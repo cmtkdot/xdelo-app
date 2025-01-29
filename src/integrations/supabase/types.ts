@@ -20,7 +20,9 @@ export type Database = {
           file_unique_id: string
           height: number | null
           id: string
+          is_original_caption: boolean | null
           media_group_id: string | null
+          message_caption_id: string | null
           mime_type: string | null
           public_url: string | null
           telegram_data: Json | null
@@ -39,7 +41,9 @@ export type Database = {
           file_unique_id: string
           height?: number | null
           id?: string
+          is_original_caption?: boolean | null
           media_group_id?: string | null
+          message_caption_id?: string | null
           mime_type?: string | null
           public_url?: string | null
           telegram_data?: Json | null
@@ -58,7 +62,9 @@ export type Database = {
           file_unique_id?: string
           height?: number | null
           id?: string
+          is_original_caption?: boolean | null
           media_group_id?: string | null
+          message_caption_id?: string | null
           mime_type?: string | null
           public_url?: string | null
           telegram_data?: Json | null
@@ -67,7 +73,15 @@ export type Database = {
           user_id?: string
           width?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
