@@ -2,7 +2,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Trash } from "lucide-react";
 import { MediaItem } from "@/types";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -20,7 +20,13 @@ export const ProductMediaViewer = ({
   relatedMedia,
 }: ProductMediaViewerProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    // Reset index when media changes
+    setCurrentIndex(0);
+  }, [media]);
 
   if (!media) return null;
 
@@ -38,6 +44,7 @@ export const ProductMediaViewer = ({
 
   const handleDelete = async () => {
     try {
+      setIsLoading(true);
       const { error } = await supabase
         .from('messages')
         .delete()
@@ -58,6 +65,8 @@ export const ProductMediaViewer = ({
         description: "Failed to delete media. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -72,12 +81,28 @@ export const ProductMediaViewer = ({
               controls
               autoPlay
               playsInline
+              onError={(e) => {
+                console.error('Video loading error:', e);
+                toast({
+                  title: "Error",
+                  description: "Failed to load video. Please try again.",
+                  variant: "destructive",
+                });
+              }}
             />
           ) : (
             <img
               src={mediaUrl}
               alt={currentMedia.analyzed_content?.product_name || 'Product'}
               className="max-h-full max-w-full object-contain"
+              onError={(e) => {
+                console.error('Image loading error:', e);
+                toast({
+                  title: "Error",
+                  description: "Failed to load image. Please try again.",
+                  variant: "destructive",
+                });
+              }}
             />
           )}
 
@@ -86,6 +111,7 @@ export const ProductMediaViewer = ({
               variant="destructive"
               size="icon"
               onClick={handleDelete}
+              disabled={isLoading}
               className="rounded-full"
             >
               <Trash className="h-4 w-4" />
