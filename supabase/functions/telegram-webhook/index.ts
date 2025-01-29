@@ -6,6 +6,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+interface TelegramMedia {
+  file_id: string;
+  file_unique_id: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  mime_type?: string;
+}
+
 interface TelegramUpdate {
   message?: {
     message_id: number;
@@ -21,22 +31,9 @@ interface TelegramUpdate {
     date: number;
     media_group_id?: string;
     caption?: string;
-    photo?: Array<{
-      file_id: string;
-      file_unique_id: string;
-      file_size: number;
-      width: number;
-      height: number;
-    }>;
-    video?: {
-      file_id: string;
-      file_unique_id: string;
-      file_size: number;
-      mime_type: string;
-      width: number;
-      height: number;
-      duration: number;
-    };
+    photo?: TelegramMedia[];
+    video?: TelegramMedia;
+    document?: TelegramMedia;
   };
 }
 
@@ -78,48 +75,62 @@ serve(async (req) => {
     console.log('Received update:', JSON.stringify(update, null, 2))
 
     if (!update.message) {
-      return new Response(JSON.stringify({ message: 'No message in update' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
-      })
+      return new Response(
+        JSON.stringify({ message: 'No message in update' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     const message = update.message
-    const mediaItem = message.photo?.[message.photo.length - 1] || message.video
+    const mediaItem = message.photo?.[message.photo.length - 1] || message.video || message.document
 
     if (!mediaItem) {
-      return new Response(JSON.stringify({ message: 'No media in message' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
-      })
+      return new Response(
+        JSON.stringify({ message: 'No media in message' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
-    // Get file info from Telegram
-    const fileInfoResponse = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${mediaItem.file_id}`
-    )
-    const fileInfo = await fileInfoResponse.json()
+    // Check for existing media with the same file_unique_id
+    const { data: existingMedia } = await supabase
+      .from('messages')
+      .select('id, public_url')
+      .eq('file_unique_id', mediaItem.file_unique_id)
+      .single()
 
-    if (!fileInfo.ok) {
-      throw new Error(`Failed to get file info: ${JSON.stringify(fileInfo)}`)
-    }
+    let publicUrl = existingMedia?.public_url
 
-    // Download file from Telegram
-    const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`
-    const fileResponse = await fetch(fileUrl)
-    const fileBlob = await fileResponse.blob()
+    if (!publicUrl) {
+      // Get file info from Telegram
+      const fileInfoResponse = await fetch(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${mediaItem.file_id}`
+      )
+      const fileInfo = await fileInfoResponse.json()
 
-    // Upload to Supabase Storage
-    const fileExt = fileInfo.result.file_path.split('.').pop()
-    const { error: uploadError } = await supabase.storage
-      .from('telegram-media')
-      .upload(`${mediaItem.file_unique_id}.${fileExt}`, fileBlob, {
-        contentType: message.video?.mime_type || 'image/jpeg',
-        upsert: true
-      })
+      if (!fileInfo.ok) {
+        throw new Error(`Failed to get file info: ${JSON.stringify(fileInfo)}`)
+      }
 
-    if (uploadError) {
-      throw new Error(`Failed to upload file: ${JSON.stringify(uploadError)}`)
+      // Download file from Telegram
+      const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`
+      const fileResponse = await fetch(fileUrl)
+      const fileBlob = await fileResponse.blob()
+
+      // Upload to Supabase Storage
+      const fileExt = fileInfo.result.file_path.split('.').pop()
+      const { error: uploadError } = await supabase.storage
+        .from('telegram-media')
+        .upload(`${mediaItem.file_unique_id}.${fileExt}`, fileBlob, {
+          contentType: message.video?.mime_type || 'image/jpeg',
+          upsert: true
+        })
+
+      if (uploadError) {
+        throw new Error(`Failed to upload file: ${JSON.stringify(uploadError)}`)
+      }
+
+      // Generate public URL
+      publicUrl = `https://ovpsyrhigencvzlxqwqz.supabase.co/storage/v1/object/public/telegram-media/${mediaItem.file_unique_id}.${fileExt}`
     }
 
     // Store message data
@@ -131,12 +142,14 @@ serve(async (req) => {
         caption: message.caption,
         file_id: mediaItem.file_id,
         file_unique_id: mediaItem.file_unique_id,
+        public_url: publicUrl,
         mime_type: message.video?.mime_type || 'image/jpeg',
         file_size: mediaItem.file_size,
         width: mediaItem.width,
         height: mediaItem.height,
-        duration: message.video?.duration,
+        duration: mediaItem.duration,
         user_id: message.from.id.toString(),
+        telegram_data: update
       })
 
     if (messageError) {
@@ -145,7 +158,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ message: 'Successfully processed media message' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
   } catch (error) {
