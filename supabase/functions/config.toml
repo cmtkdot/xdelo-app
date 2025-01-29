@@ -2,3 +2,4 @@ project_id = "ovpsyrhigencvzlxqwqz"
 
 [global.env]
 TELEGRAM_BOT_TOKEN = "env(TELEGRAM_BOT_TOKEN)"
+OPENAI_API_KEY = "env(OPENAI_API_KEY)"
