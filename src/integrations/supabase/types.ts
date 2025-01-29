@@ -106,12 +106,7 @@ export type Database = {
       }
     }
     Enums: {
-      message_processing_state:
-        | "initialized"
-        | "caption_ready"
-        | "analyzing"
-        | "analysis_synced"
-        | "completed"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
