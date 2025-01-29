@@ -24,7 +24,6 @@ export const ProductMediaViewer = ({
   const { toast } = useToast();
 
   useEffect(() => {
-    // Reset index when media changes
     setCurrentIndex(0);
   }, [media]);
 
@@ -48,7 +47,7 @@ export const ProductMediaViewer = ({
       const { error } = await supabase
         .from('messages')
         .delete()
-        .match({ id: currentMedia.id });
+        .eq('id', currentMedia.id);
 
       if (error) throw error;
 
