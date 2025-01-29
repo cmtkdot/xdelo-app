@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { determineMediaType, uploadMedia, type MediaFileMetadata } from './mediaUtils.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -114,6 +115,12 @@ serve(async (req) => {
 
     console.log('📨 Processing message ID:', message.message_id);
 
+    // Generate a UUID for channel posts or use existing user ID
+    const userId = update.message?.from?.id.toString() || 
+                  (update.channel_post ? 
+                    crypto.randomUUID() : // Generate UUID for channel posts
+                    message.sender_chat.id.toString());
+
     // Handle photos, videos, and documents
     const mediaItems: TelegramMedia[] = []
     
@@ -164,30 +171,24 @@ serve(async (req) => {
         console.log('⬇️ Downloading file from Telegram');
         const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`
         const fileResponse = await fetch(fileUrl)
-        const fileBlob = await fileResponse.blob()
+        const fileBuffer = await fileResponse.arrayBuffer()
         console.log('✅ File downloaded successfully');
 
-        // Upload to Supabase Storage using file_unique_id as name
-        console.log('⬆️ Uploading to Supabase Storage');
-        const fileExt = fileInfo.result.file_path.split('.').pop()
-        const fileName = `${mediaItem.file_unique_id}.${fileExt}`
-        
-        const { error: uploadError } = await supabase.storage
-          .from('telegram-media')
-          .upload(fileName, fileBlob, {
-            contentType: message.video?.mime_type || 'image/jpeg',
-            upsert: true
-          })
-
-        if (uploadError) {
-          console.error('❌ Upload failed:', uploadError);
-          throw new Error(`Failed to upload file: ${JSON.stringify(uploadError)}`)
+        // Prepare metadata for upload
+        const metadata: MediaFileMetadata = {
+          fileUniqueId: mediaItem.file_unique_id,
+          fileType: determineMediaType(mediaItem.mime_type),
+          mimeType: mediaItem.mime_type,
+          fileSize: mediaItem.file_size,
+          width: mediaItem.width,
+          height: mediaItem.height,
+          duration: mediaItem.duration
         }
-        console.log('✅ File uploaded successfully');
 
-        // Generate public URL
-        publicUrl = `https://ovpsyrhigencvzlxqwqz.supabase.co/storage/v1/object/public/telegram-media/${fileName}`
-        console.log('🔗 Generated public URL:', publicUrl);
+        // Upload using the new media utilities
+        const uploadResult = await uploadMedia(supabase, fileBuffer, metadata)
+        publicUrl = uploadResult.publicUrl
+        console.log('✅ File uploaded successfully');
       } else {
         console.log('♻️ Reusing existing public URL:', publicUrl);
       }
@@ -203,12 +204,12 @@ serve(async (req) => {
           file_id: mediaItem.file_id,
           file_unique_id: mediaItem.file_unique_id,
           public_url: publicUrl,
-          mime_type: message.video?.mime_type || 'image/jpeg',
+          mime_type: mediaItem.mime_type,
           file_size: mediaItem.file_size,
           width: mediaItem.width,
           height: mediaItem.height,
           duration: mediaItem.duration,
-          user_id: message.from?.id.toString() || message.sender_chat.id.toString(),
+          user_id: userId,
           telegram_data: update
         })
 
