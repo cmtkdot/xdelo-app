@@ -81,9 +81,37 @@ serve(async (req) => {
     console.log('📝 Processing update:', JSON.stringify(update, null, 2))
 
     if (!update.message) {
-      console.log('⚠️ No message found in update');
+      console.log('⚠️ No message found in update, creating placeholder file');
+      
+      // Generate a unique file name
+      const timestamp = new Date().toISOString()
+      const uniqueId = crypto.randomUUID()
+      const fileName = `placeholder_${timestamp}_${uniqueId}.txt`
+      
+      // Create a simple text file with update information
+      const fileContent = new Blob([JSON.stringify(update, null, 2)], { type: 'text/plain' })
+      
+      console.log('📁 Uploading placeholder file to storage');
+      const { error: uploadError } = await supabase.storage
+        .from('telegram-media')
+        .upload(fileName, fileContent, {
+          contentType: 'text/plain',
+          upsert: true
+        })
+
+      if (uploadError) {
+        console.error('❌ Failed to upload placeholder file:', uploadError)
+        throw new Error(`Failed to upload placeholder file: ${JSON.stringify(uploadError)}`)
+      }
+
+      const publicUrl = `https://ovpsyrhigencvzlxqwqz.supabase.co/storage/v1/object/public/telegram-media/${fileName}`
+      console.log('✅ Placeholder file uploaded successfully:', publicUrl)
+
       return new Response(
-        JSON.stringify({ message: 'No message in update' }),
+        JSON.stringify({ 
+          message: 'Created placeholder file for non-message update',
+          public_url: publicUrl 
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
