@@ -17,15 +17,36 @@ interface TelegramMedia {
 }
 
 interface TelegramUpdate {
+  update_id: number;
   message?: {
     message_id: number;
-    from: {
+    from?: {
       id: number;
       first_name: string;
       username?: string;
     };
     chat: {
       id: number;
+      type: string;
+      title?: string;
+    };
+    date: number;
+    media_group_id?: string;
+    caption?: string;
+    photo?: TelegramMedia[];
+    video?: TelegramMedia;
+    document?: TelegramMedia;
+  };
+  channel_post?: {
+    message_id: number;
+    sender_chat: {
+      id: number;
+      title: string;
+      type: string;
+    };
+    chat: {
+      id: number;
+      title: string;
       type: string;
     };
     date: number;
@@ -78,41 +99,19 @@ serve(async (req) => {
 
     console.log('📝 Processing update:', JSON.stringify(update, null, 2))
 
-    if (!update.message) {
-      console.log('⚠️ No message found in update, creating placeholder file');
-      
-      const timestamp = new Date().toISOString()
-      const uniqueId = crypto.randomUUID()
-      const fileName = `placeholder_${timestamp}_${uniqueId}.txt`
-      
-      const fileContent = new Blob([JSON.stringify(update, null, 2)], { type: 'text/plain' })
-      
-      console.log('📁 Uploading placeholder file to storage');
-      const { error: uploadError } = await supabase.storage
-        .from('telegram-media')
-        .upload(fileName, fileContent, {
-          contentType: 'text/plain',
-          upsert: true
-        })
-
-      if (uploadError) {
-        console.error('❌ Failed to upload placeholder file:', uploadError)
-        throw new Error(`Failed to upload placeholder file: ${JSON.stringify(uploadError)}`)
-      }
-
-      const publicUrl = `https://ovpsyrhigencvzlxqwqz.supabase.co/storage/v1/object/public/telegram-media/${fileName}`
-      console.log('✅ Placeholder file uploaded successfully:', publicUrl)
-
+    // Handle both regular messages and channel posts
+    const message = update.message || update.channel_post
+    if (!message) {
+      console.error('❌ No message or channel_post found in update')
       return new Response(
-        JSON.stringify({ 
-          message: 'Created placeholder file for non-message update',
-          public_url: publicUrl 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'No message or channel_post found in update' }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400 
+        }
       )
     }
 
-    const message = update.message
     console.log('📨 Processing message ID:', message.message_id);
 
     // Handle photos, videos, and documents
@@ -209,7 +208,7 @@ serve(async (req) => {
           width: mediaItem.width,
           height: mediaItem.height,
           duration: mediaItem.duration,
-          user_id: message.from.id.toString(),
+          user_id: message.from?.id.toString() || message.sender_chat.id.toString(),
           telegram_data: update
         })
 
