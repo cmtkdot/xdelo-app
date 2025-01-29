@@ -24,7 +24,7 @@ export async function analyzeCaption(caption: string): Promise<AIResponse> {
 
     console.log("Making OpenAI API request...");
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Using the correct model name
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: caption },
