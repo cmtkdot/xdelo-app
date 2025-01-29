@@ -1,6 +1,6 @@
-import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
-export type MediaType = 'photo' | 'video' | 'document' | 'unknown';
+export type MediaType = "photo" | "video" | "document" | "unknown";
 
 export interface MediaUploadResult {
   publicUrl: string;
@@ -20,54 +20,75 @@ export interface MediaFileMetadata {
 }
 
 export function determineMediaType(mimeType?: string): MediaType {
-  if (!mimeType) return 'unknown';
-  
-  if (mimeType.startsWith('image/')) return 'photo';
-  if (mimeType.startsWith('video/')) return 'video';
-  if (mimeType.startsWith('application/')) return 'document';
-  
-  return 'unknown';
+  if (!mimeType) return "unknown";
+
+  if (mimeType.startsWith("image/")) return "photo";
+  if (mimeType.startsWith("video/")) return "video";
+  if (mimeType.startsWith("application/")) return "document";
+
+  return "unknown";
 }
 
 export function generateSafeFileName(metadata: MediaFileMetadata): string {
   const safeId = metadata.fileUniqueId
-    .replace(/[^\x00-\x7F]/g, '')
-    .replace(/[^a-zA-Z0-9]/g, '_');
-    
+    .replace(/[^\x00-\x7F]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "_");
+
   const extension = getFileExtension(metadata);
   return `${safeId}.${extension}`;
 }
 
 function getFileExtension(metadata: MediaFileMetadata): string {
+  // If we have a MIME type, use it to determine the extension
   if (metadata.mimeType) {
-    const ext = metadata.mimeType.split('/')[1];
-    if (ext) return ext;
+    // Handle specific MIME types
+    switch (metadata.mimeType) {
+      case "image/jpeg":
+      case "image/jpg":
+        return "jpg";
+      case "image/png":
+        return "png";
+      case "image/gif":
+        return "gif";
+      case "image/webp":
+        return "webp";
+      case "video/mp4":
+        return "mp4";
+      case "video/webm":
+        return "webm";
+      default:
+        // For other MIME types, get extension from MIME type
+        const ext = metadata.mimeType.split("/")[1];
+        if (ext && !ext.includes(";")) return ext;
+    }
   }
-  
+
+  // Fallback based on file type if no valid extension from MIME type
   switch (metadata.fileType) {
-    case 'photo':
-      return 'jpg';
-    case 'video':
-      return 'mp4';
-    case 'document':
-      return 'pdf';
+    case "photo":
+      return "jpg"; // Default to jpg for photos
+    case "video":
+      return "mp4";
+    case "document":
+      return "pdf";
     default:
-      return 'bin';
+      return "jpg"; // Default to jpg instead of bin for unknown types that might be images
   }
 }
 
 export function getMimeType(metadata: MediaFileMetadata): string {
   if (metadata.mimeType) return metadata.mimeType;
-  
+
+  // If no MIME type provided, infer from file type
   switch (metadata.fileType) {
-    case 'photo':
-      return 'image/jpeg';
-    case 'video':
-      return 'video/mp4';
-    case 'document':
-      return 'application/pdf';
+    case "photo":
+      return "image/jpeg";
+    case "video":
+      return "video/mp4";
+    case "document":
+      return "application/pdf";
     default:
-      return 'application/octet-stream';
+      return "image/jpeg"; // Default to JPEG for unknown types that might be images
   }
 }
 
@@ -77,21 +98,21 @@ export async function checkFileExists(
 ): Promise<string | null> {
   try {
     const { data: existingFile } = await supabase.storage
-      .from('telegram-media')
-      .list('', {
+      .from("telegram-media")
+      .list("", {
         search: fileName,
       });
 
     if (existingFile && existingFile.length > 0) {
-      const { data: { publicUrl } } = await supabase.storage
-        .from('telegram-media')
-        .getPublicUrl(fileName);
+      const {
+        data: { publicUrl },
+      } = await supabase.storage.from("telegram-media").getPublicUrl(fileName);
       return publicUrl;
     }
 
     return null;
   } catch (error) {
-    console.error('Error checking file existence:', error);
+    console.error("Error checking file existence:", error);
     return null;
   }
 }
@@ -111,32 +132,32 @@ export async function uploadMedia(
       publicUrl: existingUrl,
       fileName,
       mimeType,
-      fileSize: metadata.fileSize
+      fileSize: metadata.fileSize,
     };
   }
 
   // Upload new file
   const { error: uploadError } = await supabase.storage
-    .from('telegram-media')
+    .from("telegram-media")
     .upload(fileName, buffer, {
       contentType: mimeType,
       upsert: true,
-      cacheControl: '3600'
+      cacheControl: "3600",
     });
 
   if (uploadError) {
-    console.error('Upload error:', uploadError);
+    console.error("Upload error:", uploadError);
     throw uploadError;
   }
 
-  const { data: { publicUrl } } = await supabase.storage
-    .from('telegram-media')
-    .getPublicUrl(fileName);
+  const {
+    data: { publicUrl },
+  } = await supabase.storage.from("telegram-media").getPublicUrl(fileName);
 
   return {
     publicUrl,
     fileName,
     mimeType,
-    fileSize: metadata.fileSize
+    fileSize: metadata.fileSize,
   };
 }
