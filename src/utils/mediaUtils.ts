@@ -39,26 +39,47 @@ export function generateSafeFileName(metadata: MediaFileMetadata): string {
 }
 
 function getFileExtension(metadata: MediaFileMetadata): string {
+  // If we have a MIME type, use it to determine the extension
   if (metadata.mimeType) {
-    const ext = metadata.mimeType.split('/')[1];
-    if (ext) return ext;
+    // Handle specific MIME types
+    switch (metadata.mimeType) {
+      case 'image/jpeg':
+      case 'image/jpg':
+        return 'jpg';
+      case 'image/png':
+        return 'png';
+      case 'image/gif':
+        return 'gif';
+      case 'image/webp':
+        return 'webp';
+      case 'video/mp4':
+        return 'mp4';
+      case 'video/webm':
+        return 'webm';
+      default:
+        // For other MIME types, get extension from MIME type
+        const ext = metadata.mimeType.split('/')[1];
+        if (ext && !ext.includes(';')) return ext;
+    }
   }
   
+  // Fallback based on file type if no valid extension from MIME type
   switch (metadata.fileType) {
     case 'photo':
-      return 'jpg';
+      return 'jpg'; // Default to jpg for photos
     case 'video':
       return 'mp4';
     case 'document':
       return 'pdf';
     default:
-      return 'bin';
+      return 'jpg'; // Default to jpg instead of bin for unknown types that might be images
   }
 }
 
 export function getMimeType(metadata: MediaFileMetadata): string {
   if (metadata.mimeType) return metadata.mimeType;
   
+  // If no MIME type provided, infer from file type
   switch (metadata.fileType) {
     case 'photo':
       return 'image/jpeg';
@@ -67,7 +88,7 @@ export function getMimeType(metadata: MediaFileMetadata): string {
     case 'document':
       return 'application/pdf';
     default:
-      return 'application/octet-stream';
+      return 'image/jpeg'; // Default to JPEG for unknown types that might be images
   }
 }
 
