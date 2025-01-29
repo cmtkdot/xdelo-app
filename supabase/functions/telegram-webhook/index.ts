@@ -144,6 +144,27 @@ serve(async (req) => {
     if (update.my_chat_member) {
       console.log("👤 Handling my_chat_member update");
       const chatMember = update.my_chat_member;
+      
+      // Store bot status update in other_messages table
+      const { error: insertError } = await supabase
+        .from("other_messages")
+        .insert({
+          user_id: BOT_USER_ID,
+          message_type: "bot_status",
+          chat_id: chatMember.chat.id,
+          chat_type: chatMember.chat.type,
+          chat_title: chatMember.chat.title,
+          message_text: `Bot status changed from ${chatMember.old_chat_member.status} to ${chatMember.new_chat_member.status}`,
+          telegram_data: update,
+          processing_state: "completed",
+          processing_completed_at: new Date().toISOString()
+        });
+
+      if (insertError) {
+        console.error("❌ Failed to store bot status update:", insertError);
+        throw insertError;
+      }
+
       return new Response(
         JSON.stringify({
           message: "Successfully processed chat member update",
@@ -159,16 +180,53 @@ serve(async (req) => {
 
     const message = update.message || update.channel_post;
     if (!message) {
-      console.error("❌ No message or channel_post found in update. Update object:", JSON.stringify(update, null, 2));
+      console.error("❌ No message or channel_post found in update");
       return new Response(
         JSON.stringify({ 
-          message: "No media content to process",
+          message: "No content to process",
           update_type: update.my_chat_member ? "chat_member_update" : "unknown",
           update: update
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200, // Changed to 200 since this is now a valid case
+          status: 200,
+        }
+      );
+    }
+
+    // Handle text messages without media
+    if (!message.photo && !message.video && !message.document) {
+      console.log("📝 Processing text message");
+      
+      const { error: insertError } = await supabase
+        .from("other_messages")
+        .insert({
+          user_id: BOT_USER_ID,
+          telegram_message_id: message.message_id,
+          message_type: "text",
+          chat_id: message.chat.id,
+          chat_type: message.chat.type,
+          chat_title: message.chat.title,
+          message_text: message.text || message.caption || "",
+          telegram_data: update,
+          processing_state: "completed",
+          processing_completed_at: new Date().toISOString()
+        });
+
+      if (insertError) {
+        console.error("❌ Failed to store text message:", insertError);
+        throw insertError;
+      }
+
+      return new Response(
+        JSON.stringify({
+          message: "Successfully processed text message",
+          chat_id: message.chat.id,
+          message_id: message.message_id
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
         }
       );
     }
@@ -318,9 +376,12 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("❌ Error processing update:", error);
-    return new Response(JSON.stringify({ error: error.message, stack: error.stack }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
+    return new Response(
+      JSON.stringify({ error: error.message, stack: error.stack }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      }
+    );
   }
 });

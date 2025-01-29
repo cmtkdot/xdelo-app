@@ -108,6 +108,54 @@ export type Database = {
           },
         ]
       }
+      other_messages: {
+        Row: {
+          chat_id: number | null
+          chat_title: string | null
+          chat_type: string | null
+          created_at: string | null
+          id: string
+          message_text: string | null
+          message_type: string
+          processing_completed_at: string | null
+          processing_state: string | null
+          telegram_data: Json | null
+          telegram_message_id: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          chat_id?: number | null
+          chat_title?: string | null
+          chat_type?: string | null
+          created_at?: string | null
+          id?: string
+          message_text?: string | null
+          message_type: string
+          processing_completed_at?: string | null
+          processing_state?: string | null
+          telegram_data?: Json | null
+          telegram_message_id?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          chat_id?: number | null
+          chat_title?: string | null
+          chat_type?: string | null
+          created_at?: string | null
+          id?: string
+          message_text?: string | null
+          message_type?: string
+          processing_completed_at?: string | null
+          processing_state?: string | null
+          telegram_data?: Json | null
+          telegram_message_id?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
