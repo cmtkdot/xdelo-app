@@ -181,7 +181,7 @@ serve(async (req) => {
         .insert({
           telegram_message_id: message.message_id,
           media_group_id: message.media_group_id,
-          caption: message.caption,
+          caption: message.caption || '', // Store empty string for messages without caption
           file_id: mediaItem.file_id,
           file_unique_id: mediaItem.file_unique_id,
           public_url: uploadResult.publicUrl,
@@ -190,8 +190,9 @@ serve(async (req) => {
           width: mediaItem.width,
           height: mediaItem.height,
           duration: mediaItem.duration,
-          user_id: BOT_USER_ID, // Using the fixed user_id
-          telegram_data: update
+          user_id: BOT_USER_ID,
+          telegram_data: update,
+          is_original_caption: false // Will be updated by the trigger if needed
         })
 
       if (messageError) {
