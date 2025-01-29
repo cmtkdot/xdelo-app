@@ -96,10 +96,13 @@ const Messages = () => {
     if (!editItem) return;
 
     try {
+      // Update the message with new analyzed_content and set processing_state to trigger sync
       const { error } = await supabase
         .from('messages')
         .update({
-          analyzed_content: editItem.analyzed_content
+          analyzed_content: editItem.analyzed_content,
+          processing_state: 'analyzing', // This will trigger the sync process
+          group_caption_synced: false // Reset sync flag to ensure proper syncing
         })
         .eq('id', editItem.id);
 
