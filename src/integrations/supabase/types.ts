@@ -23,6 +23,7 @@ export type Database = {
           media_group_id: string | null
           mime_type: string | null
           public_url: string | null
+          telegram_data: Json | null
           telegram_message_id: number
           updated_at: string | null
           user_id: string
@@ -41,6 +42,7 @@ export type Database = {
           media_group_id?: string | null
           mime_type?: string | null
           public_url?: string | null
+          telegram_data?: Json | null
           telegram_message_id: number
           updated_at?: string | null
           user_id: string
@@ -59,6 +61,7 @@ export type Database = {
           media_group_id?: string | null
           mime_type?: string | null
           public_url?: string | null
+          telegram_data?: Json | null
           telegram_message_id?: number
           updated_at?: string | null
           user_id?: string
