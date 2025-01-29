@@ -3,11 +3,10 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import OpenAI from "https://esm.sh/openai@4.28.0";
 
-// Deno types
-declare const Deno: {
-  env: {
-    get(key: string): string | undefined;
-  };
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 interface AnalyzedContent {
@@ -17,95 +16,6 @@ interface AnalyzedContent {
   vendor_uid?: string;
   purchase_date?: string;
   notes?: string;
-}
-
-interface AnalysisResult {
-  caption: string;
-  extracted_data: AnalyzedContent | null;
-  confidence: number;
-  timestamp: string;
-  model_version: string;
-  error?: string;
-}
-
-type MessageProcessingState =
-  | "initialized"
-  | "caption_ready"
-  | "analyzing"
-  | "analysis_synced"
-  | "analysis_failed"
-  | "completed";
-
-interface MessageUpdate {
-  analyzed_content?: AnalysisResult;
-  processing_state?: MessageProcessingState;
-  processing_started_at?: string;
-  processing_completed_at?: string;
-  error_message?: string | null;
-  group_caption_synced?: boolean;
-}
-
-interface BaseProcessingLog {
-  event: string;
-  message_id: string;
-  media_group_id?: string;
-  duration_ms?: number;
-  state?: MessageProcessingState;
-  error?: string;
-  metadata?: Record<string, any>;
-}
-
-interface ProcessingLog extends BaseProcessingLog {
-  timestamp: string;
-}
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
-
-function parseDateFromCode(dateStr: string): string | null {
-  try {
-    if (!dateStr || dateStr.length < 5) return null;
-
-    // Handle both 5 and 6 digit formats
-    let month: string, day: string, year: string;
-
-    if (dateStr.length === 5) {
-      // Format: #CHAD12345 (single digit month)
-      month = `0${dateStr[0]}`;
-      day = dateStr.substring(1, 3);
-      year = dateStr.substring(3, 5);
-    } else {
-      // Format: #CHAD123456 (two digit month)
-      month = dateStr.substring(0, 2);
-      day = dateStr.substring(2, 4);
-      year = dateStr.substring(4, 6);
-    }
-
-    // Validate month and day
-    const monthNum = parseInt(month);
-    const dayNum = parseInt(day);
-
-    if (monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
-      return null;
-    }
-
-    // Convert to full year format
-    const fullYear = `20${year}`;
-    const date = new Date(`${fullYear}-${month}-${day}`);
-
-    // Check if date is valid and not in the future
-    if (isNaN(date.getTime()) || date > new Date()) {
-      return null;
-    }
-
-    return `${fullYear}-${month}-${day}`;
-  } catch (error) {
-    console.error("Error parsing date:", error);
-    return null;
-  }
 }
 
 async function analyzeCaption(caption: string): Promise<any> {
@@ -137,20 +47,10 @@ async function analyzeCaption(caption: string): Promise<any> {
       "vendor_uid": "CHAD",
       "purchase_date": "2023-12-05",
       "notes": "sample"
-    }
-
-    Input: "Purple Haze #CHAD12345 x3"
-    Output: {
-      "product_name": "Purple Haze",
-      "product_code": "#CHAD12345",
-      "quantity": 3,
-      "vendor_uid": "CHAD",
-      "purchase_date": "2023-01-23",
-      "notes": null
     }`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: caption },
@@ -165,21 +65,6 @@ async function analyzeCaption(caption: string): Promise<any> {
     let extractedData;
     try {
       extractedData = JSON.parse(response);
-
-      // Double-check the date parsing even from AI response
-      if (extractedData.product_code) {
-        const codeMatch = extractedData.product_code.match(/#[A-Z]+(\d+)/);
-        if (codeMatch) {
-          const dateStr = codeMatch[1];
-          const parsedDate = parseDateFromCode(dateStr);
-          if (parsedDate) {
-            extractedData.purchase_date = parsedDate;
-          } else {
-            console.log("AI provided date was invalid, setting to null");
-            extractedData.purchase_date = null;
-          }
-        }
-      }
     } catch (error) {
       console.error("Error parsing AI response:", error);
       extractedData = parseManually(caption);
@@ -205,10 +90,10 @@ async function analyzeCaption(caption: string): Promise<any> {
   }
 }
 
-function parseManually(text: string): any {
+function parseManually(text: string): AnalyzedContent {
   console.log("Falling back to manual parsing for:", text);
 
-  const result: any = {
+  const result: AnalyzedContent = {
     product_name: null,
     product_code: null,
     quantity: null,
@@ -223,9 +108,28 @@ function parseManually(text: string): any {
     result.product_code = codeMatch[0];
     result.vendor_uid = codeMatch[1];
 
-    // Parse date from code using our enhanced date parser
+    // Parse date from code
     const dateStr = codeMatch[2];
-    result.purchase_date = parseDateFromCode(dateStr);
+    if (dateStr.length >= 5) {
+      let month: string, day: string, year: string;
+
+      if (dateStr.length === 5) {
+        month = `0${dateStr[0]}`;
+        day = dateStr.substring(1, 3);
+        year = dateStr.substring(3, 5);
+      } else {
+        month = dateStr.substring(0, 2);
+        day = dateStr.substring(2, 4);
+        year = dateStr.substring(4, 6);
+      }
+
+      const fullYear = `20${year}`;
+      const date = new Date(`${fullYear}-${month}-${day}`);
+
+      if (!isNaN(date.getTime()) && date <= new Date()) {
+        result.purchase_date = `${fullYear}-${month}-${day}`;
+      }
+    }
   }
 
   // Extract quantity
@@ -249,17 +153,6 @@ function parseManually(text: string): any {
   return result;
 }
 
-function logProcessingEvent(log: BaseProcessingLog) {
-  const timestamp = new Date().toISOString();
-  console.log(
-    JSON.stringify({
-      ...log,
-      timestamp,
-      environment: Deno.env.get("ENVIRONMENT") || "development",
-    })
-  );
-}
-
 serve(async (req) => {
   const startTime = Date.now();
   const correlationId = crypto.randomUUID();
@@ -274,283 +167,98 @@ serve(async (req) => {
 
   try {
     const { message_id } = await req.json();
+    console.log("Processing message:", message_id);
 
-    logProcessingEvent({
-      event: "ANALYSIS_STARTED",
-      message_id,
-      state: "initialized",
-      metadata: {
-        correlation_id: correlationId,
-      },
-    });
-
-    // Fetch the target message and check if it's part of a group
+    // Fetch the message
     const { data: message, error: messageError } = await supabase
       .from("messages")
-      .select("*, media_group_messages:messages!media_group_id(*)")
+      .select("*")
       .eq("id", message_id)
       .single();
 
     if (messageError) {
-      logProcessingEvent({
-        event: "MESSAGE_FETCH_ERROR",
-        message_id,
-        error: messageError.message,
-        metadata: {
-          correlation_id: correlationId,
-          error_details: messageError,
-        },
-      });
       throw messageError;
     }
 
     if (!message) {
-      const error = "Message not found";
-      logProcessingEvent({
-        event: "MESSAGE_NOT_FOUND",
-        message_id,
-        error,
-        metadata: { correlation_id: correlationId },
-      });
-      throw new Error(error);
+      throw new Error("Message not found");
     }
 
-    // Check if message is already processed or being processed
-    if (
-      message.processing_state === "completed" ||
-      message.processing_state === "analysis_synced"
-    ) {
-      logProcessingEvent({
-        event: "ALREADY_PROCESSED",
-        message_id,
-        media_group_id: message.media_group_id,
-        state: message.processing_state as MessageProcessingState,
-        metadata: {
-          correlation_id: correlationId,
-          analyzed_content: message.analyzed_content,
-          skip_reason: "already_processed",
-        },
-      });
+    if (!message.caption) {
+      console.log("No caption to analyze for message:", message_id);
       return new Response(
         JSON.stringify({
-          success: true,
-          already_processed: true,
-          analyzed_content: message.analyzed_content,
+          success: false,
+          error: "No caption to analyze",
           correlation_id: correlationId,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Check if this is part of a media group and if another message in the group is already processed
-    if (message.media_group_id && message.media_group_messages) {
-      const processedGroupMessage = message.media_group_messages.find(
-        (m: any) =>
-          m.analyzed_content &&
-          (m.processing_state === "completed" ||
-            m.processing_state === "analysis_synced")
-      );
+    // Analyze the caption
+    console.log("Analyzing caption for message:", message_id);
+    const analyzedContent = await analyzeCaption(message.caption);
 
-      if (processedGroupMessage) {
-        // Use the existing analysis from the group
-        const { error: syncError } = await supabase.rpc(
-          "process_media_group_analysis",
-          {
-            p_message_id: message_id,
-            p_media_group_id: message.media_group_id,
-            p_analyzed_content: processedGroupMessage.analyzed_content,
-            p_processing_completed_at: new Date().toISOString(),
-            p_correlation_id: correlationId,
-          }
-        );
-
-        if (syncError) {
-          logProcessingEvent({
-            event: "GROUP_SYNC_REUSE_ERROR",
-            message_id,
-            media_group_id: message.media_group_id,
-            error: syncError.message,
-            metadata: {
-              correlation_id: correlationId,
-              source_message_id: processedGroupMessage.id,
-            },
-          });
-          throw syncError;
-        }
-
-        logProcessingEvent({
-          event: "REUSED_GROUP_ANALYSIS",
-          message_id,
-          media_group_id: message.media_group_id,
-          state: "analysis_synced",
-          metadata: {
-            correlation_id: correlationId,
-            source_message_id: processedGroupMessage.id,
-          },
-        });
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            reused_analysis: true,
-            analyzed_content: processedGroupMessage.analyzed_content,
-            correlation_id: correlationId,
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
-
-    // If we get here, we need to process this message
-    logProcessingEvent({
-      event: "MESSAGE_FETCHED",
-      message_id,
-      media_group_id: message.media_group_id,
-      duration_ms: Date.now() - startTime,
-      state: message.processing_state as MessageProcessingState,
-      metadata: {
-        correlation_id: correlationId,
-        has_caption: !!message.caption,
-        group_size: message.media_group_messages?.length,
-        requires_processing: true,
-      },
-    });
-
-    // Update state to analyzing
-    const { error: stateError } = await supabase
+    // Update the message with analyzed content
+    const { error: updateError } = await supabase
       .from("messages")
       .update({
+        analyzed_content: analyzedContent,
         processing_state: "analyzing",
         processing_started_at: new Date().toISOString(),
       })
       .eq("id", message_id);
 
-    if (stateError) {
-      logProcessingEvent({
-        event: "STATE_UPDATE_ERROR",
-        message_id,
-        media_group_id: message.media_group_id,
-        error: stateError.message,
-        metadata: {
-          correlation_id: correlationId,
-          target_state: "analyzing",
-        },
-      });
-      throw stateError;
+    if (updateError) {
+      throw updateError;
     }
 
-    // Analyze the caption
-    const analysisStartTime = Date.now();
-    const analyzedContent = await analyzeCaption(message.caption);
+    // Process media group if needed
+    if (message.media_group_id) {
+      console.log("Processing media group:", message.media_group_id);
+      const { error: groupError } = await supabase.rpc(
+        "process_media_group_analysis",
+        {
+          p_message_id: message_id,
+          p_media_group_id: message.media_group_id,
+          p_analyzed_content: analyzedContent,
+          p_processing_completed_at: new Date().toISOString(),
+        }
+      );
 
-    logProcessingEvent({
-      event: "ANALYSIS_COMPLETED",
-      message_id,
-      media_group_id: message.media_group_id,
-      duration_ms: Date.now() - analysisStartTime,
-      metadata: {
-        correlation_id: correlationId,
-        confidence: analyzedContent.confidence,
-      },
-    });
-
-    // Begin transaction for group updates
-    const { error: transactionError } = await supabase.rpc(
-      "process_media_group_analysis",
-      {
-        p_message_id: message_id,
-        p_media_group_id: message.media_group_id,
-        p_analyzed_content: analyzedContent,
-        p_processing_completed_at: new Date().toISOString(),
+      if (groupError) {
+        throw groupError;
       }
-    );
+    } else {
+      // Update single message to completed state
+      const { error: completeError } = await supabase
+        .from("messages")
+        .update({
+          processing_state: "completed",
+          processing_completed_at: new Date().toISOString(),
+        })
+        .eq("id", message_id);
 
-    if (transactionError) {
-      logProcessingEvent({
-        event: "GROUP_SYNC_ERROR",
-        message_id,
-        media_group_id: message.media_group_id,
-        error: transactionError.message,
-        metadata: {
-          correlation_id: correlationId,
-          error_details: transactionError,
-        },
-      });
-      throw transactionError;
+      if (completeError) {
+        throw completeError;
+      }
     }
 
-    const totalDuration = Date.now() - startTime;
-    logProcessingEvent({
-      event: "PROCESSING_COMPLETED",
-      message_id,
-      media_group_id: message.media_group_id,
-      duration_ms: totalDuration,
-      state: "completed",
-      metadata: {
-        correlation_id: correlationId,
-        analysis_duration_ms: Date.now() - analysisStartTime,
-        total_duration_ms: totalDuration,
-      },
-    });
+    const duration = Date.now() - startTime;
+    console.log(`Analysis completed in ${duration}ms for message:`, message_id);
 
     return new Response(
       JSON.stringify({
         success: true,
         analyzed_content: analyzedContent,
-        processing_time_ms: totalDuration,
+        processing_time_ms: duration,
         correlation_id: correlationId,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    const errorEvent = {
-      event: "PROCESSING_FAILED",
-      message_id: req.message_id || "unknown",
-      error: error.message,
-      metadata: {
-        correlation_id: correlationId,
-        error_stack: error.stack,
-        error_details: error,
-      },
-    };
-    logProcessingEvent(errorEvent);
-
-    // Update message state to failed
-    try {
-      if (error.message !== "Message not found" && req.message_id) {
-        const { error: updateError } = await supabase
-          .from("messages")
-          .update({
-            processing_state: "analysis_failed",
-            error_message: JSON.stringify(errorEvent),
-            processing_completed_at: new Date().toISOString(),
-          })
-          .eq("id", req.message_id);
-
-        if (updateError) {
-          logProcessingEvent({
-            event: "ERROR_STATUS_UPDATE_FAILED",
-            message_id: req.message_id,
-            error: updateError.message,
-            metadata: {
-              correlation_id: correlationId,
-              original_error: error.message,
-            },
-          });
-        }
-      }
-    } catch (updateError) {
-      logProcessingEvent({
-        event: "ERROR_HANDLING_FAILED",
-        message_id: req.message_id || "unknown",
-        error: updateError.message,
-        metadata: {
-          correlation_id: correlationId,
-          original_error: error.message,
-        },
-      });
-    }
-
+    console.error("Error processing message:", error);
     return new Response(
       JSON.stringify({
         error: error.message,
