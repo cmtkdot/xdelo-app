@@ -9,6 +9,60 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      messages: {
+        Row: {
+          caption: string | null
+          created_at: string | null
+          duration: number | null
+          file_id: string | null
+          file_size: number | null
+          file_unique_id: string
+          height: number | null
+          id: string
+          media_group_id: string | null
+          mime_type: string | null
+          public_url: string | null
+          telegram_message_id: number
+          updated_at: string | null
+          user_id: string
+          width: number | null
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string | null
+          duration?: number | null
+          file_id?: string | null
+          file_size?: number | null
+          file_unique_id: string
+          height?: number | null
+          id?: string
+          media_group_id?: string | null
+          mime_type?: string | null
+          public_url?: string | null
+          telegram_message_id: number
+          updated_at?: string | null
+          user_id: string
+          width?: number | null
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string | null
+          duration?: number | null
+          file_id?: string | null
+          file_size?: number | null
+          file_unique_id?: string
+          height?: number | null
+          id?: string
+          media_group_id?: string | null
+          mime_type?: string | null
+          public_url?: string | null
+          telegram_message_id?: number
+          updated_at?: string | null
+          user_id?: string
+          width?: number | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
