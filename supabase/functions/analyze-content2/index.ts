@@ -21,6 +21,7 @@ serve(async (req) => {
 
   try {
     const { message_id } = await req.json();
+    console.log('Processing message:', message_id);
 
     // Fetch the message from the database
     const { data: message, error: messageError } = await supabase
@@ -29,16 +30,20 @@ serve(async (req) => {
       .eq('id', message_id)
       .single();
 
-    if (messageError) throw messageError;
+    if (messageError) {
+      console.error('Error fetching message:', messageError);
+      throw messageError;
+    }
+    
     if (!message?.caption) {
+      console.log('No caption found for message:', message_id);
       return new Response(
         JSON.stringify({ error: 'No caption found' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Processing message:', message_id);
-    console.log('Caption:', message.caption);
+    console.log('Caption to analyze:', message.caption);
 
     // Prepare the prompt for OpenAI
     const systemPrompt = `You are a product information parser. Extract the following information from the given text:
@@ -51,6 +56,8 @@ serve(async (req) => {
     
     Return ONLY a JSON object with these fields. If a field cannot be extracted, set it to null.`;
 
+    console.log('Calling OpenAI API...');
+
     // Call OpenAI API
     const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -59,7 +66,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: message.caption }
@@ -67,14 +74,22 @@ serve(async (req) => {
       }),
     });
 
+    if (!openAIResponse.ok) {
+      const errorData = await openAIResponse.text();
+      console.error('OpenAI API error:', errorData);
+      throw new Error(`OpenAI API error: ${errorData}`);
+    }
+
     const aiData = await openAIResponse.json();
+    console.log('OpenAI Response:', aiData);
+
     if (!aiData.choices?.[0]?.message?.content) {
+      console.error('Invalid response from OpenAI:', aiData);
       throw new Error('Invalid response from OpenAI');
     }
 
-    console.log('AI Response:', aiData.choices[0].message.content);
-
     const analyzedContent = JSON.parse(aiData.choices[0].message.content);
+    console.log('Parsed analyzed content:', analyzedContent);
 
     // Update the message with the analyzed content
     const { error: updateError } = await supabase
@@ -85,7 +100,10 @@ serve(async (req) => {
       })
       .eq('id', message_id);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      console.error('Error updating message:', updateError);
+      throw updateError;
+    }
 
     console.log('Successfully updated message:', message_id);
 
