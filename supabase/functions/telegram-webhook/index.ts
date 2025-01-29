@@ -65,6 +65,39 @@ interface TelegramUpdate {
     video?: TelegramMedia;
     document?: TelegramMedia;
   };
+  my_chat_member?: {
+    chat: {
+      id: number;
+      title: string;
+      type: string;
+    };
+    from: {
+      id: number;
+      is_bot: boolean;
+      first_name: string;
+      language_code?: string;
+    };
+    date: number;
+    old_chat_member: {
+      user: {
+        id: number;
+        is_bot: boolean;
+        first_name: string;
+        username?: string;
+      };
+      status: string;
+    };
+    new_chat_member: {
+      user: {
+        id: number;
+        is_bot: boolean;
+        first_name: string;
+        username?: string;
+      };
+      status: string;
+      [key: string]: any; // For additional admin rights fields
+    };
+  };
 }
 
 serve(async (req) => {
@@ -107,20 +140,35 @@ serve(async (req) => {
       );
     }
 
-    // Log the entire update object for debugging
-    console.log("📝 Full update object:", JSON.stringify(update, null, 2));
+    // Handle my_chat_member updates (bot status changes)
+    if (update.my_chat_member) {
+      console.log("👤 Handling my_chat_member update");
+      const chatMember = update.my_chat_member;
+      return new Response(
+        JSON.stringify({
+          message: "Successfully processed chat member update",
+          chat_id: chatMember.chat.id,
+          status: chatMember.new_chat_member.status,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
 
     const message = update.message || update.channel_post;
     if (!message) {
       console.error("❌ No message or channel_post found in update. Update object:", JSON.stringify(update, null, 2));
       return new Response(
         JSON.stringify({ 
-          error: "No message or channel_post found in update",
-          update: update // Include the update object in the response for debugging
+          message: "No media content to process",
+          update_type: update.my_chat_member ? "chat_member_update" : "unknown",
+          update: update
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 400,
+          status: 200, // Changed to 200 since this is now a valid case
         }
       );
     }
