@@ -1,1 +1,8 @@
 project_id = "ovpsyrhigencvzlxqwqz"
+[api]
+enabled = true
+[api.cors]
+enabled = true
+[functions]
+[functions.telegram-webhook]
+verify_jwt = false
