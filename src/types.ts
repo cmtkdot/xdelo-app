@@ -22,5 +22,10 @@ export interface MediaItem {
     quantity?: number;
     notes?: string;
   } | null;
-  telegram_data?: any;
+  group_caption_synced?: boolean;
+  is_original_caption?: boolean;
+  message_caption_id?: string;
+  processing_state?: string;
+  processing_started_at?: string;
+  processing_completed_at?: string;
 }

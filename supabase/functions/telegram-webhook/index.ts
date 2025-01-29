@@ -89,13 +89,12 @@ serve(async (req) => {
     );
 
     const rawBody = await req.text();
-    console.log("📩 Raw webhook payload:", rawBody);
+    console.log("📩 Received webhook payload:", rawBody);
 
     let update: TelegramUpdate;
     try {
       console.log("🔄 Parsing JSON payload");
       update = JSON.parse(rawBody);
-      console.log("✅ Parsed update object:", JSON.stringify(update, null, 2));
     } catch (error) {
       console.error("❌ Failed to parse JSON:", error);
       return new Response(
@@ -107,17 +106,13 @@ serve(async (req) => {
       );
     }
 
-    // Log the entire update object for debugging
-    console.log("📝 Full update object:", JSON.stringify(update, null, 2));
+    console.log("📝 Processing update:", JSON.stringify(update, null, 2));
 
     const message = update.message || update.channel_post;
     if (!message) {
-      console.error("❌ No message or channel_post found in update. Update object:", JSON.stringify(update, null, 2));
+      console.error("❌ No message or channel_post found in update");
       return new Response(
-        JSON.stringify({ 
-          error: "No message or channel_post found in update",
-          update: update // Include the update object in the response for debugging
-        }),
+        JSON.stringify({ error: "No message or channel_post found in update" }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 400,
@@ -270,7 +265,7 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("❌ Error processing update:", error);
-    return new Response(JSON.stringify({ error: error.message, stack: error.stack }), {
+    return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });
