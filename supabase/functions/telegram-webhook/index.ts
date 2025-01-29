@@ -141,7 +141,7 @@ serve(async (req) => {
       // Check if file already exists in messages table
       const { data: existingMessage } = await supabase
         .from('messages')
-        .select('public_url')
+        .select('*')
         .eq('file_unique_id', mediaItem.file_unique_id)
         .single();
 
@@ -153,6 +153,24 @@ serve(async (req) => {
           fileName: `${mediaItem.file_unique_id}.${mediaItem.mime_type?.split('/')[1]}`,
           mimeType: mediaItem.mime_type || 'application/octet-stream'
         };
+        
+        // Update existing message with new telegram data
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({
+            telegram_data: update,
+            caption: message.caption || '', // Store empty string for messages without caption
+            media_group_id: message.media_group_id,
+            telegram_message_id: message.message_id,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingMessage.id);
+
+        if (updateError) {
+          console.error('❌ Failed to update existing message:', updateError);
+          throw updateError;
+        }
+        console.log('✅ Updated existing message with new telegram data');
       } else {
         // Get file info from Telegram
         const fileInfoResponse = await fetch(
@@ -186,39 +204,39 @@ serve(async (req) => {
         // Upload using the media utilities
         uploadResult = await uploadMedia(supabase, fileBuffer, metadata)
         console.log('✅ File uploaded successfully');
-      }
 
-      // Store message data
-      console.log('💾 Storing message data in database');
-      const { error: messageError } = await supabase
-        .from('messages')
-        .insert({
-          telegram_message_id: message.message_id,
-          media_group_id: message.media_group_id,
-          caption: message.caption || '', // Store empty string for messages without caption
-          file_id: mediaItem.file_id,
-          file_unique_id: mediaItem.file_unique_id,
-          public_url: uploadResult.publicUrl,
-          mime_type: mediaItem.mime_type,
-          file_size: mediaItem.file_size,
-          width: mediaItem.width,
-          height: mediaItem.height,
-          duration: mediaItem.duration,
-          user_id: BOT_USER_ID,
-          telegram_data: update,
-          is_original_caption: false // Will be updated by the trigger if needed
-        })
+        // Store new message data
+        console.log('💾 Storing new message data in database');
+        const { error: messageError } = await supabase
+          .from('messages')
+          .insert({
+            telegram_message_id: message.message_id,
+            media_group_id: message.media_group_id,
+            caption: message.caption || '', // Store empty string for messages without caption
+            file_id: mediaItem.file_id,
+            file_unique_id: mediaItem.file_unique_id,
+            public_url: uploadResult.publicUrl,
+            mime_type: mediaItem.mime_type,
+            file_size: mediaItem.file_size,
+            width: mediaItem.width,
+            height: mediaItem.height,
+            duration: mediaItem.duration,
+            user_id: BOT_USER_ID,
+            telegram_data: update,
+            is_original_caption: false // Will be updated by the trigger if needed
+          });
 
-      if (messageError) {
-        console.error('❌ Failed to store message:', messageError);
-        throw new Error(`Failed to store message: ${JSON.stringify(messageError)}`)
+        if (messageError) {
+          console.error('❌ Failed to store message:', messageError);
+          throw messageError;
+        }
+        console.log('✅ Message stored successfully');
       }
-      console.log('✅ Message stored successfully');
 
       processedMedia.push({
         file_unique_id: mediaItem.file_unique_id,
         public_url: uploadResult.publicUrl
-      })
+      });
     }
 
     console.log('🎉 Webhook processing completed successfully');
