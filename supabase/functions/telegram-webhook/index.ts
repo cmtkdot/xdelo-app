@@ -38,17 +38,22 @@ interface TelegramUpdate {
 }
 
 serve(async (req) => {
+  console.log('🚀 Webhook handler started');
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
+    console.log('👋 Handling CORS preflight request');
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
+    console.log('🔑 Checking for TELEGRAM_BOT_TOKEN');
     const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')
     if (!TELEGRAM_BOT_TOKEN) {
       throw new Error('TELEGRAM_BOT_TOKEN is not set')
     }
 
+    console.log('🔌 Initializing Supabase client');
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -56,13 +61,14 @@ serve(async (req) => {
 
     // Log the raw request body for debugging
     const rawBody = await req.text()
-    console.log('Raw request body:', rawBody)
+    console.log('📩 Received webhook payload:', rawBody)
 
     let update: TelegramUpdate
     try {
+      console.log('🔄 Parsing JSON payload');
       update = JSON.parse(rawBody)
     } catch (error) {
-      console.error('Failed to parse JSON:', error)
+      console.error('❌ Failed to parse JSON:', error)
       return new Response(
         JSON.stringify({ error: 'Invalid JSON in request body' }),
         { 
@@ -72,9 +78,10 @@ serve(async (req) => {
       )
     }
 
-    console.log('Received update:', JSON.stringify(update, null, 2))
+    console.log('📝 Processing update:', JSON.stringify(update, null, 2))
 
     if (!update.message) {
+      console.log('⚠️ No message found in update');
       return new Response(
         JSON.stringify({ message: 'No message in update' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -82,16 +89,21 @@ serve(async (req) => {
     }
 
     const message = update.message
+    console.log('📨 Processing message ID:', message.message_id);
+    
     const mediaItem = message.photo?.[message.photo.length - 1] || message.video || message.document
+    console.log('🖼️ Media item details:', JSON.stringify(mediaItem, null, 2));
 
     if (!mediaItem) {
+      console.log('⚠️ No media found in message');
       return new Response(
         JSON.stringify({ message: 'No media in message' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Check for existing media with the same file_unique_id
+    // Check for existing media
+    console.log('🔍 Checking for existing media with file_unique_id:', mediaItem.file_unique_id);
     const { data: existingMedia } = await supabase
       .from('messages')
       .select('id, public_url')
@@ -101,22 +113,27 @@ serve(async (req) => {
     let publicUrl = existingMedia?.public_url
 
     if (!publicUrl) {
+      console.log('📥 No existing media found, downloading from Telegram');
       // Get file info from Telegram
       const fileInfoResponse = await fetch(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${mediaItem.file_id}`
       )
       const fileInfo = await fileInfoResponse.json()
+      console.log('📄 File info from Telegram:', JSON.stringify(fileInfo, null, 2));
 
       if (!fileInfo.ok) {
         throw new Error(`Failed to get file info: ${JSON.stringify(fileInfo)}`)
       }
 
       // Download file from Telegram
+      console.log('⬇️ Downloading file from Telegram');
       const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`
       const fileResponse = await fetch(fileUrl)
       const fileBlob = await fileResponse.blob()
+      console.log('✅ File downloaded successfully');
 
       // Upload to Supabase Storage
+      console.log('⬆️ Uploading to Supabase Storage');
       const fileExt = fileInfo.result.file_path.split('.').pop()
       const { error: uploadError } = await supabase.storage
         .from('telegram-media')
@@ -126,14 +143,20 @@ serve(async (req) => {
         })
 
       if (uploadError) {
+        console.error('❌ Upload failed:', uploadError);
         throw new Error(`Failed to upload file: ${JSON.stringify(uploadError)}`)
       }
+      console.log('✅ File uploaded successfully');
 
       // Generate public URL
       publicUrl = `https://ovpsyrhigencvzlxqwqz.supabase.co/storage/v1/object/public/telegram-media/${mediaItem.file_unique_id}.${fileExt}`
+      console.log('🔗 Generated public URL:', publicUrl);
+    } else {
+      console.log('♻️ Reusing existing public URL:', publicUrl);
     }
 
     // Store message data
+    console.log('💾 Storing message data in database');
     const { error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -153,16 +176,19 @@ serve(async (req) => {
       })
 
     if (messageError) {
+      console.error('❌ Failed to store message:', messageError);
       throw new Error(`Failed to store message: ${JSON.stringify(messageError)}`)
     }
+    console.log('✅ Message stored successfully');
 
+    console.log('🎉 Webhook processing completed successfully');
     return new Response(
       JSON.stringify({ message: 'Successfully processed media message' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
   } catch (error) {
-    console.error('Error processing update:', error)
+    console.error('❌ Error processing update:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
