@@ -18,12 +18,18 @@ export type Database = {
           file_id: string | null
           file_size: number | null
           file_unique_id: string
+          group_caption_synced: boolean | null
           height: number | null
           id: string
           is_original_caption: boolean | null
           media_group_id: string | null
           message_caption_id: string | null
           mime_type: string | null
+          processing_completed_at: string | null
+          processing_started_at: string | null
+          processing_state:
+            | Database["public"]["Enums"]["message_processing_state"]
+            | null
           public_url: string | null
           telegram_data: Json | null
           telegram_message_id: number
@@ -39,12 +45,18 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id: string
+          group_caption_synced?: boolean | null
           height?: number | null
           id?: string
           is_original_caption?: boolean | null
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          processing_state?:
+            | Database["public"]["Enums"]["message_processing_state"]
+            | null
           public_url?: string | null
           telegram_data?: Json | null
           telegram_message_id: number
@@ -60,12 +72,18 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string
+          group_caption_synced?: boolean | null
           height?: number | null
           id?: string
           is_original_caption?: boolean | null
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          processing_state?:
+            | Database["public"]["Enums"]["message_processing_state"]
+            | null
           public_url?: string | null
           telegram_data?: Json | null
           telegram_message_id?: number
@@ -112,7 +130,12 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      message_processing_state:
+        | "initialized"
+        | "caption_ready"
+        | "analyzing"
+        | "analysis_synced"
+        | "completed"
     }
     CompositeTypes: {
       [_ in never]: never
