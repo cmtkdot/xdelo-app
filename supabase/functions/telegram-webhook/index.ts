@@ -127,6 +127,7 @@ serve(async (req) => {
     if (message.photo) {
       console.log("📸 Found photo array, selecting largest size");
       const largestPhoto = message.photo[message.photo.length - 1];
+      // Telegram photos are always JPEG
       largestPhoto.mime_type = "image/jpeg";
       mediaItems.push(largestPhoto);
     }
@@ -152,21 +153,6 @@ serve(async (req) => {
         .eq("file_unique_id", mediaItem.file_unique_id)
         .single();
 
-      // Check if the content is identical
-      const isContentIdentical = existingMessage && 
-        existingMessage.caption === message.caption &&
-        existingMessage.telegram_data?.update_id === update.update_id;
-
-      if (isContentIdentical) {
-        console.log("✅ Content already exists and is identical, skipping processing");
-        processedMedia.push({
-          file_unique_id: mediaItem.file_unique_id,
-          public_url: existingMessage.public_url,
-          skipped: true,
-        });
-        continue;
-      }
-
       let uploadResult;
       if (existingMessage?.public_url) {
         console.log(
@@ -181,16 +167,15 @@ serve(async (req) => {
           mimeType: mediaItem.mime_type || "application/octet-stream",
         };
 
-        // Update existing message with new telegram data only if content changed
+        // Update existing message with new telegram data
         const { error: updateError } = await supabase
           .from("messages")
           .update({
             telegram_data: update,
-            caption: message.caption || "",
+            caption: message.caption || "", // Store empty string for messages without caption
             media_group_id: message.media_group_id,
             telegram_message_id: message.message_id,
             updated_at: new Date().toISOString(),
-            processing_state: 'caption_ready'
           })
           .eq("id", existingMessage.id);
 
@@ -243,7 +228,7 @@ serve(async (req) => {
         const { error: messageError } = await supabase.from("messages").insert({
           telegram_message_id: message.message_id,
           media_group_id: message.media_group_id,
-          caption: message.caption || "",
+          caption: message.caption || "", // Store empty string for messages without caption
           file_id: mediaItem.file_id,
           file_unique_id: mediaItem.file_unique_id,
           public_url: uploadResult.publicUrl,
@@ -254,8 +239,7 @@ serve(async (req) => {
           duration: mediaItem.duration,
           user_id: BOT_USER_ID,
           telegram_data: update,
-          is_original_caption: false,
-          processing_state: 'caption_ready'
+          is_original_caption: false, // Will be updated by the trigger if needed
         });
 
         if (messageError) {
