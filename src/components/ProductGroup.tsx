@@ -1,0 +1,49 @@
+import { MediaItem } from "@/types";
+
+interface ProductGroupProps {
+  group: MediaItem[];
+  onMediaClick: (media: MediaItem, group: MediaItem[]) => void;
+  onEdit: (item: MediaItem) => void;
+}
+
+export const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps) => {
+  const mainMedia = group[0];
+  const isVideo = mainMedia.mime_type?.startsWith('video');
+
+  return (
+    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div 
+        className="relative aspect-video cursor-pointer group"
+        onClick={() => onMediaClick(mainMedia, group)}
+      >
+        {isVideo ? (
+          <video
+            src={`https://ovpsyrhigencvzlxqwqz.supabase.co/storage/v1/object/public/telegram-media/${mainMedia.file_unique_id}.${mainMedia.mime_type?.split('/')[1]}`}
+            className="w-full h-full object-cover"
+            autoPlay
+            muted
+            loop
+            playsInline
+          />
+        ) : (
+          <img
+            src={`https://ovpsyrhigencvzlxqwqz.supabase.co/storage/v1/object/public/telegram-media/${mainMedia.file_unique_id}.${mainMedia.mime_type?.split('/')[1]}`}
+            alt={mainMedia.analyzed_content?.product_name || 'Product'}
+            className="w-full h-full object-cover"
+          />
+        )}
+        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity duration-200" />
+      </div>
+      <div className="p-4">
+        <h3 className="text-lg font-semibold mb-2">{mainMedia.analyzed_content?.product_name || 'Untitled Product'}</h3>
+        <p className="text-sm text-gray-600 mb-2">Code: {mainMedia.analyzed_content?.product_code || 'N/A'}</p>
+        <button
+          onClick={() => onEdit(mainMedia)}
+          className="text-sm text-blue-600 hover:text-blue-800"
+        >
+          Edit Details
+        </button>
+      </div>
+    </div>
+  );
+};

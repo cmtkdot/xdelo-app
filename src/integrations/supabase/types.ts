@@ -11,6 +11,7 @@ export type Database = {
     Tables: {
       messages: {
         Row: {
+          analyzed_content: Json | null
           caption: string | null
           created_at: string | null
           duration: number | null
@@ -28,6 +29,7 @@ export type Database = {
           width: number | null
         }
         Insert: {
+          analyzed_content?: Json | null
           caption?: string | null
           created_at?: string | null
           duration?: number | null
@@ -45,6 +47,7 @@ export type Database = {
           width?: number | null
         }
         Update: {
+          analyzed_content?: Json | null
           caption?: string | null
           created_at?: string | null
           duration?: number | null
