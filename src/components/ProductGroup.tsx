@@ -10,6 +10,11 @@ export const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps)
   const mainMedia = group[0];
   const isVideo = mainMedia.mime_type?.startsWith('video');
 
+  const getMediaUrl = (media: MediaItem) => {
+    if (media.public_url) return media.public_url;
+    return `https://ovpsyrhigencvzlxqwqz.supabase.co/storage/v1/object/public/telegram-media/${media.file_unique_id}.${media.mime_type?.split('/')[1]}`;
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
       <div 
@@ -18,7 +23,7 @@ export const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps)
       >
         {isVideo ? (
           <video
-            src={`https://ovpsyrhigencvzlxqwqz.supabase.co/storage/v1/object/public/telegram-media/${mainMedia.file_unique_id}.${mainMedia.mime_type?.split('/')[1]}`}
+            src={getMediaUrl(mainMedia)}
             className="w-full h-full object-cover"
             autoPlay
             muted
@@ -27,7 +32,7 @@ export const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps)
           />
         ) : (
           <img
-            src={`https://ovpsyrhigencvzlxqwqz.supabase.co/storage/v1/object/public/telegram-media/${mainMedia.file_unique_id}.${mainMedia.mime_type?.split('/')[1]}`}
+            src={getMediaUrl(mainMedia)}
             alt={mainMedia.analyzed_content?.product_name || 'Product'}
             className="w-full h-full object-cover"
           />

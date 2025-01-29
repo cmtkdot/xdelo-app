@@ -127,7 +127,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      process_media_group_analysis: {
+        Args: {
+          p_message_id: string
+          p_media_group_id: string
+          p_analyzed_content: Json
+          p_processing_completed_at: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       message_processing_state:
