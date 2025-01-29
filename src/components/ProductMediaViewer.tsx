@@ -47,7 +47,7 @@ export const ProductMediaViewer = ({
       const { error } = await supabase
         .from('messages')
         .delete()
-        .eq('id', currentMedia.id);
+        .filter('id', 'eq', currentMedia.id);
 
       if (error) throw error;
 
