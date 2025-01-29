@@ -18,18 +18,10 @@ export type Database = {
           file_id: string | null
           file_size: number | null
           file_unique_id: string
-          group_caption_synced: boolean | null
           height: number | null
           id: string
-          is_original_caption: boolean | null
           media_group_id: string | null
-          message_caption_id: string | null
           mime_type: string | null
-          processing_completed_at: string | null
-          processing_started_at: string | null
-          processing_state:
-            | Database["public"]["Enums"]["message_processing_state"]
-            | null
           public_url: string | null
           telegram_data: Json | null
           telegram_message_id: number
@@ -45,18 +37,10 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id: string
-          group_caption_synced?: boolean | null
           height?: number | null
           id?: string
-          is_original_caption?: boolean | null
           media_group_id?: string | null
-          message_caption_id?: string | null
           mime_type?: string | null
-          processing_completed_at?: string | null
-          processing_started_at?: string | null
-          processing_state?:
-            | Database["public"]["Enums"]["message_processing_state"]
-            | null
           public_url?: string | null
           telegram_data?: Json | null
           telegram_message_id: number
@@ -72,18 +56,10 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string
-          group_caption_synced?: boolean | null
           height?: number | null
           id?: string
-          is_original_caption?: boolean | null
           media_group_id?: string | null
-          message_caption_id?: string | null
           mime_type?: string | null
-          processing_completed_at?: string | null
-          processing_started_at?: string | null
-          processing_state?:
-            | Database["public"]["Enums"]["message_processing_state"]
-            | null
           public_url?: string | null
           telegram_data?: Json | null
           telegram_message_id?: number
@@ -91,15 +67,7 @@ export type Database = {
           user_id?: string
           width?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "messages_message_caption_id_fkey"
-            columns: ["message_caption_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
