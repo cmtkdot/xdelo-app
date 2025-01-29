@@ -22,8 +22,9 @@ export async function analyzeCaption(caption: string): Promise<AIResponse> {
        - Return null if date is invalid or in future
     6. Notes (any text in parentheses)`;
 
+    console.log("Making OpenAI API request...");
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o-mini", // Using the correct model name
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: caption },
@@ -40,6 +41,7 @@ export async function analyzeCaption(caption: string): Promise<AIResponse> {
       extractedData = JSON.parse(response);
     } catch (error) {
       console.error("Error parsing AI response:", error);
+      console.log("Falling back to manual parsing");
       extractedData = parseManually(caption);
     }
 
@@ -52,6 +54,11 @@ export async function analyzeCaption(caption: string): Promise<AIResponse> {
     };
   } catch (error) {
     console.error("Error in caption analysis:", error);
+    console.log("Error details:", error.message);
+    if (error.response) {
+      console.error("OpenAI API Error:", error.response.data);
+    }
+    console.log("Falling back to manual parsing due to error");
     return {
       caption,
       extracted_data: parseManually(caption),
