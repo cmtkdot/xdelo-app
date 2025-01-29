@@ -15,13 +15,20 @@ export type Database = {
           caption: string | null
           created_at: string | null
           duration: number | null
+          error_message: string | null
           file_id: string | null
           file_size: number | null
           file_unique_id: string
+          group_caption_synced: boolean | null
           height: number | null
           id: string
+          is_original_caption: boolean | null
           media_group_id: string | null
+          message_caption_id: string | null
           mime_type: string | null
+          processing_completed_at: string | null
+          processing_started_at: string | null
+          processing_state: string | null
           public_url: string | null
           telegram_data: Json | null
           telegram_message_id: number
@@ -34,13 +41,20 @@ export type Database = {
           caption?: string | null
           created_at?: string | null
           duration?: number | null
+          error_message?: string | null
           file_id?: string | null
           file_size?: number | null
           file_unique_id: string
+          group_caption_synced?: boolean | null
           height?: number | null
           id?: string
+          is_original_caption?: boolean | null
           media_group_id?: string | null
+          message_caption_id?: string | null
           mime_type?: string | null
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          processing_state?: string | null
           public_url?: string | null
           telegram_data?: Json | null
           telegram_message_id: number
@@ -53,13 +67,20 @@ export type Database = {
           caption?: string | null
           created_at?: string | null
           duration?: number | null
+          error_message?: string | null
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string
+          group_caption_synced?: boolean | null
           height?: number | null
           id?: string
+          is_original_caption?: boolean | null
           media_group_id?: string | null
+          message_caption_id?: string | null
           mime_type?: string | null
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          processing_state?: string | null
           public_url?: string | null
           telegram_data?: Json | null
           telegram_message_id?: number
@@ -67,7 +88,15 @@ export type Database = {
           user_id?: string
           width?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_message_caption"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -106,12 +135,7 @@ export type Database = {
       }
     }
     Enums: {
-      message_processing_state:
-        | "initialized"
-        | "caption_ready"
-        | "analyzing"
-        | "analysis_synced"
-        | "completed"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
