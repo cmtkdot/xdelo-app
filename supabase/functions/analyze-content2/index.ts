@@ -37,6 +37,9 @@ serve(async (req) => {
       );
     }
 
+    console.log('Processing message:', message_id);
+    console.log('Caption:', message.caption);
+
     // Prepare the prompt for OpenAI
     const systemPrompt = `You are a product information parser. Extract the following information from the given text:
     - product_name (text before #)
@@ -69,15 +72,22 @@ serve(async (req) => {
       throw new Error('Invalid response from OpenAI');
     }
 
+    console.log('AI Response:', aiData.choices[0].message.content);
+
     const analyzedContent = JSON.parse(aiData.choices[0].message.content);
 
     // Update the message with the analyzed content
     const { error: updateError } = await supabase
       .from('messages')
-      .update({ analyzed_content: analyzedContent })
+      .update({ 
+        analyzed_content: analyzedContent,
+        processing_state: 'analysis_synced'
+      })
       .eq('id', message_id);
 
     if (updateError) throw updateError;
+
+    console.log('Successfully updated message:', message_id);
 
     return new Response(
       JSON.stringify({ success: true, analyzed_content: analyzedContent }),
