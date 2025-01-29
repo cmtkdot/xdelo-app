@@ -103,7 +103,6 @@ serve(async (req) => {
 
     console.log('📝 Processing update:', JSON.stringify(update, null, 2))
 
-    // Handle both regular messages and channel posts
     const message = update.message || update.channel_post
     if (!message) {
       console.error('❌ No message or channel_post found in update')
@@ -118,12 +117,10 @@ serve(async (req) => {
 
     console.log('📨 Processing message ID:', message.message_id);
 
-    // Handle photos, videos, and documents
     const mediaItems: TelegramMedia[] = []
     
     if (message.photo) {
       console.log('📸 Found photo array, selecting largest size');
-      // For photos, get the highest resolution version (last in array)
       mediaItems.push(message.photo[message.photo.length - 1])
     }
     if (message.video) {
@@ -141,38 +138,55 @@ serve(async (req) => {
     for (const mediaItem of mediaItems) {
       console.log('🔍 Processing media item:', mediaItem.file_unique_id);
 
-      // Get file info from Telegram
-      const fileInfoResponse = await fetch(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${mediaItem.file_id}`
-      )
-      const fileInfo = await fileInfoResponse.json()
-      console.log('📄 File info from Telegram:', JSON.stringify(fileInfo, null, 2));
+      // Check if file already exists in messages table
+      const { data: existingMessage } = await supabase
+        .from('messages')
+        .select('public_url')
+        .eq('file_unique_id', mediaItem.file_unique_id)
+        .single();
 
-      if (!fileInfo.ok) {
-        throw new Error(`Failed to get file info: ${JSON.stringify(fileInfo)}`)
+      let uploadResult;
+      if (existingMessage?.public_url) {
+        console.log('✅ Found existing file, reusing public URL:', existingMessage.public_url);
+        uploadResult = {
+          publicUrl: existingMessage.public_url,
+          fileName: `${mediaItem.file_unique_id}.${mediaItem.mime_type?.split('/')[1]}`,
+          mimeType: mediaItem.mime_type || 'application/octet-stream'
+        };
+      } else {
+        // Get file info from Telegram
+        const fileInfoResponse = await fetch(
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${mediaItem.file_id}`
+        )
+        const fileInfo = await fileInfoResponse.json()
+        console.log('📄 File info from Telegram:', JSON.stringify(fileInfo, null, 2));
+
+        if (!fileInfo.ok) {
+          throw new Error(`Failed to get file info: ${JSON.stringify(fileInfo)}`)
+        }
+
+        // Download file from Telegram
+        console.log('⬇️ Downloading file from Telegram');
+        const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`
+        const fileResponse = await fetch(fileUrl)
+        const fileBuffer = await fileResponse.arrayBuffer()
+        console.log('✅ File downloaded successfully');
+
+        // Prepare metadata for upload
+        const metadata: MediaFileMetadata = {
+          fileUniqueId: mediaItem.file_unique_id,
+          fileType: determineMediaType(mediaItem.mime_type),
+          mimeType: mediaItem.mime_type,
+          fileSize: mediaItem.file_size,
+          width: mediaItem.width,
+          height: mediaItem.height,
+          duration: mediaItem.duration
+        }
+
+        // Upload using the media utilities
+        uploadResult = await uploadMedia(supabase, fileBuffer, metadata)
+        console.log('✅ File uploaded successfully');
       }
-
-      // Download file from Telegram
-      console.log('⬇️ Downloading file from Telegram');
-      const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`
-      const fileResponse = await fetch(fileUrl)
-      const fileBuffer = await fileResponse.arrayBuffer()
-      console.log('✅ File downloaded successfully');
-
-      // Prepare metadata for upload
-      const metadata: MediaFileMetadata = {
-        fileUniqueId: mediaItem.file_unique_id,
-        fileType: determineMediaType(mediaItem.mime_type),
-        mimeType: mediaItem.mime_type,
-        fileSize: mediaItem.file_size,
-        width: mediaItem.width,
-        height: mediaItem.height,
-        duration: mediaItem.duration
-      }
-
-      // Upload using the media utilities
-      const uploadResult = await uploadMedia(supabase, fileBuffer, metadata)
-      console.log('✅ File uploaded successfully');
 
       // Store message data
       console.log('💾 Storing message data in database');
