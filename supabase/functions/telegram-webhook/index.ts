@@ -57,7 +57,24 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const update: TelegramUpdate = await req.json()
+    // Log the raw request body for debugging
+    const rawBody = await req.text()
+    console.log('Raw request body:', rawBody)
+
+    let update: TelegramUpdate
+    try {
+      update = JSON.parse(rawBody)
+    } catch (error) {
+      console.error('Failed to parse JSON:', error)
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON in request body' }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400 
+        }
+      )
+    }
+
     console.log('Received update:', JSON.stringify(update, null, 2))
 
     if (!update.message) {
@@ -103,19 +120,6 @@ serve(async (req) => {
 
     if (uploadError) {
       throw new Error(`Failed to upload file: ${JSON.stringify(uploadError)}`)
-    }
-
-    // Create or update user profile
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .upsert({
-        id: message.from.id.toString(),
-        telegram_username: message.from.username,
-        telegram_first_name: message.from.first_name,
-      })
-
-    if (profileError) {
-      console.error('Error updating profile:', profileError)
     }
 
     // Store message data
