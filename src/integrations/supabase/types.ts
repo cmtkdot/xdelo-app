@@ -9,7 +9,137 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      messages: {
+        Row: {
+          analyzed_content: Json | null
+          caption: string | null
+          created_at: string | null
+          duration: number | null
+          file_id: string | null
+          file_size: number | null
+          file_unique_id: string | null
+          group_caption_synced: boolean | null
+          height: number | null
+          id: string
+          is_original_caption: boolean | null
+          media_group_id: string | null
+          message_caption_id: string | null
+          mime_type: string | null
+          processing_completed_at: string | null
+          processing_started_at: string | null
+          processing_state: string | null
+          public_url: string | null
+          telegram_data: Json | null
+          telegram_message_id: number | null
+          updated_at: string | null
+          user_id: string
+          width: number | null
+        }
+        Insert: {
+          analyzed_content?: Json | null
+          caption?: string | null
+          created_at?: string | null
+          duration?: number | null
+          file_id?: string | null
+          file_size?: number | null
+          file_unique_id?: string | null
+          group_caption_synced?: boolean | null
+          height?: number | null
+          id?: string
+          is_original_caption?: boolean | null
+          media_group_id?: string | null
+          message_caption_id?: string | null
+          mime_type?: string | null
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          processing_state?: string | null
+          public_url?: string | null
+          telegram_data?: Json | null
+          telegram_message_id?: number | null
+          updated_at?: string | null
+          user_id: string
+          width?: number | null
+        }
+        Update: {
+          analyzed_content?: Json | null
+          caption?: string | null
+          created_at?: string | null
+          duration?: number | null
+          file_id?: string | null
+          file_size?: number | null
+          file_unique_id?: string | null
+          group_caption_synced?: boolean | null
+          height?: number | null
+          id?: string
+          is_original_caption?: boolean | null
+          media_group_id?: string | null
+          message_caption_id?: string | null
+          mime_type?: string | null
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          processing_state?: string | null
+          public_url?: string | null
+          telegram_data?: Json | null
+          telegram_message_id?: number | null
+          updated_at?: string | null
+          user_id?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      other_messages: {
+        Row: {
+          chat_id: number | null
+          chat_title: string | null
+          chat_type: string | null
+          created_at: string | null
+          id: string
+          message_text: string | null
+          message_type: string
+          processing_completed_at: string | null
+          processing_state: string | null
+          telegram_data: Json | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          chat_id?: number | null
+          chat_title?: string | null
+          chat_type?: string | null
+          created_at?: string | null
+          id?: string
+          message_text?: string | null
+          message_type: string
+          processing_completed_at?: string | null
+          processing_state?: string | null
+          telegram_data?: Json | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          chat_id?: number | null
+          chat_title?: string | null
+          chat_type?: string | null
+          created_at?: string | null
+          id?: string
+          message_text?: string | null
+          message_type?: string
+          processing_completed_at?: string | null
+          processing_state?: string | null
+          telegram_data?: Json | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
