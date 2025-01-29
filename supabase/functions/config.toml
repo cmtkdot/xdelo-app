@@ -1,4 +1,4 @@
-project_id = "xjhhehxcxkiumnwbirel"
+project_id = "ovpsyrhigencvzlxqwqz"
 
 [global.env]
 TELEGRAM_BOT_TOKEN = "env(TELEGRAM_BOT_TOKEN)"
