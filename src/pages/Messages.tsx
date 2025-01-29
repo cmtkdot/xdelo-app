@@ -12,7 +12,7 @@ const Messages = () => {
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<MediaItem[]>([]);
   const [viewerOpen, setViewerOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -27,12 +27,12 @@ const Messages = () => {
 
         // Group messages by media_group_id or individual messages
         const groups: { [key: string]: MediaItem[] } = {};
-        data.forEach((message: MediaItem) => {
+        data.forEach((message) => {
           const groupKey = message.media_group_id || message.id;
           if (!groups[groupKey]) {
             groups[groupKey] = [];
           }
-          groups[groupKey].push(message);
+          groups[groupKey].push(message as MediaItem);
         });
 
         setMediaGroups(groups);
@@ -77,8 +77,53 @@ const Messages = () => {
   };
 
   const handleEdit = (media: MediaItem) => {
-    setSelectedMedia(media);
-    setEditDialogOpen(true);
+    setEditItem(media);
+  };
+
+  const handleItemChange = (field: string, value: any) => {
+    if (editItem) {
+      setEditItem({
+        ...editItem,
+        analyzed_content: {
+          ...editItem.analyzed_content,
+          [field]: value
+        }
+      });
+    }
+  };
+
+  const handleSave = async () => {
+    if (!editItem) return;
+
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({
+          analyzed_content: editItem.analyzed_content
+        })
+        .eq('id', editItem.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Product details updated successfully.",
+      });
+      
+      setEditItem(null);
+    } catch (error) {
+      console.error('Error updating message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update product details.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const formatDate = (date: string | null) => {
+    if (!date) return null;
+    return new Date(date).toISOString().split('T')[0];
   };
 
   return (
@@ -112,9 +157,11 @@ const Messages = () => {
       />
 
       <MediaEditDialog
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        media={selectedMedia}
+        editItem={editItem}
+        onClose={() => setEditItem(null)}
+        onSave={handleSave}
+        onItemChange={handleItemChange}
+        formatDate={formatDate}
       />
     </div>
   );
