@@ -106,12 +106,7 @@ export type Database = {
       }
     }
     Enums: {
-      message_processing_state:
-        | "initialized"
-        | "caption_ready"
-        | "analyzing"
-        | "analysis_synced"
-        | "completed"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -215,3 +210,4 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
     ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
+
