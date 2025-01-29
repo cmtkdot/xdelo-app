@@ -61,7 +61,7 @@ serve(async (req) => {
       metadata: { correlation_id: correlationId },
     });
 
-    // Find the original caption message in the group
+    // Find all messages in the group
     const { data: groupMessages, error: groupError } = await supabase
       .from("messages")
       .select("*")
@@ -76,14 +76,12 @@ serve(async (req) => {
       throw new Error("No messages found in group");
     }
 
-    // Find message with analyzed content
-    const sourceMessage = groupMessages.find(
-      (m) => m.analyzed_content && Object.keys(m.analyzed_content).length > 0
-    );
+    // Find message with caption
+    const sourceMessage = groupMessages.find((m) => m.caption);
 
     if (!sourceMessage) {
       logProcessingEvent({
-        event: "NO_ANALYSIS_FOUND",
+        event: "NO_CAPTION_FOUND",
         message_id,
         media_group_id,
         metadata: {
@@ -94,7 +92,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "No analyzed content found in group",
+          error: "No caption found in group",
           correlation_id: correlationId,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -107,7 +105,7 @@ serve(async (req) => {
       {
         p_message_id: sourceMessage.id,
         p_media_group_id: media_group_id,
-        p_analyzed_content: sourceMessage.analyzed_content,
+        p_analyzed_content: sourceMessage.analyzed_content || {},
         p_processing_completed_at: new Date().toISOString(),
         p_correlation_id: correlationId,
       }
@@ -117,13 +115,28 @@ serve(async (req) => {
       throw syncError;
     }
 
+    // Update all messages in group to caption_ready state
+    const { error: updateError } = await supabase
+      .from("messages")
+      .update({
+        processing_state: "caption_ready",
+        group_caption_synced: true,
+        message_caption_id: sourceMessage.id,
+      })
+      .eq("media_group_id", media_group_id)
+      .neq("id", sourceMessage.id); // Don't update source message
+
+    if (updateError) {
+      throw updateError;
+    }
+
     const totalDuration = Date.now() - startTime;
     logProcessingEvent({
       event: "SYNC_COMPLETED",
       message_id,
       media_group_id,
       duration_ms: totalDuration,
-      state: "completed",
+      state: "caption_ready",
       metadata: {
         correlation_id: correlationId,
         group_size: groupMessages.length,

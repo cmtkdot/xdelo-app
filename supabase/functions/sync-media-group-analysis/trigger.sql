@@ -4,8 +4,7 @@ RETURNS TRIGGER AS $$
 BEGIN
   -- Only trigger for messages that are part of a media group
   IF NEW.media_group_id IS NOT NULL AND
-     (NEW.analyzed_content IS NOT NULL AND NEW.analyzed_content != '{}'::jsonb) AND
-     NEW.processing_state = 'analysis_synced' THEN
+     NEW.processing_state = 'caption_ready' THEN
 
     -- Make HTTP request to the Edge Function
     PERFORM net.http_post(
@@ -26,6 +25,7 @@ $$ LANGUAGE plpgsql;
 
 -- Create the trigger
 CREATE OR REPLACE TRIGGER sync_media_group_analysis_trigger
-AFTER UPDATE OF analyzed_content ON messages
+AFTER UPDATE OF processing_state ON messages
 FOR EACH ROW
+WHEN (NEW.processing_state = 'caption_ready')
 EXECUTE FUNCTION trigger_sync_media_group_analysis();
