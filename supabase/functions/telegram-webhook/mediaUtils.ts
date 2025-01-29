@@ -97,42 +97,17 @@ export async function checkFileExists(
   fileName: string
 ): Promise<string | null> {
   try {
-    // First try exact match
-    const { data: exactMatch } = await supabase.storage
+    const { data: existingFile } = await supabase.storage
       .from("telegram-media")
       .list("", {
         search: fileName,
-        limit: 1,
       });
 
-    if (exactMatch && exactMatch.length > 0) {
+    if (existingFile && existingFile.length > 0) {
       const {
         data: { publicUrl },
       } = await supabase.storage.from("telegram-media").getPublicUrl(fileName);
       return publicUrl;
-    }
-
-    // If no exact match, try finding by file_unique_id without extension
-    const baseFileName = fileName.split(".")[0];
-    const { data: files } = await supabase.storage
-      .from("telegram-media")
-      .list("", {
-        search: baseFileName,
-      });
-
-    if (files && files.length > 0) {
-      // Find first matching file with same base name
-      const matchingFile = files.find((f) =>
-        f.name.startsWith(baseFileName + ".")
-      );
-      if (matchingFile) {
-        const {
-          data: { publicUrl },
-        } = await supabase.storage
-          .from("telegram-media")
-          .getPublicUrl(matchingFile.name);
-        return publicUrl;
-      }
     }
 
     return null;
