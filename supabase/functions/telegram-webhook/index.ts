@@ -117,14 +117,17 @@ serve(async (req) => {
       throw new Error("Webhook secret is not configured");
     }
 
-    // Verify webhook secret from URL parameters
-    const url = new URL(req.url);
-    const providedSecret = url.searchParams.get("secret");
-    
-    if (!providedSecret) {
-      console.error("❌ No webhook secret provided");
+    // Get Authorization header
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      console.error("❌ No Authorization header provided");
       throw new Error("No webhook secret provided");
     }
+
+    // Extract secret from Authorization header
+    const providedSecret = authHeader.startsWith("Bearer ") 
+      ? authHeader.slice(7) 
+      : authHeader;
 
     // Use constant-time comparison for security
     const encoder = new TextEncoder();
