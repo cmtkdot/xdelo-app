@@ -103,24 +103,46 @@ interface TelegramUpdate {
 serve(async (req) => {
   console.log("🚀 Webhook handler started");
 
+  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     console.log("👋 Handling CORS preflight request");
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Verify webhook secret
-    const url = new URL(req.url);
-    const secret = url.searchParams.get("secret");
+    // Get webhook secret from environment
     const WEBHOOK_SECRET = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
-
     if (!WEBHOOK_SECRET) {
       console.error("❌ TELEGRAM_WEBHOOK_SECRET is not set");
       throw new Error("Webhook secret is not configured");
     }
 
-    if (secret !== WEBHOOK_SECRET) {
-      console.error("❌ Invalid webhook secret");
+    // Verify webhook secret from URL parameters
+    const url = new URL(req.url);
+    const providedSecret = url.searchParams.get("secret");
+    
+    if (!providedSecret) {
+      console.error("❌ No webhook secret provided");
+      throw new Error("No webhook secret provided");
+    }
+
+    // Use constant-time comparison for security
+    const encoder = new TextEncoder();
+    const secretsMatch = await crypto.subtle.verify(
+      "HMAC",
+      await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(WEBHOOK_SECRET),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["verify"]
+      ),
+      await crypto.subtle.digest("SHA-256", encoder.encode(providedSecret)),
+      encoder.encode(WEBHOOK_SECRET)
+    );
+
+    if (!secretsMatch) {
+      console.error("❌ Invalid webhook secret provided");
       throw new Error("Invalid webhook secret");
     }
 
@@ -391,13 +413,18 @@ serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
   } catch (error) {
     console.error("❌ Error processing update:", error);
     return new Response(
-      JSON.stringify({ error: error.message, stack: error.stack }),
+      JSON.stringify({ 
+        error: error.message, 
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+      }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
+        status: error.message.includes("webhook secret") ? 401 : 500,
       }
     );
   }
