@@ -13,6 +13,8 @@ export type Database = {
         Row: {
           analyzed_content: Json | null
           caption: string | null
+          chat_id: number | null
+          chat_type: string | null
           created_at: string | null
           duration: number | null
           file_id: string | null
@@ -38,6 +40,8 @@ export type Database = {
         Insert: {
           analyzed_content?: Json | null
           caption?: string | null
+          chat_id?: number | null
+          chat_type?: string | null
           created_at?: string | null
           duration?: number | null
           file_id?: string | null
@@ -63,6 +67,8 @@ export type Database = {
         Update: {
           analyzed_content?: Json | null
           caption?: string | null
+          chat_id?: number | null
+          chat_type?: string | null
           created_at?: string | null
           duration?: number | null
           file_id?: string | null
@@ -137,6 +143,27 @@ export type Database = {
           telegram_data?: Json | null
           updated_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -227,6 +254,14 @@ export type Database = {
             Args: {
               uri: string
               data: Json
+            }
+            Returns: unknown
+          }
+        | {
+            Args: {
+              url: string
+              headers: Json
+              body: Json
             }
             Returns: unknown
           }
