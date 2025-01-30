@@ -147,7 +147,6 @@ export async function handleMediaMessage(
 
       uploadResult = await uploadMedia(supabase, fileBuffer, {
         fileUniqueId: mediaItem.file_unique_id,
-        fileType: "photo",
         mimeType: mediaItem.mime_type,
         fileSize: mediaItem.file_size,
         width: mediaItem.width,
