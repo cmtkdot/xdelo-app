@@ -17,6 +17,7 @@ serve(async (req) => {
   }
 
   try {
+    console.log("🔒 Validating webhook secret");
     await validateWebhookSecret(req);
 
     console.log("🔑 Checking for TELEGRAM_BOT_TOKEN");
