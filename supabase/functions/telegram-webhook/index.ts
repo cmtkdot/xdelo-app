@@ -109,6 +109,23 @@ serve(async (req) => {
   }
 
   try {
+    // Verify webhook secret
+    const url = new URL(req.url);
+    const secret = url.searchParams.get("secret");
+    const WEBHOOK_SECRET = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
+
+    if (!WEBHOOK_SECRET) {
+      console.error("❌ TELEGRAM_WEBHOOK_SECRET is not set");
+      throw new Error("Webhook secret is not configured");
+    }
+
+    if (secret !== WEBHOOK_SECRET) {
+      console.error("❌ Invalid webhook secret");
+      throw new Error("Invalid webhook secret");
+    }
+
+    console.log("✅ Webhook secret verified");
+
     console.log("🔑 Checking for TELEGRAM_BOT_TOKEN");
     const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
     if (!TELEGRAM_BOT_TOKEN) {
