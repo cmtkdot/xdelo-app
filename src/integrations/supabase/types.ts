@@ -29,7 +29,9 @@ export type Database = {
           mime_type: string | null
           processing_completed_at: string | null
           processing_started_at: string | null
-          processing_state: string | null
+          processing_state:
+            | Database["public"]["Enums"]["message_processing_state"]
+            | null
           public_url: string | null
           telegram_data: Json | null
           telegram_message_id: number | null
@@ -56,7 +58,9 @@ export type Database = {
           mime_type?: string | null
           processing_completed_at?: string | null
           processing_started_at?: string | null
-          processing_state?: string | null
+          processing_state?:
+            | Database["public"]["Enums"]["message_processing_state"]
+            | null
           public_url?: string | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
@@ -83,7 +87,9 @@ export type Database = {
           mime_type?: string | null
           processing_completed_at?: string | null
           processing_started_at?: string | null
-          processing_state?: string | null
+          processing_state?:
+            | Database["public"]["Enums"]["message_processing_state"]
+            | null
           public_url?: string | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
@@ -320,7 +326,12 @@ export type Database = {
           }
     }
     Enums: {
-      [_ in never]: never
+      message_processing_state:
+        | "initialized"
+        | "caption_ready"
+        | "analyzing"
+        | "analysis_synced"
+        | "completed"
     }
     CompositeTypes: {
       http_header: {
