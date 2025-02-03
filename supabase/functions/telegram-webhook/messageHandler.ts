@@ -119,32 +119,78 @@ export async function handleMediaMessage(
       .single();
 
     let uploadResult: MediaUploadResult;
-    if (existingMessage?.public_url) {
-      console.log("✅ Found existing file, reusing public URL");
+    if (existingMessage) {
+      console.log("✅ Found existing message, checking analysis status");
+      
+      // Check if analysis is incomplete
+      const needsAnalysis = !existingMessage.analyzed_content && 
+                          existingMessage.processing_state !== 'completed' &&
+                          existingMessage.processing_state !== 'analyzing';
+      
+      // Check if media group sync is incomplete
+      const needsGroupSync = existingMessage.media_group_id && 
+                           (!existingMessage.group_caption_synced || 
+                            existingMessage.processing_state !== 'completed');
+
+      if (needsAnalysis || needsGroupSync) {
+        console.log("🔄 Existing message needs processing:", { needsAnalysis, needsGroupSync });
+        
+        const { error: updateError } = await supabase
+          .from("messages")
+          .update({
+            telegram_data: { message },
+            caption: message.caption || "",
+            media_group_id: message.media_group_id,
+            telegram_message_id: message.message_id,
+            processing_state: message.caption ? 'caption_ready' : 'initialized',
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingMessage.id);
+
+        if (updateError) {
+          console.error("❌ Failed to update existing message:", updateError);
+          throw updateError;
+        }
+
+        // If needs analysis and has caption, trigger analysis
+        if (needsAnalysis && message.caption) {
+          try {
+            console.log("🔄 Triggering caption parsing for existing message");
+            const response = await fetch(
+              `${Deno.env.get("SUPABASE_URL")}/functions/v1/parse-caption-with-ai`,
+              {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  message_id: existingMessage.id,
+                  media_group_id: message.media_group_id,
+                  caption: message.caption
+                }),
+              }
+            );
+
+            if (!response.ok) {
+              const errorText = await response.text();
+              console.error("❌ Caption parsing failed for existing message:", errorText);
+              throw new Error(`Caption parsing failed: ${errorText}`);
+            }
+            console.log("✅ Caption parsing triggered for existing message");
+          } catch (error) {
+            console.error("❌ Error triggering caption parsing for existing message:", error);
+          }
+        }
+      } else {
+        console.log("✅ Existing message is already fully processed");
+      }
+
       uploadResult = {
         publicUrl: existingMessage.public_url,
-        fileName: `${mediaItem.file_unique_id}.${
-          mediaItem.mime_type?.split("/")[1]
-        }`,
+        fileName: `${mediaItem.file_unique_id}.${mediaItem.mime_type?.split("/")[1]}`,
         mimeType: mediaItem.mime_type || "application/octet-stream",
       };
-
-      const { error: updateError } = await supabase
-        .from("messages")
-        .update({
-          telegram_data: { message },
-          caption: message.caption || "",
-          media_group_id: message.media_group_id,
-          telegram_message_id: message.message_id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", existingMessage.id);
-
-      if (updateError) {
-        console.error("❌ Failed to update existing message:", updateError);
-        throw updateError;
-      }
-      console.log("✅ Updated existing message with new telegram data");
     } else {
       console.log("⬇️ Downloading new media file from Telegram");
       const fileInfoResponse = await fetch(
