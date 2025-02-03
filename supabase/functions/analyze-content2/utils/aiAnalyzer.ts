@@ -1,34 +1,32 @@
-import { AnalyzedContent } from "../types.ts";
 import { parseManually } from "./manualParser.ts";
+import { AnalyzedContent } from "../types.ts";
 
-const SYSTEM_PROMPT = `You are a product information extractor. Your task is to analyze product-related captions and extract structured information. Focus on identifying:
+const SYSTEM_PROMPT = `You are a product information extractor. Extract structured information from product-related captions. Focus on:
 - Product name
 - Product code (usually starts with # or appears as a code)
 - Vendor UID (if present)
-- Purchase date (in any format)
+- Purchase date (in YYYY-MM-DD format)
 - Quantity (numerical value)
 - Additional notes
 
-Format dates as YYYY-MM-DD. If information is not present, omit the field.`;
+Return ONLY a JSON object with these fields. Omit fields if information is not present.`;
 
 export async function analyzeCaption(caption: string): Promise<AnalyzedContent> {
   try {
-    console.log("Starting caption analysis for:", caption);
+    console.log("Starting caption analysis:", caption);
     
-    // First try manual parsing
+    // Try manual parsing first
     const manualResult = parseManually(caption);
     if (Object.keys(manualResult).length > 0) {
       console.log("Successfully parsed using manual parser:", manualResult);
       return manualResult;
     }
 
-    // If manual parsing doesn't yield results, use OpenAI
+    // Fallback to OpenAI
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAIApiKey) {
       throw new Error('OpenAI API key not configured');
     }
-
-    console.log("Analyzing caption with OpenAI:", caption);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -58,10 +56,8 @@ export async function analyzeCaption(caption: string): Promise<AnalyzedContent> 
     console.log("OpenAI response:", aiResponse);
 
     try {
-      // Try to parse as JSON first
       return JSON.parse(aiResponse);
     } catch (e) {
-      // If not JSON, try manual parsing again
       console.log("Falling back to manual parsing of AI response");
       return parseManually(aiResponse);
     }

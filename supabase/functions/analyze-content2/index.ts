@@ -22,8 +22,9 @@ serve(async (req) => {
 
   try {
     const { message_id } = await req.json();
-    console.log(`[${correlationId}] Processing message:`, message_id);
+    console.log(`[${correlationId}] Starting analysis for message:`, message_id);
 
+    // Fetch message details
     const { data: message, error: messageError } = await supabase
       .from("messages")
       .select("*")
@@ -32,25 +33,11 @@ serve(async (req) => {
 
     if (messageError) throw messageError;
     if (!message) throw new Error("Message not found");
-    if (!message.caption) {
-      console.log(`[${correlationId}] No caption to analyze for message:`, message_id);
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: "No caption to analyze",
-          correlation_id: correlationId,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
 
-    console.log(`[${correlationId}] Analyzing caption for message:`, message_id);
-    const analyzedContent = await analyzeCaption(message.caption);
-
+    // Update state to analyzing
     const { error: updateError } = await supabase
       .from("messages")
       .update({
-        analyzed_content: analyzedContent,
         processing_state: "analyzing",
         processing_started_at: new Date().toISOString(),
       })
@@ -58,8 +45,18 @@ serve(async (req) => {
 
     if (updateError) throw updateError;
 
+    // Analyze caption if present
+    let analyzedContent = null;
+    if (message.caption) {
+      console.log(`[${correlationId}] Analyzing caption:`, message.caption);
+      analyzedContent = await analyzeCaption(message.caption);
+      console.log(`[${correlationId}] Analysis result:`, analyzedContent);
+    }
+
+    // Handle media group synchronization
     if (message.media_group_id) {
       console.log(`[${correlationId}] Processing media group:`, message.media_group_id);
+      
       const { error: groupError } = await supabase.rpc(
         "process_media_group_analysis",
         {
@@ -72,9 +69,11 @@ serve(async (req) => {
 
       if (groupError) throw groupError;
     } else {
+      // Single message update
       const { error: completeError } = await supabase
         .from("messages")
         .update({
+          analyzed_content: analyzedContent,
           processing_state: "completed",
           processing_completed_at: new Date().toISOString(),
         })
@@ -84,7 +83,7 @@ serve(async (req) => {
     }
 
     const duration = Date.now() - startTime;
-    console.log(`[${correlationId}] Analysis completed in ${duration}ms for message:`, message_id);
+    console.log(`[${correlationId}] Analysis completed in ${duration}ms`);
 
     return new Response(
       JSON.stringify({
@@ -96,7 +95,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error(`[${correlationId}] Error processing message:`, error);
+    console.error(`[${correlationId}] Error:`, error);
     return new Response(
       JSON.stringify({
         error: error.message,
