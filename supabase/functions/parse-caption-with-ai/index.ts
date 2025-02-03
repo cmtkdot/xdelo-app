@@ -15,9 +15,14 @@ async function syncMediaGroupAnalysis(
   mediaGroupId: string | null,
   analyzedContent: any
 ) {
-  if (!mediaGroupId) return;
+  if (!mediaGroupId) {
+    console.log('No media group ID provided, skipping sync');
+    return;
+  }
 
   try {
+    console.log(`Starting media group analysis sync for message ${messageId} in group ${mediaGroupId}`);
+    
     const response = await supabase.functions.invoke('sync-media-group-analysis', {
       body: {
         message_id: messageId,
@@ -28,24 +33,29 @@ async function syncMediaGroupAnalysis(
     });
 
     if (!response.data) {
-      throw new Error('Failed to sync media group analysis');
+      throw new Error('No response data from sync-media-group-analysis');
     }
 
     console.log('Successfully synced media group analysis:', response.data);
   } catch (error) {
     console.error('Error syncing media group analysis:', error);
-    throw error;
+    throw new Error(`Failed to sync media group analysis: ${error.message}`);
   }
 }
 
 serve(async (req) => {
+  console.log('Received caption parsing request');
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const { message_id, media_group_id, caption } = await req.json();
-    console.log(`Processing caption parsing for message ${message_id}`);
+    console.log(`Processing caption parsing for message ${message_id}`, {
+      media_group_id,
+      caption_length: caption?.length
+    });
 
     if (!caption) {
       throw new Error('No caption provided for parsing');
@@ -73,6 +83,7 @@ serve(async (req) => {
         console.log('Merged parsing result:', finalResult);
       } catch (aiError) {
         console.error('AI parsing failed:', aiError);
+        // Continue with manual results even if AI fails
       }
     }
 
@@ -81,6 +92,8 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    console.log(`Updating message ${message_id} with parsed content`);
+    
     // First update the source message
     const { error: updateError } = await supabase
       .from('messages')
@@ -91,7 +104,10 @@ serve(async (req) => {
       })
       .eq('id', message_id);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      console.error('Error updating message:', updateError);
+      throw updateError;
+    }
 
     // If this is part of a media group, sync the analysis
     if (media_group_id) {
@@ -110,11 +126,12 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error parsing caption:', error);
+    console.error('Error in parse-caption-with-ai:', error);
     return new Response(
       JSON.stringify({ 
         error: error.message,
-        details: 'Failed to parse caption or update message'
+        details: 'Failed to parse caption or update message',
+        timestamp: new Date().toISOString()
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -7,6 +7,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('Received media group analysis sync request');
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -18,7 +20,15 @@ serve(async (req) => {
     );
 
     const { message_id, media_group_id, analyzed_content, processing_completed_at } = await req.json();
-    console.log(`Processing media group analysis for message ${message_id} in group ${media_group_id}`);
+    
+    if (!message_id || !media_group_id) {
+      throw new Error('Missing required parameters: message_id and media_group_id are required');
+    }
+
+    console.log(`Processing media group analysis for message ${message_id} in group ${media_group_id}`, {
+      has_analyzed_content: !!analyzed_content,
+      processing_completed_at
+    });
 
     // Call the database function to process the media group
     const { data, error } = await supabase.rpc('process_media_group_analysis', {
@@ -28,23 +38,30 @@ serve(async (req) => {
       p_processing_completed_at: processing_completed_at
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error in process_media_group_analysis:', error);
+      throw error;
+    }
+
+    console.log('Successfully processed media group analysis');
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         analyzed_content: analyzed_content,
-        message: 'Media group analysis synced successfully'
+        message: 'Media group analysis synced successfully',
+        timestamp: new Date().toISOString()
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Error processing media group:', error);
+    console.error('Error in sync-media-group-analysis:', error);
     return new Response(
       JSON.stringify({ 
         error: error.message,
-        details: 'Failed to sync media group analysis'
+        details: 'Failed to sync media group analysis',
+        timestamp: new Date().toISOString()
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
