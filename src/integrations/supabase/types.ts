@@ -97,6 +97,7 @@ export type Database = {
           file_id: string | null
           file_size: number | null
           file_unique_id: string | null
+          fresh_analysis: Json | null
           group_caption_synced: boolean | null
           height: number | null
           id: string
@@ -131,6 +132,7 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
+          fresh_analysis?: Json | null
           group_caption_synced?: boolean | null
           height?: number | null
           id?: string
@@ -165,6 +167,7 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
+          fresh_analysis?: Json | null
           group_caption_synced?: boolean | null
           height?: number | null
           id?: string

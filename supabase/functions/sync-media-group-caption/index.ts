@@ -26,45 +26,34 @@ serve(async (req) => {
     const { message_id, media_group_id, caption } = await req.json() as SyncRequest;
     console.log(`Processing caption sync for message ${message_id} in group ${media_group_id}`);
 
-    // Create synced caption JSON
-    const syncedCaption = {
-      caption,
-      synced_at: new Date().toISOString(),
-      source_message_id: message_id
-    };
-
-    // Update the source message
-    const { error: sourceError } = await supabase
+    // Get the current message to check its analysis state
+    const { data: message, error: messageError } = await supabase
       .from('messages')
-      .update({
-        is_original_caption: true,
-        group_caption_synced: true,
-        synced_caption: syncedCaption
-      })
-      .eq('id', message_id);
+      .select('analyzed_content, fresh_analysis')
+      .eq('id', message_id)
+      .single();
 
-    if (sourceError) {
-      throw sourceError;
-    }
+    if (messageError) throw messageError;
 
-    // Update all other messages in the group
-    const { error: groupError } = await supabase
-      .from('messages')
-      .update({
-        is_original_caption: false,
-        group_caption_synced: true,
-        synced_caption: syncedCaption
-      })
-      .eq('media_group_id', media_group_id)
-      .neq('id', message_id);
+    // Use fresh_analysis if available, fallback to analyzed_content
+    const analysisContent = message?.fresh_analysis || message?.analyzed_content;
 
-    if (groupError) {
-      throw groupError;
-    }
+    // Update all messages in the group with the caption and analysis
+    const { error: updateError } = await supabase.rpc(
+      'process_media_group_analysis',
+      {
+        p_message_id: message_id,
+        p_media_group_id: media_group_id,
+        p_analyzed_content: analysisContent,
+        p_processing_completed_at: new Date().toISOString()
+      }
+    );
 
-    // Trigger caption parsing with AI fallback
+    if (updateError) throw updateError;
+
+    // Trigger the parse-caption-all function to analyze the caption
     const parseResponse = await fetch(
-      `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
+      `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-all`,
       {
         method: 'POST',
         headers: {
@@ -73,7 +62,8 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           message_id,
-          caption
+          caption,
+          media_group_id
         })
       }
     );
