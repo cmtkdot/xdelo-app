@@ -24,7 +24,7 @@ serve(async (req) => {
     const { message_id } = await req.json();
     console.log(`[${correlationId}] Starting analysis for message:`, message_id);
 
-    // Fetch message details using maybeSingle() instead of single()
+    // Fetch message details using maybeSingle()
     const { data: message, error: messageError } = await supabase
       .from("messages")
       .select("*")
