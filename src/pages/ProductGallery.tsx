@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem } from "@/types";
+import { MediaItem, AnalyzedContent } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
@@ -17,7 +17,7 @@ const ProductGallery = () => {
   const [vendors, setVendors] = useState<string[]>([]);
   const [filters, setFilters] = useState<FilterValues>({
     search: "",
-    vendor: "",
+    vendor: "all",
     dateFrom: undefined,
     dateTo: undefined,
     sortOrder: "desc",
@@ -36,7 +36,7 @@ const ProductGallery = () => {
 
         const uniqueVendors = new Set<string>();
         data.forEach((message) => {
-          const content = message.analyzed_content as MediaItem['analyzed_content'];
+          const content = message.analyzed_content as AnalyzedContent;
           if (content?.vendor_uid) {
             uniqueVendors.add(content.vendor_uid);
           }
@@ -167,7 +167,7 @@ const ProductGallery = () => {
       setEditItem({
         ...editItem,
         analyzed_content: {
-          ...editItem.analyzed_content,
+          ...(editItem.analyzed_content || {}),
           [field]: value
         }
       });
@@ -205,7 +205,7 @@ const ProductGallery = () => {
 
   const handleFilterChange = (newFilters: FilterValues) => {
     setFilters(newFilters);
-    setCurrentPage(1); // Reset to first page when filters change
+    setCurrentPage(1);
   };
 
   return (

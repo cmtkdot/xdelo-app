@@ -65,7 +65,7 @@ export const ProductFilters = ({ vendors, filters, onFilterChange }: ProductFilt
     setDateRange({ from: undefined, to: undefined });
     onFilterChange({
       search: "",
-      vendor: "",
+      vendor: "all",
       dateFrom: undefined,
       dateTo: undefined,
       sortOrder: "desc",
@@ -74,7 +74,7 @@ export const ProductFilters = ({ vendors, filters, onFilterChange }: ProductFilt
 
   const hasActiveFilters =
     filters.search ||
-    filters.vendor ||
+    filters.vendor !== "all" ||
     filters.dateFrom ||
     filters.dateTo ||
     filters.sortOrder !== "desc";
@@ -96,7 +96,7 @@ export const ProductFilters = ({ vendors, filters, onFilterChange }: ProductFilt
             <SelectValue placeholder="Select vendor" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All vendors</SelectItem>
+            <SelectItem value="all">All vendors</SelectItem>
             {vendors.map((vendor) => (
               <SelectItem key={vendor} value={vendor}>
                 {vendor}
