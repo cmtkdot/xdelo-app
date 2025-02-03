@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import React, { useState, createContext, useContext } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, HTMLMotionProps } from "framer-motion";
 import { Menu, X } from "lucide-react";
 
 interface Links {
@@ -66,11 +66,12 @@ export const Sidebar = ({
   );
 };
 
-export const SidebarBody = ({
-  className,
-  children,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => {
+interface SidebarBodyProps extends Omit<HTMLMotionProps<"div">, "animate"> {
+  className?: string;
+  children?: React.ReactNode;
+}
+
+export const SidebarBody = ({ className, children, ...props }: SidebarBodyProps) => {
   return (
     <>
       <DesktopSidebar className={className} {...props}>
@@ -83,11 +84,7 @@ export const SidebarBody = ({
   );
 };
 
-const DesktopSidebar = ({
-  className,
-  children,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => {
+const DesktopSidebar = ({ className, children, ...props }: SidebarBodyProps) => {
   const { open, setOpen, animate } = useSidebar();
   
   return (
@@ -101,18 +98,14 @@ const DesktopSidebar = ({
       }}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
-      {...props}
+      {...(props as any)}
     >
       {children}
     </motion.div>
   );
 };
 
-const MobileSidebar = ({
-  className,
-  children,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => {
+const MobileSidebar = ({ className, children, ...props }: SidebarBodyProps) => {
   const { open, setOpen } = useSidebar();
 
   return (
@@ -134,7 +127,7 @@ const MobileSidebar = ({
               "fixed inset-0 bg-white dark:bg-neutral-900 md:hidden z-40 p-6",
               className
             )}
-            {...props}
+            {...(props as any)}
           >
             <div
               className="absolute right-6 top-6 cursor-pointer"
