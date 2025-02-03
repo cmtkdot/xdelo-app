@@ -79,23 +79,21 @@ serve(async (req) => {
     console.error('Error processing caption:', error);
     
     // Update message state to error
-    if (error.message) {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-      const supabase = createClient(supabaseUrl, supabaseKey);
-      
-      try {
-        await supabase
-          .from('messages')
-          .update({ 
-            processing_state: 'error',
-            error_message: error.message,
-            last_error_at: new Date().toISOString()
-          })
-          .eq('id', (await req.json()).message_id);
-      } catch (updateError) {
-        console.error('Failed to update message error state:', updateError);
-      }
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    try {
+      await supabase
+        .from('messages')
+        .update({ 
+          processing_state: 'error',
+          error_message: error.message,
+          last_error_at: new Date().toISOString()
+        })
+        .eq('id', (await req.json()).message_id);
+    } catch (updateError) {
+      console.error('Failed to update message error state:', updateError);
     }
     
     return new Response(

@@ -54,7 +54,6 @@ export type Database = {
         Row: {
           analyzed_content: Json | null
           caption: string | null
-          caption_wait_started_at: string | null
           chat_id: number | null
           chat_type: string | null
           created_at: string | null
@@ -63,7 +62,6 @@ export type Database = {
           file_id: string | null
           file_size: number | null
           file_unique_id: string | null
-          fresh_analysis: Json | null
           group_caption_synced: boolean | null
           group_completion_checked_at: string | null
           group_first_message_time: string | null
@@ -76,7 +74,6 @@ export type Database = {
           media_group_id: string | null
           message_caption_id: string | null
           mime_type: string | null
-          parsed_content: Json | null
           processing_completed_at: string | null
           processing_started_at: string | null
           processing_state:
@@ -93,7 +90,6 @@ export type Database = {
         Insert: {
           analyzed_content?: Json | null
           caption?: string | null
-          caption_wait_started_at?: string | null
           chat_id?: number | null
           chat_type?: string | null
           created_at?: string | null
@@ -102,7 +98,6 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
-          fresh_analysis?: Json | null
           group_caption_synced?: boolean | null
           group_completion_checked_at?: string | null
           group_first_message_time?: string | null
@@ -115,7 +110,6 @@ export type Database = {
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
-          parsed_content?: Json | null
           processing_completed_at?: string | null
           processing_started_at?: string | null
           processing_state?:
@@ -132,7 +126,6 @@ export type Database = {
         Update: {
           analyzed_content?: Json | null
           caption?: string | null
-          caption_wait_started_at?: string | null
           chat_id?: number | null
           chat_type?: string | null
           created_at?: string | null
@@ -141,7 +134,6 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
-          fresh_analysis?: Json | null
           group_caption_synced?: boolean | null
           group_completion_checked_at?: string | null
           group_first_message_time?: string | null
@@ -154,7 +146,6 @@ export type Database = {
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
-          parsed_content?: Json | null
           processing_completed_at?: string | null
           processing_started_at?: string | null
           processing_state?:
@@ -254,10 +245,6 @@ export type Database = {
           data: string
         }
         Returns: string
-      }
-      cleanup_stuck_messages: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
       }
       http: {
         Args: {

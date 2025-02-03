@@ -17,7 +17,7 @@ export interface MediaItem {
   created_at?: string;
   updated_at?: string;
   user_id: string;
-  processing_state?: 'initialized' | 'waiting_caption' | 'has_caption' | 'processing_caption' | 'completed' | 'ready_for_sync' | 'error';
+  processing_state?: 'initialized' | 'processing' | 'completed' | 'error';
   processing_started_at?: string;
   processing_completed_at?: string;
   analyzed_content?: {
@@ -28,23 +28,11 @@ export interface MediaItem {
     quantity?: number;
     notes?: string;
   } | null;
-  parsed_content?: {
-    product_name?: string;
-    product_code?: string;
-    vendor_uid?: string;
-    purchase_date?: string;
-    quantity?: number;
-    notes?: string;
-  } | null;
   telegram_data?: any;
   error_message?: string;
   retry_count?: number;
-  analysis_version?: number;
   last_error_at?: string;
-  synced_caption?: any;
   group_first_message_time?: string;
   group_last_message_time?: string;
   group_message_count?: number;
-  caption_wait_started_at?: string;
-  group_completion_checked_at?: string;
 }
