@@ -1,4 +1,4 @@
-import { MediaItem, AnalyzedContent, toJsonValue } from "@/types";
+import { MediaItem, AnalyzedContent, processingMetadataToJson, analyzedContentToJson } from "@/types";
 import { AlertCircle, Pencil, Trash2, RotateCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageSwiper } from "@/components/ui/image-swiper";
@@ -48,6 +48,17 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
         });
 
         try {
+          const correlationId = crypto.randomUUID();
+          const processingMetadata = {
+            correlation_id: correlationId,
+            timestamp: new Date().toISOString(),
+            method: 'hybrid',
+            confidence: analyzedContent?.parsing_metadata?.confidence || 0,
+            reanalysis_attempted: true,
+            group_message_count: mainMedia.group_message_count,
+            is_original_caption: mainMedia.is_original_caption
+          };
+
           // First, update all messages in the group to pending state
           if (mainMedia.media_group_id) {
             const { error: updateError } = await supabase
@@ -56,7 +67,8 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
                 processing_state: 'pending',
                 group_caption_synced: false
               })
-              .eq('media_group_id', mainMedia.media_group_id);
+              .eq('media_group_id', mainMedia.media_group_id)
+              .select();
 
             if (updateError) throw updateError;
           }
@@ -68,12 +80,8 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
             event_type: 'REANALYSIS_REQUESTED',
             old_state: mainMedia.processing_state,
             new_state: 'pending',
-            analyzed_content: analyzedContent ? toJsonValue(analyzedContent) : null,
-            processing_details: toJsonValue({
-              reason: 'low_confidence',
-              confidence: analyzedContent?.parsing_metadata?.confidence,
-              group_message_count: mainMedia.group_message_count
-            })
+            analyzed_content: analyzedContent ? analyzedContentToJson(analyzedContent) : null,
+            processing_details: processingMetadataToJson(processingMetadata)
           });
 
           const { error } = await supabase.functions.invoke('reanalyze-low-confidence', {
@@ -82,7 +90,7 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
               media_group_id: mainMedia.media_group_id,
               caption: mainMedia.caption,
               analyzed_content: analyzedContent,
-              group_message_count: mainMedia.group_message_count
+              correlation_id: correlationId
             }
           });
 
@@ -145,6 +153,17 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
 
   const handleReanalyze = async () => {
     try {
+      const correlationId = crypto.randomUUID();
+      const processingMetadata = {
+        correlation_id: correlationId,
+        timestamp: new Date().toISOString(),
+        method: 'manual',
+        confidence: 0,
+        reanalysis_attempted: true,
+        group_message_count: mainMedia.group_message_count,
+        is_original_caption: mainMedia.is_original_caption
+      };
+
       // First, update all messages in the group to pending state
       if (mainMedia.media_group_id) {
         const { error: updateError } = await supabase
@@ -153,7 +172,8 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
             processing_state: 'pending',
             group_caption_synced: false
           })
-          .eq('media_group_id', mainMedia.media_group_id);
+          .eq('media_group_id', mainMedia.media_group_id)
+          .select();
 
         if (updateError) throw updateError;
       }
@@ -165,11 +185,8 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
         event_type: 'MANUAL_REANALYSIS_REQUESTED',
         old_state: mainMedia.processing_state,
         new_state: 'pending',
-        analyzed_content: analyzedContent ? toJsonValue(analyzedContent) : null,
-        processing_details: toJsonValue({
-          group_message_count: mainMedia.group_message_count,
-          is_original_caption: mainMedia.is_original_caption
-        })
+        analyzed_content: analyzedContent ? analyzedContentToJson(analyzedContent) : null,
+        processing_details: processingMetadataToJson(processingMetadata)
       });
 
       const { error } = await supabase.functions.invoke('reanalyze-low-confidence', {
@@ -178,7 +195,7 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
           media_group_id: mainMedia.media_group_id,
           caption: mainMedia.caption,
           analyzed_content: analyzedContent,
-          group_message_count: mainMedia.group_message_count
+          correlation_id: correlationId
         }
       });
 

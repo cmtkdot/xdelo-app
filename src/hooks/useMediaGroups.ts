@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, FilterValues, AnalyzedContent, toJsonValue } from "@/types";
+import { MediaItem, FilterValues, AnalyzedContent, analyzedContentToJson, processingMetadataToJson } from "@/types";
 import { useToast } from "@/components/ui/use-toast";
 
 export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
@@ -34,11 +34,14 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
                 .limit(1);
 
               if (groupMessages?.[0]?.analyzed_content) {
-                const syncDetails = {
-                  sync_type: "auto_group_sync",
-                  source_message_id: groupMessages[0].id,
+                const correlationId = crypto.randomUUID();
+                const processingMetadata = {
+                  correlation_id: correlationId,
+                  timestamp: new Date().toISOString(),
+                  method: 'hybrid',
+                  confidence: groupMessages[0].analyzed_content?.parsing_metadata?.confidence || 0,
                   group_message_count: msg.group_message_count,
-                  sync_timestamp: new Date().toISOString()
+                  is_original_caption: false
                 };
 
                 // Log sync attempt
@@ -48,12 +51,12 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
                   event_type: "GROUP_SYNC_INITIATED",
                   old_state: "initialized",
                   new_state: "completed",
-                  analyzed_content: toJsonValue(groupMessages[0].analyzed_content as AnalyzedContent),
-                  processing_details: syncDetails
+                  analyzed_content: analyzedContentToJson(groupMessages[0].analyzed_content as AnalyzedContent),
+                  processing_details: processingMetadataToJson(processingMetadata)
                 });
 
                 // Update the message
-                await supabase
+                const { error: updateError } = await supabase
                   .from("messages")
                   .update({
                     analyzed_content: groupMessages[0].analyzed_content,
@@ -62,7 +65,13 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
                     message_caption_id: groupMessages[0].id,
                     processing_completed_at: new Date().toISOString()
                   })
-                  .eq("id", msg.id);
+                  .eq("id", msg.id)
+                  .select();
+
+                if (updateError) {
+                  console.error("Error updating message:", updateError);
+                  continue;
+                }
               }
             }
           }

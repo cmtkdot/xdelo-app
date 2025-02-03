@@ -113,6 +113,19 @@ export interface MessageSyncResult {
 // Base type for JSON data
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
+// Processing metadata for analysis tracking
+export interface ProcessingMetadata {
+  correlation_id: string;
+  timestamp: string;
+  method: 'manual' | 'ai' | 'hybrid';
+  confidence: number;
+  fallbacks_used?: string[];
+  reanalysis_attempted?: boolean;
+  previous_analysis?: AnalyzedContent;
+  group_message_count?: number;
+  is_original_caption?: boolean;
+}
+
 // Type guard for JsonValue
 export function isJsonValue(value: unknown): value is JsonValue {
   if (value === null) return true;
@@ -124,8 +137,23 @@ export function isJsonValue(value: unknown): value is JsonValue {
   return false;
 }
 
+// Convert ProcessingMetadata to JsonValue
+export function processingMetadataToJson(metadata: ProcessingMetadata): JsonValue {
+  return {
+    correlation_id: metadata.correlation_id,
+    timestamp: metadata.timestamp,
+    method: metadata.method,
+    confidence: metadata.confidence,
+    fallbacks_used: metadata.fallbacks_used || [],
+    reanalysis_attempted: metadata.reanalysis_attempted || false,
+    previous_analysis: metadata.previous_analysis ? analyzedContentToJson(metadata.previous_analysis) : null,
+    group_message_count: metadata.group_message_count || null,
+    is_original_caption: metadata.is_original_caption || false
+  };
+}
+
 // Convert AnalyzedContent to JsonValue
-export function toJsonValue(analyzed: AnalyzedContent): JsonValue {
+export function analyzedContentToJson(analyzed: AnalyzedContent): JsonValue {
   return {
     product_name: analyzed.product_name || null,
     product_code: analyzed.product_code || null,
@@ -139,7 +167,7 @@ export function toJsonValue(analyzed: AnalyzedContent): JsonValue {
       fallbacks_used: analyzed.parsing_metadata.fallbacks_used || [],
       reanalysis_attempted: analyzed.parsing_metadata.reanalysis_attempted || false,
       previous_analysis: analyzed.parsing_metadata.previous_analysis ? 
-        toJsonValue(analyzed.parsing_metadata.previous_analysis) : null
+        analyzedContentToJson(analyzed.parsing_metadata.previous_analysis) : null
     } : null
   };
 }
