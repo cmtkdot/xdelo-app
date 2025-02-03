@@ -44,7 +44,11 @@ export const ProductTable = ({ mediaGroups }: ProductTableProps) => {
       // Update the analyzed content based on the field
       const updatedContent = {
         ...analyzed,
-        [field]: value
+        [field]: value,
+        parsing_metadata: {
+          ...(analyzed.parsing_metadata || {}),
+          reanalysis_attempted: true
+        }
       };
 
       // Reconstruct caption based on the analyzed content pattern
@@ -58,16 +62,15 @@ export const ProductTable = ({ mediaGroups }: ProductTableProps) => {
         newCaption = `${analyzed.product_name || ''} #${analyzed.product_code || ''} x${analyzed.quantity || ''} (${value})`;
       }
 
-      // Update message in Supabase
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: updatedContent,
-          caption: newCaption
-        })
-        .eq('id', mainMedia.id);
+      // Update message in Supabase and sync with media group
+      const { error: groupError } = await supabase.rpc('process_media_group_analysis', {
+        p_message_id: mainMedia.id,
+        p_media_group_id: mainMedia.media_group_id,
+        p_analyzed_content: updatedContent,
+        p_processing_completed_at: new Date().toISOString()
+      });
 
-      if (updateError) throw updateError;
+      if (groupError) throw groupError;
 
       // Update caption in Telegram
       const { error: webhookError } = await supabase.functions.invoke('edit-telegram-message', {
