@@ -120,7 +120,12 @@ serve(async (req) => {
 
     console.log('Media uploaded successfully');
 
-    // Prepare message data with proper processing state based on caption
+    // Determine initial processing state based on message type and caption
+    const initialState = message.media_group_id
+      ? (hasValidCaption ? 'has_caption' : 'waiting_caption')
+      : (hasValidCaption ? 'has_caption' : 'initialized');
+
+    // Prepare message data
     const messageData = {
       telegram_message_id: message.message_id,
       media_group_id: message.media_group_id,
@@ -135,7 +140,7 @@ serve(async (req) => {
       duration: mediaItem.duration,
       user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
       telegram_data: { message },
-      processing_state: hasValidCaption ? 'has_caption' : 'waiting_caption',
+      processing_state: initialState,
       is_original_caption: message.media_group_id && hasValidCaption ? true : false,
       analyzed_content: existingAnalysis
     };
@@ -170,9 +175,9 @@ serve(async (req) => {
       currentMessageId = newMessage.id;
     }
 
-    // Only process caption if it exists and is not empty
-    if (hasValidCaption && !existingAnalysis) {
-      console.log('Processing new caption');
+    // Only process caption for media groups if it exists and no existing analysis
+    if (message.media_group_id && hasValidCaption && !existingAnalysis) {
+      console.log('Processing new caption for media group');
       
       // Update state to processing_caption
       await supabase
@@ -180,9 +185,7 @@ serve(async (req) => {
         .update({ processing_state: 'processing_caption' })
         .eq('id', currentMessageId);
 
-      // Wait to ensure media is properly processed
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
+      // Trigger AI analysis
       const aiResponse = await fetch(
         `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
         {
@@ -194,6 +197,29 @@ serve(async (req) => {
           body: JSON.stringify({
             message_id: currentMessageId,
             media_group_id: message.media_group_id,
+            caption: message.caption
+          }),
+        }
+      );
+
+      if (!aiResponse.ok) {
+        const errorText = await aiResponse.text();
+        throw new Error(`Caption analysis failed: ${errorText}`);
+      }
+    } else if (hasValidCaption && !message.media_group_id) {
+      // For single messages with caption, process immediately
+      console.log('Processing caption for single message');
+      
+      const aiResponse = await fetch(
+        `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message_id: currentMessageId,
             caption: message.caption
           }),
         }
