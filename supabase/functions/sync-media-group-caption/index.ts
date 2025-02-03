@@ -6,12 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface SyncRequest {
-  message_id: string;
-  media_group_id: string;
-  caption: string;
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -23,10 +17,10 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { message_id, media_group_id, caption } = await req.json() as SyncRequest;
+    const { message_id, media_group_id, caption } = await req.json();
     console.log(`Processing caption sync for message ${message_id} in group ${media_group_id}`);
 
-    // First update the source message
+    // Update the source message
     const { error: updateError } = await supabase
       .from('messages')
       .update({
@@ -52,35 +46,21 @@ serve(async (req) => {
 
     if (groupUpdateError) throw groupUpdateError;
 
-    // Trigger the parse-caption-all function to analyze the caption
-    const parseResponse = await fetch(
-      `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-all`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          message_id,
-          media_group_id,
-          caption
-        })
-      }
-    );
+    // Trigger the parse-caption-with-ai function
+    const { data: parseData, error: parseError } = await supabase.functions.invoke('parse-caption-with-ai', {
+      body: { message_id, media_group_id, caption }
+    });
 
-    if (!parseResponse.ok) {
-      console.error('Error triggering caption parsing:', await parseResponse.text());
-      throw new Error('Failed to trigger caption parsing');
+    if (parseError) {
+      console.error('Error triggering caption parsing:', parseError);
+      throw parseError;
     }
-
-    const parseResult = await parseResponse.json();
 
     return new Response(
       JSON.stringify({ 
         success: true,
         message: 'Caption synced and analysis triggered',
-        parse_result: parseResult
+        parse_result: parseData
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
