@@ -3,6 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { MediaItem, FilterValues } from "@/types";
 import { useToast } from "@/components/ui/use-toast";
 import { useMessageSearch } from "./useMessageSearch";
+import { Database } from "@/integrations/supabase/types";
+
+type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 
 export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
   const [mediaGroups, setMediaGroups] = useState<{ [key: string]: MediaItem[] }>({});
@@ -16,7 +19,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
       try {
         let query = supabase
           .from("messages")
-          .select("*", { count: "exact" });
+          .select("*", { count: "exact" }) as PostgrestFilterBuilder<MessageRow, MessageRow, any>;
 
         // Apply filters using the search utility functions
         query = buildSearchQuery(query, filters.search);

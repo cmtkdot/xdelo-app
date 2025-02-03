@@ -1,11 +1,8 @@
 import { PostgrestFilterBuilder } from "@supabase/postgrest-js";
 import { Database } from "@/integrations/supabase/types";
 
-type MessageQuery = PostgrestFilterBuilder<
-  Database["public"]["Tables"]["messages"]["Row"],
-  Database["public"]["Tables"]["messages"]["Row"],
-  any
->;
+type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
+type MessageQuery = PostgrestFilterBuilder<MessageRow, MessageRow, any>;
 
 export const useMessageSearch = () => {
   const buildSearchQuery = (query: MessageQuery, search: string): MessageQuery => {
