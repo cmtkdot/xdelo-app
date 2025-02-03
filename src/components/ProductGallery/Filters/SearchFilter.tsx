@@ -8,16 +8,16 @@ interface SearchFilterProps {
 
 export const SearchFilter = ({ value, onChange }: SearchFilterProps) => {
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-medium flex items-center gap-2">
-        <Search className="w-4 h-4" />
-        Search Products
+    <div className="space-y-1">
+      <label className="text-xs font-medium flex items-center gap-1">
+        <Search className="w-3 h-3" />
+        Search
       </label>
       <Input
-        placeholder="Search by product name..."
+        placeholder="Search products..."
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full"
+        className="h-8 text-sm"
       />
     </div>
   );

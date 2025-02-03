@@ -85,20 +85,21 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
 
   const FilterContent = () => (
     <div className="flex flex-col space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
         <SearchFilter value={search} onChange={setSearch} />
         <ProductCodeFilter value={productCode} options={productCodes} onChange={setProductCode} />
         <QuantityFilter value={quantityRange} onChange={setQuantityRange} />
         <VendorFilter value={vendor} vendors={vendors} onChange={setVendor} />
         <ProcessingStateFilter value={processingState} onChange={setProcessingState} />
       </div>
-
-      <DateRangeFilter
-        dateFrom={dateFrom}
-        dateTo={dateTo}
-        onDateFromChange={setDateFrom}
-        onDateToChange={setDateTo}
-      />
+      <div className="flex justify-start">
+        <DateRangeFilter
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo}
+        />
+      </div>
     </div>
   );
 

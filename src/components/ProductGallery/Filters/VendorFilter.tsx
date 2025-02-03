@@ -9,13 +9,13 @@ interface VendorFilterProps {
 
 export const VendorFilter = ({ value, vendors, onChange }: VendorFilterProps) => {
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-medium flex items-center gap-2">
-        <Users className="w-4 h-4" />
+    <div className="space-y-1">
+      <label className="text-xs font-medium flex items-center gap-1">
+        <Users className="w-3 h-3" />
         Vendor
       </label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger>
+        <SelectTrigger className="h-8 text-sm">
           <SelectValue placeholder="Select Vendor" />
         </SelectTrigger>
         <SelectContent>

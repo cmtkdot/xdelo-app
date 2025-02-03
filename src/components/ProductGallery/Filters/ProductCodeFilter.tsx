@@ -9,17 +9,17 @@ interface ProductCodeFilterProps {
 
 export const ProductCodeFilter = ({ value, options, onChange }: ProductCodeFilterProps) => {
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-medium flex items-center gap-2">
-        <Tag className="w-4 h-4" />
+    <div className="space-y-1">
+      <label className="text-xs font-medium flex items-center gap-1">
+        <Tag className="w-3 h-3" />
         Product Code
       </label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger>
-          <SelectValue placeholder="Select Product Code" />
+        <SelectTrigger className="h-8 text-sm">
+          <SelectValue placeholder="Select Code" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All Product Codes</SelectItem>
+          <SelectItem value="all">All Codes</SelectItem>
           {options.map((code) => (
             <SelectItem key={code} value={code}>
               {code.startsWith('PO#') ? code : `PO#${code}`}

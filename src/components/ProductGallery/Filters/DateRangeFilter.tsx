@@ -18,16 +18,16 @@ export const DateRangeFilter = ({
   onDateToChange 
 }: DateRangeFilterProps) => {
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-medium flex items-center gap-2">
-        <CalendarIcon className="w-4 h-4" />
+    <div className="space-y-1">
+      <label className="text-xs font-medium flex items-center gap-1">
+        <CalendarIcon className="w-3 h-3" />
         Date Range
       </label>
       <div className="flex gap-2">
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" className="w-[150px]">
-              <CalendarIcon className="w-4 h-4 mr-2" />
+            <Button variant="outline" className="h-8 text-sm px-2">
+              <CalendarIcon className="w-3 h-3 mr-1" />
               {dateFrom ? format(dateFrom, 'MM/dd/yyyy') : 'From'}
             </Button>
           </PopoverTrigger>
@@ -43,8 +43,8 @@ export const DateRangeFilter = ({
 
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" className="w-[150px]">
-              <CalendarIcon className="w-4 h-4 mr-2" />
+            <Button variant="outline" className="h-8 text-sm px-2">
+              <CalendarIcon className="w-3 h-3 mr-1" />
               {dateTo ? format(dateTo, 'MM/dd/yyyy') : 'To'}
             </Button>
           </PopoverTrigger>
