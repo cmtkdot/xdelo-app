@@ -19,6 +19,7 @@ export type Database = {
           message_id: string | null
           new_state: string | null
           old_state: string | null
+          processing_details: Json | null
         }
         Insert: {
           analyzed_content?: Json | null
@@ -29,6 +30,7 @@ export type Database = {
           message_id?: string | null
           new_state?: string | null
           old_state?: string | null
+          processing_details?: Json | null
         }
         Update: {
           analyzed_content?: Json | null
@@ -39,6 +41,7 @@ export type Database = {
           message_id?: string | null
           new_state?: string | null
           old_state?: string | null
+          processing_details?: Json | null
         }
         Relationships: [
           {
@@ -63,24 +66,24 @@ export type Database = {
           file_size: number | null
           file_unique_id: string | null
           group_caption_synced: boolean | null
-          group_completion_checked_at: string | null
           group_first_message_time: string | null
           group_last_message_time: string | null
           group_message_count: number | null
           height: number | null
           id: string
           is_original_caption: boolean | null
-          last_error_at: string | null
           media_group_id: string | null
           message_caption_id: string | null
           mime_type: string | null
           processing_completed_at: string | null
+          processing_lock_acquired_at: string | null
+          processing_lock_id: string | null
           processing_started_at: string | null
           processing_state:
             | Database["public"]["Enums"]["message_processing_state"]
             | null
           public_url: string | null
-          retry_count: number | null
+          storage_path: string | null
           telegram_data: Json | null
           telegram_message_id: number | null
           updated_at: string | null
@@ -99,24 +102,24 @@ export type Database = {
           file_size?: number | null
           file_unique_id?: string | null
           group_caption_synced?: boolean | null
-          group_completion_checked_at?: string | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
           group_message_count?: number | null
           height?: number | null
           id?: string
           is_original_caption?: boolean | null
-          last_error_at?: string | null
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
           processing_completed_at?: string | null
+          processing_lock_acquired_at?: string | null
+          processing_lock_id?: string | null
           processing_started_at?: string | null
           processing_state?:
             | Database["public"]["Enums"]["message_processing_state"]
             | null
           public_url?: string | null
-          retry_count?: number | null
+          storage_path?: string | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
@@ -135,24 +138,24 @@ export type Database = {
           file_size?: number | null
           file_unique_id?: string | null
           group_caption_synced?: boolean | null
-          group_completion_checked_at?: string | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
           group_message_count?: number | null
           height?: number | null
           id?: string
           is_original_caption?: boolean | null
-          last_error_at?: string | null
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
           processing_completed_at?: string | null
+          processing_lock_acquired_at?: string | null
+          processing_lock_id?: string | null
           processing_started_at?: string | null
           processing_state?:
             | Database["public"]["Enums"]["message_processing_state"]
             | null
           public_url?: string | null
-          retry_count?: number | null
+          storage_path?: string | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
@@ -250,14 +253,14 @@ export type Database = {
         Args: {
           request: Database["public"]["CompositeTypes"]["http_request"]
         }
-        Returns: unknown
+        Returns: Database["public"]["CompositeTypes"]["http_response"]
       }
       http_delete:
         | {
             Args: {
               uri: string
             }
-            Returns: unknown
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
           }
         | {
             Args: {
@@ -265,27 +268,27 @@ export type Database = {
               content: string
               content_type: string
             }
-            Returns: unknown
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
           }
       http_get:
         | {
             Args: {
               uri: string
             }
-            Returns: unknown
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
           }
         | {
             Args: {
               uri: string
               data: Json
             }
-            Returns: unknown
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
           }
       http_head: {
         Args: {
           uri: string
         }
-        Returns: unknown
+        Returns: Database["public"]["CompositeTypes"]["http_response"]
       }
       http_header: {
         Args: {
@@ -307,7 +310,7 @@ export type Database = {
           content: string
           content_type: string
         }
-        Returns: unknown
+        Returns: Database["public"]["CompositeTypes"]["http_response"]
       }
       http_post:
         | {
@@ -316,14 +319,14 @@ export type Database = {
               content: string
               content_type: string
             }
-            Returns: unknown
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
           }
         | {
             Args: {
               uri: string
               data: Json
             }
-            Returns: unknown
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
           }
         | {
             Args: {
@@ -331,7 +334,7 @@ export type Database = {
               headers: Json
               body: Json
             }
-            Returns: unknown
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
           }
       http_put: {
         Args: {
@@ -339,7 +342,7 @@ export type Database = {
           content: string
           content_type: string
         }
-        Returns: unknown
+        Returns: Database["public"]["CompositeTypes"]["http_response"]
       }
       http_reset_curlopt: {
         Args: Record<PropertyKey, never>

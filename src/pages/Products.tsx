@@ -34,13 +34,37 @@ const Products = () => {
   const { data: products = [], refetch } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
+      // Get unique messages based on file_unique_id and media_group_id
       const { data, error } = await supabase
         .from("messages")
         .select("*")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data as MediaItem[];
+
+      // Create a map to store unique messages
+      const uniqueMessages = new Map();
+      
+      (data as MediaItem[]).forEach(message => {
+        const key = `${message.file_unique_id}-${message.media_group_id || 'single'}`;
+        
+        if (!uniqueMessages.has(key)) {
+          // If message doesn't exist, add it
+          uniqueMessages.set(key, message);
+        } else {
+          // If message exists, update only if it has newer content
+          const existingMessage = uniqueMessages.get(key);
+          if (
+            message.analyzed_content && 
+            (!existingMessage.analyzed_content || 
+             message.updated_at > existingMessage.updated_at)
+          ) {
+            uniqueMessages.set(key, message);
+          }
+        }
+      });
+
+      return Array.from(uniqueMessages.values()) as MediaItem[];
     }
   });
 
@@ -56,7 +80,13 @@ const Products = () => {
         },
         (payload) => {
           console.log('Real-time update:', payload);
-          queryClient.invalidateQueries({ queryKey: ['products'] });
+          // Only invalidate query if the update contains new analyzed content
+          if (payload.new && 
+              (payload.new.analyzed_content !== payload.old?.analyzed_content ||
+               payload.eventType === 'INSERT' ||
+               payload.eventType === 'DELETE')) {
+            queryClient.invalidateQueries({ queryKey: ['products'] });
+          }
         }
       )
       .subscribe();
@@ -66,47 +96,45 @@ const Products = () => {
     };
   }, [queryClient]);
 
-  const retryAnalysisMutation = useMutation({
-    mutationFn: async (messageId: string) => {
-      const { data, error } = await supabase.functions.invoke('parse-caption-with-ai', {
-        body: { message_id: messageId }
-      });
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-      toast({
-        title: "Analysis started",
-        description: "The content analysis has been initiated."
-      });
-    },
-    onError: (error) => {
-      console.error('Error initiating analysis:', error);
-      toast({
-        title: "Error",
-        description: "Failed to start content analysis. Please try again.",
-        variant: "destructive"
-      });
-    }
-  });
-
   const handleSave = async () => {
     if (!editItem) return;
 
     try {
-      const { error } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: {
-            ...editItem.analyzed_content,
-            caption: getMediaCaption(editItem)
-          }
-        })
-        .eq('id', editItem.id);
+      // Check if there are other messages in the same group
+      if (editItem.media_group_id) {
+        const { data: groupMessages } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('media_group_id', editItem.media_group_id);
 
-      if (error) throw error;
+        // Update all messages in the group with the new content
+        if (groupMessages && groupMessages.length > 0) {
+          const { error } = await supabase
+            .from('messages')
+            .update({
+              analyzed_content: {
+                ...editItem.analyzed_content,
+                caption: getMediaCaption(editItem)
+              }
+            })
+            .eq('media_group_id', editItem.media_group_id);
+
+          if (error) throw error;
+        }
+      } else {
+        // Update single message
+        const { error } = await supabase
+          .from('messages')
+          .update({
+            analyzed_content: {
+              ...editItem.analyzed_content,
+              caption: getMediaCaption(editItem)
+            }
+          })
+          .eq('id', editItem.id);
+
+        if (error) throw error;
+      }
 
       toast({
         title: "Changes saved",
