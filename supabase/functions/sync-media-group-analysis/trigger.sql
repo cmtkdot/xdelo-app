@@ -1,54 +1,86 @@
--- Function to process media group analysis
-CREATE OR REPLACE FUNCTION process_media_group_analysis(
-  p_message_id UUID,
-  p_media_group_id TEXT,
-  p_analyzed_content JSONB,
-  p_processing_completed_at TIMESTAMPTZ,
-  p_correlation_id TEXT DEFAULT NULL
-) RETURNS void AS $$
-DECLARE
-    v_lock_obtained BOOLEAN;
+CREATE OR REPLACE FUNCTION public.manage_processing_state()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
 BEGIN
-    -- Try to obtain advisory lock using media_group_id hash
-    SELECT pg_try_advisory_xact_lock(hashtext(p_media_group_id)) INTO v_lock_obtained;
+    -- Set initial state for new messages
+    IF TG_OP = 'INSERT' THEN
+        -- For media groups, check if there's already an analyzed caption
+        IF NEW.media_group_id IS NOT NULL THEN
+            DECLARE
+                v_caption_message messages%ROWTYPE;
+            BEGIN
+                -- Look for existing analyzed message in the group with a valid caption
+                SELECT * INTO v_caption_message
+                FROM messages
+                WHERE media_group_id = NEW.media_group_id
+                    AND caption IS NOT NULL
+                    AND caption != ''
+                    AND trim(caption) != ''
+                    AND analyzed_content IS NOT NULL
+                LIMIT 1;
+
+                IF v_caption_message.id IS NOT NULL AND (NEW.caption IS NULL OR trim(NEW.caption) = '') THEN
+                    -- If we found an analyzed caption and current message has no caption,
+                    -- sync with existing analysis
+                    NEW.message_caption_id := v_caption_message.id;
+                    NEW.analyzed_content := v_caption_message.analyzed_content;
+                    NEW.processing_state := 'analysis_synced';
+                    NEW.is_original_caption := false;
+                ELSIF NEW.caption IS NOT NULL AND trim(NEW.caption) != '' THEN
+                    -- This is a message with valid caption
+                    NEW.processing_state := 'caption_ready';
+                    NEW.is_original_caption := true;
+                ELSE
+                    -- No valid caption found yet
+                    NEW.processing_state := 'initialized';
+                    NEW.is_original_caption := false;
+                END IF;
+            END;
+        ELSE
+            -- For single messages, only process if caption exists and is not empty
+            NEW.processing_state := CASE 
+                WHEN NEW.caption IS NOT NULL AND trim(NEW.caption) != '' THEN 'caption_ready'
+                ELSE 'initialized'
+            END;
+        END IF;
+    END IF;
+
+    -- Handle updates
+    IF TG_OP = 'UPDATE' THEN
+        -- If valid caption is added to an initialized message
+        IF NEW.caption IS NOT NULL AND trim(NEW.caption) != '' AND 
+           (OLD.caption IS NULL OR trim(OLD.caption) = '') AND 
+           NEW.processing_state = 'initialized' THEN
+            NEW.processing_state := 'caption_ready';
+        END IF;
+
+        -- Prevent individual messages in a group from being marked as completed
+        -- until the entire group is synced with valid captions
+        IF NEW.media_group_id IS NOT NULL AND 
+           NEW.processing_state = 'completed' AND 
+           OLD.processing_state != 'completed' THEN
+            -- Check if all messages in the group are properly synced
+            DECLARE
+                v_all_synced BOOLEAN;
+            BEGIN
+                SELECT bool_and(
+                    CASE 
+                        WHEN caption IS NOT NULL AND trim(caption) != '' THEN group_caption_synced
+                        ELSE message_caption_id IS NOT NULL -- For messages without caption, check if they're linked to a caption
+                    END
+                )
+                INTO v_all_synced
+                FROM messages
+                WHERE media_group_id = NEW.media_group_id;
+
+                IF NOT v_all_synced THEN
+                    NEW.processing_state := 'analysis_synced';
+                END IF;
+            END;
+        END IF;
+    END IF;
     
-    IF NOT v_lock_obtained THEN
-        RAISE EXCEPTION 'Could not obtain lock for media group %', p_media_group_id;
-    END IF;
-
-    -- Update the source message
-    UPDATE messages
-    SET 
-        analyzed_content = p_analyzed_content,
-        processing_state = 'analysis_synced',
-        processing_completed_at = p_processing_completed_at,
-        is_original_caption = true,
-        group_caption_synced = true
-    WHERE id = p_message_id;
-
-    -- Update all other messages in the group
-    UPDATE messages
-    SET 
-        analyzed_content = p_analyzed_content,
-        processing_state = 'analysis_synced',
-        processing_completed_at = p_processing_completed_at,
-        is_original_caption = false,
-        group_caption_synced = true,
-        message_caption_id = p_message_id
-    WHERE 
-        media_group_id = p_media_group_id 
-        AND id != p_message_id;
-
-    -- Mark group as completed if all messages are synced
-    IF NOT EXISTS (
-        SELECT 1 
-        FROM messages 
-        WHERE media_group_id = p_media_group_id 
-        AND (processing_state != 'analysis_synced' OR NOT group_caption_synced)
-    ) THEN
-        UPDATE messages
-        SET processing_state = 'completed'
-        WHERE media_group_id = p_media_group_id;
-    END IF;
+    RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
