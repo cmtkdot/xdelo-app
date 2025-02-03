@@ -43,19 +43,37 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
       ) {
         console.log('Low confidence detected, triggering reanalysis:', {
           confidence: analyzedContent?.parsing_metadata?.confidence,
-          message_id: mainMedia.id
+          message_id: mainMedia.id,
+          media_group_id: mainMedia.media_group_id
         });
 
         try {
           const { error } = await supabase.functions.invoke('reanalyze-low-confidence', {
             body: {
               message_id: mainMedia.id,
+              media_group_id: mainMedia.media_group_id,
               caption: mainMedia.caption,
-              analyzed_content: analyzedContent
+              analyzed_content: analyzedContent,
+              group_message_count: mainMedia.group_message_count
             }
           });
 
           if (error) throw error;
+
+          // Log reanalysis attempt to audit log
+          await supabase.from('analysis_audit_log').insert({
+            message_id: mainMedia.id,
+            media_group_id: mainMedia.media_group_id,
+            event_type: 'REANALYSIS_REQUESTED',
+            old_state: mainMedia.processing_state,
+            new_state: 'pending',
+            analyzed_content: analyzedContent,
+            processing_details: {
+              reason: 'low_confidence',
+              confidence: analyzedContent?.parsing_metadata?.confidence,
+              group_message_count: mainMedia.group_message_count
+            }
+          });
 
           toast({
             title: "Reanalysis Started",
@@ -73,10 +91,22 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
     };
 
     checkConfidence();
-  }, [mainMedia.id, mainMedia.caption, analyzedContent, toast]);
+  }, [mainMedia.id, mainMedia.caption, analyzedContent, toast, mainMedia.media_group_id, mainMedia.processing_state, mainMedia.group_message_count]);
 
   const handleDelete = async () => {
     try {
+      // Log deletion attempt
+      await supabase.from('analysis_audit_log').insert({
+        message_id: mainMedia.id,
+        media_group_id: mainMedia.media_group_id,
+        event_type: 'DELETE_REQUESTED',
+        old_state: mainMedia.processing_state,
+        processing_details: {
+          group_message_count: mainMedia.group_message_count,
+          is_original_caption: mainMedia.is_original_caption
+        }
+      });
+
       const { error } = await supabase
         .from('messages')
         .delete()
@@ -100,11 +130,27 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
 
   const handleReanalyze = async () => {
     try {
+      // Log reanalysis request
+      await supabase.from('analysis_audit_log').insert({
+        message_id: mainMedia.id,
+        media_group_id: mainMedia.media_group_id,
+        event_type: 'MANUAL_REANALYSIS_REQUESTED',
+        old_state: mainMedia.processing_state,
+        new_state: 'pending',
+        analyzed_content: analyzedContent,
+        processing_details: {
+          group_message_count: mainMedia.group_message_count,
+          is_original_caption: mainMedia.is_original_caption
+        }
+      });
+
       const { error } = await supabase.functions.invoke('reanalyze-low-confidence', {
         body: {
           message_id: mainMedia.id,
+          media_group_id: mainMedia.media_group_id,
           caption: mainMedia.caption,
-          analyzed_content: analyzedContent
+          analyzed_content: analyzedContent,
+          group_message_count: mainMedia.group_message_count
         }
       });
 
