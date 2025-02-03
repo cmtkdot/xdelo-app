@@ -21,7 +21,7 @@ export interface MediaItem {
   processing_started_at?: string;
   processing_completed_at?: string;
   analyzed_content?: AnalyzedContent | null;
-  telegram_data?: any;
+  telegram_data?: Record<string, unknown>;
   error_message?: string;
   retry_count?: number;
   last_error_at?: string;
@@ -42,7 +42,7 @@ export interface AnalyzedContent {
     confidence: number;
     fallbacks_used?: string[];
     reanalysis_attempted?: boolean;
-    previous_analysis?: any;
+    previous_analysis?: Record<string, unknown>;
   };
 }
 
@@ -111,4 +111,3 @@ export interface MessageSyncResult {
     sync_timestamp: string;
   };
 }
-

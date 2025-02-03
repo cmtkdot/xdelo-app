@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, FilterValues, Json } from "@/types";
+import { MediaItem, FilterValues } from "@/types";
 import { useToast } from "@/components/ui/use-toast";
 
 export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
@@ -48,8 +48,8 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
                   event_type: "GROUP_SYNC_INITIATED",
                   old_state: "initialized",
                   new_state: "completed",
-                  analyzed_content: groupMessages[0].analyzed_content as Json,
-                  processing_details: syncDetails as Json
+                  analyzed_content: groupMessages[0].analyzed_content,
+                  processing_details: syncDetails
                 });
 
                 // Update the message with synced content
@@ -75,7 +75,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
                     processing_details: { 
                       error: updateError.message,
                       sync_attempt: syncDetails 
-                    } as Json
+                    }
                   });
                 } else {
                   // Log successful sync
@@ -85,8 +85,8 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
                     event_type: "GROUP_SYNC_COMPLETED",
                     old_state: "initialized",
                     new_state: "completed",
-                    analyzed_content: groupMessages[0].analyzed_content as Json,
-                    processing_details: syncDetails as Json
+                    analyzed_content: groupMessages[0].analyzed_content,
+                    processing_details: syncDetails
                   });
                 }
               }
