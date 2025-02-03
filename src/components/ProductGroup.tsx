@@ -20,11 +20,13 @@ export const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps)
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
       <div className="relative">
+        <ImageSwiper media={group} />
+        
+        {/* Invisible overlay for triggering media viewer */}
         <div 
           className="absolute inset-0 z-20"
           onClick={() => onMediaClick(mainMedia, group)}
         />
-        <ImageSwiper media={group} />
         
         {hasError && (
           <div className="absolute top-2 right-2 z-30">

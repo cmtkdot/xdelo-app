@@ -32,6 +32,11 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
     }
   }
 
+  const handleButtonClick = (e: React.MouseEvent, newIndex: number) => {
+    e.stopPropagation();
+    setMediaIndex(newIndex);
+  };
+
   return (
     <div
       className={cn(
@@ -47,10 +52,7 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
               variant="ghost"
               size="icon"
               className="pointer-events-auto h-8 w-8 rounded-full bg-white/80 opacity-0 transition-opacity group-hover:opacity-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                setMediaIndex((prev) => prev - 1);
-              }}
+              onClick={(e) => handleButtonClick(e, mediaIndex - 1)}
             >
               <ChevronLeft className="h-4 w-4 text-neutral-600" />
             </Button>
@@ -63,10 +65,7 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
               variant="ghost" 
               size="icon"
               className="pointer-events-auto h-8 w-8 rounded-full bg-white/80 opacity-0 transition-opacity group-hover:opacity-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                setMediaIndex((prev) => prev + 1);
-              }}
+              onClick={(e) => handleButtonClick(e, mediaIndex + 1)}
             >
               <ChevronRight className="h-4 w-4 text-neutral-600" />
             </Button>
@@ -99,16 +98,19 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
         onClick={(e) => e.stopPropagation()}
       >
         {sortedMedia.map((item, i) => {
-          const isVideo = item.mime_type?.startsWith('video/');
+          const isVideo = item.mime_type?.startsWith('video');
+          const mediaUrl = `https://ovpsyrhigencvzlxqwqz.supabase.co/storage/v1/object/public/telegram-media/${item.file_unique_id}.${item.mime_type?.split('/')[1]}`;
+          
           return (
             <motion.div
               key={i}
               className="h-full w-full shrink-0 overflow-hidden bg-neutral-800 object-cover first:rounded-l-[inherit] last:rounded-r-[inherit]"
+              onClick={(e) => e.stopPropagation()}
             >
               {isVideo ? (
                 <video
                   ref={videoRef}
-                  src={item.public_url}
+                  src={mediaUrl}
                   className="pointer-events-none h-full w-full object-cover"
                   autoPlay
                   muted
@@ -117,7 +119,7 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
                 />
               ) : (
                 <img 
-                  src={item.public_url} 
+                  src={mediaUrl} 
                   alt={item.analyzed_content?.product_name || 'Product image'}
                   className="pointer-events-none h-full w-full object-cover" 
                 />
