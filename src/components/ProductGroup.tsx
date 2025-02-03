@@ -44,11 +44,6 @@ export const ProductGroup = ({
     }
   };
 
-  const formatProductCode = (code?: string) => {
-    if (!code) return 'N/A';
-    return code.startsWith('PO#') ? code : `PO#${code}`;
-  };
-
   useEffect(() => {
     const checkConfidence = async () => {
       if (
@@ -252,24 +247,18 @@ export const ProductGroup = ({
           <h3 className="text-lg font-semibold mb-1">
             {analyzedContent?.product_name || 'Untitled Product'}
           </h3>
-          <div className="flex justify-between items-center text-sm">
-            <span>{analyzedContent?.product_code ? `PO#${analyzedContent.product_code}` : 'N/A'}</span>
-            <span>{analyzedContent?.vendor_uid || 'N/A'}</span>
+          <div className="text-sm opacity-90">
+            {formatDate(analyzedContent?.purchase_date)}
           </div>
         </div>
       </div>
       
       <div className="p-3 space-y-2">
         {/* Secondary info in compact form */}
-        <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-          <div>
-            <span className="font-medium">Purchase Date:</span>
-            <p>{formatDate(analyzedContent?.purchase_date)}</p>
-          </div>
-          <div>
-            <span className="font-medium">Quantity:</span>
-            <p>{analyzedContent?.quantity || 'N/A'}</p>
-          </div>
+        <div className="space-y-1 text-xs text-gray-600">
+          <p>PO#: {analyzedContent?.product_code || 'N/A'}</p>
+          <p>Vendor: {analyzedContent?.vendor_uid || 'N/A'}</p>
+          <p>Quantity: {analyzedContent?.quantity || 'N/A'}</p>
         </div>
 
         {analyzedContent?.parsing_metadata?.confidence < 0.7 && (
