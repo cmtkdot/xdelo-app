@@ -44,6 +44,32 @@ const Products = () => {
     }
   });
 
+  const analyzeContentMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      const { data, error } = await supabase.functions.invoke('analyze-content', {
+        body: { message_id: messageId }
+      });
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      toast({
+        title: "Analysis completed",
+        description: "The content has been analyzed successfully."
+      });
+    },
+    onError: (error) => {
+      console.error('Error analyzing content:', error);
+      toast({
+        title: "Error",
+        description: "Failed to analyze content. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
   const retryMutation = useMutation({
     mutationFn: async (messageId: string) => {
       const { error } = await supabase
@@ -56,6 +82,8 @@ const Products = () => {
         .eq('id', messageId);
 
       if (error) throw error;
+      
+      return analyzeContentMutation.mutateAsync(messageId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
@@ -96,6 +124,7 @@ const Products = () => {
       });
 
       await refetch();
+      setEditItem(null);
     } catch (error) {
       console.error('Error saving changes:', error);
       toast({

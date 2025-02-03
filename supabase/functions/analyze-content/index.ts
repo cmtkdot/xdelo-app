@@ -1,5 +1,5 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { analyzeCaption } from "./utils/aiAnalyzer.ts";
 
@@ -29,12 +29,7 @@ function logProcessingEvent(event: Omit<ProcessingLog, "timestamp">) {
 serve(async (req) => {
   const startTime = Date.now();
   const correlationId = crypto.randomUUID();
-  logProcessingEvent({
-    event: "ANALYSIS_STARTED",
-    message_id: "pending",
-    metadata: { correlation_id: correlationId }
-  });
-
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -46,16 +41,17 @@ serve(async (req) => {
   try {
     const { message_id } = await req.json();
     logProcessingEvent({
-      event: "MESSAGE_RECEIVED",
+      event: "ANALYSIS_STARTED",
       message_id,
       metadata: { correlation_id: correlationId }
     });
 
+    // Fetch message details
     const { data: message, error: messageError } = await supabase
       .from("messages")
       .select("*")
       .eq("id", message_id)
-      .maybeSingle();
+      .single();
 
     if (messageError) {
       logProcessingEvent({
@@ -68,26 +64,10 @@ serve(async (req) => {
     }
 
     if (!message) {
-      logProcessingEvent({
-        event: "MESSAGE_NOT_FOUND",
-        message_id,
-        metadata: { correlation_id: correlationId }
-      });
       throw new Error(`Message not found: ${message_id}`);
     }
 
-    logProcessingEvent({
-      event: "MESSAGE_FETCHED",
-      message_id: message.id,
-      media_group_id: message.media_group_id,
-      metadata: {
-        correlation_id: correlationId,
-        caption_length: message.caption?.length,
-        processing_state: message.processing_state
-      }
-    });
-
-    // Analyze caption if present
+    // Analyze caption
     let analyzedContent = null;
     if (message.caption) {
       logProcessingEvent({
@@ -111,62 +91,36 @@ serve(async (req) => {
       });
     }
 
-    // Handle media group synchronization
+    // Update the message with analyzed content
+    const { error: updateError } = await supabase
+      .from("messages")
+      .update({
+        analyzed_content: analyzedContent,
+        processing_state: "completed",
+        processing_completed_at: new Date().toISOString(),
+      })
+      .eq("id", message_id);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    // If part of a media group, sync the content
     if (message.media_group_id) {
-      logProcessingEvent({
-        event: "GROUP_SYNC_STARTED",
-        message_id,
-        media_group_id: message.media_group_id,
-        metadata: { correlation_id: correlationId }
-      });
-      
-      const { error: groupError } = await supabase.rpc(
-        "process_media_group_analysis",
-        {
-          p_message_id: message_id,
-          p_media_group_id: message.media_group_id,
-          p_analyzed_content: analyzedContent,
-          p_processing_completed_at: new Date().toISOString(),
-          p_correlation_id: correlationId
-        }
-      );
-
-      if (groupError) {
-        logProcessingEvent({
-          event: "GROUP_SYNC_ERROR",
-          message_id,
-          media_group_id: message.media_group_id,
-          error: groupError.message,
-          metadata: { correlation_id: correlationId }
-        });
-        throw groupError;
-      }
-
-      logProcessingEvent({
-        event: "GROUP_SYNC_COMPLETED",
-        message_id,
-        media_group_id: message.media_group_id,
-        metadata: { correlation_id: correlationId }
-      });
-    } else {
-      // Single message update
-      const { error: completeError } = await supabase
+      const { error: groupUpdateError } = await supabase
         .from("messages")
         .update({
           analyzed_content: analyzedContent,
           processing_state: "completed",
           processing_completed_at: new Date().toISOString(),
+          group_caption_synced: true,
+          message_caption_id: message_id
         })
-        .eq("id", message_id);
+        .eq("media_group_id", message.media_group_id)
+        .neq("id", message_id);
 
-      if (completeError) {
-        logProcessingEvent({
-          event: "COMPLETION_ERROR",
-          message_id,
-          error: completeError.message,
-          metadata: { correlation_id: correlationId }
-        });
-        throw completeError;
+      if (groupUpdateError) {
+        throw groupUpdateError;
       }
     }
 
@@ -190,6 +144,7 @@ serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
   } catch (error) {
     const duration = Date.now() - startTime;
     logProcessingEvent({
