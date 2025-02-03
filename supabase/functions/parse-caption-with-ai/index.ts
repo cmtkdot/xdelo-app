@@ -7,17 +7,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const SYSTEM_PROMPT = `You are a specialized product information extractor. Your task is to analyze captions and extract structured product information following these rules:
-
-1. Product Name: Text before '#' (required)
-2. Product Code: Full code after '#' including vendor and date
-3. Vendor UID: 1-4 letters after '#' before any numbers
-4. Purchase Date: Convert date format:
-   - 6 digits (mmDDyy) -> YYYY-MM-DD
-   - 5 digits (mDDyy) -> YYYY-MM-DD (add leading zero)
-5. Quantity: Number after 'x'
-6. Notes: Any additional info in parentheses or unstructured text`;
-
 interface ParsedContent {
   product_name?: string;
   product_code?: string;
@@ -25,71 +14,210 @@ interface ParsedContent {
   purchase_date?: string;
   quantity?: number;
   notes?: string;
+  parsing_metadata?: {
+    method: 'manual' | 'ai' | 'hybrid';
+    confidence: number;
+    fallbacks_used?: string[];
+    quantity_confidence?: number;
+    quantity_method?: string;
+    quantity_is_approximate?: boolean;
+    quantity_unit?: string;
+    quantity_original?: string;
+  };
 }
 
-function parseDate(dateStr: string): string | undefined {
-  if (!dateStr) return undefined;
-  if (dateStr.length < 5 || dateStr.length > 6) return undefined;
+interface QuantityParseResult {
+  value: number;
+  confidence: number;
+  unit?: string;
+  original_text: string;
+  method: 'explicit' | 'numeric' | 'text' | 'fallback';
+  is_approximate: boolean;
+}
 
-  const paddedDate = dateStr.length === 5 ? '0' + dateStr : dateStr;
-  const month = paddedDate.substring(0, 2);
-  const day = paddedDate.substring(2, 4);
-  const year = '20' + paddedDate.substring(4, 6);
+const QUANTITY_PATTERNS = {
+  STANDARD_X: /[x×]\s*(\d+)/i,
+  WITH_UNITS: /(\d+)\s*(pc|pcs|pieces?|units?|qty)/i,
+  PREFIX_QTY: /(?:qty|quantity)\s*:?\s*(\d+)/i,
+  PARENTHESES: /\((?:qty|quantity|x|×)?\s*(\d+)\s*(?:pc|pcs|pieces?)?\)/i,
+  NUMBER_PREFIX: /^(\d+)\s*[x×]/i,
+  TEXT_NUMBERS: /\b(one|two|three|four|five|six|seven|eight|nine|ten)\b/i,
+  APPROXIMATE: /(?:about|approximately|approx|~)\s*(\d+)/i
+};
 
-  const date = new Date(`${year}-${month}-${day}`);
-  if (isNaN(date.getTime()) || date > new Date()) return undefined;
+const TEXT_TO_NUMBER: { [key: string]: number } = {
+  'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+  'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10
+};
 
-  return `${year}-${month}-${day}`;
+const UNIT_NORMALIZATIONS: { [key: string]: string } = {
+  'pc': 'piece',
+  'pcs': 'pieces',
+  'piece': 'piece',
+  'pieces': 'pieces',
+  'unit': 'unit',
+  'units': 'units',
+  'qty': 'quantity'
+};
+
+function parseQuantity(text: string): QuantityParseResult | null {
+  console.log("Parsing quantity from:", text);
+  
+  function validateQuantity(value: number): number | null {
+    if (isNaN(value) || value <= 0 || value > 9999) return null;
+    return value;
+  }
+
+  const patterns: [RegExp, string, number][] = [
+    [QUANTITY_PATTERNS.STANDARD_X, 'explicit', 0.9],
+    [QUANTITY_PATTERNS.WITH_UNITS, 'explicit', 0.9],
+    [QUANTITY_PATTERNS.PREFIX_QTY, 'explicit', 0.85],
+    [QUANTITY_PATTERNS.PARENTHESES, 'explicit', 0.8],
+    [QUANTITY_PATTERNS.NUMBER_PREFIX, 'explicit', 0.8],
+    [QUANTITY_PATTERNS.APPROXIMATE, 'explicit', 0.7],
+    [QUANTITY_PATTERNS.TEXT_NUMBERS, 'text', 0.6]
+  ];
+
+  for (const [pattern, method, confidence] of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      let value: number;
+      let is_approximate = false;
+
+      if (method === 'text') {
+        value = TEXT_TO_NUMBER[match[1].toLowerCase()];
+      } else {
+        value = parseInt(match[1]);
+        is_approximate = text.includes('~') || 
+                        text.toLowerCase().includes('about') || 
+                        text.toLowerCase().includes('approx');
+      }
+
+      const validatedValue = validateQuantity(value);
+      if (validatedValue === null) continue;
+
+      let unit: string | undefined;
+      const unitMatch = text.match(/(?:pc|pcs|pieces?|units?)/i);
+      if (unitMatch) {
+        unit = UNIT_NORMALIZATIONS[unitMatch[0].toLowerCase()];
+      }
+
+      return {
+        value: validatedValue,
+        confidence: is_approximate ? confidence * 0.8 : confidence,
+        unit,
+        original_text: match[0],
+        method: method as 'explicit' | 'numeric' | 'text' | 'fallback',
+        is_approximate
+      };
+    }
+  }
+
+  const numberMatch = text.match(/\b(\d+)\b/);
+  if (numberMatch) {
+    const value = validateQuantity(parseInt(numberMatch[1]));
+    if (value !== null) {
+      return {
+        value,
+        confidence: 0.4,
+        original_text: numberMatch[0],
+        method: 'fallback',
+        is_approximate: false
+      };
+    }
+  }
+
+  return null;
 }
 
 function manualParse(caption: string): ParsedContent {
-  console.log("Starting manual parsing for:", caption);
+  console.log("Starting enhanced manual parsing for:", caption);
   const result: ParsedContent = {};
+  const fallbacks_used: string[] = [];
 
-  // Product name (everything before #)
-  const productNameMatch = caption.split('#')[0].trim();
-  if (productNameMatch) {
-    result.product_name = productNameMatch;
+  const hashIndex = caption.indexOf('#');
+  if (hashIndex > 0) {
+    result.product_name = caption.substring(0, hashIndex).trim();
+  } else {
+    result.product_name = caption.trim();
+    fallbacks_used.push('no_hash_product_name');
   }
 
-  // Product code (everything after # including vendor and date)
-  const codeMatch = caption.match(/#([A-Za-z0-9]+)/);
+  const codeMatch = caption.match(/#([A-Za-z0-9-]+)/);
   if (codeMatch) {
     result.product_code = codeMatch[1];
     
-    // Vendor (letters at start of product code)
     const vendorMatch = result.product_code.match(/^([A-Za-z]{1,4})/);
     if (vendorMatch) {
       result.vendor_uid = vendorMatch[1];
       
-      // Date (digits after vendor)
       const dateStr = result.product_code.substring(vendorMatch[1].length);
-      result.purchase_date = parseDate(dateStr);
+      if (/^\d{5,6}$/.test(dateStr)) {
+        try {
+          const paddedDate = dateStr.length === 5 ? '0' + dateStr : dateStr;
+          const month = paddedDate.substring(0, 2);
+          const day = paddedDate.substring(2, 4);
+          const year = '20' + paddedDate.substring(4, 6);
+          
+          const date = new Date(`${year}-${month}-${day}`);
+          if (!isNaN(date.getTime()) && date <= new Date()) {
+            result.purchase_date = `${year}-${month}-${day}`;
+          } else {
+            fallbacks_used.push('invalid_date');
+          }
+        } catch (error) {
+          console.error("Date parsing error:", error);
+          fallbacks_used.push('date_parse_error');
+        }
+      } else if (dateStr) {
+        result.product_code = `${result.vendor_uid}-${dateStr}`;
+        fallbacks_used.push('non_date_product_code');
+      }
     }
   }
 
-  // Quantity (x followed by number)
-  const quantityMatch = caption.match(/x\s*(\d+)/i);
-  if (quantityMatch) {
-    result.quantity = parseInt(quantityMatch[1]);
+  const quantityResult = parseQuantity(caption);
+  if (quantityResult) {
+    result.quantity = quantityResult.value;
+    result.parsing_metadata = {
+      method: 'manual',
+      confidence: quantityResult.confidence,
+      quantity_confidence: quantityResult.confidence,
+      quantity_method: quantityResult.method,
+      quantity_is_approximate: quantityResult.is_approximate,
+      quantity_unit: quantityResult.unit,
+      quantity_original: quantityResult.original_text,
+      fallbacks_used
+    };
   }
 
-  // Notes (text in parentheses or remaining text)
   const notesMatch = caption.match(/\((.*?)\)/);
   if (notesMatch) {
     result.notes = notesMatch[1].trim();
   } else {
-    const remainingText = caption
-      .replace(/#[A-Za-z0-9]+/, '')
-      .replace(/x\s*\d+/, '')
-      .replace(productNameMatch, '')
-      .trim();
+    let remainingText = caption
+      .replace(/#[A-Za-z0-9-]+/, '')
+      .replace(/x\s*\d+/i, '')
+      .replace(result.product_name || '', '')
+      .trim()
+      .replace(/^[-,\s]+/, '')
+      .replace(/[-,\s]+$/, '');
     
     if (remainingText) {
       result.notes = remainingText;
+      fallbacks_used.push('implicit_notes');
     }
   }
 
+  if (!result.parsing_metadata) {
+    result.parsing_metadata = {
+      method: 'manual',
+      confidence: fallbacks_used.length ? 0.7 : 0.9,
+      fallbacks_used: fallbacks_used.length ? fallbacks_used : undefined
+    };
+  }
+
+  console.log("Enhanced manual parsing result:", result);
   return result;
 }
 
@@ -109,7 +237,18 @@ async function aiParse(caption: string): Promise<ParsedContent> {
     body: JSON.stringify({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        {
+          role: 'system',
+          content: `You are a specialized product information extractor. Extract the following from the caption:
+          1. Product Name: Text before '#'
+          2. Product Code: Full code after '#'
+          3. Vendor UID: Letters at start of product code
+          4. Purchase Date: Convert mmDDyy or mDDyy to YYYY-MM-DD
+          5. Quantity: Look for numbers after 'x' or in units
+          6. Notes: Text in parentheses or remaining info
+          
+          Return a JSON object with these fields and include confidence levels.`
+        },
         { role: 'user', content: caption }
       ],
       temperature: 0.3,
@@ -122,36 +261,66 @@ async function aiParse(caption: string): Promise<ParsedContent> {
   }
 
   const data = await response.json();
-  const result = JSON.parse(data.choices[0].message.content);
+  const aiResult = JSON.parse(data.choices[0].message.content);
 
   return {
-    product_name: result.product_name,
-    product_code: result.product_code,
-    vendor_uid: result.vendor_uid,
-    purchase_date: result.purchase_date ? parseDate(result.purchase_date) : undefined,
-    quantity: typeof result.quantity === 'number' ? result.quantity : undefined,
-    notes: result.notes
-  };
-}
-
-function mergeResults(manual: ParsedContent, ai: ParsedContent): ParsedContent {
-  return {
-    product_name: manual.product_name || ai.product_name || 'Untitled Product',
-    product_code: manual.product_code || ai.product_code,
-    vendor_uid: manual.vendor_uid || ai.vendor_uid,
-    purchase_date: manual.purchase_date || ai.purchase_date,
-    quantity: manual.quantity || ai.quantity,
-    notes: manual.notes || ai.notes
+    ...aiResult,
+    parsing_metadata: {
+      method: 'ai',
+      confidence: 0.8,
+      fallbacks_used: []
+    }
   };
 }
 
 function validateParsedContent(content: ParsedContent): boolean {
-  return !!(
+  const hasRequiredFields = !!(
     content.product_name &&
     content.product_name !== 'Untitled Product' &&
     content.product_code &&
     content.vendor_uid
   );
+
+  const hasValidDate = !content.purchase_date || (
+    new Date(content.purchase_date) <= new Date() &&
+    !isNaN(new Date(content.purchase_date).getTime())
+  );
+
+  const hasValidQuantity = !content.quantity || (
+    content.quantity > 0 && 
+    content.quantity < 10000
+  );
+
+  return hasRequiredFields && hasValidDate && hasValidQuantity;
+}
+
+function mergeResults(manual: ParsedContent, ai: ParsedContent): ParsedContent {
+  const merged = {
+    product_name: manual.product_name || ai.product_name || 'Untitled Product',
+    product_code: manual.product_code || ai.product_code,
+    vendor_uid: manual.vendor_uid || ai.vendor_uid,
+    purchase_date: manual.purchase_date || ai.purchase_date,
+    quantity: manual.quantity || ai.quantity,
+    notes: manual.notes || ai.notes,
+    parsing_metadata: {
+      method: 'hybrid',
+      confidence: Math.max(
+        manual.parsing_metadata?.confidence || 0,
+        ai.parsing_metadata?.confidence || 0
+      ),
+      fallbacks_used: [
+        ...(manual.parsing_metadata?.fallbacks_used || []),
+        ...(ai.parsing_metadata?.fallbacks_used || [])
+      ],
+      quantity_confidence: manual.parsing_metadata?.quantity_confidence || ai.parsing_metadata?.quantity_confidence,
+      quantity_method: manual.parsing_metadata?.quantity_method || ai.parsing_metadata?.quantity_method,
+      quantity_is_approximate: manual.parsing_metadata?.quantity_is_approximate || ai.parsing_metadata?.quantity_is_approximate,
+      quantity_unit: manual.parsing_metadata?.quantity_unit || ai.parsing_metadata?.quantity_unit,
+      quantity_original: manual.parsing_metadata?.quantity_original || ai.parsing_metadata?.quantity_original
+    }
+  };
+
+  return merged;
 }
 
 serve(async (req) => {
@@ -167,29 +336,23 @@ serve(async (req) => {
       throw new Error('No caption provided for parsing');
     }
 
-    // Step 1: Manual parsing attempt
     const manualResult = manualParse(caption);
     console.log('Manual parsing result:', manualResult);
 
     let finalResult = manualResult;
 
-    // Step 2: Check if manual parsing was successful
     if (!validateParsedContent(manualResult)) {
       console.log('Manual parsing incomplete, attempting AI parsing');
       try {
         const aiResult = await aiParse(caption);
         console.log('AI parsing result:', aiResult);
-        
-        // Step 3: Merge results, preferring manual parsing results
         finalResult = mergeResults(manualResult, aiResult);
         console.log('Merged parsing result:', finalResult);
       } catch (aiError) {
         console.error('AI parsing failed:', aiError);
-        // Continue with manual results if AI fails
       }
     }
 
-    // Update the message with parsed content
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -219,7 +382,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error parsing caption:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: 'Failed to parse caption or update message'
+      }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500
