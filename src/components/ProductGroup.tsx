@@ -1,6 +1,7 @@
 import { MediaItem } from "@/types";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ImageSwiper } from "@/components/ui/image-swiper";
 
 interface ProductGroupProps {
   group: MediaItem[];
@@ -11,40 +12,18 @@ interface ProductGroupProps {
 export const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps) => {
   // Find the message with original caption or the first message as fallback
   const mainMedia = group.find(media => media.is_original_caption) || group[0];
-  const isVideo = mainMedia.mime_type?.startsWith('video');
   const hasError = mainMedia.processing_state === 'error';
 
   // Get the analyzed content from the original caption message
   const analyzedContent = group.find(media => media.is_original_caption)?.analyzed_content || mainMedia.analyzed_content;
 
-  const getMediaUrl = (media: MediaItem) => {
-    if (media.public_url) return media.public_url;
-    return `https://ovpsyrhigencvzlxqwqz.supabase.co/storage/v1/object/public/telegram-media/${media.file_unique_id}.${media.mime_type?.split('/')[1]}`;
-  };
-
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
       <div 
-        className="relative aspect-video cursor-pointer group"
+        className="relative cursor-pointer"
         onClick={() => onMediaClick(mainMedia, group)}
       >
-        {isVideo ? (
-          <video
-            src={getMediaUrl(mainMedia)}
-            className="w-full h-full object-cover"
-            autoPlay
-            muted
-            loop
-            playsInline
-          />
-        ) : (
-          <img
-            src={getMediaUrl(mainMedia)}
-            alt={analyzedContent?.product_name || 'Product'}
-            className="w-full h-full object-cover"
-          />
-        )}
-        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity duration-200" />
+        <ImageSwiper media={group} />
         
         {hasError && (
           <div className="absolute top-2 right-2">
