@@ -20,14 +20,7 @@ export interface MediaItem {
   processing_state?: 'initialized' | 'processing' | 'completed' | 'error';
   processing_started_at?: string;
   processing_completed_at?: string;
-  analyzed_content?: {
-    product_name?: string;
-    product_code?: string;
-    vendor_uid?: string;
-    purchase_date?: string;
-    quantity?: number;
-    notes?: string;
-  } | null;
+  analyzed_content?: AnalyzedContent | null;
   telegram_data?: any;
   error_message?: string;
   retry_count?: number;
@@ -35,4 +28,13 @@ export interface MediaItem {
   group_first_message_time?: string;
   group_last_message_time?: string;
   group_message_count?: number;
+}
+
+export interface AnalyzedContent {
+  product_name?: string;
+  product_code?: string;
+  vendor_uid?: string;
+  purchase_date?: string;
+  quantity?: number;
+  notes?: string;
 }

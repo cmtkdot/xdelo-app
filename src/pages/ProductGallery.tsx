@@ -36,8 +36,9 @@ const ProductGallery = () => {
 
         const uniqueVendors = new Set<string>();
         data.forEach((message) => {
-          if (message.analyzed_content?.vendor_uid) {
-            uniqueVendors.add(message.analyzed_content.vendor_uid);
+          const content = message.analyzed_content as MediaItem['analyzed_content'];
+          if (content?.vendor_uid) {
+            uniqueVendors.add(content.vendor_uid);
           }
         });
 
@@ -49,6 +50,17 @@ const ProductGallery = () => {
 
     fetchVendors();
   }, []);
+
+  const formatDate = (date: string | null) => {
+    if (!date) return null;
+    try {
+      const d = new Date(date);
+      return d.toISOString().split('T')[0];
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return null;
+    }
+  };
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -223,6 +235,7 @@ const ProductGallery = () => {
         onClose={() => setEditItem(null)}
         onSave={handleSave}
         onItemChange={handleItemChange}
+        formatDate={formatDate}
       />
     </div>
   );
