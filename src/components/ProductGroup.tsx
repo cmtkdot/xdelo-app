@@ -52,7 +52,7 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
           const processingMetadata = {
             correlation_id: correlationId,
             timestamp: new Date().toISOString(),
-            method: 'hybrid',
+            method: 'hybrid' as const,
             confidence: analyzedContent?.parsing_metadata?.confidence || 0,
             reanalysis_attempted: true,
             group_message_count: mainMedia.group_message_count,
@@ -157,7 +157,7 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
       const processingMetadata = {
         correlation_id: correlationId,
         timestamp: new Date().toISOString(),
-        method: 'manual',
+        method: 'manual' as const,
         confidence: 0,
         reanalysis_attempted: true,
         group_message_count: mainMedia.group_message_count,

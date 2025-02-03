@@ -154,20 +154,27 @@ export function processingMetadataToJson(metadata: ProcessingMetadata): JsonValu
 
 // Convert AnalyzedContent to JsonValue
 export function analyzedContentToJson(analyzed: AnalyzedContent): JsonValue {
-  return {
-    product_name: analyzed.product_name || null,
-    product_code: analyzed.product_code || null,
-    vendor_uid: analyzed.vendor_uid || null,
-    purchase_date: analyzed.purchase_date || null,
-    quantity: analyzed.quantity || null,
-    notes: analyzed.notes || null,
-    parsing_metadata: analyzed.parsing_metadata ? {
+  if (!analyzed) return null;
+  
+  const result: { [key: string]: JsonValue } = {};
+  
+  if (analyzed.product_name) result.product_name = analyzed.product_name;
+  if (analyzed.product_code) result.product_code = analyzed.product_code;
+  if (analyzed.vendor_uid) result.vendor_uid = analyzed.vendor_uid;
+  if (analyzed.purchase_date) result.purchase_date = analyzed.purchase_date;
+  if (analyzed.quantity) result.quantity = analyzed.quantity;
+  if (analyzed.notes) result.notes = analyzed.notes;
+  
+  if (analyzed.parsing_metadata) {
+    result.parsing_metadata = {
       method: analyzed.parsing_metadata.method,
       confidence: analyzed.parsing_metadata.confidence,
       fallbacks_used: analyzed.parsing_metadata.fallbacks_used || [],
       reanalysis_attempted: analyzed.parsing_metadata.reanalysis_attempted || false,
       previous_analysis: analyzed.parsing_metadata.previous_analysis ? 
         analyzedContentToJson(analyzed.parsing_metadata.previous_analysis) : null
-    } : null
-  };
+    };
+  }
+  
+  return result;
 }

@@ -43,12 +43,19 @@ const ProductGallery = () => {
 
   const handleItemChange = (field: string, value: any) => {
     if (editItem) {
+      const updatedContent = {
+        ...(editItem.analyzed_content || {}),
+        [field]: value,
+        parsing_metadata: {
+          method: 'manual' as const,
+          confidence: 1.0,
+          timestamp: new Date().toISOString()
+        }
+      };
+
       setEditItem({
         ...editItem,
-        analyzed_content: {
-          ...(editItem.analyzed_content || {}),
-          [field]: value
-        }
+        analyzed_content: updatedContent
       });
     }
   };
