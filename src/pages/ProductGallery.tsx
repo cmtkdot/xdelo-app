@@ -8,6 +8,7 @@ import { ProductPagination } from "@/components/ProductGallery/ProductPagination
 import ProductFilters from "@/components/ProductGallery/ProductFilters";
 import { useVendors } from "@/hooks/useVendors";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
+import { format } from "date-fns";
 
 const ProductGallery = () => {
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
@@ -55,6 +56,16 @@ const ProductGallery = () => {
         ...editItem,
         analyzed_content: updatedContent
       });
+    }
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return null;
+    try {
+      return format(new Date(dateString), 'yyyy-MM-dd');
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return null;
     }
   };
 
@@ -143,6 +154,7 @@ const ProductGallery = () => {
         onClose={() => setEditItem(null)}
         onSave={handleSave}
         onItemChange={handleItemChange}
+        formatDate={formatDate}
       />
     </div>
   );
