@@ -124,7 +124,7 @@ const MobileSidebar = ({ className, children, ...props }: SidebarBodyProps) => {
             exit={{ x: "-100%", opacity: 0 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
             className={cn(
-              "fixed inset-0 bg-white dark:bg-neutral-900 md:hidden z-40 p-6",
+              "fixed inset-y-0 left-0 w-[75%] max-w-[300px] bg-white dark:bg-neutral-900 md:hidden z-40 p-6 shadow-lg",
               className
             )}
             {...(props as any)}
@@ -150,10 +150,18 @@ export const SidebarLink = ({
   link: Links;
   className?: string;
 }) => {
-  const { open, animate } = useSidebar();
+  const { open, animate, setOpen } = useSidebar();
+  
+  const handleClick = () => {
+    if (link.onClick) {
+      link.onClick();
+      setOpen(false); // Close sidebar after navigation
+    }
+  };
+
   return (
     <button
-      onClick={link.onClick}
+      onClick={handleClick}
       className={cn(
         "flex items-center justify-start gap-2 group/sidebar py-2 w-full",
         className
