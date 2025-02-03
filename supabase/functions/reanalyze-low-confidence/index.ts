@@ -6,20 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface AnalyzedContent {
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  quantity?: number;
-  notes?: string;
-  parsing_metadata?: {
-    method: string;
-    confidence: number;
-    fallbacks_used?: string[];
-  };
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -99,6 +85,10 @@ Return JSON with high confidence if all required fields are found and valid.`
         max_tokens: 500
       }),
     });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.statusText}`);
+    }
 
     const data = await response.json();
     const newAnalyzedContent = JSON.parse(data.choices[0].message.content);
