@@ -55,6 +55,7 @@ export interface FilterValues {
   vendor: string;
   dateFrom?: Date;
   dateTo?: Date;
+  dateField: 'purchase_date' | 'created_at' | 'updated_at';
   sortOrder: "desc" | "asc";
   productCode?: string;
   quantityRange?: string;

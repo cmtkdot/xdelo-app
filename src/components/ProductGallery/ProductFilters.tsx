@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { FilterValues, ProcessingState } from "@/types";
 import { Filter } from "lucide-react";
 import debounce from 'lodash/debounce';
-import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,33 +23,12 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   const [vendor, setVendor] = useState(filters.vendor);
   const [dateFrom, setDateFrom] = useState<Date | undefined>(filters.dateFrom);
   const [dateTo, setDateTo] = useState<Date | undefined>(filters.dateTo);
+  const [dateField, setDateField] = useState<'purchase_date' | 'created_at' | 'updated_at'>(filters.dateField || 'purchase_date');
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder);
   const [productCode, setProductCode] = useState(filters.productCode || 'all');
   const [quantityRange, setQuantityRange] = useState(filters.quantityRange || 'all');
   const [processingState, setProcessingState] = useState<ProcessingState | "all">(filters.processingState || 'all');
-  const [productCodes, setProductCodes] = useState<string[]>([]);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
-
-  // Fetch unique product codes from analyzed_content
-  useEffect(() => {
-    const fetchProductCodes = async () => {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('analyzed_content')
-        .not('analyzed_content', 'is', null)
-        .is('is_original_caption', true);
-
-      if (!error && data) {
-        const uniqueCodes = [...new Set(data
-          .map(item => item.analyzed_content?.product_code)
-          .filter(Boolean)
-        )];
-        setProductCodes(uniqueCodes);
-      }
-    };
-
-    fetchProductCodes();
-  }, []);
 
   // Count active filters
   useEffect(() => {
@@ -76,18 +54,19 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
       vendor,
       dateFrom,
       dateTo,
+      dateField,
       sortOrder,
       productCode,
       quantityRange,
       processingState
     });
-  }, [search, vendor, dateFrom, dateTo, sortOrder, productCode, quantityRange, processingState]);
+  }, [search, vendor, dateFrom, dateTo, dateField, sortOrder, productCode, quantityRange, processingState]);
 
   const FilterContent = () => (
     <div className="flex flex-col space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
         <SearchFilter value={search} onChange={setSearch} />
-        <ProductCodeFilter value={productCode} options={productCodes} onChange={setProductCode} />
+        <ProductCodeFilter value={productCode} onChange={setProductCode} />
         <QuantityFilter value={quantityRange} onChange={setQuantityRange} />
         <VendorFilter value={vendor} vendors={vendors} onChange={setVendor} />
         <ProcessingStateFilter value={processingState} onChange={setProcessingState} />
@@ -96,8 +75,10 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
         <DateRangeFilter
           dateFrom={dateFrom}
           dateTo={dateTo}
+          dateField={dateField}
           onDateFromChange={setDateFrom}
           onDateToChange={setDateTo}
+          onDateFieldChange={setDateField}
         />
       </div>
     </div>
