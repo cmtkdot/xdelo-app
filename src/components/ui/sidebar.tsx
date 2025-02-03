@@ -1,7 +1,7 @@
-import * as React from "react"
-import { cn } from "@/lib/utils"
-import { AnimatePresence, motion } from "framer-motion"
-import { Menu, X } from "lucide-react"
+import { cn } from "@/lib/utils";
+import React, { useState, createContext, useContext } from "react";
+import { AnimatePresence, motion, HTMLMotionProps } from "framer-motion";
+import { Menu, X } from "lucide-react";
 
 interface Links {
   label: string;
@@ -16,10 +16,10 @@ interface SidebarContextProps {
   animate: boolean;
 }
 
-const SidebarContext = React.createContext<SidebarContextProps | undefined>(undefined);
+const SidebarContext = createContext<SidebarContextProps | undefined>(undefined);
 
 export const useSidebar = () => {
-  const context = React.useContext(SidebarContext);
+  const context = useContext(SidebarContext);
   if (!context) {
     throw new Error("useSidebar must be used within a SidebarProvider");
   }
@@ -37,7 +37,7 @@ export const SidebarProvider = ({
   setOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   animate?: boolean;
 }) => {
-  const [openState, setOpenState] = React.useState(false);
+  const [openState, setOpenState] = useState(false);
   const open = openProp !== undefined ? openProp : openState;
   const setOpen = setOpenProp || setOpenState;
 
@@ -66,11 +66,11 @@ export const Sidebar = ({
   );
 };
 
-export const SidebarBody = (props: React.ComponentProps<typeof motion.div>) => {
+export const SidebarBody = (props: HTMLMotionProps<"div">) => {
   return (
     <>
       <DesktopSidebar {...props} />
-      <MobileSidebar {...(props as React.ComponentProps<"div">)} />
+      <MobileSidebar {...props} />
     </>
   );
 };
@@ -79,7 +79,7 @@ const DesktopSidebar = ({
   className,
   children,
   ...props
-}: React.ComponentProps<typeof motion.div>) => {
+}: HTMLMotionProps<"div">) => {
   const { open, setOpen, animate } = useSidebar();
   return (
     <motion.div
@@ -103,7 +103,7 @@ const MobileSidebar = ({
   className,
   children,
   ...props
-}: React.ComponentProps<"div">) => {
+}: HTMLMotionProps<"div">) => {
   const { open, setOpen } = useSidebar();
   return (
     <>
