@@ -6,7 +6,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { CalendarIcon, Filter, Search, Tag, Users, Package2, AlertCircle } from "lucide-react";
-import { FilterValues, ProcessingState, AnalyzedContent } from "@/types";
+import { FilterValues, ProcessingState } from "@/types";
 import debounce from 'lodash/debounce';
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -32,16 +32,17 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
 
   useEffect(() => {
     const fetchProductCodes = async () => {
+      // Query only original caption messages to avoid duplicates
       const { data, error } = await supabase
         .from('messages')
         .select('analyzed_content')
-        .is('is_original_caption', true)
+        .eq('is_original_caption', true)
         .not('analyzed_content', 'is', null);
 
       if (!error && data) {
         const uniqueCodes = [...new Set(data
           .map(item => {
-            const content = item.analyzed_content as AnalyzedContent;
+            const content = item.analyzed_content as { product_code?: string };
             return content?.product_code;
           })
           .filter(Boolean)

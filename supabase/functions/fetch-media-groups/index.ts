@@ -18,7 +18,6 @@ interface FilterValues {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -31,15 +30,16 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Build the query
+    // Build the query for original caption messages only
     let query = supabase
       .from("messages")
       .select("*", { count: "exact" })
-      .eq('is_original_caption', true);
+      .eq('is_original_caption', true)
+      .not('analyzed_content', 'is', null);
 
     // Apply filters
     if (filters.search) {
-      query = query.or(`analyzed_content->product_name.ilike.%${filters.search}%,analyzed_content->notes.ilike.%${filters.search}%`);
+      query = query.or(`analyzed_content->product_name.ilike.%${filters.search}%,analyzed_content->notes.ilike.%${filters.search}%,caption.ilike.%${filters.search}%`);
     }
 
     if (filters.vendor && filters.vendor !== "all") {

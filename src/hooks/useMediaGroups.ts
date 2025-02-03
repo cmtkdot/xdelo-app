@@ -1,60 +1,31 @@
-import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, FilterValues } from "@/types";
-import { useToast } from "@/components/ui/use-toast";
+import { FilterValues, MediaItem } from "@/types";
 
-export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
-  const [mediaGroups, setMediaGroups] = useState<Record<string, MediaItem[]>>({});
-  const [totalPages, setTotalPages] = useState(1);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    const fetchMediaGroups = async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke('fetch-media-groups', {
-          body: { page: currentPage, filters }
-        });
-
-        if (error) throw error;
-
-        setMediaGroups(data.mediaGroups);
-        setTotalPages(data.totalPages);
-      } catch (error) {
-        console.error("Error fetching media groups:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load media groups. Please try again.",
-          variant: "destructive",
-        });
-      }
-    };
-
-    fetchMediaGroups();
-
-    // Subscribe to ALL changes on the messages table
-    const channel = supabase
-      .channel("media-groups-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "messages",
+export const useMediaGroups = (page: number, filters: FilterValues) => {
+  return useQuery({
+    queryKey: ['mediaGroups', page, filters],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke<{
+        mediaGroups: { [key: string]: MediaItem[] };
+        totalPages: number;
+      }>('fetch-media-groups', {
+        body: {
+          page,
+          filters: {
+            ...filters,
+            dateFrom: filters.dateFrom?.toISOString(),
+            dateTo: filters.dateTo?.toISOString(),
+          },
         },
-        (payload) => {
-          console.log("Received real-time update:", payload);
-          // Fetch fresh data to ensure we have the latest state
-          fetchMediaGroups();
-        }
-      )
-      .subscribe((status) => {
-        console.log("Subscription status:", status);
       });
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [toast, currentPage, filters]);
+      if (error) {
+        console.error('Error fetching media groups:', error);
+        throw error;
+      }
 
-  return { mediaGroups, totalPages };
+      return data;
+    },
+  });
 };
