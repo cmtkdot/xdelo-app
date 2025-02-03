@@ -27,7 +27,6 @@ serve(async (req) => {
 
   const { message_id, media_group_id, caption } = requestBody;
 
-  // Validate required parameters
   if (!message_id || !caption) {
     console.error('Missing required parameters:', { message_id, caption });
     return new Response(
@@ -58,6 +57,31 @@ serve(async (req) => {
         caption
       }
     });
+
+    // If this is part of a media group, wait for all messages to be in the database
+    if (media_group_id) {
+      console.log('Checking media group completeness:', media_group_id);
+      
+      // Wait for up to 5 seconds for all messages to arrive
+      for (let i = 0; i < 5; i++) {
+        const { data: groupMessages, error: groupError } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('media_group_id', media_group_id);
+
+        if (groupError) throw groupError;
+
+        if (groupMessages && groupMessages.length > 0) {
+          console.log(`Found ${groupMessages.length} messages in group`);
+          break;
+        }
+
+        if (i < 4) {
+          console.log('Waiting for more messages...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    }
 
     // Update message to processing state
     await supabase
