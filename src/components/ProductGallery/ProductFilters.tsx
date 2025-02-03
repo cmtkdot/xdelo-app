@@ -24,10 +24,9 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder);
   const [productCode, setProductCode] = useState(filters.productCode || 'all');
   const [quantityRange, setQuantityRange] = useState(filters.quantityRange || 'all');
-  const [processingState, setProcessingState] = useState(filters.processingState || 'all');
+  const [processingState, setProcessingState] = useState<'initialized' | 'processing' | 'completed' | 'error' | 'pending' | 'all'>(filters.processingState || 'all');
   const [productCodes, setProductCodes] = useState<string[]>([]);
 
-  // Fetch unique product codes
   useEffect(() => {
     const fetchProductCodes = async () => {
       const { data, error } = await supabase
@@ -45,7 +44,6 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     fetchProductCodes();
   }, []);
 
-  // Debounced filter change for real-time search
   const debouncedFilterChange = debounce((newFilters: FilterValues) => {
     onFilterChange(newFilters);
   }, 300);
@@ -113,7 +111,10 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
           </SelectContent>
         </Select>
 
-        <Select value={processingState} onValueChange={setProcessingState}>
+        <Select 
+          value={processingState} 
+          onValueChange={(value: 'initialized' | 'processing' | 'completed' | 'error' | 'pending' | 'all') => setProcessingState(value)}
+        >
           <SelectTrigger className="w-full md:w-48">
             <SelectValue placeholder="Processing State" />
           </SelectTrigger>

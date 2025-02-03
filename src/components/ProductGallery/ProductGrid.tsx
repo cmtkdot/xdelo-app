@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 
 interface ProductGridProps {
   mediaGroups: { [key: string]: MediaItem[] };
-  onEdit: (media: MediaItem) => void;
+  onEdit?: (media: MediaItem) => void;
 }
 
 export const ProductGrid = ({ mediaGroups, onEdit }: ProductGridProps) => {
