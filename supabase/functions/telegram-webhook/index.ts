@@ -9,12 +9,17 @@ import {
 import type { TelegramUpdate, WebhookResponse } from "./types.ts";
 
 serve(async (req) => {
+  console.log("Received webhook request");
+
   if (req.method === "OPTIONS") {
+    console.log("Handling CORS preflight request");
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Validate the webhook secret
     await validateWebhookSecret(req);
+    console.log("Webhook secret validated successfully");
 
     const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
     if (!TELEGRAM_BOT_TOKEN) {
@@ -27,6 +32,7 @@ serve(async (req) => {
     );
 
     const update: TelegramUpdate = await req.json();
+    console.log("Received update:", JSON.stringify(update));
 
     let response: WebhookResponse | null = null;
 
@@ -55,11 +61,15 @@ serve(async (req) => {
       }
     }
 
+    console.log("Processing completed successfully");
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
     console.error("Error processing webhook:", error);
+    
+    const status = error.message.includes("Authorization") ? 401 : 500;
+    console.log(`Responding with status ${status}`);
     
     return new Response(
       JSON.stringify({
@@ -68,7 +78,7 @@ serve(async (req) => {
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: error.message.includes("Authorization") ? 401 : 500,
+        status,
       }
     );
   }
