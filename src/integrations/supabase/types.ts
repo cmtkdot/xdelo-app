@@ -64,6 +64,7 @@ export type Database = {
           height: number | null
           id: string
           is_original_caption: boolean | null
+          last_error_at: string | null
           media_group_id: string | null
           message_caption_id: string | null
           mime_type: string | null
@@ -74,6 +75,7 @@ export type Database = {
             | null
           public_url: string | null
           purchase_order_uid: string | null
+          retry_count: number | null
           storage_path: string | null
           telegram_data: Json | null
           telegram_message_id: number | null
@@ -99,6 +101,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_original_caption?: boolean | null
+          last_error_at?: string | null
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
@@ -109,6 +112,7 @@ export type Database = {
             | null
           public_url?: string | null
           purchase_order_uid?: string | null
+          retry_count?: number | null
           storage_path?: string | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
@@ -134,6 +138,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_original_caption?: boolean | null
+          last_error_at?: string | null
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
@@ -144,6 +149,7 @@ export type Database = {
             | null
           public_url?: string | null
           purchase_order_uid?: string | null
+          retry_count?: number | null
           storage_path?: string | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
@@ -364,6 +370,15 @@ export type Database = {
             }
             Returns: undefined
           }
+      sync_media_group_content: {
+        Args: {
+          p_message_id: string
+          p_media_group_id: string
+          p_analyzed_content: Json
+          p_correlation_id?: string
+        }
+        Returns: undefined
+      }
       text_to_bytea: {
         Args: {
           data: string
