@@ -11,6 +11,7 @@ const corsHeaders = {
 serve(async (req) => {
   const startTime = Date.now();
   const correlationId = crypto.randomUUID();
+  console.log(`[${correlationId}] Starting message analysis`);
 
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -22,9 +23,9 @@ serve(async (req) => {
 
   try {
     const { message_id } = await req.json();
-    console.log(`[${correlationId}] Starting analysis for message:`, message_id);
+    console.log(`[${correlationId}] Processing message ID:`, message_id);
 
-    // Fetch message details using maybeSingle()
+    // Fetch message with maybeSingle() to handle no results gracefully
     const { data: message, error: messageError } = await supabase
       .from("messages")
       .select("*")
@@ -32,14 +33,21 @@ serve(async (req) => {
       .maybeSingle();
 
     if (messageError) {
-      console.error(`[${correlationId}] Error fetching message:`, messageError);
+      console.error(`[${correlationId}] Database error:`, messageError);
       throw messageError;
     }
-    
+
     if (!message) {
       console.error(`[${correlationId}] Message not found:`, message_id);
-      throw new Error("Message not found");
+      throw new Error(`Message not found: ${message_id}`);
     }
+
+    console.log(`[${correlationId}] Found message:`, {
+      id: message.id,
+      caption: message.caption,
+      media_group_id: message.media_group_id,
+      processing_state: message.processing_state
+    });
 
     // Update state to analyzing
     const { error: updateError } = await supabase
@@ -51,7 +59,7 @@ serve(async (req) => {
       .eq("id", message_id);
 
     if (updateError) {
-      console.error(`[${correlationId}] Error updating message state:`, updateError);
+      console.error(`[${correlationId}] Error updating state:`, updateError);
       throw updateError;
     }
 
@@ -78,7 +86,7 @@ serve(async (req) => {
       );
 
       if (groupError) {
-        console.error(`[${correlationId}] Error processing media group:`, groupError);
+        console.error(`[${correlationId}] Group sync error:`, groupError);
         throw groupError;
       }
     } else {
@@ -93,7 +101,7 @@ serve(async (req) => {
         .eq("id", message_id);
 
       if (completeError) {
-        console.error(`[${correlationId}] Error completing message analysis:`, completeError);
+        console.error(`[${correlationId}] Completion error:`, completeError);
         throw completeError;
       }
     }
