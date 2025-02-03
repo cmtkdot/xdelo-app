@@ -53,7 +53,7 @@ const Products = () => {
           const existingMessage = uniqueMessages.get(key) as MediaItem;
           if (
             message.analyzed_content && 
-            (!existingMessage?.analyzed_content || 
+            (!existingMessage.analyzed_content || 
              message.updated_at > existingMessage.updated_at)
           ) {
             uniqueMessages.set(key, message);

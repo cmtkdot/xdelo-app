@@ -5,46 +5,66 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
     try {
-      const { error } = isSignUp
-        ? await supabase.auth.signUp({
-            email,
-            password,
-          })
-        : await supabase.auth.signInWithPassword({
-            email,
-            password,
-          });
+      if (isSignUp) {
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        });
 
-      if (error) throw error;
+        if (signUpError) {
+          if (signUpError.message.includes("already registered")) {
+            setError("This email is already registered. Please try signing in instead.");
+          } else {
+            setError(signUpError.message);
+          }
+          return;
+        }
 
-      toast({
-        title: isSignUp ? "Account created!" : "Welcome back!",
-        description: isSignUp
-          ? "Please check your email to verify your account."
-          : "You have been successfully logged in.",
-      });
+        toast({
+          title: "Account created!",
+          description: "Please check your email to verify your account.",
+        });
+      } else {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInError) {
+          if (signInError.message.includes("Invalid login credentials")) {
+            setError("Invalid email or password. Please try again.");
+          } else {
+            setError(signInError.message);
+          }
+          return;
+        }
+
+        toast({
+          title: "Welcome back!",
+          description: "You have been successfully logged in.",
+        });
+      }
 
       navigate("/");
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      setError(error.message);
     } finally {
       setLoading(false);
     }
@@ -58,6 +78,13 @@ const Auth = () => {
             {isSignUp ? "Create an account" : "Sign in to your account"}
           </h2>
         </div>
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         <form className="mt-8 space-y-6" onSubmit={handleAuth}>
           <div className="rounded-md shadow-sm space-y-4">
             <div>
@@ -104,7 +131,10 @@ const Auth = () => {
             <Button
               type="button"
               variant="link"
-              onClick={() => setIsSignUp(!isSignUp)}
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setError(null);
+              }}
             >
               {isSignUp
                 ? "Already have an account? Sign in"
