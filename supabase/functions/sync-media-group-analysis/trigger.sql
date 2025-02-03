@@ -1,31 +1,54 @@
--- Create a function to call the Edge Function
-CREATE OR REPLACE FUNCTION trigger_sync_media_group_analysis()
-RETURNS TRIGGER AS $$
+-- Function to process media group analysis
+CREATE OR REPLACE FUNCTION process_media_group_analysis(
+  p_message_id UUID,
+  p_media_group_id TEXT,
+  p_analyzed_content JSONB,
+  p_processing_completed_at TIMESTAMPTZ,
+  p_correlation_id TEXT DEFAULT NULL
+) RETURNS void AS $$
+DECLARE
+    v_lock_obtained BOOLEAN;
 BEGIN
-  -- Only trigger for messages that are part of a media group
-  IF NEW.media_group_id IS NOT NULL AND
-     NEW.processing_state = 'caption_ready' THEN
+    -- Try to obtain advisory lock using media_group_id hash
+    SELECT pg_try_advisory_xact_lock(hashtext(p_media_group_id)) INTO v_lock_obtained;
+    
+    IF NOT v_lock_obtained THEN
+        RAISE EXCEPTION 'Could not obtain lock for media group %', p_media_group_id;
+    END IF;
 
-    -- Make HTTP request to the Edge Function
-    PERFORM net.http_post(
-      url := CONCAT(current_setting('app.settings.supabase_url'), '/functions/v1/sync-media-group-analysis'),
-      headers := jsonb_build_object(
-        'Content-Type', 'application/json',
-        'Authorization', CONCAT('Bearer ', current_setting('app.settings.service_role_key'))
-      ),
-      body := jsonb_build_object(
-        'message_id', NEW.id,
-        'media_group_id', NEW.media_group_id
-      )
-    );
-  END IF;
-  RETURN NEW;
+    -- Update the source message
+    UPDATE messages
+    SET 
+        analyzed_content = p_analyzed_content,
+        processing_state = 'analysis_synced',
+        processing_completed_at = p_processing_completed_at,
+        is_original_caption = true,
+        group_caption_synced = true
+    WHERE id = p_message_id;
+
+    -- Update all other messages in the group
+    UPDATE messages
+    SET 
+        analyzed_content = p_analyzed_content,
+        processing_state = 'analysis_synced',
+        processing_completed_at = p_processing_completed_at,
+        is_original_caption = false,
+        group_caption_synced = true,
+        message_caption_id = p_message_id
+    WHERE 
+        media_group_id = p_media_group_id 
+        AND id != p_message_id;
+
+    -- Mark group as completed if all messages are synced
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM messages 
+        WHERE media_group_id = p_media_group_id 
+        AND (processing_state != 'analysis_synced' OR NOT group_caption_synced)
+    ) THEN
+        UPDATE messages
+        SET processing_state = 'completed'
+        WHERE media_group_id = p_media_group_id;
+    END IF;
 END;
 $$ LANGUAGE plpgsql;
-
--- Create the trigger
-CREATE OR REPLACE TRIGGER sync_media_group_analysis_trigger
-AFTER UPDATE OF processing_state ON messages
-FOR EACH ROW
-WHEN (NEW.processing_state = 'caption_ready')
-EXECUTE FUNCTION trigger_sync_media_group_analysis();

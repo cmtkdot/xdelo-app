@@ -179,10 +179,10 @@ export async function handleMediaMessage(
       console.log("✅ Message stored successfully");
     }
 
-    // If message has caption and is part of a media group, trigger caption sync
+    // If message has caption and is part of a media group, trigger analysis
     if (message.caption && message.media_group_id) {
       try {
-        console.log("🔄 Triggering caption sync for media group");
+        console.log("🔄 Triggering media group analysis");
         const { data: messageData } = await supabase
           .from("messages")
           .select("id")
@@ -191,7 +191,7 @@ export async function handleMediaMessage(
 
         if (messageData) {
           const response = await fetch(
-            `${Deno.env.get("SUPABASE_URL")}/functions/v1/sync-media-group-caption`,
+            `${Deno.env.get("SUPABASE_URL")}/functions/v1/sync-media-group-analysis`,
             {
               method: "POST",
               headers: {
@@ -201,19 +201,18 @@ export async function handleMediaMessage(
               body: JSON.stringify({
                 message_id: messageData.id,
                 media_group_id: message.media_group_id,
-                caption: message.caption,
               }),
             }
           );
 
           if (!response.ok) {
-            throw new Error(`Caption sync failed: ${await response.text()}`);
+            throw new Error(`Analysis sync failed: ${await response.text()}`);
           }
-          console.log("✅ Caption sync triggered successfully");
+          console.log("✅ Analysis sync triggered successfully");
         }
       } catch (error) {
-        console.error("❌ Error triggering caption sync:", error);
-        // Continue processing even if caption sync fails
+        console.error("❌ Error triggering analysis sync:", error);
+        // Continue processing even if analysis sync fails
       }
     }
 

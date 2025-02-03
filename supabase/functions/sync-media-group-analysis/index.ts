@@ -2,197 +2,128 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface ProcessingLog {
-  event: string;
+interface SyncRequest {
   message_id: string;
-  media_group_id?: string;
-  duration_ms?: number;
-  state?: MessageProcessingState;
-  error?: string;
-  metadata?: Record<string, any>;
-  timestamp: string;
+  media_group_id: string;
+  correlation_id?: string;
 }
 
-type MessageProcessingState =
-  | "initialized"
-  | "caption_ready"
-  | "analyzing"
-  | "analysis_synced"
-  | "completed"
-  | "analysis_failed";
+function parseCaption(caption: string): any {
+  const result: any = {};
+  
+  // Extract product name (text before #)
+  const hashIndex = caption.indexOf('#');
+  if (hashIndex > 0) {
+    result.product_name = caption.substring(0, hashIndex).trim();
+  } else {
+    result.product_name = caption.trim();
+  }
 
-function logProcessingEvent(event: Omit<ProcessingLog, "timestamp">) {
-  console.log(
-    JSON.stringify({
-      ...event,
-      timestamp: new Date().toISOString(),
-    })
-  );
+  // Extract product code and other details
+  const codeMatch = caption.match(/#([A-Za-z0-9]+)/);
+  if (codeMatch) {
+    const code = codeMatch[1];
+    result.product_code = code;
+
+    // Extract vendor UID (letters before numbers)
+    const vendorMatch = code.match(/^([A-Za-z]+)/);
+    if (vendorMatch) {
+      result.vendor_uid = vendorMatch[1];
+    }
+
+    // Extract and parse date
+    const dateMatch = code.match(/(\d{5,6})/);
+    if (dateMatch) {
+      const dateStr = dateMatch[1];
+      const paddedDate = dateStr.length === 5 ? '0' + dateStr : dateStr;
+      const month = paddedDate.substring(0, 2);
+      const day = paddedDate.substring(2, 4);
+      const year = '20' + paddedDate.substring(4, 6);
+      result.purchase_date = `${year}-${month}-${day}`;
+    }
+  }
+
+  // Extract quantity
+  const quantityMatch = caption.match(/x(\d+)/);
+  if (quantityMatch) {
+    result.quantity = parseInt(quantityMatch[1]);
+  }
+
+  // Extract notes (anything in parentheses or remaining text)
+  const notesMatch = caption.match(/\((.*?)\)/);
+  if (notesMatch) {
+    result.notes = notesMatch[1].trim();
+  } else {
+    // Get any remaining text after the product code as notes
+    const remainingText = caption.split('#')[1]?.split(/x\d+/)[1]?.trim();
+    if (remainingText) {
+      result.notes = remainingText;
+    }
+  }
+
+  return result;
 }
 
 serve(async (req) => {
-  const startTime = Date.now();
-  const correlationId = crypto.randomUUID();
-
-  if (req.method === "OPTIONS") {
+  if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
-
   try {
-    const { message_id, media_group_id } = await req.json();
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
 
-    if (!message_id || !media_group_id) {
-      throw new Error("message_id and media_group_id are required");
+    const { message_id, media_group_id, correlation_id } = await req.json() as SyncRequest;
+    console.log(`Processing media group analysis for message ${message_id} in group ${media_group_id}`);
+
+    // Get the message with caption
+    const { data: message, error: messageError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', message_id)
+      .single();
+
+    if (messageError) throw messageError;
+    if (!message?.caption) {
+      throw new Error('Message has no caption to analyze');
     }
 
-    logProcessingEvent({
-      event: "SYNC_STARTED",
-      message_id,
-      media_group_id,
-      metadata: { correlation_id: correlationId },
-    });
+    // Parse the caption
+    const analyzed_content = parseCaption(message.caption);
+    const processing_completed_at = new Date().toISOString();
 
-    // Find all messages in the group
-    const { data: groupMessages, error: groupError } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("media_group_id", media_group_id)
-      .order("created_at", { ascending: true });
-
-    if (groupError) {
-      throw groupError;
-    }
-
-    if (!groupMessages?.length) {
-      throw new Error("No messages found in group");
-    }
-
-    // First try to find a message with analyzed content
-    let sourceMessage = groupMessages.find(m => m.analyzed_content);
-    
-    // If no analyzed content exists, look for a message with caption
-    if (!sourceMessage) {
-      sourceMessage = groupMessages.find(m => m.caption);
-    }
-
-    if (!sourceMessage) {
-      logProcessingEvent({
-        event: "NO_CAPTION_OR_CONTENT_FOUND",
-        message_id,
-        media_group_id,
-        metadata: {
-          correlation_id: correlationId,
-          group_size: groupMessages.length,
-        },
-      });
-      
-      // Update all messages to initialized state if no caption found
-      const { error: updateError } = await supabase
-        .from("messages")
-        .update({
-          processing_state: "initialized",
-          group_caption_synced: false,
-        })
-        .eq("media_group_id", media_group_id);
-
-      if (updateError) throw updateError;
-
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: "No caption or analyzed content found in group",
-          correlation_id: correlationId,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Call the stored procedure to handle the group sync
+    // Call the database function to sync the group
     const { error: syncError } = await supabase.rpc(
-      "process_media_group_analysis",
+      'process_media_group_analysis',
       {
-        p_message_id: sourceMessage.id,
+        p_message_id: message_id,
         p_media_group_id: media_group_id,
-        p_analyzed_content: sourceMessage.analyzed_content || {},
-        p_processing_completed_at: new Date().toISOString(),
-        p_correlation_id: correlationId,
+        p_analyzed_content: analyzed_content,
+        p_processing_completed_at: processing_completed_at,
+        p_correlation_id: correlation_id
       }
     );
 
-    if (syncError) {
-      throw syncError;
-    }
-
-    // Update all messages in group to caption_ready state if they don't have analyzed content
-    const { error: updateError } = await supabase
-      .from("messages")
-      .update({
-        processing_state: "caption_ready",
-        group_caption_synced: true,
-        message_caption_id: sourceMessage.id,
-      })
-      .eq("media_group_id", media_group_id)
-      .is("analyzed_content", null);
-
-    if (updateError) {
-      throw updateError;
-    }
-
-    const totalDuration = Date.now() - startTime;
-    logProcessingEvent({
-      event: "SYNC_COMPLETED",
-      message_id,
-      media_group_id,
-      duration_ms: totalDuration,
-      state: "caption_ready",
-      metadata: {
-        correlation_id: correlationId,
-        group_size: groupMessages.length,
-        source_message_id: sourceMessage.id,
-      },
-    });
+    if (syncError) throw syncError;
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        source_message_id: sourceMessage.id,
-        group_size: groupMessages.length,
-        processing_time_ms: totalDuration,
-        correlation_id: correlationId,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ success: true, analyzed_content }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
-    const errorEvent = {
-      event: "SYNC_FAILED",
-      message_id: req.message_id,
-      media_group_id: req.media_group_id,
-      error: error.message,
-      metadata: {
-        correlation_id: correlationId,
-        error_stack: error.stack,
-        error_details: error,
-      },
-    };
-    logProcessingEvent(errorEvent);
 
+  } catch (error) {
+    console.error('Error processing media group:', error);
     return new Response(
-      JSON.stringify({
-        error: error.message,
-        correlation_id: correlationId,
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      JSON.stringify({ error: error.message }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
       }
     );
   }
