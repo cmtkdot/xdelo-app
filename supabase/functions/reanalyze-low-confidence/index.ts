@@ -79,28 +79,32 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `Extract product information from captions and return a JSON object with these exact fields:
-- notes (string, optional)
-- quantity (number, optional)
-- vendor_uid (string, optional)
-- product_code (string, optional)
-- product_name (string, required)
-- purchase_date (string in YYYY-MM-DD format, optional)
-- parsing_metadata (object with method and confidence)
+            content: `Analyze the product caption and return a JSON object with these EXACT lowercase field names:
+{
+  "notes": string (optional),
+  "quantity": number (optional),
+  "vendor_uid": string (optional),
+  "product_code": string (optional),
+  "product_name": string (required),
+  "purchase_date": string (YYYY-MM-DD format, optional)
+}
 
-Example output format:
+Example output:
 {
   "notes": "30 behind",
   "quantity": 2,
   "vendor_uid": "FISH",
   "product_code": "FISH012225",
   "product_name": "Blue Nerds",
-  "purchase_date": "2025-01-22",
-  "parsing_metadata": {
-    "method": "ai",
-    "confidence": 0.9
-  }
-}`
+  "purchase_date": "2025-01-22"
+}
+
+Important:
+- Use EXACTLY these lowercase field names
+- Return ONLY these fields
+- Ensure product_name is always present
+- Convert any numbers in quantity to actual number type
+- Format dates as YYYY-MM-DD`
           },
           { role: 'user', content: caption }
         ],
@@ -119,31 +123,29 @@ Example output format:
     
     let newAnalyzedContent;
     try {
-      newAnalyzedContent = JSON.parse(aiResponse);
-      // Ensure the parsing_metadata has the correct structure
-      newAnalyzedContent.parsing_metadata = {
-        method: 'ai',
-        confidence: 0.9,
-        reanalysis_attempted: true,
-        timestamp: new Date().toISOString()
+      const parsedResponse = JSON.parse(aiResponse);
+      
+      // Ensure correct field names and structure
+      newAnalyzedContent = {
+        notes: parsedResponse.notes || "",
+        quantity: parsedResponse.quantity ? Number(parsedResponse.quantity) : null,
+        vendor_uid: parsedResponse.vendor_uid || "",
+        product_code: parsedResponse.product_code || "",
+        product_name: parsedResponse.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
+        purchase_date: parsedResponse.purchase_date || "",
+        parsing_metadata: {
+          method: "ai",
+          confidence: 0.9,
+          reanalysis_attempted: true
+        }
       };
 
-      // Validate required fields
-      if (!newAnalyzedContent.product_name) {
-        throw new Error('Product name is required');
-      }
-
-      // Convert quantity to number if present
-      if (newAnalyzedContent.quantity) {
-        newAnalyzedContent.quantity = Number(newAnalyzedContent.quantity);
-      }
+      console.log('New analyzed content:', newAnalyzedContent);
 
     } catch (parseError) {
       console.error('Error parsing AI response:', parseError);
       throw new Error('Failed to parse AI response');
     }
-
-    console.log('New analyzed content:', newAnalyzedContent);
 
     // Call the process_media_group_analysis function with correlation_id
     const { error: syncError } = await supabase.rpc('process_media_group_analysis', {
