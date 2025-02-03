@@ -52,4 +52,7 @@ export interface FilterValues {
   dateFrom?: Date;
   dateTo?: Date;
   sortOrder: "desc" | "asc";
+  productCode?: string;
+  quantity?: number;
+  processingState?: string;
 }

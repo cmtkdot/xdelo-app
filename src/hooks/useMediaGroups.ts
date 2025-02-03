@@ -12,18 +12,30 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
   useEffect(() => {
     const fetchMessages = async () => {
       try {
-        // First, get the original caption messages that match our filters
         let originalCaptionsQuery = supabase
           .from("messages_parsed")
           .select("*", { count: "exact" })
           .eq('is_original_caption', true);
 
+        // Apply filters
         if (filters.search) {
-          originalCaptionsQuery = originalCaptionsQuery.or(`product_name.ilike.%${filters.search}%,product_code.ilike.%${filters.search}%,notes.ilike.%${filters.search}%`);
+          originalCaptionsQuery = originalCaptionsQuery.or(`product_name.ilike.%${filters.search}%,notes.ilike.%${filters.search}%`);
         }
 
         if (filters.vendor !== "all") {
           originalCaptionsQuery = originalCaptionsQuery.eq("vendor_uid", filters.vendor);
+        }
+
+        if (filters.productCode) {
+          originalCaptionsQuery = originalCaptionsQuery.ilike("product_code", `%${filters.productCode}%`);
+        }
+
+        if (filters.quantity) {
+          originalCaptionsQuery = originalCaptionsQuery.eq("quantity", filters.quantity);
+        }
+
+        if (filters.processingState && filters.processingState !== 'all') {
+          originalCaptionsQuery = originalCaptionsQuery.eq("processing_state", filters.processingState);
         }
 
         if (filters.dateFrom) {
@@ -94,6 +106,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
 
     fetchMessages();
 
+    // Set up real-time subscription
     const channel = supabase
       .channel("schema-db-changes")
       .on(
