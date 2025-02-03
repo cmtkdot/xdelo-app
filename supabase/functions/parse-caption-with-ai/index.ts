@@ -33,7 +33,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Step 1: Parse the caption
+    // Parse the caption
     console.log('Starting caption parsing');
     const manualResult = manualParse(caption);
     console.log('Manual parsing result:', manualResult);
@@ -61,23 +61,39 @@ serve(async (req) => {
       }
     }
 
-    const processingCompletedAt = new Date().toISOString();
+    // Update the message with parsed content
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        analyzed_content: finalResult,
+        processing_state: 'analyzing',
+        processing_started_at: new Date().toISOString()
+      })
+      .eq('id', message_id);
 
-    // Step 2: Update the message with parsed content
-    console.log('Updating message with parsed content');
-    const { error: updateError } = await supabase.rpc(
-      'process_media_group_analysis',
-      {
-        p_message_id: message_id,
-        p_media_group_id: media_group_id,
-        p_analyzed_content: finalResult,
-        p_processing_completed_at: processingCompletedAt
+    if (updateError) throw updateError;
+
+    // If this is part of a media group, sync the analysis
+    if (media_group_id) {
+      const syncResponse = await fetch(
+        `${Deno.env.get('SUPABASE_URL')}/functions/v1/sync-media-group`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message_id,
+            media_group_id,
+            analyzed_content: finalResult
+          })
+        }
+      );
+
+      if (!syncResponse.ok) {
+        throw new Error('Failed to sync media group');
       }
-    );
-
-    if (updateError) {
-      console.error('Error updating message:', updateError);
-      throw updateError;
     }
 
     return new Response(
