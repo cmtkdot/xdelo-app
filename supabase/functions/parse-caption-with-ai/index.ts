@@ -62,17 +62,19 @@ serve(async (req) => {
     if (media_group_id) {
       console.log('Checking media group completeness:', media_group_id);
       
+      let groupMessages = [];
       // Wait for up to 5 seconds for all messages to arrive
       for (let i = 0; i < 5; i++) {
-        const { data: groupMessages, error: groupError } = await supabase
+        const { data: messages, error: groupError } = await supabase
           .from('messages')
           .select('*')
           .eq('media_group_id', media_group_id);
 
         if (groupError) throw groupError;
 
-        if (groupMessages && groupMessages.length > 0) {
-          console.log(`Found ${groupMessages.length} messages in group`);
+        if (messages && messages.length > 0) {
+          groupMessages = messages;
+          console.log(`Found ${messages.length} messages in group`);
           break;
         }
 
@@ -80,6 +82,11 @@ serve(async (req) => {
           console.log('Waiting for more messages...');
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
+      }
+
+      // If no messages found after waiting, log warning
+      if (groupMessages.length === 0) {
+        console.warn('No messages found in group after waiting');
       }
     }
 
@@ -142,13 +149,18 @@ serve(async (req) => {
     if (analyzedContent && media_group_id) {
       console.log('Processing media group:', media_group_id);
       
-      await supabase.rpc('process_media_group_analysis', {
+      const { error: rpcError } = await supabase.rpc('process_media_group_analysis', {
         p_message_id: message_id,
         p_media_group_id: media_group_id,
         p_analyzed_content: analyzedContent,
         p_processing_completed_at: new Date().toISOString(),
         p_correlation_id: crypto.randomUUID()
       });
+
+      if (rpcError) {
+        console.error('Error in process_media_group_analysis:', rpcError);
+        throw rpcError;
+      }
     }
 
     const response: AnalysisResult = {
