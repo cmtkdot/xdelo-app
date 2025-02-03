@@ -1,5 +1,5 @@
 import { MediaItem, AnalyzedContent, ProcessingMetadata, processingMetadataToJson, analyzedContentToJson } from "@/types";
-import { AlertCircle, Pencil, Trash2, RotateCw } from "lucide-react";
+import { AlertCircle, Pencil, Trash2, RotateCw, Eye } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageSwiper } from "@/components/ui/image-swiper";
 import { format } from "date-fns";
@@ -9,17 +9,31 @@ import { supabase } from "@/integrations/supabase/client";
 import { useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { MediaViewer } from "./MediaViewer/MediaViewer";
 
 interface ProductGroupProps {
   group: MediaItem[];
   onEdit: (item: MediaItem) => void;
+  onPrevious?: () => void;
+  onNext?: () => void;
+  hasPrevious?: boolean;
+  hasNext?: boolean;
 }
 
-export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
+export const ProductGroup = ({ 
+  group, 
+  onEdit,
+  onPrevious,
+  onNext,
+  hasPrevious,
+  hasNext 
+}: ProductGroupProps) => {
   const mainMedia = group.find(media => media.is_original_caption) || group[0];
   const hasError = mainMedia.processing_state === 'error';
   const analyzedContent = group.find(media => media.is_original_caption)?.analyzed_content || mainMedia.analyzed_content;
   const { toast } = useToast();
+
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'N/A';
@@ -265,7 +279,18 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
         
         <div className="flex gap-2 mt-4">
           <Tabs defaultValue="edit" className="w-full">
-            <TabsList className="grid grid-cols-3 gap-2">
+            <TabsList className="grid grid-cols-4 gap-2">
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger value="view" onClick={() => setIsViewerOpen(true)} className="py-2">
+                      <Eye className="w-4 h-4" />
+                    </TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent className="px-2 py-1 text-xs">View</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -302,6 +327,16 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
           </Tabs>
         </div>
       </div>
+
+      <MediaViewer
+        isOpen={isViewerOpen}
+        onClose={() => setIsViewerOpen(false)}
+        currentGroup={group}
+        onPrevious={onPrevious}
+        onNext={onNext}
+        hasPrevious={hasPrevious}
+        hasNext={hasNext}
+      />
     </div>
   );
 };

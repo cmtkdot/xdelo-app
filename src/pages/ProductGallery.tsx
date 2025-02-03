@@ -12,6 +12,7 @@ import { useMediaGroups } from "@/hooks/useMediaGroups";
 const ProductGallery = () => {
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedGroupIndex, setSelectedGroupIndex] = useState<number | null>(null);
   const [filters, setFilters] = useState<FilterValues>({
     search: "",
     vendor: "all",
@@ -23,22 +24,13 @@ const ProductGallery = () => {
     quantityRange: "all",
     processingState: "all"
   });
+
   const { toast } = useToast();
   const vendors = useVendors();
   const { data } = useMediaGroups(currentPage, filters);
   const mediaGroups = data?.mediaGroups ?? {};
   const totalPages = data?.totalPages ?? 1;
-
-  const formatDate = (date: string | null) => {
-    if (!date) return null;
-    try {
-      const d = new Date(date);
-      return d.toISOString().split('T')[0];
-    } catch (error) {
-      console.error("Error formatting date:", error);
-      return null;
-    }
-  };
+  const groupsArray = Object.values(mediaGroups);
 
   const handleEdit = (media: MediaItem) => {
     const groupKey = media.media_group_id || media.id;
@@ -105,6 +97,18 @@ const ProductGallery = () => {
     setCurrentPage(1);
   };
 
+  const handlePrevious = () => {
+    if (selectedGroupIndex !== null && selectedGroupIndex > 0) {
+      setSelectedGroupIndex(selectedGroupIndex - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (selectedGroupIndex !== null && selectedGroupIndex < groupsArray.length - 1) {
+      setSelectedGroupIndex(selectedGroupIndex + 1);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -117,7 +121,14 @@ const ProductGallery = () => {
         onFilterChange={handleFilterChange}
       />
 
-      <ProductGrid mediaGroups={mediaGroups} onEdit={handleEdit} />
+      <ProductGrid 
+        mediaGroups={mediaGroups} 
+        onEdit={handleEdit}
+        onGroupSelect={(index) => setSelectedGroupIndex(index)}
+        selectedGroupIndex={selectedGroupIndex}
+        onPrevious={handlePrevious}
+        onNext={handleNext}
+      />
       
       {Object.keys(mediaGroups).length > 0 && (
         <ProductPagination
@@ -132,7 +143,6 @@ const ProductGallery = () => {
         onClose={() => setEditItem(null)}
         onSave={handleSave}
         onItemChange={handleItemChange}
-        formatDate={formatDate}
       />
     </div>
   );
