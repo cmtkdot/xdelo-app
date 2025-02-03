@@ -1,3 +1,4 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { manualParse } from './manualParser.ts';
@@ -20,23 +21,29 @@ async function syncMediaGroupAnalysis(
     return;
   }
 
+  if (!analyzedContent) {
+    console.log('No analyzed content to sync, skipping');
+    return;
+  }
+
   try {
-    console.log(`Starting media group analysis sync for message ${messageId} in group ${mediaGroupId}`);
+    console.log(`Starting media group analysis sync for message ${messageId} in group ${mediaGroupId}`, {
+      analyzed_content: analyzedContent
+    });
     
-    const response = await supabase.functions.invoke('sync-media-group-analysis', {
-      body: {
-        message_id: messageId,
-        media_group_id: mediaGroupId,
-        analyzed_content: analyzedContent,
-        processing_completed_at: new Date().toISOString()
-      }
+    const { error } = await supabase.rpc('process_media_group_analysis', {
+      p_message_id: messageId,
+      p_media_group_id: mediaGroupId,
+      p_analyzed_content: analyzedContent,
+      p_processing_completed_at: new Date().toISOString()
     });
 
-    if (!response.data) {
-      throw new Error('No response data from sync-media-group-analysis');
+    if (error) {
+      console.error('Error in process_media_group_analysis:', error);
+      throw error;
     }
 
-    console.log('Successfully synced media group analysis:', response.data);
+    console.log('Successfully synced media group analysis');
   } catch (error) {
     console.error('Error syncing media group analysis:', error);
     throw new Error(`Failed to sync media group analysis: ${error.message}`);
@@ -54,23 +61,32 @@ serve(async (req) => {
     const { message_id, media_group_id, caption } = await req.json();
     console.log(`Processing caption parsing for message ${message_id}`, {
       media_group_id,
-      caption_length: caption?.length
+      caption_length: caption?.length,
+      timestamp: new Date().toISOString()
     });
+
+    if (!message_id) {
+      throw new Error('No message_id provided');
+    }
 
     if (!caption) {
       throw new Error('No caption provided for parsing');
     }
 
+    // First try manual parsing
     const manualResult = manualParse(caption);
     console.log('Manual parsing result:', manualResult);
 
     let finalResult = manualResult;
+    const isManualComplete = validateParsedContent(manualResult);
 
-    if (!validateParsedContent(manualResult)) {
+    // If manual parsing is incomplete, try AI parsing
+    if (!isManualComplete) {
       console.log('Manual parsing incomplete, attempting AI parsing');
       try {
         const aiResult = await aiParse(caption);
         console.log('AI parsing result:', aiResult);
+        
         finalResult = {
           ...aiResult,
           ...manualResult, // Manual results take precedence
@@ -83,7 +99,7 @@ serve(async (req) => {
         console.log('Merged parsing result:', finalResult);
       } catch (aiError) {
         console.error('AI parsing failed:', aiError);
-        // Continue with manual results even if AI fails
+        // Continue with manual results if AI fails
       }
     }
 
@@ -100,7 +116,7 @@ serve(async (req) => {
       .update({
         parsed_content: finalResult,
         analyzed_content: finalResult,
-        processing_state: media_group_id ? 'analysis_synced' : 'completed'
+        processing_state: 'analysis_ready'
       })
       .eq('id', message_id);
 
@@ -112,12 +128,27 @@ serve(async (req) => {
     // If this is part of a media group, sync the analysis
     if (media_group_id) {
       await syncMediaGroupAnalysis(supabase, message_id, media_group_id, finalResult);
+    } else {
+      // For single messages, mark as completed
+      const { error: completeError } = await supabase
+        .from('messages')
+        .update({
+          processing_state: 'completed',
+          processing_completed_at: new Date().toISOString()
+        })
+        .eq('id', message_id);
+
+      if (completeError) {
+        console.error('Error completing message:', completeError);
+        throw completeError;
+      }
     }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        parsed_content: finalResult 
+        parsed_content: finalResult,
+        message: 'Caption parsed and analysis synced successfully'
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
