@@ -62,9 +62,9 @@ serve(async (req) => {
       throw groupError;
     }
 
-    // Trigger caption parsing
+    // Trigger caption parsing with AI fallback
     const parseResponse = await fetch(
-      `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption`,
+      `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
       {
         method: 'POST',
         headers: {
@@ -73,7 +73,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           message_id,
-          media_group_id
+          caption
         })
       }
     );
