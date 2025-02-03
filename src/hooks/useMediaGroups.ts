@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem, FilterValues } from "@/types";
 import { useToast } from "@/components/ui/use-toast";
+import { useMessageSearch } from "./useMessageSearch";
 
 export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
   const [mediaGroups, setMediaGroups] = useState<{ [key: string]: MediaItem[] }>({});
   const [totalPages, setTotalPages] = useState(1);
   const { toast } = useToast();
+  const { buildSearchQuery, buildVendorFilter, buildDateFilter } = useMessageSearch();
   const ITEMS_PER_PAGE = 16;
 
   useEffect(() => {
@@ -16,41 +18,15 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
           .from("messages")
           .select("*", { count: "exact" });
 
-        // Enhanced search across multiple JSON fields
-        if (filters.search) {
-          query = query.or(
-            `analyzed_content->>'product_name'.ilike.%${filters.search}%,` +
-            `analyzed_content->>'product_code'.ilike.%${filters.search}%,` +
-            `analyzed_content->>'notes'.ilike.%${filters.search}%,` +
-            `analyzed_content->>'vendor_uid'.ilike.%${filters.search}%,` +
-            `telegram_data->>'caption'.ilike.%${filters.search}%`
-          );
-        }
+        // Apply filters using the search utility functions
+        query = buildSearchQuery(query, filters.search);
+        query = buildVendorFilter(query, filters.vendor);
+        query = buildDateFilter(query, filters.dateFrom, filters.dateTo);
 
-        // Filter by vendor from analyzed_content
-        if (filters.vendor && filters.vendor !== "all") {
-          query = query.eq("analyzed_content->>'vendor_uid'", filters.vendor);
-        }
-
-        // Date range filtering using purchase_date from analyzed_content
-        if (filters.dateFrom) {
-          query = query.or(
-            `analyzed_content->>'purchase_date'.gte.${filters.dateFrom.toISOString()},` +
-            `created_at.gte.${filters.dateFrom.toISOString()}`
-          );
-        }
-        if (filters.dateTo) {
-          const endDate = new Date(filters.dateTo);
-          endDate.setDate(endDate.getDate() + 1);
-          query = query.or(
-            `analyzed_content->>'purchase_date'.lt.${endDate.toISOString()},` +
-            `created_at.lt.${endDate.toISOString()}`
-          );
-        }
-
-        // Prioritize original caption messages in the sorting
-        query = query.order("is_original_caption", { ascending: false })
-                    .order("created_at", { ascending: filters.sortOrder === "asc" });
+        // Prioritize original caption messages and apply sorting
+        query = query
+          .order("is_original_caption", { ascending: false })
+          .order("created_at", { ascending: filters.sortOrder === "asc" });
 
         // Apply pagination
         const from = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -74,7 +50,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
           groups[groupKey].push(message as MediaItem);
         });
 
-        // Sort messages within groups to prioritize original captions
+        // Sort messages within groups
         Object.keys(groups).forEach(key => {
           groups[key].sort((a, b) => {
             if (a.is_original_caption && !b.is_original_caption) return -1;
