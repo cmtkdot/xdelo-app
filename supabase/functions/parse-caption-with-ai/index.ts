@@ -61,9 +61,9 @@ serve(async (req) => {
     let parsedContent = await manualParse(caption);
     let confidence = parsedContent.parsing_metadata?.confidence || 0;
 
-    // If manual parsing has low confidence, try AI parsing
-    if (confidence < 0.5) {
-      console.log('Manual parsing had low confidence, attempting AI parsing');
+    // If manual parsing has low confidence (< 0.8), try AI parsing
+    if (confidence < 0.8) {
+      console.log('Manual parsing had low confidence, attempting AI parsing:', { confidence });
       try {
         const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
         if (!openAIApiKey) {
@@ -116,16 +116,11 @@ serve(async (req) => {
 
       } catch (aiError) {
         console.error('AI parsing failed:', aiError);
-        // Fallback to basic parsing if AI fails
-        parsedContent = {
-          product_name: caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
-          notes: caption,
-          parsing_metadata: {
-            method: "ai",
-            confidence: 0.1,
-            reanalysis_attempted: true,
-            error: aiError.message
-          }
+        // Keep the manual parsing result if AI fails
+        parsedContent.parsing_metadata = {
+          ...parsedContent.parsing_metadata,
+          ai_error: aiError.message,
+          reanalysis_attempted: true
         };
       }
     }
