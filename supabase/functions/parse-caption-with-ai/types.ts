@@ -9,11 +9,6 @@ export interface ParsedContent {
     method: 'manual' | 'ai' | 'hybrid';
     confidence: number;
     fallbacks_used?: string[];
-    quantity_confidence?: number;
-    quantity_method?: string;
-    quantity_is_approximate?: boolean;
-    quantity_unit?: string;
-    quantity_original?: string;
   };
 }
 

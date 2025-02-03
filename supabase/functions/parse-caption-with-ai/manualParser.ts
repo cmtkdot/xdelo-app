@@ -2,10 +2,11 @@ import { ParsedContent } from './types.ts';
 import { parseQuantity } from './quantityParser.ts';
 
 export function manualParse(caption: string): ParsedContent {
-  console.log("Starting enhanced manual parsing for:", caption);
+  console.log("Starting manual parsing for:", caption);
   const result: ParsedContent = {};
   const fallbacks_used: string[] = [];
 
+  // Extract product name (text before #)
   const hashIndex = caption.indexOf('#');
   if (hashIndex > 0) {
     result.product_name = caption.substring(0, hashIndex).trim();
@@ -14,14 +15,16 @@ export function manualParse(caption: string): ParsedContent {
     fallbacks_used.push('no_hash_product_name');
   }
 
+  // Extract product code and vendor UID
   const codeMatch = caption.match(/#([A-Za-z0-9-]+)/);
   if (codeMatch) {
     result.product_code = codeMatch[1];
     
-    const vendorMatch = result.product_code.match(/^([A-Za-z]{1,4})/);
+    const vendorMatch = result.product_code.match(/^([A-Za-z]+)/);
     if (vendorMatch) {
-      result.vendor_uid = vendorMatch[1];
+      result.vendor_uid = vendorMatch[1].toUpperCase();
       
+      // Extract and parse date
       const dateStr = result.product_code.substring(vendorMatch[1].length);
       if (/^\d{5,6}$/.test(dateStr)) {
         try {
@@ -40,54 +43,28 @@ export function manualParse(caption: string): ParsedContent {
           console.error("Date parsing error:", error);
           fallbacks_used.push('date_parse_error');
         }
-      } else if (dateStr) {
-        result.product_code = `${result.vendor_uid}-${dateStr}`;
-        fallbacks_used.push('non_date_product_code');
       }
     }
   }
 
+  // Parse quantity
   const quantityResult = parseQuantity(caption);
   if (quantityResult) {
     result.quantity = quantityResult.value;
-    result.parsing_metadata = {
-      method: 'manual',
-      confidence: fallbacks_used.length ? 0.7 : 0.9,
-      fallbacks_used: fallbacks_used.length ? fallbacks_used : undefined,
-      quantity_confidence: quantityResult.confidence,
-      quantity_method: quantityResult.method,
-      quantity_is_approximate: quantityResult.is_approximate,
-      quantity_unit: quantityResult.unit,
-      quantity_original: quantityResult.original_text
-    };
   }
 
+  // Extract notes (text in parentheses)
   const notesMatch = caption.match(/\((.*?)\)/);
   if (notesMatch) {
     result.notes = notesMatch[1].trim();
-  } else {
-    let remainingText = caption
-      .replace(/#[A-Za-z0-9-]+/, '')
-      .replace(/x\s*\d+/i, '')
-      .replace(result.product_name || '', '')
-      .trim()
-      .replace(/^[-,\s]+/, '')
-      .replace(/[-,\s]+$/, '');
-    
-    if (remainingText) {
-      result.notes = remainingText;
-      fallbacks_used.push('implicit_notes');
-    }
   }
 
-  if (!result.parsing_metadata) {
-    result.parsing_metadata = {
-      method: 'manual',
-      confidence: fallbacks_used.length ? 0.7 : 0.9,
-      fallbacks_used: fallbacks_used.length ? fallbacks_used : undefined
-    };
-  }
+  result.parsing_metadata = {
+    method: 'manual',
+    confidence: fallbacks_used.length ? 0.7 : 0.9,
+    fallbacks_used: fallbacks_used.length ? fallbacks_used : undefined
+  };
 
-  console.log("Enhanced manual parsing result:", result);
+  console.log("Manual parsing result:", result);
   return result;
 }

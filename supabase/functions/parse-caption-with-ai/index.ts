@@ -28,12 +28,7 @@ function mergeResults(manual: ParsedContent, ai: ParsedContent): ParsedContent {
       fallbacks_used: [
         ...(manual.parsing_metadata?.fallbacks_used || []),
         ...(ai.parsing_metadata?.fallbacks_used || [])
-      ],
-      quantity_confidence: manual.parsing_metadata?.quantity_confidence || ai.parsing_metadata?.quantity_confidence,
-      quantity_method: manual.parsing_metadata?.quantity_method || ai.parsing_metadata?.quantity_method,
-      quantity_is_approximate: manual.parsing_metadata?.quantity_is_approximate || ai.parsing_metadata?.quantity_is_approximate,
-      quantity_unit: manual.parsing_metadata?.quantity_unit || ai.parsing_metadata?.quantity_unit,
-      quantity_original: manual.parsing_metadata?.quantity_original || ai.parsing_metadata?.quantity_original
+      ]
     }
   };
 }

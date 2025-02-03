@@ -1,14 +1,22 @@
 import { ParsedContent } from './types.ts';
 
-const SYSTEM_PROMPT = `You are a specialized product information extractor. Extract the following from the caption:
-1. Product Name: Text before '#'
+const SYSTEM_PROMPT = `Extract product information from captions following these rules:
+1. Product Name: Text before '#' (required)
 2. Product Code: Full code after '#'
 3. Vendor UID: Letters at start of product code
-4. Purchase Date: Convert mmDDyy or mDDyy to YYYY-MM-DD
+4. Purchase Date: Convert MMDDYY or MDDYY to YYYY-MM-DD
 5. Quantity: Look for numbers after 'x' or in units
 6. Notes: Text in parentheses or remaining info
 
-Return a JSON object with these fields and include confidence levels.`;
+Example Input: "Blue Widget #ABC12345 x5 (new stock)"
+Example Output: {
+  "product_name": "Blue Widget",
+  "product_code": "ABC12345",
+  "vendor_uid": "ABC",
+  "purchase_date": "2023-12-34",
+  "quantity": 5,
+  "notes": "new stock"
+}`;
 
 export async function aiParse(caption: string): Promise<ParsedContent> {
   console.log('Attempting AI analysis for caption:', caption);
@@ -39,10 +47,10 @@ export async function aiParse(caption: string): Promise<ParsedContent> {
   }
 
   const data = await response.json();
-  const aiResult = JSON.parse(data.choices[0].message.content);
+  const result = JSON.parse(data.choices[0].message.content);
 
   return {
-    ...aiResult,
+    ...result,
     parsing_metadata: {
       method: 'ai',
       confidence: 0.8,

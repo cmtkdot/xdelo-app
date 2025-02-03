@@ -15,23 +15,13 @@ const TEXT_TO_NUMBER: { [key: string]: number } = {
   'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10
 };
 
-const UNIT_NORMALIZATIONS: { [key: string]: string } = {
-  'pc': 'piece',
-  'pcs': 'pieces',
-  'piece': 'piece',
-  'pieces': 'pieces',
-  'unit': 'unit',
-  'units': 'units',
-  'qty': 'quantity'
-};
-
-function validateQuantity(value: number): number | null {
-  if (isNaN(value) || value <= 0 || value > 9999) return null;
-  return value;
-}
-
 export function parseQuantity(text: string): QuantityParseResult | null {
   console.log("Parsing quantity from:", text);
+
+  function validateQuantity(value: number): number | null {
+    if (isNaN(value) || value <= 0 || value > 9999) return null;
+    return value;
+  }
 
   const patterns: [RegExp, string, number][] = [
     [QUANTITY_PATTERNS.STANDARD_X, 'explicit', 0.9],
@@ -61,16 +51,9 @@ export function parseQuantity(text: string): QuantityParseResult | null {
       const validatedValue = validateQuantity(value);
       if (validatedValue === null) continue;
 
-      let unit: string | undefined;
-      const unitMatch = text.match(/(?:pc|pcs|pieces?|units?)/i);
-      if (unitMatch) {
-        unit = UNIT_NORMALIZATIONS[unitMatch[0].toLowerCase()];
-      }
-
       return {
         value: validatedValue,
         confidence: is_approximate ? confidence * 0.8 : confidence,
-        unit,
         original_text: match[0],
         method: method as 'explicit' | 'numeric' | 'text' | 'fallback',
         is_approximate
