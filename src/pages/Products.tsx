@@ -35,7 +35,6 @@ const Products = () => {
   const { data: products = [], refetch } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
-      // Get unique messages based on file_unique_id and media_group_id
       const { data, error } = await supabase
         .from("messages")
         .select("*")
@@ -83,7 +82,8 @@ const Products = () => {
           console.log('Real-time update:', payload);
           // Only invalidate query if the update contains new analyzed content
           if (payload.new && 
-              ((payload.new.analyzed_content !== (payload.old as MediaItem | undefined)?.analyzed_content) ||
+              ((payload.old && 'analyzed_content' in payload.new && 
+                JSON.stringify(payload.new.analyzed_content) !== JSON.stringify(payload.old.analyzed_content)) ||
                payload.eventType === 'INSERT' ||
                payload.eventType === 'DELETE')) {
             queryClient.invalidateQueries({ queryKey: ['products'] });
