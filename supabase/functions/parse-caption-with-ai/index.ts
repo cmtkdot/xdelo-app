@@ -1,7 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { manualParse } from "./manualParser.ts";
-import { aiParse } from "./aiParser.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,12 +18,18 @@ const SYSTEM_PROMPT = `Analyze product captions and return a JSON object with th
 
 Important rules:
 1. Use EXACTLY these lowercase field names
-2. Put any additional information or details not fitting in other fields into the notes field
+2. Put ANY additional information or details not fitting in other fields into the notes field
 3. Include flavor descriptions, strain types, and any other product details in notes
 4. Convert any numbers in quantity to actual number type
 5. Format dates as YYYY-MM-DD
 6. Ensure product_name is always present
-7. Move any information not fitting the specific fields into notes
+7. Move ANY information not fitting the specific fields into notes, including:
+   - Strain information
+   - Flavor descriptions
+   - Product characteristics
+   - Additional details
+   - Text in parentheses
+   - Any unstructured information
 
 Example input: "Blue Dream #CHAD120523 x2 (indoor) Indica dominant, THC: 24%"
 Example output:
@@ -92,7 +96,7 @@ serve(async (req) => {
         
         const aiResult = JSON.parse(data.choices[0].message.content);
         
-        // Ensure correct field names and structure
+        // Ensure correct field names and structure with explicit lowercase mapping
         parsedContent = {
           notes: aiResult.notes || "",
           quantity: aiResult.quantity ? Number(aiResult.quantity) : null,

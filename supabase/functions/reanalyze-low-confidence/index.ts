@@ -6,6 +6,41 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const SYSTEM_PROMPT = `Analyze the product caption and return a JSON object with these EXACT lowercase field names:
+{
+  "notes": string,
+  "quantity": number,
+  "vendor_uid": string,
+  "product_code": string,
+  "product_name": string,
+  "purchase_date": string (YYYY-MM-DD format)
+}
+
+Important rules:
+1. Use EXACTLY these lowercase field names
+2. Put ANY additional information or details not fitting in other fields into the notes field
+3. Include flavor descriptions, strain types, and any other product details in notes
+4. Convert any numbers in quantity to actual number type
+5. Format dates as YYYY-MM-DD
+6. Ensure product_name is always present
+7. Move ANY information not fitting the specific fields into notes, including:
+   - Strain information
+   - Flavor descriptions
+   - Product characteristics
+   - Additional details
+   - Text in parentheses
+   - Any unstructured information
+
+Example output:
+{
+  "notes": "indoor grown, Indica dominant hybrid, THC: 24%",
+  "quantity": 2,
+  "vendor_uid": "FISH",
+  "product_code": "FISH012225",
+  "product_name": "Blue Nerds",
+  "purchase_date": "2025-01-22"
+}`;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -77,35 +112,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
-          {
-            role: 'system',
-            content: `Analyze the product caption and return a JSON object with these EXACT lowercase field names:
-{
-  "notes": string (optional),
-  "quantity": number (optional),
-  "vendor_uid": string (optional),
-  "product_code": string (optional),
-  "product_name": string (required),
-  "purchase_date": string (YYYY-MM-DD format, optional)
-}
-
-Example output:
-{
-  "notes": "30 behind",
-  "quantity": 2,
-  "vendor_uid": "FISH",
-  "product_code": "FISH012225",
-  "product_name": "Blue Nerds",
-  "purchase_date": "2025-01-22"
-}
-
-Important:
-- Use EXACTLY these lowercase field names
-- Return ONLY these fields
-- Ensure product_name is always present
-- Convert any numbers in quantity to actual number type
-- Format dates as YYYY-MM-DD`
-          },
+          { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: caption }
         ],
         temperature: 0.3,
@@ -125,7 +132,7 @@ Important:
     try {
       const parsedResponse = JSON.parse(aiResponse);
       
-      // Ensure correct field names and structure
+      // Ensure correct field names and structure with explicit lowercase mapping
       newAnalyzedContent = {
         notes: parsedResponse.notes || "",
         quantity: parsedResponse.quantity ? Number(parsedResponse.quantity) : null,
@@ -136,7 +143,8 @@ Important:
         parsing_metadata: {
           method: "ai",
           confidence: 0.9,
-          reanalysis_attempted: true
+          reanalysis_attempted: true,
+          timestamp: new Date().toISOString()
         }
       };
 
