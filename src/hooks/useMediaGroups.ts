@@ -43,7 +43,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
           }
         }
 
-        if (filters.processingState && filters.processingState !== 'all') {
+        if (filters.processingState) {
           if (filters.processingState === 'pending') {
             originalCaptionsQuery = originalCaptionsQuery.is('processing_state', null);
           } else {
