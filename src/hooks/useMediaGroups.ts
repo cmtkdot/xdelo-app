@@ -34,6 +34,13 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
                 .limit(1);
 
               if (groupMessages?.[0]?.analyzed_content) {
+                const syncDetails = {
+                  sync_type: "auto_group_sync",
+                  source_message_id: groupMessages[0].id,
+                  group_message_count: msg.group_message_count,
+                  sync_timestamp: new Date().toISOString()
+                };
+
                 // Log sync attempt to audit log
                 await supabase.from("analysis_audit_log").insert({
                   message_id: msg.id,
@@ -42,15 +49,11 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
                   old_state: "initialized",
                   new_state: "completed",
                   analyzed_content: groupMessages[0].analyzed_content as Json,
-                  processing_details: {
-                    sync_type: "auto_group_sync",
-                    source_message_id: groupMessages[0].id,
-                    group_message_count: msg.group_message_count
-                  } as Json
+                  processing_details: syncDetails as Json
                 });
 
                 // Update the message with synced content
-                await supabase
+                const { error: updateError } = await supabase
                   .from("messages")
                   .update({
                     analyzed_content: groupMessages[0].analyzed_content,
@@ -60,6 +63,32 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
                     processing_completed_at: new Date().toISOString()
                   })
                   .eq("id", msg.id);
+
+                if (updateError) {
+                  // Log sync failure
+                  await supabase.from("analysis_audit_log").insert({
+                    message_id: msg.id,
+                    media_group_id: msg.media_group_id,
+                    event_type: "GROUP_SYNC_FAILED",
+                    old_state: "initialized",
+                    error_message: updateError.message,
+                    processing_details: { 
+                      error: updateError.message,
+                      sync_attempt: syncDetails 
+                    } as Json
+                  });
+                } else {
+                  // Log successful sync
+                  await supabase.from("analysis_audit_log").insert({
+                    message_id: msg.id,
+                    media_group_id: msg.media_group_id,
+                    event_type: "GROUP_SYNC_COMPLETED",
+                    old_state: "initialized",
+                    new_state: "completed",
+                    analyzed_content: groupMessages[0].analyzed_content as Json,
+                    processing_details: syncDetails as Json
+                  });
+                }
               }
             }
           }
@@ -129,21 +158,25 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
           if (groupMediaError) throw groupMediaError;
 
           const groups: Record<string, MediaItem[]> = {};
-          allGroupMedia?.forEach((message) => {
-            const groupKey = message.media_group_id || message.id;
-            if (!groups[groupKey]) {
-              groups[groupKey] = [];
-            }
-            groups[groupKey].push(message as MediaItem);
-          });
-
-          Object.keys(groups).forEach(key => {
-            groups[key].sort((a, b) => {
-              if (a.is_original_caption && !b.is_original_caption) return -1;
-              if (!a.is_original_caption && b.is_original_caption) return 1;
-              return 0;
+          
+          if (allGroupMedia) {
+            allGroupMedia.forEach((message) => {
+              const groupKey = message.media_group_id || message.id;
+              if (!groups[groupKey]) {
+                groups[groupKey] = [];
+              }
+              groups[groupKey].push(message as MediaItem);
             });
-          });
+
+            // Sort messages within each group
+            Object.keys(groups).forEach(key => {
+              groups[key].sort((a, b) => {
+                if (a.is_original_caption && !b.is_original_caption) return -1;
+                if (!a.is_original_caption && b.is_original_caption) return 1;
+                return 0;
+              });
+            });
+          }
 
           setMediaGroups(groups);
         } else {
