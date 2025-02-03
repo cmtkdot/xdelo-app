@@ -98,7 +98,7 @@ const Products = () => {
   }, [queryClient]);
 
   const handleSave = async () => {
-    if (!editItem) return;
+    if (!editItem?.analyzed_content) return;
 
     try {
       // Check if there are other messages in the same group
