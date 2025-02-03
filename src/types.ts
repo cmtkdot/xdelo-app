@@ -39,7 +39,7 @@ export interface FilterValues {
   sortOrder: "asc" | "desc";
   productCode?: string;
   quantityRange?: string;
-  processingState?: 'initialized' | 'processing' | 'completed' | 'error' | 'pending';
+  processingState?: 'initialized' | 'processing' | 'completed' | 'error' | 'pending' | 'all';
 }
 
 export interface AnalyzedContent {
