@@ -53,6 +53,18 @@ export const ProductMediaViewer = ({
 
       if (updateError) throw updateError;
 
+      // Delete the file from storage
+      const fileExtension = currentMedia.mime_type?.split('/')[1];
+      const fileName = `${currentMedia.file_unique_id}.${fileExtension}`;
+      const { error: storageError } = await supabase.storage
+        .from('telegram-media')
+        .remove([fileName]);
+
+      if (storageError) {
+        console.error('Error deleting file from storage:', storageError);
+        // Continue with message deletion even if storage deletion fails
+      }
+
       // Then delete the message
       const { error: deleteError } = await supabase
         .from('messages')
