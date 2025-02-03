@@ -21,6 +21,9 @@ export const MediaEditDialog = ({
 }: MediaEditDialogProps) => {
   if (!editItem) return null;
 
+  // Use parsed_content if available, fall back to analyzed_content
+  const content = editItem.parsed_content || editItem.analyzed_content || {};
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave();
@@ -35,7 +38,7 @@ export const MediaEditDialog = ({
             <Label htmlFor="product_name">Product Name</Label>
             <Input
               id="product_name"
-              value={editItem.analyzed_content?.product_name || ''}
+              value={content.product_name || ''}
               onChange={(e) => onItemChange('product_name', e.target.value)}
             />
           </div>
@@ -43,7 +46,7 @@ export const MediaEditDialog = ({
             <Label htmlFor="product_code">Product Code</Label>
             <Input
               id="product_code"
-              value={editItem.analyzed_content?.product_code || ''}
+              value={content.product_code || ''}
               onChange={(e) => onItemChange('product_code', e.target.value)}
             />
           </div>
@@ -51,7 +54,7 @@ export const MediaEditDialog = ({
             <Label htmlFor="vendor_uid">Vendor UID</Label>
             <Input
               id="vendor_uid"
-              value={editItem.analyzed_content?.vendor_uid || ''}
+              value={content.vendor_uid || ''}
               onChange={(e) => onItemChange('vendor_uid', e.target.value)}
             />
           </div>
@@ -60,7 +63,7 @@ export const MediaEditDialog = ({
             <Input
               id="purchase_date"
               type="date"
-              value={formatDate(editItem.analyzed_content?.purchase_date || null) || ''}
+              value={formatDate(content.purchase_date || null) || ''}
               onChange={(e) => onItemChange('purchase_date', e.target.value)}
             />
           </div>
@@ -69,7 +72,7 @@ export const MediaEditDialog = ({
             <Input
               id="quantity"
               type="number"
-              value={editItem.analyzed_content?.quantity || ''}
+              value={content.quantity || ''}
               onChange={(e) => onItemChange('quantity', parseInt(e.target.value))}
             />
           </div>
@@ -77,7 +80,7 @@ export const MediaEditDialog = ({
             <Label htmlFor="notes">Notes</Label>
             <Input
               id="notes"
-              value={editItem.analyzed_content?.notes || ''}
+              value={content.notes || ''}
               onChange={(e) => onItemChange('notes', e.target.value)}
             />
           </div>
