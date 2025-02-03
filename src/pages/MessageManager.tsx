@@ -41,7 +41,7 @@ const MessageManager = () => {
         .from('messages')
         .update({
           caption: updatedMessage.caption,
-          analyzed_content: updatedMessage.analyzed_content
+          analyzed_content: updatedMessage.analyzed_content as Record<string, unknown>
         })
         .eq('id', updatedMessage.id);
 
