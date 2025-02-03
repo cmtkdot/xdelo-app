@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, FilterValues } from "@/types";
+import { MediaItem, FilterValues, JsonObject } from "@/types";
 import { useToast } from "@/components/ui/use-toast";
 
 export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
@@ -34,7 +34,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
                 .limit(1);
 
               if (groupMessages?.[0]?.analyzed_content) {
-                const syncDetails = {
+                const syncDetails: JsonObject = {
                   sync_type: "auto_group_sync",
                   source_message_id: groupMessages[0].id,
                   group_message_count: msg.group_message_count,

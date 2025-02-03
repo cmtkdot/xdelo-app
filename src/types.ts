@@ -37,18 +37,21 @@ export interface AnalyzedContent {
   purchase_date?: string;
   quantity?: number;
   notes?: string;
-  parsing_metadata?: {
-    method: string;
-    confidence: number;
-    fallbacks_used?: string[];
-    reanalysis_attempted?: boolean;
-    previous_analysis?: Record<string, unknown>;
-  };
+  parsing_metadata?: ParsingMetadata;
 }
 
-export interface Json {
-  [key: string]: Json | string | number | boolean | null | Json[] | undefined;
+export interface ParsingMetadata {
+  method: string;
+  confidence: number;
+  fallbacks_used?: string[];
+  reanalysis_attempted?: boolean;
+  previous_analysis?: Record<string, unknown>;
 }
+
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonArray = Json[];
+export type JsonObject = { [key: string]: Json };
+export type Json = JsonPrimitive | JsonObject | JsonArray;
 
 export type ProcessingState = "initialized" | "processing" | "completed" | "error" | "pending";
 
