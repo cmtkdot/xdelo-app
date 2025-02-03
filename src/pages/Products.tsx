@@ -8,7 +8,7 @@ import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/hooks/use-toast";
 
 const getMediaCaption = (item: MediaItem): string => {
-  const content = item.analyzed_content || item.parsed_content;
+  const content = item.analyzed_content;
   if (!content) return '';
 
   let caption = content.product_name || '';

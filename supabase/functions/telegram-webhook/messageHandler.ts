@@ -6,7 +6,7 @@ export async function handleTextMessage(
   supabase: ReturnType<typeof createClient>,
   message: any
 ): Promise<WebhookResponse> {
-  console.log('Processing text message:', {
+  console.log('📝 Processing text message:', {
     message_id: message.message_id,
     chat_id: message.chat.id,
     text_length: message.text?.length || 0
@@ -41,7 +41,7 @@ export async function handleMediaMessage(
   TELEGRAM_BOT_TOKEN: string
 ): Promise<WebhookResponse> {
   const mediaItems: TelegramMedia[] = [];
-  console.log('Starting media message processing:', {
+  console.log('🖼️ Starting media message processing:', {
     message_id: message.message_id,
     media_group_id: message.media_group_id,
     has_caption: !!message.caption
@@ -63,7 +63,7 @@ export async function handleMediaMessage(
     mediaItems.push(message.document);
   }
 
-  console.log(`🖼️ Processing ${mediaItems.length} media items`);
+  console.log(`🔄 Processing ${mediaItems.length} media items`);
   const processedMedia: ProcessedMedia[] = [];
 
   for (const mediaItem of mediaItems) {
@@ -84,7 +84,7 @@ export async function handleMediaMessage(
     console.log("✅ File uploaded successfully");
 
     // Set initial state based on caption presence
-    const initialState = message.caption ? 'pending' : 'initialized';
+    const initialState = message.caption ? 'processing' : 'initialized';
 
     const messageData = {
       telegram_message_id: message.message_id,
@@ -100,7 +100,10 @@ export async function handleMediaMessage(
       duration: mediaItem.duration,
       user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
       telegram_data: { message },
-      processing_state: initialState
+      processing_state: initialState,
+      group_first_message_time: message.media_group_id ? new Date().toISOString() : null,
+      group_last_message_time: message.media_group_id ? new Date().toISOString() : null,
+      group_message_count: message.media_group_id ? 1 : null
     };
 
     const { data: newMessage, error: messageError } = await supabase
@@ -127,6 +130,7 @@ export async function handleMediaMessage(
         console.log("✅ AI analysis triggered for message:", newMessage.id);
       } catch (error) {
         console.error("❌ Failed to trigger AI analysis:", error);
+        // Don't throw here, we want to continue processing other media items
       }
     }
 
@@ -146,7 +150,7 @@ export async function handleChatMemberUpdate(
   supabase: ReturnType<typeof createClient>,
   update: any
 ): Promise<WebhookResponse> {
-  console.log("Processing chat member update:", update);
+  console.log("👥 Processing chat member update:", update);
   
   const { error: insertError } = await supabase.from("other_messages").insert({
     user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",

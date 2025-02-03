@@ -21,8 +21,7 @@ export const MediaEditDialog = ({
 }: MediaEditDialogProps) => {
   if (!editItem) return null;
 
-  // Use parsed_content if available, fall back to analyzed_content
-  const content = editItem.parsed_content || editItem.analyzed_content || {};
+  const content = editItem.analyzed_content || {};
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

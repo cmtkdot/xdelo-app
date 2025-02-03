@@ -4,23 +4,21 @@ import { corsHeaders } from "./authUtils.ts";
 import { handleTextMessage, handleMediaMessage, handleChatMemberUpdate } from "./messageHandler.ts";
 
 serve(async (req) => {
-  console.log("Received webhook request");
+  console.log("📥 Received webhook request");
 
   if (req.method === "OPTIONS") {
-    console.log("Handling CORS preflight request");
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const update = await req.json();
-    console.log("Processing update:", JSON.stringify(update));
+    console.log("🔄 Processing update:", JSON.stringify(update));
 
     const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
     if (!TELEGRAM_BOT_TOKEN) {
       throw new Error("TELEGRAM_BOT_TOKEN is not configured");
     }
 
-    // Initialize Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     
@@ -47,7 +45,7 @@ serve(async (req) => {
       result = await handleMediaMessage(supabase, message, TELEGRAM_BOT_TOKEN);
     }
 
-    console.log("Successfully processed webhook request");
+    console.log("✅ Successfully processed webhook request");
     
     return new Response(
       JSON.stringify(result),
@@ -55,16 +53,17 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error("Error processing webhook:", error);
-    
-    const errorResponse = {
-      error: error.message,
-      timestamp: new Date().toISOString(),
-    };
+    console.error("❌ Error processing webhook:", error);
     
     return new Response(
-      JSON.stringify(errorResponse),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+      JSON.stringify({
+        error: error.message,
+        timestamp: new Date().toISOString(),
+      }),
+      { 
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500
+      }
     );
   }
 });
