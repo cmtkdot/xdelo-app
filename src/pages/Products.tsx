@@ -56,15 +56,15 @@ const Products = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       toast({
-        title: "Analysis completed",
-        description: "The content has been analyzed successfully."
+        title: "Analysis started",
+        description: "The content analysis has been initiated."
       });
     },
     onError: (error) => {
-      console.error('Error analyzing content:', error);
+      console.error('Error initiating analysis:', error);
       toast({
         title: "Error",
-        description: "Failed to analyze content. Please try again.",
+        description: "Failed to start content analysis. Please try again.",
         variant: "destructive"
       });
     }
@@ -72,6 +72,7 @@ const Products = () => {
 
   const retryMutation = useMutation({
     mutationFn: async (messageId: string) => {
+      // Reset the message state to trigger reanalysis
       const { error } = await supabase
         .from('messages')
         .update({
