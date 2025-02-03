@@ -135,7 +135,7 @@ serve(async (req) => {
       duration: mediaItem.duration,
       user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
       telegram_data: { message },
-      processing_state: hasValidCaption ? 'caption_ready' : 'initialized',
+      processing_state: hasValidCaption ? 'has_caption' : 'waiting_caption',
       is_original_caption: message.media_group_id && hasValidCaption ? true : false,
       analyzed_content: existingAnalysis
     };
@@ -174,6 +174,12 @@ serve(async (req) => {
     if (hasValidCaption && !existingAnalysis) {
       console.log('Processing new caption');
       
+      // Update state to processing_caption
+      await supabase
+        .from('messages')
+        .update({ processing_state: 'processing_caption' })
+        .eq('id', currentMessageId);
+
       // Wait to ensure media is properly processed
       await new Promise(resolve => setTimeout(resolve, 2000));
 

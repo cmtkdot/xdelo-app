@@ -17,7 +17,7 @@ export interface MediaItem {
   created_at?: string;
   updated_at?: string;
   user_id: string;
-  processing_state?: 'initialized' | 'caption_ready' | 'analyzing' | 'analysis_synced' | 'completed' | 'error';
+  processing_state?: 'initialized' | 'waiting_caption' | 'has_caption' | 'processing_caption' | 'completed' | 'ready_for_sync' | 'error';
   processing_started_at?: string;
   processing_completed_at?: string;
   analyzed_content?: {
@@ -42,4 +42,9 @@ export interface MediaItem {
   analysis_version?: number;
   last_error_at?: string;
   synced_caption?: any;
+  group_first_message_time?: string;
+  group_last_message_time?: string;
+  group_message_count?: number;
+  caption_wait_started_at?: string;
+  group_completion_checked_at?: string;
 }

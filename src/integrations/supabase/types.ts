@@ -54,6 +54,7 @@ export type Database = {
         Row: {
           analyzed_content: Json | null
           caption: string | null
+          caption_wait_started_at: string | null
           chat_id: number | null
           chat_type: string | null
           created_at: string | null
@@ -64,6 +65,10 @@ export type Database = {
           file_unique_id: string | null
           fresh_analysis: Json | null
           group_caption_synced: boolean | null
+          group_completion_checked_at: string | null
+          group_first_message_time: string | null
+          group_last_message_time: string | null
+          group_message_count: number | null
           height: number | null
           id: string
           is_original_caption: boolean | null
@@ -88,6 +93,7 @@ export type Database = {
         Insert: {
           analyzed_content?: Json | null
           caption?: string | null
+          caption_wait_started_at?: string | null
           chat_id?: number | null
           chat_type?: string | null
           created_at?: string | null
@@ -98,6 +104,10 @@ export type Database = {
           file_unique_id?: string | null
           fresh_analysis?: Json | null
           group_caption_synced?: boolean | null
+          group_completion_checked_at?: string | null
+          group_first_message_time?: string | null
+          group_last_message_time?: string | null
+          group_message_count?: number | null
           height?: number | null
           id?: string
           is_original_caption?: boolean | null
@@ -122,6 +132,7 @@ export type Database = {
         Update: {
           analyzed_content?: Json | null
           caption?: string | null
+          caption_wait_started_at?: string | null
           chat_id?: number | null
           chat_type?: string | null
           created_at?: string | null
@@ -132,6 +143,10 @@ export type Database = {
           file_unique_id?: string | null
           fresh_analysis?: Json | null
           group_caption_synced?: boolean | null
+          group_completion_checked_at?: string | null
+          group_first_message_time?: string | null
+          group_last_message_time?: string | null
+          group_message_count?: number | null
           height?: number | null
           id?: string
           is_original_caption?: boolean | null
@@ -389,10 +404,11 @@ export type Database = {
     Enums: {
       message_processing_state:
         | "initialized"
-        | "caption_ready"
-        | "analyzing"
-        | "analysis_synced"
+        | "waiting_caption"
+        | "has_caption"
+        | "processing_caption"
         | "completed"
+        | "ready_for_sync"
         | "error"
     }
     CompositeTypes: {
