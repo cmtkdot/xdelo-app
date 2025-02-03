@@ -29,84 +29,54 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // First, check if this is part of a media group and if there's already an analyzed message
-    if (media_group_id) {
-      const { data: existingAnalysis } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('media_group_id', media_group_id)
-        .eq('is_original_caption', true)
-        .eq('processing_state', 'completed')
-        .maybeSingle();
-
-      if (existingAnalysis) {
-        console.log('Found existing analysis for media group:', existingAnalysis.id);
-        // Update current message to use existing analysis
-        const { error: updateError } = await supabase
-          .from('messages')
-          .update({
-            analyzed_content: existingAnalysis.analyzed_content,
-            processing_state: 'completed',
-            message_caption_id: existingAnalysis.id,
-            is_original_caption: false,
-            group_caption_synced: true
-          })
-          .eq('id', message_id);
-
-        if (updateError) throw updateError;
-        
-        return new Response(
-          JSON.stringify({ 
-            message: 'Message synced with existing group analysis',
-            analyzed_content: existingAnalysis.analyzed_content 
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-    }
-
-    // Update message state to processing
-    await supabase
+    // First update the message to processing state
+    const { error: updateError } = await supabase
       .from('messages')
       .update({ 
         processing_state: 'processing',
-        processing_started_at: new Date().toISOString()
+        processing_started_at: new Date().toISOString(),
+        is_original_caption: true
       })
       .eq('id', message_id);
 
-    // Analyze caption
+    if (updateError) throw updateError;
+
+    // Analyze the caption
     const analyzedContent = await analyzeCaption(caption);
     console.log('Analysis completed:', analyzedContent);
 
+    // Add a delay for AI analysis to ensure proper syncing
+    if (analyzedContent.parsing_metadata?.method === 'ai') {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    // Update the source message with analyzed content
+    const { error: sourceUpdateError } = await supabase
+      .from('messages')
+      .update({
+        analyzed_content: analyzedContent,
+        processing_state: 'completed',
+        processing_completed_at: new Date().toISOString(),
+        is_original_caption: true,
+        group_caption_synced: true
+      })
+      .eq('id', message_id);
+
+    if (sourceUpdateError) throw sourceUpdateError;
+
     // If this is part of a media group, process the entire group
     if (media_group_id) {
-      // First update the source message
-      const { error: sourceUpdateError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: analyzedContent,
-          processing_state: 'completed',
-          processing_completed_at: new Date().toISOString(),
-          is_original_caption: true,
-          group_caption_synced: true
-        })
-        .eq('id', message_id);
+      // Add additional delay before group sync for AI analysis
+      if (analyzedContent.parsing_metadata?.method === 'ai') {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
 
-      if (sourceUpdateError) throw sourceUpdateError;
-
-      // Then update other messages in the group
-      const { error: groupError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: analyzedContent,
-          processing_state: 'completed',
-          processing_completed_at: new Date().toISOString(),
-          message_caption_id: message_id,
-          is_original_caption: false,
-          group_caption_synced: true
-        })
-        .eq('media_group_id', media_group_id)
-        .neq('id', message_id);
+      const { error: groupError } = await supabase.rpc('process_media_group_analysis', {
+        p_message_id: message_id,
+        p_media_group_id: media_group_id,
+        p_analyzed_content: analyzedContent,
+        p_processing_completed_at: new Date().toISOString()
+      });
 
       if (groupError) throw groupError;
 
@@ -120,47 +90,42 @@ serve(async (req) => {
           new_state: 'completed',
           analyzed_content: analyzedContent,
           processing_details: {
-            method: 'ai',
-            sync_type: 'group'
+            method: analyzedContent.parsing_metadata?.method || 'unknown',
+            sync_type: 'group',
+            sync_delay: analyzedContent.parsing_metadata?.method === 'ai' ? 3000 : 0
           }
         });
-    } else {
-      // Update single message
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: analyzedContent,
-          processing_state: 'completed',
-          processing_completed_at: new Date().toISOString(),
-          is_original_caption: true
-        })
-        .eq('id', message_id);
-
-      if (updateError) throw updateError;
     }
 
     return new Response(
-      JSON.stringify({ message: 'Caption analyzed successfully', analyzed_content: analyzedContent }),
+      JSON.stringify({ 
+        message: 'Caption analyzed successfully', 
+        analyzed_content: analyzedContent 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('Error processing caption:', error);
     
-    // Update message state to error
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
     try {
-      await supabase
-        .from('messages')
-        .update({ 
-          processing_state: 'error',
-          error_message: error.message,
-          last_error_at: new Date().toISOString()
-        })
-        .eq('id', (await req.json()).message_id);
+      // Create a new request body for error update
+      const { message_id } = await req.clone().json();
+      
+      if (message_id) {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL');
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        await supabase
+          .from('messages')
+          .update({ 
+            processing_state: 'error',
+            error_message: error.message,
+            last_error_at: new Date().toISOString()
+          })
+          .eq('id', message_id);
+      }
     } catch (updateError) {
       console.error('Failed to update message error state:', updateError);
     }
