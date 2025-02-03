@@ -23,7 +23,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   const [vendor, setVendor] = useState(filters.vendor);
   const [dateFrom, setDateFrom] = useState<Date | undefined>(filters.dateFrom);
   const [dateTo, setDateTo] = useState<Date | undefined>(filters.dateTo);
-  const [dateField, setDateField] = useState<'purchase_date' | 'created_at' | 'updated_at'>(filters.dateField || 'purchase_date');
+  const [dateField, setDateField] = useState<'purchase_date' | 'created_at' | 'updated_at'>(filters.dateField);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder);
   const [productCode, setProductCode] = useState(filters.productCode || 'all');
   const [quantityRange, setQuantityRange] = useState(filters.quantityRange || 'all');

@@ -3,11 +3,10 @@ import { Tag } from "lucide-react";
 
 interface ProductCodeFilterProps {
   value: string;
-  options: string[];
   onChange: (value: string) => void;
 }
 
-export const ProductCodeFilter = ({ value, options, onChange }: ProductCodeFilterProps) => {
+export const ProductCodeFilter = ({ value, onChange }: ProductCodeFilterProps) => {
   return (
     <div className="space-y-1">
       <label className="text-xs font-medium flex items-center gap-1">
@@ -20,11 +19,7 @@ export const ProductCodeFilter = ({ value, options, onChange }: ProductCodeFilte
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Codes</SelectItem>
-          {options.map((code) => (
-            <SelectItem key={code} value={code}>
-              {code.startsWith('PO#') ? code : `PO#${code}`}
-            </SelectItem>
-          ))}
+          {/* Product codes will be filtered from the data directly */}
         </SelectContent>
       </Select>
     </div>

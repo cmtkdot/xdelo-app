@@ -17,7 +17,11 @@ const ProductGallery = () => {
     vendor: "all",
     dateFrom: undefined,
     dateTo: undefined,
+    dateField: 'purchase_date',
     sortOrder: "desc",
+    productCode: "all",
+    quantityRange: "all",
+    processingState: "all"
   });
   const { toast } = useToast();
   const vendors = useVendors();
