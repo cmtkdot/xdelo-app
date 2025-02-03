@@ -43,7 +43,7 @@ const Products = () => {
       if (error) throw error;
 
       // Create a map to store unique messages
-      const uniqueMessages = new Map();
+      const uniqueMessages = new Map<string, MediaItem>();
       
       (data as MediaItem[]).forEach(message => {
         const key = `${message.file_unique_id}-${message.media_group_id || 'single'}`;
@@ -64,7 +64,7 @@ const Products = () => {
         }
       });
 
-      return Array.from(uniqueMessages.values()) as MediaItem[];
+      return Array.from(uniqueMessages.values());
     }
   });
 
