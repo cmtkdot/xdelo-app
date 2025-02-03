@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { corsHeaders, validateWebhookSecret } from "./authUtils.ts";
+import { corsHeaders } from "./authUtils.ts";
 import {
   handleChatMemberUpdate,
   handleTextMessage,
@@ -19,10 +19,6 @@ serve(async (req) => {
   }
 
   try {
-    // Validate webhook secret
-    await validateWebhookSecret(req);
-    console.log("Webhook secret validated");
-
     const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
     if (!TELEGRAM_BOT_TOKEN) {
       throw new Error("TELEGRAM_BOT_TOKEN is not set");
@@ -71,17 +67,16 @@ serve(async (req) => {
   } catch (error) {
     console.error("Error processing webhook:", error);
     
-    const status = error.message.includes("Authorization") ? 401 : 500;
     const errorResponse = {
       error: error.message,
       timestamp: new Date().toISOString(),
     };
     
-    console.log(`Responding with status ${status} and error:`, errorResponse);
+    console.log("Error response:", errorResponse);
     
     return new Response(JSON.stringify(errorResponse), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status,
+      status: 500,
     });
   }
 });
