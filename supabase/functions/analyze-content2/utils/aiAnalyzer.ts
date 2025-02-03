@@ -1,23 +1,31 @@
 import { parseManually } from "./manualParser.ts";
 import { AnalyzedContent } from "../types.ts";
 
-const SYSTEM_PROMPT = `You are a product information extractor. Extract structured information from product-related captions. Focus on:
-- Product name
-- Product code (usually starts with # or appears as a code)
-- Vendor UID (if present)
-- Purchase date (in YYYY-MM-DD format)
-- Quantity (numerical value)
-- Additional notes
+const SYSTEM_PROMPT = `You are a product information extractor. Extract structured information from product-related captions with these specific rules:
+
+Required fields:
+- product_name: Text before '#' (always required)
+- product_code: Everything after '#' including vendor code and date
+- vendor_uid: 1-4 letters after '#' before any numbers
+- purchase_date: Convert date format:
+  * 6 digits (mmDDyy) -> YYYY-MM-DD
+  * 5 digits (mDDyy) -> YYYY-MM-DD (add leading zero)
+- quantity: Number after 'x'
+- notes: Any text in parentheses or unmatched text
+
+Example inputs:
+"Blue Dream #CHAD120523 x2"
+"OG Kush #Z31524 x1"
 
 Return ONLY a JSON object with these fields. Omit fields if information is not present.`;
 
 export async function analyzeCaption(caption: string): Promise<AnalyzedContent> {
+  console.log("Starting caption analysis:", caption);
+  
   try {
-    console.log("Starting caption analysis:", caption);
-    
     // Try manual parsing first
     const manualResult = parseManually(caption);
-    if (Object.keys(manualResult).length > 0) {
+    if (manualResult.product_name) {
       console.log("Successfully parsed using manual parser:", manualResult);
       return manualResult;
     }
@@ -56,13 +64,19 @@ export async function analyzeCaption(caption: string): Promise<AnalyzedContent> 
     console.log("OpenAI response:", aiResponse);
 
     try {
-      return JSON.parse(aiResponse);
+      const parsedResponse = JSON.parse(aiResponse);
+      // Validate required fields
+      if (!parsedResponse.product_name) {
+        throw new Error('Product name is required but missing from AI response');
+      }
+      return parsedResponse;
     } catch (e) {
-      console.log("Falling back to manual parsing of AI response");
-      return parseManually(aiResponse);
+      console.log("Error parsing AI response, falling back to manual parsing");
+      return parseManually(caption);
     }
   } catch (error) {
     console.error('Error analyzing caption:', error);
-    throw error;
+    // Always return at least a partial result with manual parsing
+    return parseManually(caption);
   }
 }
