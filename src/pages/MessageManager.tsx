@@ -17,6 +17,9 @@ import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { Edit, Trash } from "lucide-react";
+import { Database } from "@/integrations/supabase/types";
+
+type Json = Database['public']['Tables']['messages']['Row']['analyzed_content'];
 
 const MessageManager = () => {
   const [selectedMessage, setSelectedMessage] = useState<MediaItem | null>(null);
@@ -41,7 +44,7 @@ const MessageManager = () => {
         .from('messages')
         .update({
           caption: updatedMessage.caption,
-          analyzed_content: updatedMessage.analyzed_content as Record<string, unknown>
+          analyzed_content: updatedMessage.analyzed_content as Json
         })
         .eq('id', updatedMessage.id);
 
