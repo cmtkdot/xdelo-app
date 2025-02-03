@@ -52,20 +52,39 @@ export const MediaViewer = ({
           </div>
 
           <div className="p-4 bg-background border-t">
-            <div className="space-y-2 text-sm">
-              <p><span className="font-medium">PO #:</span> {analyzedContent?.product_code ? `PO#${analyzedContent.product_code}` : 'N/A'}</p>
-              <p><span className="font-medium">Vendor:</span> {analyzedContent?.vendor_uid || 'N/A'}</p>
-              <p><span className="font-medium">Quantity:</span> {analyzedContent?.quantity || 'N/A'}</p>
-              <p><span className="font-medium">Purchase Date:</span> {formatDate(analyzedContent?.purchase_date)}</p>
-              <p><span className="font-medium">Created:</span> {formatDate(mainMedia.created_at)}</p>
-              <p><span className="font-medium">Updated:</span> {formatDate(mainMedia.updated_at)}</p>
-              <p><span className="font-medium">Processing State:</span> {mainMedia.processing_state}</p>
-              <p><span className="font-medium">Media Group ID:</span> {mainMedia.media_group_id || 'N/A'}</p>
-              <p><span className="font-medium">Group Size:</span> {mainMedia.group_message_count || 1}</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+              {analyzedContent?.product_code && (
+                <p><span className="font-medium">PO #:</span> PO#{analyzedContent.product_code}</p>
+              )}
+              {analyzedContent?.vendor_uid && (
+                <p><span className="font-medium">Vendor:</span> {analyzedContent.vendor_uid}</p>
+              )}
+              {(analyzedContent?.quantity || mainMedia.caption) && (
+                <p><span className="font-medium">Caption:</span> {analyzedContent?.quantity || mainMedia.caption}</p>
+              )}
+              {analyzedContent?.purchase_date && (
+                <p><span className="font-medium">Purchase Date:</span> {formatDate(analyzedContent.purchase_date)}</p>
+              )}
+              {mainMedia.created_at && (
+                <p><span className="font-medium">Created:</span> {formatDate(mainMedia.created_at)}</p>
+              )}
+              {mainMedia.updated_at && (
+                <p><span className="font-medium">Updated:</span> {formatDate(mainMedia.updated_at)}</p>
+              )}
+              {mainMedia.processing_state && (
+                <p><span className="font-medium">Processing State:</span> {mainMedia.processing_state}</p>
+              )}
+              {mainMedia.media_group_id && (
+                <p><span className="font-medium">Media Group ID:</span> {mainMedia.media_group_id}</p>
+              )}
+              {mainMedia.group_message_count && (
+                <p><span className="font-medium">Group Size:</span> {mainMedia.group_message_count}</p>
+              )}
             </div>
 
             {analyzedContent?.notes && (
               <div className="mt-4 pt-4 border-t border-border">
+                <p className="text-sm font-medium mb-1">Notes:</p>
                 <p className="text-sm text-muted-foreground">{analyzedContent.notes}</p>
               </div>
             )}
