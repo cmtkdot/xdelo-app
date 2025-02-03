@@ -26,6 +26,10 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
     })
   }, [media])
 
+  const findFirstVideoIndex = React.useCallback(() => {
+    return sortedMedia.findIndex(item => item.mime_type?.startsWith('video'))
+  }, [sortedMedia])
+
   const onDragEnd = () => {
     const x = dragX.get()
     if (x <= -10 && mediaIndex < sortedMedia.length - 1) {
@@ -55,6 +59,14 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
     })
   }, [isHovered, mediaIndex])
 
+  // Auto-swipe to first video on hover/click if we're not already on a video
+  const handleInteraction = React.useCallback(() => {
+    const firstVideoIndex = findFirstVideoIndex()
+    if (firstVideoIndex !== -1 && !sortedMedia[mediaIndex].mime_type?.startsWith('video')) {
+      setMediaIndex(firstVideoIndex)
+    }
+  }, [findFirstVideoIndex, mediaIndex, sortedMedia])
+
   if (sortedMedia.length === 0) {
     return (
       <div className="group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
@@ -69,8 +81,12 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
         'group relative aspect-video h-full w-full overflow-hidden rounded-lg',
         className
       )}
-      onMouseEnter={() => setIsHovered(true)}
+      onMouseEnter={() => {
+        setIsHovered(true)
+        handleInteraction()
+      }}
       onMouseLeave={() => setIsHovered(false)}
+      onClick={handleInteraction}
       {...props}
     >
       <div className="pointer-events-none absolute inset-0 z-10">
@@ -80,7 +96,10 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
               variant="ghost"
               size="icon"
               className="pointer-events-auto h-8 w-8 rounded-full bg-white/80 opacity-0 transition-opacity group-hover:opacity-100"
-              onClick={() => setMediaIndex((prev) => prev - 1)}
+              onClick={(e) => {
+                e.stopPropagation()
+                setMediaIndex((prev) => prev - 1)
+              }}
             >
               <ChevronLeft className="h-4 w-4 text-neutral-600" />
             </Button>
@@ -93,7 +112,10 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
               variant="ghost" 
               size="icon"
               className="pointer-events-auto h-8 w-8 rounded-full bg-white/80 opacity-0 transition-opacity group-hover:opacity-100"
-              onClick={() => setMediaIndex((prev) => prev + 1)}
+              onClick={(e) => {
+                e.stopPropagation()
+                setMediaIndex((prev) => prev + 1)
+              }}
             >
               <ChevronRight className="h-4 w-4 text-neutral-600" />
             </Button>
