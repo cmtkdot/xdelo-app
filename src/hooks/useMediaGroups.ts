@@ -12,10 +12,11 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
   useEffect(() => {
     const fetchMessages = async () => {
       try {
+        // First, get the original captions with pagination
         let originalCaptionsQuery = supabase
           .from("messages_parsed")
           .select("*", { count: "exact" })
-          .eq('is_original_caption', true);
+          .is('is_original_caption', true);
 
         // Apply filters
         if (filters.search) {
@@ -26,7 +27,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
           originalCaptionsQuery = originalCaptionsQuery.eq("vendor_uid", filters.vendor);
         }
 
-        if (filters.productCode) {
+        if (filters.productCode && filters.productCode !== 'all') {
           originalCaptionsQuery = originalCaptionsQuery.eq("product_code", filters.productCode);
         }
 
@@ -43,7 +44,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
           }
         }
 
-        if (filters.processingState) {
+        if (filters.processingState && filters.processingState !== 'all') {
           if (filters.processingState === 'pending') {
             originalCaptionsQuery = originalCaptionsQuery.is('processing_state', null);
           } else {
@@ -75,7 +76,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
         
         if (mediaGroupIds.length > 0) {
           const { data: allGroupMedia, error: groupMediaError } = await supabase
-            .from("messages")
+            .from("messages_parsed")
             .select("*")
             .in("media_group_id", mediaGroupIds);
 
@@ -84,7 +85,8 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
           // Organize messages into groups
           const groups: { [key: string]: MediaItem[] } = {};
           allGroupMedia?.forEach((message) => {
-            const groupKey = message.media_group_id || message.id;
+            if (!message.media_group_id) return;
+            const groupKey = message.media_group_id;
             if (!groups[groupKey]) {
               groups[groupKey] = [];
             }

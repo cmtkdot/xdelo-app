@@ -21,10 +21,26 @@ export const MessageList = ({ onMessageSelect }: MessageListProps) => {
   const { data: messages, isLoading } = useQuery({
     queryKey: ['messages'],
     queryFn: async () => {
+      // First, get all unique media group IDs
+      const { data: groupIds, error: groupError } = await supabase
+        .from('messages_parsed')
+        .select('media_group_id')
+        .is('is_original_caption', true)
+        .order('created_at', { ascending: false });
+
+      if (groupError) throw groupError;
+
+      // Then get all messages for these groups
+      const mediaGroupIds = groupIds
+        .map(g => g.media_group_id)
+        .filter(Boolean) as string[];
+
+      if (mediaGroupIds.length === 0) return [];
+
       const { data, error } = await supabase
         .from('messages_parsed')
         .select('*')
-        .eq('is_original_caption', true)
+        .in('media_group_id', mediaGroupIds)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -59,21 +75,24 @@ export const MessageList = ({ onMessageSelect }: MessageListProps) => {
 
     try {
       if (deleteTelegram) {
-        await supabase.functions.invoke('delete-telegram-message', {
-          body: {
+        const { error: webhookError } = await supabase.functions.invoke('delete-telegram-message', {
+          body: { 
             message_id: deleteMessage.telegram_message_id,
-            chat_id: deleteMessage.chat_id,
-          },
+            chat_id: deleteMessage.chat_id 
+          }
         });
+
+        if (webhookError) throw webhookError;
       }
 
-      const { error } = await supabase
+      const { error: dbError } = await supabase
         .from('messages')
         .delete()
-        .eq('id', deleteMessage.id);
+        .eq('media_group_id', deleteMessage.media_group_id);
 
-      if (error) throw error;
+      if (dbError) throw dbError;
 
+      setDeleteMessage(null);
       toast({
         title: "Success",
         description: "Message deleted successfully",
@@ -88,82 +107,71 @@ export const MessageList = ({ onMessageSelect }: MessageListProps) => {
         description: "Failed to delete message",
         variant: "destructive",
       });
-    } finally {
-      setDeleteMessage(null);
     }
   };
 
-  if (isLoading) return <div>Loading...</div>;
-
   // Group messages by media_group_id
   const groupedMessages = messages?.reduce((acc, message) => {
-    const groupId = message.media_group_id || message.id;
-    if (!acc[groupId]) {
-      acc[groupId] = [];
+    if (!message.media_group_id) return acc;
+    
+    if (!acc[message.media_group_id]) {
+      acc[message.media_group_id] = [];
     }
-    acc[groupId].push(message);
+    acc[message.media_group_id].push(message);
     return acc;
   }, {} as Record<string, MediaItem[]>) || {};
 
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
+
   return (
-    <ScrollArea className="h-[600px] rounded-md border p-4">
-      <div className="space-y-4">
+    <>
+      <ScrollArea className="h-[600px] rounded-md border p-4">
         {Object.entries(groupedMessages).map(([groupId, groupMessages]) => {
           const mainMessage = groupMessages.find(m => m.is_original_caption) || groupMessages[0];
-          
           return (
-            <Card
-              key={groupId}
-              className="p-4"
-            >
-              <div className="flex items-start gap-4">
-                {mainMessage.public_url && (
-                  <img
-                    src={mainMessage.public_url}
-                    alt="Media thumbnail"
-                    className="w-20 h-20 object-cover rounded"
-                  />
-                )}
-                <div className="flex-1">
-                  <h3 className="font-medium">
-                    {mainMessage.analyzed_content?.product_name || 'Untitled'}
+            <Card key={groupId} className="p-4 mb-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="font-semibold">
+                    {mainMessage.analyzed_content?.product_name || 'Untitled Product'}
                   </h3>
                   <p className="text-sm text-gray-500">
                     {mainMessage.caption || 'No caption'}
                   </p>
                   <p className="text-xs text-gray-400">
-                    {new Date(mainMessage.created_at || '').toLocaleString()}
+                    Group ID: {groupId} ({groupMessages.length} items)
                   </p>
-                  <div className="flex gap-2 mt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onMessageSelect(mainMessage)}
-                    >
-                      <Edit className="h-4 w-4 mr-1" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setDeleteMessage(mainMessage)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Delete
-                    </Button>
-                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onMessageSelect(mainMessage)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDeleteMessage(mainMessage)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             </Card>
           );
         })}
-      </div>
+      </ScrollArea>
+
       <DeleteConfirmDialog
-        open={!!deleteMessage}
-        onOpenChange={(open) => !open && setDeleteMessage(null)}
+        isOpen={!!deleteMessage}
+        onClose={() => setDeleteMessage(null)}
         onConfirm={handleDelete}
       />
-    </ScrollArea>
+    </>
   );
 };
