@@ -33,4 +33,6 @@ export interface MediaItem {
   retry_count?: number;
   analysis_version?: number;
   last_error_at?: string;
+  parsed_content?: any;
+  synced_caption?: any;
 }
