@@ -51,16 +51,21 @@ export const MediaViewer = ({
             <ImageSwiper media={currentGroup} />
           </div>
 
-          <div className="p-4 bg-background border-t">
+          <div className="p-4 bg-background border-t space-y-3">
+            {/* Caption section in a single row */}
+            {(analyzedContent?.quantity || mainMedia.caption) && (
+              <p className="border-b pb-2">
+                <span className="font-semibold text-primary">Caption:</span> {analyzedContent?.quantity || mainMedia.caption}
+              </p>
+            )}
+
+            {/* Two column grid for other information */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
               {analyzedContent?.product_code && (
                 <p><span className="font-semibold text-primary">PO #:</span> PO#{analyzedContent.product_code}</p>
               )}
               {analyzedContent?.vendor_uid && (
                 <p><span className="font-semibold text-primary">Vendor:</span> {analyzedContent.vendor_uid}</p>
-              )}
-              {(analyzedContent?.quantity || mainMedia.caption) && (
-                <p><span className="font-semibold text-primary">Caption:</span> {analyzedContent?.quantity || mainMedia.caption}</p>
               )}
               {analyzedContent?.purchase_date && (
                 <p><span className="font-semibold text-primary">Purchase Date:</span> {formatDate(analyzedContent.purchase_date)}</p>
