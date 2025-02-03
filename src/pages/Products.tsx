@@ -42,8 +42,8 @@ const Products = () => {
 
       if (error) throw error;
 
-      // Create a map to store unique messages with proper typing
-      const uniqueMessages = new Map<string, MediaItem>();
+      // Create a map to store unique messages
+      const uniqueMessages = new Map();
       
       (data as MediaItem[]).forEach(message => {
         const key = `${message.file_unique_id}-${message.media_group_id || 'single'}`;
@@ -53,7 +53,7 @@ const Products = () => {
           uniqueMessages.set(key, message);
         } else {
           // If message exists, update only if it has newer content
-          const existingMessage = uniqueMessages.get(key) as MediaItem;
+          const existingMessage = uniqueMessages.get(key);
           if (
             message.analyzed_content && 
             (!existingMessage.analyzed_content || 
@@ -64,7 +64,7 @@ const Products = () => {
         }
       });
 
-      return Array.from(uniqueMessages.values());
+      return Array.from(uniqueMessages.values()) as MediaItem[];
     }
   });
 
@@ -98,7 +98,7 @@ const Products = () => {
   }, [queryClient]);
 
   const handleSave = async () => {
-    if (!editItem?.analyzed_content) return;
+    if (!editItem) return;
 
     try {
       // Check if there are other messages in the same group
@@ -218,7 +218,7 @@ const Products = () => {
             setEditItem({
               ...editItem,
               analyzed_content: {
-                ...(editItem.analyzed_content || {}),
+                ...editItem.analyzed_content,
                 [field]: value
               }
             });
