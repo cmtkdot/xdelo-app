@@ -51,6 +51,13 @@ export type Database = {
             referencedRelation: "messages"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "analysis_audit_log_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages_parsed"
+            referencedColumns: ["id"]
+          },
         ]
       }
       messages: {
@@ -173,6 +180,13 @@ export type Database = {
             referencedRelation: "messages"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages_parsed"
+            referencedColumns: ["id"]
+          },
         ]
       }
       other_messages: {
@@ -243,7 +257,144 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      messages_parsed: {
+        Row: {
+          caption: string | null
+          created_at: string | null
+          duration: number | null
+          file_id: string | null
+          file_size: number | null
+          file_unique_id: string | null
+          group_caption_synced: boolean | null
+          height: number | null
+          id: string | null
+          is_original_caption: boolean | null
+          media_group_id: string | null
+          message_caption_id: string | null
+          mime_type: string | null
+          notes: string | null
+          parsing_confidence: number | null
+          parsing_fallbacks: Json | null
+          parsing_method: string | null
+          processing_completed_at: string | null
+          processing_started_at: string | null
+          processing_state:
+            | Database["public"]["Enums"]["message_processing_state"]
+            | null
+          product_code: string | null
+          product_name: string | null
+          public_url: string | null
+          purchase_date: string | null
+          purchase_order_uid: string | null
+          quantity: number | null
+          reanalysis_attempted: boolean | null
+          telegram_chat_id: string | null
+          telegram_chat_type: string | null
+          telegram_date: string | null
+          telegram_message_id: number | null
+          telegram_original_message_id: string | null
+          updated_at: string | null
+          user_id: string | null
+          vendor_uid: string | null
+          width: number | null
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string | null
+          duration?: number | null
+          file_id?: string | null
+          file_size?: number | null
+          file_unique_id?: string | null
+          group_caption_synced?: boolean | null
+          height?: number | null
+          id?: string | null
+          is_original_caption?: boolean | null
+          media_group_id?: string | null
+          message_caption_id?: string | null
+          mime_type?: string | null
+          notes?: never
+          parsing_confidence?: never
+          parsing_fallbacks?: never
+          parsing_method?: never
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          processing_state?:
+            | Database["public"]["Enums"]["message_processing_state"]
+            | null
+          product_code?: never
+          product_name?: never
+          public_url?: string | null
+          purchase_date?: never
+          purchase_order_uid?: string | null
+          quantity?: never
+          reanalysis_attempted?: never
+          telegram_chat_id?: never
+          telegram_chat_type?: never
+          telegram_date?: never
+          telegram_message_id?: number | null
+          telegram_original_message_id?: never
+          updated_at?: string | null
+          user_id?: string | null
+          vendor_uid?: never
+          width?: number | null
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string | null
+          duration?: number | null
+          file_id?: string | null
+          file_size?: number | null
+          file_unique_id?: string | null
+          group_caption_synced?: boolean | null
+          height?: number | null
+          id?: string | null
+          is_original_caption?: boolean | null
+          media_group_id?: string | null
+          message_caption_id?: string | null
+          mime_type?: string | null
+          notes?: never
+          parsing_confidence?: never
+          parsing_fallbacks?: never
+          parsing_method?: never
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          processing_state?:
+            | Database["public"]["Enums"]["message_processing_state"]
+            | null
+          product_code?: never
+          product_name?: never
+          public_url?: string | null
+          purchase_date?: never
+          purchase_order_uid?: string | null
+          quantity?: never
+          reanalysis_attempted?: never
+          telegram_chat_id?: never
+          telegram_chat_type?: never
+          telegram_date?: never
+          telegram_message_id?: number | null
+          telegram_original_message_id?: never
+          updated_at?: string | null
+          user_id?: string | null
+          vendor_uid?: never
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages_parsed"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       bytea_to_text: {

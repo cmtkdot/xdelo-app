@@ -12,60 +12,76 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
   useEffect(() => {
     const fetchMessages = async () => {
       try {
-        let query = supabase
-          .from("messages")
-          .select("*", { count: "exact" });
+        // First, get the original caption messages that match our filters
+        let originalCaptionsQuery = supabase
+          .from("messages_parsed")
+          .select("*", { count: "exact" })
+          .eq('is_original_caption', true);
 
         if (filters.search) {
-          query = query.textSearch(
-            "analyzed_content->>'product_name'", 
-            filters.search
-          );
+          originalCaptionsQuery = originalCaptionsQuery.or(`product_name.ilike.%${filters.search}%,product_code.ilike.%${filters.search}%,notes.ilike.%${filters.search}%`);
         }
 
         if (filters.vendor !== "all") {
-          query = query.eq("analyzed_content->>'vendor_uid'", filters.vendor);
+          originalCaptionsQuery = originalCaptionsQuery.eq("vendor_uid", filters.vendor);
         }
 
         if (filters.dateFrom) {
-          query = query.gte("created_at", filters.dateFrom.toISOString());
+          originalCaptionsQuery = originalCaptionsQuery.gte("purchase_date", filters.dateFrom.toISOString().split('T')[0]);
         }
 
         if (filters.dateTo) {
-          query = query.lte("created_at", filters.dateTo.toISOString());
+          originalCaptionsQuery = originalCaptionsQuery.lte("purchase_date", filters.dateTo.toISOString().split('T')[0]);
         }
 
-        query = query.order("created_at", { ascending: filters.sortOrder === "asc" });
+        originalCaptionsQuery = originalCaptionsQuery
+          .order("created_at", { ascending: filters.sortOrder === "asc" });
 
         const from = (currentPage - 1) * ITEMS_PER_PAGE;
         const to = from + ITEMS_PER_PAGE - 1;
-        query = query.range(from, to);
+        originalCaptionsQuery = originalCaptionsQuery.range(from, to);
 
-        const { data, count, error } = await query;
+        const { data: originalCaptions, count, error: originalCaptionsError } = await originalCaptionsQuery;
 
-        if (error) throw error;
+        if (originalCaptionsError) throw originalCaptionsError;
+
+        // Get all media items for the filtered media groups
+        const mediaGroupIds = originalCaptions?.map(msg => msg.media_group_id).filter(Boolean) || [];
+        
+        if (mediaGroupIds.length > 0) {
+          const { data: allGroupMedia, error: groupMediaError } = await supabase
+            .from("messages")
+            .select("*")
+            .in("media_group_id", mediaGroupIds);
+
+          if (groupMediaError) throw groupMediaError;
+
+          // Organize messages into groups
+          const groups: { [key: string]: MediaItem[] } = {};
+          allGroupMedia?.forEach((message) => {
+            const groupKey = message.media_group_id || message.id;
+            if (!groups[groupKey]) {
+              groups[groupKey] = [];
+            }
+            groups[groupKey].push(message as MediaItem);
+          });
+
+          // Sort messages within each group
+          Object.keys(groups).forEach(key => {
+            groups[key].sort((a, b) => {
+              if (a.is_original_caption && !b.is_original_caption) return -1;
+              if (!a.is_original_caption && b.is_original_caption) return 1;
+              return 0;
+            });
+          });
+
+          setMediaGroups(groups);
+        } else {
+          setMediaGroups({});
+        }
 
         const total = count || 0;
         setTotalPages(Math.ceil(total / ITEMS_PER_PAGE));
-
-        const groups: { [key: string]: MediaItem[] } = {};
-        data?.forEach((message) => {
-          const groupKey = message.media_group_id || message.id;
-          if (!groups[groupKey]) {
-            groups[groupKey] = [];
-          }
-          groups[groupKey].push(message as MediaItem);
-        });
-
-        Object.keys(groups).forEach(key => {
-          groups[key].sort((a, b) => {
-            if (a.is_original_caption && !b.is_original_caption) return -1;
-            if (!a.is_original_caption && b.is_original_caption) return 1;
-            return 0;
-          });
-        });
-
-        setMediaGroups(groups);
       } catch (error) {
         console.error("Error fetching messages:", error);
         toast({
