@@ -20,8 +20,8 @@ export const VendorFilter = ({ value, vendors, onChange }: VendorFilterProps) =>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Vendors</SelectItem>
-          {vendors.map((v) => (
-            <SelectItem key={v} value={v}>{v}</SelectItem>
+          {vendors.map((vendor) => (
+            <SelectItem key={vendor} value={vendor}>{vendor}</SelectItem>
           ))}
         </SelectContent>
       </Select>

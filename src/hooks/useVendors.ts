@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { AnalyzedContent } from "@/types";
 
 export const useVendors = () => {
   const [vendors, setVendors] = useState<string[]>([]);
@@ -10,16 +9,16 @@ export const useVendors = () => {
       try {
         const { data, error } = await supabase
           .from("messages")
-          .select("analyzed_content")
-          .not("analyzed_content", "is", null);
+          .select("analyzed_content->vendor_uid")
+          .not("analyzed_content->vendor_uid", "is", null)
+          .not("analyzed_content->vendor_uid", "eq", "");
 
         if (error) throw error;
 
         const uniqueVendors = new Set<string>();
-        data.forEach((message) => {
-          const content = message.analyzed_content as AnalyzedContent;
-          if (content?.vendor_uid) {
-            uniqueVendors.add(content.vendor_uid);
+        data.forEach((item) => {
+          if (item.vendor_uid) {
+            uniqueVendors.add(item.vendor_uid);
           }
         });
 

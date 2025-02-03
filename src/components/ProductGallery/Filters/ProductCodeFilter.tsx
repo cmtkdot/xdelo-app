@@ -21,7 +21,9 @@ export const ProductCodeFilter = ({ value, options, onChange }: ProductCodeFilte
         <SelectContent>
           <SelectItem value="all">All Product Codes</SelectItem>
           {options.map((code) => (
-            <SelectItem key={code} value={code}>{code}</SelectItem>
+            <SelectItem key={code} value={code}>
+              {code.startsWith('PO#') ? code : `PO#${code}`}
+            </SelectItem>
           ))}
         </SelectContent>
       </Select>

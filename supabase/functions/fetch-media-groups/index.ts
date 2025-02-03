@@ -37,29 +37,23 @@ serve(async (req) => {
       .eq('is_original_caption', true)
       .not('analyzed_content', 'is', null);
 
-    // Apply text search filter across multiple JSON fields and caption
+    // Apply text search filter across product name in analyzed_content
     if (filters.search) {
       const searchTerm = `%${filters.search}%`;
-      query = query.or(
-        `analyzed_content->product_name.ilike.${searchTerm},` +
-        `analyzed_content->notes.ilike.${searchTerm},` +
-        `analyzed_content->vendor_uid.ilike.${searchTerm},` +
-        `analyzed_content->product_code.ilike.${searchTerm},` +
-        `caption.ilike.${searchTerm}`
-      );
+      query = query.ilike('analyzed_content->product_name', searchTerm);
     }
 
-    // Apply vendor filter using JSON path
+    // Apply vendor filter using vendor_uid from analyzed_content
     if (filters.vendor && filters.vendor !== "all") {
-      query = query.eq("analyzed_content->vendor_uid", filters.vendor);
+      query = query.eq('analyzed_content->vendor_uid', filters.vendor);
     }
 
-    // Apply product code filter using JSON path
+    // Apply product code filter using product_code from analyzed_content
     if (filters.productCode && filters.productCode !== 'all') {
-      query = query.eq("analyzed_content->product_code", filters.productCode);
+      query = query.eq('analyzed_content->product_code', filters.productCode);
     }
 
-    // Apply quantity range filter using JSON path
+    // Apply quantity range filter using quantity from analyzed_content
     if (filters.quantityRange && filters.quantityRange !== 'all') {
       if (filters.quantityRange === 'undefined') {
         query = query.is('analyzed_content->quantity', null);
@@ -78,12 +72,12 @@ serve(async (req) => {
       query = query.eq("processing_state", filters.processingState);
     }
 
-    // Apply date range filters using JSON path
+    // Apply date range filters using purchase_date from analyzed_content
     if (filters.dateFrom) {
-      query = query.gte("analyzed_content->purchase_date", filters.dateFrom);
+      query = query.gte('analyzed_content->purchase_date', filters.dateFrom);
     }
     if (filters.dateTo) {
-      query = query.lte("analyzed_content->purchase_date", filters.dateTo);
+      query = query.lte('analyzed_content->purchase_date', filters.dateTo);
     }
 
     // Apply sorting
