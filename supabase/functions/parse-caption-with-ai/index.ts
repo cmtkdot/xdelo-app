@@ -6,15 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface AnalyzedContent {
-  product_name: string;
-  product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  quantity?: number;
-  notes?: string;
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -39,22 +30,13 @@ serve(async (req) => {
         messages: [
           { 
             role: 'system', 
-            content: `You are a product information extractor. Extract and return ONLY a JSON object with these fields:
-              - product_name (string, required): Text before '#'
-              - product_code (string, optional): Full code after '#'
-              - vendor_uid (string, optional): Letters at start of product code
-              - purchase_date (string, optional): Date in YYYY-MM-DD format
-              - quantity (number, optional): Numbers after 'x' or in units
-              - notes (string, optional): Text in parentheses or remaining info
-              
-              Example input: "Blue Widget #ABC12345 x5 (new stock)"
-              Example output: {
-                "product_name": "Blue Widget",
-                "product_code": "ABC12345",
-                "vendor_uid": "ABC",
-                "quantity": 5,
-                "notes": "new stock"
-              }`
+            content: `Extract and return ONLY a valid JSON object with these fields:
+              - product_name (string, required)
+              - product_code (string, optional)
+              - vendor_uid (string, optional)
+              - purchase_date (string, optional, YYYY-MM-DD format)
+              - quantity (number, optional)
+              - notes (string, optional)`
           },
           { role: 'user', content: caption }
         ],
@@ -71,11 +53,10 @@ serve(async (req) => {
     const data = await response.json();
     console.log('OpenAI API response:', data);
     
-    let analyzedContent: AnalyzedContent;
+    let analyzedContent;
     try {
       const content = data.choices[0].message.content.trim();
       console.log('Parsing content:', content);
-      
       analyzedContent = JSON.parse(content);
       
       if (!analyzedContent.product_name) {
@@ -88,52 +69,32 @@ serve(async (req) => {
           delete analyzedContent.quantity;
         }
       }
-
-      console.log('Final analyzed result:', analyzedContent);
     } catch (parseError) {
       console.error('Error parsing OpenAI response:', parseError);
       throw new Error(`Failed to parse AI response: ${parseError.message}`);
     }
 
-    // Create Supabase client
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    // Sync the analyzed content
+    const syncResponse = await fetch(
+      `${Deno.env.get('SUPABASE_URL')}/functions/v1/sync-analyzed-content`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message_id,
+          media_group_id,
+          analyzed_content: analyzedContent
+        }),
+      }
     );
 
-    // Update the message with analyzed content
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update({
-        analyzed_content: analyzedContent,
-        processing_state: 'analyzing'
-      })
-      .eq('id', message_id);
-
-    if (updateError) throw updateError;
-
-    // If this is part of a media group, sync the analysis
-    if (media_group_id) {
-      console.log('Syncing media group analysis');
-      const { error: syncError } = await supabase.functions.invoke('sync-media-group', {
-        body: { message_id, media_group_id, analyzed_content: analyzedContent }
-      });
-
-      if (syncError) {
-        console.error('Error syncing media group:', syncError);
-        throw syncError;
-      }
-    } else {
-      // For single messages, mark as completed
-      const { error: completeError } = await supabase
-        .from('messages')
-        .update({
-          processing_state: 'completed',
-          processing_completed_at: new Date().toISOString()
-        })
-        .eq('id', message_id);
-
-      if (completeError) throw completeError;
+    if (!syncResponse.ok) {
+      const errorText = await syncResponse.text();
+      console.error('Error syncing analyzed content:', errorText);
+      throw new Error(`Failed to sync analyzed content: ${errorText}`);
     }
 
     return new Response(
