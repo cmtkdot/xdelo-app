@@ -66,6 +66,23 @@ export async function handleMediaMessage(
   console.log(`🔄 Processing ${mediaItems.length} media items`);
   const processedMedia: ProcessedMedia[] = [];
 
+  // If this is part of a media group, update group count first
+  if (message.media_group_id) {
+    console.log("📊 Updating media group count");
+    const { data: groupCount, error: countError } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact' })
+      .eq('media_group_id', message.media_group_id);
+
+    if (countError) {
+      console.error("❌ Error getting group count:", countError);
+      throw countError;
+    }
+
+    const currentCount = groupCount?.length || 0;
+    console.log(`📈 Current group count: ${currentCount}`);
+  }
+
   for (const mediaItem of mediaItems) {
     console.log("🔍 Processing media item:", {
       file_unique_id: mediaItem.file_unique_id,
@@ -91,9 +108,9 @@ export async function handleMediaMessage(
     // Check if caption has changed or if analysis needs to be redone
     if (existingMessage) {
       shouldReanalyze = (
-        message.caption !== existingMessage.caption || // Caption changed
-        !existingMessage.analyzed_content || // No previous analysis
-        existingMessage.processing_state === 'error' // Previous analysis failed
+        message.caption !== existingMessage.caption || 
+        !existingMessage.analyzed_content || 
+        existingMessage.processing_state === 'error'
       );
 
       console.log("🔄 Duplicate check:", {
@@ -106,7 +123,6 @@ export async function handleMediaMessage(
     }
 
     if (!existingMessage) {
-      // Only download and upload if message doesn't exist
       console.log("📥 Downloading new media file");
       const fileResponse = await downloadTelegramFile(mediaItem.file_id, TELEGRAM_BOT_TOKEN);
       const fileBuffer = await fileResponse.arrayBuffer();
@@ -119,7 +135,18 @@ export async function handleMediaMessage(
       console.log("✅ New file uploaded successfully");
     }
 
-    // Prepare message data
+    // Get current group count for new messages
+    let currentGroupCount = 1;
+    if (message.media_group_id) {
+      const { count } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('media_group_id', message.media_group_id);
+      
+      currentGroupCount = (count || 0) + 1;
+    }
+
+    // Prepare message data with updated group information
     messageData = {
       telegram_message_id: message.message_id,
       media_group_id: message.media_group_id,
@@ -134,23 +161,22 @@ export async function handleMediaMessage(
       duration: mediaItem.duration,
       user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
       telegram_data: { message },
-      processing_state: message.caption ? 'processing' : 'initialized',
+      processing_state: message.caption ? 'pending' : 'initialized',
       group_first_message_time: message.media_group_id ? new Date().toISOString() : null,
       group_last_message_time: message.media_group_id ? new Date().toISOString() : null,
-      group_message_count: message.media_group_id ? 1 : null
+      group_message_count: message.media_group_id ? currentGroupCount : null,
+      is_original_caption: message.caption ? true : false
     };
 
     let newMessage;
     if (existingMessage) {
-      // Update existing message
       console.log("🔄 Updating existing message:", existingMessage.id);
       const { data: updatedMessage, error: updateError } = await supabase
         .from("messages")
         .update({
           ...messageData,
-          // Reset analysis if reanalysis is needed
           analyzed_content: shouldReanalyze ? null : existingMessage.analyzed_content,
-          processing_state: shouldReanalyze ? 'processing' : existingMessage.processing_state
+          processing_state: shouldReanalyze ? 'pending' : existingMessage.processing_state
         })
         .eq("id", existingMessage.id)
         .select()
@@ -162,7 +188,6 @@ export async function handleMediaMessage(
       }
       newMessage = updatedMessage;
     } else {
-      // Insert new message
       console.log("➕ Creating new message");
       const { data: insertedMessage, error: insertError } = await supabase
         .from("messages")
@@ -175,6 +200,22 @@ export async function handleMediaMessage(
         throw insertError;
       }
       newMessage = insertedMessage;
+    }
+
+    // Update group message count for all messages in the group
+    if (message.media_group_id) {
+      const { error: groupUpdateError } = await supabase
+        .from("messages")
+        .update({
+          group_message_count: currentGroupCount,
+          group_last_message_time: new Date().toISOString()
+        })
+        .eq("media_group_id", message.media_group_id);
+
+      if (groupUpdateError) {
+        console.error("❌ Failed to update group count:", groupUpdateError);
+        // Don't throw, continue processing
+      }
     }
 
     // If message needs analysis, trigger AI analysis
@@ -191,7 +232,6 @@ export async function handleMediaMessage(
         console.log("✅ AI analysis triggered successfully");
       } catch (error) {
         console.error("❌ Failed to trigger AI analysis:", error);
-        // Don't throw here, we want to continue processing other media items
       }
     }
 
