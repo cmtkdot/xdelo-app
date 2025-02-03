@@ -53,11 +53,3 @@ export interface FilterValues {
   dateTo?: Date;
   sortOrder: "desc" | "asc";
 }
-
-export interface SearchableContent {
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  notes?: string;
-  telegram_caption?: string;
-}

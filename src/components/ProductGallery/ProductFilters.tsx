@@ -14,7 +14,7 @@ interface ProductFiltersProps {
   onFilterChange: (filters: FilterValues) => void;
 }
 
-const ProductFilters = ({ vendors, filters, onFilterChange }: ProductFiltersProps) => {
+export default function ProductFilters({ vendors, filters, onFilterChange }: ProductFiltersProps) {
   const [search, setSearch] = useState(filters.search);
   const [vendor, setVendor] = useState(filters.vendor);
   const [dateFrom, setDateFrom] = useState<Date | undefined>(filters.dateFrom);
@@ -22,26 +22,19 @@ const ProductFilters = ({ vendors, filters, onFilterChange }: ProductFiltersProp
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder);
 
   const handleApplyFilters = () => {
-    onFilterChange({
-      search,
-      vendor,
-      dateFrom,
-      dateTo,
-      sortOrder
-    });
+    onFilterChange({ search, vendor, dateFrom, dateTo, sortOrder });
   };
 
   return (
     <div className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0">
       <div className="flex items-center space-x-2">
         <Input
-          placeholder="Search products..."
+          placeholder="Search..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-64"
         />
         <Select value={vendor} onValueChange={setVendor}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger>
             <SelectValue placeholder="Select Vendor" />
           </SelectTrigger>
           <SelectContent>
@@ -55,12 +48,12 @@ const ProductFilters = ({ vendors, filters, onFilterChange }: ProductFiltersProp
         </Select>
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" className="w-32">
-              <CalendarIcon className="mr-2 h-4 w-4" />
+            <Button variant="outline">
+              <CalendarIcon className="w-4 h-4" />
               {dateFrom ? format(dateFrom, 'MM/dd/yyyy') : 'From'}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0">
+          <PopoverContent>
             <Calendar
               mode="single"
               selected={dateFrom}
@@ -71,12 +64,12 @@ const ProductFilters = ({ vendors, filters, onFilterChange }: ProductFiltersProp
         </Popover>
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" className="w-32">
-              <CalendarIcon className="mr-2 h-4 w-4" />
+            <Button variant="outline">
+              <CalendarIcon className="w-4 h-4" />
               {dateTo ? format(dateTo, 'MM/dd/yyyy') : 'To'}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0">
+          <PopoverContent>
             <Calendar
               mode="single"
               selected={dateTo}
@@ -85,19 +78,20 @@ const ProductFilters = ({ vendors, filters, onFilterChange }: ProductFiltersProp
             />
           </PopoverContent>
         </Popover>
-        <Select value={sortOrder} onValueChange={(value: "asc" | "desc") => setSortOrder(value)}>
-          <SelectTrigger className="w-40">
+        <Select 
+          value={sortOrder} 
+          onValueChange={(value: "asc" | "desc") => setSortOrder(value)}
+        >
+          <SelectTrigger>
             <SelectValue placeholder="Sort Order" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="asc">Oldest First</SelectItem>
-            <SelectItem value="desc">Newest First</SelectItem>
+            <SelectItem value="asc">Ascending</SelectItem>
+            <SelectItem value="desc">Descending</SelectItem>
           </SelectContent>
         </Select>
         <Button onClick={handleApplyFilters}>Apply Filters</Button>
       </div>
     </div>
   );
-};
-
-export default ProductFilters;
+}
