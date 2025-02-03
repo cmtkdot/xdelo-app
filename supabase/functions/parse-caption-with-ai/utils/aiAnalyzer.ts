@@ -7,20 +7,12 @@ const SYSTEM_PROMPT = `Extract product information from captions following these
 3. Vendor UID: Letters at start of product code
 4. Purchase Date: Convert MMDDYY or MDDYY to YYYY-MM-DD
 5. Quantity: Look for numbers after 'x' or in units
-6. Notes: Text in parentheses or remaining info
-
-Example Input: "Blue Widget #ABC12345 x5 (new stock)"
-Example Output: {
-  "product_name": "Blue Widget",
-  "product_code": "ABC12345",
-  "vendor_uid": "ABC",
-  "purchase_date": "2023-12-34",
-  "quantity": 5,
-  "notes": "new stock"
-}`;
+6. Notes: Text in parentheses or remaining info`;
 
 export async function analyzeCaption(caption: string): Promise<ParsedContent> {
   try {
+    console.log('Starting caption analysis:', caption);
+    
     // First try manual parsing
     const manualResult = manualParse(caption);
     console.log('Manual parsing result:', manualResult);

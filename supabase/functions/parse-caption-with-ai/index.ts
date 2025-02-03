@@ -48,6 +48,7 @@ serve(async (req) => {
       .eq('id', message_id);
 
     // If this is part of a media group, ensure we're working with the right message
+    let originalMessageId = message_id;
     if (media_group_id) {
       console.log('Checking media group for original caption:', media_group_id);
       
@@ -66,7 +67,7 @@ serve(async (req) => {
 
       if (originalMessage && originalMessage.id !== message_id) {
         console.log('Found better message for analysis:', originalMessage.id);
-        message_id = originalMessage.id;
+        originalMessageId = originalMessage.id;
       }
     }
 
@@ -88,7 +89,7 @@ serve(async (req) => {
       
       // Log group analysis start
       await supabase.from('analysis_audit_log').insert({
-        message_id,
+        message_id: originalMessageId,
         media_group_id,
         event_type: 'GROUP_ANALYSIS_STARTED',
         old_state: 'processing',
@@ -96,8 +97,9 @@ serve(async (req) => {
         analyzed_content: analyzedContent
       });
 
+      // Update all messages in the group
       const { error: groupError } = await supabase.rpc('process_media_group_analysis', {
-        p_message_id: message_id,
+        p_message_id: originalMessageId,
         p_media_group_id: media_group_id,
         p_analyzed_content: analyzedContent,
         p_processing_completed_at: new Date().toISOString()
@@ -109,7 +111,7 @@ serve(async (req) => {
 
       // Log group analysis completion
       await supabase.from('analysis_audit_log').insert({
-        message_id,
+        message_id: originalMessageId,
         media_group_id,
         event_type: 'GROUP_ANALYSIS_COMPLETED',
         old_state: 'syncing',
@@ -128,7 +130,7 @@ serve(async (req) => {
           group_caption_synced: true,
           is_original_caption: true
         })
-        .eq('id', message_id);
+        .eq('id', originalMessageId);
 
       if (updateError) {
         throw updateError;
@@ -136,7 +138,7 @@ serve(async (req) => {
 
       // Log single message completion
       await supabase.from('analysis_audit_log').insert({
-        message_id,
+        message_id: originalMessageId,
         event_type: 'ANALYSIS_COMPLETED',
         old_state: 'processing',
         new_state: 'completed',
@@ -152,13 +154,11 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error processing caption:', error);
     
-    // Update message state to error
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
     try {
       const messageData = await req.json();
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      const supabase = createClient(supabaseUrl, supabaseKey);
       
       // Log error in audit log
       await supabase.from('analysis_audit_log').insert({

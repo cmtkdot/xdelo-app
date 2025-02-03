@@ -12,8 +12,8 @@ serve(async (req) => {
   }
 
   try {
-    const { message_id, caption, analyzed_content } = await req.json();
-    console.log('Starting reanalysis for message:', { message_id, caption });
+    const { message_id, media_group_id } = await req.json();
+    console.log('Reanalyzing content for message:', { message_id, media_group_id });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -24,7 +24,7 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get message details including media_group_id
+    // Get the message to reanalyze
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .select('*')
@@ -33,59 +33,38 @@ serve(async (req) => {
 
     if (messageError) throw messageError;
 
-    // If this is part of a media group, find the original caption message
-    if (message.media_group_id) {
-      console.log('Message is part of media group:', message.media_group_id);
-      
-      const { data: groupMessages, error: groupError } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('media_group_id', message.media_group_id)
-        .order('created_at', { ascending: true });
+    // Log reanalysis start
+    await supabase.from('analysis_audit_log').insert({
+      message_id,
+      media_group_id,
+      event_type: 'REANALYSIS_STARTED',
+      old_state: message.processing_state,
+      new_state: 'processing'
+    });
 
-      if (groupError) throw groupError;
-
-      // Find JPEG image with caption or use the first message
-      const originalMessage = groupMessages.find(msg => 
-        msg.mime_type === 'image/jpeg' && msg.caption
-      ) || groupMessages[0];
-
-      if (originalMessage && originalMessage.id !== message_id) {
-        console.log('Found original message:', originalMessage.id);
-        message_id = originalMessage.id;
-      }
-    }
+    // Update message state
+    await supabase
+      .from('messages')
+      .update({ 
+        processing_state: 'processing',
+        processing_started_at: new Date().toISOString()
+      })
+      .eq('id', message_id);
 
     // Trigger reanalysis
-    const { error: reanalysisError } = await supabase.functions.invoke('parse-caption-with-ai', {
+    const response = await supabase.functions.invoke('parse-caption-with-ai', {
       body: { 
         message_id,
-        media_group_id: message.media_group_id,
-        caption: caption || message.caption,
+        media_group_id,
+        caption: message.caption,
         force_reanalysis: true
       }
     });
 
-    if (reanalysisError) throw reanalysisError;
-
-    // Log reanalysis attempt
-    await supabase.from('analysis_audit_log').insert({
-      message_id,
-      media_group_id: message.media_group_id,
-      event_type: 'REANALYSIS_TRIGGERED',
-      old_state: 'completed',
-      new_state: 'processing',
-      analyzed_content: {
-        ...analyzed_content,
-        parsing_metadata: {
-          ...analyzed_content?.parsing_metadata,
-          reanalysis_attempted: true
-        }
-      }
-    });
+    if (response.error) throw response.error;
 
     return new Response(
-      JSON.stringify({ message: 'Reanalysis triggered successfully' }),
+      JSON.stringify({ message: 'Content reanalysis triggered successfully' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
