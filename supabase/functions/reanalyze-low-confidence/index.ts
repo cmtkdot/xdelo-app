@@ -6,39 +6,47 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const SYSTEM_PROMPT = `Analyze the product caption and return a JSON object with these EXACT lowercase field names:
-{
-  "notes": string,
-  "quantity": number,
-  "vendor_uid": string,
-  "product_code": string,
-  "product_name": string,
-  "purchase_date": string (YYYY-MM-DD format)
-}
+const SYSTEM_PROMPT = `You are a specialized product information extractor. Extract structured information following these rules:
 
-Important rules:
-1. Use EXACTLY these lowercase field names
-2. Put ANY additional information or details not fitting in other fields into the notes field
-3. Include flavor descriptions, strain types, and any other product details in notes
-4. Convert any numbers in quantity to actual number type
-5. Format dates as YYYY-MM-DD
-6. Ensure product_name is always present
-7. Move ANY information not fitting the specific fields into notes, including:
-   - Strain information
-   - Flavor descriptions
-   - Product characteristics
-   - Additional details
+1. Product Name (REQUIRED):
+   - Text before '#' or 'x' marker
+   - Remove any trailing spaces
+   - Example: "Blue Dream x2" -> "Blue Dream"
+
+2. Product Code:
+   - Full code after '#' including vendor and date
+   - Format: #[vendor_uid][date]
+   - Example: "#CHAD120523" -> "CHAD120523"
+
+3. Vendor UID:
+   - 1-4 letters after '#' before any numbers
+   - Example: "#CHAD120523" -> "CHAD"
+
+4. Purchase Date:
+   - Convert date formats:
+   - 6 digits (mmDDyy) -> YYYY-MM-DD
+   - 5 digits (mDDyy) -> YYYY-MM-DD (add leading zero)
+   - Example: "120523" -> "2023-12-05"
+
+5. Quantity:
+   - Look for numbers after 'x' or 'qty:'
+   - Must be positive integer
+   - Common formats: "x2", "x 2", "qty: 2"
+
+6. Notes:
    - Text in parentheses
-   - Any unstructured information
+   - Any additional unstructured text
+   - Example: "(indoor grown)" -> "indoor grown"
+   - Include ANY information not fitting in other fields
 
-Example output:
-{
-  "notes": "indoor grown, Indica dominant hybrid, THC: 24%",
+Example Input: "Blue Dream x2 #CHAD120523 (indoor)"
+Expected Output: {
+  "product_name": "Blue Dream",
+  "product_code": "CHAD120523",
+  "vendor_uid": "CHAD",
+  "purchase_date": "2023-12-05",
   "quantity": 2,
-  "vendor_uid": "FISH",
-  "product_code": "FISH012225",
-  "product_name": "Blue Nerds",
-  "purchase_date": "2025-01-22"
+  "notes": "indoor"
 }`;
 
 serve(async (req) => {
@@ -47,19 +55,49 @@ serve(async (req) => {
   }
 
   try {
-    const { message_id, caption, media_group_id, correlation_id = crypto.randomUUID() } = await req.json();
+    const { message_id, caption, media_group_id, analyzed_content, correlation_id = crypto.randomUUID() } = await req.json();
     
+    // Validate required fields
     if (!message_id || !caption) {
       throw new Error('message_id and caption are required');
     }
 
-    console.log('Reanalyzing message:', { message_id, caption, correlation_id, media_group_id });
+    // Check if this is an auto-triggered reanalysis
+    const isAutoTriggered = analyzed_content?.parsing_metadata?.confidence < 0.8 && 
+                           analyzed_content?.parsing_metadata?.method === 'manual' &&
+                           !analyzed_content?.parsing_metadata?.reanalysis_attempted;
+
+    // If not auto-triggered and no explicit reanalysis request, skip
+    if (!isAutoTriggered && !correlation_id) {
+      console.log('Skipping reanalysis - confidence threshold not met:', {
+        confidence: analyzed_content?.parsing_metadata?.confidence,
+        method: analyzed_content?.parsing_metadata?.method,
+        reanalysis_attempted: analyzed_content?.parsing_metadata?.reanalysis_attempted
+      });
+      return new Response(
+        JSON.stringify({ 
+          message: 'Reanalysis not needed',
+          analyzed_content,
+          correlation_id 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Starting reanalysis:', { 
+      message_id, 
+      caption, 
+      correlation_id,
+      media_group_id,
+      confidence: analyzed_content?.parsing_metadata?.confidence,
+      is_auto: isAutoTriggered
+    });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // First, get the message to check its current state
+    // Get the message to check its current state
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .select('*')
@@ -86,7 +124,7 @@ serve(async (req) => {
       .insert({
         message_id,
         media_group_id: message.media_group_id,
-        event_type: 'REANALYSIS_STARTED',
+        event_type: isAutoTriggered ? 'AUTO_REANALYSIS_STARTED' : 'MANUAL_REANALYSIS_STARTED',
         old_state: message.processing_state,
         new_state: 'pending',
         processing_details: {
@@ -94,7 +132,9 @@ serve(async (req) => {
           retry_count: message.retry_count,
           start_time: new Date().toISOString(),
           group_message_count: message.group_message_count,
-          is_original_caption: message.is_original_caption
+          is_original_caption: message.is_original_caption,
+          is_auto_triggered: isAutoTriggered,
+          original_confidence: analyzed_content?.parsing_metadata?.confidence
         }
       });
 
@@ -144,7 +184,9 @@ serve(async (req) => {
           method: "ai",
           confidence: 0.9,
           reanalysis_attempted: true,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          original_confidence: analyzed_content?.parsing_metadata?.confidence,
+          is_auto_triggered: isAutoTriggered
         }
       };
 
@@ -174,7 +216,7 @@ serve(async (req) => {
       .insert({
         message_id,
         media_group_id,
-        event_type: 'REANALYSIS_COMPLETED',
+        event_type: isAutoTriggered ? 'AUTO_REANALYSIS_COMPLETED' : 'MANUAL_REANALYSIS_COMPLETED',
         old_state: 'pending',
         new_state: 'completed',
         analyzed_content: newAnalyzedContent,
@@ -183,7 +225,8 @@ serve(async (req) => {
           completion_time: new Date().toISOString(),
           retry_count: message.retry_count,
           group_message_count: message.group_message_count,
-          is_original_caption: message.is_original_caption
+          is_original_caption: message.is_original_caption,
+          is_auto_triggered: isAutoTriggered
         }
       });
 
@@ -191,7 +234,8 @@ serve(async (req) => {
       JSON.stringify({ 
         message: 'Reanalysis completed', 
         analyzed_content: newAnalyzedContent,
-        correlation_id 
+        correlation_id,
+        is_auto_triggered: isAutoTriggered
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
