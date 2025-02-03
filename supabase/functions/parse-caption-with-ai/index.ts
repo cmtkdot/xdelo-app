@@ -1,4 +1,3 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { manualParse } from "./manualParser.ts";
@@ -40,6 +39,17 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // First verify the message exists
+    const { data: existingMessage, error: messageError } = await supabase
+      .from('messages')
+      .select('id, processing_state, analyzed_content')
+      .eq('id', messageId)
+      .maybeSingle();
+
+    if (messageError || !existingMessage) {
+      throw new Error(`Message not found or error: ${messageError?.message || 'Not found'}`);
+    }
+
     // Update message to processing state
     const { error: updateError } = await supabase
       .from('messages')
@@ -47,7 +57,8 @@ serve(async (req) => {
         processing_state: 'processing',
         processing_started_at: new Date().toISOString()
       })
-      .eq('id', messageId);
+      .eq('id', messageId)
+      .select();
 
     if (updateError) {
       throw new Error(`Failed to update message state: ${updateError.message}`);
@@ -57,8 +68,8 @@ serve(async (req) => {
     let parsedContent = await manualParse(caption);
     let confidence = parsedContent.parsing_metadata?.confidence || 0;
 
-    // Log initial parsing attempt
-    await supabase.from("analysis_audit_log").insert({
+    // Only log if message exists and update was successful
+    const { error: auditError } = await supabase.from("analysis_audit_log").insert({
       message_id: messageId,
       media_group_id: mediaGroupId,
       event_type: "MANUAL_PARSE_COMPLETED",
@@ -71,6 +82,10 @@ serve(async (req) => {
       }
     });
 
+    if (auditError) {
+      console.error("Failed to log manual parsing:", auditError);
+    }
+
     // If manual parsing has low confidence, try AI parsing
     if (confidence < 0.7) {
       console.log('Manual parsing had low confidence, attempting AI parsing');
@@ -80,8 +95,8 @@ serve(async (req) => {
           parsedContent = aiResult;
           confidence = aiResult.parsing_metadata.confidence;
 
-          // Log AI parsing success
-          await supabase.from("analysis_audit_log").insert({
+          // Log AI parsing success only if message exists
+          const { error: aiAuditError } = await supabase.from("analysis_audit_log").insert({
             message_id: messageId,
             media_group_id: mediaGroupId,
             event_type: "AI_PARSE_COMPLETED",
@@ -93,11 +108,16 @@ serve(async (req) => {
               method: "ai"
             }
           });
+
+          if (aiAuditError) {
+            console.error("Failed to log AI parsing:", aiAuditError);
+          }
         }
       } catch (aiError) {
         console.error('AI parsing failed:', aiError);
-        // Log AI parsing failure but continue with manual results
-        await supabase.from("analysis_audit_log").insert({
+        
+        // Log AI parsing failure only if message exists
+        const { error: errorAuditError } = await supabase.from("analysis_audit_log").insert({
           message_id: messageId,
           media_group_id: mediaGroupId,
           event_type: "AI_PARSE_FAILED",
@@ -107,6 +127,10 @@ serve(async (req) => {
             error: aiError.message
           }
         });
+
+        if (errorAuditError) {
+          console.error("Failed to log AI error:", errorAuditError);
+        }
       }
     }
 
@@ -145,29 +169,38 @@ serve(async (req) => {
       if (supabaseUrl && supabaseKey && messageId) {
         const supabase = createClient(supabaseUrl, supabaseKey);
         
-        // Update message error state
-        await supabase
+        // First verify the message exists before updating
+        const { data: existingMessage } = await supabase
           .from('messages')
-          .update({ 
-            processing_state: 'error',
-            error_message: error.message,
-            processing_completed_at: new Date().toISOString()
-          })
-          .eq('id', messageId);
+          .select('id')
+          .eq('id', messageId)
+          .maybeSingle();
 
-        // Log error in audit log
-        await supabase.from("analysis_audit_log").insert({
-          message_id: messageId,
-          media_group_id: mediaGroupId,
-          event_type: "PARSING_ERROR",
-          old_state: "processing",
-          new_state: "error",
-          error_message: error.message,
-          processing_details: {
-            correlation_id: correlationId,
-            error: error.message
-          }
-        });
+        if (existingMessage) {
+          // Update message error state
+          await supabase
+            .from('messages')
+            .update({ 
+              processing_state: 'error',
+              error_message: error.message,
+              processing_completed_at: new Date().toISOString()
+            })
+            .eq('id', messageId);
+
+          // Log error in audit log only if message exists
+          await supabase.from("analysis_audit_log").insert({
+            message_id: messageId,
+            media_group_id: mediaGroupId,
+            event_type: "PARSING_ERROR",
+            old_state: "processing",
+            new_state: "error",
+            error_message: error.message,
+            processing_details: {
+              correlation_id: correlationId,
+              error: error.message
+            }
+          });
+        }
       }
     } catch (updateError) {
       console.error('Failed to update message error state:', updateError);
