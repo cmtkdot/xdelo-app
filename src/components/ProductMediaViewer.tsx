@@ -44,12 +44,22 @@ export const ProductMediaViewer = ({
   const handleDelete = async () => {
     try {
       setIsLoading(true);
-      const { error } = await supabase
+
+      // First, update all messages that reference this message as their caption source
+      const { error: updateError } = await supabase
+        .from('messages')
+        .update({ message_caption_id: null })
+        .eq('message_caption_id', currentMedia.id);
+
+      if (updateError) throw updateError;
+
+      // Then delete the message
+      const { error: deleteError } = await supabase
         .from('messages')
         .delete()
-        .filter('id', 'eq', currentMedia.id);
+        .eq('id', currentMedia.id);
 
-      if (error) throw error;
+      if (deleteError) throw deleteError;
 
       toast({
         title: "Media deleted",
