@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -6,7 +7,7 @@ const corsHeaders = {
 };
 
 interface AnalyzedContent {
-  product_name?: string;
+  product_name: string;
   product_code?: string;
   vendor_uid?: string;
   purchase_date?: string;
@@ -15,37 +16,26 @@ interface AnalyzedContent {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('Starting caption analysis');
-    const { message_id, caption } = await req.json();
-
-    if (!message_id) {
-      throw new Error('message_id is required');
-    }
+    const { message_id, media_group_id, caption } = await req.json();
+    console.log('Processing caption:', { message_id, media_group_id, caption });
 
     if (!caption) {
-      throw new Error('No caption provided for analysis');
+      throw new Error('Caption is required');
     }
 
-    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openAIApiKey) {
-      throw new Error('OpenAI API key not configured');
-    }
-
-    console.log('Analyzing caption with OpenAI:', caption);
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
+        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-3.5-turbo',
         messages: [
           { 
             role: 'system', 
@@ -69,8 +59,8 @@ serve(async (req) => {
           { role: 'user', content: caption }
         ],
         temperature: 0.3,
-        max_tokens: 500
-      }),
+        max_tokens: 150
+      })
     });
 
     if (!response.ok) {
@@ -83,19 +73,15 @@ serve(async (req) => {
     
     let analyzedContent: AnalyzedContent;
     try {
-      // Extract the content from the message
       const content = data.choices[0].message.content.trim();
       console.log('Parsing content:', content);
       
-      // Try to parse the JSON response
       analyzedContent = JSON.parse(content);
       
-      // Validate required fields
       if (!analyzedContent.product_name) {
         analyzedContent.product_name = 'Untitled Product';
       }
 
-      // Validate quantity
       if (typeof analyzedContent.quantity === 'number') {
         analyzedContent.quantity = Math.floor(analyzedContent.quantity);
         if (analyzedContent.quantity <= 0) {
@@ -109,24 +95,59 @@ serve(async (req) => {
       throw new Error(`Failed to parse AI response: ${parseError.message}`);
     }
 
+    // Create Supabase client
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // Update the message with analyzed content
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        analyzed_content: analyzedContent,
+        processing_state: 'analyzing'
+      })
+      .eq('id', message_id);
+
+    if (updateError) throw updateError;
+
+    // If this is part of a media group, sync the analysis
+    if (media_group_id) {
+      console.log('Syncing media group analysis');
+      const { error: syncError } = await supabase.functions.invoke('sync-media-group', {
+        body: { message_id, media_group_id, analyzed_content: analyzedContent }
+      });
+
+      if (syncError) {
+        console.error('Error syncing media group:', syncError);
+        throw syncError;
+      }
+    } else {
+      // For single messages, mark as completed
+      const { error: completeError } = await supabase
+        .from('messages')
+        .update({
+          processing_state: 'completed',
+          processing_completed_at: new Date().toISOString()
+        })
+        .eq('id', message_id);
+
+      if (completeError) throw completeError;
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         analyzed_content: analyzedContent
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('Error in parse-caption-with-ai:', error);
-    
     return new Response(
-      JSON.stringify({
-        error: error.message,
-        details: 'Failed to analyze caption'
-      }),
+      JSON.stringify({ error: error.message }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500
