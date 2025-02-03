@@ -28,13 +28,13 @@ serve(async (req) => {
   }
 
   try {
-    const { message_id, caption, analyzed_content } = await req.json();
-    console.log('Reanalyzing message:', { message_id, caption, confidence: analyzed_content?.parsing_metadata?.confidence });
+    const { message_id, caption } = await req.json();
+    console.log('Reanalyzing message:', { message_id, caption });
 
-    // Skip if no caption or already high confidence
-    if (!caption || (analyzed_content?.parsing_metadata?.confidence || 0) > 0.7) {
+    // Skip if no caption
+    if (!caption) {
       return new Response(
-        JSON.stringify({ message: 'Skipped reanalysis', analyzed_content }),
+        JSON.stringify({ message: 'Skipped reanalysis - no caption provided' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -44,7 +44,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Call OpenAI for reanalysis with enhanced prompt
+    // Call OpenAI for reanalysis
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAIApiKey) {
       throw new Error('OpenAI API key not configured');
@@ -111,8 +111,11 @@ Return a JSON object with these fields. Include null for missing values.`
 
     try {
       const aiResponse = data.choices[0].message.content;
-      console.log('AI response:', aiResponse);
-      newAnalyzedContent = JSON.parse(aiResponse);
+      console.log('Raw AI response:', aiResponse);
+      
+      // Clean up the response if it contains markdown
+      const cleanResponse = aiResponse.replace(/```json\n|\n```/g, '');
+      newAnalyzedContent = JSON.parse(cleanResponse);
     } catch (parseError) {
       console.error('Error parsing AI response:', parseError);
       throw new Error('Failed to parse AI response');
@@ -122,8 +125,7 @@ Return a JSON object with these fields. Include null for missing values.`
     newAnalyzedContent.parsing_metadata = {
       method: 'ai_enhanced',
       confidence: 0.9,
-      reanalysis_attempted: true,
-      previous_analysis: analyzed_content?.parsing_metadata
+      reanalysis_attempted: true
     };
 
     console.log('New analyzed content:', newAnalyzedContent);
@@ -135,7 +137,8 @@ Return a JSON object with these fields. Include null for missing values.`
         analyzed_content: newAnalyzedContent,
         processing_state: 'completed'
       })
-      .eq('id', message_id);
+      .eq('id', message_id)
+      .eq('is_original_caption', true); // Only update original caption messages
 
     if (updateError) {
       console.error('Error updating message:', updateError);
