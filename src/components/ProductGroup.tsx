@@ -236,7 +236,7 @@ export const ProductGroup = ({
 
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
-      <div className="relative h-64 md:h-72">
+      <div className="relative h-72 md:h-80">
         <ImageSwiper media={group} />
         
         {hasError && (
@@ -246,40 +246,57 @@ export const ProductGroup = ({
             </div>
           </div>
         )}
+
+        {/* Core product info overlaid on image bottom */}
+        <div className="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm p-3 text-white">
+          <h3 className="text-lg font-semibold mb-1">
+            {analyzedContent?.product_name || 'Untitled Product'}
+          </h3>
+          <div className="flex justify-between items-center text-sm">
+            <span>{analyzedContent?.product_code ? `PO#${analyzedContent.product_code}` : 'N/A'}</span>
+            <span>{analyzedContent?.vendor_uid || 'N/A'}</span>
+          </div>
+        </div>
       </div>
       
-      <div className="p-4 space-y-3 text-center">
-        <h3 className="text-lg font-semibold">
-          {analyzedContent?.product_name || 'Untitled Product'}
-        </h3>
-        
-        <div className="space-y-2 text-sm text-gray-600">
-          <p><span className="font-medium">PO #:</span> {analyzedContent?.product_code || 'N/A'}</p>
-          <p><span className="font-medium">Vendor:</span> {analyzedContent?.vendor_uid || 'N/A'}</p>
-          <p><span className="font-medium">Purchase Date:</span> {formatDate(analyzedContent?.purchase_date)}</p>
-          <p><span className="font-medium">Quantity:</span> {analyzedContent?.quantity || 'N/A'}</p>
-          {analyzedContent?.parsing_metadata?.confidence < 0.7 && (
-            <p className="text-yellow-600">
-              Low confidence analysis ({Math.round(analyzedContent.parsing_metadata.confidence * 100)}%)
-            </p>
-          )}
+      <div className="p-3 space-y-2">
+        {/* Secondary info in compact form */}
+        <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+          <div>
+            <span className="font-medium">Purchase Date:</span>
+            <p>{formatDate(analyzedContent?.purchase_date)}</p>
+          </div>
+          <div>
+            <span className="font-medium">Quantity:</span>
+            <p>{analyzedContent?.quantity || 'N/A'}</p>
+          </div>
         </div>
+
+        {analyzedContent?.parsing_metadata?.confidence < 0.7 && (
+          <p className="text-xs text-yellow-600">
+            Low confidence analysis ({Math.round(analyzedContent.parsing_metadata.confidence * 100)}%)
+          </p>
+        )}
         
         {hasError && (
-          <Alert variant="destructive" className="mt-3">
+          <Alert variant="destructive" className="mt-2 p-2 text-xs">
             <AlertDescription>
               {mainMedia.error_message || 'Processing error occurred'}
             </AlertDescription>
           </Alert>
         )}
         
-        <div className="flex justify-center gap-2 pt-2">
+        <div className="flex justify-center gap-2 pt-1">
           <Tabs defaultValue="edit" className="w-full max-w-xs">
             <TabsList className="grid grid-cols-4 gap-2">
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <TabsTrigger value="view" onClick={() => setIsViewerOpen(true)} className="py-2">
+                    <TabsTrigger 
+                      value="view" 
+                      onClick={() => setIsViewerOpen(true)} 
+                      className="py-2 text-black hover:text-black/80"
+                    >
                       <Eye className="w-4 h-4" />
                     </TabsTrigger>
                   </TooltipTrigger>
@@ -290,7 +307,11 @@ export const ProductGroup = ({
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <TabsTrigger value="edit" onClick={() => onEdit(mainMedia)} className="py-2">
+                    <TabsTrigger 
+                      value="edit" 
+                      onClick={() => onEdit(mainMedia)} 
+                      className="py-2 text-black hover:text-black/80"
+                    >
                       <Pencil className="w-4 h-4" />
                     </TabsTrigger>
                   </TooltipTrigger>
@@ -301,7 +322,11 @@ export const ProductGroup = ({
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <TabsTrigger value="reanalyze" onClick={handleReanalyze} className="py-2">
+                    <TabsTrigger 
+                      value="reanalyze" 
+                      onClick={handleReanalyze} 
+                      className="py-2 text-black hover:text-black/80"
+                    >
                       <RotateCw className="w-4 h-4" />
                     </TabsTrigger>
                   </TooltipTrigger>
@@ -312,7 +337,11 @@ export const ProductGroup = ({
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <TabsTrigger value="delete" onClick={handleDelete} className="py-2 text-destructive">
+                    <TabsTrigger 
+                      value="delete" 
+                      onClick={handleDelete} 
+                      className="py-2 text-destructive hover:text-destructive/80"
+                    >
                       <Trash2 className="w-4 h-4" />
                     </TabsTrigger>
                   </TooltipTrigger>
