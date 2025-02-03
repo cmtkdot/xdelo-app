@@ -13,7 +13,6 @@ interface SyncRequest {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -61,6 +60,26 @@ serve(async (req) => {
 
     if (groupError) {
       throw groupError;
+    }
+
+    // Trigger caption parsing
+    const parseResponse = await fetch(
+      `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message_id,
+          media_group_id
+        })
+      }
+    );
+
+    if (!parseResponse.ok) {
+      console.error('Error triggering caption parsing:', await parseResponse.text());
     }
 
     return new Response(

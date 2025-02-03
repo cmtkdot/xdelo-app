@@ -106,6 +106,7 @@ export type Database = {
           media_group_id: string | null
           message_caption_id: string | null
           mime_type: string | null
+          parsed_content: Json | null
           processing_completed_at: string | null
           processing_started_at: string | null
           processing_state:
@@ -140,6 +141,7 @@ export type Database = {
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
+          parsed_content?: Json | null
           processing_completed_at?: string | null
           processing_started_at?: string | null
           processing_state?:
@@ -174,6 +176,7 @@ export type Database = {
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
+          parsed_content?: Json | null
           processing_completed_at?: string | null
           processing_started_at?: string | null
           processing_state?:
