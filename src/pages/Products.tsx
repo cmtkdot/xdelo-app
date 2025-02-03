@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem } from "@/types";
@@ -31,6 +31,7 @@ const Products = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Query for products with real-time updates
   const { data: products = [], refetch } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
@@ -44,6 +45,30 @@ const Products = () => {
     }
   });
 
+  // Set up real-time subscription for updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages'
+        },
+        (payload) => {
+          console.log('Real-time update:', payload);
+          queryClient.invalidateQueries({ queryKey: ['products'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
+  // Mutation for retrying analysis
   const analyzeContentMutation = useMutation({
     mutationFn: async (messageId: string) => {
       const { data, error } = await supabase.functions.invoke('analyze-content', {
@@ -70,6 +95,7 @@ const Products = () => {
     }
   });
 
+  // Mutation for retrying failed analyses
   const retryMutation = useMutation({
     mutationFn: async (messageId: string) => {
       // Reset the message state to trigger reanalysis

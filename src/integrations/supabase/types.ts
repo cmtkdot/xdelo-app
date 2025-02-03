@@ -9,6 +9,47 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      analysis_audit_log: {
+        Row: {
+          analyzed_content: Json | null
+          created_at: string | null
+          event_type: string
+          id: string
+          media_group_id: string | null
+          message_id: string | null
+          new_state: string | null
+          old_state: string | null
+        }
+        Insert: {
+          analyzed_content?: Json | null
+          created_at?: string | null
+          event_type: string
+          id?: string
+          media_group_id?: string | null
+          message_id?: string | null
+          new_state?: string | null
+          old_state?: string | null
+        }
+        Update: {
+          analyzed_content?: Json | null
+          created_at?: string | null
+          event_type?: string
+          id?: string
+          media_group_id?: string | null
+          message_id?: string | null
+          new_state?: string | null
+          old_state?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_audit_log_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           analysis_version: number | null
