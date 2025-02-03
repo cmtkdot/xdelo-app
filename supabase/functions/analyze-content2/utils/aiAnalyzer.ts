@@ -1,6 +1,5 @@
 import { AnalyzedContent } from "../types.ts";
-import { parseDate } from "./dateParser.ts";
-import { manualParse } from "./manualParser.ts";
+import { parseManually } from "./manualParser.ts";
 
 const SYSTEM_PROMPT = `You are a product information extractor. Your task is to analyze product-related captions and extract structured information. Focus on identifying:
 - Product name
@@ -14,8 +13,10 @@ Format dates as YYYY-MM-DD. If information is not present, omit the field.`;
 
 export async function analyzeCaption(caption: string): Promise<AnalyzedContent> {
   try {
-    // First try manual parsing for simple cases
-    const manualResult = manualParse(caption);
+    console.log("Starting caption analysis for:", caption);
+    
+    // First try manual parsing
+    const manualResult = parseManually(caption);
     if (Object.keys(manualResult).length > 0) {
       console.log("Successfully parsed using manual parser:", manualResult);
       return manualResult;
@@ -36,7 +37,7 @@ export async function analyzeCaption(caption: string): Promise<AnalyzedContent> 
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: caption }
@@ -56,32 +57,14 @@ export async function analyzeCaption(caption: string): Promise<AnalyzedContent> 
     const aiResponse = data.choices[0].message.content;
     console.log("OpenAI response:", aiResponse);
 
-    // Parse the AI response into structured data
-    let parsedContent: AnalyzedContent = {};
     try {
       // Try to parse as JSON first
-      parsedContent = JSON.parse(aiResponse);
+      return JSON.parse(aiResponse);
     } catch (e) {
-      // If not JSON, try to extract information from the text
-      const lines = aiResponse.split('\n');
-      for (const line of lines) {
-        if (line.includes('Product name:')) parsedContent.product_name = line.split(':')[1]?.trim();
-        if (line.includes('Product code:')) parsedContent.product_code = line.split(':')[1]?.trim();
-        if (line.includes('Vendor UID:')) parsedContent.vendor_uid = line.split(':')[1]?.trim();
-        if (line.includes('Purchase date:')) {
-          const dateStr = line.split(':')[1]?.trim();
-          parsedContent.purchase_date = parseDate(dateStr);
-        }
-        if (line.includes('Quantity:')) {
-          const qty = parseInt(line.split(':')[1]?.trim());
-          if (!isNaN(qty)) parsedContent.quantity = qty;
-        }
-        if (line.includes('Notes:')) parsedContent.notes = line.split(':')[1]?.trim();
-      }
+      // If not JSON, try manual parsing again
+      console.log("Falling back to manual parsing of AI response");
+      return parseManually(aiResponse);
     }
-
-    console.log("Final parsed content:", parsedContent);
-    return parsedContent;
   } catch (error) {
     console.error('Error analyzing caption:', error);
     throw error;

@@ -1,23 +1,23 @@
 import { AnalyzedContent } from "../types.ts";
-import { parsePurchaseDate } from "./dateParser.ts";
 
-export const manualParse = (text: string): AnalyzedContent => {
-  console.log("Falling back to manual parsing for:", text);
+export function parseManually(text: string): AnalyzedContent {
+  console.log("Manual parsing attempt for:", text);
 
   const result: AnalyzedContent = {};
 
-  // Extract product code and vendor_uid
-  const codeMatch = text.match(/#([A-Z]+)(\d+)/);
+  // Extract product code (everything after #)
+  const codeMatch = text.match(/#([A-Za-z0-9]+)/);
   if (codeMatch) {
-    result.product_code = codeMatch[0];
-    result.vendor_uid = codeMatch[1];
+    result.product_code = codeMatch[1];
     
-    // Parse date from code
-    const dateStr = codeMatch[2];
-    result.purchase_date = parsePurchaseDate(dateStr);
+    // Extract vendor (letters at start of product code)
+    const vendorMatch = result.product_code.match(/^([A-Za-z]+)/);
+    if (vendorMatch) {
+      result.vendor_uid = vendorMatch[1];
+    }
   }
 
-  // Extract quantity
+  // Extract quantity (x followed by number)
   const quantityMatch = text.match(/x\s*(\d+)/i);
   if (quantityMatch) {
     result.quantity = parseInt(quantityMatch[1]);
@@ -29,11 +29,12 @@ export const manualParse = (text: string): AnalyzedContent => {
     result.notes = notesMatch[1].trim();
   }
 
-  // Extract product name (everything before the product code)
+  // Extract product name (everything before #)
   const productNameMatch = text.split("#")[0];
   if (productNameMatch) {
     result.product_name = productNameMatch.trim();
   }
 
+  console.log("Manual parsing result:", result);
   return result;
-};
+}

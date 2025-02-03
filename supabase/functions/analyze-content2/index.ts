@@ -5,8 +5,7 @@ import { analyzeCaption } from "./utils/aiAnalyzer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
@@ -23,7 +22,7 @@ serve(async (req) => {
 
   try {
     const { message_id } = await req.json();
-    console.log("Processing message:", message_id);
+    console.log(`[${correlationId}] Processing message:`, message_id);
 
     const { data: message, error: messageError } = await supabase
       .from("messages")
@@ -34,7 +33,7 @@ serve(async (req) => {
     if (messageError) throw messageError;
     if (!message) throw new Error("Message not found");
     if (!message.caption) {
-      console.log("No caption to analyze for message:", message_id);
+      console.log(`[${correlationId}] No caption to analyze for message:`, message_id);
       return new Response(
         JSON.stringify({
           success: false,
@@ -45,7 +44,7 @@ serve(async (req) => {
       );
     }
 
-    console.log("Analyzing caption for message:", message_id);
+    console.log(`[${correlationId}] Analyzing caption for message:`, message_id);
     const analyzedContent = await analyzeCaption(message.caption);
 
     const { error: updateError } = await supabase
@@ -60,7 +59,7 @@ serve(async (req) => {
     if (updateError) throw updateError;
 
     if (message.media_group_id) {
-      console.log("Processing media group:", message.media_group_id);
+      console.log(`[${correlationId}] Processing media group:`, message.media_group_id);
       const { error: groupError } = await supabase.rpc(
         "process_media_group_analysis",
         {
@@ -85,7 +84,7 @@ serve(async (req) => {
     }
 
     const duration = Date.now() - startTime;
-    console.log(`Analysis completed in ${duration}ms for message:`, message_id);
+    console.log(`[${correlationId}] Analysis completed in ${duration}ms for message:`, message_id);
 
     return new Response(
       JSON.stringify({
@@ -97,7 +96,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Error processing message:", error);
+    console.error(`[${correlationId}] Error processing message:`, error);
     return new Response(
       JSON.stringify({
         error: error.message,
