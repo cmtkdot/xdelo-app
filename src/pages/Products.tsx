@@ -42,7 +42,7 @@ const Products = () => {
 
       if (error) throw error;
 
-      // Create a map to store unique messages
+      // Create a map to store unique messages with proper typing
       const uniqueMessages = new Map<string, MediaItem>();
       
       (data as MediaItem[]).forEach(message => {
