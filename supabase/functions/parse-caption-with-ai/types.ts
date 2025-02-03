@@ -5,18 +5,4 @@ export interface ParsedContent {
   purchase_date?: string;
   quantity?: number;
   notes?: string;
-  parsing_metadata?: {
-    method: 'manual' | 'ai' | 'hybrid';
-    confidence: number;
-    fallbacks_used?: string[];
-  };
-}
-
-export interface QuantityParseResult {
-  value: number;
-  confidence: number;
-  unit?: string;
-  original_text: string;
-  method: 'explicit' | 'numeric' | 'text' | 'fallback';
-  is_approximate: boolean;
 }

@@ -1,4 +1,4 @@
-import { AnalyzedContent } from "../types.ts";
+import { ParsedContent } from "../types.ts";
 import { parseCaption } from "./manualParser.ts";
 
 const SYSTEM_PROMPT = `You are a specialized product information extractor. Your task is to analyze captions and extract structured product information following these rules:
@@ -15,10 +15,10 @@ const SYSTEM_PROMPT = `You are a specialized product information extractor. Your
    - Should be standalone (e.g., 'x5' or 'x 5')
 6. Notes: Any additional info in parentheses or unstructured text`;
 
-export async function analyzeCaption(caption: string): Promise<AnalyzedContent> {
-  console.log('Starting caption analysis for:', caption);
-  
+export async function analyzeCaption(caption: string): Promise<ParsedContent> {
   try {
+    console.log('Starting caption analysis for:', caption);
+    
     // First try manual parsing
     const manualResult = parseCaption(caption);
     if (manualResult && manualResult.product_name && manualResult.quantity) {
@@ -51,23 +51,29 @@ export async function analyzeCaption(caption: string): Promise<AnalyzedContent> 
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('OpenAI API error:', errorData);
       throw new Error(`OpenAI API error: ${response.statusText}`);
     }
 
     const data = await response.json();
     console.log('OpenAI API response:', data);
-
+    
     const result = JSON.parse(data.choices[0].message.content);
 
-    // Validate and format the result
+    // Validate quantity
+    if (typeof result.quantity === 'number') {
+      result.quantity = Math.floor(result.quantity);
+      if (result.quantity <= 0) {
+        delete result.quantity;
+      }
+    }
+
+    console.log('Final analyzed result:', result);
     return {
       product_name: result.product_name || caption.split('#')[0]?.trim() || 'Untitled Product',
       product_code: result.product_code,
       vendor_uid: result.vendor_uid,
       purchase_date: result.purchase_date,
-      quantity: typeof result.quantity === 'number' ? Math.max(1, Math.floor(result.quantity)) : undefined,
+      quantity: result.quantity,
       notes: result.notes
     };
   } catch (error) {
