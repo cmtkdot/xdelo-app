@@ -189,3 +189,30 @@ export async function handleMediaMessage(
     processed_media: processedMedia,
   };
 }
+
+export async function handleChatMemberUpdate(
+  supabase: ReturnType<typeof createClient>,
+  update: any
+): Promise<WebhookResponse> {
+  console.log("Processing chat member update:", update);
+  
+  const { error: insertError } = await supabase.from("other_messages").insert({
+    user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
+    message_type: "chat_member",
+    chat_id: update.chat.id,
+    chat_type: update.chat.type,
+    chat_title: update.chat.title,
+    telegram_data: { update },
+    processing_state: "completed",
+    processing_completed_at: new Date().toISOString(),
+  });
+
+  if (insertError) {
+    console.error("❌ Failed to store chat member update:", insertError);
+    throw insertError;
+  }
+
+  return {
+    message: "Successfully processed chat member update",
+  };
+}
