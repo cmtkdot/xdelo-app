@@ -1,4 +1,3 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { manualParse } from './manualParser.ts';
@@ -29,10 +28,6 @@ serve(async (req) => {
       throw new Error('No message_id provided');
     }
 
-    if (!caption) {
-      throw new Error('No caption provided for parsing');
-    }
-
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -54,7 +49,7 @@ serve(async (req) => {
         
         finalResult = {
           ...aiResult,
-          ...manualResult, // Manual results take precedence
+          ...manualResult,
           parsing_metadata: {
             method: 'hybrid',
             timestamp: new Date().toISOString(),
@@ -63,16 +58,14 @@ serve(async (req) => {
         };
       } catch (aiError) {
         console.error('AI parsing failed:', aiError);
-        // Continue with manual results if AI fails
       }
     }
 
-    // Step 2: Update the source message
-    console.log('Updating source message with parsed content');
+    // Step 2: Update the message with parsed content
+    console.log('Updating message with parsed content');
     const { error: updateError } = await supabase
       .from('messages')
       .update({
-        parsed_content: finalResult,
         analyzed_content: finalResult,
         processing_state: 'analysis_synced',
         processing_completed_at: new Date().toISOString()
@@ -84,7 +77,7 @@ serve(async (req) => {
       throw updateError;
     }
 
-    // Step 3: If part of a media group, sync analysis to other messages
+    // Step 3: If part of a media group, sync to other messages
     if (media_group_id) {
       console.log(`Syncing analysis to media group ${media_group_id}`);
       
@@ -92,7 +85,6 @@ serve(async (req) => {
         .from('messages')
         .update({
           analyzed_content: finalResult,
-          parsed_content: finalResult,
           processing_state: 'analysis_synced',
           processing_completed_at: new Date().toISOString(),
           message_caption_id: message_id,
@@ -105,28 +97,26 @@ serve(async (req) => {
         console.error('Error updating media group:', groupUpdateError);
         throw groupUpdateError;
       }
+    }
 
-      // Step 4: Mark all messages as completed
-      console.log('Marking media group as completed');
-      const { error: completeError } = await supabase
-        .from('messages')
-        .update({
-          processing_state: 'completed'
-        })
-        .eq('media_group_id', media_group_id);
+    // Step 4: Mark processing as completed
+    console.log('Marking processing as completed');
+    const { error: completeError } = await supabase
+      .from('messages')
+      .update({
+        processing_state: 'completed'
+      })
+      .eq('id', message_id);
 
-      if (completeError) {
-        console.error('Error completing media group:', completeError);
-        throw completeError;
-      }
-
-      console.log('Successfully synced and completed media group');
+    if (completeError) {
+      console.error('Error completing message:', completeError);
+      throw completeError;
     }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        parsed_content: finalResult,
+        analyzed_content: finalResult,
         message: 'Caption parsed and analysis synced successfully'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
