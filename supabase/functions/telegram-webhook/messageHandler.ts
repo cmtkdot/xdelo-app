@@ -72,27 +72,43 @@ export async function handleMediaMessage(
       mime_type: mediaItem.mime_type
     });
 
-    const fileResponse = await downloadTelegramFile(mediaItem.file_id, TELEGRAM_BOT_TOKEN);
-    const fileBuffer = await fileResponse.arrayBuffer();
-    console.log("✅ File downloaded successfully");
+    // Check for existing message with same file_unique_id
+    const { data: existingMessage, error: fetchError } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("file_unique_id", mediaItem.file_unique_id)
+      .maybeSingle();
 
-    const uploadResult = await uploadMedia(supabase, fileBuffer, {
-      fileUniqueId: mediaItem.file_unique_id,
-      mimeType: mediaItem.mime_type,
-      fileSize: mediaItem.file_size,
-    });
-    console.log("✅ File uploaded successfully");
+    if (fetchError) {
+      console.error("❌ Error checking for existing message:", fetchError);
+      throw fetchError;
+    }
 
-    // Set initial state based on caption presence
-    const initialState = message.caption ? 'processing' : 'initialized';
+    let messageData;
+    let uploadResult: MediaUploadResult | null = null;
 
-    const messageData = {
+    if (!existingMessage) {
+      // Only download and upload if message doesn't exist
+      console.log("📥 Downloading new media file");
+      const fileResponse = await downloadTelegramFile(mediaItem.file_id, TELEGRAM_BOT_TOKEN);
+      const fileBuffer = await fileResponse.arrayBuffer();
+      
+      uploadResult = await uploadMedia(supabase, fileBuffer, {
+        fileUniqueId: mediaItem.file_unique_id,
+        mimeType: mediaItem.mime_type,
+        fileSize: mediaItem.file_size,
+      });
+      console.log("✅ New file uploaded successfully");
+    }
+
+    // Prepare message data
+    messageData = {
       telegram_message_id: message.message_id,
       media_group_id: message.media_group_id,
       caption: message.caption || "",
       file_id: mediaItem.file_id,
       file_unique_id: mediaItem.file_unique_id,
-      public_url: uploadResult.publicUrl,
+      public_url: uploadResult?.publicUrl || existingMessage?.public_url,
       mime_type: mediaItem.mime_type,
       file_size: mediaItem.file_size,
       width: mediaItem.width,
@@ -100,25 +116,52 @@ export async function handleMediaMessage(
       duration: mediaItem.duration,
       user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
       telegram_data: { message },
-      processing_state: initialState,
+      processing_state: message.caption ? 'processing' : 'initialized',
       group_first_message_time: message.media_group_id ? new Date().toISOString() : null,
       group_last_message_time: message.media_group_id ? new Date().toISOString() : null,
       group_message_count: message.media_group_id ? 1 : null
     };
 
-    const { data: newMessage, error: messageError } = await supabase
-      .from("messages")
-      .insert(messageData)
-      .select()
-      .single();
+    let newMessage;
+    if (existingMessage) {
+      // Update existing message
+      console.log("🔄 Updating existing message:", existingMessage.id);
+      const { data: updatedMessage, error: updateError } = await supabase
+        .from("messages")
+        .update({
+          ...messageData,
+          // Preserve existing analyzed content if present
+          analyzed_content: existingMessage.analyzed_content || null,
+          // Update processing state only if new caption
+          processing_state: message.caption && !existingMessage.analyzed_content ? 'processing' : existingMessage.processing_state
+        })
+        .eq("id", existingMessage.id)
+        .select()
+        .single();
 
-    if (messageError) {
-      console.error("❌ Failed to store message:", messageError);
-      throw messageError;
+      if (updateError) {
+        console.error("❌ Failed to update message:", updateError);
+        throw updateError;
+      }
+      newMessage = updatedMessage;
+    } else {
+      // Insert new message
+      console.log("➕ Creating new message");
+      const { data: insertedMessage, error: insertError } = await supabase
+        .from("messages")
+        .insert(messageData)
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("❌ Failed to store message:", insertError);
+        throw insertError;
+      }
+      newMessage = insertedMessage;
     }
 
-    // If message has caption, trigger AI analysis
-    if (message.caption) {
+    // If message has caption and needs analysis, trigger AI analysis
+    if (message.caption && (!existingMessage?.analyzed_content || message.caption !== existingMessage.caption)) {
       try {
         await supabase.functions.invoke('parse-caption-with-ai', {
           body: { 
@@ -136,7 +179,7 @@ export async function handleMediaMessage(
 
     processedMedia.push({
       file_unique_id: mediaItem.file_unique_id,
-      public_url: uploadResult.publicUrl,
+      public_url: messageData.public_url,
     });
   }
 
