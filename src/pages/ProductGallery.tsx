@@ -21,7 +21,9 @@ const ProductGallery = () => {
   });
   const { toast } = useToast();
   const vendors = useVendors();
-  const { mediaGroups, totalPages } = useMediaGroups(currentPage, filters);
+  const { data } = useMediaGroups(currentPage, filters);
+  const mediaGroups = data?.mediaGroups ?? {};
+  const totalPages = data?.totalPages ?? 1;
 
   const formatDate = (date: string | null) => {
     if (!date) return null;
