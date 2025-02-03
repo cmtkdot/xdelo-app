@@ -47,6 +47,7 @@ export async function handleMediaMessage(
     has_caption: !!message.caption
   });
 
+  // Collect media items
   if (message.photo) {
     console.log("📸 Found photo array, selecting largest size");
     const largestPhoto = message.photo[message.photo.length - 1];
@@ -111,6 +112,23 @@ export async function handleMediaMessage(
     if (messageError) {
       console.error("❌ Failed to store message:", messageError);
       throw messageError;
+    }
+
+    // If message has caption, trigger AI analysis
+    if (message.caption) {
+      try {
+        await supabase.functions.invoke('parse-caption-with-ai', {
+          body: { 
+            message_id: newMessage.id,
+            media_group_id: message.media_group_id,
+            caption: message.caption
+          }
+        });
+        console.log("✅ AI analysis triggered for message:", newMessage.id);
+      } catch (error) {
+        console.error("❌ Failed to trigger AI analysis:", error);
+        // Don't throw here, we still want to return the processed media
+      }
     }
 
     processedMedia.push({
