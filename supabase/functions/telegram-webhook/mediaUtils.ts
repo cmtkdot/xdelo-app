@@ -1,22 +1,27 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { TelegramMedia, MediaUploadResult, SupabaseClient } from "./types.ts";
 
-export interface MediaUploadResult {
-  publicUrl: string;
-  fileName: string;
-  mimeType: string;
-  fileSize?: number;
+export async function downloadTelegramFile(fileId: string, botToken: string): Promise<Response> {
+  const fileInfoResponse = await fetch(
+    `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
+  );
+  const fileInfo = await fileInfoResponse.json();
+
+  if (!fileInfo.ok) {
+    console.error("❌ Failed to get file info:", fileInfo);
+    throw new Error(`Failed to get file info: ${JSON.stringify(fileInfo)}`);
+  }
+
+  const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.result.file_path}`;
+  return fetch(fileUrl);
 }
 
 export async function uploadMedia(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   buffer: ArrayBuffer,
   metadata: {
     fileUniqueId: string;
     mimeType?: string;
     fileSize?: number;
-    width?: number;
-    height?: number;
-    duration?: number;
   }
 ): Promise<MediaUploadResult> {
   const fileName = `${metadata.fileUniqueId}.${
@@ -24,42 +29,23 @@ export async function uploadMedia(
   }`;
   const mimeType = metadata.mimeType || "image/jpeg";
 
-  // Check if file already exists
-  const { data: existingFile } = await supabase.storage
-    .from("telegram-media")
-    .list("", {
-      search: fileName,
-    });
-
-  if (existingFile && existingFile.length > 0) {
-    const {
-      data: { publicUrl },
-    } = await supabase.storage.from("telegram-media").getPublicUrl(fileName);
-    return {
-      publicUrl,
-      fileName,
-      mimeType,
-      fileSize: metadata.fileSize,
-    };
-  }
-
-  // Upload new file
   const { error: uploadError } = await supabase.storage
     .from("telegram-media")
     .upload(fileName, buffer, {
       contentType: mimeType,
       upsert: true,
-      cacheControl: "3600",
     });
 
   if (uploadError) {
-    console.error("Upload error:", uploadError);
+    console.error("❌ Upload error:", uploadError);
     throw uploadError;
   }
 
   const {
     data: { publicUrl },
-  } = await supabase.storage.from("telegram-media").getPublicUrl(fileName);
+  } = await supabase.storage
+    .from("telegram-media")
+    .getPublicUrl(fileName);
 
   return {
     publicUrl,
