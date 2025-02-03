@@ -1,24 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { MediaMessage, ProcessingState } from "./types.ts";
+import { downloadTelegramFile, getMediaItem, hasValidCaption } from "./mediaUtils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-interface MediaMessage {
-  message_id: number;
-  media_group_id?: string;
-  caption?: string;
-  photo?: any[];
-  video?: any;
-  document?: any;
-  chat: {
-    id: number;
-    type: string;
-  };
-}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -40,20 +29,14 @@ serve(async (req) => {
       console.log('No media message found in update');
       return new Response(
         JSON.stringify({ message: 'No content to process' }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200 
-        }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
 
     const correlationId = crypto.randomUUID();
     console.log(`Processing message ${message.message_id} with correlation ID ${correlationId}`);
 
-    const mediaItem = message.photo ? 
-      message.photo[message.photo.length - 1] : 
-      message.video || message.document;
-
+    const mediaItem = getMediaItem(message);
     if (!mediaItem) {
       console.log('No media found in message');
       return new Response(
@@ -62,20 +45,16 @@ serve(async (req) => {
           message: 'No media content found',
           correlation_id: correlationId 
         }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200 
-        }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
 
-    // Check if caption exists and is not empty
-    const hasValidCaption = message.caption && message.caption.trim() !== '';
-    console.log(`Message caption status: ${hasValidCaption ? 'Valid' : 'Missing or empty'}`);
+    const validCaption = hasValidCaption(message);
+    console.log(`Message caption status: ${validCaption ? 'Valid' : 'Missing or empty'}`);
 
-    // Check for existing analyzed content in the media group only if there's a valid caption
+    // Check for existing analyzed content in the media group
     let existingAnalysis = null;
-    if (message.media_group_id && hasValidCaption) {
+    if (message.media_group_id && validCaption) {
       const { data: existingMessage } = await supabase
         .from('messages')
         .select('*')
@@ -120,10 +99,19 @@ serve(async (req) => {
 
     console.log('Media uploaded successfully');
 
-    // Determine initial processing state based on message type and caption
-    const initialState = message.media_group_id
-      ? (hasValidCaption ? 'has_caption' : 'waiting_caption')
-      : (hasValidCaption ? 'has_caption' : 'initialized');
+    // Determine initial state based on message type and existing analysis
+    let initialState: ProcessingState;
+    if (message.media_group_id) {
+      if (existingAnalysis) {
+        initialState = 'ready_for_sync';
+      } else if (validCaption) {
+        initialState = 'has_caption';
+      } else {
+        initialState = 'waiting_caption';
+      }
+    } else {
+      initialState = validCaption ? 'has_caption' : 'initialized';
+    }
 
     // Prepare message data
     const messageData = {
@@ -141,7 +129,7 @@ serve(async (req) => {
       user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
       telegram_data: { message },
       processing_state: initialState,
-      is_original_caption: message.media_group_id && hasValidCaption ? true : false,
+      is_original_caption: message.media_group_id && validCaption ? true : false,
       analyzed_content: existingAnalysis
     };
 
@@ -175,9 +163,9 @@ serve(async (req) => {
       currentMessageId = newMessage.id;
     }
 
-    // Only process caption for media groups if it exists and no existing analysis
-    if (message.media_group_id && hasValidCaption && !existingAnalysis) {
-      console.log('Processing new caption for media group');
+    // Process caption based on message type
+    if (validCaption && !existingAnalysis) {
+      console.log(`Processing caption for ${message.media_group_id ? 'media group' : 'single message'}`);
       
       // Update state to processing_caption
       await supabase
@@ -206,29 +194,6 @@ serve(async (req) => {
         const errorText = await aiResponse.text();
         throw new Error(`Caption analysis failed: ${errorText}`);
       }
-    } else if (hasValidCaption && !message.media_group_id) {
-      // For single messages with caption, process immediately
-      console.log('Processing caption for single message');
-      
-      const aiResponse = await fetch(
-        `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            message_id: currentMessageId,
-            caption: message.caption
-          }),
-        }
-      );
-
-      if (!aiResponse.ok) {
-        const errorText = await aiResponse.text();
-        throw new Error(`Caption analysis failed: ${errorText}`);
-      }
     }
 
     console.log('Processing completed successfully');
@@ -239,10 +204,7 @@ serve(async (req) => {
         message: 'Media processed successfully',
         correlation_id: correlationId
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 
   } catch (error) {
@@ -252,25 +214,7 @@ serve(async (req) => {
         error: error.message,
         details: error.toString()
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });
-
-async function downloadTelegramFile(fileId: string, botToken: string): Promise<Response> {
-  const fileInfoResponse = await fetch(
-    `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
-  );
-  const fileInfo = await fileInfoResponse.json();
-
-  if (!fileInfo.ok) {
-    console.error("Failed to get file info:", fileInfo);
-    throw new Error(`Failed to get file info: ${JSON.stringify(fileInfo)}`);
-  }
-
-  const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.result.file_path}`;
-  return fetch(fileUrl);
-}
