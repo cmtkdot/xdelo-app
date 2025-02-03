@@ -41,19 +41,14 @@ export interface AnalyzedContent {
 }
 
 export interface ParsingMetadata {
-  method: string;
+  method: 'manual' | 'ai' | 'hybrid';
   confidence: number;
   fallbacks_used?: string[];
   reanalysis_attempted?: boolean;
-  previous_analysis?: Record<string, unknown>;
+  previous_analysis?: AnalyzedContent;
 }
 
-export type JsonPrimitive = string | number | boolean | null;
-export type JsonArray = Json[];
-export type JsonObject = { [key: string]: Json };
-export type Json = JsonPrimitive | JsonObject | JsonArray;
-
-export type ProcessingState = "initialized" | "processing" | "completed" | "error" | "pending";
+export type ProcessingState = "initialized" | "pending" | "processing" | "completed" | "error";
 
 export interface FilterValues {
   search: string;
@@ -114,3 +109,11 @@ export interface MessageSyncResult {
     sync_timestamp: string;
   };
 }
+
+// Utility types for JSON handling
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
+export interface JsonObject {
+  [key: string]: JsonValue;
+}
+export interface JsonArray extends Array<JsonValue> {}

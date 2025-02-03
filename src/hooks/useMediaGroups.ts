@@ -41,7 +41,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
                   sync_timestamp: new Date().toISOString()
                 };
 
-                // Log sync attempt to audit log
+                // Log sync attempt
                 await supabase.from("analysis_audit_log").insert({
                   message_id: msg.id,
                   media_group_id: msg.media_group_id,
@@ -52,8 +52,8 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
                   processing_details: syncDetails
                 });
 
-                // Update the message with synced content
-                const { error: updateError } = await supabase
+                // Update the message
+                await supabase
                   .from("messages")
                   .update({
                     analyzed_content: groupMessages[0].analyzed_content,
@@ -63,32 +63,6 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
                     processing_completed_at: new Date().toISOString()
                   })
                   .eq("id", msg.id);
-
-                if (updateError) {
-                  // Log sync failure
-                  await supabase.from("analysis_audit_log").insert({
-                    message_id: msg.id,
-                    media_group_id: msg.media_group_id,
-                    event_type: "GROUP_SYNC_FAILED",
-                    old_state: "initialized",
-                    error_message: updateError.message,
-                    processing_details: { 
-                      error: updateError.message,
-                      sync_attempt: syncDetails 
-                    }
-                  });
-                } else {
-                  // Log successful sync
-                  await supabase.from("analysis_audit_log").insert({
-                    message_id: msg.id,
-                    media_group_id: msg.media_group_id,
-                    event_type: "GROUP_SYNC_COMPLETED",
-                    old_state: "initialized",
-                    new_state: "completed",
-                    analyzed_content: groupMessages[0].analyzed_content,
-                    processing_details: syncDetails
-                  });
-                }
               }
             }
           }
@@ -100,6 +74,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
           .select("*", { count: "exact" })
           .eq('is_original_caption', true);
 
+        // Apply filters
         if (filters.search) {
           query = query.or(`analyzed_content->product_name.ilike.%${filters.search}%,analyzed_content->notes.ilike.%${filters.search}%`);
         }
