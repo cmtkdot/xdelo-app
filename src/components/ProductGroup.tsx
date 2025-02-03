@@ -263,7 +263,7 @@ export const ProductGroup = ({
             <p>Vendor: {analyzedContent.vendor_uid}</p>
           )}
           {(analyzedContent?.quantity || mainMedia.caption) && (
-            <p>Quantity: {analyzedContent?.quantity || mainMedia.caption}</p>
+            <p>Caption: {analyzedContent?.quantity || mainMedia.caption}</p>
           )}
         </div>
 
