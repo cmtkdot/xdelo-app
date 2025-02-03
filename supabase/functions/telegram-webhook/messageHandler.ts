@@ -11,6 +11,12 @@ export async function handleChatMemberUpdate(
   if (!update.my_chat_member) return null;
 
   const chatMember = update.my_chat_member;
+  console.log('Processing chat member update:', {
+    chat_id: chatMember.chat.id,
+    old_status: chatMember.old_chat_member.status,
+    new_status: chatMember.new_chat_member.status
+  });
+
   const { error: insertError } = await supabase.from("other_messages").insert({
     user_id: BOT_USER_ID,
     message_type: "bot_status",
@@ -39,6 +45,12 @@ export async function handleTextMessage(
   supabase: ReturnType<typeof createClient>,
   message: TelegramMessage
 ) {
+  console.log('Processing text message:', {
+    message_id: message.message_id,
+    chat_id: message.chat.id,
+    text_length: message.text?.length || 0
+  });
+
   const { error: insertError } = await supabase.from("other_messages").insert({
     user_id: BOT_USER_ID,
     telegram_message_id: message.message_id,
@@ -70,6 +82,11 @@ export async function handleMediaMessage(
   TELEGRAM_BOT_TOKEN: string
 ) {
   const mediaItems: TelegramMedia[] = [];
+  console.log('Starting media message processing:', {
+    message_id: message.message_id,
+    media_group_id: message.media_group_id,
+    has_caption: !!message.caption
+  });
 
   if (message.photo) {
     console.log("📸 Found photo array, selecting largest size");
@@ -90,7 +107,10 @@ export async function handleMediaMessage(
 
   const processedMedia = [];
   for (const mediaItem of mediaItems) {
-    console.log("🔍 Processing media item:", mediaItem.file_unique_id);
+    console.log("🔍 Processing media item:", {
+      file_unique_id: mediaItem.file_unique_id,
+      mime_type: mediaItem.mime_type
+    });
 
     const { data: existingMessage } = await supabase
       .from("messages")
@@ -100,10 +120,7 @@ export async function handleMediaMessage(
 
     let uploadResult: MediaUploadResult;
     if (existingMessage?.public_url) {
-      console.log(
-        "✅ Found existing file, reusing public URL:",
-        existingMessage.public_url
-      );
+      console.log("✅ Found existing file, reusing public URL");
       uploadResult = {
         publicUrl: existingMessage.public_url,
         fileName: `${mediaItem.file_unique_id}.${
@@ -129,17 +146,17 @@ export async function handleMediaMessage(
       }
       console.log("✅ Updated existing message with new telegram data");
     } else {
+      console.log("⬇️ Downloading new media file from Telegram");
       const fileInfoResponse = await fetch(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${mediaItem.file_id}`
       );
       const fileInfo = await fileInfoResponse.json();
-      console.log("📄 File info from Telegram:", JSON.stringify(fileInfo, null, 2));
 
       if (!fileInfo.ok) {
+        console.error("❌ Failed to get file info:", fileInfo);
         throw new Error(`Failed to get file info: ${JSON.stringify(fileInfo)}`);
       }
 
-      console.log("⬇️ Downloading file from Telegram");
       const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`;
       const fileResponse = await fetch(fileUrl);
       const fileBuffer = await fileResponse.arrayBuffer();
@@ -155,43 +172,39 @@ export async function handleMediaMessage(
       });
       console.log("✅ File uploaded successfully");
 
-      console.log("💾 Storing new message data in database");
-      const { error: messageError } = await supabase.from("messages").insert({
-        telegram_message_id: message.message_id,
-        media_group_id: message.media_group_id,
-        caption: message.caption || "",
-        file_id: mediaItem.file_id,
-        file_unique_id: mediaItem.file_unique_id,
-        public_url: uploadResult.publicUrl,
-        mime_type: mediaItem.mime_type,
-        file_size: mediaItem.file_size,
-        width: mediaItem.width,
-        height: mediaItem.height,
-        duration: mediaItem.duration,
-        user_id: BOT_USER_ID,
-        telegram_data: { message },
-      });
+      const { data: newMessage, error: messageError } = await supabase
+        .from("messages")
+        .insert({
+          telegram_message_id: message.message_id,
+          media_group_id: message.media_group_id,
+          caption: message.caption || "",
+          file_id: mediaItem.file_id,
+          file_unique_id: mediaItem.file_unique_id,
+          public_url: uploadResult.publicUrl,
+          mime_type: mediaItem.mime_type,
+          file_size: mediaItem.file_size,
+          width: mediaItem.width,
+          height: mediaItem.height,
+          duration: mediaItem.duration,
+          user_id: BOT_USER_ID,
+          telegram_data: { message },
+          processing_state: message.caption ? 'caption_ready' : 'initialized'
+        })
+        .select()
+        .single();
 
       if (messageError) {
         console.error("❌ Failed to store message:", messageError);
         throw messageError;
       }
       console.log("✅ Message stored successfully");
-    }
 
-    // If message has caption and is part of a media group, trigger analysis
-    if (message.caption && message.media_group_id) {
-      try {
-        console.log("🔄 Triggering media group analysis");
-        const { data: messageData } = await supabase
-          .from("messages")
-          .select("id")
-          .eq("telegram_message_id", message.message_id)
-          .single();
-
-        if (messageData) {
+      // If message has caption, trigger parsing
+      if (message.caption) {
+        try {
+          console.log("🔄 Triggering caption parsing");
           const response = await fetch(
-            `${Deno.env.get("SUPABASE_URL")}/functions/v1/sync-media-group-analysis`,
+            `${Deno.env.get("SUPABASE_URL")}/functions/v1/parse-caption-with-ai`,
             {
               method: "POST",
               headers: {
@@ -199,20 +212,23 @@ export async function handleMediaMessage(
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({
-                message_id: messageData.id,
+                message_id: newMessage.id,
                 media_group_id: message.media_group_id,
+                caption: message.caption
               }),
             }
           );
 
           if (!response.ok) {
-            throw new Error(`Analysis sync failed: ${await response.text()}`);
+            const errorText = await response.text();
+            console.error("❌ Caption parsing failed:", errorText);
+            throw new Error(`Caption parsing failed: ${errorText}`);
           }
-          console.log("✅ Analysis sync triggered successfully");
+          console.log("✅ Caption parsing triggered successfully");
+        } catch (error) {
+          console.error("❌ Error triggering caption parsing:", error);
+          // Continue processing even if parsing fails
         }
-      } catch (error) {
-        console.error("❌ Error triggering analysis sync:", error);
-        // Continue processing even if analysis sync fails
       }
     }
 

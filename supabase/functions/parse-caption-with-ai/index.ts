@@ -39,6 +39,7 @@ serve(async (req) => {
     );
 
     // Step 1: Parse the caption
+    console.log('Starting caption parsing');
     const manualResult = manualParse(caption);
     console.log('Manual parsing result:', manualResult);
 
@@ -62,10 +63,12 @@ serve(async (req) => {
         };
       } catch (aiError) {
         console.error('AI parsing failed:', aiError);
+        // Continue with manual results if AI fails
       }
     }
 
     // Step 2: Update the source message
+    console.log('Updating source message with parsed content');
     const { error: updateError } = await supabase
       .from('messages')
       .update({
@@ -103,7 +106,8 @@ serve(async (req) => {
         throw groupUpdateError;
       }
 
-      // Step 4: Mark all messages as completed if sync was successful
+      // Step 4: Mark all messages as completed
+      console.log('Marking media group as completed');
       const { error: completeError } = await supabase
         .from('messages')
         .update({
