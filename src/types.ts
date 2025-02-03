@@ -36,3 +36,24 @@ export interface MediaItem {
   quantity?: number;
   notes?: string;
 }
+
+export interface FilterValues {
+  search: string;
+  vendor: string;
+  dateFrom?: Date;
+  dateTo?: Date;
+  sortOrder: "asc" | "desc";
+  productCode?: string;
+  quantityRange?: string;
+  processingState?: string;
+}
+
+export interface AnalyzedContent {
+  product_name?: string;
+  product_code?: string;
+  vendor_uid?: string;
+  purchase_date?: string;
+  quantity?: number;
+  notes?: string;
+  [key: string]: any;
+}
