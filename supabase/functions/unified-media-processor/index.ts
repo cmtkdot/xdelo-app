@@ -59,36 +59,20 @@ serve(async (req) => {
       );
     }
 
-    // Check if this is part of a media group and has no caption
-    if (message.media_group_id && !message.caption) {
-      console.log(`Message ${message.message_id} is part of media group ${message.media_group_id} without caption`);
-      
-      // Check if there's already a message with caption in this group
-      const { data: existingGroupMessage } = await supabase
+    // Check for existing analyzed content in the media group
+    let existingAnalysis = null;
+    if (message.media_group_id) {
+      const { data: existingMessage } = await supabase
         .from('messages')
         .select('*')
         .eq('media_group_id', message.media_group_id)
         .eq('is_original_caption', true)
+        .not('analyzed_content', 'is', null)
         .maybeSingle();
 
-      if (existingGroupMessage?.analyzed_content) {
+      if (existingMessage?.analyzed_content) {
         console.log('Found existing analyzed content in media group');
-        // We can use this analysis for the current message
-        await processMediaWithExistingAnalysis(
-          supabase,
-          message,
-          mediaItem,
-          existingGroupMessage,
-          correlationId
-        );
-        return new Response(
-          JSON.stringify({ 
-            success: true, 
-            message: 'Media processed with existing group analysis',
-            correlation_id: correlationId 
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        existingAnalysis = existingMessage.analyzed_content;
       }
     }
 
@@ -138,7 +122,8 @@ serve(async (req) => {
       user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
       telegram_data: { message },
       processing_state: message.caption ? 'caption_ready' : 'initialized',
-      is_original_caption: message.media_group_id && message.caption ? true : false
+      is_original_caption: message.media_group_id && message.caption ? true : false,
+      analyzed_content: existingAnalysis // Use existing analysis if available
     };
 
     // Create or update message record
@@ -171,10 +156,9 @@ serve(async (req) => {
       currentMessageId = newMessage.id;
     }
 
-    // Only process caption if it exists and this is either a single message
-    // or the first message with caption in a media group
-    if (message.caption && (!message.media_group_id || messageData.is_original_caption)) {
-      console.log('Processing caption');
+    // Only process caption if it exists and no existing analysis is available
+    if (message.caption && !existingAnalysis) {
+      console.log('Processing new caption');
       
       // Wait to ensure media is properly processed
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -272,64 +256,4 @@ async function downloadTelegramFile(fileId: string, botToken: string): Promise<R
 
   const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.result.file_path}`;
   return fetch(fileUrl);
-}
-
-async function processMediaWithExistingAnalysis(
-  supabase: any,
-  message: MediaMessage,
-  mediaItem: any,
-  existingGroupMessage: any,
-  correlationId: string
-) {
-  // Download and process media first
-  const fileResponse = await downloadTelegramFile(
-    mediaItem.file_id,
-    Deno.env.get('TELEGRAM_BOT_TOKEN') ?? ''
-  );
-
-  if (!fileResponse.ok) {
-    throw new Error(`Failed to download media: ${fileResponse.statusText}`);
-  }
-
-  const fileBuffer = await fileResponse.arrayBuffer();
-  
-  // Upload to storage
-  const fileName = `${mediaItem.file_unique_id}.${mediaItem.mime_type?.split("/")[1] || 'jpg'}`;
-  await supabase.storage
-    .from('telegram-media')
-    .upload(fileName, fileBuffer, {
-      contentType: mediaItem.mime_type || 'image/jpeg',
-      upsert: true,
-    });
-
-  const { data: { publicUrl } } = await supabase.storage
-    .from('telegram-media')
-    .getPublicUrl(fileName);
-
-  // Create message record with existing analysis
-  const messageData = {
-    telegram_message_id: message.message_id,
-    media_group_id: message.media_group_id,
-    message_caption_id: existingGroupMessage.id,
-    caption: message.caption || '',
-    file_id: mediaItem.file_id,
-    file_unique_id: mediaItem.file_unique_id,
-    public_url: publicUrl,
-    mime_type: mediaItem.mime_type,
-    file_size: mediaItem.file_size,
-    width: mediaItem.width,
-    height: mediaItem.height,
-    duration: mediaItem.duration,
-    user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
-    telegram_data: { message },
-    processing_state: 'completed',
-    is_original_caption: false,
-    group_caption_synced: true,
-    analyzed_content: existingGroupMessage.analyzed_content,
-    processing_completed_at: new Date().toISOString()
-  };
-
-  await supabase
-    .from('messages')
-    .insert(messageData);
 }
