@@ -5,6 +5,7 @@ import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
 import { ProductPagination } from "@/components/ProductGallery/ProductPagination";
+import { ProductFilters, FilterValues } from "@/components/ProductGallery/ProductFilters";
 
 const ITEMS_PER_PAGE = 16;
 
@@ -13,30 +14,86 @@ const ProductGallery = () => {
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [vendors, setVendors] = useState<string[]>([]);
+  const [filters, setFilters] = useState<FilterValues>({
+    search: "",
+    vendor: "",
+    dateFrom: undefined,
+    dateTo: undefined,
+    sortOrder: "desc",
+  });
   const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchVendors = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("messages")
+          .select("analyzed_content")
+          .not("analyzed_content", "is", null);
+
+        if (error) throw error;
+
+        const uniqueVendors = new Set<string>();
+        data.forEach((message) => {
+          if (message.analyzed_content?.vendor_uid) {
+            uniqueVendors.add(message.analyzed_content.vendor_uid);
+          }
+        });
+
+        setVendors(Array.from(uniqueVendors).sort());
+      } catch (error) {
+        console.error("Error fetching vendors:", error);
+      }
+    };
+
+    fetchVendors();
+  }, []);
 
   useEffect(() => {
     const fetchMessages = async () => {
       try {
-        const { count, error: countError } = await supabase
+        let query = supabase
           .from("messages")
-          .select("*", { count: 'exact', head: true });
+          .select("*", { count: "exact" });
 
-        if (countError) throw countError;
+        // Apply filters
+        if (filters.search) {
+          query = query.textSearch(
+            "analyzed_content->>'product_name'", 
+            filters.search
+          );
+        }
+
+        if (filters.vendor) {
+          query = query.eq("analyzed_content->>'vendor_uid'", filters.vendor);
+        }
+
+        if (filters.dateFrom) {
+          query = query.gte("created_at", filters.dateFrom.toISOString());
+        }
+
+        if (filters.dateTo) {
+          query = query.lte("created_at", filters.dateTo.toISOString());
+        }
+
+        // Apply sorting
+        query = query.order("created_at", { ascending: filters.sortOrder === "asc" });
+
+        // Apply pagination
+        const from = (currentPage - 1) * ITEMS_PER_PAGE;
+        const to = from + ITEMS_PER_PAGE - 1;
+        query = query.range(from, to);
+
+        const { data, count, error } = await query;
+
+        if (error) throw error;
 
         const total = count || 0;
         setTotalPages(Math.ceil(total / ITEMS_PER_PAGE));
 
-        const { data, error } = await supabase
-          .from("messages")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .range((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE - 1);
-
-        if (error) throw error;
-
         const groups: { [key: string]: MediaItem[] } = {};
-        data.forEach((message) => {
+        data?.forEach((message) => {
           const groupKey = message.media_group_id || message.id;
           if (!groups[groupKey]) {
             groups[groupKey] = [];
@@ -84,7 +141,7 @@ const ProductGallery = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [toast, currentPage]);
+  }, [toast, currentPage, filters]);
 
   const handleEdit = (media: MediaItem) => {
     const groupKey = media.media_group_id || media.id;
@@ -134,9 +191,9 @@ const ProductGallery = () => {
     }
   };
 
-  const formatDate = (date: string | null) => {
-    if (!date) return null;
-    return new Date(date).toISOString().split('T')[0];
+  const handleFilterChange = (newFilters: FilterValues) => {
+    setFilters(newFilters);
+    setCurrentPage(1); // Reset to first page when filters change
   };
 
   return (
@@ -144,6 +201,12 @@ const ProductGallery = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Product Gallery</h2>
       </div>
+
+      <ProductFilters
+        vendors={vendors}
+        filters={filters}
+        onFilterChange={handleFilterChange}
+      />
 
       <ProductGrid mediaGroups={mediaGroups} onEdit={handleEdit} />
       
@@ -160,7 +223,6 @@ const ProductGallery = () => {
         onClose={() => setEditItem(null)}
         onSave={handleSave}
         onItemChange={handleItemChange}
-        formatDate={formatDate}
       />
     </div>
   );
