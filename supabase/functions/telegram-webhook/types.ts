@@ -29,14 +29,4 @@ export interface WebhookResponse {
 
 export type SupabaseClient = ReturnType<typeof createClient>;
 
-export type ProcessingState = 'initialized' | 'caption_ready' | 'analyzing' | 'analysis_synced' | 'completed' | 'error';
-
-export interface ExistingMessage {
-  id: string;
-  public_url: string;
-  analyzed_content: any;
-  processing_state: ProcessingState;
-  group_caption_synced: boolean;
-  media_group_id: string | null;
-  is_original_caption?: boolean;
-}
+export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';

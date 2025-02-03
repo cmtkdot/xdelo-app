@@ -402,7 +402,12 @@ export type Database = {
           }
     }
     Enums: {
-      message_processing_state: "pending" | "processing" | "completed" | "error"
+      message_processing_state:
+        | "initialized"
+        | "pending"
+        | "processing"
+        | "completed"
+        | "error"
     }
     CompositeTypes: {
       http_header: {

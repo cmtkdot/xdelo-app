@@ -82,6 +82,9 @@ export async function handleMediaMessage(
     });
     console.log("✅ File uploaded successfully");
 
+    // Set initial state based on caption presence
+    const initialState = message.caption ? 'pending' : 'initialized';
+
     const messageData = {
       telegram_message_id: message.message_id,
       media_group_id: message.media_group_id,
@@ -96,7 +99,7 @@ export async function handleMediaMessage(
       duration: mediaItem.duration,
       user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
       telegram_data: { message },
-      processing_state: message.caption ? 'pending' : 'processing'
+      processing_state: initialState
     };
 
     const { data: newMessage, error: messageError } = await supabase
