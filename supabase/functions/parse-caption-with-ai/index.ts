@@ -69,6 +69,7 @@ serve(async (req) => {
       .eq('id', message_id);
 
     // Try manual parsing first
+    console.log('Attempting manual parsing for caption:', caption);
     let analyzedContent: ParsedContent = await manualParse(caption);
     let isAiAnalysis = false;
 
@@ -97,8 +98,24 @@ serve(async (req) => {
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
-    // Process media group if applicable
-    if (media_group_id) {
+    // First update the current message with analyzed content
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        analyzed_content: analyzedContent,
+        processing_state: 'completed',
+        processing_completed_at: new Date().toISOString(),
+        is_original_caption: true,
+        group_caption_synced: true
+      })
+      .eq('id', message_id);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    // Only process media group if we have valid analyzed content and a media group ID
+    if (analyzedContent && media_group_id) {
       console.log('Processing media group:', media_group_id);
       
       await supabase.rpc('process_media_group_analysis', {
@@ -108,22 +125,10 @@ serve(async (req) => {
         p_processing_completed_at: new Date().toISOString(),
         p_correlation_id: crypto.randomUUID()
       });
-    } else {
-      // Update single message
-      await supabase
-        .from('messages')
-        .update({
-          analyzed_content: analyzedContent,
-          processing_state: 'completed',
-          processing_completed_at: new Date().toISOString(),
-          is_original_caption: true,
-          group_caption_synced: true
-        })
-        .eq('id', message_id);
     }
 
     const response: AnalysisResult = {
-      message: 'Caption analyzed and synced successfully',
+      message: 'Caption analyzed successfully',
       analyzed_content: analyzedContent,
       processing_details: {
         method: isAiAnalysis ? 'ai' : 'manual',
