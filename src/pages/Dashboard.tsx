@@ -1,31 +1,78 @@
 import { Card } from "@/components/ui/card";
 import { MessageSquare, Package, Users } from "lucide-react";
-
-const stats = [
-  {
-    name: "Total Messages",
-    value: "0",
-    icon: MessageSquare,
-    change: "+0%",
-    changeType: "positive",
-  },
-  {
-    name: "Products Created",
-    value: "0",
-    icon: Package,
-    change: "+0%",
-    changeType: "positive",
-  },
-  {
-    name: "Active Vendors",
-    value: "0",
-    icon: Users,
-    change: "+0%",
-    changeType: "positive",
-  },
-];
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const Dashboard = () => {
+  const { data: messageCount = 0 } = useQuery({
+    queryKey: ['messageCount'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true });
+      
+      if (error) throw error;
+      return count || 0;
+    }
+  });
+
+  const { data: productCount = 0 } = useQuery({
+    queryKey: ['productCount'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .not('analyzed_content', 'is', null);
+      
+      if (error) throw error;
+      return count || 0;
+    }
+  });
+
+  const { data: vendorCount = 0 } = useQuery({
+    queryKey: ['vendorCount'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('analyzed_content->vendor_uid')
+        .not('analyzed_content->vendor_uid', 'is', null);
+      
+      if (error) throw error;
+      
+      const uniqueVendors = new Set(
+        data
+          .map(item => item.analyzed_content?.vendor_uid)
+          .filter(Boolean)
+      );
+      
+      return uniqueVendors.size;
+    }
+  });
+
+  const stats = [
+    {
+      name: "Total Messages",
+      value: messageCount.toString(),
+      icon: MessageSquare,
+      change: "+0%",
+      changeType: "positive",
+    },
+    {
+      name: "Products Created",
+      value: productCount.toString(),
+      icon: Package,
+      change: "+0%",
+      changeType: "positive",
+    },
+    {
+      name: "Active Vendors",
+      value: vendorCount.toString(),
+      icon: Users,
+      change: "+0%",
+      changeType: "positive",
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-3">
