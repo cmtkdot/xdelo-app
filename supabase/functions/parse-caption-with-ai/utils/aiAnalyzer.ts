@@ -1,5 +1,5 @@
 import { ParsedContent } from "../types.ts";
-import { parseCaption } from "./manualParser.ts";
+import { manualParse } from "./manualParser.ts";
 
 const SYSTEM_PROMPT = `You are a specialized product information extractor. Your task is to analyze captions and extract structured product information following these rules:
 
@@ -20,7 +20,7 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
     console.log('Starting caption analysis for:', caption);
     
     // First try manual parsing
-    const manualResult = parseCaption(caption);
+    const manualResult = manualParse(caption);
     if (manualResult && manualResult.product_name && manualResult.quantity) {
       console.log('Successfully parsed caption manually:', manualResult);
       return manualResult;
@@ -74,13 +74,22 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
       vendor_uid: result.vendor_uid,
       purchase_date: result.purchase_date,
       quantity: result.quantity,
-      notes: result.notes
+      notes: result.notes,
+      parsing_metadata: {
+        method: 'ai',
+        confidence: 0.8
+      }
     };
   } catch (error) {
     console.error('Error analyzing caption:', error);
     // Return basic info even if analysis fails
     return {
-      product_name: caption.split('#')[0]?.trim() || 'Untitled Product'
+      product_name: caption.split('#')[0]?.trim() || 'Untitled Product',
+      parsing_metadata: {
+        method: 'ai',
+        confidence: 0.1,
+        fallbacks_used: ['error_fallback']
+      }
     };
   }
 }

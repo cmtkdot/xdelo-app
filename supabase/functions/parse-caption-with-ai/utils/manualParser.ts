@@ -1,4 +1,4 @@
-import { ParsedContent } from "../index.ts";
+import { ParsedContent } from "../types.ts";
 import { parseQuantity } from "./quantityParser.ts";
 
 export function manualParse(caption: string): ParsedContent {
@@ -58,6 +58,12 @@ export function manualParse(caption: string): ParsedContent {
   if (notesMatch) {
     result.notes = notesMatch[1].trim();
   }
+
+  result.parsing_metadata = {
+    method: 'manual',
+    confidence: fallbacks_used.length ? 0.7 : 0.9,
+    fallbacks_used: fallbacks_used.length ? fallbacks_used : undefined
+  };
 
   console.log("Manual parsing result:", result);
   return result;
