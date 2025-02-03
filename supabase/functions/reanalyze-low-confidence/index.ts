@@ -79,18 +79,33 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `Extract product information from captions following these rules:
-1. Product Name: Text before '#' (required)
-2. Product Code: Full code after '#'
-3. Vendor UID: Letters at start of product code
-4. Purchase Date: Convert MMDDYY or MDDYY to YYYY-MM-DD
-5. Quantity: Look for numbers after 'x' or in units
-6. Notes: Text in parentheses or remaining info
+            content: `Extract product information from captions and return a JSON object with these exact fields:
+- notes (string, optional)
+- quantity (number, optional)
+- vendor_uid (string, optional)
+- product_code (string, optional)
+- product_name (string, required)
+- purchase_date (string in YYYY-MM-DD format, optional)
+- parsing_metadata (object with method and confidence)
 
-Return a clean JSON object with these fields, no markdown formatting.`
+Example output format:
+{
+  "notes": "30 behind",
+  "quantity": 2,
+  "vendor_uid": "FISH",
+  "product_code": "FISH012225",
+  "product_name": "Blue Nerds",
+  "purchase_date": "2025-01-22",
+  "parsing_metadata": {
+    "method": "ai",
+    "confidence": 0.9
+  }
+}`
           },
           { role: 'user', content: caption }
         ],
+        temperature: 0.3,
+        max_tokens: 500
       }),
     });
 
@@ -105,12 +120,24 @@ Return a clean JSON object with these fields, no markdown formatting.`
     let newAnalyzedContent;
     try {
       newAnalyzedContent = JSON.parse(aiResponse);
+      // Ensure the parsing_metadata has the correct structure
       newAnalyzedContent.parsing_metadata = {
-        method: 'ai_enhanced',
+        method: 'ai',
         confidence: 0.9,
         reanalysis_attempted: true,
         timestamp: new Date().toISOString()
       };
+
+      // Validate required fields
+      if (!newAnalyzedContent.product_name) {
+        throw new Error('Product name is required');
+      }
+
+      // Convert quantity to number if present
+      if (newAnalyzedContent.quantity) {
+        newAnalyzedContent.quantity = Number(newAnalyzedContent.quantity);
+      }
+
     } catch (parseError) {
       console.error('Error parsing AI response:', parseError);
       throw new Error('Failed to parse AI response');
