@@ -1,7 +1,5 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { ParsedContent } from './types.ts';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { manualParse } from './manualParser.ts';
 import { aiParse } from './aiParser.ts';
 import { validateParsedContent } from './validator.ts';
@@ -15,7 +13,7 @@ async function syncMediaGroupAnalysis(
   supabase: ReturnType<typeof createClient>,
   messageId: string,
   mediaGroupId: string | null,
-  analyzedContent: ParsedContent
+  analyzedContent: any
 ) {
   if (!mediaGroupId) return;
 
@@ -88,7 +86,6 @@ serve(async (req) => {
       .from('messages')
       .update({
         parsed_content: finalResult,
-        fresh_analysis: finalResult,
         analyzed_content: finalResult,
         processing_state: media_group_id ? 'analysis_synced' : 'completed'
       })
