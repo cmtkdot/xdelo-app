@@ -22,7 +22,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   const [dateFrom, setDateFrom] = useState<Date | undefined>(filters.dateFrom);
   const [dateTo, setDateTo] = useState<Date | undefined>(filters.dateTo);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder);
-  const [productCode, setProductCode] = useState(filters.productCode || '');
+  const [productCode, setProductCode] = useState(filters.productCode || 'all');
   const [quantityRange, setQuantityRange] = useState(filters.quantityRange || 'all');
   const [processingState, setProcessingState] = useState(filters.processingState || 'all');
   const [productCodes, setProductCodes] = useState<string[]>([]);
@@ -58,9 +58,9 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
       dateFrom,
       dateTo,
       sortOrder,
-      productCode,
+      productCode: productCode === 'all' ? undefined : productCode,
       quantityRange,
-      processingState
+      processingState: processingState === 'all' ? undefined : processingState
     });
   }, [search, vendor, dateFrom, dateTo, sortOrder, productCode, quantityRange, processingState]);
 
@@ -79,9 +79,9 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
             <SelectValue placeholder="Select Product Code" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Product Codes</SelectItem>
+            <SelectItem value="all">All Product Codes</SelectItem>
             {productCodes.map((code) => (
-              <SelectItem key={code} value={code}>{code}</SelectItem>
+              <SelectItem key={code} value={code || 'unknown'}>{code || 'Unknown'}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -108,7 +108,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
           <SelectContent>
             <SelectItem value="all">All Vendors</SelectItem>
             {vendors.map((v) => (
-              <SelectItem key={v} value={v}>{v}</SelectItem>
+              <SelectItem key={v} value={v || 'unknown'}>{v || 'Unknown'}</SelectItem>
             ))}
           </SelectContent>
         </Select>
