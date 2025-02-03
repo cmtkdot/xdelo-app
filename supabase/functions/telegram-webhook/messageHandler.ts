@@ -1,6 +1,6 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { TelegramMedia, MediaUploadResult, ProcessedMedia, WebhookResponse } from "./types.ts";
 import { downloadTelegramFile, uploadMedia } from "./mediaUtils.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 export async function handleTextMessage(
   supabase: ReturnType<typeof createClient>,
