@@ -65,10 +65,10 @@ serve(async (req) => {
       event_type: 'ANALYSIS_STARTED',
       old_state: 'initialized',
       new_state: 'processing',
-      processing_details: {
-        timestamp: new Date().toISOString(),
-        caption
-      }
+      processing_details: jsonb_build_object(
+        'timestamp', new Date().toISOString(),
+        'caption', caption
+      )
     });
 
     // Try manual parsing first
@@ -86,35 +86,50 @@ serve(async (req) => {
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
+    // Ensure analyzed_content is properly formatted as JSONB
+    const formattedAnalyzedContent = {
+      ...analyzedContent,
+      parsing_metadata: {
+        method: isAiAnalysis ? 'ai' : 'manual',
+        confidence: isAiAnalysis ? 0.8 : 0.9,
+        timestamp: new Date().toISOString()
+      }
+    };
+
     // Log the analysis method
     await supabase.from('analysis_audit_log').insert({
       message_id,
       media_group_id,
       event_type: 'ANALYSIS_METHOD_SELECTED',
       new_state: 'processing',
+      analyzed_content: formattedAnalyzedContent,
       processing_details: {
         method: isAiAnalysis ? 'ai' : 'manual',
-        confidence: analyzedContent.parsing_metadata?.confidence,
+        confidence: formattedAnalyzedContent.parsing_metadata.confidence,
         timestamp: new Date().toISOString()
       }
     });
 
-    // Update the current message with analyzed content
-    const { error: contentUpdateError } = await supabase.rpc('process_media_group_analysis', {
-      p_message_id: message_id,
-      p_media_group_id: media_group_id,
-      p_analyzed_content: analyzedContent,
-      p_processing_completed_at: new Date().toISOString(),
-      p_correlation_id: crypto.randomUUID()
-    });
+    // Use RPC call to process media group analysis
+    const { error: contentUpdateError } = await supabase.rpc(
+      'process_media_group_analysis',
+      {
+        p_message_id: message_id,
+        p_media_group_id: media_group_id,
+        p_analyzed_content: formattedAnalyzedContent,
+        p_processing_completed_at: new Date().toISOString(),
+        p_correlation_id: crypto.randomUUID()
+      }
+    );
 
     if (contentUpdateError) {
+      console.error('Error updating content:', contentUpdateError);
       throw contentUpdateError;
     }
 
     const response: AnalysisResult = {
       message: 'Caption analyzed successfully',
-      analyzed_content: analyzedContent,
+      analyzed_content: formattedAnalyzedContent,
       processing_details: {
         method: isAiAnalysis ? 'ai' : 'manual',
         timestamp: new Date().toISOString(),
@@ -138,6 +153,7 @@ serve(async (req) => {
       // Log error in audit log
       await supabase.from('analysis_audit_log').insert({
         message_id,
+        media_group_id,
         event_type: 'ERROR',
         new_state: 'error',
         processing_details: {
