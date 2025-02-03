@@ -53,6 +53,14 @@ export const ProductMediaViewer = ({
 
       if (auditLogError) throw auditLogError;
 
+      // Next, delete related caption sync history
+      const { error: syncHistoryError } = await supabase
+        .from('caption_sync_history')
+        .delete()
+        .eq('message_id', currentMedia.id);
+
+      if (syncHistoryError) throw syncHistoryError;
+
       // Then, update all messages that reference this message as their caption source
       const { error: updateError } = await supabase
         .from('messages')
