@@ -8,15 +8,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const correlationId = crypto.randomUUID();
   let messageId: string;
   let mediaGroupId: string | null;
   let caption: string;
-  const correlationId = crypto.randomUUID();
+  let retryCount = 0;
 
   try {
     const requestData = await req.json();
@@ -24,9 +28,9 @@ serve(async (req) => {
     mediaGroupId = requestData.media_group_id;
     caption = requestData.caption;
 
+    // Validate required fields
     if (!messageId || !caption) {
-      console.error('Missing required fields:', { messageId, caption });
-      throw new Error('message_id and caption are required');
+      throw new Error('message_id and caption are required fields');
     }
 
     console.log('Processing caption:', { messageId, mediaGroupId, caption, correlationId });
@@ -43,7 +47,7 @@ serve(async (req) => {
     // First verify the message exists and get its current state
     const { data: existingMessage, error: messageError } = await supabase
       .from('messages')
-      .select('id, processing_state, analyzed_content, is_original_caption')
+      .select('id, processing_state, analyzed_content, is_original_caption, retry_count')
       .eq('id', messageId)
       .maybeSingle();
 
@@ -51,12 +55,18 @@ serve(async (req) => {
       throw new Error(`Message not found or error: ${messageError?.message || 'Not found'}`);
     }
 
+    // Check retry count
+    if (existingMessage.retry_count && existingMessage.retry_count >= MAX_RETRIES) {
+      throw new Error(`Maximum retry attempts (${MAX_RETRIES}) reached for message ${messageId}`);
+    }
+
     // Update message to processing state
     const { error: updateError } = await supabase
       .from('messages')
       .update({ 
         processing_state: 'processing',
-        processing_started_at: new Date().toISOString()
+        processing_started_at: new Date().toISOString(),
+        retry_count: (existingMessage.retry_count || 0) + 1
       })
       .eq('id', messageId);
 
@@ -79,7 +89,9 @@ serve(async (req) => {
         correlation_id: correlationId,
         confidence,
         method: "manual",
-        original_caption: caption
+        original_caption: caption,
+        message_id: messageId,
+        retry_count: existingMessage.retry_count || 0
       }
     });
 
@@ -105,14 +117,16 @@ serve(async (req) => {
               correlation_id: correlationId,
               confidence,
               method: "ai",
-              original_caption: caption
+              original_caption: caption,
+              message_id: messageId,
+              retry_count: existingMessage.retry_count || 0
             }
           });
         }
       } catch (aiError) {
         console.error('AI parsing failed:', aiError);
         
-        // Log AI parsing failure
+        // Log AI parsing failure but continue with manual results
         await supabase.from("analysis_audit_log").insert({
           message_id: messageId,
           media_group_id: mediaGroupId,
@@ -121,7 +135,9 @@ serve(async (req) => {
           processing_details: {
             correlation_id: correlationId,
             error: aiError.message,
-            original_caption: caption
+            original_caption: caption,
+            message_id: messageId,
+            retry_count: existingMessage.retry_count || 0
           }
         });
       }
@@ -168,7 +184,8 @@ serve(async (req) => {
           .update({ 
             processing_state: 'error',
             error_message: error.message,
-            processing_completed_at: new Date().toISOString()
+            processing_completed_at: new Date().toISOString(),
+            last_error_at: new Date().toISOString()
           })
           .eq('id', messageId);
 
@@ -183,7 +200,9 @@ serve(async (req) => {
           processing_details: {
             correlation_id: correlationId,
             error: error.message,
-            original_caption: caption
+            original_caption: caption,
+            message_id: messageId,
+            retry_count: retryCount
           }
         });
       }

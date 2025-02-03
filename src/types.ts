@@ -119,11 +119,15 @@ export interface ProcessingMetadata {
   timestamp: string;
   method: 'manual' | 'ai' | 'hybrid';
   confidence: number;
+  original_caption: string;
+  message_id: string;
   fallbacks_used?: string[];
   reanalysis_attempted?: boolean;
   previous_analysis?: AnalyzedContent;
   group_message_count?: number;
   is_original_caption?: boolean;
+  error?: string;
+  retry_count?: number;
 }
 
 // Type guard for JsonValue
@@ -144,11 +148,15 @@ export function processingMetadataToJson(metadata: ProcessingMetadata): JsonValu
     timestamp: metadata.timestamp,
     method: metadata.method,
     confidence: metadata.confidence,
+    original_caption: metadata.original_caption,
+    message_id: metadata.message_id,
     fallbacks_used: metadata.fallbacks_used || [],
     reanalysis_attempted: metadata.reanalysis_attempted || false,
     previous_analysis: metadata.previous_analysis ? analyzedContentToJson(metadata.previous_analysis) : null,
     group_message_count: metadata.group_message_count || null,
-    is_original_caption: metadata.is_original_caption || false
+    is_original_caption: metadata.is_original_caption || false,
+    error: metadata.error || null,
+    retry_count: metadata.retry_count || 0
   };
 }
 
