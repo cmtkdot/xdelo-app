@@ -26,9 +26,13 @@ export async function updateExistingMessage(
   messageId: string,
   updateData: any
 ) {
-  // Cast processing_state to the correct enum type
+  // Ensure processing_state is properly typed as enum
   if (updateData.processing_state) {
-    updateData.processing_state = updateData.processing_state as 'initialized' | 'caption_ready' | 'analyzing' | 'analysis_synced' | 'completed' | 'error';
+    // Cast the processing_state to the correct enum type
+    const validStates = ['initialized', 'caption_ready', 'analyzing', 'analysis_synced', 'completed', 'error'];
+    if (!validStates.includes(updateData.processing_state)) {
+      throw new Error(`Invalid processing_state: ${updateData.processing_state}`);
+    }
   }
 
   const { error } = await supabase
@@ -46,9 +50,12 @@ export async function createNewMessage(
   supabase: SupabaseClient,
   messageData: any
 ) {
-  // Ensure processing_state is properly typed
+  // Ensure processing_state is properly typed as enum
   if (messageData.processing_state) {
-    messageData.processing_state = messageData.processing_state as 'initialized' | 'caption_ready' | 'analyzing' | 'analysis_synced' | 'completed' | 'error';
+    const validStates = ['initialized', 'caption_ready', 'analyzing', 'analysis_synced', 'completed', 'error'];
+    if (!validStates.includes(messageData.processing_state)) {
+      throw new Error(`Invalid processing_state: ${messageData.processing_state}`);
+    }
   }
 
   const { data: newMessage, error: messageError } = await supabase
@@ -71,6 +78,8 @@ export async function triggerCaptionParsing(
   caption: string
 ) {
   try {
+    console.log("🔄 Triggering caption parsing for message:", messageId);
+    
     const response = await fetch(
       `${Deno.env.get("SUPABASE_URL")}/functions/v1/parse-caption-with-ai`,
       {
