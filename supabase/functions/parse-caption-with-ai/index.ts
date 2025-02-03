@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second
+const RETRY_DELAY = 1000;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -28,7 +28,6 @@ serve(async (req) => {
     mediaGroupId = requestData.media_group_id;
     caption = requestData.caption;
 
-    // Validate required fields
     if (!messageId || !caption) {
       throw new Error('message_id and caption are required fields');
     }
@@ -44,7 +43,6 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // First verify the message exists and get its current state
     const { data: existingMessage, error: messageError } = await supabase
       .from('messages')
       .select('id, processing_state, analyzed_content, is_original_caption, retry_count')
@@ -55,12 +53,10 @@ serve(async (req) => {
       throw new Error(`Message not found or error: ${messageError?.message || 'Not found'}`);
     }
 
-    // Check retry count
     if (existingMessage.retry_count && existingMessage.retry_count >= MAX_RETRIES) {
       throw new Error(`Maximum retry attempts (${MAX_RETRIES}) reached for message ${messageId}`);
     }
 
-    // Update message to processing state
     const { error: updateError } = await supabase
       .from('messages')
       .update({ 
@@ -99,34 +95,101 @@ serve(async (req) => {
     if (confidence < 0.5) {
       console.log('Manual parsing had low confidence, attempting AI parsing');
       try {
-        const aiResult = await aiParse(caption);
-        
-        // Only use AI result if it has higher confidence
-        if (aiResult.parsing_metadata?.confidence && aiResult.parsing_metadata.confidence > confidence) {
-          parsedContent = aiResult;
-          confidence = aiResult.parsing_metadata.confidence;
-
-          // Log AI parsing success
-          await supabase.from("analysis_audit_log").insert({
-            message_id: messageId,
-            media_group_id: mediaGroupId,
-            event_type: "AI_PARSE_COMPLETED",
-            old_state: "processing",
-            analyzed_content: parsedContent,
-            processing_details: {
-              correlation_id: correlationId,
-              confidence,
-              method: "ai",
-              original_caption: caption,
-              message_id: messageId,
-              retry_count: existingMessage.retry_count || 0
-            }
-          });
+        const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+        if (!openAIApiKey) {
+          throw new Error('OpenAI API key not configured');
         }
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openAIApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              {
+                role: 'system',
+                content: `Analyze the product caption and return a JSON object with these EXACT lowercase field names:
+{
+  "notes": string (optional),
+  "quantity": number (optional),
+  "vendor_uid": string (optional),
+  "product_code": string (optional),
+  "product_name": string (required),
+  "purchase_date": string (YYYY-MM-DD format, optional)
+}
+
+Example output:
+{
+  "notes": "30 behind",
+  "quantity": 2,
+  "vendor_uid": "FISH",
+  "product_code": "FISH012225",
+  "product_name": "Blue Nerds",
+  "purchase_date": "2025-01-22"
+}
+
+Important:
+- Use EXACTLY these lowercase field names
+- Return ONLY these fields
+- Ensure product_name is always present
+- Convert any numbers in quantity to actual number type
+- Format dates as YYYY-MM-DD`
+              },
+              { role: 'user', content: caption }
+            ],
+            temperature: 0.3,
+            max_tokens: 500
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`OpenAI API error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log('Raw AI response:', data.choices[0].message.content);
+        
+        const aiResult = JSON.parse(data.choices[0].message.content);
+        
+        // Ensure correct field names and structure
+        parsedContent = {
+          notes: aiResult.notes || "",
+          quantity: aiResult.quantity ? Number(aiResult.quantity) : null,
+          vendor_uid: aiResult.vendor_uid || "",
+          product_code: aiResult.product_code || "",
+          product_name: aiResult.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
+          purchase_date: aiResult.purchase_date || "",
+          parsing_metadata: {
+            method: "ai",
+            confidence: 0.9,
+            reanalysis_attempted: true
+          }
+        };
+
+        console.log('Structured AI content:', parsedContent);
+
+        // Log AI parsing success
+        await supabase.from("analysis_audit_log").insert({
+          message_id: messageId,
+          media_group_id: mediaGroupId,
+          event_type: "AI_PARSE_COMPLETED",
+          old_state: "processing",
+          analyzed_content: parsedContent,
+          processing_details: {
+            correlation_id: correlationId,
+            confidence: 0.9,
+            method: "ai",
+            original_caption: caption,
+            message_id: messageId,
+            retry_count: existingMessage.retry_count || 0
+          }
+        });
       } catch (aiError) {
         console.error('AI parsing failed:', aiError);
         
-        // Log AI parsing failure but continue with manual results
         await supabase.from("analysis_audit_log").insert({
           message_id: messageId,
           media_group_id: mediaGroupId,
@@ -178,7 +241,6 @@ serve(async (req) => {
       if (supabaseUrl && supabaseKey && messageId) {
         const supabase = createClient(supabaseUrl, supabaseKey);
         
-        // Update message error state
         await supabase
           .from('messages')
           .update({ 
@@ -189,7 +251,6 @@ serve(async (req) => {
           })
           .eq('id', messageId);
 
-        // Log error in audit log
         await supabase.from("analysis_audit_log").insert({
           message_id: messageId,
           media_group_id: mediaGroupId,

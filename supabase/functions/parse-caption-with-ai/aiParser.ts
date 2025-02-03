@@ -10,12 +10,12 @@ const SYSTEM_PROMPT = `Extract product information from captions following these
 
 Example Input: "Blue Widget #ABC12345 x5 (new stock)"
 Example Output: {
-  "product_name": "Blue Widget",
-  "product_code": "ABC12345",
-  "vendor_uid": "ABC",
-  "purchase_date": "2023-12-34",
+  "notes": "new stock",
   "quantity": 5,
-  "notes": "new stock"
+  "vendor_uid": "ABC",
+  "product_code": "ABC12345",
+  "product_name": "Blue Widget",
+  "purchase_date": "2023-12-34"
 }`;
 
 export async function aiParse(caption: string): Promise<ParsedContent> {
@@ -49,8 +49,14 @@ export async function aiParse(caption: string): Promise<ParsedContent> {
   const data = await response.json();
   const result = JSON.parse(data.choices[0].message.content);
 
+  // Ensure correct field names and structure
   return {
-    ...result,
+    notes: result.notes || "",
+    quantity: result.quantity ? Number(result.quantity) : null,
+    vendor_uid: result.vendor_uid || "",
+    product_code: result.product_code || "",
+    product_name: result.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
+    purchase_date: result.purchase_date || "",
     parsing_metadata: {
       method: 'ai',
       confidence: 0.8,
