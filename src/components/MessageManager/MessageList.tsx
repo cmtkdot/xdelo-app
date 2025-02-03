@@ -1,11 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem } from "@/types";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Edit, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -16,6 +16,7 @@ interface MessageListProps {
 export const MessageList = ({ onMessageSelect }: MessageListProps) => {
   const [deleteMessage, setDeleteMessage] = useState<MediaItem | null>(null);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
   const { data: messages, isLoading } = useQuery({
     queryKey: ['messages'],
@@ -23,12 +24,35 @@ export const MessageList = ({ onMessageSelect }: MessageListProps) => {
       const { data, error } = await supabase
         .from('messages_parsed')
         .select('*')
+        .eq('is_original_caption', true)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data as MediaItem[];
     },
   });
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages'
+        },
+        () => {
+          // Invalidate and refetch messages when there's a change
+          queryClient.invalidateQueries({ queryKey: ['messages'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   const handleDelete = async (deleteTelegram: boolean) => {
     if (!deleteMessage) return;
@@ -54,6 +78,9 @@ export const MessageList = ({ onMessageSelect }: MessageListProps) => {
         title: "Success",
         description: "Message deleted successfully",
       });
+      
+      // Invalidate the query to trigger a refetch
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
     } catch (error) {
       console.error("Error deleting message:", error);
       toast({

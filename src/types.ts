@@ -17,10 +17,11 @@ export interface MediaItem {
   created_at?: string;
   updated_at?: string;
   user_id: string;
+  chat_id?: number;
   processing_state?: 'initialized' | 'processing' | 'completed' | 'error';
   processing_started_at?: string;
   processing_completed_at?: string;
-  analyzed_content?: AnalyzedContent | null;
+  analyzed_content?: Record<string, any> | null;
   telegram_data?: any;
   error_message?: string;
   retry_count?: number;

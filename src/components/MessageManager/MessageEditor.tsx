@@ -38,7 +38,7 @@ export const MessageEditor = ({ message, onUpdate, onCancel }: MessageEditorProp
         .from('messages')
         .update({
           caption: editedMessage.caption,
-          analyzed_content: editedMessage.analyzed_content,
+          analyzed_content: editedMessage.analyzed_content as Record<string, any>,
         })
         .eq('id', editedMessage.id);
 
