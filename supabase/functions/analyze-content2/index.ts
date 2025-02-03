@@ -24,15 +24,22 @@ serve(async (req) => {
     const { message_id } = await req.json();
     console.log(`[${correlationId}] Starting analysis for message:`, message_id);
 
-    // Fetch message details
+    // Fetch message details using maybeSingle() instead of single()
     const { data: message, error: messageError } = await supabase
       .from("messages")
       .select("*")
       .eq("id", message_id)
-      .single();
+      .maybeSingle();
 
-    if (messageError) throw messageError;
-    if (!message) throw new Error("Message not found");
+    if (messageError) {
+      console.error(`[${correlationId}] Error fetching message:`, messageError);
+      throw messageError;
+    }
+    
+    if (!message) {
+      console.error(`[${correlationId}] Message not found:`, message_id);
+      throw new Error("Message not found");
+    }
 
     // Update state to analyzing
     const { error: updateError } = await supabase
@@ -43,7 +50,10 @@ serve(async (req) => {
       })
       .eq("id", message_id);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      console.error(`[${correlationId}] Error updating message state:`, updateError);
+      throw updateError;
+    }
 
     // Analyze caption if present
     let analyzedContent = null;
@@ -67,7 +77,10 @@ serve(async (req) => {
         }
       );
 
-      if (groupError) throw groupError;
+      if (groupError) {
+        console.error(`[${correlationId}] Error processing media group:`, groupError);
+        throw groupError;
+      }
     } else {
       // Single message update
       const { error: completeError } = await supabase
@@ -79,7 +92,10 @@ serve(async (req) => {
         })
         .eq("id", message_id);
 
-      if (completeError) throw completeError;
+      if (completeError) {
+        console.error(`[${correlationId}] Error completing message analysis:`, completeError);
+        throw completeError;
+      }
     }
 
     const duration = Date.now() - startTime;

@@ -1,5 +1,5 @@
-import { parseManually } from "./manualParser.ts";
 import { AnalyzedContent } from "../types.ts";
+import { parseManually } from "./manualParser.ts";
 
 const SYSTEM_PROMPT = `You are a product information extractor. Extract structured information from product-related captions with these specific rules:
 
@@ -43,7 +43,7 @@ export async function analyzeCaption(caption: string): Promise<AnalyzedContent> 
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: caption }
