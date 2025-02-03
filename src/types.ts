@@ -54,5 +54,5 @@ export interface FilterValues {
   sortOrder: "desc" | "asc";
   productCode?: string;
   quantityRange?: string;
-  processingState?: "initialized" | "processing" | "completed" | "error" | "pending";
+  processingState?: "initialized" | "processing" | "completed" | "error" | "pending" | "all";
 }
