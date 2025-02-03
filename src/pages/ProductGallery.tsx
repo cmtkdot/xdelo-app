@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem } from "@/types";
+import { MediaItem, FilterValues } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
 import { ProductPagination } from "@/components/ProductGallery/ProductPagination";
-import { ProductFilters, FilterValues } from "@/components/ProductGallery/ProductFilters";
+import ProductFilters from "@/components/ProductGallery/ProductFilters";
 import { useVendors } from "@/hooks/useVendors";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
 

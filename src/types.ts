@@ -49,7 +49,7 @@ export interface AnalyzedContent {
 export interface FilterValues {
   search: string;
   vendor: string;
-  dateFrom: Date | undefined;
-  dateTo: Date | undefined;
+  dateFrom?: Date;
+  dateTo?: Date;
   sortOrder: "desc" | "asc";
 }

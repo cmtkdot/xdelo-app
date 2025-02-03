@@ -6,14 +6,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
-
-export interface FilterValues {
-  search: string;
-  vendor: string;
-  dateFrom?: Date;
-  dateTo?: Date;
-  sortOrder: "asc" | "desc";
-}
+import { FilterValues } from "@/types";
 
 interface ProductFiltersProps {
   vendors: string[];
@@ -21,12 +14,12 @@ interface ProductFiltersProps {
   onFilterChange: (filters: FilterValues) => void;
 }
 
-const ProductFilters = ({ vendors, filters, onFilterChange }: ProductFiltersProps) => {
+export default function ProductFilters({ vendors, filters, onFilterChange }: ProductFiltersProps) {
   const [search, setSearch] = useState(filters.search);
   const [vendor, setVendor] = useState(filters.vendor);
-  const [dateFrom, setDateFrom] = useState(filters.dateFrom);
-  const [dateTo, setDateTo] = useState(filters.dateTo);
-  const [sortOrder, setSortOrder] = useState(filters.sortOrder);
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(filters.dateFrom);
+  const [dateTo, setDateTo] = useState<Date | undefined>(filters.dateTo);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder);
 
   const handleApplyFilters = () => {
     onFilterChange({ search, vendor, dateFrom, dateTo, sortOrder });
@@ -45,6 +38,7 @@ const ProductFilters = ({ vendors, filters, onFilterChange }: ProductFiltersProp
             <SelectValue placeholder="Select Vendor" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="all">All Vendors</SelectItem>
             {vendors.map((vendor) => (
               <SelectItem key={vendor} value={vendor}>
                 {vendor}
@@ -84,7 +78,10 @@ const ProductFilters = ({ vendors, filters, onFilterChange }: ProductFiltersProp
             />
           </PopoverContent>
         </Popover>
-        <Select value={sortOrder} onValueChange={setSortOrder}>
+        <Select 
+          value={sortOrder} 
+          onValueChange={(value: "asc" | "desc") => setSortOrder(value)}
+        >
           <SelectTrigger>
             <SelectValue placeholder="Sort Order" />
           </SelectTrigger>
@@ -97,6 +94,4 @@ const ProductFilters = ({ vendors, filters, onFilterChange }: ProductFiltersProp
       </div>
     </div>
   );
-};
-
-export default ProductFilters;
+}
