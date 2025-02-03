@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom
 import { DashboardLayout } from "./components/Layout/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import ProductGallery from "./pages/ProductGallery";
+import MessageManager from "./pages/MessageManager";
 import Vendors from "./pages/Vendors";
 import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
@@ -64,6 +65,7 @@ const App = () => (
           >
             <Route path="/" element={<Dashboard />} />
             <Route path="/gallery" element={<ProductGallery />} />
+            <Route path="/messages" element={<MessageManager />} />
             <Route path="/vendors" element={<Vendors />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<NotFound />} />
