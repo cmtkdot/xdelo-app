@@ -1,69 +1,50 @@
 import { ParsedContent } from "../types.ts";
 import { manualParse } from "./manualParser.ts";
 
-const SYSTEM_PROMPT = `You are a specialized cannabis product information extractor. Extract structured information following these rules:
+const SYSTEM_PROMPT = `Extract product information from captions following these rules:
+1. Product Name: Text before '#' (required)
+2. Product Code: Full code after '#'
+3. Vendor UID: Letters at start of product code
+4. Purchase Date: Convert MMDDYY or MDDYY to YYYY-MM-DD
+5. Quantity: Look for numbers after 'x' or in units
+6. Notes: Text in parentheses or remaining info
 
-1. Product Name (REQUIRED):
-   - Text before '#' or 'x' marker
-   - Stop at first 'x' or '#' encountered
-   - Remove any trailing spaces
-   - Example: "Blue Dream x2" -> "Blue Dream"
-
-2. Product Code:
-   - Full code after '#' including vendor and date
-   - Format: #[vendor_uid][date]
-   - Example: "#CHAD120523" -> "CHAD120523"
-
-3. Vendor UID:
-   - 1-4 letters after '#' before any numbers
-   - Example: "#CHAD120523" -> "CHAD"
-
-4. Purchase Date:
-   - Convert date formats:
-   - 6 digits (mmDDyy) -> YYYY-MM-DD
-   - 5 digits (mDDyy) -> YYYY-MM-DD (add leading zero)
-   - Example: "120523" -> "2023-12-05"
-   - Example: "31524" -> "2024-03-15"
-
-5. Quantity:
-   - Look for numbers after 'x' or 'qty:'
-   - Must be positive integer
-   - Common formats: "x2", "x 2", "qty: 2"
-   - Ignore if part of measurement
-
-6. Notes:
-   - Text in parentheses
-   - Any additional unstructured text
-   - Example: "(indoor grown)" -> "indoor grown"
-
-Example Input: "Blue Dream x2 #CHAD120523 (indoor)"
-Expected Output: {
-  "product_name": "Blue Dream",
-  "product_code": "CHAD120523",
-  "vendor_uid": "CHAD",
-  "purchase_date": "2023-12-05",
-  "quantity": 2,
-  "notes": "indoor"
-}
-
-Handle variations and edge cases:
-1. Product names with numbers (e.g., "OG Kush #18")
-2. Multiple x markers (use the last one for quantity)
-3. Missing or incomplete product codes
-4. Various date formats
-5. Special characters in product names`;
+Example Input: "Blue Widget #ABC12345 x5 (new stock)"
+Example Output: {
+  "product_name": "Blue Widget",
+  "product_code": "ABC12345",
+  "vendor_uid": "ABC",
+  "purchase_date": "2023-12-34",
+  "quantity": 5,
+  "notes": "new stock"
+}`;
 
 export async function analyzeCaption(caption: string): Promise<ParsedContent> {
   try {
     // First try manual parsing
     const manualResult = manualParse(caption);
-    if (manualResult && manualResult.product_name && manualResult.quantity) {
-      console.log('Successfully parsed caption manually:', manualResult);
-      return manualResult;
+    console.log('Manual parsing result:', manualResult);
+
+    // If manual parsing is successful and has high confidence, use it
+    if (
+      manualResult && 
+      manualResult.product_name && 
+      manualResult.quantity &&
+      manualResult.parsing_metadata?.confidence > 0.8
+    ) {
+      console.log('Using manual parsing result with high confidence');
+      return {
+        ...manualResult,
+        parsing_metadata: {
+          ...manualResult.parsing_metadata,
+          method: 'manual',
+          reanalysis_attempted: false
+        }
+      };
     }
 
     // Fallback to AI analysis
-    console.log('Manual parsing incomplete, attempting AI analysis');
+    console.log('Manual parsing incomplete or low confidence, attempting AI analysis');
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAIApiKey) {
       throw new Error('OpenAI API key not configured');
@@ -103,15 +84,12 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
 
     console.log('AI analysis result:', result);
     return {
-      product_name: result.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
-      product_code: result.product_code,
-      vendor_uid: result.vendor_uid,
-      purchase_date: result.purchase_date,
-      quantity: result.quantity,
-      notes: result.notes,
+      ...result,
       parsing_metadata: {
         method: 'ai',
-        confidence: 0.8
+        confidence: 0.9,
+        reanalysis_attempted: false,
+        ai_model: 'gpt-4o-mini'
       }
     };
   } catch (error) {
@@ -120,9 +98,10 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
     return {
       product_name: caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
       parsing_metadata: {
-        method: 'ai',
+        method: 'fallback',
         confidence: 0.1,
-        fallbacks_used: ['error_fallback']
+        error: error.message,
+        reanalysis_attempted: false
       }
     };
   }
