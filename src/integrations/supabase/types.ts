@@ -83,6 +83,7 @@ export type Database = {
             | Database["public"]["Enums"]["message_processing_state"]
             | null
           public_url: string | null
+          purchase_order_uid: string | null
           storage_path: string | null
           telegram_data: Json | null
           telegram_message_id: number | null
@@ -119,6 +120,7 @@ export type Database = {
             | Database["public"]["Enums"]["message_processing_state"]
             | null
           public_url?: string | null
+          purchase_order_uid?: string | null
           storage_path?: string | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
@@ -155,6 +157,7 @@ export type Database = {
             | Database["public"]["Enums"]["message_processing_state"]
             | null
           public_url?: string | null
+          purchase_order_uid?: string | null
           storage_path?: string | null
           telegram_data?: Json | null
           telegram_message_id?: number | null

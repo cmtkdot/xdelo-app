@@ -44,7 +44,7 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
         </h3>
         
         <div className="space-y-1 text-xs md:text-sm text-gray-600">
-          <p className="mb-1">Code: {analyzedContent?.product_code || 'N/A'}</p>
+          <p className="mb-1">Code: {analyzedContent?.product_code ? `PO#${analyzedContent.product_code}` : 'N/A'}</p>
           <p>Vendor: {analyzedContent?.vendor_uid || 'N/A'}</p>
           <p>Purchase Date: {formatDate(analyzedContent?.purchase_date)}</p>
           <p>Quantity: {analyzedContent?.quantity || 'N/A'}</p>
