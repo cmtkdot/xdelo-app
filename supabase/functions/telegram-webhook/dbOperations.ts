@@ -26,6 +26,11 @@ export async function updateExistingMessage(
   messageId: string,
   updateData: any
 ) {
+  // Cast processing_state to the correct enum type
+  if (updateData.processing_state) {
+    updateData.processing_state = updateData.processing_state as 'initialized' | 'caption_ready' | 'analyzing' | 'analysis_synced' | 'completed' | 'error';
+  }
+
   const { error } = await supabase
     .from("messages")
     .update(updateData)
@@ -41,6 +46,11 @@ export async function createNewMessage(
   supabase: SupabaseClient,
   messageData: any
 ) {
+  // Ensure processing_state is properly typed
+  if (messageData.processing_state) {
+    messageData.processing_state = messageData.processing_state as 'initialized' | 'caption_ready' | 'analyzing' | 'analysis_synced' | 'completed' | 'error';
+  }
+
   const { data: newMessage, error: messageError } = await supabase
     .from("messages")
     .insert(messageData)
@@ -85,6 +95,34 @@ export async function triggerCaptionParsing(
     console.log("✅ Caption parsing triggered successfully");
   } catch (error) {
     console.error("❌ Error triggering caption parsing:", error);
+    throw error;
+  }
+}
+
+export async function syncMediaGroupAnalysis(
+  supabase: SupabaseClient,
+  mediaGroupId: string,
+  analyzedContent: any,
+  originalMessageId: string
+) {
+  try {
+    console.log("🔄 Syncing media group analysis:", { mediaGroupId, originalMessageId });
+    
+    const { error } = await supabase.rpc('process_media_group_analysis', {
+      p_message_id: originalMessageId,
+      p_media_group_id: mediaGroupId,
+      p_analyzed_content: analyzedContent,
+      p_processing_completed_at: new Date().toISOString()
+    });
+
+    if (error) {
+      console.error("❌ Failed to sync media group analysis:", error);
+      throw error;
+    }
+
+    console.log("✅ Media group analysis synced successfully");
+  } catch (error) {
+    console.error("❌ Error in syncMediaGroupAnalysis:", error);
     throw error;
   }
 }
