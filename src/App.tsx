@@ -1,24 +1,31 @@
-import { BrowserRouter as Router, Routes, Route, Outlet } from 'react-router-dom';
-import { DashboardLayout } from './components/Layout/DashboardLayout';
-import Dashboard from './pages/Dashboard';
-import ProductGallery from './pages/ProductGallery';
-import Settings from './pages/Settings';
-import Vendors from './pages/Vendors';
-import MessageManager from './pages/MessageManager';
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "./lib/react-query";
+import { DashboardLayout } from "@/components/Layout/DashboardLayout";
+import Dashboard from "@/pages/Dashboard";
+import ProductGallery from "@/pages/ProductGallery";
+import MessageManager from "@/pages/MessageManager";
+import Settings from "@/pages/Settings";
+import Vendors from "@/pages/Vendors";
+import { Toaster } from "@/components/ui/toaster";
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<DashboardLayout><Outlet /></DashboardLayout>}>
-          <Route index element={<Dashboard />} />
-          <Route path="products" element={<ProductGallery />} />
-          <Route path="messages" element={<MessageManager />} />
-          <Route path="vendors" element={<Vendors />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
-      </Routes>
-    </Router>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<DashboardLayout />}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="messages" element={<MessageManager />} />
+            <Route path="gallery" element={<ProductGallery />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="vendors" element={<Vendors />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+      <Toaster />
+    </QueryClientProvider>
   );
 }
 
