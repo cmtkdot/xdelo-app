@@ -6,6 +6,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface AnalyzedContent {
+  product_name?: string;
+  product_code?: string;
+  vendor_uid?: string;
+  purchase_date?: string;
+  quantity?: number;
+  notes?: string;
+  parsing_metadata?: {
+    method: string;
+    confidence: number;
+    fallbacks_used?: string[];
+    reanalysis_attempted?: boolean;
+    previous_analysis?: any;
+  };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -77,7 +93,7 @@ serve(async (req) => {
    - Text in parentheses or remaining info
    - Example: "(indoor grown)"
 
-Return JSON with high confidence if all required fields are found and valid.`
+Return a JSON object with these fields. Include null for missing values.`
           },
           { role: 'user', content: caption }
         ],
@@ -91,14 +107,26 @@ Return JSON with high confidence if all required fields are found and valid.`
     }
 
     const data = await response.json();
-    const newAnalyzedContent = JSON.parse(data.choices[0].message.content);
+    let newAnalyzedContent: AnalyzedContent;
+
+    try {
+      const aiResponse = data.choices[0].message.content;
+      console.log('AI response:', aiResponse);
+      newAnalyzedContent = JSON.parse(aiResponse);
+    } catch (parseError) {
+      console.error('Error parsing AI response:', parseError);
+      throw new Error('Failed to parse AI response');
+    }
 
     // Add metadata
     newAnalyzedContent.parsing_metadata = {
       method: 'ai_enhanced',
       confidence: 0.9,
+      reanalysis_attempted: true,
       previous_analysis: analyzed_content?.parsing_metadata
     };
+
+    console.log('New analyzed content:', newAnalyzedContent);
 
     // Update the message with new analysis
     const { error: updateError } = await supabase
@@ -109,7 +137,10 @@ Return JSON with high confidence if all required fields are found and valid.`
       })
       .eq('id', message_id);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      console.error('Error updating message:', updateError);
+      throw updateError;
+    }
 
     return new Response(
       JSON.stringify({ message: 'Reanalysis completed', analyzed_content: newAnalyzedContent }),
