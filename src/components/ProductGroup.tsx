@@ -9,11 +9,8 @@ interface ProductGroupProps {
 }
 
 export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
-  // Find the message with original caption or the first message as fallback
   const mainMedia = group.find(media => media.is_original_caption) || group[0];
   const hasError = mainMedia.processing_state === 'error';
-
-  // Get the analyzed content from the original caption message
   const analyzedContent = group.find(media => media.is_original_caption)?.analyzed_content || mainMedia.analyzed_content;
 
   return (
@@ -30,11 +27,11 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
         )}
       </div>
       
-      <div className="p-4">
-        <h3 className="text-lg font-semibold mb-2">
+      <div className="p-3 md:p-4">
+        <h3 className="text-base md:text-lg font-semibold mb-2">
           {analyzedContent?.product_name || 'Untitled Product'}
         </h3>
-        <p className="text-sm text-gray-600 mb-2">
+        <p className="text-xs md:text-sm text-gray-600 mb-2">
           Code: {analyzedContent?.product_code || 'N/A'}
         </p>
         
@@ -49,7 +46,7 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
         
         <button
           onClick={() => onEdit(mainMedia)}
-          className="text-sm text-blue-600 hover:text-blue-800"
+          className="text-xs md:text-sm text-blue-600 hover:text-blue-800"
         >
           Edit Details
         </button>
