@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, FilterValues, AnalyzedContent } from "@/types";
+import { MediaItem, FilterValues, Json } from "@/types";
 import { useToast } from "@/components/ui/use-toast";
 
 export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
-  const [mediaGroups, setMediaGroups] = useState<{ [key: string]: MediaItem[] }>({});
+  const [mediaGroups, setMediaGroups] = useState<Record<string, MediaItem[]>>({});
   const [totalPages, setTotalPages] = useState(1);
   const { toast } = useToast();
   const ITEMS_PER_PAGE = 16;
@@ -12,6 +12,60 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
   useEffect(() => {
     const fetchMessages = async () => {
       try {
+        // First, check for any initialized messages that need syncing
+        const { data: initializedMessages, error: initError } = await supabase
+          .from("messages")
+          .select("*")
+          .eq("processing_state", "initialized")
+          .eq("group_caption_synced", false);
+
+        if (initError) throw initError;
+
+        // Sync initialized messages if they belong to a group with analyzed content
+        if (initializedMessages?.length) {
+          for (const msg of initializedMessages) {
+            if (msg.media_group_id) {
+              const { data: groupMessages } = await supabase
+                .from("messages")
+                .select("*")
+                .eq("media_group_id", msg.media_group_id)
+                .eq("processing_state", "completed")
+                .order("created_at", { ascending: true })
+                .limit(1);
+
+              if (groupMessages?.[0]?.analyzed_content) {
+                // Log sync attempt to audit log
+                await supabase.from("analysis_audit_log").insert({
+                  message_id: msg.id,
+                  media_group_id: msg.media_group_id,
+                  event_type: "GROUP_SYNC_INITIATED",
+                  old_state: "initialized",
+                  new_state: "completed",
+                  analyzed_content: groupMessages[0].analyzed_content as Json,
+                  processing_details: {
+                    sync_type: "auto_group_sync",
+                    source_message_id: groupMessages[0].id,
+                    group_message_count: msg.group_message_count
+                  } as Json
+                });
+
+                // Update the message with synced content
+                await supabase
+                  .from("messages")
+                  .update({
+                    analyzed_content: groupMessages[0].analyzed_content,
+                    processing_state: "completed",
+                    group_caption_synced: true,
+                    message_caption_id: groupMessages[0].id,
+                    processing_completed_at: new Date().toISOString()
+                  })
+                  .eq("id", msg.id);
+              }
+            }
+          }
+        }
+
+        // Now fetch messages for display
         let query = supabase
           .from("messages")
           .select("*", { count: "exact" })
@@ -74,7 +128,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
 
           if (groupMediaError) throw groupMediaError;
 
-          const groups: { [key: string]: MediaItem[] } = {};
+          const groups: Record<string, MediaItem[]> = {};
           allGroupMedia?.forEach((message) => {
             const groupKey = message.media_group_id || message.id;
             if (!groups[groupKey]) {
