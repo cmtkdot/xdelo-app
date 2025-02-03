@@ -44,7 +44,11 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
         }
 
         if (filters.processingState && filters.processingState !== 'all') {
-          originalCaptionsQuery = originalCaptionsQuery.eq("processing_state", filters.processingState);
+          if (filters.processingState === 'pending') {
+            originalCaptionsQuery = originalCaptionsQuery.is('processing_state', null);
+          } else {
+            originalCaptionsQuery = originalCaptionsQuery.eq('processing_state', filters.processingState);
+          }
         }
 
         if (filters.dateFrom) {
