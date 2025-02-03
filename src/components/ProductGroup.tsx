@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useEffect } from "react";
 
 interface ProductGroupProps {
   group: MediaItem[];
@@ -33,6 +34,47 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
     return code.startsWith('PO#') ? code : `PO#${code}`;
   };
 
+  useEffect(() => {
+    const checkConfidence = async () => {
+      if (
+        mainMedia.caption &&
+        analyzedContent?.parsing_metadata?.confidence < 0.7 &&
+        !analyzedContent?.parsing_metadata?.reanalysis_attempted
+      ) {
+        console.log('Low confidence detected, triggering reanalysis:', {
+          confidence: analyzedContent?.parsing_metadata?.confidence,
+          message_id: mainMedia.id
+        });
+
+        try {
+          const { error } = await supabase.functions.invoke('reanalyze-low-confidence', {
+            body: {
+              message_id: mainMedia.id,
+              caption: mainMedia.caption,
+              analyzed_content: analyzedContent
+            }
+          });
+
+          if (error) throw error;
+
+          toast({
+            title: "Reanalysis Started",
+            description: "The content is being reanalyzed for better accuracy.",
+          });
+        } catch (error) {
+          console.error("Error triggering reanalysis:", error);
+          toast({
+            title: "Error",
+            description: "Failed to start reanalysis",
+            variant: "destructive",
+          });
+        }
+      }
+    };
+
+    checkConfidence();
+  }, [mainMedia.id, mainMedia.caption, analyzedContent, toast]);
+
   const handleDelete = async () => {
     try {
       const { error } = await supabase
@@ -58,11 +100,11 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
 
   const handleReanalyze = async () => {
     try {
-      const { error } = await supabase.functions.invoke('parse-caption-with-ai', {
+      const { error } = await supabase.functions.invoke('reanalyze-low-confidence', {
         body: {
           message_id: mainMedia.id,
-          media_group_id: mainMedia.media_group_id,
-          caption: mainMedia.caption
+          caption: mainMedia.caption,
+          analyzed_content: analyzedContent
         }
       });
 
@@ -109,13 +151,17 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
           {analyzedContent?.notes && (
             <p className="text-gray-500 italic">Notes: {analyzedContent.notes}</p>
           )}
+          {analyzedContent?.parsing_metadata?.confidence < 0.7 && (
+            <p className="text-yellow-600">
+              Low confidence analysis ({Math.round(analyzedContent.parsing_metadata.confidence * 100)}%)
+            </p>
+          )}
         </div>
         
         {hasError && (
           <Alert variant="destructive" className="mt-3 mb-3">
             <AlertDescription>
               {mainMedia.error_message || 'Processing error occurred'}
-              {mainMedia.retry_count > 0 && ` (Retry ${mainMedia.retry_count}/3)`}
             </AlertDescription>
           </Alert>
         )}

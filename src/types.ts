@@ -37,6 +37,13 @@ export interface AnalyzedContent {
   purchase_date?: string;
   quantity?: number;
   notes?: string;
+  parsing_metadata?: {
+    method: string;
+    confidence: number;
+    fallbacks_used?: string[];
+    reanalysis_attempted?: boolean;
+    previous_analysis?: any;
+  };
 }
 
 export interface FilterValues {
