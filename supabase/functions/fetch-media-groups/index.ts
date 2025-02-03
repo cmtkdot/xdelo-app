@@ -30,40 +30,38 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Build the base query for messages with original captions
     let query = supabase
       .from("messages")
       .select("*", { count: "exact" })
       .eq('is_original_caption', true)
       .not('analyzed_content', 'is', null);
 
-    // Apply text search filter across product name in analyzed_content
+    // Apply text search filter
     if (filters.search) {
-      const searchTerm = `%${filters.search}%`;
-      query = query.ilike('analyzed_content->product_name', searchTerm);
+      query = query.ilike('analyzed_content->>product_name', `%${filters.search}%`);
     }
 
-    // Apply vendor filter using vendor_uid from analyzed_content
+    // Apply vendor filter
     if (filters.vendor && filters.vendor !== "all") {
-      query = query.eq('analyzed_content->vendor_uid', filters.vendor);
+      query = query.eq('analyzed_content->>vendor_uid', filters.vendor);
     }
 
-    // Apply product code filter using product_code from analyzed_content
+    // Apply product code filter
     if (filters.productCode && filters.productCode !== 'all') {
-      query = query.eq('analyzed_content->product_code', filters.productCode);
+      query = query.eq('analyzed_content->>product_code', filters.productCode);
     }
 
-    // Apply quantity range filter using quantity from analyzed_content
+    // Apply quantity range filter
     if (filters.quantityRange && filters.quantityRange !== 'all') {
       if (filters.quantityRange === 'undefined') {
-        query = query.is('analyzed_content->quantity', null);
+        query = query.is('analyzed_content->>quantity', null);
       } else if (filters.quantityRange === '21+') {
-        query = query.gte('analyzed_content->quantity', 21);
+        query = query.gte('analyzed_content->>quantity', '21');
       } else {
         const [min, max] = filters.quantityRange.split('-').map(Number);
         query = query
-          .gte('analyzed_content->quantity', min)
-          .lte('analyzed_content->quantity', max);
+          .gte('analyzed_content->>quantity', min.toString())
+          .lte('analyzed_content->>quantity', max.toString());
       }
     }
 
@@ -72,12 +70,12 @@ serve(async (req) => {
       query = query.eq("processing_state", filters.processingState);
     }
 
-    // Apply date range filters using purchase_date from analyzed_content
+    // Apply date range filters
     if (filters.dateFrom) {
-      query = query.gte('analyzed_content->purchase_date', filters.dateFrom);
+      query = query.gte('analyzed_content->>purchase_date', filters.dateFrom);
     }
     if (filters.dateTo) {
-      query = query.lte('analyzed_content->purchase_date', filters.dateTo);
+      query = query.lte('analyzed_content->>purchase_date', filters.dateTo);
     }
 
     // Apply sorting
@@ -117,7 +115,6 @@ serve(async (req) => {
       }
 
       if (allGroupMedia) {
-        // Organize messages into groups
         allGroupMedia.forEach((message) => {
           const groupKey = message.media_group_id || message.id;
           if (!groups[groupKey]) {
@@ -126,25 +123,15 @@ serve(async (req) => {
           groups[groupKey].push(message);
         });
 
-        // Sort messages within each group
         Object.keys(groups).forEach(key => {
           groups[key].sort((a, b) => {
-            // Prioritize messages with original captions
             if (a.is_original_caption && !b.is_original_caption) return -1;
             if (!a.is_original_caption && b.is_original_caption) return 1;
-            
-            // Then sort by creation date
             return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
           });
         });
       }
     }
-
-    console.log('Returning response with groups:', {
-      groupCount: Object.keys(groups).length,
-      totalMessages: count,
-      totalPages: Math.ceil((count || 0) / ITEMS_PER_PAGE)
-    });
 
     return new Response(
       JSON.stringify({

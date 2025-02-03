@@ -36,13 +36,13 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     const fetchProductCodes = async () => {
       const { data, error } = await supabase
         .from('messages')
-        .select('analyzed_content->product_code')
-        .eq('is_original_caption', true)
-        .not('analyzed_content', 'is', null);
+        .select('analyzed_content')
+        .not('analyzed_content', 'is', null)
+        .is('is_original_caption', true);
 
       if (!error && data) {
         const uniqueCodes = [...new Set(data
-          .map(item => item.product_code)
+          .map(item => item.analyzed_content?.product_code)
           .filter(Boolean)
         )];
         setProductCodes(uniqueCodes);

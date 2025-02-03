@@ -9,16 +9,16 @@ export const useVendors = () => {
       try {
         const { data, error } = await supabase
           .from("messages")
-          .select("analyzed_content->vendor_uid")
-          .not("analyzed_content->vendor_uid", "is", null)
-          .not("analyzed_content->vendor_uid", "eq", "");
+          .select('analyzed_content')
+          .not('analyzed_content', 'is', null)
+          .is('is_original_caption', true);
 
         if (error) throw error;
 
         const uniqueVendors = new Set<string>();
         data.forEach((item) => {
-          if (item.vendor_uid) {
-            uniqueVendors.add(item.vendor_uid);
+          if (item.analyzed_content?.vendor_uid) {
+            uniqueVendors.add(item.analyzed_content.vendor_uid);
           }
         });
 
