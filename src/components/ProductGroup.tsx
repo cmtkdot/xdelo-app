@@ -5,11 +5,10 @@ import { ImageSwiper } from "@/components/ui/image-swiper";
 
 interface ProductGroupProps {
   group: MediaItem[];
-  onMediaClick: (media: MediaItem, group: MediaItem[]) => void;
   onEdit: (item: MediaItem) => void;
 }
 
-export const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps) => {
+export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
   // Find the message with original caption or the first message as fallback
   const mainMedia = group.find(media => media.is_original_caption) || group[0];
   const hasError = mainMedia.processing_state === 'error';
@@ -19,10 +18,7 @@ export const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps)
 
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
-      <div 
-        className="relative cursor-pointer"
-        onClick={() => onMediaClick(mainMedia, group)}
-      >
+      <div className="relative">
         <ImageSwiper media={group} />
         
         {hasError && (

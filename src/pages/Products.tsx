@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
-import { ProductMediaViewer } from "@/components/ProductMediaViewer";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/hooks/use-toast";
 import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
@@ -26,8 +25,6 @@ const getMediaCaption = (item: MediaItem): string => {
 };
 
 const Products = () => {
-  const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
-  const [viewerOpen, setViewerOpen] = useState(false);
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -43,7 +40,7 @@ const Products = () => {
       if (error) throw error;
 
       // Create a map to store unique messages
-      const uniqueMessages = new Map();
+      const uniqueMessages = new Map<string, MediaItem>();
       
       (data as MediaItem[]).forEach(message => {
         const key = `${message.file_unique_id}-${message.media_group_id || 'single'}`;
@@ -56,7 +53,7 @@ const Products = () => {
           const existingMessage = uniqueMessages.get(key);
           if (
             message.analyzed_content && 
-            (!existingMessage.analyzed_content || 
+            (!existingMessage?.analyzed_content || 
              message.updated_at > existingMessage.updated_at)
           ) {
             uniqueMessages.set(key, message);
@@ -175,11 +172,6 @@ const Products = () => {
     });
   };
 
-  const handleMediaClick = (media: MediaItem, group: MediaItem[]) => {
-    setSelectedMedia(media);
-    setViewerOpen(true);
-  };
-
   const handleEdit = (item: MediaItem) => {
     setEditItem(item);
   };
@@ -194,20 +186,10 @@ const Products = () => {
           <ProductGroup
             key={group[0].id}
             group={group}
-            onMediaClick={handleMediaClick}
             onEdit={handleEdit}
           />
         ))}
       </div>
-
-      <ProductMediaViewer
-        open={viewerOpen}
-        onOpenChange={setViewerOpen}
-        media={selectedMedia}
-        relatedMedia={selectedMedia ? products.filter(item => 
-          item.media_group_id === selectedMedia.media_group_id
-        ) : []}
-      />
 
       <MediaEditDialog
         editItem={editItem}
