@@ -18,10 +18,10 @@ export interface MediaItem {
   updated_at?: string;
   user_id: string;
   chat_id?: number;
-  processing_state?: 'initialized' | 'processing' | 'completed' | 'error';
+  processing_state?: 'initialized' | 'processing' | 'completed' | 'error' | 'pending';
   processing_started_at?: string;
   processing_completed_at?: string;
-  analyzed_content?: Record<string, any> | null;
+  analyzed_content?: AnalyzedContent | null;
   telegram_data?: any;
   error_message?: string;
   retry_count?: number;
@@ -29,12 +29,6 @@ export interface MediaItem {
   group_first_message_time?: string;
   group_last_message_time?: string;
   group_message_count?: number;
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  quantity?: number;
-  notes?: string;
 }
 
 export interface FilterValues {
@@ -45,7 +39,7 @@ export interface FilterValues {
   sortOrder: "asc" | "desc";
   productCode?: string;
   quantityRange?: string;
-  processingState?: string;
+  processingState?: 'initialized' | 'processing' | 'completed' | 'error' | 'pending';
 }
 
 export interface AnalyzedContent {
@@ -55,5 +49,18 @@ export interface AnalyzedContent {
   purchase_date?: string;
   quantity?: number;
   notes?: string;
+  parsing_metadata?: {
+    confidence: number;
+    reanalysis_attempted?: boolean;
+    method?: string;
+  };
   [key: string]: any;
+}
+
+export interface MediaGroup {
+  id: string;
+  items: MediaItem[];
+  mainItem: MediaItem;
+  caption?: string;
+  productInfo: AnalyzedContent;
 }
