@@ -45,7 +45,15 @@ export const ProductMediaViewer = ({
     try {
       setIsLoading(true);
 
-      // First, update all messages that reference this message as their caption source
+      // First, delete related audit log entries
+      const { error: auditLogError } = await supabase
+        .from('analysis_audit_log')
+        .delete()
+        .eq('message_id', currentMedia.id);
+
+      if (auditLogError) throw auditLogError;
+
+      // Then, update all messages that reference this message as their caption source
       const { error: updateError } = await supabase
         .from('messages')
         .update({ message_caption_id: null })
@@ -65,7 +73,7 @@ export const ProductMediaViewer = ({
         // Continue with message deletion even if storage deletion fails
       }
 
-      // Then delete the message
+      // Finally delete the message
       const { error: deleteError } = await supabase
         .from('messages')
         .delete()
