@@ -30,26 +30,36 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Build the query for original caption messages only
+    // Build the base query for messages with original captions
     let query = supabase
       .from("messages")
       .select("*", { count: "exact" })
       .eq('is_original_caption', true)
       .not('analyzed_content', 'is', null);
 
-    // Apply JSON filters
+    // Apply text search filter across multiple JSON fields and caption
     if (filters.search) {
-      query = query.or(`analyzed_content->product_name.ilike.%${filters.search}%,analyzed_content->notes.ilike.%${filters.search}%,caption.ilike.%${filters.search}%`);
+      const searchTerm = `%${filters.search}%`;
+      query = query.or(
+        `analyzed_content->product_name.ilike.${searchTerm},` +
+        `analyzed_content->notes.ilike.${searchTerm},` +
+        `analyzed_content->vendor_uid.ilike.${searchTerm},` +
+        `analyzed_content->product_code.ilike.${searchTerm},` +
+        `caption.ilike.${searchTerm}`
+      );
     }
 
+    // Apply vendor filter using JSON path
     if (filters.vendor && filters.vendor !== "all") {
       query = query.eq("analyzed_content->vendor_uid", filters.vendor);
     }
 
+    // Apply product code filter using JSON path
     if (filters.productCode && filters.productCode !== 'all') {
       query = query.eq("analyzed_content->product_code", filters.productCode);
     }
 
+    // Apply quantity range filter using JSON path
     if (filters.quantityRange && filters.quantityRange !== 'all') {
       if (filters.quantityRange === 'undefined') {
         query = query.is('analyzed_content->quantity', null);
@@ -63,40 +73,57 @@ serve(async (req) => {
       }
     }
 
+    // Apply processing state filter
     if (filters.processingState && filters.processingState !== 'all') {
       query = query.eq("processing_state", filters.processingState);
     }
 
+    // Apply date range filters using JSON path
     if (filters.dateFrom) {
       query = query.gte("analyzed_content->purchase_date", filters.dateFrom);
     }
-
     if (filters.dateTo) {
       query = query.lte("analyzed_content->purchase_date", filters.dateTo);
     }
 
+    // Apply sorting
     query = query.order("created_at", { ascending: filters.sortOrder === "asc" });
 
+    // Apply pagination
     const from = (page - 1) * ITEMS_PER_PAGE;
     const to = from + ITEMS_PER_PAGE - 1;
     query = query.range(from, to);
 
+    console.log('Executing query for original messages...');
     const { data: originalMessages, count, error: originalMessagesError } = await query;
 
-    if (originalMessagesError) throw originalMessagesError;
+    if (originalMessagesError) {
+      console.error('Error fetching original messages:', originalMessagesError);
+      throw originalMessagesError;
+    }
 
-    const mediaGroupIds = originalMessages?.map(msg => msg.media_group_id).filter(Boolean) || [];
+    // Get all media group IDs from the original messages
+    const mediaGroupIds = originalMessages
+      ?.map(msg => msg.media_group_id)
+      .filter(Boolean) || [];
+
     const groups: Record<string, any[]> = {};
 
+    // If we have media groups, fetch all related media
     if (mediaGroupIds.length > 0) {
+      console.log('Fetching related media for groups:', mediaGroupIds);
       const { data: allGroupMedia, error: groupMediaError } = await supabase
         .from("messages")
         .select("*")
         .in("media_group_id", mediaGroupIds);
 
-      if (groupMediaError) throw groupMediaError;
+      if (groupMediaError) {
+        console.error('Error fetching group media:', groupMediaError);
+        throw groupMediaError;
+      }
 
       if (allGroupMedia) {
+        // Organize messages into groups
         allGroupMedia.forEach((message) => {
           const groupKey = message.media_group_id || message.id;
           if (!groups[groupKey]) {
@@ -108,13 +135,22 @@ serve(async (req) => {
         // Sort messages within each group
         Object.keys(groups).forEach(key => {
           groups[key].sort((a, b) => {
+            // Prioritize messages with original captions
             if (a.is_original_caption && !b.is_original_caption) return -1;
             if (!a.is_original_caption && b.is_original_caption) return 1;
-            return 0;
+            
+            // Then sort by creation date
+            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
           });
         });
       }
     }
+
+    console.log('Returning response with groups:', {
+      groupCount: Object.keys(groups).length,
+      totalMessages: count,
+      totalPages: Math.ceil((count || 0) / ITEMS_PER_PAGE)
+    });
 
     return new Response(
       JSON.stringify({
@@ -125,10 +161,16 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error fetching media groups:', error);
+    console.error('Error in fetch-media-groups function:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        error: error.message,
+        details: error.stack
+      }),
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
     );
   }
 });

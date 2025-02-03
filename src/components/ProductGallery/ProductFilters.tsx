@@ -31,20 +31,18 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   const [productCodes, setProductCodes] = useState<string[]>([]);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
+  // Fetch unique product codes from analyzed_content
   useEffect(() => {
     const fetchProductCodes = async () => {
       const { data, error } = await supabase
         .from('messages')
-        .select('analyzed_content')
+        .select('analyzed_content->product_code')
         .eq('is_original_caption', true)
         .not('analyzed_content', 'is', null);
 
       if (!error && data) {
         const uniqueCodes = [...new Set(data
-          .map(item => {
-            const content = item.analyzed_content as { product_code?: string };
-            return content?.product_code;
-          })
+          .map(item => item.product_code)
           .filter(Boolean)
         )];
         setProductCodes(uniqueCodes);
@@ -54,6 +52,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     fetchProductCodes();
   }, []);
 
+  // Count active filters
   useEffect(() => {
     let count = 0;
     if (search) count++;
@@ -65,10 +64,12 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     setActiveFiltersCount(count);
   }, [search, vendor, dateFrom, dateTo, productCode, quantityRange, processingState]);
 
+  // Debounce filter changes
   const debouncedFilterChange = debounce((newFilters: FilterValues) => {
     onFilterChange(newFilters);
   }, 300);
 
+  // Update filters when any value changes
   useEffect(() => {
     debouncedFilterChange({
       search,
