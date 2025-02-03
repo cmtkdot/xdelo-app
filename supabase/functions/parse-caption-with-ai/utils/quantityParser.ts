@@ -1,7 +1,7 @@
 import { QuantityParseResult } from "../types.ts";
 
 const QUANTITY_PATTERNS = {
-  STANDARD_X: /[x×]\s*(\d+)/i,
+  STANDARD_X: /[x×]\s*(\d+)(?!\s*[a-zA-Z])/i,
   WITH_UNITS: /(\d+)\s*(pc|pcs|pieces?|units?|qty)/i,
   PREFIX_QTY: /(?:qty|quantity)\s*:?\s*(\d+)/i,
   PARENTHESES: /\((?:qty|quantity|x|×)?\s*(\d+)\s*(?:pc|pcs|pieces?)?\)/i,
@@ -61,6 +61,7 @@ export function parseQuantity(text: string): QuantityParseResult | null {
     }
   }
 
+  // Last resort: look for standalone numbers
   const numberMatch = text.match(/\b(\d+)\b/);
   if (numberMatch) {
     const value = validateQuantity(parseInt(numberMatch[1]));

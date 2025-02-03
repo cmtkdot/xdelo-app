@@ -6,13 +6,13 @@ export function manualParse(caption: string): ParsedContent {
   const result: ParsedContent = {};
   const fallbacks_used: string[] = [];
 
-  // Extract product name (text before #)
-  const hashIndex = caption.indexOf('#');
-  if (hashIndex > 0) {
-    result.product_name = caption.substring(0, hashIndex).trim();
+  // Extract product name (text before # or x)
+  const productNameMatch = caption.split(/[#x]/)[0]?.trim();
+  if (productNameMatch) {
+    result.product_name = productNameMatch;
   } else {
     result.product_name = caption.trim();
-    fallbacks_used.push('no_hash_product_name');
+    fallbacks_used.push('no_product_name_marker');
   }
 
   // Extract product code and vendor UID
@@ -20,7 +20,7 @@ export function manualParse(caption: string): ParsedContent {
   if (codeMatch) {
     result.product_code = codeMatch[1];
     
-    const vendorMatch = result.product_code.match(/^([A-Za-z]+)/);
+    const vendorMatch = result.product_code.match(/^([A-Za-z]{1,4})/);
     if (vendorMatch) {
       result.vendor_uid = vendorMatch[1].toUpperCase();
       
@@ -47,16 +47,27 @@ export function manualParse(caption: string): ParsedContent {
     }
   }
 
-  // Parse quantity
+  // Parse quantity using the enhanced quantityParser
   const quantityResult = parseQuantity(caption);
   if (quantityResult) {
     result.quantity = quantityResult.value;
   }
 
-  // Extract notes (text in parentheses)
+  // Extract notes (text in parentheses or remaining text)
   const notesMatch = caption.match(/\((.*?)\)/);
   if (notesMatch) {
     result.notes = notesMatch[1].trim();
+  } else {
+    // If no parentheses, look for any remaining text after the product code and quantity
+    const remainingText = caption
+      .replace(/#[A-Za-z0-9-]+/, '') // Remove product code
+      .replace(/x\s*\d+/, '')        // Remove quantity
+      .replace(productNameMatch, '')  // Remove product name
+      .trim();
+    
+    if (remainingText) {
+      result.notes = remainingText;
+    }
   }
 
   result.parsing_metadata = {

@@ -1,24 +1,53 @@
 import { ParsedContent } from "../types.ts";
 import { manualParse } from "./manualParser.ts";
 
-const SYSTEM_PROMPT = `You are a specialized product information extractor. Your task is to analyze captions and extract structured product information following these rules:
+const SYSTEM_PROMPT = `You are a specialized cannabis product information extractor. Extract structured information following these rules:
 
-1. Product Name: Text before '#' (required)
-2. Product Code: Full code after '#' including vendor and date
-3. Vendor UID: 1-4 letters after '#' before any numbers
-4. Purchase Date: Convert date format:
+1. Product Name (REQUIRED):
+   - Text before '#' or 'x' marker
+   - Stop at first 'x' or '#' encountered
+   - Remove any trailing spaces
+   - Example: "Blue Dream x2" -> "Blue Dream"
+
+2. Product Code:
+   - Full code after '#' including vendor and date
+   - Format: #[vendor_uid][date]
+   - Example: "#CHAD120523" -> "CHAD120523"
+
+3. Vendor UID:
+   - 1-4 letters after '#' before any numbers
+   - Example: "#CHAD120523" -> "CHAD"
+
+4. Purchase Date:
+   - Convert date formats:
    - 6 digits (mmDDyy) -> YYYY-MM-DD
    - 5 digits (mDDyy) -> YYYY-MM-DD (add leading zero)
-5. Quantity: Look for numbers after 'x' that:
-   - Must be a positive integer
-   - Should not be part of a measurement (e.g., '2x4' lumber)
-   - Should be standalone (e.g., 'x5' or 'x 5')
-6. Notes: Any additional info in parentheses or unstructured text`;
+   - Example: "120523" -> "2023-12-05"
+   - Example: "31524" -> "2024-03-15"
+
+5. Quantity:
+   - Look for numbers after 'x' or 'qty:'
+   - Must be positive integer
+   - Common formats: "x2", "x 2", "qty: 2"
+   - Ignore if part of measurement
+
+6. Notes:
+   - Text in parentheses
+   - Any additional unstructured text
+   - Example: "(indoor grown)" -> "indoor grown"
+
+Example Input: "Blue Dream x2 #CHAD120523 (indoor)"
+Expected Output: {
+  "product_name": "Blue Dream",
+  "product_code": "CHAD120523",
+  "vendor_uid": "CHAD",
+  "purchase_date": "2023-12-05",
+  "quantity": 2,
+  "notes": "indoor"
+}`;
 
 export async function analyzeCaption(caption: string): Promise<ParsedContent> {
   try {
-    console.log('Starting caption analysis for:', caption);
-    
     // First try manual parsing
     const manualResult = manualParse(caption);
     if (manualResult && manualResult.product_name && manualResult.quantity) {
@@ -40,7 +69,7 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: caption }
@@ -55,8 +84,6 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
     }
 
     const data = await response.json();
-    console.log('OpenAI API response:', data);
-    
     const result = JSON.parse(data.choices[0].message.content);
 
     // Validate quantity
@@ -67,9 +94,9 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
       }
     }
 
-    console.log('Final analyzed result:', result);
+    console.log('AI analysis result:', result);
     return {
-      product_name: result.product_name || caption.split('#')[0]?.trim() || 'Untitled Product',
+      product_name: result.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
       product_code: result.product_code,
       vendor_uid: result.vendor_uid,
       purchase_date: result.purchase_date,
@@ -84,7 +111,7 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
     console.error('Error analyzing caption:', error);
     // Return basic info even if analysis fails
     return {
-      product_name: caption.split('#')[0]?.trim() || 'Untitled Product',
+      product_name: caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
       parsing_metadata: {
         method: 'ai',
         confidence: 0.1,
