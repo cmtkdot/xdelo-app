@@ -1,91 +1,67 @@
-import { Card } from "@/components/ui/card";
-import { MessageSquare, Package, Users } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Card } from "@/components/ui/card";
+import { AnalyzedContent } from "@/types";
 
 const Dashboard = () => {
-  const { data: messageCount = 0 } = useQuery({
-    queryKey: ['messageCount'],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from('messages')
-        .select('*', { count: 'exact', head: true });
-      
-      if (error) throw error;
-      return count || 0;
-    }
+  const [stats, setStats] = useState({
+    totalMessages: 0,
+    totalProducts: 0,
+    uniqueVendors: 0
   });
 
-  const { data: productCount = 0 } = useQuery({
-    queryKey: ['productCount'],
-    queryFn: async () => {
-      const { count, error } = await supabase
+  useEffect(() => {
+    const fetchStats = async () => {
+      // Get total messages
+      const { count: totalMessages } = await supabase
         .from('messages')
-        .select('*', { count: 'exact', head: true })
+        .select('*', { count: 'exact' });
+
+      // Get total products (unique product codes)
+      const { data: products } = await supabase
+        .from('messages')
+        .select('analyzed_content')
         .not('analyzed_content', 'is', null);
-      
-      if (error) throw error;
-      return count || 0;
-    }
-  });
 
-  const { data: vendorCount = 0 } = useQuery({
-    queryKey: ['vendorCount'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('analyzed_content->vendor_uid')
-        .not('analyzed_content->vendor_uid', 'is', null);
-      
-      if (error) throw error;
-      
-      const uniqueVendors = new Set(
-        data.map(item => item.analyzed_content?.vendor_uid)
+      const uniqueProducts = new Set(
+        products
+          ?.map(msg => (msg.analyzed_content as AnalyzedContent)?.product_code)
           .filter(Boolean)
       );
-      
-      return uniqueVendors.size;
-    }
-  });
 
-  const stats = [
-    {
-      name: "Total Messages",
-      value: messageCount.toString(),
-      icon: MessageSquare,
-      change: "+0%",
-      changeType: "positive",
-    },
-    {
-      name: "Products Created",
-      value: productCount.toString(),
-      icon: Package,
-      change: "+0%",
-      changeType: "positive",
-    },
-    {
-      name: "Active Vendors",
-      value: vendorCount.toString(),
-      icon: Users,
-      change: "+0%",
-      changeType: "positive",
-    },
-  ];
+      // Get unique vendors
+      const uniqueVendors = new Set(
+        products
+          ?.map(msg => (msg.analyzed_content as AnalyzedContent)?.vendor_uid)
+          .filter(Boolean)
+      );
+
+      setStats({
+        totalMessages: totalMessages || 0,
+        totalProducts: uniqueProducts.size,
+        uniqueVendors: uniqueVendors.size
+      });
+    };
+
+    fetchStats();
+  }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
-        {stats.map((stat) => (
-          <Card key={stat.name} className="p-6">
-            <div className="flex items-center gap-4">
-              <stat.icon className="h-6 w-6 text-gray-400" />
-              <div>
-                <p className="text-sm font-medium text-gray-500">{stat.name}</p>
-                <p className="text-2xl font-semibold">{stat.value}</p>
-              </div>
-            </div>
-          </Card>
-        ))}
+    <div className="space-y-4">
+      <h1 className="text-2xl font-bold">Dashboard</h1>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="p-4">
+          <h2 className="text-lg font-semibold">Total Messages</h2>
+          <p className="text-3xl font-bold">{stats.totalMessages}</p>
+        </Card>
+        <Card className="p-4">
+          <h2 className="text-lg font-semibold">Unique Products</h2>
+          <p className="text-3xl font-bold">{stats.totalProducts}</p>
+        </Card>
+        <Card className="p-4">
+          <h2 className="text-lg font-semibold">Unique Vendors</h2>
+          <p className="text-3xl font-bold">{stats.uniqueVendors}</p>
+        </Card>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, FilterValues } from "@/types";
+import { MediaItem, FilterValues, AnalyzedContent } from "@/types";
 import { useToast } from "@/components/ui/use-toast";
 
 export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
@@ -17,7 +17,6 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
           .select("*", { count: "exact" })
           .eq('is_original_caption', true);
 
-        // Apply filters
         if (filters.search) {
           query = query.or(`analyzed_content->product_name.ilike.%${filters.search}%,analyzed_content->notes.ilike.%${filters.search}%`);
         }
@@ -26,7 +25,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
           query = query.eq("analyzed_content->vendor_uid", filters.vendor);
         }
 
-        if (filters.productCode) {
+        if (filters.productCode && filters.productCode !== 'all') {
           query = query.eq("analyzed_content->product_code", filters.productCode);
         }
 
@@ -65,7 +64,6 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
 
         if (originalMessagesError) throw originalMessagesError;
 
-        // Get all media items for the filtered media groups
         const mediaGroupIds = originalMessages?.map(msg => msg.media_group_id).filter(Boolean) || [];
         
         if (mediaGroupIds.length > 0) {
@@ -76,7 +74,6 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
 
           if (groupMediaError) throw groupMediaError;
 
-          // Organize messages into groups
           const groups: { [key: string]: MediaItem[] } = {};
           allGroupMedia?.forEach((message) => {
             const groupKey = message.media_group_id || message.id;
@@ -86,7 +83,6 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
             groups[groupKey].push(message as MediaItem);
           });
 
-          // Sort messages within each group
           Object.keys(groups).forEach(key => {
             groups[key].sort((a, b) => {
               if (a.is_original_caption && !b.is_original_caption) return -1;

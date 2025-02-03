@@ -6,7 +6,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
-import { FilterValues, ProcessingState } from "@/types";
+import { FilterValues, ProcessingState, AnalyzedContent } from "@/types";
 import debounce from 'lodash/debounce';
 import { supabase } from "@/integrations/supabase/client";
 
@@ -37,7 +37,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
 
       if (!error && data) {
         const uniqueCodes = [...new Set(data
-          .map(item => item.analyzed_content?.product_code)
+          .map(item => (item.analyzed_content as AnalyzedContent)?.product_code)
           .filter(Boolean)
         )];
         setProductCodes(uniqueCodes);
@@ -51,7 +51,6 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     onFilterChange(newFilters);
   }, 300);
 
-  // Effect for real-time search
   useEffect(() => {
     debouncedFilterChange({
       search,
