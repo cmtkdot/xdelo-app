@@ -1,8 +1,11 @@
 import { MediaItem } from "@/types";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Pencil, Trash2, RotateCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageSwiper } from "@/components/ui/image-swiper";
 import { format } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ProductGroupProps {
   group: MediaItem[];
@@ -13,6 +16,7 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
   const mainMedia = group.find(media => media.is_original_caption) || group[0];
   const hasError = mainMedia.processing_state === 'error';
   const analyzedContent = group.find(media => media.is_original_caption)?.analyzed_content || mainMedia.analyzed_content;
+  const { toast } = useToast();
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'N/A';
@@ -21,6 +25,55 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
     } catch (error) {
       console.error("Error formatting date:", error);
       return 'Invalid Date';
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .delete()
+        .eq('media_group_id', mainMedia.media_group_id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Product group deleted successfully",
+      });
+    } catch (error) {
+      console.error("Error deleting product group:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete product group",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleReanalyze = async () => {
+    try {
+      const { error } = await supabase.functions.invoke('parse-caption-with-ai', {
+        body: {
+          message_id: mainMedia.id,
+          media_group_id: mainMedia.media_group_id,
+          caption: mainMedia.caption
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Reanalysis started",
+      });
+    } catch (error) {
+      console.error("Error triggering reanalysis:", error);
+      toast({
+        title: "Error",
+        description: "Failed to start reanalysis",
+        variant: "destructive",
+      });
     }
   };
 
@@ -62,12 +115,37 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
           </Alert>
         )}
         
-        <button
-          onClick={() => onEdit(mainMedia)}
-          className="text-xs md:text-sm text-blue-600 hover:text-blue-800 mt-3"
-        >
-          Edit Details
-        </button>
+        <div className="flex gap-2 mt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onEdit(mainMedia)}
+            className="flex items-center"
+          >
+            <Pencil className="w-4 h-4 mr-1" />
+            Edit
+          </Button>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleReanalyze}
+            className="flex items-center"
+          >
+            <RotateCw className="w-4 h-4 mr-1" />
+            Reanalyze
+          </Button>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDelete}
+            className="flex items-center text-red-600 hover:text-red-700"
+          >
+            <Trash2 className="w-4 h-4 mr-1" />
+            Delete
+          </Button>
+        </div>
       </div>
     </div>
   );
