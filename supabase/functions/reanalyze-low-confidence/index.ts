@@ -28,19 +28,54 @@ serve(async (req) => {
   }
 
   try {
-    const { message_id, caption } = await req.json();
-    console.log('Reanalyzing message:', { message_id, caption });
-
-    if (!caption) {
-      return new Response(
-        JSON.stringify({ message: 'Skipped reanalysis - no caption provided' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    const { message_id, caption, correlation_id = crypto.randomUUID() } = await req.json();
+    
+    if (!message_id || !caption) {
+      throw new Error('message_id and caption are required');
     }
+
+    console.log('Reanalyzing message:', { message_id, caption, correlation_id });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // First, get the message to check its current state
+    const { data: message, error: messageError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', message_id)
+      .single();
+
+    if (messageError) {
+      throw messageError;
+    }
+
+    // Update message to pending state
+    await supabase
+      .from('messages')
+      .update({
+        processing_state: 'pending',
+        group_caption_synced: false,
+        retry_count: (message.retry_count || 0) + 1
+      })
+      .eq('id', message_id);
+
+    // Log reanalysis attempt
+    await supabase
+      .from('analysis_audit_log')
+      .insert({
+        message_id,
+        media_group_id: message.media_group_id,
+        event_type: 'REANALYSIS_STARTED',
+        old_state: message.processing_state,
+        new_state: 'pending',
+        processing_details: {
+          correlation_id,
+          retry_count: message.retry_count,
+          start_time: new Date().toISOString()
+        }
+      });
 
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAIApiKey) {
@@ -66,16 +101,7 @@ serve(async (req) => {
 5. Quantity: Look for numbers after 'x' or in units
 6. Notes: Text in parentheses or remaining info
 
-Return a clean JSON object with these fields, no markdown formatting.
-Example Input: "Blue Widget #ABC12345 x5 (new stock)"
-Example Output: {
-  "product_name": "Blue Widget",
-  "product_code": "ABC12345",
-  "vendor_uid": "ABC",
-  "purchase_date": "2023-12-34",
-  "quantity": 5,
-  "notes": "new stock"
-}`
+Return a clean JSON object with these fields, no markdown formatting.`
           },
           { role: 'user', content: caption }
         ],
@@ -107,47 +133,42 @@ Example Output: {
 
     console.log('New analyzed content:', newAnalyzedContent);
 
-    // Get the message to find its media group
-    const { data: message, error: messageError } = await supabase
-      .from('messages')
-      .select('media_group_id')
-      .eq('id', message_id)
-      .single();
+    // Call the process_media_group_analysis function with correlation_id
+    const { error: syncError } = await supabase.rpc('process_media_group_analysis', {
+      p_message_id: message_id,
+      p_media_group_id: message.media_group_id,
+      p_analyzed_content: newAnalyzedContent,
+      p_processing_completed_at: new Date().toISOString(),
+      p_correlation_id: correlation_id
+    });
 
-    if (messageError) {
-      throw messageError;
+    if (syncError) {
+      throw syncError;
     }
 
-    if (message.media_group_id) {
-      // Update all messages in the media group
-      const { error: groupError } = await supabase.rpc('process_media_group_analysis', {
-        p_message_id: message_id,
-        p_media_group_id: message.media_group_id,
-        p_analyzed_content: newAnalyzedContent,
-        p_processing_completed_at: new Date().toISOString()
+    // Log successful reanalysis
+    await supabase
+      .from('analysis_audit_log')
+      .insert({
+        message_id,
+        media_group_id: message.media_group_id,
+        event_type: 'REANALYSIS_COMPLETED',
+        old_state: 'pending',
+        new_state: 'completed',
+        analyzed_content: newAnalyzedContent,
+        processing_details: {
+          correlation_id,
+          completion_time: new Date().toISOString(),
+          retry_count: message.retry_count
+        }
       });
 
-      if (groupError) {
-        throw groupError;
-      }
-    } else {
-      // Update single message
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: newAnalyzedContent,
-          processing_state: 'completed'
-        })
-        .eq('id', message_id)
-        .eq('is_original_caption', true);
-
-      if (updateError) {
-        throw updateError;
-      }
-    }
-
     return new Response(
-      JSON.stringify({ message: 'Reanalysis completed', analyzed_content: newAnalyzedContent }),
+      JSON.stringify({ 
+        message: 'Reanalysis completed', 
+        analyzed_content: newAnalyzedContent,
+        correlation_id 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
