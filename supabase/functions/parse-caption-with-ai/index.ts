@@ -25,6 +25,7 @@ serve(async (req) => {
     caption = requestData.caption;
 
     if (!messageId || !caption) {
+      console.error('Missing required fields:', { messageId, caption });
       throw new Error('message_id and caption are required');
     }
 
@@ -39,10 +40,10 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // First verify the message exists
+    // First verify the message exists and get its current state
     const { data: existingMessage, error: messageError } = await supabase
       .from('messages')
-      .select('id, processing_state, analyzed_content')
+      .select('id, processing_state, analyzed_content, is_original_caption')
       .eq('id', messageId)
       .maybeSingle();
 
@@ -57,8 +58,7 @@ serve(async (req) => {
         processing_state: 'processing',
         processing_started_at: new Date().toISOString()
       })
-      .eq('id', messageId)
-      .select();
+      .eq('id', messageId);
 
     if (updateError) {
       throw new Error(`Failed to update message state: ${updateError.message}`);
@@ -68,35 +68,34 @@ serve(async (req) => {
     let parsedContent = await manualParse(caption);
     let confidence = parsedContent.parsing_metadata?.confidence || 0;
 
-    // Only log if message exists and update was successful
-    const { error: auditError } = await supabase.from("analysis_audit_log").insert({
+    // Log manual parsing attempt
+    await supabase.from("analysis_audit_log").insert({
       message_id: messageId,
       media_group_id: mediaGroupId,
       event_type: "MANUAL_PARSE_COMPLETED",
-      old_state: "processing",
+      old_state: existingMessage.processing_state,
       analyzed_content: parsedContent,
       processing_details: {
         correlation_id: correlationId,
         confidence,
-        method: "manual"
+        method: "manual",
+        original_caption: caption
       }
     });
 
-    if (auditError) {
-      console.error("Failed to log manual parsing:", auditError);
-    }
-
-    // If manual parsing has low confidence, try AI parsing
-    if (confidence < 0.7) {
+    // If manual parsing has low confidence (< 0.5), try AI parsing
+    if (confidence < 0.5) {
       console.log('Manual parsing had low confidence, attempting AI parsing');
       try {
         const aiResult = await aiParse(caption);
+        
+        // Only use AI result if it has higher confidence
         if (aiResult.parsing_metadata?.confidence && aiResult.parsing_metadata.confidence > confidence) {
           parsedContent = aiResult;
           confidence = aiResult.parsing_metadata.confidence;
 
-          // Log AI parsing success only if message exists
-          const { error: aiAuditError } = await supabase.from("analysis_audit_log").insert({
+          // Log AI parsing success
+          await supabase.from("analysis_audit_log").insert({
             message_id: messageId,
             media_group_id: mediaGroupId,
             event_type: "AI_PARSE_COMPLETED",
@@ -105,36 +104,30 @@ serve(async (req) => {
             processing_details: {
               correlation_id: correlationId,
               confidence,
-              method: "ai"
+              method: "ai",
+              original_caption: caption
             }
           });
-
-          if (aiAuditError) {
-            console.error("Failed to log AI parsing:", aiAuditError);
-          }
         }
       } catch (aiError) {
         console.error('AI parsing failed:', aiError);
         
-        // Log AI parsing failure only if message exists
-        const { error: errorAuditError } = await supabase.from("analysis_audit_log").insert({
+        // Log AI parsing failure
+        await supabase.from("analysis_audit_log").insert({
           message_id: messageId,
           media_group_id: mediaGroupId,
           event_type: "AI_PARSE_FAILED",
           error_message: aiError.message,
           processing_details: {
             correlation_id: correlationId,
-            error: aiError.message
+            error: aiError.message,
+            original_caption: caption
           }
         });
-
-        if (errorAuditError) {
-          console.error("Failed to log AI error:", errorAuditError);
-        }
       }
     }
 
-    // Update the message with the analyzed content
+    // Update the message and sync with media group
     const { error: contentUpdateError } = await supabase.rpc(
       'process_media_group_analysis',
       {
@@ -169,38 +162,30 @@ serve(async (req) => {
       if (supabaseUrl && supabaseKey && messageId) {
         const supabase = createClient(supabaseUrl, supabaseKey);
         
-        // First verify the message exists before updating
-        const { data: existingMessage } = await supabase
+        // Update message error state
+        await supabase
           .from('messages')
-          .select('id')
-          .eq('id', messageId)
-          .maybeSingle();
-
-        if (existingMessage) {
-          // Update message error state
-          await supabase
-            .from('messages')
-            .update({ 
-              processing_state: 'error',
-              error_message: error.message,
-              processing_completed_at: new Date().toISOString()
-            })
-            .eq('id', messageId);
-
-          // Log error in audit log only if message exists
-          await supabase.from("analysis_audit_log").insert({
-            message_id: messageId,
-            media_group_id: mediaGroupId,
-            event_type: "PARSING_ERROR",
-            old_state: "processing",
-            new_state: "error",
+          .update({ 
+            processing_state: 'error',
             error_message: error.message,
-            processing_details: {
-              correlation_id: correlationId,
-              error: error.message
-            }
-          });
-        }
+            processing_completed_at: new Date().toISOString()
+          })
+          .eq('id', messageId);
+
+        // Log error in audit log
+        await supabase.from("analysis_audit_log").insert({
+          message_id: messageId,
+          media_group_id: mediaGroupId,
+          event_type: "PARSING_ERROR",
+          old_state: "processing",
+          new_state: "error",
+          error_message: error.message,
+          processing_details: {
+            correlation_id: correlationId,
+            error: error.message,
+            original_caption: caption
+          }
+        });
       }
     } catch (updateError) {
       console.error('Failed to update message error state:', updateError);
