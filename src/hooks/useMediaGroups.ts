@@ -3,9 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { MediaItem, FilterValues } from "@/types";
 import { useToast } from "@/components/ui/use-toast";
 import { useMessageSearch } from "./useMessageSearch";
+import { PostgrestFilterBuilder } from "@supabase/postgrest-js";
 import { Database } from "@/integrations/supabase/types";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
+type MessageQuery = PostgrestFilterBuilder<Database["public"]["Tables"], MessageRow, any>;
 
 export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
   const [mediaGroups, setMediaGroups] = useState<{ [key: string]: MediaItem[] }>({});
@@ -19,7 +21,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
       try {
         let query = supabase
           .from("messages")
-          .select("*", { count: "exact" }) as PostgrestFilterBuilder<MessageRow, MessageRow, any>;
+          .select("*", { count: "exact" }) as MessageQuery;
 
         // Apply filters using the search utility functions
         query = buildSearchQuery(query, filters.search);
@@ -29,6 +31,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
         // Prioritize original caption messages and apply sorting
         query = query
           .order("is_original_caption", { ascending: false })
+          .order("mime_type", { ascending: true }) // This will put image/jpeg first
           .order("created_at", { ascending: filters.sortOrder === "asc" });
 
         // Apply pagination
@@ -43,7 +46,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
         const total = count || 0;
         setTotalPages(Math.ceil(total / ITEMS_PER_PAGE));
 
-        // Group messages and prioritize original captions
+        // Group messages and prioritize original captions and JPEG images
         const groups: { [key: string]: MediaItem[] } = {};
         data?.forEach((message) => {
           const groupKey = message.media_group_id || message.id;
@@ -56,8 +59,16 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
         // Sort messages within groups
         Object.keys(groups).forEach(key => {
           groups[key].sort((a, b) => {
+            // First, prioritize original captions
             if (a.is_original_caption && !b.is_original_caption) return -1;
             if (!a.is_original_caption && b.is_original_caption) return 1;
+            
+            // Then, prioritize JPEG images
+            const aIsJpeg = a.mime_type?.includes('jpeg') || false;
+            const bIsJpeg = b.mime_type?.includes('jpeg') || false;
+            if (aIsJpeg && !bIsJpeg) return -1;
+            if (!aIsJpeg && bIsJpeg) return 1;
+            
             return 0;
           });
         });
