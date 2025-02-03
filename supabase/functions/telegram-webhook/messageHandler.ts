@@ -170,7 +170,6 @@ export async function handleMediaMessage(
         duration: mediaItem.duration,
         user_id: BOT_USER_ID,
         telegram_data: { message },
-        is_original_caption: false,
       });
 
       if (messageError) {
@@ -178,6 +177,44 @@ export async function handleMediaMessage(
         throw messageError;
       }
       console.log("✅ Message stored successfully");
+    }
+
+    // If message has caption and is part of a media group, trigger caption sync
+    if (message.caption && message.media_group_id) {
+      try {
+        console.log("🔄 Triggering caption sync for media group");
+        const { data: messageData } = await supabase
+          .from("messages")
+          .select("id")
+          .eq("telegram_message_id", message.message_id)
+          .single();
+
+        if (messageData) {
+          const response = await fetch(
+            `${Deno.env.get("SUPABASE_URL")}/functions/v1/sync-media-group-caption`,
+            {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                message_id: messageData.id,
+                media_group_id: message.media_group_id,
+                caption: message.caption,
+              }),
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(`Caption sync failed: ${await response.text()}`);
+          }
+          console.log("✅ Caption sync triggered successfully");
+        }
+      } catch (error) {
+        console.error("❌ Error triggering caption sync:", error);
+        // Continue processing even if caption sync fails
+      }
     }
 
     processedMedia.push({
