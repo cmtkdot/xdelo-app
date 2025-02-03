@@ -11,26 +11,33 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-function mergeResults(manual: ParsedContent, ai: ParsedContent): ParsedContent {
-  return {
-    product_name: manual.product_name || ai.product_name || 'Untitled Product',
-    product_code: manual.product_code || ai.product_code,
-    vendor_uid: manual.vendor_uid || ai.vendor_uid,
-    purchase_date: manual.purchase_date || ai.purchase_date,
-    quantity: manual.quantity || ai.quantity,
-    notes: manual.notes || ai.notes,
-    parsing_metadata: {
-      method: 'hybrid',
-      confidence: Math.max(
-        manual.parsing_metadata?.confidence || 0,
-        ai.parsing_metadata?.confidence || 0
-      ),
-      fallbacks_used: [
-        ...(manual.parsing_metadata?.fallbacks_used || []),
-        ...(ai.parsing_metadata?.fallbacks_used || [])
-      ]
+async function syncMediaGroupAnalysis(
+  supabase: ReturnType<typeof createClient>,
+  messageId: string,
+  mediaGroupId: string | null,
+  analyzedContent: ParsedContent
+) {
+  if (!mediaGroupId) return;
+
+  try {
+    const response = await supabase.functions.invoke('sync-media-group-analysis', {
+      body: {
+        message_id: messageId,
+        media_group_id: mediaGroupId,
+        analyzed_content: analyzedContent,
+        processing_completed_at: new Date().toISOString()
+      }
+    });
+
+    if (!response.data) {
+      throw new Error('Failed to sync media group analysis');
     }
-  };
+
+    console.log('Successfully synced media group analysis:', response.data);
+  } catch (error) {
+    console.error('Error syncing media group analysis:', error);
+    throw error;
+  }
 }
 
 serve(async (req) => {
@@ -39,7 +46,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message_id, caption } = await req.json();
+    const { message_id, media_group_id, caption } = await req.json();
     console.log(`Processing caption parsing for message ${message_id}`);
 
     if (!caption) {
@@ -56,7 +63,15 @@ serve(async (req) => {
       try {
         const aiResult = await aiParse(caption);
         console.log('AI parsing result:', aiResult);
-        finalResult = mergeResults(manualResult, aiResult);
+        finalResult = {
+          ...aiResult,
+          ...manualResult, // Manual results take precedence
+          parsing_metadata: {
+            method: 'hybrid',
+            timestamp: new Date().toISOString(),
+            sources: ['manual', 'ai']
+          }
+        };
         console.log('Merged parsing result:', finalResult);
       } catch (aiError) {
         console.error('AI parsing failed:', aiError);
@@ -68,15 +83,23 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // First update the source message
     const { error: updateError } = await supabase
       .from('messages')
       .update({
         parsed_content: finalResult,
-        processing_state: 'completed'
+        fresh_analysis: finalResult,
+        analyzed_content: finalResult,
+        processing_state: media_group_id ? 'analysis_synced' : 'completed'
       })
       .eq('id', message_id);
 
     if (updateError) throw updateError;
+
+    // If this is part of a media group, sync the analysis
+    if (media_group_id) {
+      await syncMediaGroupAnalysis(supabase, message_id, media_group_id, finalResult);
+    }
 
     return new Response(
       JSON.stringify({ 
