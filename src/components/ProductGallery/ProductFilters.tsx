@@ -22,11 +22,12 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   const [dateFrom, setDateFrom] = useState<Date | undefined>(filters.dateFrom);
   const [dateTo, setDateTo] = useState<Date | undefined>(filters.dateTo);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder);
-  const [productCode, setProductCode] = useState(filters.productCode || 'all');
+  const [productCode, setProductCode] = useState(filters.productCode || '');
   const [quantityRange, setQuantityRange] = useState(filters.quantityRange || 'all');
-  const [processingState, setProcessingState] = useState<'initialized' | 'processing' | 'completed' | 'error' | 'pending' | 'all'>(filters.processingState || 'all');
+  const [processingState, setProcessingState] = useState(filters.processingState || 'all');
   const [productCodes, setProductCodes] = useState<string[]>([]);
 
+  // Fetch unique product codes
   useEffect(() => {
     const fetchProductCodes = async () => {
       const { data, error } = await supabase
@@ -44,6 +45,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     fetchProductCodes();
   }, []);
 
+  // Debounced filter change for real-time search
   const debouncedFilterChange = debounce((newFilters: FilterValues) => {
     onFilterChange(newFilters);
   }, 300);
@@ -56,9 +58,9 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
       dateFrom,
       dateTo,
       sortOrder,
-      productCode: productCode === 'all' ? undefined : productCode,
+      productCode,
       quantityRange,
-      processingState: processingState === 'all' ? undefined : processingState
+      processingState
     });
   }, [search, vendor, dateFrom, dateTo, sortOrder, productCode, quantityRange, processingState]);
 
@@ -77,9 +79,9 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
             <SelectValue placeholder="Select Product Code" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Product Codes</SelectItem>
+            <SelectItem value="">All Product Codes</SelectItem>
             {productCodes.map((code) => (
-              <SelectItem key={code} value={code || 'unknown'}>{code || 'Unknown'}</SelectItem>
+              <SelectItem key={code} value={code}>{code}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -106,15 +108,12 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
           <SelectContent>
             <SelectItem value="all">All Vendors</SelectItem>
             {vendors.map((v) => (
-              <SelectItem key={v} value={v || 'unknown'}>{v || 'Unknown'}</SelectItem>
+              <SelectItem key={v} value={v}>{v}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        <Select 
-          value={processingState} 
-          onValueChange={(value: 'initialized' | 'processing' | 'completed' | 'error' | 'pending' | 'all') => setProcessingState(value)}
-        >
+        <Select value={processingState} onValueChange={setProcessingState}>
           <SelectTrigger className="w-full md:w-48">
             <SelectValue placeholder="Processing State" />
           </SelectTrigger>

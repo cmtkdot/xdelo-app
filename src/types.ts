@@ -17,8 +17,7 @@ export interface MediaItem {
   created_at?: string;
   updated_at?: string;
   user_id: string;
-  chat_id?: number;
-  processing_state?: 'initialized' | 'processing' | 'completed' | 'error' | 'pending';
+  processing_state?: 'initialized' | 'processing' | 'completed' | 'error';
   processing_started_at?: string;
   processing_completed_at?: string;
   analyzed_content?: AnalyzedContent | null;
@@ -31,17 +30,6 @@ export interface MediaItem {
   group_message_count?: number;
 }
 
-export interface FilterValues {
-  search: string;
-  vendor: string;
-  dateFrom?: Date;
-  dateTo?: Date;
-  sortOrder: "asc" | "desc";
-  productCode?: string;
-  quantityRange?: string;
-  processingState?: 'initialized' | 'processing' | 'completed' | 'error' | 'pending' | 'all';
-}
-
 export interface AnalyzedContent {
   product_name?: string;
   product_code?: string;
@@ -50,17 +38,21 @@ export interface AnalyzedContent {
   quantity?: number;
   notes?: string;
   parsing_metadata?: {
+    method: string;
     confidence: number;
+    fallbacks_used?: string[];
     reanalysis_attempted?: boolean;
-    method?: string;
+    previous_analysis?: any;
   };
-  [key: string]: any;
 }
 
-export interface MediaGroup {
-  id: string;
-  items: MediaItem[];
-  mainItem: MediaItem;
-  caption?: string;
-  productInfo: AnalyzedContent;
+export interface FilterValues {
+  search: string;
+  vendor: string;
+  dateFrom?: Date;
+  dateTo?: Date;
+  sortOrder: "desc" | "asc";
+  productCode?: string;
+  quantityRange?: string;
+  processingState?: "initialized" | "processing" | "completed" | "error" | "pending";
 }

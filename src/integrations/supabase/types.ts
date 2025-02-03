@@ -259,20 +259,13 @@ export type Database = {
     Views: {
       messages_parsed: {
         Row: {
-          analyzed_content: Json | null
           caption: string | null
-          chat_id: number | null
-          chat_type: string | null
           created_at: string | null
           duration: number | null
-          error_message: string | null
           file_id: string | null
           file_size: number | null
           file_unique_id: string | null
           group_caption_synced: boolean | null
-          group_first_message_time: string | null
-          group_last_message_time: string | null
-          group_message_count: number | null
           height: number | null
           id: string | null
           is_original_caption: boolean | null
@@ -284,8 +277,6 @@ export type Database = {
           parsing_fallbacks: Json | null
           parsing_method: string | null
           processing_completed_at: string | null
-          processing_lock_acquired_at: string | null
-          processing_lock_id: string | null
           processing_started_at: string | null
           processing_state:
             | Database["public"]["Enums"]["message_processing_state"]
@@ -297,10 +288,8 @@ export type Database = {
           purchase_order_uid: string | null
           quantity: number | null
           reanalysis_attempted: boolean | null
-          storage_path: string | null
           telegram_chat_id: string | null
           telegram_chat_type: string | null
-          telegram_data: Json | null
           telegram_date: string | null
           telegram_message_id: number | null
           telegram_original_message_id: string | null
@@ -310,20 +299,13 @@ export type Database = {
           width: number | null
         }
         Insert: {
-          analyzed_content?: Json | null
           caption?: string | null
-          chat_id?: number | null
-          chat_type?: string | null
           created_at?: string | null
           duration?: number | null
-          error_message?: string | null
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
           group_caption_synced?: boolean | null
-          group_first_message_time?: string | null
-          group_last_message_time?: string | null
-          group_message_count?: number | null
           height?: number | null
           id?: string | null
           is_original_caption?: boolean | null
@@ -335,8 +317,6 @@ export type Database = {
           parsing_fallbacks?: never
           parsing_method?: never
           processing_completed_at?: string | null
-          processing_lock_acquired_at?: string | null
-          processing_lock_id?: string | null
           processing_started_at?: string | null
           processing_state?:
             | Database["public"]["Enums"]["message_processing_state"]
@@ -348,10 +328,8 @@ export type Database = {
           purchase_order_uid?: string | null
           quantity?: never
           reanalysis_attempted?: never
-          storage_path?: string | null
           telegram_chat_id?: never
           telegram_chat_type?: never
-          telegram_data?: Json | null
           telegram_date?: never
           telegram_message_id?: number | null
           telegram_original_message_id?: never
@@ -361,20 +339,13 @@ export type Database = {
           width?: number | null
         }
         Update: {
-          analyzed_content?: Json | null
           caption?: string | null
-          chat_id?: number | null
-          chat_type?: string | null
           created_at?: string | null
           duration?: number | null
-          error_message?: string | null
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
           group_caption_synced?: boolean | null
-          group_first_message_time?: string | null
-          group_last_message_time?: string | null
-          group_message_count?: number | null
           height?: number | null
           id?: string | null
           is_original_caption?: boolean | null
@@ -386,8 +357,6 @@ export type Database = {
           parsing_fallbacks?: never
           parsing_method?: never
           processing_completed_at?: string | null
-          processing_lock_acquired_at?: string | null
-          processing_lock_id?: string | null
           processing_started_at?: string | null
           processing_state?:
             | Database["public"]["Enums"]["message_processing_state"]
@@ -399,10 +368,8 @@ export type Database = {
           purchase_order_uid?: string | null
           quantity?: never
           reanalysis_attempted?: never
-          storage_path?: string | null
           telegram_chat_id?: never
           telegram_chat_type?: never
-          telegram_data?: Json | null
           telegram_date?: never
           telegram_message_id?: number | null
           telegram_original_message_id?: never

@@ -15,8 +15,9 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
         let originalCaptionsQuery = supabase
           .from("messages_parsed")
           .select("*", { count: "exact" })
-          .is('is_original_caption', true);
+          .eq('is_original_caption', true);
 
+        // Apply filters
         if (filters.search) {
           originalCaptionsQuery = originalCaptionsQuery.or(`product_name.ilike.%${filters.search}%,notes.ilike.%${filters.search}%`);
         }
@@ -25,7 +26,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
           originalCaptionsQuery = originalCaptionsQuery.eq("vendor_uid", filters.vendor);
         }
 
-        if (filters.productCode && filters.productCode !== 'all') {
+        if (filters.productCode) {
           originalCaptionsQuery = originalCaptionsQuery.eq("product_code", filters.productCode);
         }
 
@@ -43,11 +44,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
         }
 
         if (filters.processingState && filters.processingState !== 'all') {
-          if (filters.processingState === 'pending') {
-            originalCaptionsQuery = originalCaptionsQuery.is('processing_state', null);
-          } else {
-            originalCaptionsQuery = originalCaptionsQuery.eq('processing_state', filters.processingState);
-          }
+          originalCaptionsQuery = originalCaptionsQuery.eq("processing_state", filters.processingState);
         }
 
         if (filters.dateFrom) {
@@ -69,26 +66,28 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
 
         if (originalCaptionsError) throw originalCaptionsError;
 
+        // Get all media items for the filtered media groups
         const mediaGroupIds = originalCaptions?.map(msg => msg.media_group_id).filter(Boolean) || [];
         
         if (mediaGroupIds.length > 0) {
           const { data: allGroupMedia, error: groupMediaError } = await supabase
-            .from("messages_parsed")
+            .from("messages")
             .select("*")
             .in("media_group_id", mediaGroupIds);
 
           if (groupMediaError) throw groupMediaError;
 
+          // Organize messages into groups
           const groups: { [key: string]: MediaItem[] } = {};
           allGroupMedia?.forEach((message) => {
-            if (!message.media_group_id) return;
-            const groupKey = message.media_group_id;
+            const groupKey = message.media_group_id || message.id;
             if (!groups[groupKey]) {
               groups[groupKey] = [];
             }
             groups[groupKey].push(message as MediaItem);
           });
 
+          // Sort messages within each group
           Object.keys(groups).forEach(key => {
             groups[key].sort((a, b) => {
               if (a.is_original_caption && !b.is_original_caption) return -1;
@@ -116,6 +115,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
 
     fetchMessages();
 
+    // Set up real-time subscription
     const channel = supabase
       .channel("schema-db-changes")
       .on(

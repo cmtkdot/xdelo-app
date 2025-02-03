@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Sidebar, SidebarBody, SidebarLink } from "@/components/ui/sidebar";
-import { LayoutDashboard, MessageSquare, Package, Settings, LogOut, Table } from "lucide-react";
+import { LayoutDashboard, MessageSquare, Package, Settings, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
@@ -42,12 +42,6 @@ export function AppSidebar() {
       href: "/gallery",
       icon: <MessageSquare className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />,
       onClick: () => navigate("/gallery")
-    },
-    {
-      label: "Messages Table",
-      href: "/messages",
-      icon: <Table className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />,
-      onClick: () => navigate("/messages")
     },
     {
       label: "Vendors",
