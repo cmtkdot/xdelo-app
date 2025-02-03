@@ -8,17 +8,6 @@ export interface ParsedContent {
   parsing_metadata?: {
     method: 'manual' | 'ai';
     confidence: number;
-    fallbacks_used?: string[];
-    reanalysis_attempted?: boolean;
-  };
-}
-
-export interface AnalysisResult {
-  message: string;
-  analyzed_content: ParsedContent;
-  processing_details?: {
-    method: string;
     timestamp: string;
-    group_id?: string;
   };
 }
