@@ -1,36 +1,38 @@
 import { AnalyzedContent } from "../types.ts";
-import { parseManually } from "./manualParser.ts";
+import { parseCaption } from "./manualParser.ts";
+import { parseDateString } from "./dateParser.ts";
 
-const SYSTEM_PROMPT = `You are a product information extractor. Extract structured information from product-related captions with these specific rules:
+const SYSTEM_PROMPT = `You are a specialized product information extractor. Your task is to analyze captions and extract structured product information following these rules:
 
-Required fields:
-- product_name: Text before '#' (always required)
-- product_code: Everything after '#' including vendor code and date
-- vendor_uid: 1-4 letters after '#' before any numbers
-- purchase_date: Convert date format:
-  * 6 digits (mmDDyy) -> YYYY-MM-DD
-  * 5 digits (mDDyy) -> YYYY-MM-DD (add leading zero)
-- quantity: Number after 'x'
-- notes: Any text in parentheses or unmatched text
+1. Product Name: Text before '#' (required)
+2. Product Code: Full code after '#' including vendor and date
+3. Vendor UID: 1-4 letters after '#' before any numbers
+4. Purchase Date: Convert date format:
+   - 6 digits (mmDDyy) -> YYYY-MM-DD
+   - 5 digits (mDDyy) -> YYYY-MM-DD (add leading zero)
+5. Quantity: Number after 'x'
+6. Notes: Any additional info in parentheses or unstructured text
 
-Example inputs:
-"Blue Dream #CHAD120523 x2"
-"OG Kush #Z31524 x1"
-
-Return ONLY a JSON object with these fields. Omit fields if information is not present.`;
+Example Input: "Blue Dream #CHAD120523 x2"
+Example Output: {
+  "product_name": "Blue Dream",
+  "product_code": "CHAD120523",
+  "vendor_uid": "CHAD",
+  "purchase_date": "2023-12-05",
+  "quantity": 2
+}`;
 
 export async function analyzeCaption(caption: string): Promise<AnalyzedContent> {
-  console.log("Starting caption analysis:", caption);
-  
   try {
-    // Try manual parsing first
-    const manualResult = parseManually(caption);
-    if (manualResult.product_name) {
-      console.log("Successfully parsed using manual parser:", manualResult);
+    // First try manual parsing
+    const manualResult = parseCaption(caption);
+    if (manualResult && manualResult.product_name) {
+      console.log('Successfully parsed caption manually:', manualResult);
       return manualResult;
     }
 
-    // Fallback to OpenAI
+    // Fallback to AI analysis
+    console.log('Manual parsing failed, attempting AI analysis');
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAIApiKey) {
       throw new Error('OpenAI API key not configured');
@@ -49,34 +51,31 @@ export async function analyzeCaption(caption: string): Promise<AnalyzedContent> 
           { role: 'user', content: caption }
         ],
         temperature: 0.3,
-        max_tokens: 500,
+        max_tokens: 500
       }),
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error('OpenAI API error:', error);
-      throw new Error(`OpenAI API error: ${error}`);
+      throw new Error(`OpenAI API error: ${response.statusText}`);
     }
 
     const data = await response.json();
-    const aiResponse = data.choices[0].message.content;
-    console.log("OpenAI response:", aiResponse);
+    const result = JSON.parse(data.choices[0].message.content);
 
-    try {
-      const parsedResponse = JSON.parse(aiResponse);
-      // Validate required fields
-      if (!parsedResponse.product_name) {
-        throw new Error('Product name is required but missing from AI response');
-      }
-      return parsedResponse;
-    } catch (e) {
-      console.log("Error parsing AI response, falling back to manual parsing");
-      return parseManually(caption);
-    }
+    // Validate and format the result
+    return {
+      product_name: result.product_name || 'Untitled Product',
+      product_code: result.product_code,
+      vendor_uid: result.vendor_uid,
+      purchase_date: result.purchase_date ? parseDateString(result.purchase_date) : undefined,
+      quantity: typeof result.quantity === 'number' ? result.quantity : undefined,
+      notes: result.notes
+    };
   } catch (error) {
     console.error('Error analyzing caption:', error);
-    // Always return at least a partial result with manual parsing
-    return parseManually(caption);
+    // Return basic info even if analysis fails
+    return {
+      product_name: caption.split('#')[0]?.trim() || 'Untitled Product'
+    };
   }
 }
