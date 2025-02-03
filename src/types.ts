@@ -17,7 +17,7 @@ export interface MediaItem {
   created_at?: string;
   updated_at?: string;
   user_id: string;
-  processing_state?: 'initialized' | 'caption_ready' | 'analyzing' | 'analysis_synced' | 'completed';
+  processing_state?: 'initialized' | 'caption_ready' | 'analyzing' | 'analysis_synced' | 'completed' | 'error';
   processing_started_at?: string;
   processing_completed_at?: string;
   analyzed_content?: {
@@ -29,4 +29,8 @@ export interface MediaItem {
     notes?: string;
   } | null;
   telegram_data?: any;
+  error_message?: string;
+  retry_count?: number;
+  analysis_version?: number;
+  last_error_at?: string;
 }

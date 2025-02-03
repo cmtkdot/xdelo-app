@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
@@ -29,6 +29,7 @@ const Products = () => {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: products = [], refetch } = useQuery({
     queryKey: ['products'],
@@ -39,8 +40,37 @@ const Products = () => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-
       return data as MediaItem[];
+    }
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      const { error } = await supabase
+        .from('messages')
+        .update({
+          processing_state: 'caption_ready',
+          error_message: null,
+          retry_count: 0
+        })
+        .eq('id', messageId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      toast({
+        title: "Analysis retry initiated",
+        description: "The product analysis will be attempted again."
+      });
+    },
+    onError: (error) => {
+      console.error('Error retrying analysis:', error);
+      toast({
+        title: "Error",
+        description: "Failed to retry analysis. Please try again.",
+        variant: "destructive"
+      });
     }
   });
 

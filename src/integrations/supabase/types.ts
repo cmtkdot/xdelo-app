@@ -11,12 +11,14 @@ export type Database = {
     Tables: {
       messages: {
         Row: {
+          analysis_version: number | null
           analyzed_content: Json | null
           caption: string | null
           chat_id: number | null
           chat_type: string | null
           created_at: string | null
           duration: number | null
+          error_message: string | null
           file_id: string | null
           file_size: number | null
           file_unique_id: string | null
@@ -24,6 +26,7 @@ export type Database = {
           height: number | null
           id: string
           is_original_caption: boolean | null
+          last_error_at: string | null
           media_group_id: string | null
           message_caption_id: string | null
           mime_type: string | null
@@ -33,6 +36,7 @@ export type Database = {
             | Database["public"]["Enums"]["message_processing_state"]
             | null
           public_url: string | null
+          retry_count: number | null
           telegram_data: Json | null
           telegram_message_id: number | null
           updated_at: string | null
@@ -40,12 +44,14 @@ export type Database = {
           width: number | null
         }
         Insert: {
+          analysis_version?: number | null
           analyzed_content?: Json | null
           caption?: string | null
           chat_id?: number | null
           chat_type?: string | null
           created_at?: string | null
           duration?: number | null
+          error_message?: string | null
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
@@ -53,6 +59,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_original_caption?: boolean | null
+          last_error_at?: string | null
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
@@ -62,6 +69,7 @@ export type Database = {
             | Database["public"]["Enums"]["message_processing_state"]
             | null
           public_url?: string | null
+          retry_count?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
@@ -69,12 +77,14 @@ export type Database = {
           width?: number | null
         }
         Update: {
+          analysis_version?: number | null
           analyzed_content?: Json | null
           caption?: string | null
           chat_id?: number | null
           chat_type?: string | null
           created_at?: string | null
           duration?: number | null
+          error_message?: string | null
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
@@ -82,6 +92,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_original_caption?: boolean | null
+          last_error_at?: string | null
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
@@ -91,6 +102,7 @@ export type Database = {
             | Database["public"]["Enums"]["message_processing_state"]
             | null
           public_url?: string | null
+          retry_count?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
@@ -183,6 +195,10 @@ export type Database = {
           data: string
         }
         Returns: string
+      }
+      cleanup_stuck_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       http: {
         Args: {
@@ -332,6 +348,7 @@ export type Database = {
         | "analyzing"
         | "analysis_synced"
         | "completed"
+        | "error"
     }
     CompositeTypes: {
       http_header: {
