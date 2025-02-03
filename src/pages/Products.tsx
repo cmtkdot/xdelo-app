@@ -39,7 +39,7 @@ const Products = () => {
 
       if (error) throw error;
 
-      // Create a map to store unique messages
+      // Create a map to store unique messages with proper typing
       const uniqueMessages = new Map<string, MediaItem>();
       
       (data as MediaItem[]).forEach(message => {
@@ -50,7 +50,7 @@ const Products = () => {
           uniqueMessages.set(key, message);
         } else {
           // If message exists, update only if it has newer content
-          const existingMessage = uniqueMessages.get(key) as MediaItem;
+          const existingMessage = uniqueMessages.get(key)!; // We can use ! here because we checked with has()
           if (
             message.analyzed_content && 
             (!existingMessage.analyzed_content || 
