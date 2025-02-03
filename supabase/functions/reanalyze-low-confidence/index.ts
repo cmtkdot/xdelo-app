@@ -6,35 +6,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface AnalyzedContent {
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  quantity?: number;
-  notes?: string;
-  parsing_metadata?: {
-    method: string;
-    confidence: number;
-    fallbacks_used?: string[];
-    reanalysis_attempted?: boolean;
-    previous_analysis?: any;
-  };
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { message_id, caption, correlation_id = crypto.randomUUID() } = await req.json();
+    const { message_id, caption, media_group_id, correlation_id = crypto.randomUUID() } = await req.json();
     
     if (!message_id || !caption) {
       throw new Error('message_id and caption are required');
     }
 
-    console.log('Reanalyzing message:', { message_id, caption, correlation_id });
+    console.log('Reanalyzing message:', { message_id, caption, correlation_id, media_group_id });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -73,7 +57,9 @@ serve(async (req) => {
         processing_details: {
           correlation_id,
           retry_count: message.retry_count,
-          start_time: new Date().toISOString()
+          start_time: new Date().toISOString(),
+          group_message_count: message.group_message_count,
+          is_original_caption: message.is_original_caption
         }
       });
 
@@ -105,8 +91,6 @@ Return a clean JSON object with these fields, no markdown formatting.`
           },
           { role: 'user', content: caption }
         ],
-        temperature: 0.3,
-        max_tokens: 500
       }),
     });
 
@@ -118,13 +102,14 @@ Return a clean JSON object with these fields, no markdown formatting.`
     const aiResponse = data.choices[0].message.content;
     console.log('Raw AI response:', aiResponse);
     
-    let newAnalyzedContent: AnalyzedContent;
+    let newAnalyzedContent;
     try {
       newAnalyzedContent = JSON.parse(aiResponse);
       newAnalyzedContent.parsing_metadata = {
         method: 'ai_enhanced',
         confidence: 0.9,
-        reanalysis_attempted: true
+        reanalysis_attempted: true,
+        timestamp: new Date().toISOString()
       };
     } catch (parseError) {
       console.error('Error parsing AI response:', parseError);
@@ -136,7 +121,7 @@ Return a clean JSON object with these fields, no markdown formatting.`
     // Call the process_media_group_analysis function with correlation_id
     const { error: syncError } = await supabase.rpc('process_media_group_analysis', {
       p_message_id: message_id,
-      p_media_group_id: message.media_group_id,
+      p_media_group_id: media_group_id,
       p_analyzed_content: newAnalyzedContent,
       p_processing_completed_at: new Date().toISOString(),
       p_correlation_id: correlation_id
@@ -151,7 +136,7 @@ Return a clean JSON object with these fields, no markdown formatting.`
       .from('analysis_audit_log')
       .insert({
         message_id,
-        media_group_id: message.media_group_id,
+        media_group_id,
         event_type: 'REANALYSIS_COMPLETED',
         old_state: 'pending',
         new_state: 'completed',
@@ -159,7 +144,9 @@ Return a clean JSON object with these fields, no markdown formatting.`
         processing_details: {
           correlation_id,
           completion_time: new Date().toISOString(),
-          retry_count: message.retry_count
+          retry_count: message.retry_count,
+          group_message_count: message.group_message_count,
+          is_original_caption: message.is_original_caption
         }
       });
 

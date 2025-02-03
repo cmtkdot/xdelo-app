@@ -1,4 +1,4 @@
-import { MediaItem, AnalyzedContent, processingMetadataToJson, analyzedContentToJson } from "@/types";
+import { MediaItem, AnalyzedContent, ProcessingMetadata, processingMetadataToJson, analyzedContentToJson } from "@/types";
 import { AlertCircle, Pencil, Trash2, RotateCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageSwiper } from "@/components/ui/image-swiper";
@@ -49,11 +49,13 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
 
         try {
           const correlationId = crypto.randomUUID();
-          const processingMetadata = {
+          const processingMetadata: ProcessingMetadata = {
             correlation_id: correlationId,
             timestamp: new Date().toISOString(),
-            method: 'hybrid' as const,
+            method: 'hybrid',
             confidence: analyzedContent?.parsing_metadata?.confidence || 0,
+            original_caption: mainMedia.caption || '',
+            message_id: mainMedia.id,
             reanalysis_attempted: true,
             group_message_count: mainMedia.group_message_count,
             is_original_caption: mainMedia.is_original_caption
@@ -154,11 +156,13 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
   const handleReanalyze = async () => {
     try {
       const correlationId = crypto.randomUUID();
-      const processingMetadata = {
+      const processingMetadata: ProcessingMetadata = {
         correlation_id: correlationId,
         timestamp: new Date().toISOString(),
-        method: 'manual' as const,
+        method: 'manual',
         confidence: 0,
+        original_caption: mainMedia.caption || '',
+        message_id: mainMedia.id,
         reanalysis_attempted: true,
         group_message_count: mainMedia.group_message_count,
         is_original_caption: mainMedia.is_original_caption

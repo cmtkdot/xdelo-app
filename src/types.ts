@@ -114,6 +114,7 @@ export interface MessageSyncResult {
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 // Processing metadata for analysis tracking
+
 export interface ProcessingMetadata {
   correlation_id: string;
   timestamp: string;
