@@ -1,12 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { TelegramMedia, MediaUploadResult, ProcessedMedia, WebhookResponse } from "./types.ts";
 import { downloadTelegramFile, uploadMedia } from "./mediaUtils.ts";
-import { 
-  findExistingMessage, 
-  updateExistingMessage, 
-  createNewMessage,
-  triggerCaptionParsing
-} from "./dbOperations.ts";
 
 export async function handleTextMessage(
   supabase: ReturnType<typeof createClient>,
@@ -77,86 +71,43 @@ export async function handleMediaMessage(
       mime_type: mediaItem.mime_type
     });
 
-    const existingMessage = await findExistingMessage(supabase, mediaItem.file_unique_id);
-    let uploadResult: MediaUploadResult;
+    const fileResponse = await downloadTelegramFile(mediaItem.file_id, TELEGRAM_BOT_TOKEN);
+    const fileBuffer = await fileResponse.arrayBuffer();
+    console.log("✅ File downloaded successfully");
 
-    if (existingMessage) {
-      console.log("✅ Found existing message, checking analysis status");
-      
-      const needsAnalysis = !existingMessage.analyzed_content && 
-                          existingMessage.processing_state !== 'completed' &&
-                          existingMessage.processing_state !== 'processing';
+    const uploadResult = await uploadMedia(supabase, fileBuffer, {
+      fileUniqueId: mediaItem.file_unique_id,
+      mimeType: mediaItem.mime_type,
+      fileSize: mediaItem.file_size,
+    });
+    console.log("✅ File uploaded successfully");
 
-      if (needsAnalysis) {
-        console.log("🔄 Existing message needs processing");
-        
-        const updateData = {
-          telegram_data: { message },
-          caption: message.caption || "",
-          media_group_id: message.media_group_id,
-          telegram_message_id: message.message_id,
-          processing_state: message.caption ? 'pending' : 'processing',
-          updated_at: new Date().toISOString(),
-        };
+    const messageData = {
+      telegram_message_id: message.message_id,
+      media_group_id: message.media_group_id,
+      caption: message.caption || "",
+      file_id: mediaItem.file_id,
+      file_unique_id: mediaItem.file_unique_id,
+      public_url: uploadResult.publicUrl,
+      mime_type: mediaItem.mime_type,
+      file_size: mediaItem.file_size,
+      width: mediaItem.width,
+      height: mediaItem.height,
+      duration: mediaItem.duration,
+      user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
+      telegram_data: { message },
+      processing_state: message.caption ? 'pending' : 'processing'
+    };
 
-        await updateExistingMessage(supabase, existingMessage.id, updateData);
+    const { data: newMessage, error: messageError } = await supabase
+      .from("messages")
+      .insert(messageData)
+      .select()
+      .single();
 
-        if (message.caption) {
-          await triggerCaptionParsing(
-            existingMessage.id,
-            message.media_group_id,
-            message.caption
-          );
-        }
-      } else {
-        console.log("✅ Existing message is already processed");
-      }
-
-      uploadResult = {
-        publicUrl: existingMessage.public_url,
-        fileName: `${mediaItem.file_unique_id}.${mediaItem.mime_type?.split("/")[1]}`,
-        mimeType: mediaItem.mime_type || "application/octet-stream",
-      };
-    } else {
-      console.log("⬇️ Downloading new media file from Telegram");
-      const fileResponse = await downloadTelegramFile(mediaItem.file_id, TELEGRAM_BOT_TOKEN);
-      const fileBuffer = await fileResponse.arrayBuffer();
-      console.log("✅ File downloaded successfully");
-
-      uploadResult = await uploadMedia(supabase, fileBuffer, {
-        fileUniqueId: mediaItem.file_unique_id,
-        mimeType: mediaItem.mime_type,
-        fileSize: mediaItem.file_size,
-      });
-      console.log("✅ File uploaded successfully");
-
-      const messageData = {
-        telegram_message_id: message.message_id,
-        media_group_id: message.media_group_id,
-        caption: message.caption || "",
-        file_id: mediaItem.file_id,
-        file_unique_id: mediaItem.file_unique_id,
-        public_url: uploadResult.publicUrl,
-        mime_type: mediaItem.mime_type,
-        file_size: mediaItem.file_size,
-        width: mediaItem.width,
-        height: mediaItem.height,
-        duration: mediaItem.duration,
-        user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
-        telegram_data: { message },
-        processing_state: message.caption ? 'pending' : 'processing',
-        is_original_caption: message.media_group_id && message.caption ? true : false
-      };
-
-      const newMessage = await createNewMessage(supabase, messageData);
-
-      if (message.caption) {
-        await triggerCaptionParsing(
-          newMessage.id,
-          message.media_group_id,
-          message.caption
-        );
-      }
+    if (messageError) {
+      console.error("❌ Failed to store message:", messageError);
+      throw messageError;
     }
 
     processedMedia.push({

@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "./authUtils.ts";
-import type { TelegramUpdate } from "./types.ts";
 import { handleTextMessage, handleMediaMessage, handleChatMemberUpdate } from "./messageHandler.ts";
 
 serve(async (req) => {
@@ -13,13 +13,23 @@ serve(async (req) => {
   }
 
   try {
-    const update: TelegramUpdate = await req.json();
+    const update = await req.json();
     console.log("Processing update:", JSON.stringify(update));
 
     const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
     if (!TELEGRAM_BOT_TOKEN) {
       throw new Error("TELEGRAM_BOT_TOKEN is not configured");
     }
+
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error("Supabase credentials not configured");
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const message = update.message || update.channel_post;
     if (!message) {
