@@ -65,10 +65,10 @@ serve(async (req) => {
       event_type: 'ANALYSIS_STARTED',
       old_state: 'initialized',
       new_state: 'processing',
-      processing_details: jsonb_build_object(
-        'timestamp', new Date().toISOString(),
-        'caption', caption
-      )
+      processing_details: {
+        timestamp: new Date().toISOString(),
+        caption: caption
+      }
     });
 
     // Try manual parsing first
