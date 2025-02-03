@@ -15,10 +15,9 @@ serve(async (req) => {
   }
 
   try {
-    // Clone request early for potential error handling
     const reqClone = req.clone();
     const { message_id, media_group_id, caption } = await req.json();
-    console.log('Processing caption analysis for message:', { message_id, media_group_id, caption });
+    console.log('Starting caption analysis for:', { message_id, media_group_id, caption });
 
     if (!message_id || !caption) {
       throw new Error('Missing required parameters');
@@ -40,10 +39,10 @@ serve(async (req) => {
       event_type: 'ANALYSIS_STARTED',
       old_state: 'initialized',
       new_state: 'processing',
-      processing_details: JSON.stringify({
+      processing_details: {
         timestamp: new Date().toISOString(),
         caption
-      })
+      }
     });
 
     // Update message to processing state
@@ -76,11 +75,11 @@ serve(async (req) => {
       media_group_id,
       event_type: 'ANALYSIS_METHOD_SELECTED',
       new_state: 'processing',
-      processing_details: JSON.stringify({
+      processing_details: {
         method: isAiAnalysis ? 'ai' : 'manual',
         confidence: analyzedContent.parsing_metadata?.confidence,
         timestamp: new Date().toISOString()
-      })
+      }
     });
 
     // Add delay for AI analysis
@@ -92,11 +91,11 @@ serve(async (req) => {
     const { error: sourceUpdateError } = await supabase
       .from('messages')
       .update({
-        analyzed_content: JSON.stringify(analyzedContent),
+        analyzed_content: analyzedContent,
         processing_state: 'completed',
         processing_completed_at: new Date().toISOString(),
         is_original_caption: true,
-        group_caption_synced: false
+        group_caption_synced: media_group_id ? false : true
       })
       .eq('id', message_id);
 
@@ -109,11 +108,13 @@ serve(async (req) => {
       event_type: 'ANALYSIS_COMPLETED',
       old_state: 'processing',
       new_state: 'completed',
-      analyzed_content: JSON.stringify(analyzedContent)
+      analyzed_content: analyzedContent
     });
 
     // Process media group if applicable
     if (media_group_id) {
+      console.log('Processing media group:', media_group_id);
+      
       // Add additional delay for AI analysis before group sync
       if (isAiAnalysis) {
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -125,50 +126,56 @@ serve(async (req) => {
         media_group_id,
         event_type: 'GROUP_SYNC_STARTED',
         new_state: 'processing',
-        processing_details: JSON.stringify({
+        processing_details: {
           timestamp: new Date().toISOString(),
           method: isAiAnalysis ? 'ai' : 'manual'
+        }
+      });
+
+      // Update all other messages in the group
+      const { error: groupUpdateError } = await supabase
+        .from('messages')
+        .update({
+          analyzed_content: analyzedContent,
+          processing_state: 'completed',
+          processing_completed_at: new Date().toISOString(),
+          is_original_caption: false,
+          group_caption_synced: true,
+          message_caption_id: message_id
         })
-      });
+        .eq('media_group_id', media_group_id)
+        .neq('id', message_id);
 
-      // Process the media group
-      const { error: groupError } = await supabase.rpc('process_media_group_analysis', {
-        p_message_id: message_id,
-        p_media_group_id: media_group_id,
-        p_analyzed_content: JSON.stringify(analyzedContent),
-        p_processing_completed_at: new Date().toISOString()
-      });
+      if (groupUpdateError) throw groupUpdateError;
 
-      if (groupError) throw groupError;
-
-      // Update group_caption_synced after successful group sync
-      const { error: syncUpdateError } = await supabase
+      // Update the original message to mark group sync as complete
+      const { error: originalUpdateError } = await supabase
         .from('messages')
         .update({
           group_caption_synced: true
         })
         .eq('id', message_id);
 
-      if (syncUpdateError) throw syncUpdateError;
+      if (originalUpdateError) throw originalUpdateError;
 
       // Log group sync completion
       await supabase.from('analysis_audit_log').insert({
         message_id,
         media_group_id,
-        event_type: 'GROUP_ANALYSIS_COMPLETED',
+        event_type: 'GROUP_SYNC_COMPLETED',
         new_state: 'completed',
-        analyzed_content: JSON.stringify(analyzedContent),
-        processing_details: JSON.stringify({
+        analyzed_content: analyzedContent,
+        processing_details: {
           method: isAiAnalysis ? 'ai' : 'manual',
           sync_type: 'group',
           sync_delay: isAiAnalysis ? 3000 : 0,
           timestamp: new Date().toISOString()
-        })
+        }
       });
     }
 
     const response: AnalysisResult = {
-      message: 'Caption analyzed successfully',
+      message: 'Caption analyzed and synced successfully',
       analyzed_content: analyzedContent,
       processing_details: {
         method: isAiAnalysis ? 'ai' : 'manual',
@@ -197,10 +204,10 @@ serve(async (req) => {
           message_id,
           event_type: 'ERROR',
           new_state: 'error',
-          processing_details: JSON.stringify({
+          processing_details: {
             error_message: error.message,
             timestamp: new Date().toISOString()
-          })
+          }
         });
 
         // Update message error state
