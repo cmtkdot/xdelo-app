@@ -109,3 +109,37 @@ export interface MessageSyncResult {
     sync_timestamp: string;
   };
 }
+
+// Base type for JSON data
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+// Type guard for JsonValue
+export function isJsonValue(value: unknown): value is JsonValue {
+  if (value === null) return true;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return true;
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  if (typeof value === 'object') {
+    return Object.values(value as object).every(isJsonValue);
+  }
+  return false;
+}
+
+// Convert AnalyzedContent to JsonValue
+export function toJsonValue(analyzed: AnalyzedContent): JsonValue {
+  return {
+    product_name: analyzed.product_name || null,
+    product_code: analyzed.product_code || null,
+    vendor_uid: analyzed.vendor_uid || null,
+    purchase_date: analyzed.purchase_date || null,
+    quantity: analyzed.quantity || null,
+    notes: analyzed.notes || null,
+    parsing_metadata: analyzed.parsing_metadata ? {
+      method: analyzed.parsing_metadata.method,
+      confidence: analyzed.parsing_metadata.confidence,
+      fallbacks_used: analyzed.parsing_metadata.fallbacks_used || [],
+      reanalysis_attempted: analyzed.parsing_metadata.reanalysis_attempted || false,
+      previous_analysis: analyzed.parsing_metadata.previous_analysis ? 
+        toJsonValue(analyzed.parsing_metadata.previous_analysis) : null
+    } : null
+  };
+}

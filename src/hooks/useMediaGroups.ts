@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, FilterValues, AnalyzedContent } from "@/types";
+import { MediaItem, FilterValues, AnalyzedContent, toJsonValue } from "@/types";
 import { useToast } from "@/components/ui/use-toast";
 
 export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
@@ -48,7 +48,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
                   event_type: "GROUP_SYNC_INITIATED",
                   old_state: "initialized",
                   new_state: "completed",
-                  analyzed_content: groupMessages[0].analyzed_content as AnalyzedContent,
+                  analyzed_content: toJsonValue(groupMessages[0].analyzed_content as AnalyzedContent),
                   processing_details: syncDetails
                 });
 

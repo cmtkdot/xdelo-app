@@ -1,4 +1,4 @@
-import { MediaItem, AnalyzedContent } from "@/types";
+import { MediaItem, AnalyzedContent, toJsonValue } from "@/types";
 import { AlertCircle, Pencil, Trash2, RotateCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageSwiper } from "@/components/ui/image-swiper";
@@ -68,12 +68,12 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
             event_type: 'REANALYSIS_REQUESTED',
             old_state: mainMedia.processing_state,
             new_state: 'pending',
-            analyzed_content: analyzedContent,
-            processing_details: {
+            analyzed_content: analyzedContent ? toJsonValue(analyzedContent) : null,
+            processing_details: toJsonValue({
               reason: 'low_confidence',
               confidence: analyzedContent?.parsing_metadata?.confidence,
               group_message_count: mainMedia.group_message_count
-            }
+            })
           });
 
           const { error } = await supabase.functions.invoke('reanalyze-low-confidence', {
@@ -165,11 +165,11 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
         event_type: 'MANUAL_REANALYSIS_REQUESTED',
         old_state: mainMedia.processing_state,
         new_state: 'pending',
-        analyzed_content: analyzedContent,
-        processing_details: {
+        analyzed_content: analyzedContent ? toJsonValue(analyzedContent) : null,
+        processing_details: toJsonValue({
           group_message_count: mainMedia.group_message_count,
           is_original_caption: mainMedia.is_original_caption
-        }
+        })
       });
 
       const { error } = await supabase.functions.invoke('reanalyze-low-confidence', {
