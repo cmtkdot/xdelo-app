@@ -5,6 +5,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { useToast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface MessageEditorProps {
   message: MediaItem;
@@ -14,10 +16,48 @@ interface MessageEditorProps {
 
 export const MessageEditor = ({ message, onUpdate, onCancel }: MessageEditorProps) => {
   const [editedMessage, setEditedMessage] = useState<MediaItem>(message);
+  const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdate(editedMessage);
+
+    try {
+      // Update message in Telegram
+      const { error: telegramError } = await supabase.functions.invoke('edit-telegram-message', {
+        body: {
+          chat_id: editedMessage.chat_id,
+          message_id: editedMessage.telegram_message_id,
+          caption: editedMessage.caption,
+        },
+      });
+
+      if (telegramError) throw telegramError;
+
+      // Update message in database
+      const { error: dbError } = await supabase
+        .from('messages')
+        .update({
+          caption: editedMessage.caption,
+          analyzed_content: editedMessage.analyzed_content,
+        })
+        .eq('id', editedMessage.id);
+
+      if (dbError) throw dbError;
+
+      toast({
+        title: "Success",
+        description: "Message updated successfully",
+      });
+
+      onUpdate(editedMessage);
+    } catch (error) {
+      console.error("Error updating message:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update message",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleAnalyzedContentChange = (field: string, value: any) => {
