@@ -86,6 +86,24 @@ export async function handleMediaMessage(
 
     let messageData;
     let uploadResult: MediaUploadResult | null = null;
+    let shouldReanalyze = false;
+
+    // Check if caption has changed or if analysis needs to be redone
+    if (existingMessage) {
+      shouldReanalyze = (
+        message.caption !== existingMessage.caption || // Caption changed
+        !existingMessage.analyzed_content || // No previous analysis
+        existingMessage.processing_state === 'error' // Previous analysis failed
+      );
+
+      console.log("🔄 Duplicate check:", {
+        exists: true,
+        caption_changed: message.caption !== existingMessage.caption,
+        needs_analysis: !existingMessage.analyzed_content,
+        had_error: existingMessage.processing_state === 'error',
+        will_reanalyze: shouldReanalyze
+      });
+    }
 
     if (!existingMessage) {
       // Only download and upload if message doesn't exist
@@ -130,10 +148,9 @@ export async function handleMediaMessage(
         .from("messages")
         .update({
           ...messageData,
-          // Preserve existing analyzed content if present
-          analyzed_content: existingMessage.analyzed_content || null,
-          // Update processing state only if new caption
-          processing_state: message.caption && !existingMessage.analyzed_content ? 'processing' : existingMessage.processing_state
+          // Reset analysis if reanalysis is needed
+          analyzed_content: shouldReanalyze ? null : existingMessage.analyzed_content,
+          processing_state: shouldReanalyze ? 'processing' : existingMessage.processing_state
         })
         .eq("id", existingMessage.id)
         .select()
@@ -160,9 +177,10 @@ export async function handleMediaMessage(
       newMessage = insertedMessage;
     }
 
-    // If message has caption and needs analysis, trigger AI analysis
-    if (message.caption && (!existingMessage?.analyzed_content || message.caption !== existingMessage.caption)) {
+    // If message needs analysis, trigger AI analysis
+    if ((message.caption && !existingMessage) || shouldReanalyze) {
       try {
+        console.log("🤖 Triggering AI analysis for message:", newMessage.id);
         await supabase.functions.invoke('parse-caption-with-ai', {
           body: { 
             message_id: newMessage.id,
@@ -170,7 +188,7 @@ export async function handleMediaMessage(
             caption: message.caption
           }
         });
-        console.log("✅ AI analysis triggered for message:", newMessage.id);
+        console.log("✅ AI analysis triggered successfully");
       } catch (error) {
         console.error("❌ Failed to trigger AI analysis:", error);
         // Don't throw here, we want to continue processing other media items

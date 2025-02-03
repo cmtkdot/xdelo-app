@@ -7,7 +7,18 @@ export function manualParse(caption: string): ParsedContent {
   const fallbacks_used: string[] = [];
 
   // Extract product name (text before # or x)
-  const productNameMatch = caption.split(/[#x]/)[0]?.trim();
+  const xIndex = caption.toLowerCase().indexOf('x');
+  const hashIndex = caption.indexOf('#');
+  let endIndex = caption.length;
+  
+  if (xIndex > 0) {
+    endIndex = Math.min(endIndex, xIndex);
+  }
+  if (hashIndex > 0) {
+    endIndex = Math.min(endIndex, hashIndex);
+  }
+  
+  const productNameMatch = caption.substring(0, endIndex).trim();
   if (productNameMatch) {
     result.product_name = productNameMatch;
   } else {

@@ -44,7 +44,14 @@ Expected Output: {
   "purchase_date": "2023-12-05",
   "quantity": 2,
   "notes": "indoor"
-}`;
+}
+
+Handle variations and edge cases:
+1. Product names with numbers (e.g., "OG Kush #18")
+2. Multiple x markers (use the last one for quantity)
+3. Missing or incomplete product codes
+4. Various date formats
+5. Special characters in product names`;
 
 export async function analyzeCaption(caption: string): Promise<ParsedContent> {
   try {
