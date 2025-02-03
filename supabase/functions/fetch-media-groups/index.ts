@@ -18,6 +18,7 @@ interface FilterValues {
 }
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -30,49 +31,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // First, check for any initialized messages that need syncing
-    const { data: initializedMessages, error: initError } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("processing_state", "initialized")
-      .eq("group_caption_synced", false);
-
-    if (initError) throw initError;
-
-    // Sync initialized messages if needed
-    if (initializedMessages?.length) {
-      for (const msg of initializedMessages) {
-        if (msg.media_group_id) {
-          const { data: groupMessages } = await supabase
-            .from("messages")
-            .select("*")
-            .eq("media_group_id", msg.media_group_id)
-            .eq("processing_state", "completed")
-            .order("created_at", { ascending: true })
-            .limit(1);
-
-          if (groupMessages?.[0]?.analyzed_content) {
-            const { error: updateError } = await supabase
-              .from("messages")
-              .update({
-                analyzed_content: groupMessages[0].analyzed_content,
-                processing_state: "completed",
-                group_caption_synced: true,
-                message_caption_id: groupMessages[0].id,
-                processing_completed_at: new Date().toISOString()
-              })
-              .eq("id", msg.id);
-
-            if (updateError) {
-              console.error("Error updating message:", updateError);
-              continue;
-            }
-          }
-        }
-      }
-    }
-
-    // Build the query for fetching messages
+    // Build the query
     let query = supabase
       .from("messages")
       .select("*", { count: "exact" })
