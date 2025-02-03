@@ -31,7 +31,6 @@ serve(async (req) => {
     const { message_id, caption } = await req.json();
     console.log('Reanalyzing message:', { message_id, caption });
 
-    // Skip if no caption
     if (!caption) {
       return new Response(
         JSON.stringify({ message: 'Skipped reanalysis - no caption provided' }),
@@ -39,12 +38,10 @@ serve(async (req) => {
       );
     }
 
-    // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Call OpenAI for reanalysis
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAIApiKey) {
       throw new Error('OpenAI API key not configured');
@@ -61,39 +58,24 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `You are a specialized product information extractor. Extract structured information from captions following these rules:
+            content: `Extract product information from captions following these rules:
+1. Product Name: Text before '#' (required)
+2. Product Code: Full code after '#'
+3. Vendor UID: Letters at start of product code
+4. Purchase Date: Convert MMDDYY or MDDYY to YYYY-MM-DD
+5. Quantity: Look for numbers after 'x' or in units
+6. Notes: Text in parentheses or remaining info
 
-1. Product Name (REQUIRED):
-   - Text before '#' or 'x' marker
-   - Remove any trailing spaces
-   - Capitalize first letter of each word
-   - Example: "blue dream x2" -> "Blue Dream"
-
-2. Product Code:
-   - Full code after '#'
-   - Format: [vendor_uid][date]
-   - Example: "#CHAD120523"
-
-3. Vendor UID:
-   - 1-4 letters at start of product code
-   - Example: "CHAD" from "#CHAD120523"
-
-4. Purchase Date:
-   - Convert date formats:
-   - 6 digits (mmDDyy) -> YYYY-MM-DD
-   - 5 digits (mDDyy) -> YYYY-MM-DD
-   - Example: "120523" -> "2023-12-05"
-
-5. Quantity:
-   - Number after 'x' or 'qty:'
-   - Must be positive integer
-   - Example: "x2" or "qty: 2"
-
-6. Notes:
-   - Text in parentheses or remaining info
-   - Example: "(indoor grown)"
-
-Return a JSON object with these fields. Include null for missing values.`
+Return a clean JSON object with these fields, no markdown formatting.
+Example Input: "Blue Widget #ABC12345 x5 (new stock)"
+Example Output: {
+  "product_name": "Blue Widget",
+  "product_code": "ABC12345",
+  "vendor_uid": "ABC",
+  "purchase_date": "2023-12-34",
+  "quantity": 5,
+  "notes": "new stock"
+}`
           },
           { role: 'user', content: caption }
         ],
@@ -107,42 +89,61 @@ Return a JSON object with these fields. Include null for missing values.`
     }
 
     const data = await response.json();
+    const aiResponse = data.choices[0].message.content;
+    console.log('Raw AI response:', aiResponse);
+    
     let newAnalyzedContent: AnalyzedContent;
-
     try {
-      const aiResponse = data.choices[0].message.content;
-      console.log('Raw AI response:', aiResponse);
-      
-      // Clean up the response if it contains markdown
-      const cleanResponse = aiResponse.replace(/```json\n|\n```/g, '');
-      newAnalyzedContent = JSON.parse(cleanResponse);
+      newAnalyzedContent = JSON.parse(aiResponse);
+      newAnalyzedContent.parsing_metadata = {
+        method: 'ai_enhanced',
+        confidence: 0.9,
+        reanalysis_attempted: true
+      };
     } catch (parseError) {
       console.error('Error parsing AI response:', parseError);
       throw new Error('Failed to parse AI response');
     }
 
-    // Add metadata
-    newAnalyzedContent.parsing_metadata = {
-      method: 'ai_enhanced',
-      confidence: 0.9,
-      reanalysis_attempted: true
-    };
-
     console.log('New analyzed content:', newAnalyzedContent);
 
-    // Update the message with new analysis
-    const { error: updateError } = await supabase
+    // Get the message to find its media group
+    const { data: message, error: messageError } = await supabase
       .from('messages')
-      .update({
-        analyzed_content: newAnalyzedContent,
-        processing_state: 'completed'
-      })
+      .select('media_group_id')
       .eq('id', message_id)
-      .eq('is_original_caption', true); // Only update original caption messages
+      .single();
 
-    if (updateError) {
-      console.error('Error updating message:', updateError);
-      throw updateError;
+    if (messageError) {
+      throw messageError;
+    }
+
+    if (message.media_group_id) {
+      // Update all messages in the media group
+      const { error: groupError } = await supabase.rpc('process_media_group_analysis', {
+        p_message_id: message_id,
+        p_media_group_id: message.media_group_id,
+        p_analyzed_content: newAnalyzedContent,
+        p_processing_completed_at: new Date().toISOString()
+      });
+
+      if (groupError) {
+        throw groupError;
+      }
+    } else {
+      // Update single message
+      const { error: updateError } = await supabase
+        .from('messages')
+        .update({
+          analyzed_content: newAnalyzedContent,
+          processing_state: 'completed'
+        })
+        .eq('id', message_id)
+        .eq('is_original_caption', true);
+
+      if (updateError) {
+        throw updateError;
+      }
     }
 
     return new Response(
