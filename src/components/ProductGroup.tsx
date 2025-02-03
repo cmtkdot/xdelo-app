@@ -35,12 +35,12 @@ export const ProductGroup = ({
   const [isViewerOpen, setIsViewerOpen] = useState(false);
 
   const formatDate = (dateString?: string) => {
-    if (!dateString) return 'N/A';
+    if (!dateString) return '';
     try {
       return format(new Date(dateString), 'MM/dd/yyyy');
     } catch (error) {
       console.error("Error formatting date:", error);
-      return 'Invalid Date';
+      return '';
     }
   };
 
@@ -256,9 +256,15 @@ export const ProductGroup = ({
       <div className="p-3 space-y-2">
         {/* Secondary info in compact form */}
         <div className="space-y-1 text-xs text-gray-600">
-          <p>PO#: {analyzedContent?.product_code || 'N/A'}</p>
-          <p>Vendor: {analyzedContent?.vendor_uid || 'N/A'}</p>
-          <p>Quantity: {analyzedContent?.quantity || 'N/A'}</p>
+          {analyzedContent?.product_code && (
+            <p>PO#: {analyzedContent.product_code}</p>
+          )}
+          {analyzedContent?.vendor_uid && (
+            <p>Vendor: {analyzedContent.vendor_uid}</p>
+          )}
+          {analyzedContent?.quantity && (
+            <p>Quantity: {analyzedContent.quantity}</p>
+          )}
         </div>
 
         {analyzedContent?.parsing_metadata?.confidence < 0.7 && (
