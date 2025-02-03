@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { analyzeCaption } from "./utils/aiAnalyzer.ts";
+import { aiParse } from "./aiParser.ts";
+import { manualParse } from "./manualParser.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,6 +14,8 @@ serve(async (req) => {
   }
 
   try {
+    // Clone request early for potential error handling
+    const reqClone = req.clone();
     const { message_id, media_group_id, caption } = await req.json();
     console.log('Processing caption analysis for message:', { message_id, media_group_id, caption });
 
@@ -41,12 +44,21 @@ serve(async (req) => {
 
     if (updateError) throw updateError;
 
-    // Analyze the caption
-    const analyzedContent = await analyzeCaption(caption);
-    console.log('Analysis completed:', analyzedContent);
+    // Try manual parsing first
+    let analyzedContent = await manualParse(caption);
+    let isAiAnalysis = false;
 
-    // Add a delay for AI analysis to ensure proper syncing
-    if (analyzedContent.parsing_metadata?.method === 'ai') {
+    // If manual parsing doesn't yield good results, try AI parsing
+    if (!analyzedContent.product_name || !analyzedContent.quantity) {
+      console.log('Manual parsing incomplete, attempting AI analysis');
+      analyzedContent = await aiParse(caption);
+      isAiAnalysis = true;
+    }
+
+    console.log('Analysis completed:', { isAiAnalysis, analyzedContent });
+
+    // Add delay for AI analysis to ensure proper syncing
+    if (isAiAnalysis) {
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
@@ -58,7 +70,7 @@ serve(async (req) => {
         processing_state: 'completed',
         processing_completed_at: new Date().toISOString(),
         is_original_caption: true,
-        group_caption_synced: true
+        group_caption_synced: false // Set to false initially
       })
       .eq('id', message_id);
 
@@ -67,7 +79,7 @@ serve(async (req) => {
     // If this is part of a media group, process the entire group
     if (media_group_id) {
       // Add additional delay before group sync for AI analysis
-      if (analyzedContent.parsing_metadata?.method === 'ai') {
+      if (isAiAnalysis) {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
@@ -80,6 +92,16 @@ serve(async (req) => {
 
       if (groupError) throw groupError;
 
+      // Update group_caption_synced after successful group sync
+      const { error: syncUpdateError } = await supabase
+        .from('messages')
+        .update({
+          group_caption_synced: true
+        })
+        .eq('id', message_id);
+
+      if (syncUpdateError) throw syncUpdateError;
+
       // Log the group synchronization
       await supabase
         .from('analysis_audit_log')
@@ -90,9 +112,9 @@ serve(async (req) => {
           new_state: 'completed',
           analyzed_content: analyzedContent,
           processing_details: {
-            method: analyzedContent.parsing_metadata?.method || 'unknown',
+            method: isAiAnalysis ? 'ai' : 'manual',
             sync_type: 'group',
-            sync_delay: analyzedContent.parsing_metadata?.method === 'ai' ? 3000 : 0
+            sync_delay: isAiAnalysis ? 3000 : 0
           }
         });
     }
@@ -109,8 +131,8 @@ serve(async (req) => {
     console.error('Error processing caption:', error);
     
     try {
-      // Create a new request body for error update
-      const { message_id } = await req.clone().json();
+      // Use the cloned request for error handling
+      const { message_id } = await reqClone.json();
       
       if (message_id) {
         const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -122,7 +144,7 @@ serve(async (req) => {
           .update({ 
             processing_state: 'error',
             error_message: error.message,
-            last_error_at: new Date().toISOString()
+            processing_completed_at: new Date().toISOString()
           })
           .eq('id', message_id);
       }
