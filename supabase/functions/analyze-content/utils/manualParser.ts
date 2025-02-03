@@ -41,10 +41,13 @@ export function parseCaption(text: string): AnalyzedContent {
     }
   }
 
-  // Quantity (x followed by number)
-  const quantityMatch = text.match(/x\s*(\d+)/i);
+  // Quantity (x followed by number, improved regex)
+  const quantityMatch = text.match(/x\s*(\d+)(?!\d*\s*[a-zA-Z])/i);
   if (quantityMatch) {
-    result.quantity = parseInt(quantityMatch[1]);
+    const quantity = parseInt(quantityMatch[1], 10);
+    if (!isNaN(quantity) && quantity > 0) {
+      result.quantity = quantity;
+    }
   }
 
   // Notes (text in parentheses or remaining text)
