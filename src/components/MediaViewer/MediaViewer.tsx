@@ -1,6 +1,6 @@
 import React from 'react';
 import { MediaItem } from '@/types';
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ImageSwiper } from "@/components/ui/image-swiper";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
@@ -10,10 +10,10 @@ interface MediaViewerProps {
   isOpen: boolean;
   onClose: () => void;
   currentGroup: MediaItem[];
-  onPrevious: () => void;
-  onNext: () => void;
-  hasPrevious: boolean;
-  hasNext: boolean;
+  onPrevious?: () => void;
+  onNext?: () => void;
+  hasPrevious?: boolean;
+  hasNext?: boolean;
 }
 
 export const MediaViewer = ({
@@ -41,16 +41,11 @@ export const MediaViewer = ({
     <Dialog open={isOpen} onOpenChange={() => onClose()}>
       <DialogContent className="max-w-4xl h-[90vh] p-0">
         <div className="relative h-full flex flex-col">
-          <div className="absolute top-2 right-2 z-50">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="rounded-full bg-background/80 backdrop-blur-sm"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          <DialogHeader className="border-b border-border px-6 py-4">
+            <DialogTitle className="text-base">
+              {analyzedContent?.product_name || 'Untitled Product'}
+            </DialogTitle>
+          </DialogHeader>
           
           <div className="flex-1 min-h-0">
             <ImageSwiper media={currentGroup} />
@@ -59,11 +54,9 @@ export const MediaViewer = ({
           <div className="p-4 bg-background border-t">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <h3 className="text-lg font-semibold mb-2">
-                  {analyzedContent?.product_name || 'Untitled Product'}
-                </h3>
+                <h3 className="font-medium mb-2">Product Details</h3>
                 <div className="space-y-1 text-sm">
-                  <p>Code: {analyzedContent?.product_code || 'N/A'}</p>
+                  <p>Code: {analyzedContent?.product_code ? `PO#${analyzedContent.product_code}` : 'N/A'}</p>
                   <p>Vendor: {analyzedContent?.vendor_uid || 'N/A'}</p>
                   <p>Quantity: {analyzedContent?.quantity || 'N/A'}</p>
                   <p>Purchase Date: {formatDate(analyzedContent?.purchase_date)}</p>

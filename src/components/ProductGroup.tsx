@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MediaViewer } from "./MediaViewer/MediaViewer";
@@ -32,7 +32,6 @@ export const ProductGroup = ({
   const hasError = mainMedia.processing_state === 'error';
   const analyzedContent = group.find(media => media.is_original_caption)?.analyzed_content || mainMedia.analyzed_content;
   const { toast } = useToast();
-
   const [isViewerOpen, setIsViewerOpen] = useState(false);
 
   const formatDate = (dateString?: string) => {
