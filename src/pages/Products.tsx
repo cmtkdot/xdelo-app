@@ -53,7 +53,7 @@ const Products = () => {
           uniqueMessages.set(key, message);
         } else {
           // If message exists, update only if it has newer content
-          const existingMessage = uniqueMessages.get(key);
+          const existingMessage = uniqueMessages.get(key) as MediaItem;
           if (
             message.analyzed_content && 
             (!existingMessage.analyzed_content || 
@@ -218,7 +218,7 @@ const Products = () => {
             setEditItem({
               ...editItem,
               analyzed_content: {
-                ...editItem.analyzed_content,
+                ...(editItem.analyzed_content || {}),
                 [field]: value
               }
             });
