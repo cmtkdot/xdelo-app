@@ -37,7 +37,7 @@ serve(async (req) => {
       .eq('is_original_caption', true)
       .not('analyzed_content', 'is', null);
 
-    // Apply filters
+    // Apply JSON filters
     if (filters.search) {
       query = query.or(`analyzed_content->product_name.ilike.%${filters.search}%,analyzed_content->notes.ilike.%${filters.search}%,caption.ilike.%${filters.search}%`);
     }
