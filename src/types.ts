@@ -53,6 +53,6 @@ export interface FilterValues {
   dateTo?: Date;
   sortOrder: "desc" | "asc";
   productCode?: string;
-  quantity?: number;
-  processingState?: string;
+  quantityRange?: string;
+  processingState?: "initialized" | "processing" | "completed" | "error" | "pending";
 }

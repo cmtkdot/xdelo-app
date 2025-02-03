@@ -27,11 +27,20 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
         }
 
         if (filters.productCode) {
-          originalCaptionsQuery = originalCaptionsQuery.ilike("product_code", `%${filters.productCode}%`);
+          originalCaptionsQuery = originalCaptionsQuery.eq("product_code", filters.productCode);
         }
 
-        if (filters.quantity) {
-          originalCaptionsQuery = originalCaptionsQuery.eq("quantity", filters.quantity);
+        if (filters.quantityRange && filters.quantityRange !== 'all') {
+          if (filters.quantityRange === 'undefined') {
+            originalCaptionsQuery = originalCaptionsQuery.is('quantity', null);
+          } else if (filters.quantityRange === '21+') {
+            originalCaptionsQuery = originalCaptionsQuery.gte('quantity', 21);
+          } else {
+            const [min, max] = filters.quantityRange.split('-').map(Number);
+            originalCaptionsQuery = originalCaptionsQuery
+              .gte('quantity', min)
+              .lte('quantity', max);
+          }
         }
 
         if (filters.processingState && filters.processingState !== 'all') {

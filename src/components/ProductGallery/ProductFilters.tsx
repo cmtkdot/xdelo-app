@@ -8,6 +8,7 @@ import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { FilterValues } from "@/types";
 import debounce from 'lodash/debounce';
+import { supabase } from "@/integrations/supabase/client";
 
 interface ProductFiltersProps {
   vendors: string[];
@@ -22,8 +23,27 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   const [dateTo, setDateTo] = useState<Date | undefined>(filters.dateTo);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder);
   const [productCode, setProductCode] = useState(filters.productCode || '');
-  const [quantity, setQuantity] = useState<number | undefined>(filters.quantity);
+  const [quantityRange, setQuantityRange] = useState(filters.quantityRange || 'all');
   const [processingState, setProcessingState] = useState(filters.processingState || 'all');
+  const [productCodes, setProductCodes] = useState<string[]>([]);
+
+  // Fetch unique product codes
+  useEffect(() => {
+    const fetchProductCodes = async () => {
+      const { data, error } = await supabase
+        .from('messages_parsed')
+        .select('product_code')
+        .not('product_code', 'is', null)
+        .is('is_original_caption', true);
+
+      if (!error && data) {
+        const uniqueCodes = [...new Set(data.map(item => item.product_code))].filter(Boolean);
+        setProductCodes(uniqueCodes);
+      }
+    };
+
+    fetchProductCodes();
+  }, []);
 
   // Debounced filter change for real-time search
   const debouncedFilterChange = debounce((newFilters: FilterValues) => {
@@ -39,10 +59,10 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
       dateTo,
       sortOrder,
       productCode,
-      quantity,
+      quantityRange,
       processingState
     });
-  }, [search, vendor, dateFrom, dateTo, sortOrder, productCode, quantity, processingState]);
+  }, [search, vendor, dateFrom, dateTo, sortOrder, productCode, quantityRange, processingState]);
 
   return (
     <div className="flex flex-col space-y-4">
@@ -54,20 +74,32 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
           className="w-full md:w-64"
         />
         
-        <Input
-          placeholder="Product Code (PO#)"
-          value={productCode}
-          onChange={(e) => setProductCode(e.target.value)}
-          className="w-full md:w-48"
-        />
+        <Select value={productCode} onValueChange={setProductCode}>
+          <SelectTrigger className="w-full md:w-48">
+            <SelectValue placeholder="Select Product Code" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">All Product Codes</SelectItem>
+            {productCodes.map((code) => (
+              <SelectItem key={code} value={code}>{code}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        <Input
-          type="number"
-          placeholder="Quantity"
-          value={quantity || ''}
-          onChange={(e) => setQuantity(e.target.value ? Number(e.target.value) : undefined)}
-          className="w-full md:w-32"
-        />
+        <Select value={quantityRange} onValueChange={setQuantityRange}>
+          <SelectTrigger className="w-full md:w-48">
+            <SelectValue placeholder="Quantity Range" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Quantities</SelectItem>
+            <SelectItem value="undefined">Undefined</SelectItem>
+            <SelectItem value="1-5">1-5</SelectItem>
+            <SelectItem value="6-10">6-10</SelectItem>
+            <SelectItem value="11-15">11-15</SelectItem>
+            <SelectItem value="16-20">16-20</SelectItem>
+            <SelectItem value="21+">21+</SelectItem>
+          </SelectContent>
+        </Select>
 
         <Select value={vendor} onValueChange={setVendor}>
           <SelectTrigger className="w-full md:w-48">
@@ -90,6 +122,8 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
             <SelectItem value="completed">Completed</SelectItem>
             <SelectItem value="processing">Processing</SelectItem>
             <SelectItem value="error">Error</SelectItem>
+            <SelectItem value="initialized">Initialized</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
           </SelectContent>
         </Select>
       </div>
