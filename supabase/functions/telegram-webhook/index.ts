@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { corsHeaders } from "./authUtils.ts";
 import type { TelegramUpdate } from "./types.ts";
+import { handleTextMessage, handleMediaMessage, handleChatMemberUpdate } from "./messageHandler.ts";
 
 serve(async (req) => {
   console.log("Received webhook request");
@@ -15,31 +16,35 @@ serve(async (req) => {
     const update: TelegramUpdate = await req.json();
     console.log("Processing update:", JSON.stringify(update));
 
-    // Forward to unified media processor
-    const response = await fetch(
-      `${Deno.env.get("SUPABASE_URL")}/functions/v1/unified-media-processor`,
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(update),
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Unified processor error: ${errorText}`);
+    const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
+    if (!TELEGRAM_BOT_TOKEN) {
+      throw new Error("TELEGRAM_BOT_TOKEN is not configured");
     }
 
-    const result = await response.json();
+    const message = update.message || update.channel_post;
+    if (!message) {
+      return new Response(
+        JSON.stringify({ message: "No content to process" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    let result;
+    if (update.my_chat_member) {
+      result = await handleChatMemberUpdate(supabase, update);
+    } else if (message.text && !message.photo && !message.video && !message.document) {
+      result = await handleTextMessage(supabase, message);
+    } else {
+      result = await handleMediaMessage(supabase, message, TELEGRAM_BOT_TOKEN);
+    }
+
     console.log("Successfully processed webhook request");
     
-    return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
+    return new Response(
+      JSON.stringify(result),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+
   } catch (error) {
     console.error("Error processing webhook:", error);
     
@@ -48,9 +53,9 @@ serve(async (req) => {
       timestamp: new Date().toISOString(),
     };
     
-    return new Response(JSON.stringify(errorResponse), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
+    return new Response(
+      JSON.stringify(errorResponse),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+    );
   }
 });

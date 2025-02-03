@@ -1,12 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { TelegramMedia, MediaUploadResult, ProcessedMedia, WebhookResponse, ProcessingState } from "./types.ts";
+import { TelegramMedia, MediaUploadResult, ProcessedMedia, WebhookResponse } from "./types.ts";
 import { downloadTelegramFile, uploadMedia } from "./mediaUtils.ts";
 import { 
   findExistingMessage, 
   updateExistingMessage, 
   createNewMessage,
-  triggerCaptionParsing,
-  syncMediaGroupAnalysis 
+  triggerCaptionParsing
 } from "./dbOperations.ts";
 
 export async function handleTextMessage(
@@ -86,49 +85,31 @@ export async function handleMediaMessage(
       
       const needsAnalysis = !existingMessage.analyzed_content && 
                           existingMessage.processing_state !== 'completed' &&
-                          existingMessage.processing_state !== 'analyzing';
-      
-      const needsGroupSync = existingMessage.media_group_id && 
-                           (!existingMessage.group_caption_synced || 
-                            existingMessage.processing_state !== 'completed');
+                          existingMessage.processing_state !== 'processing';
 
-      if (needsAnalysis || needsGroupSync) {
-        console.log("🔄 Existing message needs processing:", { needsAnalysis, needsGroupSync });
+      if (needsAnalysis) {
+        console.log("🔄 Existing message needs processing");
         
         const updateData = {
           telegram_data: { message },
           caption: message.caption || "",
           media_group_id: message.media_group_id,
           telegram_message_id: message.message_id,
-          processing_state: message.caption ? 'caption_ready' : 'initialized',
+          processing_state: message.caption ? 'pending' : 'processing',
           updated_at: new Date().toISOString(),
-        } as { [key: string]: any };
-
-        // If this is a media group message with caption, mark it as original
-        if (message.media_group_id && message.caption) {
-          updateData.is_original_caption = true;
-        }
+        };
 
         await updateExistingMessage(supabase, existingMessage.id, updateData);
 
-        if (needsAnalysis && message.caption) {
+        if (message.caption) {
           await triggerCaptionParsing(
             existingMessage.id,
             message.media_group_id,
             message.caption
           );
         }
-
-        if (needsGroupSync && existingMessage.analyzed_content) {
-          await syncMediaGroupAnalysis(
-            supabase,
-            message.media_group_id,
-            existingMessage.analyzed_content,
-            existingMessage.id
-          );
-        }
       } else {
-        console.log("✅ Existing message is already fully processed");
+        console.log("✅ Existing message is already processed");
       }
 
       uploadResult = {
@@ -163,7 +144,7 @@ export async function handleMediaMessage(
         duration: mediaItem.duration,
         user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
         telegram_data: { message },
-        processing_state: message.caption ? 'caption_ready' : 'initialized',
+        processing_state: message.caption ? 'pending' : 'processing',
         is_original_caption: message.media_group_id && message.caption ? true : false
       };
 
