@@ -58,3 +58,52 @@ export interface FilterValues {
   quantityRange?: string;
   processingState?: ProcessingState | "all";
 }
+
+export interface MessageUpdate {
+  id: string;
+  telegram_message_id?: number;
+  media_group_id?: string;
+  message_caption_id?: string;
+  is_original_caption?: boolean;
+  group_caption_synced?: boolean;
+  caption?: string;
+  analyzed_content?: AnalyzedContent | null;
+  processing_state?: ProcessingState;
+  processing_started_at?: string;
+  processing_completed_at?: string;
+}
+
+export interface MediaGroupSync {
+  source_message_id: string;
+  media_group_id: string;
+  analyzed_content: AnalyzedContent;
+  is_original_caption: boolean;
+  group_caption_synced: boolean;
+  processing_state: ProcessingState;
+}
+
+export interface ExistingMessage {
+  id: string;
+  telegram_message_id: number;
+  media_group_id?: string;
+  file_unique_id: string;
+  caption?: string;
+  analyzed_content?: AnalyzedContent;
+  processing_state: ProcessingState;
+  is_original_caption: boolean;
+  group_caption_synced: boolean;
+  message_caption_id?: string;
+}
+
+export interface MessageSyncResult {
+  success: boolean;
+  message_id: string;
+  media_group_id?: string;
+  error?: string;
+  sync_details?: {
+    is_original_caption: boolean;
+    group_caption_synced: boolean;
+    processing_state: ProcessingState;
+    sync_timestamp: string;
+  };
+}
