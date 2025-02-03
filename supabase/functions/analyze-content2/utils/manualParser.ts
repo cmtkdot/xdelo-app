@@ -1,7 +1,7 @@
 import { AnalyzedContent } from "../types.ts";
 import { parsePurchaseDate } from "./dateParser.ts";
 
-export function parseManually(text: string): AnalyzedContent {
+export const manualParse = (text: string): AnalyzedContent => {
   console.log("Falling back to manual parsing for:", text);
 
   const result: AnalyzedContent = {};
@@ -36,4 +36,4 @@ export function parseManually(text: string): AnalyzedContent {
   }
 
   return result;
-}
+};
