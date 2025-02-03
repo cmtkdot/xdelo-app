@@ -61,56 +61,23 @@ serve(async (req) => {
       }
     }
 
+    const processingCompletedAt = new Date().toISOString();
+
     // Step 2: Update the message with parsed content
     console.log('Updating message with parsed content');
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update({
-        analyzed_content: finalResult,
-        processing_state: 'analysis_synced',
-        processing_completed_at: new Date().toISOString()
-      })
-      .eq('id', message_id);
+    const { error: updateError } = await supabase.rpc(
+      'process_media_group_analysis',
+      {
+        p_message_id: message_id,
+        p_media_group_id: media_group_id,
+        p_analyzed_content: finalResult,
+        p_processing_completed_at: processingCompletedAt
+      }
+    );
 
     if (updateError) {
       console.error('Error updating message:', updateError);
       throw updateError;
-    }
-
-    // Step 3: If part of a media group, sync to other messages
-    if (media_group_id) {
-      console.log(`Syncing analysis to media group ${media_group_id}`);
-      
-      const { error: groupUpdateError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: finalResult,
-          processing_state: 'analysis_synced',
-          processing_completed_at: new Date().toISOString(),
-          message_caption_id: message_id,
-          group_caption_synced: true
-        })
-        .eq('media_group_id', media_group_id)
-        .neq('id', message_id);
-
-      if (groupUpdateError) {
-        console.error('Error updating media group:', groupUpdateError);
-        throw groupUpdateError;
-      }
-    }
-
-    // Step 4: Mark processing as completed
-    console.log('Marking processing as completed');
-    const { error: completeError } = await supabase
-      .from('messages')
-      .update({
-        processing_state: 'completed'
-      })
-      .eq('id', message_id);
-
-    if (completeError) {
-      console.error('Error completing message:', completeError);
-      throw completeError;
     }
 
     return new Response(
