@@ -6,7 +6,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
-import { FilterValues } from "@/types";
+import { FilterValues, ProcessingState } from "@/types";
 import debounce from 'lodash/debounce';
 import { supabase } from "@/integrations/supabase/client";
 
@@ -24,10 +24,9 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder);
   const [productCode, setProductCode] = useState(filters.productCode || '');
   const [quantityRange, setQuantityRange] = useState(filters.quantityRange || 'all');
-  const [processingState, setProcessingState] = useState(filters.processingState || 'all');
+  const [processingState, setProcessingState] = useState<ProcessingState | "all">(filters.processingState || 'all');
   const [productCodes, setProductCodes] = useState<string[]>([]);
 
-  // Fetch unique product codes
   useEffect(() => {
     const fetchProductCodes = async () => {
       const { data, error } = await supabase
@@ -45,7 +44,6 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     fetchProductCodes();
   }, []);
 
-  // Debounced filter change for real-time search
   const debouncedFilterChange = debounce((newFilters: FilterValues) => {
     onFilterChange(newFilters);
   }, 300);
@@ -79,7 +77,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
             <SelectValue placeholder="Select Product Code" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Product Codes</SelectItem>
+            <SelectItem value="all">All Product Codes</SelectItem>
             {productCodes.map((code) => (
               <SelectItem key={code} value={code}>{code}</SelectItem>
             ))}
@@ -113,7 +111,10 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
           </SelectContent>
         </Select>
 
-        <Select value={processingState} onValueChange={setProcessingState}>
+        <Select 
+          value={processingState} 
+          onValueChange={(value: ProcessingState | "all") => setProcessingState(value)}
+        >
           <SelectTrigger className="w-full md:w-48">
             <SelectValue placeholder="Processing State" />
           </SelectTrigger>

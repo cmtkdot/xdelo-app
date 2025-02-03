@@ -103,6 +103,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
 
         const total = count || 0;
         setTotalPages(Math.ceil(total / ITEMS_PER_PAGE));
+
       } catch (error) {
         console.error("Error fetching messages:", error);
         toast({
@@ -115,7 +116,6 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
 
     fetchMessages();
 
-    // Set up real-time subscription
     const channel = supabase
       .channel("schema-db-changes")
       .on(
@@ -134,6 +134,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
     return () => {
       supabase.removeChannel(channel);
     };
+
   }, [toast, currentPage, filters]);
 
   return { mediaGroups, totalPages };

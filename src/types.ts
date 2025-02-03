@@ -17,7 +17,7 @@ export interface MediaItem {
   created_at?: string;
   updated_at?: string;
   user_id: string;
-  processing_state?: 'initialized' | 'processing' | 'completed' | 'error';
+  processing_state?: ProcessingState;
   processing_started_at?: string;
   processing_completed_at?: string;
   analyzed_content?: AnalyzedContent | null;
@@ -46,6 +46,8 @@ export interface AnalyzedContent {
   };
 }
 
+export type ProcessingState = "initialized" | "processing" | "completed" | "error" | "pending";
+
 export interface FilterValues {
   search: string;
   vendor: string;
@@ -54,5 +56,5 @@ export interface FilterValues {
   sortOrder: "desc" | "asc";
   productCode?: string;
   quantityRange?: string;
-  processingState?: "initialized" | "processing" | "completed" | "error" | "pending" | "all";
+  processingState?: ProcessingState | "all";
 }
