@@ -9,9 +9,13 @@ interface ProductGroupProps {
 }
 
 export const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps) => {
-  const mainMedia = group[0];
+  // Find the message with original caption or the first message as fallback
+  const mainMedia = group.find(media => media.is_original_caption) || group[0];
   const isVideo = mainMedia.mime_type?.startsWith('video');
   const hasError = mainMedia.processing_state === 'error';
+
+  // Get the analyzed content from the original caption message
+  const analyzedContent = group.find(media => media.is_original_caption)?.analyzed_content || mainMedia.analyzed_content;
 
   const getMediaUrl = (media: MediaItem) => {
     if (media.public_url) return media.public_url;
@@ -36,7 +40,7 @@ export const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps)
         ) : (
           <img
             src={getMediaUrl(mainMedia)}
-            alt={mainMedia.analyzed_content?.product_name || 'Product'}
+            alt={analyzedContent?.product_name || 'Product'}
             className="w-full h-full object-cover"
           />
         )}
@@ -53,10 +57,10 @@ export const ProductGroup = ({ group, onMediaClick, onEdit }: ProductGroupProps)
       
       <div className="p-4">
         <h3 className="text-lg font-semibold mb-2">
-          {mainMedia.analyzed_content?.product_name || 'Untitled Product'}
+          {analyzedContent?.product_name || 'Untitled Product'}
         </h3>
         <p className="text-sm text-gray-600 mb-2">
-          Code: {mainMedia.analyzed_content?.product_code || 'N/A'}
+          Code: {analyzedContent?.product_code || 'N/A'}
         </p>
         
         {hasError && (

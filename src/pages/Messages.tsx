@@ -35,6 +35,15 @@ const Messages = () => {
           groups[groupKey].push(message as MediaItem);
         });
 
+        // Sort messages within each group to ensure original caption messages are first
+        Object.keys(groups).forEach(key => {
+          groups[key].sort((a, b) => {
+            if (a.is_original_caption && !b.is_original_caption) return -1;
+            if (!a.is_original_caption && b.is_original_caption) return 1;
+            return 0;
+          });
+        });
+
         setMediaGroups(groups);
       } catch (error) {
         console.error("Error fetching messages:", error);
@@ -71,13 +80,19 @@ const Messages = () => {
   }, [toast]);
 
   const handleMediaClick = (media: MediaItem, group: MediaItem[]) => {
-    setSelectedMedia(media);
+    // Find the message with original caption or use the provided media
+    const mainMedia = group.find(m => m.is_original_caption) || media;
+    setSelectedMedia(mainMedia);
     setSelectedGroup(group);
     setViewerOpen(true);
   };
 
   const handleEdit = (media: MediaItem) => {
-    setEditItem(media);
+    // Find the message with original caption or use the provided media
+    const groupKey = media.media_group_id || media.id;
+    const group = mediaGroups[groupKey];
+    const mainMedia = group.find(m => m.is_original_caption) || media;
+    setEditItem(mainMedia);
   };
 
   const handleItemChange = (field: string, value: any) => {
