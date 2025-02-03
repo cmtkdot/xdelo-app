@@ -9,13 +9,16 @@ export interface ParsedContent {
     method: 'manual' | 'ai';
     confidence: number;
     fallbacks_used?: string[];
+    reanalysis_attempted?: boolean;
   };
 }
 
-export interface QuantityParseResult {
-  value: number;
-  confidence: number;
-  original_text: string;
-  method: 'explicit' | 'numeric' | 'text' | 'fallback';
-  is_approximate: boolean;
+export interface AnalysisResult {
+  message: string;
+  analyzed_content: ParsedContent;
+  processing_details?: {
+    method: string;
+    timestamp: string;
+    group_id?: string;
+  };
 }
