@@ -5,8 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { DashboardLayout } from "./components/Layout/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
-import Messages from "./pages/Messages";
-import Products from "./pages/Products";
+import ProductGallery from "./pages/Messages";
 import Vendors from "./pages/Vendors";
 import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
@@ -64,8 +63,7 @@ const App = () => (
             }
           >
             <Route path="/" element={<Dashboard />} />
-            <Route path="/messages" element={<Messages />} />
-            <Route path="/products" element={<Products />} />
+            <Route path="/gallery" element={<ProductGallery />} />
             <Route path="/vendors" element={<Vendors />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<NotFound />} />

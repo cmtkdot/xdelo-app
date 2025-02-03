@@ -5,19 +5,44 @@ import { MediaItem } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
-const Messages = () => {
+const ITEMS_PER_PAGE = 12;
+
+const ProductGallery = () => {
   const [mediaGroups, setMediaGroups] = useState<{ [key: string]: MediaItem[] }>({});
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const { toast } = useToast();
 
   useEffect(() => {
     const fetchMessages = async () => {
       try {
+        // First, get the total count
+        const { count, error: countError } = await supabase
+          .from("messages")
+          .select("*", { count: 'exact', head: true });
+
+        if (countError) throw countError;
+
+        // Calculate total pages
+        const total = count || 0;
+        setTotalPages(Math.ceil(total / ITEMS_PER_PAGE));
+
+        // Fetch paginated data
         const { data, error } = await supabase
           .from("messages")
           .select("*")
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+          .range((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE - 1);
 
         if (error) throw error;
 
@@ -31,7 +56,7 @@ const Messages = () => {
           groups[groupKey].push(message as MediaItem);
         });
 
-        // Sort messages within each group to ensure original caption messages are first
+        // Sort messages within each group
         Object.keys(groups).forEach(key => {
           groups[key].sort((a, b) => {
             if (a.is_original_caption && !b.is_original_caption) return -1;
@@ -73,7 +98,7 @@ const Messages = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [toast]);
+  }, [toast, currentPage]);
 
   const handleEdit = (media: MediaItem) => {
     // Find the message with original caption or use the provided media
@@ -129,26 +154,61 @@ const Messages = () => {
     return new Date(date).toISOString().split('T')[0];
   };
 
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Messages</h2>
+        <h2 className="text-2xl font-bold">Product Gallery</h2>
       </div>
 
       {Object.keys(mediaGroups).length === 0 ? (
         <Card className="p-6">
-          <p className="text-gray-500">No messages yet</p>
+          <p className="text-gray-500">No products yet</p>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {Object.values(mediaGroups).map((group) => (
-            <ProductGroup
-              key={group[0].id}
-              group={group}
-              onEdit={handleEdit}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {Object.values(mediaGroups).map((group) => (
+              <ProductGroup
+                key={group[0].id}
+                group={group}
+                onEdit={handleEdit}
+              />
+            ))}
+          </div>
+
+          <Pagination className="mt-8">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious 
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  className={currentPage === 1 ? 'pointer-events-none opacity-50' : ''}
+                />
+              </PaginationItem>
+              
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <PaginationItem key={page}>
+                  <PaginationLink
+                    onClick={() => handlePageChange(page)}
+                    isActive={currentPage === page}
+                  >
+                    {page}
+                  </PaginationLink>
+                </PaginationItem>
+              ))}
+
+              <PaginationItem>
+                <PaginationNext
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  className={currentPage === totalPages ? 'pointer-events-none opacity-50' : ''}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </>
       )}
 
       <MediaEditDialog
@@ -162,4 +222,4 @@ const Messages = () => {
   );
 };
 
-export default Messages;
+export default ProductGallery;
