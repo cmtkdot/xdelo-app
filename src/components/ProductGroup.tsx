@@ -262,7 +262,8 @@ export const ProductGroup = ({
           {analyzedContent?.vendor_uid && (
             <p>Vendor: {analyzedContent.vendor_uid}</p>
           )}
-          {(analyzedContent?.quantity || mainMedia.caption) && (
+          {/* Only show caption if there's meaningful content */}
+          {(analyzedContent?.quantity || (mainMedia.caption && !analyzedContent?.quantity)) && (
             <p>Caption: {analyzedContent?.quantity || mainMedia.caption}</p>
           )}
         </div>
