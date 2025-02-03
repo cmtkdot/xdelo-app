@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -76,12 +76,17 @@ serve(async (req) => {
       throw new Error("No messages found in group");
     }
 
-    // Find message with caption
-    const sourceMessage = groupMessages.find((m) => m.caption);
+    // First try to find a message with analyzed content
+    let sourceMessage = groupMessages.find(m => m.analyzed_content);
+    
+    // If no analyzed content exists, look for a message with caption
+    if (!sourceMessage) {
+      sourceMessage = groupMessages.find(m => m.caption);
+    }
 
     if (!sourceMessage) {
       logProcessingEvent({
-        event: "NO_CAPTION_FOUND",
+        event: "NO_CAPTION_OR_CONTENT_FOUND",
         message_id,
         media_group_id,
         metadata: {
@@ -89,10 +94,22 @@ serve(async (req) => {
           group_size: groupMessages.length,
         },
       });
+      
+      // Update all messages to initialized state if no caption found
+      const { error: updateError } = await supabase
+        .from("messages")
+        .update({
+          processing_state: "initialized",
+          group_caption_synced: false,
+        })
+        .eq("media_group_id", media_group_id);
+
+      if (updateError) throw updateError;
+
       return new Response(
         JSON.stringify({
           success: false,
-          error: "No caption found in group",
+          error: "No caption or analyzed content found in group",
           correlation_id: correlationId,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -115,7 +132,7 @@ serve(async (req) => {
       throw syncError;
     }
 
-    // Update all messages in group to caption_ready state
+    // Update all messages in group to caption_ready state if they don't have analyzed content
     const { error: updateError } = await supabase
       .from("messages")
       .update({
@@ -124,7 +141,7 @@ serve(async (req) => {
         message_caption_id: sourceMessage.id,
       })
       .eq("media_group_id", media_group_id)
-      .neq("id", sourceMessage.id); // Don't update source message
+      .is("analyzed_content", null);
 
     if (updateError) {
       throw updateError;
