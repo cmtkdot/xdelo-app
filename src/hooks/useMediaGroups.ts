@@ -2,14 +2,18 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { FilterValues, MediaItem } from "@/types";
 
+interface MediaGroupsResponse {
+  mediaGroups: { [key: string]: MediaItem[] };
+  totalPages: number;
+}
+
 export const useMediaGroups = (page: number, filters: FilterValues) => {
-  return useQuery({
+  return useQuery<MediaGroupsResponse, Error>({
     queryKey: ['mediaGroups', page, filters],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke<{
-        mediaGroups: { [key: string]: MediaItem[] };
-        totalPages: number;
-      }>('fetch-media-groups', {
+      console.log('Fetching media groups with filters:', filters);
+      
+      const { data, error } = await supabase.functions.invoke<MediaGroupsResponse>('fetch-media-groups', {
         body: {
           page,
           filters: {
@@ -25,7 +29,14 @@ export const useMediaGroups = (page: number, filters: FilterValues) => {
         throw error;
       }
 
+      if (!data) {
+        return { mediaGroups: {}, totalPages: 0 };
+      }
+
+      console.log('Received media groups data:', data);
       return data;
     },
+    staleTime: 1000 * 60, // Consider data fresh for 1 minute
+    refetchOnWindowFocus: true,
   });
 };
