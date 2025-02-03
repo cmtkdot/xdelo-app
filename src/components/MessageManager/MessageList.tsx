@@ -21,26 +21,10 @@ export const MessageList = ({ onMessageSelect }: MessageListProps) => {
   const { data: messages, isLoading } = useQuery({
     queryKey: ['messages'],
     queryFn: async () => {
-      // First, get all unique media group IDs
-      const { data: groupIds, error: groupError } = await supabase
-        .from('messages_parsed')
-        .select('media_group_id')
-        .is('is_original_caption', true)
-        .order('created_at', { ascending: false });
-
-      if (groupError) throw groupError;
-
-      // Then get all messages for these groups
-      const mediaGroupIds = groupIds
-        .map(g => g.media_group_id)
-        .filter(Boolean) as string[];
-
-      if (mediaGroupIds.length === 0) return [];
-
       const { data, error } = await supabase
         .from('messages_parsed')
         .select('*')
-        .in('media_group_id', mediaGroupIds)
+        .is('is_original_caption', true)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -59,7 +43,6 @@ export const MessageList = ({ onMessageSelect }: MessageListProps) => {
           table: 'messages'
         },
         () => {
-          // Invalidate and refetch messages when there's a change
           queryClient.invalidateQueries({ queryKey: ['messages'] });
         }
       )
@@ -98,7 +81,6 @@ export const MessageList = ({ onMessageSelect }: MessageListProps) => {
         description: "Message deleted successfully",
       });
       
-      // Invalidate the query to trigger a refetch
       queryClient.invalidateQueries({ queryKey: ['messages'] });
     } catch (error) {
       console.error("Error deleting message:", error);
@@ -110,17 +92,6 @@ export const MessageList = ({ onMessageSelect }: MessageListProps) => {
     }
   };
 
-  // Group messages by media_group_id
-  const groupedMessages = messages?.reduce((acc, message) => {
-    if (!message.media_group_id) return acc;
-    
-    if (!acc[message.media_group_id]) {
-      acc[message.media_group_id] = [];
-    }
-    acc[message.media_group_id].push(message);
-    return acc;
-  }, {} as Record<string, MediaItem[]>) || {};
-
   if (isLoading) {
     return <div>Loading...</div>;
   }
@@ -128,48 +99,49 @@ export const MessageList = ({ onMessageSelect }: MessageListProps) => {
   return (
     <>
       <ScrollArea className="h-[600px] rounded-md border p-4">
-        {Object.entries(groupedMessages).map(([groupId, groupMessages]) => {
-          const mainMessage = groupMessages.find(m => m.is_original_caption) || groupMessages[0];
-          return (
-            <Card key={groupId} className="p-4 mb-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-semibold">
-                    {mainMessage.analyzed_content?.product_name || 'Untitled Product'}
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    {mainMessage.caption || 'No caption'}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    Group ID: {groupId} ({groupMessages.length} items)
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onMessageSelect(mainMessage)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setDeleteMessage(mainMessage)}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+        {messages?.map((message) => (
+          <Card key={message.id} className="p-4 mb-4">
+            <div className="flex justify-between items-start">
+              <div className="space-y-2">
+                <h3 className="font-semibold">
+                  {message.product_name || 'Untitled Product'}
+                </h3>
+                <p className="text-sm text-gray-500">
+                  {message.caption || 'No caption'}
+                </p>
+                <div className="text-xs text-gray-400 space-y-1">
+                  <p>Product Code: {message.product_code || 'N/A'}</p>
+                  <p>Vendor: {message.vendor_uid || 'N/A'}</p>
+                  <p>Quantity: {message.quantity || 'N/A'}</p>
+                  <p>Purchase Date: {message.purchase_date || 'N/A'}</p>
+                  <p>Notes: {message.notes || 'N/A'}</p>
                 </div>
               </div>
-            </Card>
-          );
-        })}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onMessageSelect(message)}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeleteMessage(message)}
+                  className="text-red-600 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </Card>
+        ))}
       </ScrollArea>
 
       <DeleteConfirmDialog
-        isOpen={!!deleteMessage}
-        onClose={() => setDeleteMessage(null)}
+        open={!!deleteMessage}
+        onOpenChange={(open) => !open && setDeleteMessage(null)}
         onConfirm={handleDelete}
       />
     </>

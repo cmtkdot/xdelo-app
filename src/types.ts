@@ -29,31 +29,10 @@ export interface MediaItem {
   group_first_message_time?: string;
   group_last_message_time?: string;
   group_message_count?: number;
-}
-
-export interface AnalyzedContent {
   product_name?: string;
   product_code?: string;
   vendor_uid?: string;
   purchase_date?: string;
   quantity?: number;
   notes?: string;
-  parsing_metadata?: {
-    method: string;
-    confidence: number;
-    fallbacks_used?: string[];
-    reanalysis_attempted?: boolean;
-    previous_analysis?: any;
-  };
-}
-
-export interface FilterValues {
-  search: string;
-  vendor: string;
-  dateFrom?: Date;
-  dateTo?: Date;
-  sortOrder: "desc" | "asc";
-  productCode?: string;
-  quantityRange?: string;
-  processingState?: "initialized" | "processing" | "completed" | "error" | "pending" | undefined;
 }
