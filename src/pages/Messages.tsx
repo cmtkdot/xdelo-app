@@ -3,15 +3,11 @@ import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
-import { ProductMediaViewer } from "@/components/ProductMediaViewer";
-import { useToast } from "@/components/ui/use-toast";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
+import { useToast } from "@/components/ui/use-toast";
 
 const Messages = () => {
   const [mediaGroups, setMediaGroups] = useState<{ [key: string]: MediaItem[] }>({});
-  const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
-  const [selectedGroup, setSelectedGroup] = useState<MediaItem[]>([]);
-  const [viewerOpen, setViewerOpen] = useState(false);
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const { toast } = useToast();
 
@@ -78,14 +74,6 @@ const Messages = () => {
       supabase.removeChannel(channel);
     };
   }, [toast]);
-
-  const handleMediaClick = (media: MediaItem, group: MediaItem[]) => {
-    // Find the message with original caption or use the provided media
-    const mainMedia = group.find(m => m.is_original_caption) || media;
-    setSelectedMedia(mainMedia);
-    setSelectedGroup(group);
-    setViewerOpen(true);
-  };
 
   const handleEdit = (media: MediaItem) => {
     // Find the message with original caption or use the provided media
@@ -157,19 +145,11 @@ const Messages = () => {
             <ProductGroup
               key={group[0].id}
               group={group}
-              onMediaClick={handleMediaClick}
               onEdit={handleEdit}
             />
           ))}
         </div>
       )}
-
-      <ProductMediaViewer
-        open={viewerOpen}
-        onOpenChange={setViewerOpen}
-        media={selectedMedia}
-        relatedMedia={selectedGroup}
-      />
 
       <MediaEditDialog
         editItem={editItem}

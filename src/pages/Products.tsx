@@ -29,7 +29,7 @@ const Products = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: products = [], refetch } = useQuery({
+  const { data: products = [] } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -50,7 +50,7 @@ const Products = () => {
           uniqueMessages.set(key, message);
         } else {
           // If message exists, update only if it has newer content
-          const existingMessage = uniqueMessages.get(key);
+          const existingMessage = uniqueMessages.get(key) as MediaItem;
           if (
             message.analyzed_content && 
             (!existingMessage?.analyzed_content || 
@@ -61,7 +61,7 @@ const Products = () => {
         }
       });
 
-      return Array.from(uniqueMessages.values()) as MediaItem[];
+      return Array.from(uniqueMessages.values());
     }
   });
 
@@ -139,7 +139,6 @@ const Products = () => {
         description: "The product details have been updated successfully."
       });
 
-      await refetch();
       setEditItem(null);
     } catch (error) {
       console.error('Error saving changes:', error);
@@ -151,32 +150,24 @@ const Products = () => {
     }
   };
 
-  const groupMediaByProduct = (media: MediaItem[]): MediaItem[][] => {
-    if (!media?.length) return [];
-    
-    const groups = media.reduce<Record<string, MediaItem[]>>((acc, item) => {
-      const groupId = item.media_group_id || item.id;
-      if (!acc[groupId]) {
-        acc[groupId] = [];
-      }
-      acc[groupId].push(item);
-      return acc;
-    }, {});
-
-    return Object.values(groups).map(group => {
-      return group.sort((a, b) => {
-        if (a.mime_type?.startsWith('image/') && !b.mime_type?.startsWith('image/')) return -1;
-        if (!a.mime_type?.startsWith('image/') && b.mime_type?.startsWith('image/')) return 1;
-        return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
-      });
-    });
-  };
-
   const handleEdit = (item: MediaItem) => {
     setEditItem(item);
   };
 
-  const productGroups = groupMediaByProduct(products);
+  const productGroups = products.reduce<MediaItem[][]>((acc, item) => {
+    const groupId = item.media_group_id || item.id;
+    const existingGroup = acc.find(group => 
+      group[0].media_group_id === item.media_group_id || 
+      (!item.media_group_id && group[0].id === item.id)
+    );
+    
+    if (existingGroup) {
+      existingGroup.push(item);
+    } else {
+      acc.push([item]);
+    }
+    return acc;
+  }, []);
 
   return (
     <div className="container mx-auto py-8 px-4">
