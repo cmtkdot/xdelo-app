@@ -46,6 +46,10 @@ export interface AnalyzedContent {
   };
 }
 
+export interface Json {
+  [key: string]: Json | string | number | boolean | null | Json[] | undefined;
+}
+
 export type ProcessingState = "initialized" | "processing" | "completed" | "error" | "pending";
 
 export interface FilterValues {
@@ -107,3 +111,4 @@ export interface MessageSyncResult {
     sync_timestamp: string;
   };
 }
+

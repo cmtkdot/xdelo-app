@@ -1,4 +1,4 @@
-import { MediaItem } from "@/types";
+import { MediaItem, Json } from "@/types";
 import { AlertCircle, Pencil, Trash2, RotateCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageSwiper } from "@/components/ui/image-swiper";
@@ -48,6 +48,34 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
         });
 
         try {
+          // First, update all messages in the group to pending state
+          if (mainMedia.media_group_id) {
+            const { error: updateError } = await supabase
+              .from('messages')
+              .update({
+                processing_state: 'pending',
+                group_caption_synced: false
+              })
+              .eq('media_group_id', mainMedia.media_group_id);
+
+            if (updateError) throw updateError;
+          }
+
+          // Log reanalysis attempt to audit log
+          await supabase.from('analysis_audit_log').insert({
+            message_id: mainMedia.id,
+            media_group_id: mainMedia.media_group_id,
+            event_type: 'REANALYSIS_REQUESTED',
+            old_state: mainMedia.processing_state,
+            new_state: 'pending',
+            analyzed_content: analyzedContent as Json,
+            processing_details: {
+              reason: 'low_confidence',
+              confidence: analyzedContent?.parsing_metadata?.confidence,
+              group_message_count: mainMedia.group_message_count
+            } as Json
+          });
+
           const { error } = await supabase.functions.invoke('reanalyze-low-confidence', {
             body: {
               message_id: mainMedia.id,
@@ -59,21 +87,6 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
           });
 
           if (error) throw error;
-
-          // Log reanalysis attempt to audit log
-          await supabase.from('analysis_audit_log').insert({
-            message_id: mainMedia.id,
-            media_group_id: mainMedia.media_group_id,
-            event_type: 'REANALYSIS_REQUESTED',
-            old_state: mainMedia.processing_state,
-            new_state: 'pending',
-            analyzed_content: analyzedContent,
-            processing_details: {
-              reason: 'low_confidence',
-              confidence: analyzedContent?.parsing_metadata?.confidence,
-              group_message_count: mainMedia.group_message_count
-            }
-          });
 
           toast({
             title: "Reanalysis Started",
@@ -104,15 +117,17 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
         processing_details: {
           group_message_count: mainMedia.group_message_count,
           is_original_caption: mainMedia.is_original_caption
-        }
+        } as Json
       });
 
-      const { error } = await supabase
-        .from('messages')
-        .delete()
-        .eq('media_group_id', mainMedia.media_group_id);
+      if (mainMedia.media_group_id) {
+        const { error } = await supabase
+          .from('messages')
+          .delete()
+          .eq('media_group_id', mainMedia.media_group_id);
 
-      if (error) throw error;
+        if (error) throw error;
+      }
 
       toast({
         title: "Success",
@@ -130,6 +145,19 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
 
   const handleReanalyze = async () => {
     try {
+      // First, update all messages in the group to pending state
+      if (mainMedia.media_group_id) {
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({
+            processing_state: 'pending',
+            group_caption_synced: false
+          })
+          .eq('media_group_id', mainMedia.media_group_id);
+
+        if (updateError) throw updateError;
+      }
+
       // Log reanalysis request
       await supabase.from('analysis_audit_log').insert({
         message_id: mainMedia.id,
@@ -137,11 +165,11 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
         event_type: 'MANUAL_REANALYSIS_REQUESTED',
         old_state: mainMedia.processing_state,
         new_state: 'pending',
-        analyzed_content: analyzedContent,
+        analyzed_content: analyzedContent as Json,
         processing_details: {
           group_message_count: mainMedia.group_message_count,
           is_original_caption: mainMedia.is_original_caption
-        }
+        } as Json
       });
 
       const { error } = await supabase.functions.invoke('reanalyze-low-confidence', {
