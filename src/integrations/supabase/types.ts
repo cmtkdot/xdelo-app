@@ -68,8 +68,6 @@ export type Database = {
           message_caption_id: string | null
           mime_type: string | null
           processing_completed_at: string | null
-          processing_lock_acquired_at: string | null
-          processing_lock_id: string | null
           processing_started_at: string | null
           processing_state:
             | Database["public"]["Enums"]["message_processing_state"]
@@ -105,8 +103,6 @@ export type Database = {
           message_caption_id?: string | null
           mime_type?: string | null
           processing_completed_at?: string | null
-          processing_lock_acquired_at?: string | null
-          processing_lock_id?: string | null
           processing_started_at?: string | null
           processing_state?:
             | Database["public"]["Enums"]["message_processing_state"]
@@ -142,8 +138,6 @@ export type Database = {
           message_caption_id?: string | null
           mime_type?: string | null
           processing_completed_at?: string | null
-          processing_lock_acquired_at?: string | null
-          processing_lock_id?: string | null
           processing_started_at?: string | null
           processing_state?:
             | Database["public"]["Enums"]["message_processing_state"]
