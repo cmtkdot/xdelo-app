@@ -14,7 +14,7 @@ serve(async (req) => {
 
   try {
     const { message_id, media_group_id, caption, force_reanalysis } = await req.json();
-    console.log('Processing caption analysis for message:', { message_id, media_group_id, caption });
+    console.log('Starting AI caption analysis for message:', { message_id, media_group_id, caption });
 
     if (!message_id || !caption) {
       throw new Error('Missing required parameters');
@@ -33,7 +33,7 @@ serve(async (req) => {
     await supabase.from('analysis_audit_log').insert({
       message_id,
       media_group_id,
-      event_type: 'ANALYSIS_STARTED',
+      event_type: 'AI_ANALYSIS_STARTED',
       old_state: force_reanalysis ? 'reanalyzing' : 'initialized',
       new_state: 'processing'
     });
@@ -47,10 +47,12 @@ serve(async (req) => {
       })
       .eq('id', message_id);
 
-    // If this is part of a media group, ensure we're working with the right message
+    // If this is part of a media group, find the best message to analyze
     let originalMessageId = message_id;
+    let bestCaption = caption;
+    
     if (media_group_id) {
-      console.log('Checking media group for original caption:', media_group_id);
+      console.log('Checking media group for best caption:', media_group_id);
       
       const { data: groupMessages, error: groupError } = await supabase
         .from('messages')
@@ -60,99 +62,120 @@ serve(async (req) => {
 
       if (groupError) throw groupError;
 
-      // Prioritize JPEG images with captions
-      const originalMessage = groupMessages.find(msg => 
-        msg.mime_type === 'image/jpeg' && msg.caption
-      ) || groupMessages[0];
+      // First, look for JPEG images with captions
+      const jpegWithCaption = groupMessages.find(msg => 
+        msg.mime_type === 'image/jpeg' && 
+        msg.caption && 
+        msg.caption.trim() !== ''
+      );
 
-      if (originalMessage && originalMessage.id !== message_id) {
-        console.log('Found better message for analysis:', originalMessage.id);
-        originalMessageId = originalMessage.id;
+      // If no JPEG with caption, use the first message with a caption
+      const firstWithCaption = groupMessages.find(msg => 
+        msg.caption && 
+        msg.caption.trim() !== ''
+      );
+
+      const bestMessage = jpegWithCaption || firstWithCaption || groupMessages[0];
+
+      if (bestMessage && bestMessage.id !== message_id) {
+        console.log('Found better message for analysis:', bestMessage.id);
+        originalMessageId = bestMessage.id;
+        bestCaption = bestMessage.caption || caption;
       }
     }
 
     // Analyze caption
-    const analyzedContent = await analyzeCaption(caption);
-    console.log('Analysis completed:', analyzedContent);
+    console.log('Starting AI analysis with caption:', bestCaption);
+    const analyzedContent = await analyzeCaption(bestCaption);
+    console.log('AI analysis completed:', analyzedContent);
 
     // Add metadata about the analysis
     analyzedContent.parsing_metadata = {
-      ...analyzedContent.parsing_metadata,
+      method: 'ai',
+      confidence: analyzedContent.parsing_metadata?.confidence || 0.8,
       analysis_timestamp: new Date().toISOString(),
       caption_source: media_group_id ? 'media_group' : 'single_message',
       force_reanalysis: force_reanalysis || false
     };
 
+    // First, update the original message with the analysis
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        analyzed_content: analyzedContent,
+        processing_state: 'completed',
+        processing_completed_at: new Date().toISOString(),
+        is_original_caption: true,
+        group_caption_synced: true
+      })
+      .eq('id', originalMessageId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    // Log successful analysis
+    await supabase.from('analysis_audit_log').insert({
+      message_id: originalMessageId,
+      media_group_id,
+      event_type: 'AI_ANALYSIS_COMPLETED',
+      old_state: 'processing',
+      new_state: 'completed',
+      analyzed_content: analyzedContent
+    });
+
     // If this is part of a media group, process the entire group
     if (media_group_id) {
-      console.log('Processing media group:', media_group_id);
+      console.log('Starting media group sync:', media_group_id);
       
-      // Log group analysis start
+      // Log group sync start
       await supabase.from('analysis_audit_log').insert({
         message_id: originalMessageId,
         media_group_id,
-        event_type: 'GROUP_ANALYSIS_STARTED',
-        old_state: 'processing',
-        new_state: 'syncing',
-        analyzed_content: analyzedContent
+        event_type: 'GROUP_SYNC_STARTED',
+        old_state: 'completed',
+        new_state: 'syncing'
       });
 
-      // Update all messages in the group
-      const { error: groupError } = await supabase.rpc('process_media_group_analysis', {
-        p_message_id: originalMessageId,
-        p_media_group_id: media_group_id,
-        p_analyzed_content: analyzedContent,
-        p_processing_completed_at: new Date().toISOString()
-      });
-
-      if (groupError) {
-        throw groupError;
-      }
-
-      // Log group analysis completion
-      await supabase.from('analysis_audit_log').insert({
-        message_id: originalMessageId,
-        media_group_id,
-        event_type: 'GROUP_ANALYSIS_COMPLETED',
-        old_state: 'syncing',
-        new_state: 'completed',
-        analyzed_content: analyzedContent
-      });
-
-    } else {
-      // Update single message
-      const { error: updateError } = await supabase
+      // Update all other messages in the group
+      const { error: groupError } = await supabase
         .from('messages')
         .update({
           analyzed_content: analyzedContent,
           processing_state: 'completed',
           processing_completed_at: new Date().toISOString(),
+          is_original_caption: false,
           group_caption_synced: true,
-          is_original_caption: true
+          message_caption_id: originalMessageId
         })
-        .eq('id', originalMessageId);
+        .eq('media_group_id', media_group_id)
+        .neq('id', originalMessageId);
 
-      if (updateError) {
-        throw updateError;
+      if (groupError) {
+        throw groupError;
       }
 
-      // Log single message completion
+      // Log group sync completion
       await supabase.from('analysis_audit_log').insert({
         message_id: originalMessageId,
-        event_type: 'ANALYSIS_COMPLETED',
-        old_state: 'processing',
+        media_group_id,
+        event_type: 'GROUP_SYNC_COMPLETED',
+        old_state: 'syncing',
         new_state: 'completed',
         analyzed_content: analyzedContent
       });
     }
 
     return new Response(
-      JSON.stringify({ message: 'Caption analyzed successfully', analyzed_content: analyzedContent }),
+      JSON.stringify({ 
+        message: 'Caption analyzed and synced successfully', 
+        analyzed_content: analyzedContent 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Error processing caption:', error);
+    console.error('Error in AI caption analysis:', error);
     
     try {
       const messageData = await req.json();
@@ -160,11 +183,11 @@ serve(async (req) => {
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
       const supabase = createClient(supabaseUrl, supabaseKey);
       
-      // Log error in audit log
+      // Log error
       await supabase.from('analysis_audit_log').insert({
         message_id: messageData.message_id,
         media_group_id: messageData.media_group_id,
-        event_type: 'ANALYSIS_ERROR',
+        event_type: 'AI_ANALYSIS_ERROR',
         old_state: 'processing',
         new_state: 'error',
         processing_details: {
@@ -183,7 +206,7 @@ serve(async (req) => {
         })
         .eq('id', messageData.message_id);
     } catch (updateError) {
-      console.error('Failed to update message error state:', updateError);
+      console.error('Failed to update error state:', updateError);
     }
     
     return new Response(
