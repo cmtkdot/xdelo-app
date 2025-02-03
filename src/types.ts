@@ -38,3 +38,11 @@ export interface AnalyzedContent {
   quantity?: number;
   notes?: string;
 }
+
+export interface FilterValues {
+  search: string;
+  vendor: string;
+  dateFrom: Date | undefined;
+  dateTo: Date | undefined;
+  sortOrder: "desc" | "asc";
+}

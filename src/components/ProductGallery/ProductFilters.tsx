@@ -16,14 +16,7 @@ import {
 } from "@/components/ui/popover";
 import { CalendarIcon, Search, X } from "lucide-react";
 import { format } from "date-fns";
-
-export interface FilterValues {
-  search: string;
-  vendor: string;
-  dateFrom: Date | undefined;
-  dateTo: Date | undefined;
-  sortOrder: "desc" | "asc";
-}
+import { FilterValues } from "@/types";
 
 interface ProductFiltersProps {
   vendors: string[];
