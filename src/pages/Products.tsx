@@ -8,7 +8,7 @@ import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/hooks/use-toast";
 
 const getMediaCaption = (item: MediaItem): string => {
-  const content = item.analyzed_content;
+  const content = item.analyzed_content || item.parsed_content;
   if (!content) return '';
 
   let caption = content.product_name || '';
@@ -31,7 +31,6 @@ const Products = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Query for products with real-time updates
   const { data: products = [], refetch } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
@@ -45,7 +44,6 @@ const Products = () => {
     }
   });
 
-  // Set up real-time subscription for updates
   useEffect(() => {
     const channel = supabase
       .channel('schema-db-changes')
@@ -68,10 +66,9 @@ const Products = () => {
     };
   }, [queryClient]);
 
-  // Mutation for retrying analysis
-  const analyzeContentMutation = useMutation({
+  const retryAnalysisMutation = useMutation({
     mutationFn: async (messageId: string) => {
-      const { data, error } = await supabase.functions.invoke('analyze-content', {
+      const { data, error } = await supabase.functions.invoke('parse-caption-with-ai', {
         body: { message_id: messageId }
       });
       
@@ -90,40 +87,6 @@ const Products = () => {
       toast({
         title: "Error",
         description: "Failed to start content analysis. Please try again.",
-        variant: "destructive"
-      });
-    }
-  });
-
-  // Mutation for retrying failed analyses
-  const retryMutation = useMutation({
-    mutationFn: async (messageId: string) => {
-      // Reset the message state to trigger reanalysis
-      const { error } = await supabase
-        .from('messages')
-        .update({
-          processing_state: 'caption_ready',
-          error_message: null,
-          retry_count: 0
-        })
-        .eq('id', messageId);
-
-      if (error) throw error;
-      
-      return analyzeContentMutation.mutateAsync(messageId);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-      toast({
-        title: "Analysis retry initiated",
-        description: "The product analysis will be attempted again."
-      });
-    },
-    onError: (error) => {
-      console.error('Error retrying analysis:', error);
-      toast({
-        title: "Error",
-        description: "Failed to retry analysis. Please try again.",
         variant: "destructive"
       });
     }

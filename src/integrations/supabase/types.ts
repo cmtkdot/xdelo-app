@@ -87,7 +87,6 @@ export type Database = {
       }
       messages: {
         Row: {
-          analysis_version: number | null
           analyzed_content: Json | null
           caption: string | null
           chat_id: number | null
@@ -122,7 +121,6 @@ export type Database = {
           width: number | null
         }
         Insert: {
-          analysis_version?: number | null
           analyzed_content?: Json | null
           caption?: string | null
           chat_id?: number | null
@@ -157,7 +155,6 @@ export type Database = {
           width?: number | null
         }
         Update: {
-          analysis_version?: number | null
           analyzed_content?: Json | null
           caption?: string | null
           chat_id?: number | null
