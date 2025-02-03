@@ -59,9 +59,13 @@ serve(async (req) => {
       );
     }
 
-    // Check for existing analyzed content in the media group
+    // Check if caption exists and is not empty
+    const hasValidCaption = message.caption && message.caption.trim() !== '';
+    console.log(`Message caption status: ${hasValidCaption ? 'Valid' : 'Missing or empty'}`);
+
+    // Check for existing analyzed content in the media group only if there's a valid caption
     let existingAnalysis = null;
-    if (message.media_group_id) {
+    if (message.media_group_id && hasValidCaption) {
       const { data: existingMessage } = await supabase
         .from('messages')
         .select('*')
@@ -121,8 +125,8 @@ serve(async (req) => {
       duration: mediaItem.duration,
       user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
       telegram_data: { message },
-      processing_state: message.caption ? 'caption_ready' : 'initialized',
-      is_original_caption: message.media_group_id && message.caption ? true : false,
+      processing_state: hasValidCaption ? 'caption_ready' : 'initialized',
+      is_original_caption: message.media_group_id && hasValidCaption ? true : false,
       analyzed_content: existingAnalysis // Use existing analysis if available
     };
 
@@ -156,8 +160,8 @@ serve(async (req) => {
       currentMessageId = newMessage.id;
     }
 
-    // Only process caption if it exists and no existing analysis is available
-    if (message.caption && !existingAnalysis) {
+    // Only process caption if it exists, is not empty, and no existing analysis is available
+    if (hasValidCaption && !existingAnalysis) {
       console.log('Processing new caption');
       
       // Wait to ensure media is properly processed
