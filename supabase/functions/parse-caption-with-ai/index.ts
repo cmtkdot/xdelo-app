@@ -48,8 +48,7 @@ serve(async (req) => {
   }
 
   try {
-    const requestData = await req.json();
-    const { caption, correlation_id = crypto.randomUUID() } = requestData;
+    const { caption, message_id, media_group_id, correlation_id = crypto.randomUUID() } = await req.json();
 
     if (!caption) {
       throw new Error('Caption is required');
@@ -57,71 +56,102 @@ serve(async (req) => {
 
     console.log('Processing caption:', { caption, correlation_id });
 
-    // First try manual parsing
-    let parsedContent = await manualParse(caption);
-    let confidence = parsedContent.parsing_metadata?.confidence || 0;
+    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openAIApiKey) {
+      throw new Error('OpenAI API key not configured');
+    }
 
-    // If manual parsing has low confidence (< 0.8), try AI parsing
-    if (confidence < 0.8) {
-      console.log('Manual parsing had low confidence, attempting AI parsing:', { confidence });
-      try {
-        const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-        if (!openAIApiKey) {
-          throw new Error('OpenAI API key not configured');
+    // Attempt AI analysis
+    console.log('Starting AI analysis');
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: caption }
+        ],
+        temperature: 0.3,
+        max_tokens: 500
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log('Raw AI response:', data.choices[0].message.content);
+    
+    const aiResult = JSON.parse(data.choices[0].message.content);
+    
+    // Ensure correct field names and structure with explicit lowercase mapping
+    const parsedContent = {
+      notes: aiResult.notes || "",
+      quantity: aiResult.quantity ? Number(aiResult.quantity) : null,
+      vendor_uid: aiResult.vendor_uid || "",
+      product_code: aiResult.product_code || "",
+      product_name: aiResult.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
+      purchase_date: aiResult.purchase_date || "",
+      parsing_metadata: {
+        method: "ai",
+        confidence: 0.9,
+        reanalysis_attempted: false,
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    console.log('Structured AI content:', parsedContent);
+
+    // Update message and sync group if needed
+    if (message_id) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Missing Supabase credentials');
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      // Log analysis attempt
+      await supabase.from('analysis_audit_log').insert({
+        message_id,
+        media_group_id,
+        event_type: 'ANALYSIS_STARTED',
+        processing_details: {
+          correlation_id,
+          method: 'ai',
+          timestamp: new Date().toISOString(),
+          caption
         }
+      });
 
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openAIApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: [
-              { role: 'system', content: SYSTEM_PROMPT },
-              { role: 'user', content: caption }
-            ],
-            temperature: 0.3,
-            max_tokens: 500
-          }),
+      // Process media group if needed
+      if (media_group_id) {
+        await supabase.rpc('process_media_group_analysis', {
+          p_message_id: message_id,
+          p_media_group_id: media_group_id,
+          p_analyzed_content: parsedContent,
+          p_processing_completed_at: new Date().toISOString(),
+          p_correlation_id: correlation_id
         });
+      } else {
+        // Update single message
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({
+            analyzed_content: parsedContent,
+            processing_state: 'completed',
+            processing_completed_at: new Date().toISOString()
+          })
+          .eq('id', message_id);
 
-        if (!response.ok) {
-          throw new Error(`OpenAI API error: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        console.log('Raw AI response:', data.choices[0].message.content);
-        
-        const aiResult = JSON.parse(data.choices[0].message.content);
-        
-        // Ensure correct field names and structure with explicit lowercase mapping
-        parsedContent = {
-          notes: aiResult.notes || "",
-          quantity: aiResult.quantity ? Number(aiResult.quantity) : null,
-          vendor_uid: aiResult.vendor_uid || "",
-          product_code: aiResult.product_code || "",
-          product_name: aiResult.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
-          purchase_date: aiResult.purchase_date || "",
-          parsing_metadata: {
-            method: "ai",
-            confidence: 0.9,
-            reanalysis_attempted: true,
-            timestamp: new Date().toISOString()
-          }
-        };
-
-        console.log('Structured AI content:', parsedContent);
-
-      } catch (aiError) {
-        console.error('AI parsing failed:', aiError);
-        // Keep the manual parsing result if AI fails
-        parsedContent.parsing_metadata = {
-          ...parsedContent.parsing_metadata,
-          ai_error: aiError.message,
-          reanalysis_attempted: true
-        };
+        if (updateError) throw updateError;
       }
     }
 
@@ -140,7 +170,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: false,
         error: error.message,
-        correlation_id: requestData?.correlation_id || crypto.randomUUID()
+        correlation_id: crypto.randomUUID()
       }),
       { 
         status: 500, 
