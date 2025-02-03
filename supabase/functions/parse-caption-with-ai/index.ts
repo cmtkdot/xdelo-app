@@ -6,35 +6,26 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const SYSTEM_PROMPT = `Analyze product captions and return a JSON object with these EXACT lowercase field names:
-{
-  "notes": string,
-  "quantity": number,
-  "vendor_uid": string,
-  "product_code": string,
-  "product_name": string,
-  "purchase_date": string (YYYY-MM-DD format)
-}
+const SYSTEM_PROMPT = `Extract product information from captions following these rules:
+1. Product Name: Text before '#' (required)
+2. Product Code: Full code after '#'
+3. Vendor UID: Letters at start of product code
+4. Purchase Date: Convert MMDDYY or MDDYY to YYYY-MM-DD
+5. Quantity: Look for numbers after 'x' or in units
+6. Notes: Text in parentheses or remaining info
 
 Important rules:
 1. Use EXACTLY these lowercase field names
-2. Put ANY additional information or details not fitting in other fields into the notes field
-3. Include flavor descriptions, strain types, and any other product details in notes
-4. Convert any numbers in quantity to actual number type
-5. Format dates as YYYY-MM-DD
-6. Ensure product_name is always present
-7. Move ANY information not fitting the specific fields into notes, including:
-   - Strain information
-   - Flavor descriptions
-   - Product characteristics
-   - Additional details
-   - Text in parentheses
-   - Any unstructured information
+2. Put ANY additional information into the notes field
+3. Convert any numbers in quantity to actual number type
+4. Format dates as YYYY-MM-DD
+5. Ensure product_name is always present
+6. Move ANY information not fitting the specific fields into notes
 
-Example input: "Blue Dream #CHAD120523 x2 (indoor) Indica dominant, THC: 24%"
+Example input: "Blue Dream #CHAD120523 x2 (indoor) Indica dominant"
 Example output:
 {
-  "notes": "indoor, Indica dominant, THC: 24%",
+  "notes": "indoor, Indica dominant",
   "quantity": 2,
   "vendor_uid": "CHAD",
   "product_code": "CHAD120523",
@@ -43,6 +34,7 @@ Example output:
 }`;
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -50,19 +42,32 @@ serve(async (req) => {
   try {
     const { caption, message_id, media_group_id, correlation_id = crypto.randomUUID() } = await req.json();
 
-    if (!caption) {
-      throw new Error('Caption is required');
-    }
+    console.log('Processing request:', { caption, message_id, media_group_id, correlation_id });
 
-    console.log('Processing caption:', { caption, correlation_id });
+    // Handle empty or undefined caption
+    if (!caption || typeof caption !== 'string' || caption.trim() === '') {
+      console.log('Empty or invalid caption received:', { caption });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Caption is required and must be a non-empty string',
+          correlation_id
+        }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
 
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAIApiKey) {
       throw new Error('OpenAI API key not configured');
     }
 
-    // Attempt AI analysis
-    console.log('Starting AI analysis');
+    console.log('Starting AI analysis for caption:', caption);
+
+    // Perform AI analysis
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -85,29 +90,26 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    console.log('Raw AI response:', data.choices[0].message.content);
-    
-    const aiResult = JSON.parse(data.choices[0].message.content);
-    
-    // Ensure correct field names and structure with explicit lowercase mapping
-    const parsedContent = {
-      notes: aiResult.notes || "",
-      quantity: aiResult.quantity ? Number(aiResult.quantity) : null,
-      vendor_uid: aiResult.vendor_uid || "",
-      product_code: aiResult.product_code || "",
-      product_name: aiResult.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
-      purchase_date: aiResult.purchase_date || "",
+    const analyzedContent = JSON.parse(data.choices[0].message.content);
+
+    console.log('AI analysis result:', analyzedContent);
+
+    // Ensure all field names are lowercase
+    const normalizedContent = {
+      product_name: analyzedContent.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
+      product_code: analyzedContent.product_code || '',
+      vendor_uid: analyzedContent.vendor_uid || '',
+      purchase_date: analyzedContent.purchase_date || '',
+      quantity: typeof analyzedContent.quantity === 'number' ? analyzedContent.quantity : null,
+      notes: analyzedContent.notes || '',
       parsing_metadata: {
-        method: "ai",
+        method: 'ai',
         confidence: 0.9,
-        reanalysis_attempted: false,
         timestamp: new Date().toISOString()
       }
     };
 
-    console.log('Structured AI content:', parsedContent);
-
-    // Update message and sync group if needed
+    // If message_id is provided, update the database
     if (message_id) {
       const supabaseUrl = Deno.env.get('SUPABASE_URL');
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -118,25 +120,12 @@ serve(async (req) => {
 
       const supabase = createClient(supabaseUrl, supabaseKey);
 
-      // Log analysis attempt
-      await supabase.from('analysis_audit_log').insert({
-        message_id,
-        media_group_id,
-        event_type: 'ANALYSIS_STARTED',
-        processing_details: {
-          correlation_id,
-          method: 'ai',
-          timestamp: new Date().toISOString(),
-          caption
-        }
-      });
-
       // Process media group if needed
       if (media_group_id) {
         await supabase.rpc('process_media_group_analysis', {
           p_message_id: message_id,
           p_media_group_id: media_group_id,
-          p_analyzed_content: parsedContent,
+          p_analyzed_content: normalizedContent,
           p_processing_completed_at: new Date().toISOString(),
           p_correlation_id: correlation_id
         });
@@ -145,7 +134,7 @@ serve(async (req) => {
         const { error: updateError } = await supabase
           .from('messages')
           .update({
-            analyzed_content: parsedContent,
+            analyzed_content: normalizedContent,
             processing_state: 'completed',
             processing_completed_at: new Date().toISOString()
           })
@@ -158,7 +147,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        analyzed_content: parsedContent,
+        analyzed_content: normalizedContent,
         correlation_id
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -173,8 +162,8 @@ serve(async (req) => {
         correlation_id: crypto.randomUUID()
       }),
       { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
   }
