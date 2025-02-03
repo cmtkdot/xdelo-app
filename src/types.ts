@@ -152,6 +152,17 @@ export function processingMetadataToJson(metadata: ProcessingMetadata): JsonValu
   };
 }
 
+// Convert ParsingMetadata to JsonValue
+export function parsingMetadataToJson(metadata: ParsingMetadata): JsonValue {
+  return {
+    method: metadata.method,
+    confidence: metadata.confidence,
+    fallbacks_used: metadata.fallbacks_used || [],
+    reanalysis_attempted: metadata.reanalysis_attempted || false,
+    previous_analysis: metadata.previous_analysis ? analyzedContentToJson(metadata.previous_analysis) : null
+  };
+}
+
 // Convert AnalyzedContent to JsonValue
 export function analyzedContentToJson(analyzed: AnalyzedContent): JsonValue {
   if (!analyzed) return null;
@@ -166,14 +177,7 @@ export function analyzedContentToJson(analyzed: AnalyzedContent): JsonValue {
   if (analyzed.notes) result.notes = analyzed.notes;
   
   if (analyzed.parsing_metadata) {
-    result.parsing_metadata = {
-      method: analyzed.parsing_metadata.method,
-      confidence: analyzed.parsing_metadata.confidence,
-      fallbacks_used: analyzed.parsing_metadata.fallbacks_used || [],
-      reanalysis_attempted: analyzed.parsing_metadata.reanalysis_attempted || false,
-      previous_analysis: analyzed.parsing_metadata.previous_analysis ? 
-        analyzedContentToJson(analyzed.parsing_metadata.previous_analysis) : null
-    };
+    result.parsing_metadata = parsingMetadataToJson(analyzed.parsing_metadata);
   }
   
   return result;
