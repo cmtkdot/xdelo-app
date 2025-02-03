@@ -45,6 +45,19 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Update message to processing state immediately
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({ 
+        processing_state: 'processing',
+        processing_started_at: new Date().toISOString()
+      })
+      .eq('id', message_id);
+
+    if (updateError) {
+      throw new Error(`Failed to update message state: ${updateError.message}`);
+    }
+
     // Log initial state
     await supabase.from('analysis_audit_log').insert({
       message_id,
@@ -58,57 +71,19 @@ serve(async (req) => {
       }
     });
 
-    // If this is part of a media group, wait for all messages to be in the database
-    if (media_group_id) {
-      console.log('Checking media group completeness:', media_group_id);
-      
-      let groupMessages = [];
-      // Wait for up to 5 seconds for all messages to arrive
-      for (let i = 0; i < 5; i++) {
-        const { data: messages, error: groupError } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('media_group_id', media_group_id);
-
-        if (groupError) throw groupError;
-
-        if (messages && messages.length > 0) {
-          groupMessages = messages;
-          console.log(`Found ${messages.length} messages in group`);
-          break;
-        }
-
-        if (i < 4) {
-          console.log('Waiting for more messages...');
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-
-      // If no messages found after waiting, log warning
-      if (groupMessages.length === 0) {
-        console.warn('No messages found in group after waiting');
-      }
-    }
-
-    // Update message to processing state
-    await supabase
-      .from('messages')
-      .update({ 
-        processing_state: 'processing',
-        processing_started_at: new Date().toISOString()
-      })
-      .eq('id', message_id);
-
     // Try manual parsing first
     console.log('Attempting manual parsing for caption:', caption);
     let analyzedContent: ParsedContent = await manualParse(caption);
     let isAiAnalysis = false;
 
     // If manual parsing doesn't yield good results, try AI parsing
-    if (!analyzedContent.product_name || !analyzedContent.quantity) {
+    if (!analyzedContent.product_name || !analyzedContent.product_code || !analyzedContent.quantity) {
       console.log('Manual parsing incomplete, attempting AI analysis');
       analyzedContent = await aiParse(caption);
       isAiAnalysis = true;
+
+      // Add delay for AI analysis to ensure proper syncing
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
     // Log the analysis method
@@ -124,43 +99,17 @@ serve(async (req) => {
       }
     });
 
-    // Add delay for AI analysis
-    if (isAiAnalysis) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
+    // Update the current message with analyzed content
+    const { error: contentUpdateError } = await supabase.rpc('process_media_group_analysis', {
+      p_message_id: message_id,
+      p_media_group_id: media_group_id,
+      p_analyzed_content: analyzedContent,
+      p_processing_completed_at: new Date().toISOString(),
+      p_correlation_id: crypto.randomUUID()
+    });
 
-    // First update the current message with analyzed content
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update({
-        analyzed_content: analyzedContent,
-        processing_state: 'completed',
-        processing_completed_at: new Date().toISOString(),
-        is_original_caption: true,
-        group_caption_synced: true
-      })
-      .eq('id', message_id);
-
-    if (updateError) {
-      throw updateError;
-    }
-
-    // Only process media group if we have valid analyzed content and a media group ID
-    if (analyzedContent && media_group_id) {
-      console.log('Processing media group:', media_group_id);
-      
-      const { error: rpcError } = await supabase.rpc('process_media_group_analysis', {
-        p_message_id: message_id,
-        p_media_group_id: media_group_id,
-        p_analyzed_content: analyzedContent,
-        p_processing_completed_at: new Date().toISOString(),
-        p_correlation_id: crypto.randomUUID()
-      });
-
-      if (rpcError) {
-        console.error('Error in process_media_group_analysis:', rpcError);
-        throw rpcError;
-      }
+    if (contentUpdateError) {
+      throw contentUpdateError;
     }
 
     const response: AnalysisResult = {
