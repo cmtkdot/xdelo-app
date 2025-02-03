@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, FilterValues } from "@/types";
+import { MediaItem, FilterValues, analyzedContentToJson } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
@@ -64,9 +64,8 @@ const ProductGallery = () => {
     if (!editItem) return;
 
     try {
-      const analyzedContentJson = editItem.analyzed_content ? {
-        ...editItem.analyzed_content
-      } : null;
+      const analyzedContentJson = editItem.analyzed_content ? 
+        analyzedContentToJson(editItem.analyzed_content) : null;
 
       const { error } = await supabase
         .from('messages')

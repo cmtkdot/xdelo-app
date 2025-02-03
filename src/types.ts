@@ -186,7 +186,14 @@ export function analyzedContentToJson(analyzed: AnalyzedContent): JsonValue {
   if (analyzed.notes) result.notes = analyzed.notes;
   
   if (analyzed.parsing_metadata) {
-    result.parsing_metadata = parsingMetadataToJson(analyzed.parsing_metadata);
+    result.parsing_metadata = {
+      method: analyzed.parsing_metadata.method,
+      confidence: analyzed.parsing_metadata.confidence,
+      fallbacks_used: analyzed.parsing_metadata.fallbacks_used || [],
+      reanalysis_attempted: analyzed.parsing_metadata.reanalysis_attempted || false,
+      previous_analysis: analyzed.parsing_metadata.previous_analysis ? 
+        analyzedContentToJson(analyzed.parsing_metadata.previous_analysis) : null
+    };
   }
   
   return result;
