@@ -34,6 +34,7 @@ const Auth = () => {
           } else {
             setError(signUpError.message);
           }
+          setLoading(false);
           return;
         }
 
@@ -53,6 +54,7 @@ const Auth = () => {
           } else {
             setError(signInError.message);
           }
+          setLoading(false);
           return;
         }
 
