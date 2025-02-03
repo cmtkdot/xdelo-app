@@ -14,20 +14,15 @@ interface ImageSwiperProps extends React.HTMLAttributes<HTMLDivElement> {
 export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
   const [mediaIndex, setMediaIndex] = React.useState(0)
   const dragX = useMotionValue(0)
-  const videoRef = React.useRef<HTMLVideoElement>(null)
 
-  // Sort media to show images first, then videos
-  const sortedMedia = React.useMemo(() => {
-    return [...media].sort((a, b) => {
-      const aIsImage = a.mime_type?.startsWith('image') || false
-      const bIsImage = b.mime_type?.startsWith('image') || false
-      return bIsImage ? 1 : aIsImage ? -1 : 0
-    })
+  // Filter out videos and only keep images
+  const filteredMedia = React.useMemo(() => {
+    return media.filter(item => item.mime_type?.startsWith('image'))
   }, [media])
 
   const onDragEnd = () => {
     const x = dragX.get()
-    if (x <= -10 && mediaIndex < sortedMedia.length - 1) {
+    if (x <= -10 && mediaIndex < filteredMedia.length - 1) {
       setMediaIndex((prev) => prev + 1)
     } else if (x >= 10 && mediaIndex > 0) {
       setMediaIndex((prev) => prev - 1)
@@ -37,6 +32,15 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
   const getMediaUrl = (item: MediaItem) => {
     if (item.public_url) return item.public_url
     return `https://ovpsyrhigencvzlxqwqz.supabase.co/storage/v1/object/public/telegram-media/${item.file_unique_id}.${item.mime_type?.split('/')[1]}`
+  }
+
+  // If no images are available, show a placeholder or return null
+  if (filteredMedia.length === 0) {
+    return (
+      <div className="group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
+        <span className="text-gray-400">No images available</span>
+      </div>
+    )
   }
 
   return (
@@ -61,7 +65,7 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
           </div>
         )}
         
-        {mediaIndex < sortedMedia.length - 1 && (
+        {mediaIndex < filteredMedia.length - 1 && (
           <div className="absolute right-5 top-1/2 -translate-y-1/2">
             <Button
               variant="ghost" 
@@ -76,7 +80,7 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
 
         <div className="absolute bottom-2 w-full flex justify-center">
           <div className="flex min-w-9 items-center justify-center rounded-md bg-black/80 px-2 py-0.5 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
-            {mediaIndex + 1}/{sortedMedia.length}
+            {mediaIndex + 1}/{filteredMedia.length}
           </div>
         </div>
       </div>
@@ -98,35 +102,18 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
         transition={{ damping: 18, stiffness: 90, type: 'spring', duration: 0.2 }}
         className="flex h-full cursor-grab items-center rounded-[inherit] active:cursor-grabbing"
       >
-        {sortedMedia.map((item, i) => {
-          const isVideo = item.mime_type?.startsWith('video')
-          const mediaUrl = getMediaUrl(item)
-
-          return (
-            <motion.div
-              key={i}
-              className="h-full w-full shrink-0 overflow-hidden bg-neutral-800 object-cover first:rounded-l-[inherit] last:rounded-r-[inherit]"
-            >
-              {isVideo ? (
-                <video
-                  ref={videoRef}
-                  src={mediaUrl}
-                  className="pointer-events-none h-full w-full object-cover"
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                />
-              ) : (
-                <img 
-                  src={mediaUrl} 
-                  alt={item.analyzed_content?.product_name || 'Product image'}
-                  className="pointer-events-none h-full w-full object-cover" 
-                />
-              )}
-            </motion.div>
-          )
-        })}
+        {filteredMedia.map((item, i) => (
+          <motion.div
+            key={i}
+            className="h-full w-full shrink-0 overflow-hidden bg-neutral-800 object-cover first:rounded-l-[inherit] last:rounded-r-[inherit]"
+          >
+            <img 
+              src={getMediaUrl(item)} 
+              alt={item.analyzed_content?.product_name || 'Product image'}
+              className="pointer-events-none h-full w-full object-cover" 
+            />
+          </motion.div>
+        ))}
       </motion.div>
     </div>
   )
