@@ -26,30 +26,31 @@ serve(async (req) => {
     const { message_id, media_group_id, caption } = await req.json() as SyncRequest;
     console.log(`Processing caption sync for message ${message_id} in group ${media_group_id}`);
 
-    // Get the current message to check its analysis state
-    const { data: message, error: messageError } = await supabase
+    // First update the source message
+    const { error: updateError } = await supabase
       .from('messages')
-      .select('fresh_analysis, analyzed_content')
-      .eq('id', message_id)
-      .single();
-
-    if (messageError) throw messageError;
-
-    // Use fresh_analysis if available, fallback to analyzed_content
-    const analysisContent = message?.fresh_analysis || message?.analyzed_content;
-
-    // Update all messages in the group using the process_media_group_analysis function
-    const { error: updateError } = await supabase.rpc(
-      'process_media_group_analysis',
-      {
-        p_message_id: message_id,
-        p_media_group_id: media_group_id,
-        p_analyzed_content: analysisContent,
-        p_processing_completed_at: new Date().toISOString()
-      }
-    );
+      .update({
+        caption,
+        is_original_caption: true,
+        processing_state: 'caption_ready'
+      })
+      .eq('id', message_id);
 
     if (updateError) throw updateError;
+
+    // Update all other messages in the group
+    const { error: groupUpdateError } = await supabase
+      .from('messages')
+      .update({
+        caption,
+        is_original_caption: false,
+        message_caption_id: message_id,
+        processing_state: 'caption_ready'
+      })
+      .eq('media_group_id', media_group_id)
+      .neq('id', message_id);
+
+    if (groupUpdateError) throw groupUpdateError;
 
     // Trigger the parse-caption-all function to analyze the caption
     const parseResponse = await fetch(
@@ -62,8 +63,8 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           message_id,
-          caption,
-          media_group_id
+          media_group_id,
+          caption
         })
       }
     );
@@ -73,10 +74,13 @@ serve(async (req) => {
       throw new Error('Failed to trigger caption parsing');
     }
 
+    const parseResult = await parseResponse.json();
+
     return new Response(
       JSON.stringify({ 
         success: true,
-        message: 'Caption synced and analysis triggered'
+        message: 'Caption synced and analysis triggered',
+        parse_result: parseResult
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
