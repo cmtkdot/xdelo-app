@@ -70,7 +70,9 @@ const ProductGallery = () => {
       const { error } = await supabase
         .from('messages')
         .update({
-          analyzed_content: analyzedContentJson
+          analyzed_content: analyzedContentJson,
+          processing_state: 'completed',
+          group_caption_synced: true
         })
         .eq('id', editItem.id);
 

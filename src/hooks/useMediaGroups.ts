@@ -31,8 +31,9 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
 
     fetchMediaGroups();
 
+    // Subscribe to ALL changes on the messages table
     const channel = supabase
-      .channel("schema-db-changes")
+      .channel("media-groups-changes")
       .on(
         "postgres_changes",
         {
@@ -40,11 +41,15 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
           schema: "public",
           table: "messages",
         },
-        () => {
+        (payload) => {
+          console.log("Received real-time update:", payload);
+          // Fetch fresh data to ensure we have the latest state
           fetchMediaGroups();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("Subscription status:", status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
