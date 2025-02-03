@@ -6,6 +6,7 @@ import { ProductGroup } from "@/components/ProductGroup";
 import { ProductMediaViewer } from "@/components/ProductMediaViewer";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/hooks/use-toast";
+import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
 const getMediaCaption = (item: MediaItem): string => {
   const content = item.analyzed_content;
@@ -78,11 +79,11 @@ const Products = () => {
           schema: 'public',
           table: 'messages'
         },
-        (payload) => {
+        (payload: RealtimePostgresChangesPayload<MediaItem>) => {
           console.log('Real-time update:', payload);
           // Only invalidate query if the update contains new analyzed content
           if (payload.new && 
-              (payload.new.analyzed_content !== payload.old?.analyzed_content ||
+              ((payload.new.analyzed_content !== (payload.old as MediaItem | undefined)?.analyzed_content) ||
                payload.eventType === 'INSERT' ||
                payload.eventType === 'DELETE')) {
             queryClient.invalidateQueries({ queryKey: ['products'] });
