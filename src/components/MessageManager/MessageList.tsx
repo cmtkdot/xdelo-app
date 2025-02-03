@@ -104,17 +104,17 @@ export const MessageList = ({ onMessageSelect }: MessageListProps) => {
             <div className="flex justify-between items-start">
               <div className="space-y-2">
                 <h3 className="font-semibold">
-                  {message.product_name || 'Untitled Product'}
+                  {message.analyzed_content?.product_name || 'Untitled Product'}
                 </h3>
                 <p className="text-sm text-gray-500">
                   {message.caption || 'No caption'}
                 </p>
                 <div className="text-xs text-gray-400 space-y-1">
-                  <p>Product Code: {message.product_code || 'N/A'}</p>
-                  <p>Vendor: {message.vendor_uid || 'N/A'}</p>
-                  <p>Quantity: {message.quantity || 'N/A'}</p>
-                  <p>Purchase Date: {message.purchase_date || 'N/A'}</p>
-                  <p>Notes: {message.notes || 'N/A'}</p>
+                  <p>Product Code: {message.analyzed_content?.product_code || 'N/A'}</p>
+                  <p>Vendor: {message.analyzed_content?.vendor_uid || 'N/A'}</p>
+                  <p>Quantity: {message.analyzed_content?.quantity || 'N/A'}</p>
+                  <p>Purchase Date: {message.analyzed_content?.purchase_date || 'N/A'}</p>
+                  <p>Notes: {message.analyzed_content?.notes || 'N/A'}</p>
                 </div>
               </div>
               <div className="flex gap-2">
