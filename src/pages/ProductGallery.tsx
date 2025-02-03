@@ -1,20 +1,17 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, AnalyzedContent } from "@/types";
+import { MediaItem } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
 import { ProductPagination } from "@/components/ProductGallery/ProductPagination";
 import { ProductFilters, FilterValues } from "@/components/ProductGallery/ProductFilters";
-
-const ITEMS_PER_PAGE = 16;
+import { useVendors } from "@/hooks/useVendors";
+import { useMediaGroups } from "@/hooks/useMediaGroups";
 
 const ProductGallery = () => {
-  const [mediaGroups, setMediaGroups] = useState<{ [key: string]: MediaItem[] }>({});
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [vendors, setVendors] = useState<string[]>([]);
   const [filters, setFilters] = useState<FilterValues>({
     search: "",
     vendor: "all",
@@ -23,33 +20,8 @@ const ProductGallery = () => {
     sortOrder: "desc",
   });
   const { toast } = useToast();
-
-  useEffect(() => {
-    const fetchVendors = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("messages")
-          .select("analyzed_content")
-          .not("analyzed_content", "is", null);
-
-        if (error) throw error;
-
-        const uniqueVendors = new Set<string>();
-        data.forEach((message) => {
-          const content = message.analyzed_content as AnalyzedContent;
-          if (content?.vendor_uid) {
-            uniqueVendors.add(content.vendor_uid);
-          }
-        });
-
-        setVendors(Array.from(uniqueVendors).sort());
-      } catch (error) {
-        console.error("Error fetching vendors:", error);
-      }
-    };
-
-    fetchVendors();
-  }, []);
+  const vendors = useVendors();
+  const { mediaGroups, totalPages } = useMediaGroups(currentPage, filters);
 
   const formatDate = (date: string | null) => {
     if (!date) return null;
@@ -61,99 +33,6 @@ const ProductGallery = () => {
       return null;
     }
   };
-
-  useEffect(() => {
-    const fetchMessages = async () => {
-      try {
-        let query = supabase
-          .from("messages")
-          .select("*", { count: "exact" });
-
-        // Apply filters
-        if (filters.search) {
-          query = query.textSearch(
-            "analyzed_content->>'product_name'", 
-            filters.search
-          );
-        }
-
-        if (filters.vendor) {
-          query = query.eq("analyzed_content->>'vendor_uid'", filters.vendor);
-        }
-
-        if (filters.dateFrom) {
-          query = query.gte("created_at", filters.dateFrom.toISOString());
-        }
-
-        if (filters.dateTo) {
-          query = query.lte("created_at", filters.dateTo.toISOString());
-        }
-
-        // Apply sorting
-        query = query.order("created_at", { ascending: filters.sortOrder === "asc" });
-
-        // Apply pagination
-        const from = (currentPage - 1) * ITEMS_PER_PAGE;
-        const to = from + ITEMS_PER_PAGE - 1;
-        query = query.range(from, to);
-
-        const { data, count, error } = await query;
-
-        if (error) throw error;
-
-        const total = count || 0;
-        setTotalPages(Math.ceil(total / ITEMS_PER_PAGE));
-
-        const groups: { [key: string]: MediaItem[] } = {};
-        data?.forEach((message) => {
-          const groupKey = message.media_group_id || message.id;
-          if (!groups[groupKey]) {
-            groups[groupKey] = [];
-          }
-          groups[groupKey].push(message as MediaItem);
-        });
-
-        Object.keys(groups).forEach(key => {
-          groups[key].sort((a, b) => {
-            if (a.is_original_caption && !b.is_original_caption) return -1;
-            if (!a.is_original_caption && b.is_original_caption) return 1;
-            return 0;
-          });
-        });
-
-        setMediaGroups(groups);
-      } catch (error) {
-        console.error("Error fetching messages:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load messages. Please try again.",
-          variant: "destructive",
-        });
-      }
-    };
-
-    fetchMessages();
-
-    const channel = supabase
-      .channel("schema-db-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "messages",
-        },
-        (payload) => {
-          console.log("Real-time update:", payload);
-          fetchMessages();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [toast, currentPage, filters]);
 
   const handleEdit = (media: MediaItem) => {
     const groupKey = media.media_group_id || media.id;
@@ -178,7 +57,6 @@ const ProductGallery = () => {
     if (!editItem) return;
 
     try {
-      // Convert AnalyzedContent to a plain object for Supabase
       const analyzedContentJson = editItem.analyzed_content ? {
         ...editItem.analyzed_content
       } : null;
