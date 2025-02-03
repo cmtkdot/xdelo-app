@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect } from "react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ProductGroupProps {
   group: MediaItem[];
@@ -262,35 +264,42 @@ export const ProductGroup = ({ group, onEdit }: ProductGroupProps) => {
         )}
         
         <div className="flex gap-2 mt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onEdit(mainMedia)}
-            className="flex items-center"
-          >
-            <Pencil className="w-4 h-4 mr-1" />
-            Edit
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleReanalyze}
-            className="flex items-center"
-          >
-            <RotateCw className="w-4 h-4 mr-1" />
-            Reanalyze
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDelete}
-            className="flex items-center text-red-600 hover:text-red-700"
-          >
-            <Trash2 className="w-4 h-4 mr-1" />
-            Delete
-          </Button>
+          <Tabs defaultValue="edit" className="w-full">
+            <TabsList className="grid grid-cols-3 gap-2">
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger value="edit" onClick={() => onEdit(mainMedia)} className="py-2">
+                      <Pencil className="w-4 h-4" />
+                    </TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent className="px-2 py-1 text-xs">Edit</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger value="reanalyze" onClick={handleReanalyze} className="py-2">
+                      <RotateCw className="w-4 h-4" />
+                    </TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent className="px-2 py-1 text-xs">Reanalyze</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger value="delete" onClick={handleDelete} className="py-2 text-destructive">
+                      <Trash2 className="w-4 h-4" />
+                    </TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent className="px-2 py-1 text-xs">Delete</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </TabsList>
+          </Tabs>
         </div>
       </div>
     </div>
