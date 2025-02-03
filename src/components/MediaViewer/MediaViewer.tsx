@@ -22,8 +22,8 @@ export const MediaViewer = ({
   currentGroup,
   onPrevious,
   onNext,
-  hasPrevious,
-  hasNext
+  hasPrevious = false,
+  hasNext = false
 }: MediaViewerProps) => {
   const mainMedia = currentGroup.find(media => media.is_original_caption) || currentGroup[0];
   const analyzedContent = mainMedia?.analyzed_content;
@@ -101,7 +101,7 @@ export const MediaViewer = ({
                 disabled={!hasPrevious}
                 className="w-[100px]"
               >
-                <ChevronLeft className="h-4 w-4 mr-2" />
+                <ChevronLeft className="h-4 w-4 text-black" />
                 Previous
               </Button>
               <Button
@@ -111,7 +111,7 @@ export const MediaViewer = ({
                 className="w-[100px]"
               >
                 Next
-                <ChevronRight className="h-4 w-4 ml-2" />
+                <ChevronRight className="h-4 w-4 text-black" />
               </Button>
             </div>
           </div>
