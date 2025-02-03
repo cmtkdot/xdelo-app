@@ -50,41 +50,6 @@ export type Database = {
           },
         ]
       }
-      caption_sync_history: {
-        Row: {
-          created_at: string | null
-          event_type: string
-          id: string
-          media_group_id: string | null
-          message_id: string | null
-          synced_caption: Json | null
-        }
-        Insert: {
-          created_at?: string | null
-          event_type: string
-          id?: string
-          media_group_id?: string | null
-          message_id?: string | null
-          synced_caption?: Json | null
-        }
-        Update: {
-          created_at?: string | null
-          event_type?: string
-          id?: string
-          media_group_id?: string | null
-          message_id?: string | null
-          synced_caption?: Json | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "caption_sync_history_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       messages: {
         Row: {
           analyzed_content: Json | null
@@ -114,7 +79,6 @@ export type Database = {
             | null
           public_url: string | null
           retry_count: number | null
-          synced_caption: Json | null
           telegram_data: Json | null
           telegram_message_id: number | null
           updated_at: string | null
@@ -149,7 +113,6 @@ export type Database = {
             | null
           public_url?: string | null
           retry_count?: number | null
-          synced_caption?: Json | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
@@ -184,7 +147,6 @@ export type Database = {
             | null
           public_url?: string | null
           retry_count?: number | null
-          synced_caption?: Json | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null

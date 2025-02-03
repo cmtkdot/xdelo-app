@@ -29,7 +29,7 @@ serve(async (req) => {
     // Get the current message to check its analysis state
     const { data: message, error: messageError } = await supabase
       .from('messages')
-      .select('analyzed_content, fresh_analysis')
+      .select('fresh_analysis, analyzed_content')
       .eq('id', message_id)
       .single();
 
@@ -38,7 +38,7 @@ serve(async (req) => {
     // Use fresh_analysis if available, fallback to analyzed_content
     const analysisContent = message?.fresh_analysis || message?.analyzed_content;
 
-    // Update all messages in the group with the caption and analysis
+    // Update all messages in the group using the process_media_group_analysis function
     const { error: updateError } = await supabase.rpc(
       'process_media_group_analysis',
       {
@@ -70,10 +70,14 @@ serve(async (req) => {
 
     if (!parseResponse.ok) {
       console.error('Error triggering caption parsing:', await parseResponse.text());
+      throw new Error('Failed to trigger caption parsing');
     }
 
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({ 
+        success: true,
+        message: 'Caption synced and analysis triggered'
+      }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200 
@@ -83,7 +87,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error syncing caption:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: 'Failed to sync caption or trigger analysis'
+      }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500
