@@ -46,7 +46,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
           if (filters.processingState === 'pending') {
             originalCaptionsQuery = originalCaptionsQuery.is('processing_state', null);
           } else {
-            originalCaptionsQuery = originalCaptionsQuery.eq('processing_state', filters.processingState as 'initialized' | 'processing' | 'completed' | 'error' | 'pending');
+            originalCaptionsQuery = originalCaptionsQuery.eq('processing_state', filters.processingState);
           }
         }
 
