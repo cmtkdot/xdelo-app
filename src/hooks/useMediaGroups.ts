@@ -16,43 +16,55 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
           .from("messages")
           .select("*", { count: "exact" });
 
-        // Apply text search filter for product name
+        // Enhanced search across multiple JSON fields
         if (filters.search) {
-          query = query.or(`analyzed_content->>'product_name'.ilike.%${filters.search}%,analyzed_content->>'product_code'.ilike.%${filters.search}%`);
+          query = query.or(
+            `analyzed_content->>'product_name'.ilike.%${filters.search}%,` +
+            `analyzed_content->>'product_code'.ilike.%${filters.search}%,` +
+            `analyzed_content->>'notes'.ilike.%${filters.search}%,` +
+            `analyzed_content->>'vendor_uid'.ilike.%${filters.search}%,` +
+            `telegram_data->>'caption'.ilike.%${filters.search}%`
+          );
         }
 
-        // Filter by vendor
+        // Filter by vendor from analyzed_content
         if (filters.vendor && filters.vendor !== "all") {
           query = query.eq("analyzed_content->>'vendor_uid'", filters.vendor);
         }
 
-        // Apply date range filters if provided
+        // Date range filtering using purchase_date from analyzed_content
         if (filters.dateFrom) {
-          query = query.gte("created_at", filters.dateFrom.toISOString());
+          query = query.or(
+            `analyzed_content->>'purchase_date'.gte.${filters.dateFrom.toISOString()},` +
+            `created_at.gte.${filters.dateFrom.toISOString()}`
+          );
         }
         if (filters.dateTo) {
-          // Add one day to include the entire end date
           const endDate = new Date(filters.dateTo);
           endDate.setDate(endDate.getDate() + 1);
-          query = query.lt("created_at", endDate.toISOString());
+          query = query.or(
+            `analyzed_content->>'purchase_date'.lt.${endDate.toISOString()},` +
+            `created_at.lt.${endDate.toISOString()}`
+          );
         }
 
-        // Apply sorting
-        query = query.order("created_at", { ascending: filters.sortOrder === "asc" });
+        // Prioritize original caption messages in the sorting
+        query = query.order("is_original_caption", { ascending: false })
+                    .order("created_at", { ascending: filters.sortOrder === "asc" });
 
         // Apply pagination
         const from = (currentPage - 1) * ITEMS_PER_PAGE;
         const to = from + ITEMS_PER_PAGE - 1;
         query = query.range(from, to);
 
-        const { data, count, error } = await query;
+        const { data, error, count } = await query;
 
         if (error) throw error;
 
         const total = count || 0;
         setTotalPages(Math.ceil(total / ITEMS_PER_PAGE));
 
-        // Group messages by media_group_id
+        // Group messages and prioritize original captions
         const groups: { [key: string]: MediaItem[] } = {};
         data?.forEach((message) => {
           const groupKey = message.media_group_id || message.id;
@@ -62,7 +74,7 @@ export const useMediaGroups = (currentPage: number, filters: FilterValues) => {
           groups[groupKey].push(message as MediaItem);
         });
 
-        // Sort messages within groups to prioritize ones with original captions
+        // Sort messages within groups to prioritize original captions
         Object.keys(groups).forEach(key => {
           groups[key].sort((a, b) => {
             if (a.is_original_caption && !b.is_original_caption) return -1;
