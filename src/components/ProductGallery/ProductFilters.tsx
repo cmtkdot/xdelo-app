@@ -30,13 +30,16 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   useEffect(() => {
     const fetchProductCodes = async () => {
       const { data, error } = await supabase
-        .from('messages_parsed')
-        .select('product_code')
-        .not('product_code', 'is', null)
+        .from('messages')
+        .select('analyzed_content')
+        .not('analyzed_content', 'is', null)
         .is('is_original_caption', true);
 
       if (!error && data) {
-        const uniqueCodes = [...new Set(data.map(item => item.product_code))].filter(Boolean);
+        const uniqueCodes = [...new Set(data
+          .map(item => item.analyzed_content?.product_code)
+          .filter(Boolean)
+        )];
         setProductCodes(uniqueCodes);
       }
     };

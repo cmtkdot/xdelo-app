@@ -2,10 +2,6 @@ import { Card } from "@/components/ui/card";
 import { MessageSquare, Package, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/integrations/supabase/types";
-
-type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
-type MessageParsedRow = Database["public"]["Views"]["messages_parsed"]["Row"];
 
 const Dashboard = () => {
   const { data: messageCount = 0 } = useQuery({
@@ -24,7 +20,7 @@ const Dashboard = () => {
     queryKey: ['productCount'],
     queryFn: async () => {
       const { count, error } = await supabase
-        .from('messages_parsed')
+        .from('messages')
         .select('*', { count: 'exact', head: true })
         .not('analyzed_content', 'is', null);
       
@@ -37,14 +33,14 @@ const Dashboard = () => {
     queryKey: ['vendorCount'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('messages_parsed')
-        .select('vendor_uid')
-        .not('vendor_uid', 'is', null);
+        .from('messages')
+        .select('analyzed_content->vendor_uid')
+        .not('analyzed_content->vendor_uid', 'is', null);
       
       if (error) throw error;
       
       const uniqueVendors = new Set(
-        data.map(item => item.vendor_uid)
+        data.map(item => item.analyzed_content?.vendor_uid)
           .filter(Boolean)
       );
       
