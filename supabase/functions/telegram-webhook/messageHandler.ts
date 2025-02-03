@@ -127,7 +127,6 @@ export async function handleMediaMessage(
         console.log("✅ AI analysis triggered for message:", newMessage.id);
       } catch (error) {
         console.error("❌ Failed to trigger AI analysis:", error);
-        // Don't throw here, we still want to return the processed media
       }
     }
 
