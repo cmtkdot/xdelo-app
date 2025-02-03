@@ -3,7 +3,7 @@ import { MediaItem } from '@/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ImageSwiper } from "@/components/ui/image-swiper";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from 'date-fns';
 
 interface MediaViewerProps {
@@ -52,31 +52,20 @@ export const MediaViewer = ({
           </div>
 
           <div className="p-4 bg-background border-t">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h3 className="font-medium mb-2">Product Details</h3>
-                <div className="space-y-1 text-sm">
-                  <p>Code: {analyzedContent?.product_code ? `PO#${analyzedContent.product_code}` : 'N/A'}</p>
-                  <p>Vendor: {analyzedContent?.vendor_uid || 'N/A'}</p>
-                  <p>Quantity: {analyzedContent?.quantity || 'N/A'}</p>
-                  <p>Purchase Date: {formatDate(analyzedContent?.purchase_date)}</p>
-                </div>
-              </div>
-              <div>
-                <h4 className="font-medium mb-2">Technical Details</h4>
-                <div className="space-y-1 text-sm">
-                  <p>Created: {formatDate(mainMedia.created_at)}</p>
-                  <p>Updated: {formatDate(mainMedia.updated_at)}</p>
-                  <p>Processing State: {mainMedia.processing_state}</p>
-                  <p>Media Group ID: {mainMedia.media_group_id || 'N/A'}</p>
-                  <p>Group Size: {mainMedia.group_message_count || 1}</p>
-                </div>
-              </div>
+            <div className="space-y-2 text-sm">
+              <p><span className="font-medium">PO #:</span> {analyzedContent?.product_code ? `PO#${analyzedContent.product_code}` : 'N/A'}</p>
+              <p><span className="font-medium">Vendor:</span> {analyzedContent?.vendor_uid || 'N/A'}</p>
+              <p><span className="font-medium">Quantity:</span> {analyzedContent?.quantity || 'N/A'}</p>
+              <p><span className="font-medium">Purchase Date:</span> {formatDate(analyzedContent?.purchase_date)}</p>
+              <p><span className="font-medium">Created:</span> {formatDate(mainMedia.created_at)}</p>
+              <p><span className="font-medium">Updated:</span> {formatDate(mainMedia.updated_at)}</p>
+              <p><span className="font-medium">Processing State:</span> {mainMedia.processing_state}</p>
+              <p><span className="font-medium">Media Group ID:</span> {mainMedia.media_group_id || 'N/A'}</p>
+              <p><span className="font-medium">Group Size:</span> {mainMedia.group_message_count || 1}</p>
             </div>
 
             {analyzedContent?.notes && (
-              <div className="mt-4">
-                <h4 className="font-medium mb-1">Notes</h4>
+              <div className="mt-4 pt-4 border-t border-border">
                 <p className="text-sm text-muted-foreground">{analyzedContent.notes}</p>
               </div>
             )}
