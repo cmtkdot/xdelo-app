@@ -236,7 +236,7 @@ export const ProductGroup = ({
 
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
-      <div className="relative">
+      <div className="relative h-64 md:h-72">
         <ImageSwiper media={group} />
         
         {hasError && (
@@ -248,19 +248,16 @@ export const ProductGroup = ({
         )}
       </div>
       
-      <div className="p-3 md:p-4">
-        <h3 className="text-base md:text-lg font-semibold mb-2">
+      <div className="p-4 space-y-3 text-center">
+        <h3 className="text-lg font-semibold">
           {analyzedContent?.product_name || 'Untitled Product'}
         </h3>
         
-        <div className="space-y-1 text-xs md:text-sm text-gray-600">
-          <p className="mb-1">Code: {formatProductCode(analyzedContent?.product_code)}</p>
-          <p>Vendor: {analyzedContent?.vendor_uid || 'N/A'}</p>
-          <p>Purchase Date: {formatDate(analyzedContent?.purchase_date)}</p>
-          <p>Quantity: {analyzedContent?.quantity || 'N/A'}</p>
-          {analyzedContent?.notes && (
-            <p className="text-gray-500 italic">Notes: {analyzedContent.notes}</p>
-          )}
+        <div className="space-y-2 text-sm text-gray-600">
+          <p><span className="font-medium">PO #:</span> {analyzedContent?.product_code || 'N/A'}</p>
+          <p><span className="font-medium">Vendor:</span> {analyzedContent?.vendor_uid || 'N/A'}</p>
+          <p><span className="font-medium">Purchase Date:</span> {formatDate(analyzedContent?.purchase_date)}</p>
+          <p><span className="font-medium">Quantity:</span> {analyzedContent?.quantity || 'N/A'}</p>
           {analyzedContent?.parsing_metadata?.confidence < 0.7 && (
             <p className="text-yellow-600">
               Low confidence analysis ({Math.round(analyzedContent.parsing_metadata.confidence * 100)}%)
@@ -269,15 +266,15 @@ export const ProductGroup = ({
         </div>
         
         {hasError && (
-          <Alert variant="destructive" className="mt-3 mb-3">
+          <Alert variant="destructive" className="mt-3">
             <AlertDescription>
               {mainMedia.error_message || 'Processing error occurred'}
             </AlertDescription>
           </Alert>
         )}
         
-        <div className="flex gap-2 mt-4">
-          <Tabs defaultValue="edit" className="w-full">
+        <div className="flex justify-center gap-2 pt-2">
+          <Tabs defaultValue="edit" className="w-full max-w-xs">
             <TabsList className="grid grid-cols-4 gap-2">
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
