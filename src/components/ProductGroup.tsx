@@ -292,7 +292,7 @@ export const ProductGroup = ({
                       onClick={() => setIsViewerOpen(true)} 
                       className="py-2 text-black hover:text-black/80"
                     >
-                      <Eye className="w-4 h-4" />
+                      <Eye className="w-4 h-4 text-black" />
                     </TabsTrigger>
                   </TooltipTrigger>
                   <TooltipContent className="px-2 py-1 text-xs">View</TooltipContent>
@@ -307,7 +307,7 @@ export const ProductGroup = ({
                       onClick={() => onEdit(mainMedia)} 
                       className="py-2 text-black hover:text-black/80"
                     >
-                      <Pencil className="w-4 h-4" />
+                      <Pencil className="w-4 h-4 text-black" />
                     </TabsTrigger>
                   </TooltipTrigger>
                   <TooltipContent className="px-2 py-1 text-xs">Edit</TooltipContent>
@@ -322,7 +322,7 @@ export const ProductGroup = ({
                       onClick={handleReanalyze} 
                       className="py-2 text-black hover:text-black/80"
                     >
-                      <RotateCw className="w-4 h-4" />
+                      <RotateCw className="w-4 h-4 text-black" />
                     </TabsTrigger>
                   </TooltipTrigger>
                   <TooltipContent className="px-2 py-1 text-xs">Reanalyze</TooltipContent>
@@ -337,7 +337,7 @@ export const ProductGroup = ({
                       onClick={handleDelete} 
                       className="py-2 text-destructive hover:text-destructive/80"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4 text-destructive" />
                     </TabsTrigger>
                   </TooltipTrigger>
                   <TooltipContent className="px-2 py-1 text-xs">Delete</TooltipContent>
