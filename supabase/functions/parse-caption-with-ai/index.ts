@@ -32,13 +32,23 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // First update the message to processing state
+    // First log the initial state
+    await supabase.from('analysis_audit_log').insert({
+      message_id,
+      media_group_id,
+      event_type: 'ANALYSIS_STARTED',
+      old_state: 'initialized',
+      new_state: 'processing'
+    });
+
+    // Update message to processing state
     const { error: updateError } = await supabase
       .from('messages')
       .update({ 
         processing_state: 'processing',
         processing_started_at: new Date().toISOString(),
-        is_original_caption: true
+        is_original_caption: true,
+        group_caption_synced: false
       })
       .eq('id', message_id);
 
@@ -57,6 +67,18 @@ serve(async (req) => {
 
     console.log('Analysis completed:', { isAiAnalysis, analyzedContent });
 
+    // Log the analysis method
+    await supabase.from('analysis_audit_log').insert({
+      message_id,
+      media_group_id,
+      event_type: 'ANALYSIS_METHOD_SELECTED',
+      new_state: 'processing',
+      processing_details: {
+        method: isAiAnalysis ? 'ai' : 'manual',
+        confidence: analyzedContent.parsing_metadata?.confidence
+      }
+    });
+
     // Add delay for AI analysis to ensure proper syncing
     if (isAiAnalysis) {
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -70,11 +92,21 @@ serve(async (req) => {
         processing_state: 'completed',
         processing_completed_at: new Date().toISOString(),
         is_original_caption: true,
-        group_caption_synced: false // Set to false initially
+        group_caption_synced: false
       })
       .eq('id', message_id);
 
     if (sourceUpdateError) throw sourceUpdateError;
+
+    // Log successful analysis
+    await supabase.from('analysis_audit_log').insert({
+      message_id,
+      media_group_id,
+      event_type: 'ANALYSIS_COMPLETED',
+      old_state: 'processing',
+      new_state: 'completed',
+      analyzed_content: analyzedContent
+    });
 
     // If this is part of a media group, process the entire group
     if (media_group_id) {
@@ -82,6 +114,14 @@ serve(async (req) => {
       if (isAiAnalysis) {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
+
+      // Log group sync start
+      await supabase.from('analysis_audit_log').insert({
+        message_id,
+        media_group_id,
+        event_type: 'GROUP_SYNC_STARTED',
+        new_state: 'processing'
+      });
 
       const { error: groupError } = await supabase.rpc('process_media_group_analysis', {
         p_message_id: message_id,
@@ -102,7 +142,7 @@ serve(async (req) => {
 
       if (syncUpdateError) throw syncUpdateError;
 
-      // Log the group synchronization
+      // Log the group synchronization completion
       await supabase
         .from('analysis_audit_log')
         .insert({
@@ -139,6 +179,18 @@ serve(async (req) => {
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
         const supabase = createClient(supabaseUrl, supabaseKey);
         
+        // Log the error in audit log
+        await supabase.from('analysis_audit_log').insert({
+          message_id,
+          event_type: 'ERROR',
+          new_state: 'error',
+          processing_details: {
+            error_message: error.message,
+            timestamp: new Date().toISOString()
+          }
+        });
+
+        // Update message error state
         await supabase
           .from('messages')
           .update({ 
