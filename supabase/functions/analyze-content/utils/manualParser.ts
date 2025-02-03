@@ -1,6 +1,6 @@
 import { AnalyzedContent } from "../types.ts";
 
-export function parseManually(text: string): AnalyzedContent {
+export function parseCaption(text: string): AnalyzedContent {
   console.log("Starting manual parsing for:", text);
   const result: AnalyzedContent = {};
 

@@ -1,5 +1,5 @@
-export function parsePurchaseDate(dateStr: string): string | null {
-  if (dateStr.length < 5 || dateStr.length > 6) return null;
+export function parseDateString(dateStr: string): string | undefined {
+  if (dateStr.length < 5 || dateStr.length > 6) return undefined;
 
   // Pad with leading zero if 5 digits
   const paddedDate = dateStr.length === 5 ? '0' + dateStr : dateStr;
@@ -10,7 +10,7 @@ export function parsePurchaseDate(dateStr: string): string | null {
 
   // Validate date
   const date = new Date(`${year}-${month}-${day}`);
-  if (isNaN(date.getTime()) || date > new Date()) return null;
+  if (isNaN(date.getTime()) || date > new Date()) return undefined;
 
   return `${year}-${month}-${day}`;
 }

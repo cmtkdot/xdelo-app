@@ -51,7 +51,6 @@ serve(async (req) => {
       metadata: { correlation_id: correlationId }
     });
 
-    // Fetch message with maybeSingle() to handle no results gracefully
     const { data: message, error: messageError } = await supabase
       .from("messages")
       .select("*")
@@ -86,32 +85,6 @@ serve(async (req) => {
         caption_length: message.caption?.length,
         processing_state: message.processing_state
       }
-    });
-
-    // Update state to analyzing
-    const { error: updateError } = await supabase
-      .from("messages")
-      .update({
-        processing_state: "analyzing",
-        processing_started_at: new Date().toISOString(),
-      })
-      .eq("id", message_id);
-
-    if (updateError) {
-      logProcessingEvent({
-        event: "STATE_UPDATE_ERROR",
-        message_id,
-        error: updateError.message,
-        metadata: { correlation_id: correlationId }
-      });
-      throw updateError;
-    }
-
-    logProcessingEvent({
-      event: "STATE_UPDATED",
-      message_id,
-      state: "analyzing",
-      metadata: { correlation_id: correlationId }
     });
 
     // Analyze caption if present
@@ -154,6 +127,7 @@ serve(async (req) => {
           p_media_group_id: message.media_group_id,
           p_analyzed_content: analyzedContent,
           p_processing_completed_at: new Date().toISOString(),
+          p_correlation_id: correlationId
         }
       );
 

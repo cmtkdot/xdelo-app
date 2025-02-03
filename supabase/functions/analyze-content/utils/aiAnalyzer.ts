@@ -11,16 +11,7 @@ const SYSTEM_PROMPT = `You are a specialized product information extractor. Your
    - 6 digits (mmDDyy) -> YYYY-MM-DD
    - 5 digits (mDDyy) -> YYYY-MM-DD (add leading zero)
 5. Quantity: Number after 'x'
-6. Notes: Any additional info in parentheses or unstructured text
-
-Example Input: "Blue Dream #CHAD120523 x2"
-Example Output: {
-  "product_name": "Blue Dream",
-  "product_code": "CHAD120523",
-  "vendor_uid": "CHAD",
-  "purchase_date": "2023-12-05",
-  "quantity": 2
-}`;
+6. Notes: Any additional info in parentheses or unstructured text`;
 
 export async function analyzeCaption(caption: string): Promise<AnalyzedContent> {
   try {
@@ -45,7 +36,7 @@ export async function analyzeCaption(caption: string): Promise<AnalyzedContent> 
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: caption }
