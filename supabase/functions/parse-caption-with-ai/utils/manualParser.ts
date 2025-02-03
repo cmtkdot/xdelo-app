@@ -1,7 +1,6 @@
 import { ParsedContent } from "../types.ts";
-import { parseQuantity } from "./quantityParser.ts";
 
-export function manualParse(caption: string): ParsedContent {
+export async function manualParse(caption: string): Promise<ParsedContent> {
   console.log("Starting manual parsing for:", caption);
   const result: ParsedContent = {};
   const fallbacks_used: string[] = [];
@@ -56,12 +55,21 @@ export function manualParse(caption: string): ParsedContent {
         }
       }
     }
+  } else {
+    fallbacks_used.push('no_product_code');
   }
 
-  // Parse quantity using the enhanced quantityParser
-  const quantityResult = parseQuantity(caption);
-  if (quantityResult) {
-    result.quantity = quantityResult.value;
+  // Parse quantity
+  const quantityMatch = caption.match(/x\s*(\d+)(?!\d*\s*[a-zA-Z])/i);
+  if (quantityMatch) {
+    const quantity = parseInt(quantityMatch[1], 10);
+    if (!isNaN(quantity) && quantity > 0) {
+      result.quantity = quantity;
+    } else {
+      fallbacks_used.push('invalid_quantity');
+    }
+  } else {
+    fallbacks_used.push('no_quantity');
   }
 
   // Extract notes (text in parentheses or remaining text)
@@ -81,10 +89,27 @@ export function manualParse(caption: string): ParsedContent {
     }
   }
 
+  // Calculate confidence based on required fields and fallbacks
+  let confidence = 1.0;
+  
+  // Reduce confidence for missing required fields
+  if (!result.product_name || result.product_name === caption) confidence -= 0.3;
+  if (!result.product_code) confidence -= 0.2;
+  if (!result.vendor_uid) confidence -= 0.15;
+  if (!result.quantity) confidence -= 0.15;
+  if (!result.purchase_date) confidence -= 0.1;
+  
+  // Additional reduction for each fallback used
+  confidence -= (fallbacks_used.length * 0.05);
+  
+  // Ensure confidence stays between 0 and 1
+  confidence = Math.max(0, Math.min(1, confidence));
+
   result.parsing_metadata = {
     method: 'manual',
-    confidence: fallbacks_used.length ? 0.7 : 0.9,
-    fallbacks_used: fallbacks_used.length ? fallbacks_used : undefined
+    confidence,
+    fallbacks_used: fallbacks_used.length ? fallbacks_used : undefined,
+    timestamp: new Date().toISOString()
   };
 
   console.log("Manual parsing result:", result);
