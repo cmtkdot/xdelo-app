@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message_id, media_group_id, caption } = await req.json();
+    const { message_id, media_group_id, caption, force_reanalysis } = await req.json();
     console.log('Processing caption analysis for message:', { message_id, media_group_id, caption });
 
     if (!message_id || !caption) {
@@ -34,7 +34,7 @@ serve(async (req) => {
       message_id,
       media_group_id,
       event_type: 'ANALYSIS_STARTED',
-      old_state: 'initialized',
+      old_state: force_reanalysis ? 'reanalyzing' : 'initialized',
       new_state: 'processing'
     });
 
@@ -47,6 +47,29 @@ serve(async (req) => {
       })
       .eq('id', message_id);
 
+    // If this is part of a media group, ensure we're working with the right message
+    if (media_group_id) {
+      console.log('Checking media group for original caption:', media_group_id);
+      
+      const { data: groupMessages, error: groupError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('media_group_id', media_group_id)
+        .order('created_at', { ascending: true });
+
+      if (groupError) throw groupError;
+
+      // Prioritize JPEG images with captions
+      const originalMessage = groupMessages.find(msg => 
+        msg.mime_type === 'image/jpeg' && msg.caption
+      ) || groupMessages[0];
+
+      if (originalMessage && originalMessage.id !== message_id) {
+        console.log('Found better message for analysis:', originalMessage.id);
+        message_id = originalMessage.id;
+      }
+    }
+
     // Analyze caption
     const analyzedContent = await analyzeCaption(caption);
     console.log('Analysis completed:', analyzedContent);
@@ -55,7 +78,8 @@ serve(async (req) => {
     analyzedContent.parsing_metadata = {
       ...analyzedContent.parsing_metadata,
       analysis_timestamp: new Date().toISOString(),
-      caption_source: media_group_id ? 'media_group' : 'single_message'
+      caption_source: media_group_id ? 'media_group' : 'single_message',
+      force_reanalysis: force_reanalysis || false
     };
 
     // If this is part of a media group, process the entire group
@@ -101,7 +125,8 @@ serve(async (req) => {
           analyzed_content: analyzedContent,
           processing_state: 'completed',
           processing_completed_at: new Date().toISOString(),
-          group_caption_synced: true
+          group_caption_synced: true,
+          is_original_caption: true
         })
         .eq('id', message_id);
 
