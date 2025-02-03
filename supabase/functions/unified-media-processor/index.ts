@@ -40,7 +40,10 @@ serve(async (req) => {
       console.log('No media message found in update');
       return new Response(
         JSON.stringify({ message: 'No content to process' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200 
+        }
       );
     }
 
@@ -54,8 +57,15 @@ serve(async (req) => {
     if (!mediaItem) {
       console.log('No media found in message');
       return new Response(
-        JSON.stringify({ message: 'No media content found' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ 
+          success: true,
+          message: 'No media content found',
+          correlation_id: correlationId 
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200 
+        }
       );
     }
 
@@ -110,7 +120,7 @@ serve(async (req) => {
 
     console.log('Media uploaded successfully');
 
-    // Prepare message data
+    // Prepare message data with proper processing state based on caption
     const messageData = {
       telegram_message_id: message.message_id,
       media_group_id: message.media_group_id,
@@ -127,7 +137,7 @@ serve(async (req) => {
       telegram_data: { message },
       processing_state: hasValidCaption ? 'caption_ready' : 'initialized',
       is_original_caption: message.media_group_id && hasValidCaption ? true : false,
-      analyzed_content: existingAnalysis // Use existing analysis if available
+      analyzed_content: existingAnalysis
     };
 
     // Create or update message record
@@ -136,7 +146,7 @@ serve(async (req) => {
       .select('id, processing_state')
       .eq('file_unique_id', mediaItem.file_unique_id)
       .maybeSingle();
-
+    
     let currentMessageId;
     
     if (existingMessage) {
@@ -160,7 +170,7 @@ serve(async (req) => {
       currentMessageId = newMessage.id;
     }
 
-    // Only process caption if it exists, is not empty, and no existing analysis is available
+    // Only process caption if it exists and is not empty
     if (hasValidCaption && !existingAnalysis) {
       console.log('Processing new caption');
       
@@ -185,39 +195,7 @@ serve(async (req) => {
 
       if (!aiResponse.ok) {
         const errorText = await aiResponse.text();
-        console.error('Caption analysis failed:', errorText);
         throw new Error(`Caption analysis failed: ${errorText}`);
-      }
-
-      const { analyzed_content } = await aiResponse.json();
-
-      if (message.media_group_id) {
-        console.log('Syncing media group analysis');
-        
-        // Wait for any remaining media uploads
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        const { error: syncError } = await supabase.rpc('process_media_group_analysis', {
-          p_message_id: currentMessageId,
-          p_media_group_id: message.media_group_id,
-          p_analyzed_content: analyzed_content,
-          p_processing_completed_at: new Date().toISOString(),
-          p_correlation_id: correlationId
-        });
-
-        if (syncError) throw syncError;
-      } else {
-        // For single messages, just update the analysis
-        const { error: updateError } = await supabase
-          .from('messages')
-          .update({
-            analyzed_content,
-            processing_state: 'completed',
-            processing_completed_at: new Date().toISOString()
-          })
-          .eq('id', currentMessageId);
-
-        if (updateError) throw updateError;
       }
     }
 
@@ -229,7 +207,10 @@ serve(async (req) => {
         message: 'Media processed successfully',
         correlation_id: correlationId
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200 
+      }
     );
 
   } catch (error) {
