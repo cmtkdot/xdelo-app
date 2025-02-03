@@ -178,10 +178,15 @@ const ProductGallery = () => {
     if (!editItem) return;
 
     try {
+      // Convert AnalyzedContent to a plain object for Supabase
+      const analyzedContentJson = editItem.analyzed_content ? {
+        ...editItem.analyzed_content
+      } : null;
+
       const { error } = await supabase
         .from('messages')
         .update({
-          analyzed_content: editItem.analyzed_content
+          analyzed_content: analyzedContentJson
         })
         .eq('id', editItem.id);
 
