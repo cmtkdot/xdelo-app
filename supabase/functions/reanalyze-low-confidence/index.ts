@@ -52,6 +52,33 @@ serve(async (req) => {
       throw new Error('message_id and caption are required');
     }
 
+    console.log('Starting reanalysis:', { 
+      message_id, 
+      caption, 
+      correlation_id,
+      media_group_id 
+    });
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const { data: message, error: messageError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', message_id)
+      .maybeSingle();
+
+    if (messageError) {
+      console.error('Error fetching message:', messageError);
+      throw messageError;
+    }
+
+    if (!message) {
+      console.error('Message not found:', message_id);
+      throw new Error(`Message with ID ${message_id} not found`);
+    }
+
     // Updated confidence threshold to 0.5
     const isAutoTriggered = analyzed_content?.parsing_metadata?.confidence < 0.5 && 
                            analyzed_content?.parsing_metadata?.method === 'manual' &&
@@ -71,29 +98,6 @@ serve(async (req) => {
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    }
-
-    console.log('Starting reanalysis:', { 
-      message_id, 
-      caption, 
-      correlation_id,
-      media_group_id,
-      confidence: analyzed_content?.parsing_metadata?.confidence,
-      is_auto: isAutoTriggered
-    });
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    const { data: message, error: messageError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('id', message_id)
-      .single();
-
-    if (messageError) {
-      throw messageError;
     }
 
     await supabase
@@ -162,17 +166,8 @@ serve(async (req) => {
     
     let newAnalyzedContent;
     try {
-      // Attempt to parse the response, with better error handling
-      let parsedResponse;
-      try {
-        parsedResponse = JSON.parse(aiResponse);
-      } catch (parseError) {
-        console.error('JSON parse error:', parseError);
-        console.log('Failed to parse response:', aiResponse);
-        throw new Error(`Failed to parse AI response as JSON: ${parseError.message}`);
-      }
+      let parsedResponse = JSON.parse(aiResponse);
 
-      // Validate the parsed response has required fields
       if (!parsedResponse.product_name) {
         throw new Error('Parsed response missing required product_name field');
       }
