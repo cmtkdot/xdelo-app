@@ -56,7 +56,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4',
+          model: 'gpt-4o-mini',
           messages: [
             { 
               role: 'system', 
@@ -135,8 +135,8 @@ Important: Return ONLY a valid JSON object with these exact lowercase field name
       if (media_group_id) {
         const processingCompletedAt = new Date().toISOString();
         
-        // Call process_media_group_analysis with all required parameters
-        const { error: syncError } = await supabase.rpc('process_media_group_analysis', {
+        // Call the new direct function instead of the trigger function
+        const { error: syncError } = await supabase.rpc('process_media_group_analysis_direct', {
           p_message_id: message_id,
           p_media_group_id: media_group_id,
           p_analyzed_content: analyzedContent,
@@ -145,7 +145,7 @@ Important: Return ONLY a valid JSON object with these exact lowercase field name
         });
 
         if (syncError) {
-          console.error('Error in process_media_group_analysis:', syncError);
+          console.error('Error in process_media_group_analysis_direct:', syncError);
           throw syncError;
         }
 
