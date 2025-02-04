@@ -21,32 +21,61 @@ const Settings = () => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Fetch sync metrics
+  // Fetch sync metrics with proper error handling
   const { data: syncMetrics, refetch: refetchMetrics } = useQuery({
     queryKey: ['syncMetrics'],
     queryFn: async () => {
-      const { data: metrics, error } = await supabase
-        .from('glide_messages_sync_metrics')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      try {
+        // Fetch latest metrics
+        const { data: metrics, error: metricsError } = await supabase
+          .from('glide_messages_sync_metrics')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-      if (error) throw error;
+        if (metricsError) {
+          console.error('Error fetching metrics:', metricsError);
+          throw metricsError;
+        }
 
-      const { count } = await supabase
-        .from('glide_messages_sync_queue')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending')
-        .single();
+        // Fetch pending items count with proper headers
+        const { count, error: countError } = await supabase
+          .from('glide_messages_sync_queue')
+          .select('*', { 
+            count: 'exact', 
+            head: true 
+          })
+          .eq('status', 'pending')
+          .single();
 
-      return {
-        total_messages: metrics?.total_messages || 0,
-        successful_messages: metrics?.successful_messages || 0,
-        failed_messages: metrics?.failed_messages || 0,
-        last_sync: metrics?.completed_at,
-        pending_items: count || 0
-      } as SyncMetrics;
+        if (countError) {
+          console.error('Error fetching pending count:', countError);
+          throw countError;
+        }
+
+        return {
+          total_messages: metrics?.total_messages || 0,
+          successful_messages: metrics?.successful_messages || 0,
+          failed_messages: metrics?.failed_messages || 0,
+          last_sync: metrics?.completed_at,
+          pending_items: count || 0
+        } as SyncMetrics;
+      } catch (error) {
+        console.error('Error in syncMetrics query:', error);
+        toast({
+          title: "Error fetching metrics",
+          description: "Failed to fetch sync metrics. Please try again.",
+          variant: "destructive",
+        });
+        return {
+          total_messages: 0,
+          successful_messages: 0,
+          failed_messages: 0,
+          last_sync: null,
+          pending_items: 0
+        } as SyncMetrics;
+      }
     },
     refetchInterval: 5000 // Refresh every 5 seconds
   });
