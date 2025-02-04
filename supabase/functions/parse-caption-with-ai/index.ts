@@ -37,7 +37,6 @@ const SYSTEM_PROMPT = `You are a specialized product information extractor. Extr
    - Text in parentheses
    - Any additional unstructured text
    - Example: "(indoor grown)" -> "indoor grown"
-   - Include ANY information not fitting in other fields
 
 Return ONLY valid JSON with these exact fields:
 {
@@ -129,7 +128,10 @@ serve(async (req) => {
     }
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      // Ensure URL is properly encoded
+      const openAIEndpoint = new URL('https://api.openai.com/v1/chat/completions');
+      
+      const response = await fetch(openAIEndpoint.toString(), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${openAIApiKey}`,
