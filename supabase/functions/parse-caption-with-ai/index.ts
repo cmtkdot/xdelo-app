@@ -18,6 +18,54 @@ serve(async (req) => {
 
     console.log('Processing request:', { caption, message_id, media_group_id, correlation_id });
 
+    // First verify this is the original caption holder for the media group
+    if (message_id) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Missing Supabase credentials');
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      // Check if this message is the original caption holder
+      const { data: message, error: messageError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', message_id)
+        .single();
+
+      if (messageError) throw messageError;
+
+      // If this is part of a media group, verify it's the original caption holder
+      if (media_group_id && (!message.is_original_caption || !message.caption)) {
+        console.log('Skipping analysis - not original caption holder:', {
+          message_id,
+          media_group_id,
+          is_original_caption: message.is_original_caption
+        });
+        
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Message is not the original caption holder',
+            correlation_id
+          }),
+          { 
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
+
+      // Use the message's caption if none was provided
+      if (!caption && message.caption) {
+        console.log('Using caption from message:', message.caption);
+        caption = message.caption;
+      }
+    }
+
     // Handle empty or invalid caption
     if (!caption || typeof caption !== 'string' || caption.trim() === '') {
       console.log('Empty or invalid caption received:', { caption });
@@ -76,7 +124,16 @@ Important rules:
 3. Convert any numbers in quantity to actual number type
 4. Format dates as YYYY-MM-DD
 5. Ensure product_name is always present
-6. Move ANY information not fitting the specific fields into notes`
+6. Move ANY information not fitting the specific fields into notes
+7. Return ONLY valid JSON with these exact fields:
+{
+  "product_name": string,
+  "product_code": string,
+  "vendor_uid": string,
+  "purchase_date": string,
+  "quantity": number,
+  "notes": string
+}`
             },
             { role: 'user', content: caption }
           ],
@@ -90,33 +147,25 @@ Important rules:
       }
 
       const data = await response.json();
-      // Extract just the content from the AI response
       const aiContent = data.choices[0].message.content;
       
-      // Try to parse the content as JSON, handling potential formatting
-      let aiResult;
       try {
         // First try direct parsing
-        aiResult = JSON.parse(aiContent);
+        analyzedContent = JSON.parse(aiContent);
+        console.log('AI analysis result:', analyzedContent);
       } catch (e) {
         // If direct parsing fails, try to extract JSON from markdown
         const jsonMatch = aiContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
         if (jsonMatch) {
-          aiResult = JSON.parse(jsonMatch[1]);
+          analyzedContent = JSON.parse(jsonMatch[1]);
+          console.log('Extracted JSON from markdown:', analyzedContent);
         } else {
           throw new Error('Failed to parse AI response as JSON');
         }
       }
-      
-      console.log('AI analysis result:', aiResult);
 
       analyzedContent = {
-        product_name: aiResult.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
-        product_code: aiResult.product_code,
-        vendor_uid: aiResult.vendor_uid,
-        purchase_date: aiResult.purchase_date,
-        quantity: typeof aiResult.quantity === 'number' ? Math.floor(aiResult.quantity) : null,
-        notes: aiResult.notes || '',
+        ...analyzedContent,
         parsing_metadata: {
           method: 'ai',
           confidence: 0.9,
