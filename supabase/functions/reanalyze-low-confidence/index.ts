@@ -25,17 +25,54 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // First, call the parse-caption-with-ai function
-    const { data: parseResult, error: parseError } = await supabase.functions.invoke('parse-caption-with-ai', {
-      body: { message_id, media_group_id, caption }
-    });
+    // Get the message to reanalyze if no caption provided
+    let captionToAnalyze = caption;
+    if (!captionToAnalyze) {
+      const { data: message, error: fetchError } = await supabase
+        .from('messages')
+        .select('caption')
+        .eq('id', message_id)
+        .single();
 
-    if (parseError) {
-      console.error('Error parsing caption:', parseError);
-      throw parseError;
+      if (fetchError) {
+        console.error('Error fetching message:', fetchError);
+        throw fetchError;
+      }
+
+      if (!message) {
+        throw new Error('Message not found');
+      }
+
+      captionToAnalyze = message.caption;
     }
 
+    // Call the parse-caption-with-ai function
+    const parseResponse = await fetch(`${supabaseUrl}/functions/v1/parse-caption-with-ai`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message_id,
+        media_group_id,
+        caption: captionToAnalyze,
+        correlation_id
+      }),
+    });
+
+    if (!parseResponse.ok) {
+      const errorText = await parseResponse.text();
+      console.error('Error from parse-caption-with-ai:', errorText);
+      throw new Error(`Failed to parse caption: ${errorText}`);
+    }
+
+    const parseResult = await parseResponse.json();
     console.log('Caption parsed successfully:', parseResult);
+
+    if (!parseResult.analyzed_content) {
+      throw new Error('No analyzed content returned from parser');
+    }
 
     // Now use the process_media_group_content function
     const { error: processError } = await supabase.rpc('process_media_group_content', {
@@ -54,7 +91,9 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ 
+        success: true,
         message: 'Reanalysis completed successfully',
+        analyzed_content: parseResult.analyzed_content,
         correlation_id: correlation_id
       }),
       { 
@@ -70,12 +109,14 @@ serve(async (req) => {
     
     return new Response(
       JSON.stringify({ 
+        success: false,
         error: error.message,
+        correlation_id: crypto.randomUUID(),
         timestamp: new Date().toISOString()
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
+        status: 500
       }
     );
   }
