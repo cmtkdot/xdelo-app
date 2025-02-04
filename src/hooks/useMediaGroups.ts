@@ -20,6 +20,8 @@ export const useMediaGroups = (page: number, filters: FilterValues) => {
             ...filters,
             dateFrom: filters.dateFrom?.toISOString(),
             dateTo: filters.dateTo?.toISOString(),
+            dateField: filters.dateField || 'purchase_date', // Ensure purchase_date is used if not specified
+            sortOrder: filters.sortOrder || 'desc', // Ensure desc (newest first) is used if not specified
           },
         },
       });

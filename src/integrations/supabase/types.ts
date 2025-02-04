@@ -241,34 +241,43 @@ export type Database = {
       }
       webhook_logs: {
         Row: {
+          analyzed_content_hash: string | null
           created_at: string | null
           error_message: string | null
           event_type: string
           id: string
           message_id: string | null
+          processing_state: string | null
           request_payload: Json | null
           response_payload: Json | null
           status_code: number | null
+          trigger_event: string | null
         }
         Insert: {
+          analyzed_content_hash?: string | null
           created_at?: string | null
           error_message?: string | null
           event_type: string
           id?: string
           message_id?: string | null
+          processing_state?: string | null
           request_payload?: Json | null
           response_payload?: Json | null
           status_code?: number | null
+          trigger_event?: string | null
         }
         Update: {
+          analyzed_content_hash?: string | null
           created_at?: string | null
           error_message?: string | null
           event_type?: string
           id?: string
           message_id?: string | null
+          processing_state?: string | null
           request_payload?: Json | null
           response_payload?: Json | null
           status_code?: number | null
+          trigger_event?: string | null
         }
         Relationships: [
           {
