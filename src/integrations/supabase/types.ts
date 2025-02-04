@@ -45,6 +45,317 @@ export type Database = {
         }
         Relationships: []
       }
+      glide_accounts: {
+        Row: {
+          account_name: string | null
+          account_uid: string | null
+          accounts_sync_json: Json | null
+          client_type: string | null
+          created_at: string | null
+          date_added: string | null
+          glide_account_row_id: string | null
+          id: string
+          photo_url: string | null
+          rep_email: string | null
+          updated_at: string | null
+          user_email: string | null
+          user_id: string | null
+        }
+        Insert: {
+          account_name?: string | null
+          account_uid?: string | null
+          accounts_sync_json?: Json | null
+          client_type?: string | null
+          created_at?: string | null
+          date_added?: string | null
+          glide_account_row_id?: string | null
+          id?: string
+          photo_url?: string | null
+          rep_email?: string | null
+          updated_at?: string | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          account_name?: string | null
+          account_uid?: string | null
+          accounts_sync_json?: Json | null
+          client_type?: string | null
+          created_at?: string | null
+          date_added?: string | null
+          glide_account_row_id?: string | null
+          id?: string
+          photo_url?: string | null
+          rep_email?: string | null
+          updated_at?: string | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      glide_configuration: {
+        Row: {
+          api_endpoint: string | null
+          api_key: string | null
+          app_id: string | null
+          created_at: string | null
+          field_mappings: Json | null
+          glide_table_name: string
+          id: string
+          is_active: boolean | null
+          supabase_table_name: string
+          supported_operations: string[] | null
+          table_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          api_endpoint?: string | null
+          api_key?: string | null
+          app_id?: string | null
+          created_at?: string | null
+          field_mappings?: Json | null
+          glide_table_name: string
+          id?: string
+          is_active?: boolean | null
+          supabase_table_name: string
+          supported_operations?: string[] | null
+          table_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          api_endpoint?: string | null
+          api_key?: string | null
+          app_id?: string | null
+          created_at?: string | null
+          field_mappings?: Json | null
+          glide_table_name?: string
+          id?: string
+          is_active?: boolean | null
+          supabase_table_name?: string
+          supported_operations?: string[] | null
+          table_id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_products: {
+        Row: {
+          account_row_id: string | null
+          add_note: boolean | null
+          category: string | null
+          cost: number | null
+          cost_update: number | null
+          created_at: string | null
+          email_user: string | null
+          fronted: boolean | null
+          glide_product_row_id: string | null
+          id: string
+          last_edited_date: string | null
+          leave_no: boolean | null
+          miscellaneous_items: boolean | null
+          more_units_behind: boolean | null
+          po_date: string | null
+          po_uid: string | null
+          product_image_url: string | null
+          product_name: string | null
+          product_purchase_date: string | null
+          product_row_id: string | null
+          products_sync_json: Json | null
+          purchase_notes: string | null
+          purchase_order_row_id: string | null
+          rename: boolean | null
+          rename_product: boolean | null
+          samples: boolean | null
+          samples_or_fronted: boolean | null
+          sheet21_pics: string | null
+          terms_fronted_product: string | null
+          timestamp_submission: string | null
+          total_qty_purchased: number | null
+          total_units_behind_sample: number | null
+          updated_at: string | null
+          user_id: string | null
+          vendor_product_name: string | null
+          vendor_uid: string | null
+          vpay_row_id: string | null
+        }
+        Insert: {
+          account_row_id?: string | null
+          add_note?: boolean | null
+          category?: string | null
+          cost?: number | null
+          cost_update?: number | null
+          created_at?: string | null
+          email_user?: string | null
+          fronted?: boolean | null
+          glide_product_row_id?: string | null
+          id?: string
+          last_edited_date?: string | null
+          leave_no?: boolean | null
+          miscellaneous_items?: boolean | null
+          more_units_behind?: boolean | null
+          po_date?: string | null
+          po_uid?: string | null
+          product_image_url?: string | null
+          product_name?: string | null
+          product_purchase_date?: string | null
+          product_row_id?: string | null
+          products_sync_json?: Json | null
+          purchase_notes?: string | null
+          purchase_order_row_id?: string | null
+          rename?: boolean | null
+          rename_product?: boolean | null
+          samples?: boolean | null
+          samples_or_fronted?: boolean | null
+          sheet21_pics?: string | null
+          terms_fronted_product?: string | null
+          timestamp_submission?: string | null
+          total_qty_purchased?: number | null
+          total_units_behind_sample?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          vendor_product_name?: string | null
+          vendor_uid?: string | null
+          vpay_row_id?: string | null
+        }
+        Update: {
+          account_row_id?: string | null
+          add_note?: boolean | null
+          category?: string | null
+          cost?: number | null
+          cost_update?: number | null
+          created_at?: string | null
+          email_user?: string | null
+          fronted?: boolean | null
+          glide_product_row_id?: string | null
+          id?: string
+          last_edited_date?: string | null
+          leave_no?: boolean | null
+          miscellaneous_items?: boolean | null
+          more_units_behind?: boolean | null
+          po_date?: string | null
+          po_uid?: string | null
+          product_image_url?: string | null
+          product_name?: string | null
+          product_purchase_date?: string | null
+          product_row_id?: string | null
+          products_sync_json?: Json | null
+          purchase_notes?: string | null
+          purchase_order_row_id?: string | null
+          rename?: boolean | null
+          rename_product?: boolean | null
+          samples?: boolean | null
+          samples_or_fronted?: boolean | null
+          sheet21_pics?: string | null
+          terms_fronted_product?: string | null
+          timestamp_submission?: string | null
+          total_qty_purchased?: number | null
+          total_units_behind_sample?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          vendor_product_name?: string | null
+          vendor_uid?: string | null
+          vpay_row_id?: string | null
+        }
+        Relationships: []
+      }
+      glide_purchase_orders: {
+        Row: {
+          account_row_id: string | null
+          created_at: string | null
+          glide_purchase_order_row_id: string | null
+          id: string
+          last_edited_date: string | null
+          payment_date: string | null
+          pdf_created_on: string | null
+          pdf_link: string | null
+          po_date: string | null
+          purchase_order_uid: string | null
+          purchase_orders_sync_json: Json | null
+          shortlink: string | null
+          updated_at: string | null
+          user_id: string | null
+          vpay_row_id: string | null
+        }
+        Insert: {
+          account_row_id?: string | null
+          created_at?: string | null
+          glide_purchase_order_row_id?: string | null
+          id?: string
+          last_edited_date?: string | null
+          payment_date?: string | null
+          pdf_created_on?: string | null
+          pdf_link?: string | null
+          po_date?: string | null
+          purchase_order_uid?: string | null
+          purchase_orders_sync_json?: Json | null
+          shortlink?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          vpay_row_id?: string | null
+        }
+        Update: {
+          account_row_id?: string | null
+          created_at?: string | null
+          glide_purchase_order_row_id?: string | null
+          id?: string
+          last_edited_date?: string | null
+          payment_date?: string | null
+          pdf_created_on?: string | null
+          pdf_link?: string | null
+          po_date?: string | null
+          purchase_order_uid?: string | null
+          purchase_orders_sync_json?: Json | null
+          shortlink?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          vpay_row_id?: string | null
+        }
+        Relationships: []
+      }
+      glide_sync_queue: {
+        Row: {
+          correlation_id: string | null
+          created_at: string | null
+          id: string
+          last_error: string | null
+          message_id: string | null
+          processed_at: string | null
+          retry_count: number | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          correlation_id?: string | null
+          created_at?: string | null
+          id?: string
+          last_error?: string | null
+          message_id?: string | null
+          processed_at?: string | null
+          retry_count?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          correlation_id?: string | null
+          created_at?: string | null
+          id?: string
+          last_error?: string | null
+          message_id?: string | null
+          processed_at?: string | null
+          retry_count?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "glide_sync_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
