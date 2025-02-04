@@ -128,21 +128,36 @@ export const ProductGroup = ({
 
   const handleDelete = async () => {
     try {
+      console.log('Attempting to delete:', {
+        id: mainMedia.id,
+        media_group_id: mainMedia.media_group_id
+      });
+
       if (mainMedia.media_group_id) {
-        // Use the new delete_media_group function for group deletion
-        const { error } = await supabase.rpc('delete_media_group', {
+        console.log('Deleting media group:', mainMedia.media_group_id);
+        const { data, error } = await supabase.rpc('delete_media_group', {
           p_media_group_id: mainMedia.media_group_id
         });
 
-        if (error) throw error;
+        if (error) {
+          console.error('Error deleting media group:', error);
+          throw error;
+        }
+
+        console.log('Media group deleted successfully:', data);
       } else {
-        // Delete single message
+        console.log('Deleting single message:', mainMedia.id);
         const { error } = await supabase
           .from('messages')
           .delete()
           .eq('id', mainMedia.id);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Error deleting single message:', error);
+          throw error;
+        }
+
+        console.log('Single message deleted successfully');
       }
 
       toast({
@@ -153,7 +168,7 @@ export const ProductGroup = ({
       console.error("Error deleting product:", error);
       toast({
         title: "Error",
-        description: "Failed to delete product",
+        description: "Failed to delete product. Please try again.",
         variant: "destructive",
       });
     }
