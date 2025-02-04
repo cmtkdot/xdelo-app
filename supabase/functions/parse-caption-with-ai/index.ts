@@ -18,6 +18,7 @@ serve(async (req) => {
     console.log('Processing request:', { caption, message_id, media_group_id, correlation_id });
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     if (!caption || typeof caption !== 'string' || caption.trim() === '') {
       console.log('Empty or invalid caption received:', { caption });
       return new Response(
@@ -45,6 +46,8 @@ serve(async (req) => {
     // If manual parsing confidence is low, try AI analysis
     if (confidence < 0.75) {
 =======
+=======
+>>>>>>> Stashed changes
     let analyzedContent = null;
     let parsingMethod = 'pending';
     let confidence = 0;
@@ -113,6 +116,9 @@ serve(async (req) => {
 
     // If we have caption and manual parsing confidence is low, try AI analysis
     if (caption && confidence < 0.75) {
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
       console.log('Low confidence in manual parsing, attempting AI analysis:', confidence);
       const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
@@ -140,6 +146,7 @@ serve(async (req) => {
 6. Notes: Text in parentheses or remaining info
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 Important: Return ONLY a valid JSON object with these exact lowercase field names:
 {
   "product_name": "string",
@@ -150,6 +157,8 @@ Important: Return ONLY a valid JSON object with these exact lowercase field name
   "notes": "string"
 }`
 =======
+=======
+>>>>>>> Stashed changes
 Important rules:
 1. Use EXACTLY these lowercase field names
 2. Put ANY additional information into the notes field
@@ -157,6 +166,9 @@ Important rules:
 4. Format dates as YYYY-MM-DD
 5. Ensure product_name is always present
 6. Move ANY information not fitting the specific fields into notes`
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
             },
             { role: 'user', content: caption }
@@ -171,6 +183,7 @@ Important rules:
       }
 
       const data = await response.json();
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
       console.log('Raw AI response:', data.choices[0].message.content);
       
@@ -261,6 +274,11 @@ Important rules:
       const aiResult = JSON.parse(data.choices[0].message.content);
       console.log('AI analysis result:', aiResult);
 
+=======
+      const aiResult = JSON.parse(data.choices[0].message.content);
+      console.log('AI analysis result:', aiResult);
+
+>>>>>>> Stashed changes
       analyzedContent = {
         product_name: aiResult.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
         product_code: aiResult.product_code,
