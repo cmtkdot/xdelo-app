@@ -111,10 +111,7 @@ export interface MessageSyncResult {
   };
 }
 
-// Base type for JSON data
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-// Processing metadata for analysis tracking
 
 export interface ProcessingMetadata {
   correlation_id: string;
@@ -132,7 +129,6 @@ export interface ProcessingMetadata {
   retry_count?: number;
 }
 
-// Type guard for JsonValue
 export function isJsonValue(value: unknown): value is JsonValue {
   if (value === null) return true;
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return true;
@@ -143,7 +139,6 @@ export function isJsonValue(value: unknown): value is JsonValue {
   return false;
 }
 
-// Convert ProcessingMetadata to JsonValue
 export function processingMetadataToJson(metadata: ProcessingMetadata): JsonValue {
   return {
     correlation_id: metadata.correlation_id,
@@ -162,7 +157,6 @@ export function processingMetadataToJson(metadata: ProcessingMetadata): JsonValu
   };
 }
 
-// Convert ParsingMetadata to JsonValue
 export function parsingMetadataToJson(metadata: ParsingMetadata): JsonValue {
   return {
     method: metadata.method,
@@ -173,7 +167,6 @@ export function parsingMetadataToJson(metadata: ParsingMetadata): JsonValue {
   };
 }
 
-// Convert AnalyzedContent to JsonValue
 export function analyzedContentToJson(analyzed: AnalyzedContent): JsonValue {
   if (!analyzed) return null;
   
