@@ -44,47 +44,14 @@ const Settings = () => {
     try {
       setIsSyncing(true);
       
-      // Get all completed messages that haven't been synced
-      const { data: messages, error: fetchError } = await supabase
-        .from('messages')
-        .select('id')
-        .eq('processing_state', 'completed')
-        .is('glide_sync_status', null);
+      // Call the function to process Glide sync
+      const { error: functionError } = await supabase.functions.invoke('process-glide-sync-queue');
       
-      if (fetchError) throw fetchError;
-
-      if (!messages || messages.length === 0) {
-        toast({
-          title: "No messages to sync",
-          description: "All completed messages are already synced.",
-        });
-        return;
-      }
-
-      // Queue messages for sync
-      const { error: queueError } = await supabase
-        .from('glide_messages_sync_queue')
-        .insert(
-          messages.map(msg => ({
-            message_id: msg.id,
-            status: 'pending',
-            correlation_id: crypto.randomUUID()
-          }))
-        );
-
-      if (queueError) throw queueError;
-
-      // Update messages sync status
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({ glide_sync_status: 'pending' })
-        .in('id', messages.map(m => m.id));
-
-      if (updateError) throw updateError;
+      if (functionError) throw functionError;
 
       toast({
         title: "Sync initiated",
-        description: `Queued ${messages.length} messages for sync with Glide.`,
+        description: "Messages are being synced with Glide. Check the logs for details.",
       });
 
     } catch (error: any) {

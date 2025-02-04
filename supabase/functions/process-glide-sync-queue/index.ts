@@ -5,10 +5,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+interface GlideResponse {
+  rows?: Array<Record<string, any>>;
+  next?: string;
+}
+
 interface GlideConfig {
-  glide_table_name: string;
-  api_endpoint: string;
-  auth_token: string;
+  appID: string;
+  tableName: string;
   field_mappings: Record<string, string>;
 }
 
@@ -24,9 +28,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    console.log('Starting sync queue processing...')
-
-    // Get active Glide configuration
+    // Get Glide configuration
     const { data: config, error: configError } = await supabaseClient
       .from('glide_messages_configuration')
       .select('*')
@@ -37,40 +39,60 @@ Deno.serve(async (req) => {
       throw new Error('No active Glide configuration found')
     }
 
-    // Get pending queue items (up to 500)
+    // Fetch current Glide data
+    const glideResponse = await fetch('https://api.glideapp.io/api/function/queryTables', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.auth_token}`,
+      },
+      body: JSON.stringify({
+        appID: config.glide_table_name.split('-')[2],
+        queries: [{
+          tableName: config.glide_table_name,
+          utc: true
+        }]
+      })
+    })
+
+    if (!glideResponse.ok) {
+      throw new Error(`Glide API error: ${await glideResponse.text()}`)
+    }
+
+    const glideData: GlideResponse = await glideResponse.json()
+    const glideRows = glideData.rows || []
+
+    // Create a map of Glide rows by ID for quick lookup
+    const glideRowsMap = new Map(
+      glideRows.map(row => [row[config.field_mappings['id']], row])
+    )
+
+    // Process pending queue items
     const { data: queueItems, error: queueError } = await supabaseClient
       .from('glide_messages_sync_queue')
       .select('*, messages(*)')
       .eq('status', 'pending')
-      .order('created_at', { ascending: true })
       .limit(500)
 
     if (queueError) {
       throw new Error(`Failed to fetch queue items: ${queueError.message}`)
     }
 
-    if (!queueItems || queueItems.length === 0) {
-      console.log('No pending items in sync queue')
-      return new Response(JSON.stringify({ success: true, processed: 0 }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    console.log(`Processing ${queueItems.length} queue items...`)
+    const mutations = []
     let successCount = 0
     let failureCount = 0
-    const batchId = crypto.randomUUID()
 
-    for (const item of queueItems) {
+    for (const item of queueItems || []) {
       try {
-        if (!item.messages) {
-          throw new Error('Message not found')
-        }
+        const message = item.messages
+        if (!message) continue
 
-        // Map message data to Glide fields
+        const glideRow = glideRowsMap.get(message.id)
         const mappedData: Record<string, any> = {}
+
+        // Map message data to Glide columns
         for (const [glideField, messageField] of Object.entries(config.field_mappings)) {
-          let value = item.messages[messageField]
+          let value = message[messageField]
           
           // Handle special JSON fields
           if (messageField === 'analyzed_content' || messageField === 'telegram_data') {
@@ -80,86 +102,67 @@ Deno.serve(async (req) => {
           mappedData[glideField] = value
         }
 
-        // Send to Glide API
-        const response = await fetch(config.api_endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.auth_token}`,
-          },
-          body: JSON.stringify({
-            data: mappedData
-          }),
+        // Determine operation type
+        const operation = glideRow ? 'set-columns-in-row' : 'add-row-to-table'
+        
+        mutations.push({
+          kind: operation,
+          tableName: config.glide_table_name,
+          columnValues: mappedData,
+          ...(glideRow && { rowID: glideRow[config.field_mappings['id']] })
         })
-
-        if (!response.ok) {
-          throw new Error(`Glide API error: ${await response.text()}`)
-        }
-
-        const glideResponse = await response.json()
 
         // Update sync status
         await supabaseClient
-          .from('glide_messages_sync_queue')
-          .update({
-            status: 'completed',
-            processed_at: new Date().toISOString(),
-          })
-          .eq('id', item.id)
-
-        await supabaseClient
           .from('messages')
           .update({
-            glide_sync_status: 'completed',
-            glide_sync_json: glideResponse,
-            last_synced_at: new Date().toISOString(),
+            glide_sync_data: glideRow || {},
+            glide_last_sync_at: new Date().toISOString(),
+            glide_row_id: glideRow?.[config.field_mappings['id']] || null
           })
-          .eq('id', item.messages.id)
+          .eq('id', message.id)
 
         successCount++
       } catch (error) {
         console.error('Sync error:', error)
-        
-        // Update error status
-        await supabaseClient
-          .from('glide_messages_sync_queue')
-          .update({
-            status: 'error',
-            last_error: error.message,
-            retry_count: (item.retry_count || 0) + 1,
-          })
-          .eq('id', item.id)
-
-        await supabaseClient
-          .from('messages')
-          .update({
-            glide_sync_status: 'error',
-          })
-          .eq('id', item.messages?.id)
-
         failureCount++
       }
     }
 
-    // Log sync metrics
-    await supabaseClient
-      .from('glide_messages_sync_metrics')
-      .insert({
-        sync_batch_id: batchId,
-        total_messages: queueItems.length,
-        successful_messages: successCount,
-        failed_messages: failureCount,
-        completed_at: new Date().toISOString(),
+    // Send mutations to Glide if any
+    if (mutations.length > 0) {
+      const response = await fetch('https://api.glideapp.io/api/function/mutateTables', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.auth_token}`,
+        },
+        body: JSON.stringify({
+          appID: config.glide_table_name.split('-')[2],
+          mutations
+        })
       })
 
-    console.log(`Sync completed. Success: ${successCount}, Failed: ${failureCount}`)
+      if (!response.ok) {
+        throw new Error(`Glide mutation error: ${await response.text()}`)
+      }
+    }
+
+    // Update queue items status
+    await supabaseClient
+      .from('glide_messages_sync_queue')
+      .update({
+        status: 'completed',
+        processed_at: new Date().toISOString()
+      })
+      .in('id', queueItems?.map(item => item.id) || [])
 
     return new Response(
       JSON.stringify({
         success: true,
-        processed: queueItems.length,
+        processed: queueItems?.length || 0,
         successful: successCount,
-        failed: failureCount,
+        failed: failureCount
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
