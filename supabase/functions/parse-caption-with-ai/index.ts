@@ -105,7 +105,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: 'gpt-4',
           messages: [
             { 
               role: 'system', 
@@ -117,17 +117,19 @@ serve(async (req) => {
 5. Quantity: Look for numbers after 'x' or in units
 6. Notes: Text in parentheses or remaining info
 
-Important rules:
-1. Use EXACTLY these lowercase field names
-2. Put ANY additional information into the notes field
-3. Convert any numbers in quantity to actual number type
-4. Format dates as YYYY-MM-DD
-5. Ensure product_name is always present
-6. Move ANY information not fitting the specific fields into notes`
+Important: Return ONLY valid JSON with these exact lowercase field names. Example:
+{
+  "product_name": "string",
+  "product_code": "string",
+  "vendor_uid": "string",
+  "purchase_date": "YYYY-MM-DD",
+  "quantity": number,
+  "notes": "string"
+}`
             },
             { role: 'user', content: caption }
           ],
-          temperature: 0.3,
+          temperature: 0.1,
           max_tokens: 500
         }),
       });
@@ -200,35 +202,63 @@ Important rules:
       }
 
       try {
-        // Ensure valid URL format and handle potential URL errors
         const supabaseUrlObj = new URL(supabaseUrl);
         const supabase = createClient(supabaseUrlObj.toString(), supabaseKey);
 
-        // Process media group if needed
-        if (media_group_id) {
-          await supabase.rpc('process_media_group_analysis', {
-            p_message_id: message_id,
-            p_media_group_id: media_group_id,
-            p_analyzed_content: analyzedContent,
-            p_processing_completed_at: new Date().toISOString(),
-            p_correlation_id: correlation_id
-          });
-        } else {
-          // Update single message
-          const { error: updateError } = await supabase
-            .from('messages')
-            .update({
-              analyzed_content: analyzedContent,
-              processing_state: 'completed',
-              processing_completed_at: new Date().toISOString()
-            })
-            .eq('id', message_id);
+        // First check if this message should be processed
+        const { data: messageData, error: messageError } = await supabase
+          .from('messages')
+          .select('caption, media_group_id, is_original_caption')
+          .eq('id', message_id)
+          .single();
 
-          if (updateError) throw updateError;
+        if (messageError) throw messageError;
+
+        // Only process if this is a caption message or part of a media group that needs syncing
+        if (messageData.caption || (media_group_id && messageData.is_original_caption)) {
+          if (media_group_id) {
+            console.log('Processing media group analysis:', { media_group_id, message_id });
+            // Process media group analysis
+            await supabase.rpc('process_media_group_analysis', {
+              p_message_id: message_id,
+              p_media_group_id: media_group_id,
+              p_analyzed_content: analyzedContent,
+              p_processing_state: analyzedContent.parsing_metadata.method === 'pending' ? 'pending' : 'completed',
+              p_correlation_id: correlation_id
+            });
+
+            // Log the sync attempt
+            await supabase.from('analysis_audit_log').insert({
+              message_id,
+              media_group_id,
+              event_type: 'GROUP_ANALYSIS_SYNC',
+              analyzed_content: analyzedContent,
+              processing_details: {
+                correlation_id,
+                parsing_method: parsingMethod,
+                confidence,
+                timestamp: new Date().toISOString()
+              }
+            });
+          } else {
+            // Update single message
+            const { error: updateError } = await supabase
+              .from('messages')
+              .update({
+                analyzed_content: analyzedContent,
+                processing_state: analyzedContent.parsing_metadata.method === 'pending' ? 'pending' : 'completed',
+                processing_completed_at: new Date().toISOString()
+              })
+              .eq('id', message_id);
+
+            if (updateError) throw updateError;
+          }
+        } else {
+          console.log('Skipping update - message has no caption and is not original caption holder:', { message_id });
         }
-      } catch (urlError) {
-        console.error('Error initializing Supabase client:', urlError);
-        throw new Error('Failed to initialize Supabase client');
+      } catch (error) {
+        console.error('Error updating database:', error);
+        throw error;
       }
     }
 
