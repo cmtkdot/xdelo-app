@@ -14,6 +14,10 @@ interface SyncMetrics {
   errors: any[];
 }
 
+const BATCH_SIZE = 100;
+const MAX_RETRIES = 3;
+const RATE_LIMIT_DELAY = 100; // ms between requests
+
 // Handle CORS preflight requests
 Deno.serve(async (req) => {
   console.log("📥 Received sync request");
@@ -28,6 +32,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    // Get active Glide configuration
     console.log("🔍 Fetching active Glide configuration");
     const { data: config, error: configError } = await supabaseClient
       .from('glide_messages_configuration')
@@ -50,22 +55,7 @@ Deno.serve(async (req) => {
       authToken: config.auth_token ? 'present' : 'missing'
     });
 
-    // Process pending queue items with batching
-    console.log("🔄 Fetching pending queue items");
-    const { data: queueItems, error: queueError } = await supabaseClient
-      .from('glide_messages_sync_queue')
-      .select('*, messages(*)')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: true })
-      .limit(100) // Process in smaller batches
-
-    if (queueError) {
-      console.error("❌ Error fetching queue items:", queueError);
-      throw new Error(`Failed to fetch queue items: ${queueError.message}`);
-    }
-
-    console.log(`📊 Processing ${queueItems?.length || 0} queue items`);
-
+    // Initialize metrics
     const metrics: SyncMetrics = {
       processed: 0,
       successful: 0,
@@ -75,167 +65,232 @@ Deno.serve(async (req) => {
     };
 
     const batchId = crypto.randomUUID();
-    const mutations = [];
-    const processedIds = [];
+    let hasMoreItems = true;
+    let offset = 0;
 
-    // Rate limiting helper
-    const rateLimitDelay = 100; // ms between requests
-    let lastRequestTime = Date.now();
+    while (hasMoreItems) {
+      // Fetch batch of pending items
+      console.log(`🔄 Fetching batch of ${BATCH_SIZE} items starting at offset ${offset}`);
+      const { data: queueItems, error: queueError } = await supabaseClient
+        .from('glide_messages_sync_queue')
+        .select('*, messages(*)')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true })
+        .range(offset, offset + BATCH_SIZE - 1)
 
-    const waitForRateLimit = async () => {
-      const now = Date.now();
-      const elapsed = now - lastRequestTime;
-      if (elapsed < rateLimitDelay) {
-        await new Promise(resolve => setTimeout(resolve, rateLimitDelay - elapsed));
+      if (queueError) {
+        console.error("❌ Error fetching queue items:", queueError);
+        throw new Error(`Failed to fetch queue items: ${queueError.message}`);
       }
-      lastRequestTime = Date.now();
-    };
 
-    for (const item of queueItems || []) {
-      try {
-        console.log(`🔄 Processing item ${item.id}`);
-        const message = item.messages;
-        
-        if (!message) {
-          console.warn(`⚠️ No message found for queue item ${item.id}`);
-          metrics.skipped++;
-          continue;
+      if (!queueItems?.length) {
+        console.log("✅ No more items to process");
+        hasMoreItems = false;
+        break;
+      }
+
+      console.log(`📊 Processing ${queueItems.length} queue items`);
+
+      const mutations = [];
+      const processedIds = [];
+      let lastRequestTime = Date.now();
+
+      // Rate limiting helper
+      const waitForRateLimit = async () => {
+        const now = Date.now();
+        const elapsed = now - lastRequestTime;
+        if (elapsed < RATE_LIMIT_DELAY) {
+          await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY - elapsed));
         }
+        lastRequestTime = Date.now();
+      };
 
-        // Compare with existing Glide data
-        const existingGlideData = message.glide_sync_data?.data;
-        const newData = message.supabase_sync_json;
+      // Process batch
+      for (const item of queueItems) {
+        try {
+          console.log(`🔄 Processing item ${item.id}`);
+          const message = item.messages;
+          
+          if (!message) {
+            console.warn(`⚠️ No message found for queue item ${item.id}`);
+            metrics.skipped++;
+            continue;
+          }
 
-        // Skip if data hasn't changed
-        if (existingGlideData && 
-            JSON.stringify(existingGlideData) === JSON.stringify(newData)) {
-          console.log(`⏭️ Skipping unchanged message ${message.id}`);
-          metrics.skipped++;
-          continue;
-        }
+          // Compare with existing Glide data
+          const existingGlideData = message.glide_sync_data?.data;
+          const newData = message.supabase_sync_json;
 
-        // Validate required fields
-        if (!newData || Object.keys(newData).length === 0) {
-          throw new Error('Invalid sync data');
-        }
+          // Skip if data hasn't changed
+          if (existingGlideData && 
+              JSON.stringify(existingGlideData) === JSON.stringify(newData)) {
+            console.log(`⏭️ Skipping unchanged message ${message.id}`);
+            metrics.skipped++;
+            
+            // Update queue item status
+            await supabaseClient
+              .from('glide_messages_sync_queue')
+              .update({
+                status: 'completed',
+                processed_at: new Date().toISOString()
+              })
+              .eq('id', item.id);
+              
+            continue;
+          }
 
-        // Determine operation type
-        const glideRowId = message.glide_row_id;
-        const operation = glideRowId ? 'set-columns-in-row' : 'add-row-to-table';
-        
-        console.log(`📝 Preparing ${operation} mutation for message ${message.id}`);
-        mutations.push({
-          kind: operation,
-          tableName: config.glide_table_name,
-          columnValues: newData,
-          ...(glideRowId && { rowID: glideRowId })
-        });
+          // Validate required fields
+          if (!newData || Object.keys(newData).length === 0) {
+            throw new Error('Invalid sync data');
+          }
 
-        processedIds.push(item.id);
-        await waitForRateLimit();
+          // Determine operation type
+          const glideRowId = message.glide_row_id;
+          const operation = glideRowId ? 'set-columns-in-row' : 'add-row-to-table';
+          
+          console.log(`📝 Preparing ${operation} mutation for message ${message.id}`);
+          mutations.push({
+            kind: operation,
+            tableName: config.glide_table_name,
+            columnValues: newData,
+            ...(glideRowId && { rowID: glideRowId })
+          });
 
-        // Update sync status
-        const { error: updateError } = await supabaseClient
-          .from('messages')
-          .update({
-            glide_last_sync_at: new Date().toISOString(),
-            glide_sync_status: 'completed',
-            glide_sync_data: {
-              last_sync: new Date().toISOString(),
-              batch_id: batchId,
-              operation: operation,
-              data: newData
-            }
-          })
-          .eq('id', message.id);
+          processedIds.push(item.id);
+          await waitForRateLimit();
 
-        if (updateError) {
-          console.error(`❌ Error updating message ${message.id}:`, updateError);
-          throw updateError;
-        }
-
-        metrics.successful++;
-        console.log(`✅ Successfully processed message ${message.id}`);
-      } catch (error) {
-        console.error(`❌ Sync error for item ${item.id}:`, error);
-        metrics.failed++;
-        metrics.errors.push({
-          item_id: item.id,
-          error: error.message,
-          timestamp: new Date().toISOString()
-        });
-
-        // Update error status
-        if (item.messages?.id) {
-          const { error: statusError } = await supabaseClient
+          // Update message sync status
+          const { error: updateError } = await supabaseClient
             .from('messages')
             .update({
-              glide_sync_status: 'error',
-              last_error_at: new Date().toISOString(),
+              glide_last_sync_at: new Date().toISOString(),
+              glide_sync_status: 'completed',
               glide_sync_data: {
-                last_error: error.message,
-                error_time: new Date().toISOString(),
-                batch_id: batchId
+                last_sync: new Date().toISOString(),
+                batch_id: batchId,
+                operation: operation,
+                data: newData
               }
             })
-            .eq('id', item.messages.id);
+            .eq('id', message.id);
 
-          if (statusError) {
-            console.error(`❌ Error updating error status for message ${item.messages.id}:`, statusError);
+          if (updateError) {
+            console.error(`❌ Error updating message ${message.id}:`, updateError);
+            throw updateError;
+          }
+
+          metrics.successful++;
+          console.log(`✅ Successfully processed message ${message.id}`);
+        } catch (error) {
+          console.error(`❌ Sync error for item ${item.id}:`, error);
+          metrics.failed++;
+          metrics.errors.push({
+            item_id: item.id,
+            error: error.message,
+            timestamp: new Date().toISOString()
+          });
+
+          // Update error status
+          if (item.messages?.id) {
+            const { error: statusError } = await supabaseClient
+              .from('messages')
+              .update({
+                glide_sync_status: 'error',
+                last_error_at: new Date().toISOString(),
+                glide_sync_data: {
+                  last_error: error.message,
+                  error_time: new Date().toISOString(),
+                  batch_id: batchId
+                }
+              })
+              .eq('id', item.messages.id);
+
+            if (statusError) {
+              console.error(`❌ Error updating error status for message ${item.messages.id}:`, statusError);
+            }
+          }
+
+          // Handle retries
+          if ((item.retry_count || 0) < MAX_RETRIES) {
+            await supabaseClient
+              .from('glide_messages_sync_queue')
+              .update({
+                retry_count: (item.retry_count || 0) + 1,
+                last_error: error.message,
+                status: 'pending'
+              })
+              .eq('id', item.id);
+          } else {
+            await supabaseClient
+              .from('glide_messages_sync_queue')
+              .update({
+                status: 'error',
+                last_error: error.message,
+                processed_at: new Date().toISOString()
+              })
+              .eq('id', item.id);
           }
         }
+        metrics.processed++;
       }
-      metrics.processed++;
-    }
 
-    // Send mutations to Glide if any
-    if (mutations.length > 0) {
-      console.log(`📤 Sending ${mutations.length} mutations to Glide`);
-      
-      try {
-        const response = await fetch('https://api.glideapp.io/api/function/mutateTables', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.auth_token}`,
-          },
-          body: JSON.stringify({
-            appID: config.app_id,
-            mutations
-          })
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("❌ Glide API error:", errorText);
-          throw new Error(`Glide mutation error: ${errorText}`);
-        }
-
-        const result = await response.json();
-        console.log('✅ Glide sync result:', result);
-
-        // Update queue items status
-        if (processedIds.length) {
-          console.log("📝 Updating queue items status");
-          const { error: queueUpdateError } = await supabaseClient
-            .from('glide_messages_sync_queue')
-            .update({
-              status: 'completed',
-              processed_at: new Date().toISOString()
+      // Send mutations to Glide if any
+      if (mutations.length > 0) {
+        console.log(`📤 Sending ${mutations.length} mutations to Glide`);
+        
+        try {
+          const response = await fetch('https://api.glideapp.io/api/function/mutateTables', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${config.auth_token}`,
+            },
+            body: JSON.stringify({
+              appID: config.app_id,
+              mutations
             })
-            .in('id', processedIds);
+          });
 
-          if (queueUpdateError) {
-            console.error("❌ Error updating queue status:", queueUpdateError);
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error("❌ Glide API error:", errorText);
+            throw new Error(`Glide mutation error: ${errorText}`);
           }
+
+          const result = await response.json();
+          console.log('✅ Glide sync result:', result);
+
+          // Update queue items status
+          if (processedIds.length) {
+            console.log("📝 Updating queue items status");
+            const { error: queueUpdateError } = await supabaseClient
+              .from('glide_messages_sync_queue')
+              .update({
+                status: 'completed',
+                processed_at: new Date().toISOString()
+              })
+              .in('id', processedIds);
+
+            if (queueUpdateError) {
+              console.error("❌ Error updating queue status:", queueUpdateError);
+            }
+          }
+        } catch (error) {
+          console.error("❌ Failed to send mutations to Glide:", error);
+          throw error;
         }
-      } catch (error) {
-        console.error("❌ Failed to send mutations to Glide:", error);
-        throw error;
+      }
+
+      // Update offset for next batch
+      offset += queueItems.length;
+      
+      // Check if we should continue
+      if (queueItems.length < BATCH_SIZE) {
+        hasMoreItems = false;
       }
     }
 
-    // Log metrics
+    // Log final metrics
     console.log("📊 Logging sync metrics");
     const { error: metricsError } = await supabaseClient
       .from('glide_messages_sync_metrics')
@@ -246,7 +301,7 @@ Deno.serve(async (req) => {
         failed_messages: metrics.failed,
         completed_at: new Date().toISOString(),
         performance_data: {
-          batch_size: mutations.length,
+          batch_size: BATCH_SIZE,
           processing_time: Date.now(),
           skipped_messages: metrics.skipped,
           errors: metrics.errors
