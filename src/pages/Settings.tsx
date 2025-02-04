@@ -8,11 +8,14 @@ import { RefreshCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 interface SyncMetrics {
-  total_messages: number;
-  successful_messages: number;
-  failed_messages: number;
-  last_sync: string | null;
-  pending_items: number;
+  id: string;
+  batch_id: string;
+  total_processed: number;
+  successful: number;
+  failed: number;
+  started_at: string;
+  completed_at: string | null;
+  error_details: Record<string, any> | null;
 }
 
 const Settings = () => {
@@ -28,11 +31,11 @@ const Settings = () => {
       try {
         // Fetch latest metrics
         const { data: metrics, error: metricsError } = await supabase
-          .from('glide_messages_sync_metrics')
+          .from('glide_sync_metrics')
           .select('*')
           .order('created_at', { ascending: false })
           .limit(1)
-          .maybeSingle();
+          .single();
 
         if (metricsError) {
           console.error('Error fetching metrics:', metricsError);
@@ -54,12 +57,12 @@ const Settings = () => {
         }
 
         return {
-          total_messages: metrics?.total_messages || 0,
-          successful_messages: metrics?.successful_messages || 0,
-          failed_messages: metrics?.failed_messages || 0,
+          total_messages: metrics?.total_processed || 0,
+          successful_messages: metrics?.successful || 0,
+          failed_messages: metrics?.failed || 0,
           last_sync: metrics?.completed_at,
           pending_items: count || 0
-        } as SyncMetrics;
+        };
       } catch (error) {
         console.error('Error in syncMetrics query:', error);
         toast({
@@ -73,7 +76,7 @@ const Settings = () => {
           failed_messages: 0,
           last_sync: null,
           pending_items: 0
-        } as SyncMetrics;
+        };
       }
     },
     refetchInterval: 5000 // Refresh every 5 seconds
