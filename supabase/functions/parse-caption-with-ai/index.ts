@@ -10,6 +10,7 @@ const SYSTEM_PROMPT = `You are a specialized product information extractor. Extr
 
 1. Product Name (REQUIRED):
    - Text before '#' or 'x' marker
+   - Stop at first 'x' or '#' encountered
    - Remove any trailing spaces
    - Example: "Blue Dream x2" -> "Blue Dream"
 
@@ -27,11 +28,13 @@ const SYSTEM_PROMPT = `You are a specialized product information extractor. Extr
    - 6 digits (mmDDyy) -> YYYY-MM-DD
    - 5 digits (mDDyy) -> YYYY-MM-DD (add leading zero)
    - Example: "120523" -> "2023-12-05"
+   - Example: "31524" -> "2024-03-15"
 
 5. Quantity:
    - Look for numbers after 'x' or 'qty:'
    - Must be positive integer
    - Common formats: "x2", "x 2", "qty: 2"
+   - Ignore if part of measurement
 
 6. Notes:
    - Text in parentheses
@@ -59,7 +62,7 @@ serve(async (req) => {
     
     console.log('Processing request:', { caption, message_id, media_group_id, correlation_id });
 
-    // Initialize Supabase client
+    // Initialize Supabase client with proper error handling
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
@@ -128,10 +131,10 @@ serve(async (req) => {
     }
 
     try {
-      // Ensure URL is properly encoded
+      // Create URL object for validation
       const openAIEndpoint = new URL('https://api.openai.com/v1/chat/completions');
       
-      const response = await fetch(openAIEndpoint.toString(), {
+      const response = await fetch(openAIEndpoint, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${openAIApiKey}`,
