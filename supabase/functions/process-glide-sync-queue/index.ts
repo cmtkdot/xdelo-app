@@ -10,12 +10,6 @@ interface GlideResponse {
   next?: string;
 }
 
-interface GlideConfig {
-  appID: string;
-  tableName: string;
-  field_mappings: Record<string, string>;
-}
-
 // Handle CORS preflight requests
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -28,7 +22,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get Glide configuration
+    // Get active Glide configuration
     const { data: config, error: configError } = await supabaseClient
       .from('glide_messages_configuration')
       .select('*')
@@ -39,7 +33,9 @@ Deno.serve(async (req) => {
       throw new Error('No active Glide configuration found')
     }
 
-    // Fetch current Glide data
+    console.log('Processing with config:', config.glide_table_name)
+
+    // First, get current Glide data to compare
     const glideResponse = await fetch('https://api.glideapp.io/api/function/queryTables', {
       method: 'POST',
       headers: {
@@ -61,7 +57,7 @@ Deno.serve(async (req) => {
 
     const glideData: GlideResponse = await glideResponse.json()
     const glideRows = glideData.rows || []
-
+    
     // Create a map of Glide rows by ID for quick lookup
     const glideRowsMap = new Map(
       glideRows.map(row => [row[config.field_mappings['id']], row])
@@ -77,6 +73,8 @@ Deno.serve(async (req) => {
     if (queueError) {
       throw new Error(`Failed to fetch queue items: ${queueError.message}`)
     }
+
+    console.log(`Processing ${queueItems?.length || 0} queue items`)
 
     const mutations = []
     let successCount = 0
@@ -131,6 +129,8 @@ Deno.serve(async (req) => {
 
     // Send mutations to Glide if any
     if (mutations.length > 0) {
+      console.log(`Sending ${mutations.length} mutations to Glide`)
+      
       const response = await fetch('https://api.glideapp.io/api/function/mutateTables', {
         method: 'POST',
         headers: {
@@ -149,13 +149,26 @@ Deno.serve(async (req) => {
     }
 
     // Update queue items status
+    if (queueItems?.length) {
+      await supabaseClient
+        .from('glide_messages_sync_queue')
+        .update({
+          status: 'completed',
+          processed_at: new Date().toISOString()
+        })
+        .in('id', queueItems.map(item => item.id))
+    }
+
+    // Log metrics
     await supabaseClient
-      .from('glide_messages_sync_queue')
-      .update({
-        status: 'completed',
-        processed_at: new Date().toISOString()
+      .from('glide_messages_sync_metrics')
+      .insert({
+        sync_batch_id: crypto.randomUUID(),
+        total_messages: queueItems?.length || 0,
+        successful_messages: successCount,
+        failed_messages: failureCount,
+        completed_at: new Date().toISOString()
       })
-      .in('id', queueItems?.map(item => item.id) || [])
 
     return new Response(
       JSON.stringify({
