@@ -1,40 +1,33 @@
 import { ParsedContent } from "../types.ts";
 import { manualParse } from "./manualParser.ts";
 
-const SYSTEM_PROMPT = `You are a specialized cannabis product information extractor. Extract structured information following these rules:
+const SYSTEM_PROMPT = `You are a specialized product information extractor. Extract structured information following these rules:
 
 1. Product Name (REQUIRED):
    - Text before '#' or 'x' marker
    - Stop at first 'x' or '#' encountered
    - Remove any trailing spaces
-   - Example: "Blue Dream x2" -> "Blue Dream"
 
-2. Product Code:
+2. Product Code (OPTIONAL):
    - Full code after '#' including vendor and date
    - Format: #[vendor_uid][date]
-   - Example: "#CHAD120523" -> "CHAD120523"
 
-3. Vendor UID:
+3. Vendor UID (OPTIONAL):
    - 1-4 letters after '#' before any numbers
-   - Example: "#CHAD120523" -> "CHAD"
 
-4. Purchase Date:
+4. Purchase Date (OPTIONAL):
    - Convert date formats:
    - 6 digits (mmDDyy) -> YYYY-MM-DD
    - 5 digits (mDDyy) -> YYYY-MM-DD (add leading zero)
-   - Example: "120523" -> "2023-12-05"
-   - Example: "31524" -> "2024-03-15"
 
-5. Quantity:
+5. Quantity (OPTIONAL):
    - Look for numbers after 'x' or 'qty:'
    - Must be positive integer
    - Common formats: "x2", "x 2", "qty: 2"
-   - Ignore if part of measurement
 
-6. Notes:
+6. Notes (OPTIONAL):
    - Text in parentheses
    - Any additional unstructured text
-   - Example: "(indoor grown)" -> "indoor grown"
 
 Example Input: "Blue Dream x2 #CHAD120523 (indoor)"
 Expected Output: {
@@ -44,22 +37,22 @@ Expected Output: {
   "purchase_date": "2023-12-05",
   "quantity": 2,
   "notes": "indoor"
-}
-
-Handle variations and edge cases:
-1. Product names with numbers (e.g., "OG Kush #18")
-2. Multiple x markers (use the last one for quantity)
-3. Missing or incomplete product codes
-4. Various date formats
-5. Special characters in product names`;
+}`;
 
 export async function analyzeCaption(caption: string): Promise<ParsedContent> {
   try {
     // First try manual parsing
     const manualResult = manualParse(caption);
-    if (manualResult && manualResult.product_name && manualResult.quantity) {
+    if (manualResult && manualResult.product_name) {
       console.log('Successfully parsed caption manually:', manualResult);
-      return manualResult;
+      return {
+        ...manualResult,
+        parsing_metadata: {
+          method: 'manual',
+          confidence: 1.0,
+          timestamp: new Date().toISOString()
+        }
+      };
     }
 
     // Fallback to AI analysis
@@ -93,25 +86,28 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
     const data = await response.json();
     const result = JSON.parse(data.choices[0].message.content);
 
-    // Validate quantity
+    // Ensure at least a product name exists
+    const productName = result.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product';
+
+    // Clean up quantity if present
+    let quantity = null;
     if (typeof result.quantity === 'number') {
-      result.quantity = Math.floor(result.quantity);
-      if (result.quantity <= 0) {
-        delete result.quantity;
-      }
+      quantity = Math.floor(result.quantity);
+      if (quantity <= 0) quantity = null;
     }
 
     console.log('AI analysis result:', result);
     return {
-      product_name: result.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
-      product_code: result.product_code,
-      vendor_uid: result.vendor_uid,
-      purchase_date: result.purchase_date,
-      quantity: result.quantity,
-      notes: result.notes,
+      product_name: productName,
+      product_code: result.product_code || '',
+      vendor_uid: result.vendor_uid || '',
+      purchase_date: result.purchase_date || '',
+      quantity: quantity,
+      notes: result.notes || '',
       parsing_metadata: {
         method: 'ai',
-        confidence: 0.8
+        confidence: 0.8,
+        timestamp: new Date().toISOString()
       }
     };
   } catch (error) {
@@ -119,9 +115,15 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
     // Return basic info even if analysis fails
     return {
       product_name: caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
+      product_code: '',
+      vendor_uid: '',
+      purchase_date: '',
+      quantity: null,
+      notes: '',
       parsing_metadata: {
         method: 'ai',
         confidence: 0.1,
+        timestamp: new Date().toISOString(),
         fallbacks_used: ['error_fallback']
       }
     };
