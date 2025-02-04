@@ -241,8 +241,153 @@ CREATE POLICY "Authenticated users can delete media"
 ON storage.objects FOR DELETE
 USING ( bucket_id = 'telegram-media' AND auth.role() = 'authenticated' );
 
--- Add necessary edge function secrets (these need to be set manually in the Supabase dashboard)
+-- Add missing ENUM type for message processing state
+CREATE TYPE message_processing_state AS ENUM (
+    'initialized',
+    'pending',
+    'processing',
+    'completed',
+    'error'
+);
+
+-- Add missing function for handling sync retries
+CREATE OR REPLACE FUNCTION public.handle_sync_retry()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- Only handle messages that failed to sync
+    IF NEW.media_group_id IS NOT NULL 
+       AND NOT NEW.group_caption_synced 
+       AND COALESCE(NEW.retry_count, 0) < 3 THEN
+        
+        -- Find a successfully analyzed message in the group
+        DECLARE
+            v_analyzed_message messages%ROWTYPE;
+        BEGIN
+            SELECT *
+            INTO v_analyzed_message
+            FROM messages
+            WHERE 
+                media_group_id = NEW.media_group_id
+                AND analyzed_content IS NOT NULL
+                AND processing_state = 'completed'
+                AND group_caption_synced = true
+            ORDER BY created_at ASC
+            LIMIT 1;
+
+            IF FOUND THEN
+                -- Attempt to sync this message
+                PERFORM sync_media_group_content(
+                    v_analyzed_message.id,
+                    NEW.media_group_id,
+                    v_analyzed_message.analyzed_content
+                );
+            END IF;
+        END;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$;
+
+-- Add missing trigger for sync retry
+CREATE TRIGGER trg_handle_sync_retry
+    AFTER UPDATE ON messages
+    FOR EACH ROW
+    EXECUTE FUNCTION handle_sync_retry();
+
+-- Add missing function for logging analysis events
+CREATE OR REPLACE FUNCTION public.log_analysis_event()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.analyzed_content IS DISTINCT FROM OLD.analyzed_content THEN
+        -- Log the analysis event
+        INSERT INTO analysis_audit_log (
+            message_id,
+            media_group_id,
+            event_type,
+            old_state,
+            new_state,
+            analyzed_content
+        ) VALUES (
+            NEW.id,
+            NEW.media_group_id,
+            'ANALYSIS_COMPLETED',
+            OLD.processing_state::text,
+            NEW.processing_state::text,
+            NEW.analyzed_content
+        );
+    END IF;
+    
+    RETURN NEW;
+END;
+$$;
+
+-- Add missing trigger for analysis event logging
+CREATE TRIGGER trg_log_analysis_event
+    AFTER UPDATE OF analyzed_content ON messages
+    FOR EACH ROW
+    EXECUTE FUNCTION log_analysis_event();
+
+-- Add missing storage policies for the telegram-media bucket
+CREATE POLICY "Public Access"
+ON storage.objects FOR SELECT
+USING ( bucket_id = 'telegram-media' );
+
+CREATE POLICY "Authenticated users can upload media"
+ON storage.objects FOR INSERT
+WITH CHECK ( bucket_id = 'telegram-media' AND auth.role() = 'authenticated' );
+
+CREATE POLICY "Authenticated users can update media"
+ON storage.objects FOR UPDATE
+USING ( bucket_id = 'telegram-media' AND auth.role() = 'authenticated' );
+
+CREATE POLICY "Authenticated users can delete media"
+ON storage.objects FOR DELETE
+USING ( bucket_id = 'telegram-media' AND auth.role() = 'authenticated' );
+
+-- Add missing indexes for better query performance
+CREATE INDEX IF NOT EXISTS idx_messages_processing_state 
+ON messages(processing_state);
+
+CREATE INDEX IF NOT EXISTS idx_messages_created_at 
+ON messages(created_at);
+
+CREATE INDEX IF NOT EXISTS idx_messages_updated_at 
+ON messages(updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_messages_user_id 
+ON messages(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_messages_media_group_id 
+ON messages(media_group_id);
+
+-- Add missing RLS policy for profiles deletion
+CREATE POLICY "Users can delete own profile"
+    ON profiles FOR DELETE
+    USING (auth.uid() = id);
+
+-- Enable RLS on all tables
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.analysis_audit_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.other_messages ENABLE ROW LEVEL SECURITY;
+
+-- Add comment about required secrets
 COMMENT ON DATABASE postgres IS 'Required secrets for edge functions:
 - OPENAI_API_KEY
 - TELEGRAM_BOT_TOKEN
-- TELEGRAM_WEBHOOK_SECRET';
+- TELEGRAM_WEBHOOK_SECRET
+- SUPABASE_URL
+- SUPABASE_ANON_KEY
+- SUPABASE_SERVICE_ROLE_KEY
+- SUPABASE_DB_URL';
+
+-- Add extensions that might be needed
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pg_cron";
+CREATE EXTENSION IF NOT EXISTS "http";
+CREATE EXTENSION IF NOT EXISTS "pg_net";
