@@ -30,21 +30,22 @@ const Settings = () => {
         .select('*')
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
 
-      const { data: pendingCount } = await supabase
+      const { count } = await supabase
         .from('glide_messages_sync_queue')
-        .select('id', { count: true })
-        .eq('status', 'pending');
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending')
+        .single();
 
       return {
         total_messages: metrics?.total_messages || 0,
         successful_messages: metrics?.successful_messages || 0,
         failed_messages: metrics?.failed_messages || 0,
         last_sync: metrics?.completed_at,
-        pending_items: pendingCount?.count || 0
+        pending_items: count || 0
       } as SyncMetrics;
     },
     refetchInterval: 5000 // Refresh every 5 seconds
