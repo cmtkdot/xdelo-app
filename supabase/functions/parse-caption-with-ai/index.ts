@@ -17,6 +17,7 @@ serve(async (req) => {
 
     console.log('Processing request:', { caption, message_id, media_group_id, correlation_id });
 
+<<<<<<< Updated upstream
     if (!caption || typeof caption !== 'string' || caption.trim() === '') {
       console.log('Empty or invalid caption received:', { caption });
       return new Response(
@@ -43,6 +44,76 @@ serve(async (req) => {
 
     // If manual parsing confidence is low, try AI analysis
     if (confidence < 0.75) {
+=======
+    let analyzedContent = null;
+    let parsingMethod = 'pending';
+    let confidence = 0;
+
+    // Handle empty or invalid caption
+    if (!caption || typeof caption !== 'string' || caption.trim() === '') {
+      console.log('Empty caption received, checking media group:', { message_id, media_group_id });
+      
+      // Initialize Supabase client
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Missing Supabase credentials');
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      if (media_group_id) {
+        // Look for any message in the group that has analyzed content
+        const { data: groupMessages, error: groupError } = await supabase
+          .from('messages')
+          .select('analyzed_content')
+          .eq('media_group_id', media_group_id)
+          .not('analyzed_content', 'is', null)
+          .limit(1);
+
+        if (groupError) {
+          throw groupError;
+        }
+
+        if (groupMessages && groupMessages.length > 0 && groupMessages[0].analyzed_content) {
+          console.log('Found analyzed content in media group, syncing...', { media_group_id });
+          analyzedContent = groupMessages[0].analyzed_content;
+          parsingMethod = 'group_sync';
+          confidence = analyzedContent.parsing_metadata?.confidence || 0.8;
+        } else {
+          console.log('No analyzed content found in group yet, marking for later analysis');
+          // Create empty analyzed content for later processing
+          analyzedContent = {
+            product_name: 'Pending Analysis',
+            product_code: '',
+            vendor_uid: '',
+            purchase_date: '',
+            quantity: null,
+            notes: '',
+            parsing_metadata: {
+              method: 'pending',
+              confidence: 0,
+              fallbacks_used: ['awaiting_group_analysis'],
+              timestamp: new Date().toISOString()
+            }
+          };
+        }
+      }
+    } else {
+      // First try manual parsing
+      console.log('Starting manual parsing for caption:', caption);
+      const manualResult = await manualParse(caption);
+      console.log('Manual parsing result:', manualResult);
+
+      analyzedContent = manualResult;
+      parsingMethod = 'manual';
+      confidence = manualResult.parsing_metadata?.confidence || 0;
+    }
+
+    // If we have caption and manual parsing confidence is low, try AI analysis
+    if (caption && confidence < 0.75) {
+>>>>>>> Stashed changes
       console.log('Low confidence in manual parsing, attempting AI analysis:', confidence);
       const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
       if (!openAIApiKey) {
@@ -68,6 +139,7 @@ serve(async (req) => {
 5. Quantity: Look for numbers after 'x' or in units
 6. Notes: Text in parentheses or remaining info
 
+<<<<<<< Updated upstream
 Important: Return ONLY a valid JSON object with these exact lowercase field names:
 {
   "product_name": "string",
@@ -77,6 +149,15 @@ Important: Return ONLY a valid JSON object with these exact lowercase field name
   "quantity": number,
   "notes": "string"
 }`
+=======
+Important rules:
+1. Use EXACTLY these lowercase field names
+2. Put ANY additional information into the notes field
+3. Convert any numbers in quantity to actual number type
+4. Format dates as YYYY-MM-DD
+5. Ensure product_name is always present
+6. Move ANY information not fitting the specific fields into notes`
+>>>>>>> Stashed changes
             },
             { role: 'user', content: caption }
           ],
@@ -90,6 +171,7 @@ Important: Return ONLY a valid JSON object with these exact lowercase field name
       }
 
       const data = await response.json();
+<<<<<<< Updated upstream
       console.log('Raw AI response:', data.choices[0].message.content);
       
       try {
@@ -175,6 +257,47 @@ Important: Return ONLY a valid JSON object with these exact lowercase field name
             parsing_method: parsingMethod,
             confidence
           }
+=======
+      const aiResult = JSON.parse(data.choices[0].message.content);
+      console.log('AI analysis result:', aiResult);
+
+      analyzedContent = {
+        product_name: aiResult.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
+        product_code: aiResult.product_code,
+        vendor_uid: aiResult.vendor_uid,
+        purchase_date: aiResult.purchase_date,
+        quantity: typeof aiResult.quantity === 'number' ? Math.floor(aiResult.quantity) : null,
+        notes: aiResult.notes || '',
+        parsing_metadata: {
+          method: 'ai',
+          confidence: 0.9,
+          timestamp: new Date().toISOString()
+        }
+      };
+      parsingMethod = 'ai';
+      confidence = 0.9;
+    }
+
+    // If message_id is provided, update the database
+    if (message_id) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Missing Supabase credentials');
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      // Process media group if needed
+      if (media_group_id) {
+        await supabase.rpc('process_media_group_analysis', {
+          p_message_id: message_id,
+          p_media_group_id: media_group_id,
+          p_analyzed_content: analyzedContent,
+          p_processing_completed_at: new Date().toISOString(),
+          p_correlation_id: correlation_id
+>>>>>>> Stashed changes
         });
       } else {
         // Update single message
