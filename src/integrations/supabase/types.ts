@@ -242,6 +242,7 @@ export type Database = {
       webhook_logs: {
         Row: {
           created_at: string | null
+          error_message: string | null
           event_type: string
           id: string
           message_id: string | null
@@ -251,6 +252,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          error_message?: string | null
           event_type: string
           id?: string
           message_id?: string | null
@@ -260,6 +262,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          error_message?: string | null
           event_type?: string
           id?: string
           message_id?: string | null
