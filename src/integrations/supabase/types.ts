@@ -316,14 +316,14 @@ export type Database = {
         Args: {
           request: Database["public"]["CompositeTypes"]["http_request"]
         }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        Returns: unknown
       }
       http_delete:
         | {
             Args: {
               uri: string
             }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            Returns: unknown
           }
         | {
             Args: {
@@ -331,27 +331,27 @@ export type Database = {
               content: string
               content_type: string
             }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            Returns: unknown
           }
       http_get:
         | {
             Args: {
               uri: string
             }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            Returns: unknown
           }
         | {
             Args: {
               uri: string
               data: Json
             }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            Returns: unknown
           }
       http_head: {
         Args: {
           uri: string
         }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        Returns: unknown
       }
       http_header: {
         Args: {
@@ -373,7 +373,7 @@ export type Database = {
           content: string
           content_type: string
         }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        Returns: unknown
       }
       http_post:
         | {
@@ -382,14 +382,14 @@ export type Database = {
               content: string
               content_type: string
             }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            Returns: unknown
           }
         | {
             Args: {
               uri: string
               data: Json
             }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            Returns: unknown
           }
         | {
             Args: {
@@ -397,7 +397,7 @@ export type Database = {
               headers: Json
               body: Json
             }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            Returns: unknown
           }
       http_put: {
         Args: {
@@ -405,7 +405,7 @@ export type Database = {
           content: string
           content_type: string
         }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        Returns: unknown
       }
       http_reset_curlopt: {
         Args: Record<PropertyKey, never>

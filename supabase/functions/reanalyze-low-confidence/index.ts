@@ -12,13 +12,9 @@ serve(async (req) => {
   }
 
   try {
-    const { message_id, media_group_id, caption, correlation_id = crypto.randomUUID() } = await req.json();
+    const { message_id, media_group_id, caption, correlation_id } = await req.json();
     
-    console.log('Reanalyzing content:', { message_id, media_group_id, correlation_id });
-
-    if (!message_id) {
-      throw new Error('message_id is required');
-    }
+    console.log('Starting reanalysis:', { message_id, media_group_id, correlation_id });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -29,65 +25,58 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get the message to reanalyze
-    const { data: message, error: fetchError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('id', message_id)
-      .maybeSingle();
-
-    if (fetchError) {
-      console.error('Error fetching message:', fetchError);
-      throw fetchError;
-    }
-
-    if (!message) {
-      throw new Error('Message not found');
-    }
-
-    // Call the parse-caption-with-ai function
-    const response = await fetch(`${supabaseUrl}/functions/v1/parse-caption-with-ai`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message_id,
-        media_group_id,
-        caption: caption || message.caption,
-        correlation_id
-      }),
+    // First, call the parse-caption-with-ai function
+    const { data: parseResult, error: parseError } = await supabase.functions.invoke('parse-caption-with-ai', {
+      body: { message_id, media_group_id, caption }
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to parse caption: ${errorText}`);
+    if (parseError) {
+      console.error('Error parsing caption:', parseError);
+      throw parseError;
     }
 
-    const result = await response.json();
+    console.log('Caption parsed successfully:', parseResult);
+
+    // Now use the new process_media_group_content function
+    const { error: processError } = await supabase.rpc('process_media_group_content', {
+      p_message_id: message_id,
+      p_media_group_id: media_group_id,
+      p_analyzed_content: parseResult.analyzed_content,
+      p_processing_completed_at: new Date().toISOString(),
+      p_correlation_id: correlation_id
+    });
+
+    if (processError) {
+      console.error('Error processing media group:', processError);
+      throw processError;
+    }
+
+    console.log('Media group processed successfully');
 
     return new Response(
-      JSON.stringify({
-        success: true,
+      JSON.stringify({ 
         message: 'Reanalysis completed successfully',
-        result,
-        correlation_id
+        correlation_id: correlation_id
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      }
     );
 
   } catch (error) {
-    console.error('Error in reanalyze-low-confidence function:', error);
+    console.error('Error in reanalyze-low-confidence:', error);
+    
     return new Response(
       JSON.stringify({ 
-        success: false,
         error: error.message,
-        correlation_id: crypto.randomUUID()
+        timestamp: new Date().toISOString()
       }),
       { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
       }
     );
   }
