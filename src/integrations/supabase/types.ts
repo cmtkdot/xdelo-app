@@ -57,6 +57,7 @@ export type Database = {
           file_id: string | null
           file_size: number | null
           file_unique_id: string | null
+          glide_row_id: string | null
           group_caption_synced: boolean | null
           group_first_message_time: string | null
           group_last_message_time: string | null
@@ -95,6 +96,7 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
+          glide_row_id?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
@@ -133,6 +135,7 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
+          glide_row_id?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
@@ -235,6 +238,44 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      webhook_logs: {
+        Row: {
+          created_at: string | null
+          event_type: string
+          id: string
+          message_id: string | null
+          request_payload: Json | null
+          response_payload: Json | null
+          status_code: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_type: string
+          id?: string
+          message_id?: string | null
+          request_payload?: Json | null
+          response_payload?: Json | null
+          status_code?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          event_type?: string
+          id?: string
+          message_id?: string | null
+          request_payload?: Json | null
+          response_payload?: Json | null
+          status_code?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_logs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
