@@ -1007,14 +1007,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      process_media_group_direct: {
-        Args: {
-          p_message_id: string
-          p_media_group_id: string
-          p_analyzed_content: Json
-        }
-        Returns: undefined
-      }
       sync_media_group_content: {
         Args: {
           p_message_id: string
