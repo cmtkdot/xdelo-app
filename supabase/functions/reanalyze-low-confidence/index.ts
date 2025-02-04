@@ -37,7 +37,8 @@ const SYSTEM_PROMPT = `You are a specialized product information extractor. Extr
    - Text in parentheses
    - Any additional unstructured text
    - Example: "(indoor grown)" -> "indoor grown"
-   - Include ANY information not fitting in other fields`;
+
+Return ONLY a JSON object with these fields, no additional text.`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -135,7 +136,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: caption }
@@ -150,12 +151,31 @@ serve(async (req) => {
     }
 
     const data = await response.json();
+    console.log('Raw OpenAI response:', data);
+
+    if (!data.choices?.[0]?.message?.content) {
+      throw new Error('Invalid OpenAI response format');
+    }
+
     const aiResponse = data.choices[0].message.content;
-    console.log('Raw AI response:', aiResponse);
+    console.log('AI response content:', aiResponse);
     
     let newAnalyzedContent;
     try {
-      const parsedResponse = JSON.parse(aiResponse);
+      // Attempt to parse the response, with better error handling
+      let parsedResponse;
+      try {
+        parsedResponse = JSON.parse(aiResponse);
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        console.log('Failed to parse response:', aiResponse);
+        throw new Error(`Failed to parse AI response as JSON: ${parseError.message}`);
+      }
+
+      // Validate the parsed response has required fields
+      if (!parsedResponse.product_name) {
+        throw new Error('Parsed response missing required product_name field');
+      }
       
       newAnalyzedContent = {
         notes: parsedResponse.notes || "",
@@ -178,7 +198,7 @@ serve(async (req) => {
 
     } catch (parseError) {
       console.error('Error parsing AI response:', parseError);
-      throw new Error('Failed to parse AI response');
+      throw new Error(`Failed to parse AI response: ${parseError.message}`);
     }
 
     const { error: syncError } = await supabase.rpc('process_media_group_analysis', {
