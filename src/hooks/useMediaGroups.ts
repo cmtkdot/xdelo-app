@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { FilterValues, MediaItem } from "@/types";
+import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface MediaGroupsResponse {
   mediaGroups: { [key: string]: MediaItem[] };
@@ -8,6 +10,35 @@ interface MediaGroupsResponse {
 }
 
 export const useMediaGroups = (page: number, filters: FilterValues) => {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    // Subscribe to all changes in the messages table
+    const channel = supabase
+      .channel('public:messages')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all changes (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'messages'
+        },
+        (payload) => {
+          console.log('Real-time update received:', payload);
+          // Invalidate the query to trigger a refetch
+          queryClient.invalidateQueries({
+            queryKey: ['mediaGroups', page, filters]
+          });
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [page, filters, queryClient]);
+
   return useQuery<MediaGroupsResponse, Error>({
     queryKey: ['mediaGroups', page, filters],
     queryFn: async () => {
@@ -22,7 +53,7 @@ export const useMediaGroups = (page: number, filters: FilterValues) => {
             dateTo: filters.dateTo?.toISOString(),
             dateField: filters.dateField || 'purchase_date',
             sortOrder: filters.sortOrder || 'desc',
-            nullsLast: true, // This will ensure items without dates appear last
+            nullsLast: true,
           },
         },
       });
