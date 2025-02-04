@@ -1,8 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { corsHeaders } from "./authUtils.ts";
 import { analyzeCaption } from "./utils/aiAnalyzer.ts";
 import { validateAnalyzedContent } from "./validator.ts";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -13,6 +17,10 @@ serve(async (req) => {
     const { message_id, media_group_id, caption, correlation_id } = await req.json();
     
     console.log('Starting caption analysis:', { message_id, media_group_id, correlation_id });
+
+    if (!caption || typeof caption !== 'string' || caption.trim() === '') {
+      throw new Error('Caption is required and must be a non-empty string');
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -27,10 +35,9 @@ serve(async (req) => {
     const analyzedContent = await analyzeCaption(caption);
     
     // Validate the analyzed content
-    const validationResult = validateAnalyzedContent(analyzedContent);
-    if (!validationResult.isValid) {
-      console.error('Validation failed:', validationResult.errors);
-      throw new Error(`Invalid analyzed content: ${validationResult.errors.join(', ')}`);
+    if (!validateAnalyzedContent(analyzedContent)) {
+      console.error('Validation failed for analyzed content:', analyzedContent);
+      throw new Error('Invalid analyzed content structure');
     }
 
     console.log('Caption analyzed successfully:', analyzedContent);
@@ -40,7 +47,6 @@ serve(async (req) => {
       p_message_id: message_id,
       p_media_group_id: media_group_id,
       p_analyzed_content: analyzedContent,
-      p_processing_completed_at: new Date().toISOString(),
       p_correlation_id: correlation_id || crypto.randomUUID()
     });
 
@@ -53,6 +59,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ 
+        success: true,
         message: 'Caption parsed and processed successfully',
         analyzed_content: analyzedContent,
         correlation_id: correlation_id
@@ -70,12 +77,14 @@ serve(async (req) => {
     
     return new Response(
       JSON.stringify({ 
+        success: false,
         error: error.message,
+        correlation_id: crypto.randomUUID(),
         timestamp: new Date().toISOString()
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
+        status: 500
       }
     );
   }
