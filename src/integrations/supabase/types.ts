@@ -438,7 +438,26 @@ export type Database = {
             }
             Returns: undefined
           }
+      process_media_group_analysis_direct: {
+        Args: {
+          p_message_id: string
+          p_media_group_id: string
+          p_analyzed_content: Json
+          p_processing_completed_at: string
+          p_correlation_id?: string
+        }
+        Returns: undefined
+      }
       sync_media_group_content: {
+        Args: {
+          p_message_id: string
+          p_media_group_id: string
+          p_analyzed_content: Json
+          p_correlation_id?: string
+        }
+        Returns: undefined
+      }
+      sync_media_group_content_direct: {
         Args: {
           p_message_id: string
           p_media_group_id: string
