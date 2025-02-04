@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom
 import { DashboardLayout } from "./components/Layout/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import ProductGallery from "./pages/ProductGallery";
+import PublicGallery from "./pages/PublicGallery";
 import Vendors from "./pages/Vendors";
 import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
@@ -53,6 +54,7 @@ const App = () => (
         <Sonner />
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          <Route path="/p/gallery" element={<PublicGallery />} />
           <Route
             element={
               <ProtectedRoute>
