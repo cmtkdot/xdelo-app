@@ -37,7 +37,7 @@ serve(async (req) => {
 
     console.log('Caption parsed successfully:', parseResult);
 
-    // Now use the new process_media_group_content function
+    // Now use the process_media_group_content function instead of process_media_group_analysis_direct
     const { error: processError } = await supabase.rpc('process_media_group_content', {
       p_message_id: message_id,
       p_media_group_id: media_group_id,
