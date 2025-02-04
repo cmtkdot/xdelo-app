@@ -42,6 +42,7 @@ export interface ExistingMessage {
   is_original_caption: boolean;
   group_caption_synced: boolean;
   message_caption_id?: string;
+  public_url?: string;
 }
 
 export interface MessageData {
@@ -64,4 +65,5 @@ export interface MessageData {
   group_message_count?: number | null;
   is_original_caption?: boolean;
   analyzed_content?: Record<string, any> | null;
+  error_message?: string;
 }

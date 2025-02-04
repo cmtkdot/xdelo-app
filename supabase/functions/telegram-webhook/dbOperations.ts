@@ -4,21 +4,23 @@ export async function findExistingMessage(
   supabase: SupabaseClient,
   fileUniqueId: string
 ): Promise<ExistingMessage | null> {
-  const { data, error } = await supabase
-    .from("messages")
-    .select("*")
-    .eq("file_unique_id", fileUniqueId)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("file_unique_id", fileUniqueId)
+      .maybeSingle();
 
-  if (error) {
-    if (error.code !== "PGRST116") { // PGRST116 is "not found" error
+    if (error) {
       console.error("❌ Error checking for existing message:", error);
       throw error;
     }
-    return null;
-  }
 
-  return data;
+    return data;
+  } catch (error) {
+    console.error("❌ Error in findExistingMessage:", error);
+    throw error;
+  }
 }
 
 export async function updateExistingMessage(
@@ -26,16 +28,21 @@ export async function updateExistingMessage(
   messageId: string,
   updateData: Partial<MessageData>
 ) {
-  const { error } = await supabase
-    .from("messages")
-    .update({
-      ...updateData,
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", messageId);
+  try {
+    const { error } = await supabase
+      .from("messages")
+      .update({
+        ...updateData,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", messageId);
 
-  if (error) {
-    console.error("❌ Failed to update existing message:", error);
+    if (error) {
+      console.error("❌ Failed to update existing message:", error);
+      throw error;
+    }
+  } catch (error) {
+    console.error("❌ Error in updateExistingMessage:", error);
     throw error;
   }
 }
@@ -44,22 +51,27 @@ export async function createNewMessage(
   supabase: SupabaseClient,
   messageData: MessageData
 ) {
-  const { data: newMessage, error: messageError } = await supabase
-    .from("messages")
-    .insert({
-      ...messageData,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    })
-    .select()
-    .single();
+  try {
+    const { data: newMessage, error: messageError } = await supabase
+      .from("messages")
+      .insert({
+        ...messageData,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
 
-  if (messageError) {
-    console.error("❌ Failed to store message:", messageError);
-    throw messageError;
+    if (messageError) {
+      console.error("❌ Failed to store message:", messageError);
+      throw messageError;
+    }
+
+    return newMessage;
+  } catch (error) {
+    console.error("❌ Error in createNewMessage:", error);
+    throw error;
   }
-
-  return newMessage;
 }
 
 export async function triggerCaptionParsing(
@@ -97,40 +109,6 @@ export async function triggerCaptionParsing(
       error_message: error.message
     });
     
-    throw error;
-  }
-}
-
-export async function syncMediaGroupAnalysis(
-  supabase: SupabaseClient,
-  mediaGroupId: string,
-  analyzedContent: Record<string, any>,
-  originalMessageId: string
-) {
-  try {
-    console.log("🔄 Syncing media group analysis:", { mediaGroupId, originalMessageId });
-    
-    // Update all messages in the group
-    const { error } = await supabase
-      .from('messages')
-      .update({
-        analyzed_content: analyzedContent,
-        processing_state: 'completed',
-        processing_completed_at: new Date().toISOString(),
-        group_caption_synced: true,
-        message_caption_id: originalMessageId,
-        updated_at: new Date().toISOString()
-      })
-      .eq('media_group_id', mediaGroupId);
-
-    if (error) {
-      console.error("❌ Error syncing media group analysis:", error);
-      throw error;
-    }
-
-    console.log("✅ Successfully synced media group analysis");
-  } catch (error) {
-    console.error("❌ Error in syncMediaGroupAnalysis:", error);
     throw error;
   }
 }
