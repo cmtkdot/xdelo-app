@@ -14,9 +14,9 @@ serve(async (req) => {
   }
 
   try {
-    const { message_id, media_group_id, caption, correlation_id } = await req.json();
+    const { message_id, media_group_id, caption, correlation_id, is_reanalysis } = await req.json();
     
-    console.log('Starting caption analysis:', { message_id, media_group_id, correlation_id });
+    console.log('Starting caption analysis:', { message_id, media_group_id, correlation_id, is_reanalysis });
 
     if (!caption || typeof caption !== 'string' || caption.trim() === '') {
       throw new Error('Caption is required and must be a non-empty string');
@@ -30,6 +30,40 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // If this is part of a media group, wait for all files to be uploaded
+    if (media_group_id && !is_reanalysis) {
+      console.log('Checking media group completeness:', media_group_id);
+      
+      // Wait for up to 30 seconds for all files to be uploaded
+      for (let i = 0; i < 30; i++) {
+        const { data: groupMessages, error: groupError } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('media_group_id', media_group_id);
+
+        if (groupError) {
+          console.error('Error checking media group:', groupError);
+          throw groupError;
+        }
+
+        // Check if we have all messages (group_message_count matches actual count)
+        const expectedCount = groupMessages[0]?.group_message_count || 0;
+        if (groupMessages.length === expectedCount) {
+          console.log('Media group complete:', {
+            expected: expectedCount,
+            actual: groupMessages.length
+          });
+          break;
+        }
+
+        if (i === 29) {
+          console.warn('Timeout waiting for media group completion');
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
 
     // Analyze the caption using AI
     const analyzedContent = await analyzeCaption(caption);
@@ -47,11 +81,9 @@ serve(async (req) => {
       .from('messages')
       .update({
         analyzed_content: analyzedContent,
+        processing_state: 'completed',
         processing_completed_at: new Date().toISOString(),
-        processing_correlation_id: correlation_id || crypto.randomUUID(),
-        processing_status: 'completed',
-        processing_attempts: 1,
-        last_processed_at: new Date().toISOString()
+        group_caption_synced: true
       })
       .eq('id', message_id);
 
@@ -60,19 +92,49 @@ serve(async (req) => {
       throw updateError;
     }
 
-    console.log('Message updated successfully');
-
-    // If this is part of a media group, the trigger will handle syncing other messages
+    // If this is part of a media group, update all related messages
     if (media_group_id) {
-      console.log('Media group detected, trigger will handle syncing');
+      console.log('Updating media group messages:', media_group_id);
+      const { error: groupUpdateError } = await supabase
+        .from('messages')
+        .update({
+          analyzed_content: analyzedContent,
+          processing_state: 'completed',
+          processing_completed_at: new Date().toISOString(),
+          group_caption_synced: true,
+          message_caption_id: message_id
+        })
+        .eq('media_group_id', media_group_id)
+        .neq('id', message_id);
+
+      if (groupUpdateError) {
+        console.error('Error updating media group:', groupUpdateError);
+        throw groupUpdateError;
+      }
     }
+
+    // Log the analysis completion
+    await supabase.from('analysis_audit_log').insert({
+      message_id,
+      media_group_id,
+      event_type: is_reanalysis ? 'REANALYSIS_COMPLETED' : 'ANALYSIS_COMPLETED',
+      old_state: 'pending',
+      new_state: 'completed',
+      analyzed_content: analyzedContent,
+      processing_details: {
+        correlation_id,
+        timestamp: new Date().toISOString(),
+        is_reanalysis: !!is_reanalysis,
+        is_media_group: !!media_group_id
+      }
+    });
 
     return new Response(
       JSON.stringify({ 
         success: true,
         message: 'Caption parsed and processed successfully',
         analyzed_content: analyzedContent,
-        correlation_id: correlation_id
+        correlation_id
       }),
       { 
         headers: { 
