@@ -77,6 +77,7 @@ export type Database = {
           purchase_order_uid: string | null
           retry_count: number | null
           storage_path: string | null
+          supabase_sync_json: Json | null
           telegram_data: Json | null
           telegram_message_id: number | null
           updated_at: string | null
@@ -114,6 +115,7 @@ export type Database = {
           purchase_order_uid?: string | null
           retry_count?: number | null
           storage_path?: string | null
+          supabase_sync_json?: Json | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
@@ -151,6 +153,7 @@ export type Database = {
           purchase_order_uid?: string | null
           retry_count?: number | null
           storage_path?: string | null
+          supabase_sync_json?: Json | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
