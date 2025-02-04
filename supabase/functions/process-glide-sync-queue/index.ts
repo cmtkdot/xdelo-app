@@ -14,7 +14,7 @@ interface SyncMetrics {
   errors: any[];
 }
 
-const BATCH_SIZE = 100;
+const BATCH_SIZE = 500;
 const MAX_RETRIES = 3;
 const RATE_LIMIT_DELAY = 100; // ms between requests
 

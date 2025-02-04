@@ -230,10 +230,13 @@ export type Database = {
       }
       glide_messages_sync_queue: {
         Row: {
+          batch_size: number | null
           correlation_id: string | null
           created_at: string | null
+          data_hash: string | null
           id: string
           last_error: string | null
+          last_glide_data: Json | null
           message_id: string | null
           processed_at: string | null
           retry_count: number | null
@@ -241,10 +244,13 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          batch_size?: number | null
           correlation_id?: string | null
           created_at?: string | null
+          data_hash?: string | null
           id?: string
           last_error?: string | null
+          last_glide_data?: Json | null
           message_id?: string | null
           processed_at?: string | null
           retry_count?: number | null
@@ -252,10 +258,13 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          batch_size?: number | null
           correlation_id?: string | null
           created_at?: string | null
+          data_hash?: string | null
           id?: string
           last_error?: string | null
+          last_glide_data?: Json | null
           message_id?: string | null
           processed_at?: string | null
           retry_count?: number | null
@@ -802,6 +811,12 @@ export type Database = {
       bytea_to_text: {
         Args: {
           data: string
+        }
+        Returns: string
+      }
+      compute_data_hash: {
+        Args: {
+          data: Json
         }
         Returns: string
       }
