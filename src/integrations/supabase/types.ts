@@ -82,7 +82,7 @@ export type Database = {
           telegram_data: Json | null
           telegram_message_id: number | null
           updated_at: string | null
-          user_id: string
+          user_id: string | null
           width: number | null
         }
         Insert: {
@@ -121,7 +121,7 @@ export type Database = {
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
-          user_id: string
+          user_id?: string | null
           width?: number | null
         }
         Update: {
@@ -160,7 +160,7 @@ export type Database = {
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
-          user_id?: string
+          user_id?: string | null
           width?: number | null
         }
         Relationships: [
