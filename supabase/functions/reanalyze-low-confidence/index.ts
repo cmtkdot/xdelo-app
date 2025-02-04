@@ -37,17 +37,7 @@ const SYSTEM_PROMPT = `You are a specialized product information extractor. Extr
    - Text in parentheses
    - Any additional unstructured text
    - Example: "(indoor grown)" -> "indoor grown"
-   - Include ANY information not fitting in other fields
-
-Example Input: "Blue Dream x2 #CHAD120523 (indoor)"
-Expected Output: {
-  "product_name": "Blue Dream",
-  "product_code": "CHAD120523",
-  "vendor_uid": "CHAD",
-  "purchase_date": "2023-12-05",
-  "quantity": 2,
-  "notes": "indoor"
-}`;
+   - Include ANY information not fitting in other fields`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -57,17 +47,14 @@ serve(async (req) => {
   try {
     const { message_id, caption, media_group_id, analyzed_content, correlation_id = crypto.randomUUID() } = await req.json();
     
-    // Validate required fields
     if (!message_id || !caption) {
       throw new Error('message_id and caption are required');
     }
 
-    // Check if this is an auto-triggered reanalysis
     const isAutoTriggered = analyzed_content?.parsing_metadata?.confidence < 0.8 && 
                            analyzed_content?.parsing_metadata?.method === 'manual' &&
                            !analyzed_content?.parsing_metadata?.reanalysis_attempted;
 
-    // If not auto-triggered and no explicit reanalysis request, skip
     if (!isAutoTriggered && !correlation_id) {
       console.log('Skipping reanalysis - confidence threshold not met:', {
         confidence: analyzed_content?.parsing_metadata?.confidence,
@@ -97,7 +84,6 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get the message to check its current state
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .select('*')
@@ -108,7 +94,6 @@ serve(async (req) => {
       throw messageError;
     }
 
-    // Update message to pending state
     await supabase
       .from('messages')
       .update({
@@ -118,7 +103,6 @@ serve(async (req) => {
       })
       .eq('id', message_id);
 
-    // Log reanalysis attempt
     await supabase
       .from('analysis_audit_log')
       .insert({
@@ -150,7 +134,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: caption }
@@ -172,7 +156,6 @@ serve(async (req) => {
     try {
       const parsedResponse = JSON.parse(aiResponse);
       
-      // Ensure correct field names and structure with explicit lowercase mapping
       newAnalyzedContent = {
         notes: parsedResponse.notes || "",
         quantity: parsedResponse.quantity ? Number(parsedResponse.quantity) : null,
@@ -197,7 +180,6 @@ serve(async (req) => {
       throw new Error('Failed to parse AI response');
     }
 
-    // Call the process_media_group_analysis function with correlation_id
     const { error: syncError } = await supabase.rpc('process_media_group_analysis', {
       p_message_id: message_id,
       p_media_group_id: media_group_id,
@@ -210,7 +192,6 @@ serve(async (req) => {
       throw syncError;
     }
 
-    // Log successful reanalysis
     await supabase
       .from('analysis_audit_log')
       .insert({
