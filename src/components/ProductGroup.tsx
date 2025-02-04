@@ -128,36 +128,33 @@ export const ProductGroup = ({
 
   const handleDelete = async () => {
     try {
-      // Log deletion attempt
-      await supabase.from('analysis_audit_log').insert({
-        message_id: mainMedia.id,
-        media_group_id: mainMedia.media_group_id,
-        event_type: 'DELETE_REQUESTED',
-        old_state: mainMedia.processing_state,
-        processing_details: {
-          group_message_count: mainMedia.group_message_count,
-          is_original_caption: mainMedia.is_original_caption
-        }
-      });
-
       if (mainMedia.media_group_id) {
+        // Delete all messages in the media group
         const { error } = await supabase
           .from('messages')
           .delete()
           .eq('media_group_id', mainMedia.media_group_id);
 
         if (error) throw error;
+      } else {
+        // Delete single message
+        const { error } = await supabase
+          .from('messages')
+          .delete()
+          .eq('id', mainMedia.id);
+
+        if (error) throw error;
       }
 
       toast({
         title: "Success",
-        description: "Product group deleted successfully",
+        description: "Product deleted successfully",
       });
     } catch (error) {
-      console.error("Error deleting product group:", error);
+      console.error("Error deleting product:", error);
       toast({
         title: "Error",
-        description: "Failed to delete product group",
+        description: "Failed to delete product",
         variant: "destructive",
       });
     }
