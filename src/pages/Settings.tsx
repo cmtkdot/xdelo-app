@@ -5,82 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { RefreshCw } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-
-interface SyncMetrics {
-  id: string;
-  batch_id: string;
-  total_processed: number;
-  successful: number;
-  failed: number;
-  started_at: string;
-  completed_at: string | null;
-  error_details: Record<string, any> | null;
-}
 
 const Settings = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-
-  // Fetch sync metrics with proper error handling
-  const { data: syncMetrics, refetch: refetchMetrics } = useQuery({
-    queryKey: ['syncMetrics'],
-    queryFn: async () => {
-      try {
-        // Fetch latest metrics
-        const { data: metrics, error: metricsError } = await supabase
-          .from('glide_sync_metrics')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (metricsError) {
-          console.error('Error fetching metrics:', metricsError);
-          throw metricsError;
-        }
-
-        // Fetch pending items count with proper headers
-        const { count, error: countError } = await supabase
-          .from('glide_messages_sync_queue')
-          .select('id', { 
-            count: 'exact',
-            head: true 
-          })
-          .eq('status', 'pending');
-
-        if (countError) {
-          console.error('Error fetching pending count:', countError);
-          throw countError;
-        }
-
-        return {
-          total_messages: metrics?.total_processed || 0,
-          successful_messages: metrics?.successful || 0,
-          failed_messages: metrics?.failed || 0,
-          last_sync: metrics?.completed_at,
-          pending_items: count || 0
-        };
-      } catch (error) {
-        console.error('Error in syncMetrics query:', error);
-        toast({
-          title: "Error fetching metrics",
-          description: "Failed to fetch sync metrics. Please try again.",
-          variant: "destructive",
-        });
-        return {
-          total_messages: 0,
-          successful_messages: 0,
-          failed_messages: 0,
-          last_sync: null,
-          pending_items: 0
-        };
-      }
-    },
-    refetchInterval: 5000 // Refresh every 5 seconds
-  });
 
   useEffect(() => {
     const getUser = async () => {
@@ -114,28 +44,20 @@ const Settings = () => {
     try {
       setIsSyncing(true);
       
-      const { error: functionError } = await supabase.functions.invoke('process-glide-sync-queue', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      // Call the function to process Glide sync
+      const { error: functionError } = await supabase.functions.invoke('process-glide-sync-queue');
       
       if (functionError) throw functionError;
 
       toast({
         title: "Sync initiated",
-        description: "Messages are being synced with Glide. Check the metrics for details.",
+        description: "Messages are being synced with Glide. Check the logs for details.",
       });
 
-      // Refresh metrics after sync
-      await refetchMetrics();
-
     } catch (error: any) {
-      console.error('Sync error:', error);
       toast({
         title: "Sync Error",
-        description: error.message || "An error occurred during sync",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -163,48 +85,19 @@ const Settings = () => {
         </div>
 
         <div className="border-t pt-6">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-medium">Glide Sync</h3>
-                <p className="text-sm text-gray-500">Sync messages with Glide</p>
-              </div>
-              <Button 
-                onClick={handleSyncAllMessages} 
-                disabled={isSyncing}
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                {isSyncing ? 'Syncing...' : 'Sync All Messages'}
-              </Button>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-medium">Glide Sync</h3>
+              <p className="text-sm text-gray-500">Sync all completed messages with Glide</p>
             </div>
-
-            {syncMetrics && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-                <Card className="p-4">
-                  <h4 className="text-sm font-medium text-gray-500">Total Messages</h4>
-                  <p className="text-2xl font-bold">{syncMetrics.total_messages}</p>
-                </Card>
-                <Card className="p-4">
-                  <h4 className="text-sm font-medium text-gray-500">Successful</h4>
-                  <p className="text-2xl font-bold text-green-600">{syncMetrics.successful_messages}</p>
-                </Card>
-                <Card className="p-4">
-                  <h4 className="text-sm font-medium text-gray-500">Failed</h4>
-                  <p className="text-2xl font-bold text-red-600">{syncMetrics.failed_messages}</p>
-                </Card>
-                <Card className="p-4">
-                  <h4 className="text-sm font-medium text-gray-500">Pending</h4>
-                  <p className="text-2xl font-bold text-blue-600">{syncMetrics.pending_items}</p>
-                </Card>
-              </div>
-            )}
-
-            {syncMetrics?.last_sync && (
-              <p className="text-sm text-gray-500">
-                Last sync: {new Date(syncMetrics.last_sync).toLocaleString()}
-              </p>
-            )}
+            <Button 
+              onClick={handleSyncAllMessages} 
+              disabled={isSyncing}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Syncing...' : 'Sync All Messages'}
+            </Button>
           </div>
         </div>
       </Card>

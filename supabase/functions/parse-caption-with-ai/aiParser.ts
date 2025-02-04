@@ -32,7 +32,7 @@ export async function aiParse(caption: string): Promise<ParsedContent> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: caption }

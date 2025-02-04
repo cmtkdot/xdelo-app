@@ -1,61 +1,250 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
 
-Deno.serve(async (req) => {
+const SYSTEM_PROMPT = `You are a specialized product information extractor. Extract structured information following these rules:
+
+1. Product Name (REQUIRED):
+   - Text before '#' or 'x' marker
+   - Remove any trailing spaces
+   - Example: "Blue Dream x2" -> "Blue Dream"
+
+2. Product Code:
+   - Full code after '#' including vendor and date
+   - Format: #[vendor_uid][date]
+   - Example: "#CHAD120523" -> "CHAD120523"
+
+3. Vendor UID:
+   - 1-4 letters after '#' before any numbers
+   - Example: "#CHAD120523" -> "CHAD"
+
+4. Purchase Date:
+   - Convert date formats:
+   - 6 digits (mmDDyy) -> YYYY-MM-DD
+   - 5 digits (mDDyy) -> YYYY-MM-DD (add leading zero)
+   - Example: "120523" -> "2023-12-05"
+
+5. Quantity:
+   - Look for numbers after 'x' or 'qty:'
+   - Must be positive integer
+   - Common formats: "x2", "x 2", "qty: 2"
+
+6. Notes:
+   - Text in parentheses
+   - Any additional unstructured text
+   - Example: "(indoor grown)" -> "indoor grown"
+   - Include ANY information not fitting in other fields
+
+Example Input: "Blue Dream x2 #CHAD120523 (indoor)"
+Expected Output: {
+  "product_name": "Blue Dream",
+  "product_code": "CHAD120523",
+  "vendor_uid": "CHAD",
+  "purchase_date": "2023-12-05",
+  "quantity": 2,
+  "notes": "indoor"
+}`;
+
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
-
-    const { message_id, caption, media_group_id } = await req.json()
-
-    if (!message_id) {
-      throw new Error('Message ID is required')
+    const { message_id, caption, media_group_id, analyzed_content, correlation_id = crypto.randomUUID() } = await req.json();
+    
+    // Validate required fields
+    if (!message_id || !caption) {
+      throw new Error('message_id and caption are required');
     }
 
-    console.log('Reanalyzing message:', { message_id, media_group_id })
+    // Check if this is an auto-triggered reanalysis
+    const isAutoTriggered = analyzed_content?.parsing_metadata?.confidence < 0.8 && 
+                           analyzed_content?.parsing_metadata?.method === 'manual' &&
+                           !analyzed_content?.parsing_metadata?.reanalysis_attempted;
 
-    // Call the parse-caption-with-ai function
-    const response = await supabaseClient.functions.invoke('parse-caption-with-ai', {
-      body: {
+    // If not auto-triggered and no explicit reanalysis request, skip
+    if (!isAutoTriggered && !correlation_id) {
+      console.log('Skipping reanalysis - confidence threshold not met:', {
+        confidence: analyzed_content?.parsing_metadata?.confidence,
+        method: analyzed_content?.parsing_metadata?.method,
+        reanalysis_attempted: analyzed_content?.parsing_metadata?.reanalysis_attempted
+      });
+      return new Response(
+        JSON.stringify({ 
+          message: 'Reanalysis not needed',
+          analyzed_content,
+          correlation_id 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Starting reanalysis:', { 
+      message_id, 
+      caption, 
+      correlation_id,
+      media_group_id,
+      confidence: analyzed_content?.parsing_metadata?.confidence,
+      is_auto: isAutoTriggered
+    });
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Get the message to check its current state
+    const { data: message, error: messageError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', message_id)
+      .single();
+
+    if (messageError) {
+      throw messageError;
+    }
+
+    // Update message to pending state
+    await supabase
+      .from('messages')
+      .update({
+        processing_state: 'pending',
+        group_caption_synced: false,
+        retry_count: (message.retry_count || 0) + 1
+      })
+      .eq('id', message_id);
+
+    // Log reanalysis attempt
+    await supabase
+      .from('analysis_audit_log')
+      .insert({
         message_id,
-        caption,
-        media_group_id,
-        correlation_id: crypto.randomUUID()
-      }
-    })
+        media_group_id: message.media_group_id,
+        event_type: isAutoTriggered ? 'AUTO_REANALYSIS_STARTED' : 'MANUAL_REANALYSIS_STARTED',
+        old_state: message.processing_state,
+        new_state: 'pending',
+        processing_details: {
+          correlation_id,
+          retry_count: message.retry_count,
+          start_time: new Date().toISOString(),
+          group_message_count: message.group_message_count,
+          is_original_caption: message.is_original_caption,
+          is_auto_triggered: isAutoTriggered,
+          original_confidence: analyzed_content?.parsing_metadata?.confidence
+        }
+      });
 
-    if (response.error) {
-      throw new Error(`AI Analysis failed: ${response.error.message}`)
+    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openAIApiKey) {
+      throw new Error('OpenAI API key not configured');
     }
 
-    console.log('Analysis completed:', response.data)
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: caption }
+        ],
+        temperature: 0.3,
+        max_tokens: 500
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const aiResponse = data.choices[0].message.content;
+    console.log('Raw AI response:', aiResponse);
+    
+    let newAnalyzedContent;
+    try {
+      const parsedResponse = JSON.parse(aiResponse);
+      
+      // Ensure correct field names and structure with explicit lowercase mapping
+      newAnalyzedContent = {
+        notes: parsedResponse.notes || "",
+        quantity: parsedResponse.quantity ? Number(parsedResponse.quantity) : null,
+        vendor_uid: parsedResponse.vendor_uid || "",
+        product_code: parsedResponse.product_code || "",
+        product_name: parsedResponse.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
+        purchase_date: parsedResponse.purchase_date || "",
+        parsing_metadata: {
+          method: "ai",
+          confidence: 0.9,
+          reanalysis_attempted: true,
+          timestamp: new Date().toISOString(),
+          original_confidence: analyzed_content?.parsing_metadata?.confidence,
+          is_auto_triggered: isAutoTriggered
+        }
+      };
+
+      console.log('New analyzed content:', newAnalyzedContent);
+
+    } catch (parseError) {
+      console.error('Error parsing AI response:', parseError);
+      throw new Error('Failed to parse AI response');
+    }
+
+    // Call the process_media_group_analysis function with correlation_id
+    const { error: syncError } = await supabase.rpc('process_media_group_analysis', {
+      p_message_id: message_id,
+      p_media_group_id: media_group_id,
+      p_analyzed_content: newAnalyzedContent,
+      p_processing_completed_at: new Date().toISOString(),
+      p_correlation_id: correlation_id
+    });
+
+    if (syncError) {
+      throw syncError;
+    }
+
+    // Log successful reanalysis
+    await supabase
+      .from('analysis_audit_log')
+      .insert({
+        message_id,
+        media_group_id,
+        event_type: isAutoTriggered ? 'AUTO_REANALYSIS_COMPLETED' : 'MANUAL_REANALYSIS_COMPLETED',
+        old_state: 'pending',
+        new_state: 'completed',
+        analyzed_content: newAnalyzedContent,
+        processing_details: {
+          correlation_id,
+          completion_time: new Date().toISOString(),
+          retry_count: message.retry_count,
+          group_message_count: message.group_message_count,
+          is_original_caption: message.is_original_caption,
+          is_auto_triggered: isAutoTriggered
+        }
+      });
 
     return new Response(
-      JSON.stringify({ success: true, data: response.data }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
-    )
+      JSON.stringify({ 
+        message: 'Reanalysis completed', 
+        analyzed_content: newAnalyzedContent,
+        correlation_id,
+        is_auto_triggered: isAutoTriggered
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
 
   } catch (error) {
-    console.error('Error in reanalyze-low-confidence function:', error)
+    console.error('Error in reanalyze-low-confidence function:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
-      }
-    )
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
-})
+});

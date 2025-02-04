@@ -31,9 +31,7 @@ serve(async (req) => {
       throw new Error('Missing Supabase credentials');
     }
 
-    // Ensure the URL is properly formatted
-    const supabaseUrlObj = new URL(supabaseUrl);
-    const supabase = createClient(supabaseUrlObj.toString(), supabaseKey);
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Get the source message with all relevant fields
     const { data: sourceMessage, error: sourceError } = await supabase

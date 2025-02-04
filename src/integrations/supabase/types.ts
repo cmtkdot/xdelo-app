@@ -104,8 +104,6 @@ export type Database = {
           glide_table_name: string
           id: string
           is_active: boolean | null
-          mutation_endpoint: string | null
-          query_endpoint: string | null
           supabase_table_name: string
           supported_operations: string[] | null
           tableName: string
@@ -121,8 +119,6 @@ export type Database = {
           glide_table_name: string
           id?: string
           is_active?: boolean | null
-          mutation_endpoint?: string | null
-          query_endpoint?: string | null
           supabase_table_name: string
           supported_operations?: string[] | null
           tableName: string
@@ -138,8 +134,6 @@ export type Database = {
           glide_table_name?: string
           id?: string
           is_active?: boolean | null
-          mutation_endpoint?: string | null
-          query_endpoint?: string | null
           supabase_table_name?: string
           supported_operations?: string[] | null
           tableName?: string
@@ -149,67 +143,118 @@ export type Database = {
       }
       glide_messages_configuration: {
         Row: {
-          app_id: string
-          auth_token: string
+          api_endpoint: string | null
+          app_id: string | null
+          auth_token: string | null
           created_at: string | null
+          field_mappings: Json | null
+          glide_table_name: string
           id: string
           is_active: boolean | null
-          table_name: string
+          mutation_endpoint: string | null
+          supported_operations: string[] | null
           updated_at: string | null
         }
         Insert: {
-          app_id: string
-          auth_token: string
+          api_endpoint?: string | null
+          app_id?: string | null
+          auth_token?: string | null
           created_at?: string | null
+          field_mappings?: Json | null
+          glide_table_name: string
           id?: string
           is_active?: boolean | null
-          table_name: string
+          mutation_endpoint?: string | null
+          supported_operations?: string[] | null
           updated_at?: string | null
         }
         Update: {
-          app_id?: string
-          auth_token?: string
+          api_endpoint?: string | null
+          app_id?: string | null
+          auth_token?: string | null
           created_at?: string | null
+          field_mappings?: Json | null
+          glide_table_name?: string
           id?: string
           is_active?: boolean | null
-          table_name?: string
+          mutation_endpoint?: string | null
+          supported_operations?: string[] | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_messages_sync_metrics: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          failed_messages: number | null
+          id: string
+          performance_data: Json | null
+          started_at: string | null
+          successful_messages: number | null
+          sync_batch_id: string
+          total_messages: number | null
+          validation_errors: Json | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          failed_messages?: number | null
+          id?: string
+          performance_data?: Json | null
+          started_at?: string | null
+          successful_messages?: number | null
+          sync_batch_id: string
+          total_messages?: number | null
+          validation_errors?: Json | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          failed_messages?: number | null
+          id?: string
+          performance_data?: Json | null
+          started_at?: string | null
+          successful_messages?: number | null
+          sync_batch_id?: string
+          total_messages?: number | null
+          validation_errors?: Json | null
         }
         Relationships: []
       }
       glide_messages_sync_queue: {
         Row: {
-          completed_at: string | null
+          correlation_id: string | null
           created_at: string | null
-          data_hash: string | null
-          error_message: string | null
           id: string
-          last_attempted_at: string | null
+          last_error: string | null
           message_id: string | null
+          processed_at: string | null
           retry_count: number | null
           status: string | null
+          updated_at: string | null
         }
         Insert: {
-          completed_at?: string | null
+          correlation_id?: string | null
           created_at?: string | null
-          data_hash?: string | null
-          error_message?: string | null
           id?: string
-          last_attempted_at?: string | null
+          last_error?: string | null
           message_id?: string | null
+          processed_at?: string | null
           retry_count?: number | null
           status?: string | null
+          updated_at?: string | null
         }
         Update: {
-          completed_at?: string | null
+          correlation_id?: string | null
           created_at?: string | null
-          data_hash?: string | null
-          error_message?: string | null
           id?: string
-          last_attempted_at?: string | null
+          last_error?: string | null
           message_id?: string | null
+          processed_at?: string | null
           retry_count?: number | null
           status?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -397,34 +442,43 @@ export type Database = {
       }
       glide_sync_metrics: {
         Row: {
-          batch_id: string
           completed_at: string | null
-          error_details: Json | null
-          failed: number | null
+          created_at: string | null
+          failed_records: number | null
           id: string
+          performance_data: Json | null
           started_at: string | null
-          successful: number | null
-          total_processed: number | null
+          successful_records: number | null
+          sync_type: string
+          table_id: string
+          total_records: number | null
+          validation_errors: Json | null
         }
         Insert: {
-          batch_id: string
           completed_at?: string | null
-          error_details?: Json | null
-          failed?: number | null
+          created_at?: string | null
+          failed_records?: number | null
           id?: string
+          performance_data?: Json | null
           started_at?: string | null
-          successful?: number | null
-          total_processed?: number | null
+          successful_records?: number | null
+          sync_type: string
+          table_id: string
+          total_records?: number | null
+          validation_errors?: Json | null
         }
         Update: {
-          batch_id?: string
           completed_at?: string | null
-          error_details?: Json | null
-          failed?: number | null
+          created_at?: string | null
+          failed_records?: number | null
           id?: string
+          performance_data?: Json | null
           started_at?: string | null
-          successful?: number | null
-          total_processed?: number | null
+          successful_records?: number | null
+          sync_type?: string
+          table_id?: string
+          total_records?: number | null
+          validation_errors?: Json | null
         }
         Relationships: []
       }
@@ -552,7 +606,6 @@ export type Database = {
           purchase_order_uid: string | null
           retry_count: number | null
           storage_path: string | null
-          supabase_sync_json: Json | null
           telegram_data: Json | null
           telegram_message_id: number | null
           updated_at: string | null
@@ -596,7 +649,6 @@ export type Database = {
           purchase_order_uid?: string | null
           retry_count?: number | null
           storage_path?: string | null
-          supabase_sync_json?: Json | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
@@ -640,7 +692,6 @@ export type Database = {
           purchase_order_uid?: string | null
           retry_count?: number | null
           storage_path?: string | null
-          supabase_sync_json?: Json | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
@@ -727,7 +778,9 @@ export type Database = {
     Views: {
       glide_configuration_status: {
         Row: {
+          api_endpoint: string | null
           auth_token: string | null
+          field_mappings: Json | null
           glide_table_name: string | null
           id: string | null
           is_active: boolean | null
@@ -740,12 +793,6 @@ export type Database = {
       bytea_to_text: {
         Args: {
           data: string
-        }
-        Returns: string
-      }
-      compute_data_hash: {
-        Args: {
-          data: Json
         }
         Returns: string
       }

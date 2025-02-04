@@ -3,25 +3,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
 }
 
-interface SyncMetrics {
-  processed: number;
-  successful: number;
-  failed: number;
-  skipped: number;
-  errors: any[];
+interface GlideResponse {
+  rows?: Array<Record<string, any>>;
+  next?: string;
 }
-
-const BATCH_SIZE = 500;
-const MAX_RETRIES = 3;
-const RATE_LIMIT_DELAY = 100; // ms between requests
 
 // Handle CORS preflight requests
 Deno.serve(async (req) => {
-  console.log("📥 Received sync request");
-
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -33,302 +23,175 @@ Deno.serve(async (req) => {
     )
 
     // Get active Glide configuration
-    console.log("🔍 Fetching active Glide configuration");
     const { data: config, error: configError } = await supabaseClient
       .from('glide_messages_configuration')
       .select('*')
       .eq('is_active', true)
-      .maybeSingle()
+      .single()
 
-    if (configError) {
-      console.error("❌ Error fetching Glide configuration:", configError);
-      throw new Error(`Failed to fetch Glide configuration: ${configError.message}`);
+    if (configError || !config) {
+      throw new Error('No active Glide configuration found')
     }
 
-    if (!config) {
-      console.error("❌ No active Glide configuration found");
-      throw new Error('No active Glide configuration found');
-    }
-
-    if (!config.auth_token) {
-      console.error("❌ No auth token found in configuration");
-      throw new Error('No auth token found in configuration');
-    }
-
-    console.log("✅ Configuration found:", {
+    console.log('Processing with config:', {
       tableName: config.glide_table_name,
-      authToken: 'present'
-    });
+      authToken: config.auth_token ? 'present' : 'missing',
+      mappings: Object.keys(config.field_mappings).length
+    })
 
-    // Initialize metrics
-    const metrics: SyncMetrics = {
-      processed: 0,
-      successful: 0,
-      failed: 0,
-      skipped: 0,
-      errors: []
-    };
+    // First, get current Glide data to compare
+    const glideResponse = await fetch('https://api.glideapp.io/api/function/queryTables', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.auth_token}`,
+      },
+      body: JSON.stringify({
+        appID: config.app_id,
+        queries: [{
+          tableName: config.glide_table_name,
+          utc: true
+        }]
+      })
+    })
 
-    const batchId = crypto.randomUUID();
-    let hasMoreItems = true;
-    let offset = 0;
+    if (!glideResponse.ok) {
+      throw new Error(`Glide API error: ${await glideResponse.text()}`)
+    }
 
-    while (hasMoreItems) {
-      // Fetch batch of pending items
-      console.log(`🔄 Fetching batch of ${BATCH_SIZE} items starting at offset ${offset}`);
-      const { data: queueItems, error: queueError } = await supabaseClient
-        .from('glide_messages_sync_queue')
-        .select('*, messages(*)')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: true })
-        .range(offset, offset + BATCH_SIZE - 1)
+    const glideData: GlideResponse = await glideResponse.json()
+    const glideRows = glideData.rows || []
+    
+    // Extract the actual Glide column ID from the descriptive mapping
+    const getGlideColumnId = (mappingKey: string) => {
+      const match = mappingKey.match(/\((.*?)\)/)
+      return match ? match[1] : mappingKey
+    }
 
-      if (queueError) {
-        console.error("❌ Error fetching queue items:", queueError);
-        throw new Error(`Failed to fetch queue items: ${queueError.message}`);
-      }
+    // Create a map of Glide rows by ID for quick lookup
+    const glideRowsMap = new Map(
+      glideRows.map(row => {
+        const idColumnKey = Object.keys(config.field_mappings).find(key => 
+          config.field_mappings[key] === 'id'
+        )
+        return [row[getGlideColumnId(idColumnKey || '')], row]
+      })
+    )
 
-      if (!queueItems?.length) {
-        console.log("✅ No more items to process");
-        hasMoreItems = false;
-        break;
-      }
+    // Process pending queue items
+    const { data: queueItems, error: queueError } = await supabaseClient
+      .from('glide_messages_sync_queue')
+      .select('*, messages(*)')
+      .eq('status', 'pending')
+      .limit(500)
 
-      console.log(`📊 Processing ${queueItems.length} queue items`);
+    if (queueError) {
+      throw new Error(`Failed to fetch queue items: ${queueError.message}`)
+    }
 
-      const mutations = [];
-      const processedIds = [];
-      let lastRequestTime = Date.now();
+    console.log(`Processing ${queueItems?.length || 0} queue items`)
 
-      // Rate limiting helper
-      const waitForRateLimit = async () => {
-        const now = Date.now();
-        const elapsed = now - lastRequestTime;
-        if (elapsed < RATE_LIMIT_DELAY) {
-          await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY - elapsed));
-        }
-        lastRequestTime = Date.now();
-      };
+    const mutations = []
+    let successCount = 0
+    let failureCount = 0
 
-      // Process batch
-      for (const item of queueItems) {
-        try {
-          console.log(`🔄 Processing item ${item.id}`);
-          const message = item.messages;
+    for (const item of queueItems || []) {
+      try {
+        const message = item.messages
+        if (!message) continue
+
+        const glideRow = glideRowsMap.get(message.id)
+        const mappedData: Record<string, any> = {}
+
+        // Map message data to Glide columns using the new mapping format
+        for (const [mappingKey, messageField] of Object.entries(config.field_mappings)) {
+          const glideColumnId = getGlideColumnId(mappingKey)
+          let value = message[messageField]
           
-          if (!message) {
-            console.warn(`⚠️ No message found for queue item ${item.id}`);
-            metrics.skipped++;
-            continue;
+          // Handle special JSON fields
+          if (messageField === 'analyzed_content' || messageField === 'telegram_data') {
+            value = JSON.stringify(value)
           }
-
-          // Validate required data
-          if (!message.supabase_sync_json || Object.keys(message.supabase_sync_json).length === 0) {
-            throw new Error('Invalid sync data');
-          }
-
-          // Compare with existing Glide data using hash
-          const currentHash = message.supabase_sync_json ? 
-            await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(message.supabase_sync_json)))
-            .then(hash => Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join(''))
-            : null;
-
-          if (currentHash === item.data_hash) {
-            console.log(`⏭️ Skipping unchanged message ${message.id}`);
-            metrics.skipped++;
-            
-            // Update queue item status
-            await supabaseClient
-              .from('glide_messages_sync_queue')
-              .update({
-                status: 'completed',
-                processed_at: new Date().toISOString()
-              })
-              .eq('id', item.id);
-              
-            continue;
-          }
-
-          // Determine operation type
-          const glideRowId = message.glide_row_id;
-          const operation = glideRowId ? 'set-columns-in-row' : 'add-row-to-table';
           
-          console.log(`📝 Preparing ${operation} mutation for message ${message.id}`);
-          mutations.push({
-            kind: operation,
-            tableName: config.glide_table_name,
-            columnValues: message.supabase_sync_json,
-            ...(glideRowId && { rowID: glideRowId })
-          });
-
-          processedIds.push(item.id);
-          await waitForRateLimit();
-
-          // Update message sync status
-          const { error: updateError } = await supabaseClient
-            .from('messages')
-            .update({
-              glide_last_sync_at: new Date().toISOString(),
-              glide_sync_status: 'completed',
-              glide_sync_data: {
-                last_sync: new Date().toISOString(),
-                batch_id: batchId,
-                operation: operation,
-                data: message.supabase_sync_json,
-                data_hash: currentHash
-              }
-            })
-            .eq('id', message.id);
-
-          if (updateError) {
-            console.error(`❌ Error updating message ${message.id}:`, updateError);
-            throw updateError;
-          }
-
-          metrics.successful++;
-          console.log(`✅ Successfully processed message ${message.id}`);
-        } catch (error) {
-          console.error(`❌ Sync error for item ${item.id}:`, error);
-          metrics.failed++;
-          metrics.errors.push({
-            item_id: item.id,
-            error: error.message,
-            timestamp: new Date().toISOString()
-          });
-
-          // Update error status
-          if (item.messages?.id) {
-            const { error: statusError } = await supabaseClient
-              .from('messages')
-              .update({
-                glide_sync_status: 'error',
-                last_error_at: new Date().toISOString(),
-                glide_sync_data: {
-                  last_error: error.message,
-                  error_time: new Date().toISOString(),
-                  batch_id: batchId
-                }
-              })
-              .eq('id', item.messages.id);
-
-            if (statusError) {
-              console.error(`❌ Error updating error status for message ${item.messages.id}:`, statusError);
-            }
-          }
-
-          // Handle retries
-          if ((item.retry_count || 0) < MAX_RETRIES) {
-            await supabaseClient
-              .from('glide_messages_sync_queue')
-              .update({
-                retry_count: (item.retry_count || 0) + 1,
-                last_error: error.message,
-                status: 'pending'
-              })
-              .eq('id', item.id);
-          } else {
-            await supabaseClient
-              .from('glide_messages_sync_queue')
-              .update({
-                status: 'error',
-                last_error: error.message,
-                processed_at: new Date().toISOString()
-              })
-              .eq('id', item.id);
-          }
+          mappedData[glideColumnId] = value
         }
-        metrics.processed++;
-      }
 
-      // Send mutations to Glide if any
-      if (mutations.length > 0) {
-        console.log(`📤 Sending ${mutations.length} mutations to Glide`);
+        // Determine operation type
+        const operation = glideRow ? 'set-columns-in-row' : 'add-row-to-table'
         
-        try {
-          const response = await fetch('https://api.glideapp.io/api/function/mutateTables', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${config.auth_token}`,
-            },
-            body: JSON.stringify({
-              appID: config.app_id,
-              mutations
-            })
-          });
+        mutations.push({
+          kind: operation,
+          tableName: config.glide_table_name,
+          columnValues: mappedData,
+          ...(glideRow && { rowID: glideRow[getGlideColumnId(Object.keys(config.field_mappings)[0])] })
+        })
 
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error("❌ Glide API error:", errorText);
-            throw new Error(`Glide mutation error: ${errorText}`);
-          }
+        // Update sync status
+        await supabaseClient
+          .from('messages')
+          .update({
+            glide_sync_data: glideRow || {},
+            glide_last_sync_at: new Date().toISOString(),
+            glide_row_id: glideRow?.[getGlideColumnId(Object.keys(config.field_mappings)[0])] || null
+          })
+          .eq('id', message.id)
 
-          const result = await response.json();
-          console.log('✅ Glide sync result:', result);
-
-          // Update queue items status
-          if (processedIds.length) {
-            console.log("📝 Updating queue items status");
-            const { error: queueUpdateError } = await supabaseClient
-              .from('glide_messages_sync_queue')
-              .update({
-                status: 'completed',
-                processed_at: new Date().toISOString()
-              })
-              .in('id', processedIds);
-
-            if (queueUpdateError) {
-              console.error("❌ Error updating queue status:", queueUpdateError);
-            }
-          }
-        } catch (error) {
-          console.error("❌ Failed to send mutations to Glide:", error);
-          throw error;
-        }
-      }
-
-      // Update offset for next batch
-      offset += queueItems.length;
-      
-      // Check if we should continue
-      if (queueItems.length < BATCH_SIZE) {
-        hasMoreItems = false;
+        successCount++
+      } catch (error) {
+        console.error('Sync error:', error)
+        failureCount++
       }
     }
 
-    // Log final metrics
-    console.log("📊 Logging sync metrics");
-    const { error: metricsError } = await supabaseClient
+    // Send mutations to Glide if any
+    if (mutations.length > 0) {
+      console.log(`Sending ${mutations.length} mutations to Glide`)
+      
+      const response = await fetch(config.mutation_endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.auth_token}`,
+        },
+        body: JSON.stringify({
+          appID: config.app_id,
+          mutations
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Glide mutation error: ${await response.text()}`)
+      }
+    }
+
+    // Update queue items status
+    if (queueItems?.length) {
+      await supabaseClient
+        .from('glide_messages_sync_queue')
+        .update({
+          status: 'completed',
+          processed_at: new Date().toISOString()
+        })
+        .in('id', queueItems.map(item => item.id))
+    }
+
+    // Log metrics
+    await supabaseClient
       .from('glide_messages_sync_metrics')
       .insert({
-        sync_batch_id: batchId,
-        total_messages: metrics.processed,
-        successful_messages: metrics.successful,
-        failed_messages: metrics.failed,
-        completed_at: new Date().toISOString(),
-        performance_data: {
-          batch_size: BATCH_SIZE,
-          processing_time: Date.now(),
-          skipped_messages: metrics.skipped,
-          errors: metrics.errors
-        }
-      });
+        sync_batch_id: crypto.randomUUID(),
+        total_messages: queueItems?.length || 0,
+        successful_messages: successCount,
+        failed_messages: failureCount,
+        completed_at: new Date().toISOString()
+      })
 
-    if (metricsError) {
-      console.error("❌ Error logging metrics:", metricsError);
-    }
-
-    console.log("✅ Sync process completed");
     return new Response(
       JSON.stringify({
         success: true,
-        metrics: {
-          processed: metrics.processed,
-          successful: metrics.successful,
-          failed: metrics.failed,
-          skipped: metrics.skipped
-        },
-        batch_id: batchId
+        processed: queueItems?.length || 0,
+        successful: successCount,
+        failed: failureCount
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -337,13 +200,9 @@ Deno.serve(async (req) => {
     )
 
   } catch (error) {
-    console.error("❌ Function error:", error);
+    console.error('Function error:', error)
     return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        timestamp: new Date().toISOString(),
-        type: error.name || 'UnknownError'
-      }),
+      JSON.stringify({ error: error.message }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,
