@@ -104,6 +104,8 @@ export type Database = {
           glide_table_name: string
           id: string
           is_active: boolean | null
+          mutation_endpoint: string | null
+          query_endpoint: string | null
           supabase_table_name: string
           supported_operations: string[] | null
           tableName: string
@@ -119,6 +121,8 @@ export type Database = {
           glide_table_name: string
           id?: string
           is_active?: boolean | null
+          mutation_endpoint?: string | null
+          query_endpoint?: string | null
           supabase_table_name: string
           supported_operations?: string[] | null
           tableName: string
@@ -134,6 +138,8 @@ export type Database = {
           glide_table_name?: string
           id?: string
           is_active?: boolean | null
+          mutation_endpoint?: string | null
+          query_endpoint?: string | null
           supabase_table_name?: string
           supported_operations?: string[] | null
           tableName?: string
