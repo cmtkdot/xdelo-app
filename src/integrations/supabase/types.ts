@@ -306,6 +306,12 @@ export type Database = {
         }
         Returns: string
       }
+      delete_media_group: {
+        Args: {
+          p_media_group_id: string
+        }
+        Returns: undefined
+      }
       http: {
         Args: {
           request: Database["public"]["CompositeTypes"]["http_request"]

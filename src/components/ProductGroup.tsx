@@ -129,11 +129,10 @@ export const ProductGroup = ({
   const handleDelete = async () => {
     try {
       if (mainMedia.media_group_id) {
-        // Delete all messages in the media group
-        const { error } = await supabase
-          .from('messages')
-          .delete()
-          .eq('media_group_id', mainMedia.media_group_id);
+        // Use the new delete_media_group function for group deletion
+        const { error } = await supabase.rpc('delete_media_group', {
+          p_media_group_id: mainMedia.media_group_id
+        });
 
         if (error) throw error;
       } else {
