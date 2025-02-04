@@ -571,6 +571,9 @@ export type Database = {
           file_id: string | null
           file_size: number | null
           file_unique_id: string | null
+          glide_last_sync_at: string | null
+          glide_row_id: string | null
+          glide_sync_data: Json | null
           glide_sync_json: Json | null
           glide_sync_status: string | null
           group_caption_synced: boolean | null
@@ -611,6 +614,9 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
+          glide_last_sync_at?: string | null
+          glide_row_id?: string | null
+          glide_sync_data?: Json | null
           glide_sync_json?: Json | null
           glide_sync_status?: string | null
           group_caption_synced?: boolean | null
@@ -651,6 +657,9 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
+          glide_last_sync_at?: string | null
+          glide_row_id?: string | null
+          glide_sync_data?: Json | null
           glide_sync_json?: Json | null
           glide_sync_status?: string | null
           group_caption_synced?: boolean | null
@@ -872,6 +881,10 @@ export type Database = {
           value: string
         }
         Returns: boolean
+      }
+      process_glide_data_sync: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       process_media_group_analysis:
         | {
