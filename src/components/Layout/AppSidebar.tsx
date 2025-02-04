@@ -1,82 +1,77 @@
-import { useState } from "react";
-import { Sidebar, SidebarBody, SidebarLink } from "@/components/ui/sidebar";
-import { LayoutDashboard, MessageSquare, Package, Settings, LogOut } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/components/ui/use-toast";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Link, useLocation } from "react-router-dom";
+import { 
+  LayoutDashboard, 
+  Images, 
+  Settings,
+  Users,
+  Sync
+} from "lucide-react";
 
-export function AppSidebar() {
-  const [open, setOpen] = useState(false);
-  const navigate = useNavigate();
-  const { toast } = useToast();
-
-  const handleLogout = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      
-      toast({
-        title: "Logged out",
-        description: "You have been successfully logged out.",
-      });
-      
-      navigate("/auth");
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
+const AppSidebar = ({ className }: { className?: string }) => {
+  const location = useLocation();
+  
+  const isActive = (path: string) => {
+    return location.pathname === path;
   };
 
-  const links = [
-    {
-      label: "Dashboard",
-      href: "/",
-      icon: <LayoutDashboard className="text-[#0066FF] h-5 w-5 flex-shrink-0" />,
-      onClick: () => navigate("/")
-    },
-    {
-      label: "Product Gallery",
-      href: "/gallery",
-      icon: <MessageSquare className="text-[#0066FF] h-5 w-5 flex-shrink-0" />,
-      onClick: () => navigate("/gallery")
-    },
-    {
-      label: "Vendors",
-      href: "/vendors",
-      icon: <Package className="text-[#0066FF] h-5 w-5 flex-shrink-0" />,
-      onClick: () => navigate("/vendors")
-    },
-    {
-      label: "Settings",
-      href: "/settings",
-      icon: <Settings className="text-[#0066FF] h-5 w-5 flex-shrink-0" />,
-      onClick: () => navigate("/settings")
-    },
-    {
-      label: "Logout",
-      href: "#",
-      icon: <LogOut className="text-[#0066FF] h-5 w-5 flex-shrink-0" />,
-      onClick: handleLogout
-    },
-  ];
-
   return (
-    <Sidebar open={open} setOpen={setOpen}>
-      <SidebarBody className="justify-between gap-10">
-        <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="mt-8 flex flex-col gap-2">
-            {links.map((link, idx) => (
-              <SidebarLink 
-                key={idx} 
-                link={link}
-              />
-            ))}
+    <div className={cn("pb-12", className)}>
+      <div className="space-y-4 py-4">
+        <div className="px-3 py-2">
+          <div className="space-y-1">
+            <Link to="/">
+              <Button
+                variant={isActive("/") ? "secondary" : "ghost"}
+                className="w-full justify-start"
+              >
+                <LayoutDashboard className="mr-2 h-4 w-4" />
+                Dashboard
+              </Button>
+            </Link>
+            <Link to="/gallery">
+              <Button
+                variant={isActive("/gallery") ? "secondary" : "ghost"}
+                className="w-full justify-start"
+              >
+                <Images className="mr-2 h-4 w-4" />
+                Product Gallery
+              </Button>
+            </Link>
+            <Link to="/vendors">
+              <Button
+                variant={isActive("/vendors") ? "secondary" : "ghost"}
+                className="w-full justify-start"
+              >
+                <Users className="mr-2 h-4 w-4" />
+                Vendors
+              </Button>
+            </Link>
+            <Link to="/glide-sync">
+              <Button
+                variant={isActive("/glide-sync") ? "secondary" : "ghost"}
+                className="w-full justify-start"
+              >
+                <Sync className="mr-2 h-4 w-4" />
+                Glide Sync
+              </Button>
+            </Link>
+            <Link to="/settings">
+              <Button
+                variant={isActive("/settings") ? "secondary" : "ghost"}
+                className="w-full justify-start"
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </Button>
+            </Link>
           </div>
         </div>
-      </SidebarBody>
-    </Sidebar>
+      </div>
+    </div>
   );
-}
+};
+
+export default AppSidebar;
