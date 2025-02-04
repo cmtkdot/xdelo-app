@@ -767,7 +767,18 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      glide_configuration_status: {
+        Row: {
+          api_endpoint: string | null
+          auth_token: string | null
+          field_mappings: Json | null
+          glide_table_name: string | null
+          id: string | null
+          is_active: boolean | null
+          pending_items: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       bytea_to_text: {
