@@ -1,11 +1,9 @@
 import React from 'react';
-import Image from 'next/image';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Tables } from '@/integrations/supabase/types';
 import { formatDate } from '@/lib/utils';
 import { SyncButton } from './ProductGroup/SyncButton';
+import { Tables } from '@/integrations/supabase/types';
 
 interface ProductGroupProps {
   message: Tables<'messages'>;
@@ -42,12 +40,10 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
 
         {message.public_url && (
           <div className="relative aspect-square">
-            <Image
+            <img
               src={message.public_url}
               alt={message.caption || 'Product image'}
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              className="object-cover w-full h-full"
             />
           </div>
         )}
@@ -69,10 +65,10 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
                   <Badge variant="outline">Group: {message.media_group_id}</Badge>
                 )}
                 {isProcessed && (
-                  <Badge variant="success">Processed</Badge>
+                  <Badge variant="default">Processed</Badge>
                 )}
                 {isProcessing && (
-                  <Badge variant="warning">Processing</Badge>
+                  <Badge variant="secondary">Processing</Badge>
                 )}
                 {hasError && (
                   <Badge variant="destructive">Error</Badge>

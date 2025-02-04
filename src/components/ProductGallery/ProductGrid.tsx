@@ -31,17 +31,18 @@ export const ProductGrid = ({
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
-      {groupsArray.map((group, index) => (
-        <ProductGroup
-          key={group[0].id}
-          group={group}
-          onEdit={onEdit}
-          onPrevious={onPrevious}
-          onNext={onNext}
-          hasPrevious={selectedGroupIndex !== null && selectedGroupIndex > 0}
-          hasNext={selectedGroupIndex !== null && selectedGroupIndex < groupsArray.length - 1}
-        />
-      ))}
+      {groupsArray.map((group, index) => {
+        const message = group[0];
+        return (
+          <ProductGroup
+            key={message.id}
+            message={message}
+            onSelect={() => onGroupSelect(index)}
+            selected={selectedGroupIndex === index}
+            showDetails={true}
+          />
+        );
+      })}
     </div>
   );
 };

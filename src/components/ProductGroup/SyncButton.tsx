@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useGlideSync } from '@/hooks/useGlideSync';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SyncButtonProps {
   messageId: string;
