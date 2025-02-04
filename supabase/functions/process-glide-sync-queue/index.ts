@@ -5,11 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-interface GlideResponse {
-  rows?: Array<Record<string, any>>;
-  next?: string;
-}
-
 // Handle CORS preflight requests
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -35,48 +30,8 @@ Deno.serve(async (req) => {
 
     console.log('Processing with config:', {
       tableName: config.glide_table_name,
-      authToken: config.auth_token ? 'present' : 'missing',
-      mappings: Object.keys(config.field_mappings).length
+      authToken: config.auth_token ? 'present' : 'missing'
     })
-
-    // First, get current Glide data to compare
-    const glideResponse = await fetch('https://api.glideapp.io/api/function/queryTables', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.auth_token}`,
-      },
-      body: JSON.stringify({
-        appID: config.app_id,
-        queries: [{
-          tableName: config.glide_table_name,
-          utc: true
-        }]
-      })
-    })
-
-    if (!glideResponse.ok) {
-      throw new Error(`Glide API error: ${await glideResponse.text()}`)
-    }
-
-    const glideData: GlideResponse = await glideResponse.json()
-    const glideRows = glideData.rows || []
-    
-    // Extract the actual Glide column ID from the descriptive mapping
-    const getGlideColumnId = (mappingKey: string) => {
-      const match = mappingKey.match(/\((.*?)\)/)
-      return match ? match[1] : mappingKey
-    }
-
-    // Create a map of Glide rows by ID for quick lookup
-    const glideRowsMap = new Map(
-      glideRows.map(row => {
-        const idColumnKey = Object.keys(config.field_mappings).find(key => 
-          config.field_mappings[key] === 'id'
-        )
-        return [row[getGlideColumnId(idColumnKey || '')], row]
-      })
-    )
 
     // Process pending queue items
     const { data: queueItems, error: queueError } = await supabaseClient
@@ -100,39 +55,26 @@ Deno.serve(async (req) => {
         const message = item.messages
         if (!message) continue
 
-        const glideRow = glideRowsMap.get(message.id)
-        const mappedData: Record<string, any> = {}
-
-        // Map message data to Glide columns using the new mapping format
-        for (const [mappingKey, messageField] of Object.entries(config.field_mappings)) {
-          const glideColumnId = getGlideColumnId(mappingKey)
-          let value = message[messageField]
-          
-          // Handle special JSON fields
-          if (messageField === 'analyzed_content' || messageField === 'telegram_data') {
-            value = JSON.stringify(value)
-          }
-          
-          mappedData[glideColumnId] = value
-        }
-
-        // Determine operation type
-        const operation = glideRow ? 'set-columns-in-row' : 'add-row-to-table'
+        // Use the supabase_sync_json for Glide column mapping
+        const mappedData = message.supabase_sync_json || {}
+        
+        // Determine if the record exists in Glide
+        const glideRowId = message.glide_row_id
+        const operation = glideRowId ? 'set-columns-in-row' : 'add-row-to-table'
         
         mutations.push({
           kind: operation,
           tableName: config.glide_table_name,
           columnValues: mappedData,
-          ...(glideRow && { rowID: glideRow[getGlideColumnId(Object.keys(config.field_mappings)[0])] })
+          ...(glideRowId && { rowID: glideRowId })
         })
 
         // Update sync status
         await supabaseClient
           .from('messages')
           .update({
-            glide_sync_data: glideRow || {},
             glide_last_sync_at: new Date().toISOString(),
-            glide_row_id: glideRow?.[getGlideColumnId(Object.keys(config.field_mappings)[0])] || null
+            glide_sync_status: 'completed'
           })
           .eq('id', message.id)
 
@@ -140,6 +82,17 @@ Deno.serve(async (req) => {
       } catch (error) {
         console.error('Sync error:', error)
         failureCount++
+
+        // Update error status
+        if (item.messages?.id) {
+          await supabaseClient
+            .from('messages')
+            .update({
+              glide_sync_status: 'error',
+              last_error_at: new Date().toISOString()
+            })
+            .eq('id', item.messages.id)
+        }
       }
     }
 
@@ -147,7 +100,7 @@ Deno.serve(async (req) => {
     if (mutations.length > 0) {
       console.log(`Sending ${mutations.length} mutations to Glide`)
       
-      const response = await fetch(config.mutation_endpoint, {
+      const response = await fetch('https://api.glideapp.io/api/function/mutateTables', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -162,6 +115,9 @@ Deno.serve(async (req) => {
       if (!response.ok) {
         throw new Error(`Glide mutation error: ${await response.text()}`)
       }
+
+      const result = await response.json()
+      console.log('Glide sync result:', result)
     }
 
     // Update queue items status
