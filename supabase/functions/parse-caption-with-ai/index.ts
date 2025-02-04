@@ -17,8 +17,13 @@ serve(async (req) => {
     
     console.log('Starting caption analysis:', { message_id, media_group_id, correlation_id, is_reanalysis });
 
-    if (!caption || typeof caption !== 'string' || caption.trim() === '') {
-      throw new Error('Caption is required and must be a non-empty string');
+    if (!caption || typeof caption !== 'string') {
+      throw new Error('Caption is required and must be a string');
+    }
+
+    // Allow empty captions but log them
+    if (caption.trim() === '') {
+      console.log('Empty caption received, proceeding with basic analysis');
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -29,40 +34,6 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // If this is part of a media group, wait for all files to be uploaded
-    if (media_group_id && !is_reanalysis) {
-      console.log('Checking media group completeness:', media_group_id);
-      
-      // Wait for up to 30 seconds for all files to be uploaded
-      for (let i = 0; i < 30; i++) {
-        const { data: groupMessages, error: groupError } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('media_group_id', media_group_id);
-
-        if (groupError) {
-          console.error('Error checking media group:', groupError);
-          throw groupError;
-        }
-
-        // Check if we have all messages (group_message_count matches actual count)
-        const expectedCount = groupMessages[0]?.group_message_count || 0;
-        if (groupMessages.length === expectedCount) {
-          console.log('Media group complete:', {
-            expected: expectedCount,
-            actual: groupMessages.length
-          });
-          break;
-        }
-
-        if (i === 29) {
-          console.warn('Timeout waiting for media group completion');
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
 
     // Analyze the caption using AI
     const analyzedContent = await analyzeCaption(caption);

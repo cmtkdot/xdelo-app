@@ -4,9 +4,9 @@ import { manualParse } from "./manualParser.ts";
 const SYSTEM_PROMPT = `You are a specialized product information extractor. Extract structured information following these rules:
 
 1. Product Name (REQUIRED):
-   - Text before '#' or 'x' marker
-   - Stop at first 'x' or '#' encountered
-   - Remove any trailing spaces
+   - Text before any list markers or emoji sequences
+   - Keep emojis if they are part of the product name
+   - Remove any trailing spaces or newlines
 
 2. Product Code (OPTIONAL):
    - Full code after '#' including vendor and date
@@ -20,29 +20,27 @@ const SYSTEM_PROMPT = `You are a specialized product information extractor. Extr
    - 6 digits (mmDDyy) -> YYYY-MM-DD
    - 5 digits (mDDyy) -> YYYY-MM-DD (add leading zero)
 
-5. Quantity (OPTIONAL):
-   - Look for numbers after 'x' or 'qty:'
-   - Must be positive integer
-   - Common formats: "x2", "x 2", "qty: 2"
+5. Notes (OPTIONAL):
+   - Preserve emojis in flavor descriptions
+   - Format flavor lists with proper emoji handling
+   - Keep original emoji characters intact
 
-6. Notes (OPTIONAL):
-   - Text in parentheses
-   - Any additional unstructured text
-
-Example Input: "Blue Dream x2 #CHAD120523 (indoor)"
+Example Input: "Blue Dream 🌿 x2 #CHAD120523 (indoor grow 🏠)"
 Expected Output: {
-  "product_name": "Blue Dream",
+  "product_name": "Blue Dream 🌿",
   "product_code": "CHAD120523",
   "vendor_uid": "CHAD",
   "purchase_date": "2023-12-05",
   "quantity": 2,
-  "notes": "indoor"
+  "notes": "indoor grow 🏠"
 }`;
 
 export async function analyzeCaption(caption: string): Promise<ParsedContent> {
   try {
+    console.log("Starting caption analysis:", caption);
+
     // First try manual parsing
-    const manualResult = manualParse(caption);
+    const manualResult = await manualParse(caption);
     if (manualResult && manualResult.product_name) {
       console.log('Successfully parsed caption manually:', manualResult);
       return {
@@ -72,7 +70,10 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: caption }
+          { 
+            role: 'user', 
+            content: `Please analyze this product caption, preserving all emojis:\n${caption}`
+          }
         ],
         temperature: 0.3,
         max_tokens: 500
@@ -86,40 +87,30 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
     const data = await response.json();
     const result = JSON.parse(data.choices[0].message.content);
 
-    // Ensure at least a product name exists
-    const productName = result.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product';
-
-    // Clean up quantity if present
-    let quantity = null;
-    if (typeof result.quantity === 'number') {
-      quantity = Math.floor(result.quantity);
-      if (quantity <= 0) quantity = null;
-    }
-
-    console.log('AI analysis result:', result);
-    return {
-      product_name: productName,
+    // Clean up and validate the result
+    const cleanResult: ParsedContent = {
+      product_name: result.product_name?.trim() || caption.split('\n')[0]?.trim() || 'Untitled Product',
       product_code: result.product_code || '',
       vendor_uid: result.vendor_uid || '',
       purchase_date: result.purchase_date || '',
-      quantity: quantity,
-      notes: result.notes || '',
+      quantity: typeof result.quantity === 'number' ? Math.max(0, Math.floor(result.quantity)) : null,
+      notes: result.notes || formatFlavorList(caption),
       parsing_metadata: {
         method: 'ai',
         confidence: 0.8,
         timestamp: new Date().toISOString()
       }
     };
+
+    console.log('AI analysis result:', cleanResult);
+    return cleanResult;
+
   } catch (error) {
     console.error('Error analyzing caption:', error);
     // Return basic info even if analysis fails
     return {
-      product_name: caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
-      product_code: '',
-      vendor_uid: '',
-      purchase_date: '',
-      quantity: null,
-      notes: '',
+      product_name: caption.split('\n')[0]?.trim() || 'Untitled Product',
+      notes: formatFlavorList(caption),
       parsing_metadata: {
         method: 'ai',
         confidence: 0.1,
@@ -127,5 +118,23 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
         fallbacks_used: ['error_fallback']
       }
     };
+  }
+}
+
+function formatFlavorList(caption: string): string {
+  try {
+    const lines = caption.split('\n');
+    const flavorSection = lines
+      .slice(lines.findIndex(line => line.toLowerCase().includes('flavor')) + 1)
+      .filter(line => line.trim() && !line.toLowerCase().includes('flavor'));
+
+    if (flavorSection.length === 0) {
+      return '';
+    }
+
+    return flavorSection.join('\n').trim();
+  } catch (error) {
+    console.error('Error formatting flavor list:', error);
+    return '';
   }
 }
