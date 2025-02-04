@@ -33,6 +33,12 @@ const Auth = () => {
         const { error: signUpError } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: {
+              email: email,
+            }
+          }
         });
 
         if (signUpError) {
@@ -53,6 +59,9 @@ const Auth = () => {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
+          options: {
+            persistSession: true
+          }
         });
 
         if (signInError) {
