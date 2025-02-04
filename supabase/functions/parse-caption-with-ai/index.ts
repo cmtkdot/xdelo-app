@@ -133,49 +133,23 @@ Important: Return ONLY a valid JSON object with these exact lowercase field name
 
       // Process media group if needed
       if (media_group_id) {
-        // First, update the source message (the one with the caption)
-        const { error: sourceUpdateError } = await supabase
-          .from('messages')
-          .update({
-            analyzed_content: analyzedContent,
-            processing_state: 'completed',
-            processing_completed_at: new Date().toISOString(),
-            is_original_caption: true,
-            group_caption_synced: true
-          })
-          .eq('id', message_id);
-
-        if (sourceUpdateError) throw sourceUpdateError;
-
-        // Then, update all other messages in the group
-        const { error: groupUpdateError } = await supabase
-          .from('messages')
-          .update({
-            analyzed_content: analyzedContent,
-            processing_state: 'completed',
-            processing_completed_at: new Date().toISOString(),
-            is_original_caption: false,
-            group_caption_synced: true,
-            message_caption_id: message_id
-          })
-          .eq('media_group_id', media_group_id)
-          .neq('id', message_id);
-
-        if (groupUpdateError) throw groupUpdateError;
-
-        // Log the group sync
-        await supabase.from('analysis_audit_log').insert({
-          message_id,
-          media_group_id,
-          event_type: 'GROUP_SYNC_COMPLETED',
-          analyzed_content,
-          processing_details: {
-            correlation_id,
-            sync_timestamp: new Date().toISOString(),
-            parsing_method: parsingMethod,
-            confidence
-          }
+        const processingCompletedAt = new Date().toISOString();
+        
+        // Call process_media_group_analysis with all required parameters
+        const { error: syncError } = await supabase.rpc('process_media_group_analysis', {
+          p_message_id: message_id,
+          p_media_group_id: media_group_id,
+          p_analyzed_content: analyzedContent,
+          p_processing_completed_at: processingCompletedAt,
+          p_correlation_id: correlation_id
         });
+
+        if (syncError) {
+          console.error('Error in process_media_group_analysis:', syncError);
+          throw syncError;
+        }
+
+        console.log('Successfully processed media group analysis');
       } else {
         // Update single message
         const { error: updateError } = await supabase
