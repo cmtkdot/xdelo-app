@@ -8,6 +8,12 @@ export interface ParsedContent {
   parsing_metadata?: {
     method: 'manual' | 'ai';
     confidence: number;
+    fallbacks_used?: string[];
     timestamp: string;
   };
+}
+
+export interface QuantityParseResult {
+  value: number;
+  confidence: number;
 }

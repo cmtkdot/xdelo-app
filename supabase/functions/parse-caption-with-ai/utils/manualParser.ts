@@ -1,5 +1,5 @@
-import { ParsedContent } from "../../types.ts";
-import { parseQuantity } from "../quantityParser.ts";
+import { ParsedContent } from "../types.ts";
+import { parseQuantity } from "./quantityParser.ts";
 
 export async function manualParse(caption: string): Promise<ParsedContent> {
   console.log("Starting manual parsing for:", caption);
