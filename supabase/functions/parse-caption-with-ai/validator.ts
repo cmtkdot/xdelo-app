@@ -3,9 +3,7 @@ import { ParsedContent, QuantityParseResult } from './types.ts';
 export function validateParsedContent(content: ParsedContent): boolean {
   const hasRequiredFields = !!(
     content.product_name &&
-    content.product_name !== 'Untitled Product' &&
-    content.product_code &&
-    content.vendor_uid
+    content.product_name !== 'Untitled Product'
   );
 
   const hasValidDate = !content.purchase_date || (
@@ -34,30 +32,27 @@ export function validateAnalyzedContent(content: any): boolean {
     return false;
   }
 
-  // Check if it has the basic structure
+  // Only require product_name
   if (!content.product_name || typeof content.product_name !== 'string') {
     return false;
   }
 
-  // Check for valid product code if present
+  // Optional fields should be of correct type if present
   if (content.product_code && typeof content.product_code !== 'string') {
     return false;
   }
 
-  // Check for valid vendor UID if present
   if (content.vendor_uid && typeof content.vendor_uid !== 'string') {
     return false;
   }
 
-  // Check for valid quantity if present
-  if (content.quantity !== undefined && 
+  if (content.quantity !== undefined && content.quantity !== null && 
       (typeof content.quantity !== 'number' || 
        content.quantity <= 0 || 
        content.quantity >= 10000)) {
     return false;
   }
 
-  // Check for valid purchase date if present
   if (content.purchase_date) {
     const date = new Date(content.purchase_date);
     if (isNaN(date.getTime()) || date > new Date()) {
@@ -65,7 +60,6 @@ export function validateAnalyzedContent(content: any): boolean {
     }
   }
 
-  // Check for valid parsing metadata
   if (content.parsing_metadata) {
     if (typeof content.parsing_metadata !== 'object' ||
         typeof content.parsing_metadata.method !== 'string' ||
