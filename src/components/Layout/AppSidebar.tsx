@@ -34,31 +34,31 @@ export function AppSidebar() {
     {
       label: "Dashboard",
       href: "/",
-      icon: <LayoutDashboard className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />,
+      icon: <LayoutDashboard className="text-[#0066FF] h-5 w-5 flex-shrink-0" />,
       onClick: () => navigate("/")
     },
     {
       label: "Product Gallery",
       href: "/gallery",
-      icon: <MessageSquare className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />,
+      icon: <MessageSquare className="text-[#0066FF] h-5 w-5 flex-shrink-0" />,
       onClick: () => navigate("/gallery")
     },
     {
       label: "Vendors",
       href: "/vendors",
-      icon: <Package className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />,
+      icon: <Package className="text-[#0066FF] h-5 w-5 flex-shrink-0" />,
       onClick: () => navigate("/vendors")
     },
     {
       label: "Settings",
       href: "/settings",
-      icon: <Settings className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />,
+      icon: <Settings className="text-[#0066FF] h-5 w-5 flex-shrink-0" />,
       onClick: () => navigate("/settings")
     },
     {
       label: "Logout",
       href: "#",
-      icon: <LogOut className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />,
+      icon: <LogOut className="text-[#0066FF] h-5 w-5 flex-shrink-0" />,
       onClick: handleLogout
     },
   ];

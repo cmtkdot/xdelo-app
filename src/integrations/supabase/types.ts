@@ -76,7 +76,6 @@ export type Database = {
           public_url: string | null
           purchase_order_uid: string | null
           retry_count: number | null
-          secure_token: string | null
           storage_path: string | null
           telegram_data: Json | null
           telegram_message_id: number | null
@@ -114,7 +113,6 @@ export type Database = {
           public_url?: string | null
           purchase_order_uid?: string | null
           retry_count?: number | null
-          secure_token?: string | null
           storage_path?: string | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
@@ -152,7 +150,6 @@ export type Database = {
           public_url?: string | null
           purchase_order_uid?: string | null
           retry_count?: number | null
-          secure_token?: string | null
           storage_path?: string | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
@@ -407,12 +404,6 @@ export type Database = {
             }
             Returns: string
           }
-      validate_secure_token: {
-        Args: {
-          token: string
-        }
-        Returns: boolean
-      }
     }
     Enums: {
       message_processing_state:
