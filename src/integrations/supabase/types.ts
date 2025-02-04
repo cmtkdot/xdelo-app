@@ -144,32 +144,41 @@ export type Database = {
       glide_messages_configuration: {
         Row: {
           api_endpoint: string | null
+          app_id: string | null
           auth_token: string | null
           created_at: string | null
           field_mappings: Json | null
           glide_table_name: string
           id: string
           is_active: boolean | null
+          mutation_endpoint: string | null
+          supported_operations: string[] | null
           updated_at: string | null
         }
         Insert: {
           api_endpoint?: string | null
+          app_id?: string | null
           auth_token?: string | null
           created_at?: string | null
           field_mappings?: Json | null
           glide_table_name: string
           id?: string
           is_active?: boolean | null
+          mutation_endpoint?: string | null
+          supported_operations?: string[] | null
           updated_at?: string | null
         }
         Update: {
           api_endpoint?: string | null
+          app_id?: string | null
           auth_token?: string | null
           created_at?: string | null
           field_mappings?: Json | null
           glide_table_name?: string
           id?: string
           is_active?: boolean | null
+          mutation_endpoint?: string | null
+          supported_operations?: string[] | null
           updated_at?: string | null
         }
         Relationships: []

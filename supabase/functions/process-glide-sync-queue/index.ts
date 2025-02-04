@@ -39,12 +39,6 @@ Deno.serve(async (req) => {
       mappings: Object.keys(config.field_mappings).length
     })
 
-    // Extract appID from table name (format: native-table-{appID})
-    const appID = config.glide_table_name.split('-')[2]
-    if (!appID) {
-      throw new Error('Invalid Glide table name format')
-    }
-
     // First, get current Glide data to compare
     const glideResponse = await fetch('https://api.glideapp.io/api/function/queryTables', {
       method: 'POST',
@@ -53,7 +47,7 @@ Deno.serve(async (req) => {
         'Authorization': `Bearer ${config.auth_token}`,
       },
       body: JSON.stringify({
-        appID: appID,
+        appID: config.app_id,
         queries: [{
           tableName: config.glide_table_name,
           utc: true
@@ -68,9 +62,20 @@ Deno.serve(async (req) => {
     const glideData: GlideResponse = await glideResponse.json()
     const glideRows = glideData.rows || []
     
+    // Extract the actual Glide column ID from the descriptive mapping
+    const getGlideColumnId = (mappingKey: string) => {
+      const match = mappingKey.match(/\((.*?)\)/)
+      return match ? match[1] : mappingKey
+    }
+
     // Create a map of Glide rows by ID for quick lookup
     const glideRowsMap = new Map(
-      glideRows.map(row => [row[config.field_mappings['id']], row])
+      glideRows.map(row => {
+        const idColumnKey = Object.keys(config.field_mappings).find(key => 
+          config.field_mappings[key] === 'id'
+        )
+        return [row[getGlideColumnId(idColumnKey || '')], row]
+      })
     )
 
     // Process pending queue items
@@ -98,8 +103,9 @@ Deno.serve(async (req) => {
         const glideRow = glideRowsMap.get(message.id)
         const mappedData: Record<string, any> = {}
 
-        // Map message data to Glide columns
-        for (const [glideField, messageField] of Object.entries(config.field_mappings)) {
+        // Map message data to Glide columns using the new mapping format
+        for (const [mappingKey, messageField] of Object.entries(config.field_mappings)) {
+          const glideColumnId = getGlideColumnId(mappingKey)
           let value = message[messageField]
           
           // Handle special JSON fields
@@ -107,7 +113,7 @@ Deno.serve(async (req) => {
             value = JSON.stringify(value)
           }
           
-          mappedData[glideField] = value
+          mappedData[glideColumnId] = value
         }
 
         // Determine operation type
@@ -117,7 +123,7 @@ Deno.serve(async (req) => {
           kind: operation,
           tableName: config.glide_table_name,
           columnValues: mappedData,
-          ...(glideRow && { rowID: glideRow[config.field_mappings['id']] })
+          ...(glideRow && { rowID: glideRow[getGlideColumnId(Object.keys(config.field_mappings)[0])] })
         })
 
         // Update sync status
@@ -126,7 +132,7 @@ Deno.serve(async (req) => {
           .update({
             glide_sync_data: glideRow || {},
             glide_last_sync_at: new Date().toISOString(),
-            glide_row_id: glideRow?.[config.field_mappings['id']] || null
+            glide_row_id: glideRow?.[getGlideColumnId(Object.keys(config.field_mappings)[0])] || null
           })
           .eq('id', message.id)
 
@@ -141,14 +147,14 @@ Deno.serve(async (req) => {
     if (mutations.length > 0) {
       console.log(`Sending ${mutations.length} mutations to Glide`)
       
-      const response = await fetch('https://api.glideapp.io/api/function/mutateTables', {
+      const response = await fetch(config.mutation_endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${config.auth_token}`,
         },
         body: JSON.stringify({
-          appID: appID,
+          appID: config.app_id,
           mutations
         })
       })
