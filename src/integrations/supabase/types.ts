@@ -96,9 +96,8 @@ export type Database = {
       glide_configuration: {
         Row: {
           api_endpoint: string | null
-          appID: string | null
-          Authorization: string | null
-          "Content-Type": string | null
+          api_key: string | null
+          app_id: string | null
           created_at: string | null
           field_mappings: Json | null
           glide_table_name: string
@@ -106,14 +105,13 @@ export type Database = {
           is_active: boolean | null
           supabase_table_name: string
           supported_operations: string[] | null
-          tableName: string
+          table_id: string
           updated_at: string | null
         }
         Insert: {
           api_endpoint?: string | null
-          appID?: string | null
-          Authorization?: string | null
-          "Content-Type"?: string | null
+          api_key?: string | null
+          app_id?: string | null
           created_at?: string | null
           field_mappings?: Json | null
           glide_table_name: string
@@ -121,14 +119,13 @@ export type Database = {
           is_active?: boolean | null
           supabase_table_name: string
           supported_operations?: string[] | null
-          tableName: string
+          table_id: string
           updated_at?: string | null
         }
         Update: {
           api_endpoint?: string | null
-          appID?: string | null
-          Authorization?: string | null
-          "Content-Type"?: string | null
+          api_key?: string | null
+          app_id?: string | null
           created_at?: string | null
           field_mappings?: Json | null
           glide_table_name?: string
@@ -136,135 +133,10 @@ export type Database = {
           is_active?: boolean | null
           supabase_table_name?: string
           supported_operations?: string[] | null
-          tableName?: string
+          table_id?: string
           updated_at?: string | null
         }
         Relationships: []
-      }
-      glide_messages_configuration: {
-        Row: {
-          api_endpoint: string | null
-          app_id: string | null
-          auth_token: string | null
-          created_at: string | null
-          field_mappings: Json | null
-          glide_table_name: string
-          id: string
-          is_active: boolean | null
-          mutation_endpoint: string | null
-          supported_operations: string[] | null
-          updated_at: string | null
-        }
-        Insert: {
-          api_endpoint?: string | null
-          app_id?: string | null
-          auth_token?: string | null
-          created_at?: string | null
-          field_mappings?: Json | null
-          glide_table_name: string
-          id?: string
-          is_active?: boolean | null
-          mutation_endpoint?: string | null
-          supported_operations?: string[] | null
-          updated_at?: string | null
-        }
-        Update: {
-          api_endpoint?: string | null
-          app_id?: string | null
-          auth_token?: string | null
-          created_at?: string | null
-          field_mappings?: Json | null
-          glide_table_name?: string
-          id?: string
-          is_active?: boolean | null
-          mutation_endpoint?: string | null
-          supported_operations?: string[] | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      glide_messages_sync_metrics: {
-        Row: {
-          completed_at: string | null
-          created_at: string | null
-          failed_messages: number | null
-          id: string
-          performance_data: Json | null
-          started_at: string | null
-          successful_messages: number | null
-          sync_batch_id: string
-          total_messages: number | null
-          validation_errors: Json | null
-        }
-        Insert: {
-          completed_at?: string | null
-          created_at?: string | null
-          failed_messages?: number | null
-          id?: string
-          performance_data?: Json | null
-          started_at?: string | null
-          successful_messages?: number | null
-          sync_batch_id: string
-          total_messages?: number | null
-          validation_errors?: Json | null
-        }
-        Update: {
-          completed_at?: string | null
-          created_at?: string | null
-          failed_messages?: number | null
-          id?: string
-          performance_data?: Json | null
-          started_at?: string | null
-          successful_messages?: number | null
-          sync_batch_id?: string
-          total_messages?: number | null
-          validation_errors?: Json | null
-        }
-        Relationships: []
-      }
-      glide_messages_sync_queue: {
-        Row: {
-          correlation_id: string | null
-          created_at: string | null
-          id: string
-          last_error: string | null
-          message_id: string | null
-          processed_at: string | null
-          retry_count: number | null
-          status: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          correlation_id?: string | null
-          created_at?: string | null
-          id?: string
-          last_error?: string | null
-          message_id?: string | null
-          processed_at?: string | null
-          retry_count?: number | null
-          status?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          correlation_id?: string | null
-          created_at?: string | null
-          id?: string
-          last_error?: string | null
-          message_id?: string | null
-          processed_at?: string | null
-          retry_count?: number | null
-          status?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "glide_messages_sync_queue_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       glide_products: {
         Row: {
@@ -440,123 +312,39 @@ export type Database = {
         }
         Relationships: []
       }
-      glide_sync_metrics: {
-        Row: {
-          completed_at: string | null
-          created_at: string | null
-          failed_records: number | null
-          id: string
-          performance_data: Json | null
-          started_at: string | null
-          successful_records: number | null
-          sync_type: string
-          table_id: string
-          total_records: number | null
-          validation_errors: Json | null
-        }
-        Insert: {
-          completed_at?: string | null
-          created_at?: string | null
-          failed_records?: number | null
-          id?: string
-          performance_data?: Json | null
-          started_at?: string | null
-          successful_records?: number | null
-          sync_type: string
-          table_id: string
-          total_records?: number | null
-          validation_errors?: Json | null
-        }
-        Update: {
-          completed_at?: string | null
-          created_at?: string | null
-          failed_records?: number | null
-          id?: string
-          performance_data?: Json | null
-          started_at?: string | null
-          successful_records?: number | null
-          sync_type?: string
-          table_id?: string
-          total_records?: number | null
-          validation_errors?: Json | null
-        }
-        Relationships: []
-      }
       glide_sync_queue: {
         Row: {
-          api_key: string | null
-          app_id: string | null
-          batch_id: string | null
-          batch_index: number | null
-          batch_size: number | null
           correlation_id: string | null
           created_at: string | null
           id: string
           last_error: string | null
           message_id: string | null
-          operation_type: string | null
-          performance_metrics: Json | null
           processed_at: string | null
-          rate_limit_reset: string | null
-          raw_glide_data: Json | null
-          record_id: string | null
           retry_count: number | null
           status: string | null
-          sync_completed_at: string | null
-          sync_started_at: string | null
-          table_id: string | null
           updated_at: string | null
-          validation_errors: Json | null
         }
         Insert: {
-          api_key?: string | null
-          app_id?: string | null
-          batch_id?: string | null
-          batch_index?: number | null
-          batch_size?: number | null
           correlation_id?: string | null
           created_at?: string | null
           id?: string
           last_error?: string | null
           message_id?: string | null
-          operation_type?: string | null
-          performance_metrics?: Json | null
           processed_at?: string | null
-          rate_limit_reset?: string | null
-          raw_glide_data?: Json | null
-          record_id?: string | null
           retry_count?: number | null
           status?: string | null
-          sync_completed_at?: string | null
-          sync_started_at?: string | null
-          table_id?: string | null
           updated_at?: string | null
-          validation_errors?: Json | null
         }
         Update: {
-          api_key?: string | null
-          app_id?: string | null
-          batch_id?: string | null
-          batch_index?: number | null
-          batch_size?: number | null
           correlation_id?: string | null
           created_at?: string | null
           id?: string
           last_error?: string | null
           message_id?: string | null
-          operation_type?: string | null
-          performance_metrics?: Json | null
           processed_at?: string | null
-          rate_limit_reset?: string | null
-          raw_glide_data?: Json | null
-          record_id?: string | null
           retry_count?: number | null
           status?: string | null
-          sync_completed_at?: string | null
-          sync_started_at?: string | null
-          table_id?: string | null
           updated_at?: string | null
-          validation_errors?: Json | null
         }
         Relationships: [
           {
@@ -580,11 +368,6 @@ export type Database = {
           file_id: string | null
           file_size: number | null
           file_unique_id: string | null
-          glide_last_sync_at: string | null
-          glide_row_id: string | null
-          glide_sync_data: Json | null
-          glide_sync_json: Json | null
-          glide_sync_status: string | null
           group_caption_synced: boolean | null
           group_first_message_time: string | null
           group_last_message_time: string | null
@@ -593,7 +376,6 @@ export type Database = {
           id: string
           is_original_caption: boolean | null
           last_error_at: string | null
-          last_synced_at: string | null
           media_group_id: string | null
           message_caption_id: string | null
           mime_type: string | null
@@ -623,11 +405,6 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
-          glide_last_sync_at?: string | null
-          glide_row_id?: string | null
-          glide_sync_data?: Json | null
-          glide_sync_json?: Json | null
-          glide_sync_status?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
@@ -636,7 +413,6 @@ export type Database = {
           id?: string
           is_original_caption?: boolean | null
           last_error_at?: string | null
-          last_synced_at?: string | null
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
@@ -666,11 +442,6 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
-          glide_last_sync_at?: string | null
-          glide_row_id?: string | null
-          glide_sync_data?: Json | null
-          glide_sync_json?: Json | null
-          glide_sync_status?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
@@ -679,7 +450,6 @@ export type Database = {
           id?: string
           is_original_caption?: boolean | null
           last_error_at?: string | null
-          last_synced_at?: string | null
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
@@ -776,18 +546,7 @@ export type Database = {
       }
     }
     Views: {
-      glide_configuration_status: {
-        Row: {
-          api_endpoint: string | null
-          auth_token: string | null
-          field_mappings: Json | null
-          glide_table_name: string | null
-          id: string | null
-          is_active: boolean | null
-          pending_items: number | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       bytea_to_text: {
@@ -901,10 +660,6 @@ export type Database = {
           value: string
         }
         Returns: boolean
-      }
-      process_glide_data_sync: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
       }
       process_media_group_analysis:
         | {

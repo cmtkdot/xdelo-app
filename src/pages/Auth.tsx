@@ -58,7 +58,10 @@ const Auth = () => {
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
-          password
+          password,
+          options: {
+            persistSession: true
+          }
         });
 
         if (signInError) {
