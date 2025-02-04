@@ -1,4 +1,4 @@
-import { QuantityParseResult } from "../types.ts";
+import { QuantityParseResult } from "../../types.ts";
 
 const QUANTITY_PATTERNS = {
   STANDARD_X: /[x×]\s*(\d+)(?!\s*[a-zA-Z])/i,
