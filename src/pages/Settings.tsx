@@ -39,15 +39,15 @@ const Settings = () => {
           throw metricsError;
         }
 
-        // Fetch pending items count with proper headers
+        // Fetch pending items count
         const { count, error: countError } = await supabase
           .from('glide_messages_sync_queue')
-          .select('*', { 
-            count: 'exact', 
+          .select('id', { 
+            count: 'exact',
             head: true 
           })
           .eq('status', 'pending')
-          .single();
+          .maybeSingle();
 
         if (countError) {
           console.error('Error fetching pending count:', countError);
