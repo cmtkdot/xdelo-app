@@ -7,6 +7,7 @@ import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
 import { ProductPagination } from "@/components/ProductGallery/ProductPagination";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
 import { format } from "date-fns";
+import ProductFilters from "@/components/ProductGallery/ProductFilters";
 
 const SECURE_ACCESS_TOKEN = "cmtktrading-gallery-2024";
 
@@ -15,9 +16,10 @@ const PublicGallery = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedGroupIndex, setSelectedGroupIndex] = useState<number | null>(null);
   const { toast } = useToast();
+  const [vendors, setVendors] = useState<string[]>([]);
 
   // Default filters for public view
-  const filters: FilterValues = {
+  const [filters, setFilters] = useState<FilterValues>({
     search: "",
     vendor: "all",
     dateFrom: undefined,
@@ -26,8 +28,27 @@ const PublicGallery = () => {
     sortOrder: "desc",
     productCode: "all",
     quantityRange: "all",
-    processingState: "all"
-  };
+    processingState: "completed"
+  });
+
+  // Fetch unique vendors
+  useEffect(() => {
+    const fetchVendors = async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('analyzed_content->vendor_uid')
+        .not('analyzed_content->vendor_uid', 'is', null);
+
+      if (!error && data) {
+        const uniqueVendors = [...new Set(data
+          .map(item => item.analyzed_content?.vendor_uid)
+          .filter(Boolean))] as string[];
+        setVendors(uniqueVendors);
+      }
+    };
+
+    fetchVendors();
+  }, []);
 
   const { data } = useMediaGroups(currentPage, filters);
   const mediaGroups = data?.mediaGroups ?? {};
@@ -105,8 +126,17 @@ const PublicGallery = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
+        {/* Filters Section */}
+        <div className="bg-white rounded-lg shadow p-4">
+          <ProductFilters
+            vendors={vendors}
+            filters={filters}
+            onFilterChange={setFilters}
+          />
+        </div>
+
         <ProductGrid 
           mediaGroups={mediaGroups} 
           onEdit={handleEdit}
