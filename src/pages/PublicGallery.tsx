@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem, FilterValues, analyzedContentToJson } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
@@ -9,13 +8,12 @@ import { ProductPagination } from "@/components/ProductGallery/ProductPagination
 import { useMediaGroups } from "@/hooks/useMediaGroups";
 import { format } from "date-fns";
 
+const SECURE_ACCESS_TOKEN = "cmtktrading-gallery-2024";
+
 const PublicGallery = () => {
-  const [searchParams] = useSearchParams();
-  const token = searchParams.get('token');
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedGroupIndex, setSelectedGroupIndex] = useState<number | null>(null);
-  const [isValidToken, setIsValidToken] = useState(false);
   const { toast } = useToast();
 
   // Default filters for public view
@@ -30,35 +28,6 @@ const PublicGallery = () => {
     quantityRange: "all",
     processingState: "all"
   };
-
-  useEffect(() => {
-    const validateToken = async () => {
-      if (!token) {
-        setIsValidToken(false);
-        return;
-      }
-
-      // Cast the response type to handle the boolean return value
-      const { data, error } = await supabase.rpc('validate_secure_token', {
-        token: token
-      }) as { data: boolean | null, error: Error | null };
-
-      if (error) {
-        console.error('Error validating token:', error);
-        toast({
-          title: "Error",
-          description: "Invalid or expired access token",
-          variant: "destructive",
-        });
-        setIsValidToken(false);
-        return;
-      }
-
-      setIsValidToken(data ?? false);
-    };
-
-    validateToken();
-  }, [token, toast]);
 
   const { data } = useMediaGroups(currentPage, filters);
   const mediaGroups = data?.mediaGroups ?? {};
@@ -134,17 +103,6 @@ const PublicGallery = () => {
       });
     }
   };
-
-  if (!isValidToken) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Invalid Access Token</h1>
-          <p className="mt-2 text-gray-600">Please check your URL and try again.</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
