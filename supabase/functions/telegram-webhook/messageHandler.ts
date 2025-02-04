@@ -49,14 +49,17 @@ export async function handleMediaMessage(
 
   // Collect media items
   if (message.photo) {
+    console.log("📸 Found photo array, selecting largest size");
     const largestPhoto = message.photo[message.photo.length - 1];
     largestPhoto.mime_type = "image/jpeg";
     mediaItems.push(largestPhoto);
   }
   if (message.video) {
+    console.log("🎥 Found video");
     mediaItems.push(message.video);
   }
   if (message.document) {
+    console.log("📄 Found document");
     mediaItems.push(message.document);
   }
 
@@ -69,7 +72,7 @@ export async function handleMediaMessage(
       mime_type: mediaItem.mime_type
     });
 
-    // Check for existing message
+    // Check for existing message with same file_unique_id
     const { data: existingMessage, error: fetchError } = await supabase
       .from("messages")
       .select("*")
@@ -81,9 +84,27 @@ export async function handleMediaMessage(
       throw fetchError;
     }
 
+    let messageData;
     let uploadResult: MediaUploadResult | null = null;
+    let shouldReanalyze = false;
 
-    // Download and upload new media files
+    // Check if caption has changed or if analysis needs to be redone
+    if (existingMessage) {
+      shouldReanalyze = (
+        message.caption !== existingMessage.caption || 
+        !existingMessage.analyzed_content || 
+        existingMessage.processing_state === 'error'
+      );
+
+      console.log("🔄 Duplicate check:", {
+        exists: true,
+        caption_changed: message.caption !== existingMessage.caption,
+        needs_analysis: !existingMessage.analyzed_content,
+        had_error: existingMessage.processing_state === 'error',
+        will_reanalyze: shouldReanalyze
+      });
+    }
+
     if (!existingMessage) {
       console.log("📥 Downloading new media file");
       const fileResponse = await downloadTelegramFile(mediaItem.file_id, TELEGRAM_BOT_TOKEN);
@@ -97,8 +118,19 @@ export async function handleMediaMessage(
       console.log("✅ New file uploaded successfully");
     }
 
+    // Get current group count for new messages
+    let currentGroupCount = 1;
+    if (message.media_group_id) {
+      const { count } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('media_group_id', message.media_group_id);
+      
+      currentGroupCount = (count || 0) + 1;
+    }
+
     // Prepare message data
-    const messageData = {
+    messageData = {
       telegram_message_id: message.message_id,
       media_group_id: message.media_group_id,
       caption: message.caption || "",
@@ -113,48 +145,83 @@ export async function handleMediaMessage(
       user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
       telegram_data: { message },
       processing_state: message.caption ? 'pending' : 'initialized',
+      group_first_message_time: message.media_group_id ? new Date().toISOString() : null,
+      group_last_message_time: message.media_group_id ? new Date().toISOString() : null,
+      group_message_count: message.media_group_id ? currentGroupCount : null,
       is_original_caption: message.caption ? true : false
     };
 
-    // Insert or update message
+    let newMessage;
     if (existingMessage) {
       console.log("🔄 Updating existing message:", existingMessage.id);
-      const { error: updateError } = await supabase
-        .from("messages")
-        .update(messageData)
-        .eq("id", existingMessage.id);
+      
+      // Only update if it's the original caption message or needs reanalysis
+      if (existingMessage.is_original_caption || shouldReanalyze) {
+        const { data: updatedMessage, error: updateError } = await supabase
+          .from("messages")
+          .update({
+            ...messageData,
+            analyzed_content: shouldReanalyze ? null : existingMessage.analyzed_content,
+            processing_state: shouldReanalyze ? 'pending' : existingMessage.processing_state,
+            group_caption_synced: shouldReanalyze ? false : existingMessage.group_caption_synced
+          })
+          .eq("id", existingMessage.id)
+          .select()
+          .single();
 
-      if (updateError) {
-        console.error("❌ Failed to update message:", updateError);
-        throw updateError;
+        if (updateError) {
+          console.error("❌ Failed to update message:", updateError);
+          throw updateError;
+        }
+        newMessage = updatedMessage;
+      } else {
+        newMessage = existingMessage;
       }
     } else {
       console.log("➕ Creating new message");
-      const { error: insertError } = await supabase
+      const { data: insertedMessage, error: insertError } = await supabase
         .from("messages")
-        .insert(messageData);
+        .insert(messageData)
+        .select()
+        .single();
 
       if (insertError) {
         console.error("❌ Failed to store message:", insertError);
         throw insertError;
       }
+      newMessage = insertedMessage;
     }
 
-    // If message has caption, trigger content processing
-    if (message.caption) {
+    // Update group message count if needed
+    if (message.media_group_id) {
+      const { error: groupUpdateError } = await supabase
+        .from("messages")
+        .update({
+          group_message_count: currentGroupCount,
+          group_last_message_time: new Date().toISOString()
+        })
+        .eq("media_group_id", message.media_group_id);
+
+      if (groupUpdateError) {
+        console.error("❌ Failed to update group count:", groupUpdateError);
+      }
+    }
+
+    // Trigger AI analysis only for messages with captions that need analysis
+    if ((message.caption && !existingMessage) || shouldReanalyze) {
       try {
-        console.log("🤖 Triggering content processing");
-        await supabase.functions.invoke('process-telegram-content', {
-          body: {
-            message_id: existingMessage?.id,
+        console.log("🤖 Triggering AI analysis for message:", newMessage.id);
+        await supabase.functions.invoke('parse-caption-with-ai', {
+          body: { 
+            message_id: newMessage.id,
             media_group_id: message.media_group_id,
             caption: message.caption,
             correlation_id: crypto.randomUUID()
           }
         });
-        console.log("✅ Content processing triggered successfully");
+        console.log("✅ AI analysis triggered successfully");
       } catch (error) {
-        console.error("❌ Failed to trigger content processing:", error);
+        console.error("❌ Failed to trigger AI analysis:", error);
       }
     }
 
