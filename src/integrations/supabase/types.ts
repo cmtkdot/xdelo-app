@@ -149,127 +149,67 @@ export type Database = {
       }
       glide_messages_configuration: {
         Row: {
-          api_endpoint: string | null
-          app_id: string | null
-          auth_token: string | null
+          app_id: string
+          auth_token: string
           created_at: string | null
-          field_mappings: Json | null
-          glide_table_name: string
           id: string
           is_active: boolean | null
-          mutation_endpoint: string | null
-          supported_operations: string[] | null
+          table_name: string
           updated_at: string | null
         }
         Insert: {
-          api_endpoint?: string | null
-          app_id?: string | null
-          auth_token?: string | null
+          app_id: string
+          auth_token: string
           created_at?: string | null
-          field_mappings?: Json | null
-          glide_table_name: string
           id?: string
           is_active?: boolean | null
-          mutation_endpoint?: string | null
-          supported_operations?: string[] | null
+          table_name: string
           updated_at?: string | null
         }
         Update: {
-          api_endpoint?: string | null
-          app_id?: string | null
-          auth_token?: string | null
+          app_id?: string
+          auth_token?: string
           created_at?: string | null
-          field_mappings?: Json | null
-          glide_table_name?: string
           id?: string
           is_active?: boolean | null
-          mutation_endpoint?: string | null
-          supported_operations?: string[] | null
+          table_name?: string
           updated_at?: string | null
-        }
-        Relationships: []
-      }
-      glide_messages_sync_metrics: {
-        Row: {
-          completed_at: string | null
-          created_at: string | null
-          failed_messages: number | null
-          id: string
-          performance_data: Json | null
-          started_at: string | null
-          successful_messages: number | null
-          sync_batch_id: string
-          total_messages: number | null
-          validation_errors: Json | null
-        }
-        Insert: {
-          completed_at?: string | null
-          created_at?: string | null
-          failed_messages?: number | null
-          id?: string
-          performance_data?: Json | null
-          started_at?: string | null
-          successful_messages?: number | null
-          sync_batch_id: string
-          total_messages?: number | null
-          validation_errors?: Json | null
-        }
-        Update: {
-          completed_at?: string | null
-          created_at?: string | null
-          failed_messages?: number | null
-          id?: string
-          performance_data?: Json | null
-          started_at?: string | null
-          successful_messages?: number | null
-          sync_batch_id?: string
-          total_messages?: number | null
-          validation_errors?: Json | null
         }
         Relationships: []
       }
       glide_messages_sync_queue: {
         Row: {
-          batch_size: number | null
-          correlation_id: string | null
+          completed_at: string | null
           created_at: string | null
           data_hash: string | null
+          error_message: string | null
           id: string
-          last_error: string | null
-          last_glide_data: Json | null
+          last_attempted_at: string | null
           message_id: string | null
-          processed_at: string | null
           retry_count: number | null
           status: string | null
-          updated_at: string | null
         }
         Insert: {
-          batch_size?: number | null
-          correlation_id?: string | null
+          completed_at?: string | null
           created_at?: string | null
           data_hash?: string | null
+          error_message?: string | null
           id?: string
-          last_error?: string | null
-          last_glide_data?: Json | null
+          last_attempted_at?: string | null
           message_id?: string | null
-          processed_at?: string | null
           retry_count?: number | null
           status?: string | null
-          updated_at?: string | null
         }
         Update: {
-          batch_size?: number | null
-          correlation_id?: string | null
+          completed_at?: string | null
           created_at?: string | null
           data_hash?: string | null
+          error_message?: string | null
           id?: string
-          last_error?: string | null
-          last_glide_data?: Json | null
+          last_attempted_at?: string | null
           message_id?: string | null
-          processed_at?: string | null
           retry_count?: number | null
           status?: string | null
-          updated_at?: string | null
         }
         Relationships: [
           {
@@ -457,43 +397,34 @@ export type Database = {
       }
       glide_sync_metrics: {
         Row: {
+          batch_id: string
           completed_at: string | null
-          created_at: string | null
-          failed_records: number | null
+          error_details: Json | null
+          failed: number | null
           id: string
-          performance_data: Json | null
           started_at: string | null
-          successful_records: number | null
-          sync_type: string
-          table_id: string
-          total_records: number | null
-          validation_errors: Json | null
+          successful: number | null
+          total_processed: number | null
         }
         Insert: {
+          batch_id: string
           completed_at?: string | null
-          created_at?: string | null
-          failed_records?: number | null
+          error_details?: Json | null
+          failed?: number | null
           id?: string
-          performance_data?: Json | null
           started_at?: string | null
-          successful_records?: number | null
-          sync_type: string
-          table_id: string
-          total_records?: number | null
-          validation_errors?: Json | null
+          successful?: number | null
+          total_processed?: number | null
         }
         Update: {
+          batch_id?: string
           completed_at?: string | null
-          created_at?: string | null
-          failed_records?: number | null
+          error_details?: Json | null
+          failed?: number | null
           id?: string
-          performance_data?: Json | null
           started_at?: string | null
-          successful_records?: number | null
-          sync_type?: string
-          table_id?: string
-          total_records?: number | null
-          validation_errors?: Json | null
+          successful?: number | null
+          total_processed?: number | null
         }
         Relationships: []
       }
@@ -796,9 +727,7 @@ export type Database = {
     Views: {
       glide_configuration_status: {
         Row: {
-          api_endpoint: string | null
           auth_token: string | null
-          field_mappings: Json | null
           glide_table_name: string | null
           id: string | null
           is_active: boolean | null
@@ -824,14 +753,14 @@ export type Database = {
         Args: {
           request: Database["public"]["CompositeTypes"]["http_request"]
         }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        Returns: unknown
       }
       http_delete:
         | {
             Args: {
               uri: string
             }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            Returns: unknown
           }
         | {
             Args: {
@@ -839,27 +768,27 @@ export type Database = {
               content: string
               content_type: string
             }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            Returns: unknown
           }
       http_get:
         | {
             Args: {
               uri: string
             }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            Returns: unknown
           }
         | {
             Args: {
               uri: string
               data: Json
             }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            Returns: unknown
           }
       http_head: {
         Args: {
           uri: string
         }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        Returns: unknown
       }
       http_header: {
         Args: {
@@ -881,7 +810,7 @@ export type Database = {
           content: string
           content_type: string
         }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        Returns: unknown
       }
       http_post:
         | {
@@ -890,14 +819,14 @@ export type Database = {
               content: string
               content_type: string
             }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            Returns: unknown
           }
         | {
             Args: {
               uri: string
               data: Json
             }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            Returns: unknown
           }
         | {
             Args: {
@@ -905,7 +834,7 @@ export type Database = {
               headers: Json
               body: Json
             }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            Returns: unknown
           }
       http_put: {
         Args: {
@@ -913,7 +842,7 @@ export type Database = {
           content: string
           content_type: string
         }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        Returns: unknown
       }
       http_reset_curlopt: {
         Args: Record<PropertyKey, never>
