@@ -16,7 +16,14 @@ import { supabase } from "./integrations/supabase/client";
 import { ThemeProvider } from "./components/Theme/ThemeProvider";
 import { Session } from "@supabase/supabase-js";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60, // Consider data fresh for 1 minute
+      retry: 2,
+    },
+  },
+});
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
