@@ -13,6 +13,12 @@ import { ProcessingStateFilter } from "./Filters/ProcessingStateFilter";
 import { DateRangeFilter } from "./Filters/DateRangeFilter";
 import { Separator } from "@/components/ui/separator";
 
+interface ProductFiltersProps {
+  vendors: string[];
+  filters: FilterValues;
+  onFilterChange: (filters: FilterValues) => void;
+}
+
 export default function ProductFilters({ vendors, filters, onFilterChange }: ProductFiltersProps) {
   const [search, setSearch] = useState(filters.search);
   const [vendor, setVendor] = useState(filters.vendor);
