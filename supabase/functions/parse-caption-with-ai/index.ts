@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { analyzeCaption } from "./utils/aiAnalyzer.ts";
-import { validateAnalyzedContent } from "./validator.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,13 +66,6 @@ serve(async (req) => {
 
     // Analyze the caption using AI
     const analyzedContent = await analyzeCaption(caption);
-    
-    // Validate the analyzed content
-    if (!validateAnalyzedContent(analyzedContent)) {
-      console.error('Validation failed for analyzed content:', analyzedContent);
-      throw new Error('Invalid analyzed content structure');
-    }
-
     console.log('Caption analyzed successfully:', analyzedContent);
 
     // Update the message with analyzed content
