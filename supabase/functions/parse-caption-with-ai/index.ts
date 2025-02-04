@@ -17,37 +17,6 @@ serve(async (req) => {
 
     console.log('Processing request:', { caption, message_id, media_group_id, correlation_id });
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-    if (!caption || typeof caption !== 'string' || caption.trim() === '') {
-      console.log('Empty or invalid caption received:', { caption });
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Caption is required and must be a non-empty string',
-          correlation_id
-        }),
-        { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // First try manual parsing
-    console.log('Starting manual parsing for caption:', caption);
-    const manualResult = await manualParse(caption);
-    console.log('Manual parsing result:', manualResult);
-
-    let analyzedContent;
-    let parsingMethod = 'manual';
-    let confidence = manualResult.parsing_metadata?.confidence || 0;
-
-    // If manual parsing confidence is low, try AI analysis
-    if (confidence < 0.75) {
-=======
-=======
->>>>>>> Stashed changes
     let analyzedContent = null;
     let parsingMethod = 'pending';
     let confidence = 0;
@@ -64,44 +33,51 @@ serve(async (req) => {
         throw new Error('Missing Supabase credentials');
       }
 
-      const supabase = createClient(supabaseUrl, supabaseKey);
+      try {
+        // Ensure valid URL format and handle potential URL errors
+        const supabaseUrlObj = new URL(supabaseUrl);
+        const supabase = createClient(supabaseUrlObj.toString(), supabaseKey);
 
-      if (media_group_id) {
-        // Look for any message in the group that has analyzed content
-        const { data: groupMessages, error: groupError } = await supabase
-          .from('messages')
-          .select('analyzed_content')
-          .eq('media_group_id', media_group_id)
-          .not('analyzed_content', 'is', null)
-          .limit(1);
+        if (media_group_id) {
+          // Look for any message in the group that has analyzed content
+          const { data: groupMessages, error: groupError } = await supabase
+            .from('messages')
+            .select('analyzed_content')
+            .eq('media_group_id', media_group_id)
+            .not('analyzed_content', 'is', null)
+            .limit(1);
 
-        if (groupError) {
-          throw groupError;
+          if (groupError) {
+            throw groupError;
+          }
+
+          if (groupMessages && groupMessages.length > 0 && groupMessages[0].analyzed_content) {
+            console.log('Found analyzed content in media group, syncing...', { media_group_id });
+            analyzedContent = groupMessages[0].analyzed_content;
+            parsingMethod = 'group_sync';
+            confidence = analyzedContent.parsing_metadata?.confidence || 0.8;
+          } else {
+            console.log('No analyzed content found in group yet, marking for later analysis');
+            // Create empty analyzed content for later processing
+            analyzedContent = {
+              product_name: 'Pending Analysis',
+              product_code: '',
+              vendor_uid: '',
+              purchase_date: '',
+              quantity: null,
+              notes: '',
+              parsing_metadata: {
+                method: 'pending',
+                confidence: 0,
+                fallbacks_used: ['awaiting_group_analysis'],
+                timestamp: new Date().toISOString()
+              }
+            };
+          }
         }
-
-        if (groupMessages && groupMessages.length > 0 && groupMessages[0].analyzed_content) {
-          console.log('Found analyzed content in media group, syncing...', { media_group_id });
-          analyzedContent = groupMessages[0].analyzed_content;
-          parsingMethod = 'group_sync';
-          confidence = analyzedContent.parsing_metadata?.confidence || 0.8;
-        } else {
-          console.log('No analyzed content found in group yet, marking for later analysis');
-          // Create empty analyzed content for later processing
-          analyzedContent = {
-            product_name: 'Pending Analysis',
-            product_code: '',
-            vendor_uid: '',
-            purchase_date: '',
-            quantity: null,
-            notes: '',
-            parsing_metadata: {
-              method: 'pending',
-              confidence: 0,
-              fallbacks_used: ['awaiting_group_analysis'],
-              timestamp: new Date().toISOString()
-            }
-          };
-        }
+      } catch (urlError) {
+        console.error('Error initializing Supabase client:', urlError);
+        throw new Error('Failed to initialize Supabase client');
       }
     } else {
       // First try manual parsing
@@ -116,10 +92,6 @@ serve(async (req) => {
 
     // If we have caption and manual parsing confidence is low, try AI analysis
     if (caption && confidence < 0.75) {
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
       console.log('Low confidence in manual parsing, attempting AI analysis:', confidence);
       const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
       if (!openAIApiKey) {
@@ -145,20 +117,6 @@ serve(async (req) => {
 5. Quantity: Look for numbers after 'x' or in units
 6. Notes: Text in parentheses or remaining info
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-Important: Return ONLY a valid JSON object with these exact lowercase field names:
-{
-  "product_name": "string",
-  "product_code": "string",
-  "vendor_uid": "string",
-  "purchase_date": "YYYY-MM-DD",
-  "quantity": number,
-  "notes": "string"
-}`
-=======
-=======
->>>>>>> Stashed changes
 Important rules:
 1. Use EXACTLY these lowercase field names
 2. Put ANY additional information into the notes field
@@ -166,10 +124,6 @@ Important rules:
 4. Format dates as YYYY-MM-DD
 5. Ensure product_name is always present
 6. Move ANY information not fitting the specific fields into notes`
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
             },
             { role: 'user', content: caption }
           ],
@@ -183,102 +137,42 @@ Important rules:
       }
 
       const data = await response.json();
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
       console.log('Raw AI response:', data.choices[0].message.content);
       
+      let aiResult;
       try {
-        const aiResult = JSON.parse(data.choices[0].message.content.trim());
-        console.log('Parsed AI result:', aiResult);
-
-        analyzedContent = {
-          product_name: aiResult.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
-          product_code: aiResult.product_code,
-          vendor_uid: aiResult.vendor_uid,
-          purchase_date: aiResult.purchase_date,
-          quantity: typeof aiResult.quantity === 'number' ? Math.floor(aiResult.quantity) : null,
-          notes: aiResult.notes || '',
-          parsing_metadata: {
-            method: 'ai',
-            confidence: 0.9,
-            timestamp: new Date().toISOString()
-          }
-        };
-        parsingMethod = 'ai';
-        confidence = 0.9;
+        // First try direct JSON parsing
+        aiResult = JSON.parse(data.choices[0].message.content.trim());
       } catch (parseError) {
-        console.error('Error parsing AI response:', parseError);
-        analyzedContent = manualResult;
-      }
-    } else {
-      console.log('Using manual parsing result, confidence:', confidence);
-      analyzedContent = manualResult;
-    }
-
-    // If message_id is provided, update the database
-    if (message_id) {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-      
-      if (!supabaseUrl || !supabaseKey) {
-        throw new Error('Missing Supabase credentials');
-      }
-
-      const supabase = createClient(supabaseUrl, supabaseKey);
-
-      // Process media group if needed
-      if (media_group_id) {
-        // First, update the source message (the one with the caption)
-        const { error: sourceUpdateError } = await supabase
-          .from('messages')
-          .update({
-            analyzed_content: analyzedContent,
-            processing_state: 'completed',
-            processing_completed_at: new Date().toISOString(),
-            is_original_caption: true,
-            group_caption_synced: true
-          })
-          .eq('id', message_id);
-
-        if (sourceUpdateError) throw sourceUpdateError;
-
-        // Then, update all other messages in the group
-        const { error: groupUpdateError } = await supabase
-          .from('messages')
-          .update({
-            analyzed_content: analyzedContent,
-            processing_state: 'completed',
-            processing_completed_at: new Date().toISOString(),
-            is_original_caption: false,
-            group_caption_synced: true,
-            message_caption_id: message_id
-          })
-          .eq('media_group_id', media_group_id)
-          .neq('id', message_id);
-
-        if (groupUpdateError) throw groupUpdateError;
-
-        // Log the group sync
-        await supabase.from('analysis_audit_log').insert({
-          message_id,
-          media_group_id,
-          event_type: 'GROUP_SYNC_COMPLETED',
-          analyzed_content,
-          processing_details: {
-            correlation_id,
-            sync_timestamp: new Date().toISOString(),
-            parsing_method: parsingMethod,
-            confidence
+        // If direct parsing fails, try to extract JSON from markdown
+        console.log('Direct parsing failed, attempting to extract from markdown');
+        const jsonMatch = data.choices[0].message.content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+        if (jsonMatch) {
+          try {
+            aiResult = JSON.parse(jsonMatch[1].trim());
+          } catch (markdownParseError) {
+            console.error('Failed to parse markdown JSON:', markdownParseError);
+            throw new Error('Failed to parse AI response as JSON');
           }
-=======
-      const aiResult = JSON.parse(data.choices[0].message.content);
-      console.log('AI analysis result:', aiResult);
+        } else {
+          // If no JSON block found, try to find any object-like structure
+          const objectMatch = data.choices[0].message.content.match(/\{[\s\S]*?\}/);
+          if (objectMatch) {
+            try {
+              aiResult = JSON.parse(objectMatch[0].trim());
+            } catch (objectParseError) {
+              console.error('Failed to parse object structure:', objectParseError);
+              throw new Error('Failed to parse AI response as JSON');
+            }
+          } else {
+            console.error('No JSON structure found in response');
+            throw new Error('Failed to parse AI response as JSON');
+          }
+        }
+      }
 
-=======
-      const aiResult = JSON.parse(data.choices[0].message.content);
-      console.log('AI analysis result:', aiResult);
+      console.log('Successfully parsed AI result:', aiResult);
 
->>>>>>> Stashed changes
       analyzedContent = {
         product_name: aiResult.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
         product_code: aiResult.product_code,
@@ -305,30 +199,36 @@ Important rules:
         throw new Error('Missing Supabase credentials');
       }
 
-      const supabase = createClient(supabaseUrl, supabaseKey);
+      try {
+        // Ensure valid URL format and handle potential URL errors
+        const supabaseUrlObj = new URL(supabaseUrl);
+        const supabase = createClient(supabaseUrlObj.toString(), supabaseKey);
 
-      // Process media group if needed
-      if (media_group_id) {
-        await supabase.rpc('process_media_group_analysis', {
-          p_message_id: message_id,
-          p_media_group_id: media_group_id,
-          p_analyzed_content: analyzedContent,
-          p_processing_completed_at: new Date().toISOString(),
-          p_correlation_id: correlation_id
->>>>>>> Stashed changes
-        });
-      } else {
-        // Update single message
-        const { error: updateError } = await supabase
-          .from('messages')
-          .update({
-            analyzed_content: analyzedContent,
-            processing_state: 'completed',
-            processing_completed_at: new Date().toISOString()
-          })
-          .eq('id', message_id);
+        // Process media group if needed
+        if (media_group_id) {
+          await supabase.rpc('process_media_group_analysis', {
+            p_message_id: message_id,
+            p_media_group_id: media_group_id,
+            p_analyzed_content: analyzedContent,
+            p_processing_completed_at: new Date().toISOString(),
+            p_correlation_id: correlation_id
+          });
+        } else {
+          // Update single message
+          const { error: updateError } = await supabase
+            .from('messages')
+            .update({
+              analyzed_content: analyzedContent,
+              processing_state: 'completed',
+              processing_completed_at: new Date().toISOString()
+            })
+            .eq('id', message_id);
 
-        if (updateError) throw updateError;
+          if (updateError) throw updateError;
+        }
+      } catch (urlError) {
+        console.error('Error initializing Supabase client:', urlError);
+        throw new Error('Failed to initialize Supabase client');
       }
     }
 
