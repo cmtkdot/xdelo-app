@@ -96,47 +96,130 @@ export type Database = {
       glide_configuration: {
         Row: {
           api_endpoint: string | null
-          api_key: string | null
-          app_id: string | null
+          appID: string | null
+          Authorization: string | null
+          "Content-Type": string | null
           created_at: string | null
           field_mappings: Json | null
           glide_table_name: string
           id: string
           is_active: boolean | null
+          mutation_endpoint: string | null
+          query_endpoint: string | null
           supabase_table_name: string
           supported_operations: string[] | null
-          table_id: string
+          tableName: string
           updated_at: string | null
         }
         Insert: {
           api_endpoint?: string | null
-          api_key?: string | null
-          app_id?: string | null
+          appID?: string | null
+          Authorization?: string | null
+          "Content-Type"?: string | null
           created_at?: string | null
           field_mappings?: Json | null
           glide_table_name: string
           id?: string
           is_active?: boolean | null
+          mutation_endpoint?: string | null
+          query_endpoint?: string | null
           supabase_table_name: string
           supported_operations?: string[] | null
-          table_id: string
+          tableName: string
           updated_at?: string | null
         }
         Update: {
           api_endpoint?: string | null
-          api_key?: string | null
-          app_id?: string | null
+          appID?: string | null
+          Authorization?: string | null
+          "Content-Type"?: string | null
           created_at?: string | null
           field_mappings?: Json | null
           glide_table_name?: string
           id?: string
           is_active?: boolean | null
+          mutation_endpoint?: string | null
+          query_endpoint?: string | null
           supabase_table_name?: string
           supported_operations?: string[] | null
-          table_id?: string
+          tableName?: string
           updated_at?: string | null
         }
         Relationships: []
+      }
+      glide_messages_configuration: {
+        Row: {
+          app_id: string
+          auth_token: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          table_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          app_id: string
+          auth_token: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          table_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          app_id?: string
+          auth_token?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          table_name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_messages_sync_queue: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          data_hash: string | null
+          error_message: string | null
+          id: string
+          last_attempted_at: string | null
+          message_id: string | null
+          retry_count: number | null
+          status: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          data_hash?: string | null
+          error_message?: string | null
+          id?: string
+          last_attempted_at?: string | null
+          message_id?: string | null
+          retry_count?: number | null
+          status?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          data_hash?: string | null
+          error_message?: string | null
+          id?: string
+          last_attempted_at?: string | null
+          message_id?: string | null
+          retry_count?: number | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "glide_messages_sync_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       glide_products: {
         Row: {
@@ -312,39 +395,114 @@ export type Database = {
         }
         Relationships: []
       }
+      glide_sync_metrics: {
+        Row: {
+          batch_id: string
+          completed_at: string | null
+          error_details: Json | null
+          failed: number | null
+          id: string
+          started_at: string | null
+          successful: number | null
+          total_processed: number | null
+        }
+        Insert: {
+          batch_id: string
+          completed_at?: string | null
+          error_details?: Json | null
+          failed?: number | null
+          id?: string
+          started_at?: string | null
+          successful?: number | null
+          total_processed?: number | null
+        }
+        Update: {
+          batch_id?: string
+          completed_at?: string | null
+          error_details?: Json | null
+          failed?: number | null
+          id?: string
+          started_at?: string | null
+          successful?: number | null
+          total_processed?: number | null
+        }
+        Relationships: []
+      }
       glide_sync_queue: {
         Row: {
+          api_key: string | null
+          app_id: string | null
+          batch_id: string | null
+          batch_index: number | null
+          batch_size: number | null
           correlation_id: string | null
           created_at: string | null
           id: string
           last_error: string | null
           message_id: string | null
+          operation_type: string | null
+          performance_metrics: Json | null
           processed_at: string | null
+          rate_limit_reset: string | null
+          raw_glide_data: Json | null
+          record_id: string | null
           retry_count: number | null
           status: string | null
+          sync_completed_at: string | null
+          sync_started_at: string | null
+          table_id: string | null
           updated_at: string | null
+          validation_errors: Json | null
         }
         Insert: {
+          api_key?: string | null
+          app_id?: string | null
+          batch_id?: string | null
+          batch_index?: number | null
+          batch_size?: number | null
           correlation_id?: string | null
           created_at?: string | null
           id?: string
           last_error?: string | null
           message_id?: string | null
+          operation_type?: string | null
+          performance_metrics?: Json | null
           processed_at?: string | null
+          rate_limit_reset?: string | null
+          raw_glide_data?: Json | null
+          record_id?: string | null
           retry_count?: number | null
           status?: string | null
+          sync_completed_at?: string | null
+          sync_started_at?: string | null
+          table_id?: string | null
           updated_at?: string | null
+          validation_errors?: Json | null
         }
         Update: {
+          api_key?: string | null
+          app_id?: string | null
+          batch_id?: string | null
+          batch_index?: number | null
+          batch_size?: number | null
           correlation_id?: string | null
           created_at?: string | null
           id?: string
           last_error?: string | null
           message_id?: string | null
+          operation_type?: string | null
+          performance_metrics?: Json | null
           processed_at?: string | null
+          rate_limit_reset?: string | null
+          raw_glide_data?: Json | null
+          record_id?: string | null
           retry_count?: number | null
           status?: string | null
+          sync_completed_at?: string | null
+          sync_started_at?: string | null
+          table_id?: string | null
           updated_at?: string | null
+          validation_errors?: Json | null
         }
         Relationships: [
           {
@@ -368,6 +526,11 @@ export type Database = {
           file_id: string | null
           file_size: number | null
           file_unique_id: string | null
+          glide_last_sync_at: string | null
+          glide_row_id: string | null
+          glide_sync_data: Json | null
+          glide_sync_json: Json | null
+          glide_sync_status: string | null
           group_caption_synced: boolean | null
           group_first_message_time: string | null
           group_last_message_time: string | null
@@ -376,6 +539,7 @@ export type Database = {
           id: string
           is_original_caption: boolean | null
           last_error_at: string | null
+          last_synced_at: string | null
           media_group_id: string | null
           message_caption_id: string | null
           mime_type: string | null
@@ -388,6 +552,7 @@ export type Database = {
           purchase_order_uid: string | null
           retry_count: number | null
           storage_path: string | null
+          supabase_sync_json: Json | null
           telegram_data: Json | null
           telegram_message_id: number | null
           updated_at: string | null
@@ -405,6 +570,11 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
+          glide_last_sync_at?: string | null
+          glide_row_id?: string | null
+          glide_sync_data?: Json | null
+          glide_sync_json?: Json | null
+          glide_sync_status?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
@@ -413,6 +583,7 @@ export type Database = {
           id?: string
           is_original_caption?: boolean | null
           last_error_at?: string | null
+          last_synced_at?: string | null
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
@@ -425,6 +596,7 @@ export type Database = {
           purchase_order_uid?: string | null
           retry_count?: number | null
           storage_path?: string | null
+          supabase_sync_json?: Json | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
@@ -442,6 +614,11 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
+          glide_last_sync_at?: string | null
+          glide_row_id?: string | null
+          glide_sync_data?: Json | null
+          glide_sync_json?: Json | null
+          glide_sync_status?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
@@ -450,6 +627,7 @@ export type Database = {
           id?: string
           is_original_caption?: boolean | null
           last_error_at?: string | null
+          last_synced_at?: string | null
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
@@ -462,6 +640,7 @@ export type Database = {
           purchase_order_uid?: string | null
           retry_count?: number | null
           storage_path?: string | null
+          supabase_sync_json?: Json | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
@@ -546,12 +725,27 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      glide_configuration_status: {
+        Row: {
+          auth_token: string | null
+          glide_table_name: string | null
+          id: string | null
+          is_active: boolean | null
+          pending_items: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       bytea_to_text: {
         Args: {
           data: string
+        }
+        Returns: string
+      }
+      compute_data_hash: {
+        Args: {
+          data: Json
         }
         Returns: string
       }
@@ -660,6 +854,10 @@ export type Database = {
           value: string
         }
         Returns: boolean
+      }
+      process_glide_data_sync: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       process_media_group_analysis:
         | {
