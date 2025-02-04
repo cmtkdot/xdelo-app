@@ -17,7 +17,6 @@ serve(async (req) => {
 
     console.log('Processing request:', { caption, message_id, media_group_id, correlation_id });
 
-    // Handle empty or invalid caption
     if (!caption || typeof caption !== 'string' || caption.trim() === '') {
       console.log('Empty or invalid caption received:', { caption });
       return new Response(
@@ -69,13 +68,15 @@ serve(async (req) => {
 5. Quantity: Look for numbers after 'x' or in units
 6. Notes: Text in parentheses or remaining info
 
-Important rules:
-1. Use EXACTLY these lowercase field names
-2. Put ANY additional information into the notes field
-3. Convert any numbers in quantity to actual number type
-4. Format dates as YYYY-MM-DD
-5. Ensure product_name is always present
-6. Move ANY information not fitting the specific fields into notes`
+Important: Return ONLY a valid JSON object with these exact lowercase field names:
+{
+  "product_name": "string",
+  "product_code": "string",
+  "vendor_uid": "string",
+  "purchase_date": "YYYY-MM-DD",
+  "quantity": number,
+  "notes": "string"
+}`
             },
             { role: 'user', content: caption }
           ],
@@ -89,24 +90,31 @@ Important rules:
       }
 
       const data = await response.json();
-      const aiResult = JSON.parse(data.choices[0].message.content);
-      console.log('AI analysis result:', aiResult);
+      console.log('Raw AI response:', data.choices[0].message.content);
+      
+      try {
+        const aiResult = JSON.parse(data.choices[0].message.content.trim());
+        console.log('Parsed AI result:', aiResult);
 
-      analyzedContent = {
-        product_name: aiResult.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
-        product_code: aiResult.product_code,
-        vendor_uid: aiResult.vendor_uid,
-        purchase_date: aiResult.purchase_date,
-        quantity: typeof aiResult.quantity === 'number' ? Math.floor(aiResult.quantity) : null,
-        notes: aiResult.notes || '',
-        parsing_metadata: {
-          method: 'ai',
-          confidence: 0.9,
-          timestamp: new Date().toISOString()
-        }
-      };
-      parsingMethod = 'ai';
-      confidence = 0.9;
+        analyzedContent = {
+          product_name: aiResult.product_name || caption.split(/[#x]/)[0]?.trim() || 'Untitled Product',
+          product_code: aiResult.product_code,
+          vendor_uid: aiResult.vendor_uid,
+          purchase_date: aiResult.purchase_date,
+          quantity: typeof aiResult.quantity === 'number' ? Math.floor(aiResult.quantity) : null,
+          notes: aiResult.notes || '',
+          parsing_metadata: {
+            method: 'ai',
+            confidence: 0.9,
+            timestamp: new Date().toISOString()
+          }
+        };
+        parsingMethod = 'ai';
+        confidence = 0.9;
+      } catch (parseError) {
+        console.error('Error parsing AI response:', parseError);
+        analyzedContent = manualResult;
+      }
     } else {
       console.log('Using manual parsing result, confidence:', confidence);
       analyzedContent = manualResult;
