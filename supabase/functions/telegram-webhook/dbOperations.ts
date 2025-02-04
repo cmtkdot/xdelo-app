@@ -117,19 +117,23 @@ export async function syncMediaGroupAnalysis(
   try {
     console.log("🔄 Syncing media group analysis:", { mediaGroupId, originalMessageId });
     
-    const { error } = await supabase.rpc('process_media_group_analysis', {
-      p_message_id: originalMessageId,
-      p_media_group_id: mediaGroupId,
-      p_analyzed_content: analyzedContent,
-      p_processing_completed_at: new Date().toISOString()
-    });
+    // Update all messages in the media group with the analyzed content
+    const { error } = await supabase
+      .from('messages')
+      .update({
+        analyzed_content: analyzedContent,
+        processing_completed_at: new Date().toISOString(),
+        processing_status: 'completed',
+        last_processed_at: new Date().toISOString()
+      })
+      .eq('media_group_id', mediaGroupId);
 
     if (error) {
-      console.error("❌ Failed to sync media group analysis:", error);
+      console.error("❌ Error syncing media group analysis:", error);
       throw error;
     }
 
-    console.log("✅ Media group analysis synced successfully");
+    console.log("✅ Successfully synced media group analysis");
   } catch (error) {
     console.error("❌ Error in syncMediaGroupAnalysis:", error);
     throw error;

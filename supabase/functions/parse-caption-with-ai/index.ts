@@ -42,20 +42,30 @@ serve(async (req) => {
 
     console.log('Caption analyzed successfully:', analyzedContent);
 
-    // Use process_media_group_content function to update the database
-    const { error: processError } = await supabase.rpc('process_media_group_content', {
-      p_message_id: message_id,
-      p_media_group_id: media_group_id,
-      p_analyzed_content: analyzedContent,
-      p_correlation_id: correlation_id || crypto.randomUUID()
-    });
+    // Update the message with analyzed content
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        analyzed_content: analyzedContent,
+        processing_completed_at: new Date().toISOString(),
+        processing_correlation_id: correlation_id || crypto.randomUUID(),
+        processing_status: 'completed',
+        processing_attempts: 1,
+        last_processed_at: new Date().toISOString()
+      })
+      .eq('id', message_id);
 
-    if (processError) {
-      console.error('Error processing media group:', processError);
-      throw processError;
+    if (updateError) {
+      console.error('Error updating message:', updateError);
+      throw updateError;
     }
 
-    console.log('Media group processed successfully');
+    console.log('Message updated successfully');
+
+    // If this is part of a media group, the trigger will handle syncing other messages
+    if (media_group_id) {
+      console.log('Media group detected, trigger will handle syncing');
+    }
 
     return new Response(
       JSON.stringify({ 
