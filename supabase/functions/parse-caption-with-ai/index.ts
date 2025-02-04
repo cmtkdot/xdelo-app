@@ -13,19 +13,44 @@ serve(async (req) => {
   }
 
   try {
-    const { message_id, media_group_id, caption, correlation_id, is_reanalysis } = await req.json();
+    const { message_id, media_group_id, caption, correlation_id } = await req.json();
     
-    console.log('Starting caption analysis:', { message_id, media_group_id, correlation_id, is_reanalysis });
+    console.log('Starting caption analysis:', {
+      message_id,
+      media_group_id,
+      caption_length: caption?.length || 0,
+      correlation_id
+    });
 
-    if (!caption || typeof caption !== 'string') {
-      throw new Error('Caption is required and must be a string');
+    // Initialize empty caption handling
+    const textToAnalyze = caption?.trim() || '';
+    if (!textToAnalyze) {
+      console.log('Empty caption received, using default values');
+      return new Response(
+        JSON.stringify({
+          success: true,
+          analyzed_content: {
+            product_name: 'Untitled Product',
+            parsing_metadata: {
+              method: 'manual',
+              confidence: 0.1,
+              timestamp: new Date().toISOString()
+            }
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Allow empty captions but log them
-    if (caption.trim() === '') {
-      console.log('Empty caption received, proceeding with basic analysis');
-    }
+    // Analyze the caption
+    const analyzedContent = await analyzeCaption(textToAnalyze);
+    console.log('Analysis completed:', {
+      correlation_id,
+      product_name: analyzedContent.product_name,
+      confidence: analyzedContent.parsing_metadata?.confidence
+    });
 
+    // Update the message with analyzed content
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
@@ -35,18 +60,13 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Analyze the caption using AI
-    const analyzedContent = await analyzeCaption(caption);
-    console.log('Caption analyzed successfully:', analyzedContent);
-
-    // Update the message with analyzed content
+    // Update the message
     const { error: updateError } = await supabase
       .from('messages')
       .update({
         analyzed_content: analyzedContent,
         processing_state: 'completed',
-        processing_completed_at: new Date().toISOString(),
-        group_caption_synced: true
+        processing_completed_at: new Date().toISOString()
       })
       .eq('id', message_id);
 
@@ -55,16 +75,14 @@ serve(async (req) => {
       throw updateError;
     }
 
-    // If this is part of a media group, update all related messages
+    // If this is part of a media group, update related messages
     if (media_group_id) {
-      console.log('Updating media group messages:', media_group_id);
       const { error: groupUpdateError } = await supabase
         .from('messages')
         .update({
           analyzed_content: analyzedContent,
           processing_state: 'completed',
           processing_completed_at: new Date().toISOString(),
-          group_caption_synced: true,
           message_caption_id: message_id
         })
         .eq('media_group_id', media_group_id)
@@ -76,42 +94,20 @@ serve(async (req) => {
       }
     }
 
-    // Log the analysis completion
-    await supabase.from('analysis_audit_log').insert({
-      message_id,
-      media_group_id,
-      event_type: is_reanalysis ? 'REANALYSIS_COMPLETED' : 'ANALYSIS_COMPLETED',
-      old_state: 'pending',
-      new_state: 'completed',
-      analyzed_content: analyzedContent,
-      processing_details: {
-        correlation_id,
-        timestamp: new Date().toISOString(),
-        is_reanalysis: !!is_reanalysis,
-        is_media_group: !!media_group_id
-      }
-    });
-
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: true,
-        message: 'Caption parsed and processed successfully',
         analyzed_content: analyzedContent,
         correlation_id
       }),
-      { 
-        headers: { 
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('Error in parse-caption-with-ai:', error);
     
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: false,
         error: error.message,
         correlation_id: crypto.randomUUID(),

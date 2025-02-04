@@ -4,34 +4,19 @@ import { manualParse } from "./manualParser.ts";
 const SYSTEM_PROMPT = `You are a specialized product information extractor. Extract structured information following these rules:
 
 1. Product Name (REQUIRED):
-   - Text before any list markers or emoji sequences
-   - Keep emojis if they are part of the product name
-   - Remove any trailing spaces or newlines
+   - Keep all emojis in their original form
+   - Include emojis if they are part of the product name
+   - Clean up any trailing spaces or newlines
 
-2. Product Code (OPTIONAL):
-   - Full code after '#' including vendor and date
-   - Format: #[vendor_uid][date]
-
-3. Vendor UID (OPTIONAL):
-   - 1-4 letters after '#' before any numbers
-
-4. Purchase Date (OPTIONAL):
-   - Convert date formats:
-   - 6 digits (mmDDyy) -> YYYY-MM-DD
-   - 5 digits (mDDyy) -> YYYY-MM-DD (add leading zero)
-
-5. Notes (OPTIONAL):
-   - Preserve emojis in flavor descriptions
+2. Notes (OPTIONAL):
+   - Preserve all emojis in flavor descriptions
    - Format flavor lists with proper emoji handling
    - Keep original emoji characters intact
 
-Example Input: "Blue Dream 🌿 x2 #CHAD120523 (indoor grow 🏠)"
+Example Input: "Blue Dream 🌿 #ABC123 (indoor grow 🏠)"
 Expected Output: {
   "product_name": "Blue Dream 🌿",
-  "product_code": "CHAD120523",
-  "vendor_uid": "CHAD",
-  "purchase_date": "2023-12-05",
-  "quantity": 2,
+  "product_code": "ABC123",
   "notes": "indoor grow 🏠"
 }`;
 
@@ -41,16 +26,9 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
 
     // First try manual parsing
     const manualResult = await manualParse(caption);
-    if (manualResult && manualResult.product_name) {
+    if (manualResult?.product_name) {
       console.log('Successfully parsed caption manually:', manualResult);
-      return {
-        ...manualResult,
-        parsing_metadata: {
-          method: 'manual',
-          confidence: 1.0,
-          timestamp: new Date().toISOString()
-        }
-      };
+      return manualResult;
     }
 
     // Fallback to AI analysis
@@ -93,7 +71,7 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
       product_code: result.product_code || '',
       vendor_uid: result.vendor_uid || '',
       purchase_date: result.purchase_date || '',
-      quantity: typeof result.quantity === 'number' ? Math.max(0, Math.floor(result.quantity)) : null,
+      quantity: typeof result.quantity === 'number' ? Math.max(0, Math.floor(result.quantity)) : undefined,
       notes: result.notes || formatFlavorList(caption),
       parsing_metadata: {
         method: 'ai',
