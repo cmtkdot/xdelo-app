@@ -38,9 +38,10 @@ const PublicGallery = () => {
         return;
       }
 
-      const { data: { valid }, error } = await supabase.rpc('validate_secure_token', {
+      // Cast the response type to handle the boolean return value
+      const { data, error } = await supabase.rpc('validate_secure_token', {
         token: token
-      });
+      }) as { data: boolean | null, error: Error | null };
 
       if (error) {
         console.error('Error validating token:', error);
@@ -53,7 +54,7 @@ const PublicGallery = () => {
         return;
       }
 
-      setIsValidToken(valid);
+      setIsValidToken(data ?? false);
     };
 
     validateToken();
