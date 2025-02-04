@@ -6,6 +6,14 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
 }
 
+interface SyncMetrics {
+  processed: number;
+  successful: number;
+  failed: number;
+  skipped: number;
+  errors: any[];
+}
+
 // Handle CORS preflight requests
 Deno.serve(async (req) => {
   console.log("📥 Received sync request");
@@ -21,7 +29,6 @@ Deno.serve(async (req) => {
     )
 
     console.log("🔍 Fetching active Glide configuration");
-    // Get active Glide configuration
     const { data: config, error: configError } = await supabaseClient
       .from('glide_messages_configuration')
       .select('*')
@@ -43,13 +50,14 @@ Deno.serve(async (req) => {
       authToken: config.auth_token ? 'present' : 'missing'
     });
 
-    // Process pending queue items
+    // Process pending queue items with batching
     console.log("🔄 Fetching pending queue items");
     const { data: queueItems, error: queueError } = await supabaseClient
       .from('glide_messages_sync_queue')
       .select('*, messages(*)')
       .eq('status', 'pending')
-      .limit(500)
+      .order('created_at', { ascending: true })
+      .limit(100) // Process in smaller batches
 
     if (queueError) {
       console.error("❌ Error fetching queue items:", queueError);
@@ -58,24 +66,60 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Processing ${queueItems?.length || 0} queue items`);
 
-    const mutations = [];
-    let successCount = 0;
-    let failureCount = 0;
+    const metrics: SyncMetrics = {
+      processed: 0,
+      successful: 0,
+      failed: 0,
+      skipped: 0,
+      errors: []
+    };
+
     const batchId = crypto.randomUUID();
+    const mutations = [];
+    const processedIds = [];
+
+    // Rate limiting helper
+    const rateLimitDelay = 100; // ms between requests
+    let lastRequestTime = Date.now();
+
+    const waitForRateLimit = async () => {
+      const now = Date.now();
+      const elapsed = now - lastRequestTime;
+      if (elapsed < rateLimitDelay) {
+        await new Promise(resolve => setTimeout(resolve, rateLimitDelay - elapsed));
+      }
+      lastRequestTime = Date.now();
+    };
 
     for (const item of queueItems || []) {
       try {
         console.log(`🔄 Processing item ${item.id}`);
         const message = item.messages;
+        
         if (!message) {
           console.warn(`⚠️ No message found for queue item ${item.id}`);
+          metrics.skipped++;
           continue;
         }
 
-        // Use the supabase_sync_json for Glide column mapping
-        const mappedData = message.supabase_sync_json || {};
-        
-        // Determine if the record exists in Glide
+        // Compare with existing Glide data
+        const existingGlideData = message.glide_sync_data?.data;
+        const newData = message.supabase_sync_json;
+
+        // Skip if data hasn't changed
+        if (existingGlideData && 
+            JSON.stringify(existingGlideData) === JSON.stringify(newData)) {
+          console.log(`⏭️ Skipping unchanged message ${message.id}`);
+          metrics.skipped++;
+          continue;
+        }
+
+        // Validate required fields
+        if (!newData || Object.keys(newData).length === 0) {
+          throw new Error('Invalid sync data');
+        }
+
+        // Determine operation type
         const glideRowId = message.glide_row_id;
         const operation = glideRowId ? 'set-columns-in-row' : 'add-row-to-table';
         
@@ -83,9 +127,12 @@ Deno.serve(async (req) => {
         mutations.push({
           kind: operation,
           tableName: config.glide_table_name,
-          columnValues: mappedData,
+          columnValues: newData,
           ...(glideRowId && { rowID: glideRowId })
         });
+
+        processedIds.push(item.id);
+        await waitForRateLimit();
 
         // Update sync status
         const { error: updateError } = await supabaseClient
@@ -96,7 +143,8 @@ Deno.serve(async (req) => {
             glide_sync_data: {
               last_sync: new Date().toISOString(),
               batch_id: batchId,
-              operation: operation
+              operation: operation,
+              data: newData
             }
           })
           .eq('id', message.id);
@@ -106,11 +154,16 @@ Deno.serve(async (req) => {
           throw updateError;
         }
 
-        successCount++;
+        metrics.successful++;
         console.log(`✅ Successfully processed message ${message.id}`);
       } catch (error) {
         console.error(`❌ Sync error for item ${item.id}:`, error);
-        failureCount++;
+        metrics.failed++;
+        metrics.errors.push({
+          item_id: item.id,
+          error: error.message,
+          timestamp: new Date().toISOString()
+        });
 
         // Update error status
         if (item.messages?.id) {
@@ -132,6 +185,7 @@ Deno.serve(async (req) => {
           }
         }
       }
+      metrics.processed++;
     }
 
     // Send mutations to Glide if any
@@ -159,25 +213,25 @@ Deno.serve(async (req) => {
 
         const result = await response.json();
         console.log('✅ Glide sync result:', result);
+
+        // Update queue items status
+        if (processedIds.length) {
+          console.log("📝 Updating queue items status");
+          const { error: queueUpdateError } = await supabaseClient
+            .from('glide_messages_sync_queue')
+            .update({
+              status: 'completed',
+              processed_at: new Date().toISOString()
+            })
+            .in('id', processedIds);
+
+          if (queueUpdateError) {
+            console.error("❌ Error updating queue status:", queueUpdateError);
+          }
+        }
       } catch (error) {
         console.error("❌ Failed to send mutations to Glide:", error);
         throw error;
-      }
-    }
-
-    // Update queue items status
-    if (queueItems?.length) {
-      console.log("📝 Updating queue items status");
-      const { error: queueUpdateError } = await supabaseClient
-        .from('glide_messages_sync_queue')
-        .update({
-          status: 'completed',
-          processed_at: new Date().toISOString()
-        })
-        .in('id', queueItems.map(item => item.id));
-
-      if (queueUpdateError) {
-        console.error("❌ Error updating queue status:", queueUpdateError);
       }
     }
 
@@ -187,14 +241,15 @@ Deno.serve(async (req) => {
       .from('glide_messages_sync_metrics')
       .insert({
         sync_batch_id: batchId,
-        total_messages: queueItems?.length || 0,
-        successful_messages: successCount,
-        failed_messages: failureCount,
+        total_messages: metrics.processed,
+        successful_messages: metrics.successful,
+        failed_messages: metrics.failed,
         completed_at: new Date().toISOString(),
         performance_data: {
           batch_size: mutations.length,
           processing_time: Date.now(),
-          success_rate: successCount / (queueItems?.length || 1)
+          skipped_messages: metrics.skipped,
+          errors: metrics.errors
         }
       });
 
@@ -206,9 +261,12 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        processed: queueItems?.length || 0,
-        successful: successCount,
-        failed: failureCount,
+        metrics: {
+          processed: metrics.processed,
+          successful: metrics.successful,
+          failed: metrics.failed,
+          skipped: metrics.skipped
+        },
         batch_id: batchId
       }),
       {
