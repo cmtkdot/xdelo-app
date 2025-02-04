@@ -33,7 +33,17 @@ Deno.serve(async (req) => {
       throw new Error('No active Glide configuration found')
     }
 
-    console.log('Processing with config:', config.glide_table_name)
+    console.log('Processing with config:', {
+      tableName: config.glide_table_name,
+      authToken: config.auth_token ? 'present' : 'missing',
+      mappings: Object.keys(config.field_mappings).length
+    })
+
+    // Extract appID from table name (format: native-table-{appID})
+    const appID = config.glide_table_name.split('-')[2]
+    if (!appID) {
+      throw new Error('Invalid Glide table name format')
+    }
 
     // First, get current Glide data to compare
     const glideResponse = await fetch('https://api.glideapp.io/api/function/queryTables', {
@@ -43,7 +53,7 @@ Deno.serve(async (req) => {
         'Authorization': `Bearer ${config.auth_token}`,
       },
       body: JSON.stringify({
-        appID: config.glide_table_name.split('-')[2],
+        appID: appID,
         queries: [{
           tableName: config.glide_table_name,
           utc: true
@@ -138,7 +148,7 @@ Deno.serve(async (req) => {
           'Authorization': `Bearer ${config.auth_token}`,
         },
         body: JSON.stringify({
-          appID: config.glide_table_name.split('-')[2],
+          appID: appID,
           mutations
         })
       })
