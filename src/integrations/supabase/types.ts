@@ -315,57 +315,123 @@ export type Database = {
         }
         Relationships: []
       }
+      glide_sync_metrics: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          failed_records: number | null
+          id: string
+          performance_data: Json | null
+          started_at: string | null
+          successful_records: number | null
+          sync_type: string
+          table_id: string
+          total_records: number | null
+          validation_errors: Json | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          failed_records?: number | null
+          id?: string
+          performance_data?: Json | null
+          started_at?: string | null
+          successful_records?: number | null
+          sync_type: string
+          table_id: string
+          total_records?: number | null
+          validation_errors?: Json | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          failed_records?: number | null
+          id?: string
+          performance_data?: Json | null
+          started_at?: string | null
+          successful_records?: number | null
+          sync_type?: string
+          table_id?: string
+          total_records?: number | null
+          validation_errors?: Json | null
+        }
+        Relationships: []
+      }
       glide_sync_queue: {
         Row: {
           api_key: string | null
           app_id: string | null
+          batch_id: string | null
+          batch_index: number | null
+          batch_size: number | null
           correlation_id: string | null
           created_at: string | null
           id: string
           last_error: string | null
           message_id: string | null
           operation_type: string | null
+          performance_metrics: Json | null
           processed_at: string | null
+          rate_limit_reset: string | null
           raw_glide_data: Json | null
           record_id: string | null
           retry_count: number | null
           status: string | null
+          sync_completed_at: string | null
+          sync_started_at: string | null
           table_id: string | null
           updated_at: string | null
+          validation_errors: Json | null
         }
         Insert: {
           api_key?: string | null
           app_id?: string | null
+          batch_id?: string | null
+          batch_index?: number | null
+          batch_size?: number | null
           correlation_id?: string | null
           created_at?: string | null
           id?: string
           last_error?: string | null
           message_id?: string | null
           operation_type?: string | null
+          performance_metrics?: Json | null
           processed_at?: string | null
+          rate_limit_reset?: string | null
           raw_glide_data?: Json | null
           record_id?: string | null
           retry_count?: number | null
           status?: string | null
+          sync_completed_at?: string | null
+          sync_started_at?: string | null
           table_id?: string | null
           updated_at?: string | null
+          validation_errors?: Json | null
         }
         Update: {
           api_key?: string | null
           app_id?: string | null
+          batch_id?: string | null
+          batch_index?: number | null
+          batch_size?: number | null
           correlation_id?: string | null
           created_at?: string | null
           id?: string
           last_error?: string | null
           message_id?: string | null
           operation_type?: string | null
+          performance_metrics?: Json | null
           processed_at?: string | null
+          rate_limit_reset?: string | null
           raw_glide_data?: Json | null
           record_id?: string | null
           retry_count?: number | null
           status?: string | null
+          sync_completed_at?: string | null
+          sync_started_at?: string | null
           table_id?: string | null
           updated_at?: string | null
+          validation_errors?: Json | null
         }
         Relationships: [
           {
