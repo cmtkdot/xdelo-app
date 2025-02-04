@@ -96,8 +96,9 @@ export type Database = {
       glide_configuration: {
         Row: {
           api_endpoint: string | null
-          api_key: string | null
-          app_id: string | null
+          appID: string | null
+          Authorization: string | null
+          "Content-Type": string | null
           created_at: string | null
           field_mappings: Json | null
           glide_table_name: string
@@ -105,13 +106,14 @@ export type Database = {
           is_active: boolean | null
           supabase_table_name: string
           supported_operations: string[] | null
-          table_id: string
+          tableName: string
           updated_at: string | null
         }
         Insert: {
           api_endpoint?: string | null
-          api_key?: string | null
-          app_id?: string | null
+          appID?: string | null
+          Authorization?: string | null
+          "Content-Type"?: string | null
           created_at?: string | null
           field_mappings?: Json | null
           glide_table_name: string
@@ -119,13 +121,14 @@ export type Database = {
           is_active?: boolean | null
           supabase_table_name: string
           supported_operations?: string[] | null
-          table_id: string
+          tableName: string
           updated_at?: string | null
         }
         Update: {
           api_endpoint?: string | null
-          api_key?: string | null
-          app_id?: string | null
+          appID?: string | null
+          Authorization?: string | null
+          "Content-Type"?: string | null
           created_at?: string | null
           field_mappings?: Json | null
           glide_table_name?: string
@@ -133,7 +136,7 @@ export type Database = {
           is_active?: boolean | null
           supabase_table_name?: string
           supported_operations?: string[] | null
-          table_id?: string
+          tableName?: string
           updated_at?: string | null
         }
         Relationships: []
@@ -314,36 +317,54 @@ export type Database = {
       }
       glide_sync_queue: {
         Row: {
+          api_key: string | null
+          app_id: string | null
           correlation_id: string | null
           created_at: string | null
           id: string
           last_error: string | null
           message_id: string | null
+          operation_type: string | null
           processed_at: string | null
+          raw_glide_data: Json | null
+          record_id: string | null
           retry_count: number | null
           status: string | null
+          table_id: string | null
           updated_at: string | null
         }
         Insert: {
+          api_key?: string | null
+          app_id?: string | null
           correlation_id?: string | null
           created_at?: string | null
           id?: string
           last_error?: string | null
           message_id?: string | null
+          operation_type?: string | null
           processed_at?: string | null
+          raw_glide_data?: Json | null
+          record_id?: string | null
           retry_count?: number | null
           status?: string | null
+          table_id?: string | null
           updated_at?: string | null
         }
         Update: {
+          api_key?: string | null
+          app_id?: string | null
           correlation_id?: string | null
           created_at?: string | null
           id?: string
           last_error?: string | null
           message_id?: string | null
+          operation_type?: string | null
           processed_at?: string | null
+          raw_glide_data?: Json | null
+          record_id?: string | null
           retry_count?: number | null
           status?: string | null
+          table_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
