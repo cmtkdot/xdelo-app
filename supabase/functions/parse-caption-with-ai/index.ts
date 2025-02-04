@@ -41,8 +41,8 @@ serve(async (req) => {
     let parsingMethod = 'manual';
     let confidence = manualResult.parsing_metadata?.confidence || 0;
 
-    // If manual parsing confidence is low, try AI analysis
-    if (confidence < 0.75) {
+    // Updated confidence threshold to 0.5
+    if (confidence < 0.5) {
       console.log('Low confidence in manual parsing, attempting AI analysis:', confidence);
       const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
       if (!openAIApiKey) {
@@ -56,7 +56,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: 'gpt-4',
           messages: [
             { 
               role: 'system', 

@@ -51,7 +51,8 @@ serve(async (req) => {
       throw new Error('message_id and caption are required');
     }
 
-    const isAutoTriggered = analyzed_content?.parsing_metadata?.confidence < 0.8 && 
+    // Updated confidence threshold to 0.5
+    const isAutoTriggered = analyzed_content?.parsing_metadata?.confidence < 0.5 && 
                            analyzed_content?.parsing_metadata?.method === 'manual' &&
                            !analyzed_content?.parsing_metadata?.reanalysis_attempted;
 
