@@ -30,7 +30,7 @@ export const ProductGrid = ({
     );
   }
 
-  const convertToMessage = (item: MediaItem): Tables<'messages'>['Row'] => ({
+  const convertToMessage = (item: MediaItem): Tables<'messages'> => ({
     ...item,
     chat_id: null,
     chat_type: null,
@@ -40,7 +40,14 @@ export const ProductGrid = ({
     last_synced_at: null,
     group_first_message_time: null,
     group_last_message_time: null,
-    purchase_order_uid: null
+    group_message_count: 1,
+    purchase_order_uid: null,
+    duration: null,
+    error_message: null,
+    processing_state: 'initialized',
+    processing_started_at: null,
+    processing_completed_at: null,
+    telegram_data: null
   });
 
   return (

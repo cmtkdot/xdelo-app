@@ -16,26 +16,7 @@ export const SyncButton = ({ messageId }: SyncButtonProps) => {
     try {
       setIsLoading(true);
 
-      // Get current sync status
-      const { data: syncStatus, error: syncError } = await supabase
-        .from('glide_messages_sync_queue')
-        .select('status,last_error')
-        .eq('message_id', messageId)
-        .maybeSingle();
-
-      if (syncError) throw syncError;
-
-      // Get latest metrics
-      const { data: metrics, error: metricsError } = await supabase
-        .from('glide_messages_sync_metrics')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (metricsError) throw metricsError;
-
-      // Queue new sync
+      // Queue new sync directly without checking status
       const { error: queueError } = await supabase
         .from('glide_messages_sync_queue')
         .insert({
