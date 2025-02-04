@@ -90,7 +90,24 @@ Important rules:
       }
 
       const data = await response.json();
-      const aiResult = JSON.parse(data.choices[0].message.content);
+      // Extract just the content from the AI response
+      const aiContent = data.choices[0].message.content;
+      
+      // Try to parse the content as JSON, handling potential formatting
+      let aiResult;
+      try {
+        // First try direct parsing
+        aiResult = JSON.parse(aiContent);
+      } catch (e) {
+        // If direct parsing fails, try to extract JSON from markdown
+        const jsonMatch = aiContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+        if (jsonMatch) {
+          aiResult = JSON.parse(jsonMatch[1]);
+        } else {
+          throw new Error('Failed to parse AI response as JSON');
+        }
+      }
+      
       console.log('AI analysis result:', aiResult);
 
       analyzedContent = {
