@@ -50,9 +50,14 @@ Deno.serve(async (req) => {
       throw new Error('No active Glide configuration found');
     }
 
+    if (!config.auth_token) {
+      console.error("❌ No auth token found in configuration");
+      throw new Error('No auth token found in configuration');
+    }
+
     console.log("✅ Configuration found:", {
       tableName: config.glide_table_name,
-      authToken: config.auth_token ? 'present' : 'missing'
+      authToken: 'present'
     });
 
     // Initialize metrics
@@ -117,13 +122,18 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          // Compare with existing Glide data
-          const existingGlideData = message.glide_sync_data?.data;
-          const newData = message.supabase_sync_json;
+          // Validate required data
+          if (!message.supabase_sync_json || Object.keys(message.supabase_sync_json).length === 0) {
+            throw new Error('Invalid sync data');
+          }
 
-          // Skip if data hasn't changed
-          if (existingGlideData && 
-              JSON.stringify(existingGlideData) === JSON.stringify(newData)) {
+          // Compare with existing Glide data using hash
+          const currentHash = message.supabase_sync_json ? 
+            await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(message.supabase_sync_json)))
+            .then(hash => Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join(''))
+            : null;
+
+          if (currentHash === item.data_hash) {
             console.log(`⏭️ Skipping unchanged message ${message.id}`);
             metrics.skipped++;
             
@@ -139,11 +149,6 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          // Validate required fields
-          if (!newData || Object.keys(newData).length === 0) {
-            throw new Error('Invalid sync data');
-          }
-
           // Determine operation type
           const glideRowId = message.glide_row_id;
           const operation = glideRowId ? 'set-columns-in-row' : 'add-row-to-table';
@@ -152,7 +157,7 @@ Deno.serve(async (req) => {
           mutations.push({
             kind: operation,
             tableName: config.glide_table_name,
-            columnValues: newData,
+            columnValues: message.supabase_sync_json,
             ...(glideRowId && { rowID: glideRowId })
           });
 
@@ -169,7 +174,8 @@ Deno.serve(async (req) => {
                 last_sync: new Date().toISOString(),
                 batch_id: batchId,
                 operation: operation,
-                data: newData
+                data: message.supabase_sync_json,
+                data_hash: currentHash
               }
             })
             .eq('id', message.id);
