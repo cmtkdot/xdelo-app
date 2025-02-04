@@ -83,8 +83,12 @@ const Settings = () => {
     try {
       setIsSyncing(true);
       
-      // Call the function to process Glide sync
-      const { error: functionError } = await supabase.functions.invoke('process-glide-sync-queue');
+      const { error: functionError } = await supabase.functions.invoke('process-glide-sync-queue', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
       
       if (functionError) throw functionError;
 
@@ -97,9 +101,10 @@ const Settings = () => {
       await refetchMetrics();
 
     } catch (error: any) {
+      console.error('Sync error:', error);
       toast({
         title: "Sync Error",
-        description: error.message,
+        description: error.message || "An error occurred during sync",
         variant: "destructive",
       });
     } finally {
