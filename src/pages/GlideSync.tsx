@@ -57,7 +57,15 @@ const GlideSync = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setErrors(data || []);
+      
+      // Transform the data to match SyncError interface
+      const transformedErrors: SyncError[] = (data || []).map(item => ({
+        message_id: item.message_id,
+        error: item.last_error,
+        timestamp: item.created_at
+      }));
+      
+      setErrors(transformedErrors);
     } catch (error) {
       console.error('Error fetching sync errors:', error);
       toast({
