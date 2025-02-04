@@ -24,7 +24,7 @@ serve(async (req) => {
 
   try {
     const { page = 1, filters = {} } = await req.json() as { page: number; filters: FilterValues };
-    const ITEMS_PER_PAGE = 16;
+    const ITEMS_PER_PAGE = 16; // 4x4 grid
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -71,15 +71,27 @@ serve(async (req) => {
     }
 
     // Apply date range filters
+    const dateField = filters.dateField || 'purchase_date';
     if (filters.dateFrom) {
-      query = query.gte('analyzed_content->>purchase_date', filters.dateFrom);
+      query = query.gte(`analyzed_content->>${dateField}`, filters.dateFrom);
     }
     if (filters.dateTo) {
-      query = query.lte('analyzed_content->>purchase_date', filters.dateTo);
+      query = query.lte(`analyzed_content->>${dateField}`, filters.dateTo);
     }
 
-    // Apply sorting
-    query = query.order("created_at", { ascending: filters.sortOrder === "asc" });
+    // Apply sorting with NULLS LAST
+    const sortOrder = filters.sortOrder || 'desc';
+    if (dateField === 'purchase_date') {
+      query = query.order(`analyzed_content->>${dateField}`, { 
+        ascending: sortOrder === "asc",
+        nullsFirst: false // This ensures null dates are always last
+      });
+    } else {
+      query = query.order(dateField, { 
+        ascending: sortOrder === "asc",
+        nullsFirst: false
+      });
+    }
 
     // Apply pagination
     const from = (page - 1) * ITEMS_PER_PAGE;
@@ -123,6 +135,7 @@ serve(async (req) => {
           groups[groupKey].push(message);
         });
 
+        // Sort groups internally
         Object.keys(groups).forEach(key => {
           groups[key].sort((a, b) => {
             if (a.is_original_caption && !b.is_original_caption) return -1;

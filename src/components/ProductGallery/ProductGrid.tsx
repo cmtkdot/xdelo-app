@@ -29,8 +29,11 @@ export const ProductGrid = ({
     );
   }
 
+  // Calculate grid columns based on screen size
+  const gridCols = "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
+    <div className={`grid ${gridCols} gap-3 md:gap-4 auto-rows-fr`}>
       {groupsArray.map((group, index) => (
         <ProductGroup
           key={group[0].id}

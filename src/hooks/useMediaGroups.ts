@@ -20,8 +20,9 @@ export const useMediaGroups = (page: number, filters: FilterValues) => {
             ...filters,
             dateFrom: filters.dateFrom?.toISOString(),
             dateTo: filters.dateTo?.toISOString(),
-            dateField: filters.dateField || 'purchase_date', // Ensure purchase_date is used if not specified
-            sortOrder: filters.sortOrder || 'desc', // Ensure desc (newest first) is used if not specified
+            dateField: filters.dateField || 'purchase_date',
+            sortOrder: filters.sortOrder || 'desc',
+            nullsLast: true, // This will ensure items without dates appear last
           },
         },
       });
@@ -38,7 +39,7 @@ export const useMediaGroups = (page: number, filters: FilterValues) => {
       console.log('Received media groups data:', data);
       return data;
     },
-    staleTime: 1000 * 60, // Consider data fresh for 1 minute
+    staleTime: 1000 * 60,
     refetchOnWindowFocus: true,
   });
 };
