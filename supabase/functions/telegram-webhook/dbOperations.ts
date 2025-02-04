@@ -1,4 +1,4 @@
-import { SupabaseClient, ExistingMessage } from "./types.ts";
+import { SupabaseClient, ExistingMessage, ProcessingState, MessageData } from "./types.ts";
 
 export async function findExistingMessage(
   supabase: SupabaseClient,
@@ -24,20 +24,14 @@ export async function findExistingMessage(
 export async function updateExistingMessage(
   supabase: SupabaseClient,
   messageId: string,
-  updateData: any
+  updateData: Partial<MessageData>
 ) {
-  // Ensure processing_state is properly typed as enum
-  if (updateData.processing_state) {
-    // Cast the processing_state to the correct enum type
-    const validStates = ['initialized', 'caption_ready', 'analyzing', 'analysis_synced', 'completed', 'error'];
-    if (!validStates.includes(updateData.processing_state)) {
-      throw new Error(`Invalid processing_state: ${updateData.processing_state}`);
-    }
-  }
-
   const { error } = await supabase
     .from("messages")
-    .update(updateData)
+    .update({
+      ...updateData,
+      updated_at: new Date().toISOString()
+    })
     .eq("id", messageId);
 
   if (error) {
@@ -48,19 +42,15 @@ export async function updateExistingMessage(
 
 export async function createNewMessage(
   supabase: SupabaseClient,
-  messageData: any
+  messageData: MessageData
 ) {
-  // Ensure processing_state is properly typed as enum
-  if (messageData.processing_state) {
-    const validStates = ['initialized', 'caption_ready', 'analyzing', 'analysis_synced', 'completed', 'error'];
-    if (!validStates.includes(messageData.processing_state)) {
-      throw new Error(`Invalid processing_state: ${messageData.processing_state}`);
-    }
-  }
-
   const { data: newMessage, error: messageError } = await supabase
     .from("messages")
-    .insert(messageData)
+    .insert({
+      ...messageData,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
     .select()
     .single();
 
@@ -73,6 +63,7 @@ export async function createNewMessage(
 }
 
 export async function triggerCaptionParsing(
+  supabase: SupabaseClient,
   messageId: string,
   mediaGroupId: string | undefined,
   caption: string
@@ -80,30 +71,32 @@ export async function triggerCaptionParsing(
   try {
     console.log("🔄 Triggering caption parsing for message:", messageId);
     
-    const response = await fetch(
-      `${Deno.env.get("SUPABASE_URL")}/functions/v1/parse-caption-with-ai`,
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message_id: messageId,
-          media_group_id: mediaGroupId,
-          caption
-        }),
-      }
-    );
+    // Update message state to pending
+    await updateExistingMessage(supabase, messageId, {
+      processing_state: 'pending'
+    });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ Caption parsing failed:", errorText);
-      throw new Error(`Caption parsing failed: ${errorText}`);
-    }
+    // Call parse-caption-with-ai edge function
+    const { error } = await supabase.functions.invoke('parse-caption-with-ai', {
+      body: {
+        message_id: messageId,
+        media_group_id: mediaGroupId,
+        caption,
+        correlation_id: crypto.randomUUID()
+      }
+    });
+
+    if (error) throw error;
     console.log("✅ Caption parsing triggered successfully");
   } catch (error) {
     console.error("❌ Error triggering caption parsing:", error);
+    
+    // Update message state to error
+    await updateExistingMessage(supabase, messageId, {
+      processing_state: 'error',
+      error_message: error.message
+    });
+    
     throw error;
   }
 }
@@ -111,20 +104,22 @@ export async function triggerCaptionParsing(
 export async function syncMediaGroupAnalysis(
   supabase: SupabaseClient,
   mediaGroupId: string,
-  analyzedContent: any,
+  analyzedContent: Record<string, any>,
   originalMessageId: string
 ) {
   try {
     console.log("🔄 Syncing media group analysis:", { mediaGroupId, originalMessageId });
     
-    // Update all messages in the media group with the analyzed content
+    // Update all messages in the group
     const { error } = await supabase
       .from('messages')
       .update({
         analyzed_content: analyzedContent,
+        processing_state: 'completed',
         processing_completed_at: new Date().toISOString(),
-        processing_status: 'completed',
-        last_processed_at: new Date().toISOString()
+        group_caption_synced: true,
+        message_caption_id: originalMessageId,
+        updated_at: new Date().toISOString()
       })
       .eq('media_group_id', mediaGroupId);
 

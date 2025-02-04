@@ -31,6 +31,19 @@ export type SupabaseClient = ReturnType<typeof createClient>;
 
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 
+export interface ExistingMessage {
+  id: string;
+  telegram_message_id: number;
+  media_group_id?: string;
+  file_unique_id: string;
+  caption?: string;
+  analyzed_content?: Record<string, any>;
+  processing_state: ProcessingState;
+  is_original_caption: boolean;
+  group_caption_synced: boolean;
+  message_caption_id?: string;
+}
+
 export interface MessageData {
   telegram_message_id: number;
   media_group_id?: string;
