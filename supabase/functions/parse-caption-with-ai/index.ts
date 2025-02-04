@@ -212,27 +212,79 @@ Important: Return ONLY valid JSON with these exact lowercase field names. Exampl
           .eq('id', message_id)
           .single();
 
-        if (messageError) throw messageError;
+        if (messageError) {
+          console.error('Error fetching message data:', messageError);
+          throw messageError;
+        }
 
-        // Only process if this is a caption message or part of a media group that needs syncing
-        if (messageData.caption || (media_group_id && messageData.is_original_caption)) {
-          if (media_group_id) {
-            console.log('Processing media group analysis:', { media_group_id, message_id });
-            // Process media group analysis
-            await supabase.rpc('process_media_group_analysis', {
-              p_message_id: message_id,
-              p_media_group_id: media_group_id,
-              p_analyzed_content: analyzedContent,
-              p_processing_state: analyzedContent.parsing_metadata.method === 'pending' ? 'pending' : 'completed',
-              p_correlation_id: correlation_id
-            });
+        console.log('Message data found:', messageData);
 
-            // Log the sync attempt
-            await supabase.from('analysis_audit_log').insert({
+        // Add processing metadata
+        const processedContent = {
+          ...analyzedContent,
+          parsing_metadata: {
+            ...analyzedContent.parsing_metadata,
+            processed_at: new Date().toISOString(),
+            correlation_id
+          }
+        };
+
+        // Update the message first
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({
+            analyzed_content: processedContent,
+            processing_state: processedContent.parsing_metadata.method === 'pending' ? 'pending' : 'completed',
+            processing_completed_at: new Date().toISOString()
+          })
+          .eq('id', message_id);
+
+        if (updateError) {
+          console.error('Error updating message:', updateError);
+          throw updateError;
+        }
+
+        console.log('Message updated successfully:', { message_id, state: processedContent.parsing_metadata.method });
+
+        // If part of a media group, sync the analysis
+        if (media_group_id) {
+          console.log('Processing media group analysis:', { media_group_id, message_id });
+          
+          // First, update all messages in the group to pending state
+          const { error: groupUpdateError } = await supabase
+            .from('messages')
+            .update({
+              processing_state: 'pending',
+              processing_started_at: new Date().toISOString()
+            })
+            .eq('media_group_id', media_group_id);
+
+          if (groupUpdateError) {
+            console.error('Error updating media group state:', groupUpdateError);
+            throw groupUpdateError;
+          }
+
+          // Then call the sync procedure
+          const { error: syncError } = await supabase.rpc('process_media_group_analysis', {
+            p_message_id: message_id,
+            p_media_group_id: media_group_id,
+            p_analyzed_content: processedContent,
+            p_correlation_id: correlation_id
+          });
+
+          if (syncError) {
+            console.error('Error in process_media_group_analysis:', syncError);
+            throw syncError;
+          }
+
+          // Log the sync attempt
+          const { error: logError } = await supabase
+            .from('analysis_audit_log')
+            .insert({
               message_id,
               media_group_id,
               event_type: 'GROUP_ANALYSIS_SYNC',
-              analyzed_content: analyzedContent,
+              analyzed_content: processedContent,
               processing_details: {
                 correlation_id,
                 parsing_method: parsingMethod,
@@ -240,24 +292,17 @@ Important: Return ONLY valid JSON with these exact lowercase field names. Exampl
                 timestamp: new Date().toISOString()
               }
             });
-          } else {
-            // Update single message
-            const { error: updateError } = await supabase
-              .from('messages')
-              .update({
-                analyzed_content: analyzedContent,
-                processing_state: analyzedContent.parsing_metadata.method === 'pending' ? 'pending' : 'completed',
-                processing_completed_at: new Date().toISOString()
-              })
-              .eq('id', message_id);
 
-            if (updateError) throw updateError;
+          if (logError) {
+            console.error('Error logging sync attempt:', logError);
+            // Don't throw here, as the sync itself was successful
           }
-        } else {
-          console.log('Skipping update - message has no caption and is not original caption holder:', { message_id });
+
+          console.log('Media group sync completed successfully:', { media_group_id, message_id });
         }
+
       } catch (error) {
-        console.error('Error updating database:', error);
+        console.error('Error in database operations:', error);
         throw error;
       }
     }
