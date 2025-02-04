@@ -45,6 +45,498 @@ export type Database = {
         }
         Relationships: []
       }
+      glide_accounts: {
+        Row: {
+          created_at: string | null
+          glide_id: string | null
+          id: string
+          last_sync_time: string | null
+          name: string
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          name: string
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          name?: string
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_customer_credits: {
+        Row: {
+          amount: number | null
+          created_at: string | null
+          credit_date: string | null
+          customer_id: string | null
+          glide_id: string | null
+          id: string
+          last_sync_time: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string | null
+          credit_date?: string | null
+          customer_id?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string | null
+          credit_date?: string | null
+          customer_id?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_customer_payments: {
+        Row: {
+          amount: number | null
+          created_at: string | null
+          customer_id: string | null
+          glide_id: string | null
+          id: string
+          last_sync_time: string | null
+          payment_date: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string | null
+          customer_id?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          payment_date?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string | null
+          customer_id?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          payment_date?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_estimate_lines: {
+        Row: {
+          created_at: string | null
+          estimate_id: string | null
+          glide_id: string | null
+          id: string
+          last_sync_time: string | null
+          price: number | null
+          product_id: string | null
+          quantity: number | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          estimate_id?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          price?: number | null
+          product_id?: string | null
+          quantity?: number | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          estimate_id?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          price?: number | null
+          product_id?: string | null
+          quantity?: number | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_estimates: {
+        Row: {
+          created_at: string | null
+          customer_id: string | null
+          estimate_date: string | null
+          glide_id: string | null
+          id: string
+          last_sync_time: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          total_amount: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          customer_id?: string | null
+          estimate_date?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          customer_id?: string | null
+          estimate_date?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_expenses: {
+        Row: {
+          amount: number | null
+          category: string | null
+          created_at: string | null
+          expense_date: string | null
+          glide_id: string | null
+          id: string
+          last_sync_time: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number | null
+          category?: string | null
+          created_at?: string | null
+          expense_date?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number | null
+          category?: string | null
+          created_at?: string | null
+          expense_date?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_invoice_lines: {
+        Row: {
+          created_at: string | null
+          glide_id: string | null
+          id: string
+          invoice_id: string | null
+          last_sync_time: string | null
+          price: number | null
+          product_id: string | null
+          quantity: number | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          invoice_id?: string | null
+          last_sync_time?: string | null
+          price?: number | null
+          product_id?: string | null
+          quantity?: number | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          invoice_id?: string | null
+          last_sync_time?: string | null
+          price?: number | null
+          product_id?: string | null
+          quantity?: number | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_invoices: {
+        Row: {
+          created_at: string | null
+          customer_id: string | null
+          glide_id: string | null
+          id: string
+          invoice_date: string | null
+          last_sync_time: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          total_amount: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          customer_id?: string | null
+          glide_id?: string | null
+          id?: string
+          invoice_date?: string | null
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          customer_id?: string | null
+          glide_id?: string | null
+          id?: string
+          invoice_date?: string | null
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_products: {
+        Row: {
+          cost: number | null
+          created_at: string | null
+          glide_id: string | null
+          id: string
+          last_sync_time: string | null
+          name: string
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          cost?: number | null
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          name: string
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          cost?: number | null
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          name?: string
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_purchase_orders: {
+        Row: {
+          created_at: string | null
+          glide_id: string | null
+          id: string
+          last_sync_time: string | null
+          order_date: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          total_amount: number | null
+          updated_at: string | null
+          vendor_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          order_date?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          total_amount?: number | null
+          updated_at?: string | null
+          vendor_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          order_date?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          total_amount?: number | null
+          updated_at?: string | null
+          vendor_id?: string | null
+        }
+        Relationships: []
+      }
+      glide_shipping_records: {
+        Row: {
+          created_at: string | null
+          glide_id: string | null
+          id: string
+          last_sync_time: string | null
+          order_id: string | null
+          shipping_date: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          tracking_number: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          order_id?: string | null
+          shipping_date?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          tracking_number?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          order_id?: string | null
+          shipping_date?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          tracking_number?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_sync_logs: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          glide_id: string | null
+          id: string
+          operation: string
+          record_id: string
+          status: string
+          table_name: string
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          glide_id?: string | null
+          id?: string
+          operation: string
+          record_id: string
+          status: string
+          table_name: string
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          glide_id?: string | null
+          id?: string
+          operation?: string
+          record_id?: string
+          status?: string
+          table_name?: string
+        }
+        Relationships: []
+      }
+      glide_sync_metadata: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          id: string
+          last_sync_time: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          table_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          table_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          table_name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_vendor_payments: {
+        Row: {
+          amount: number | null
+          created_at: string | null
+          glide_id: string | null
+          id: string
+          last_sync_time: string | null
+          payment_date: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          updated_at: string | null
+          vendor_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          payment_date?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+          vendor_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          payment_date?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+          vendor_id?: string | null
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
@@ -467,15 +959,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      sync_media_group_content_direct: {
-        Args: {
-          p_message_id: string
-          p_media_group_id: string
-          p_analyzed_content: Json
-          p_correlation_id?: string
-        }
-        Returns: undefined
-      }
       text_to_bytea: {
         Args: {
           data: string
@@ -509,6 +992,7 @@ export type Database = {
         | "processing"
         | "completed"
         | "error"
+      sync_status: "pending" | "synced" | "error" | "locked"
     }
     CompositeTypes: {
       http_header: {
