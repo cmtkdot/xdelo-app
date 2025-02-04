@@ -13,22 +13,12 @@ import { ProcessingStateFilter } from "./Filters/ProcessingStateFilter";
 import { DateRangeFilter } from "./Filters/DateRangeFilter";
 import { Separator } from "@/components/ui/separator";
 
-interface ProductFiltersProps {
-  vendors: string[];
-  filters: FilterValues;
-  onFilterChange: (filters: FilterValues) => void;
-}
-
 export default function ProductFilters({ vendors, filters, onFilterChange }: ProductFiltersProps) {
   const [search, setSearch] = useState(filters.search);
   const [vendor, setVendor] = useState(filters.vendor);
-  const [dateFrom, setDateFrom] = useState<Date | undefined>(filters.dateFrom);
-  const [dateTo, setDateTo] = useState<Date | undefined>(filters.dateTo);
   const [dateField, setDateField] = useState<'purchase_date' | 'created_at' | 'updated_at'>(filters.dateField);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder);
-  const [productCode, setProductCode] = useState(filters.productCode || 'all');
   const [quantityRange, setQuantityRange] = useState(filters.quantityRange || 'all');
-  const [processingState, setProcessingState] = useState<ProcessingState | "all">(filters.processingState || 'all');
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
   // Count active filters
@@ -36,12 +26,9 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     let count = 0;
     if (search) count++;
     if (vendor !== 'all') count++;
-    if (dateFrom || dateTo) count++;
-    if (productCode !== 'all') count++;
     if (quantityRange !== 'all') count++;
-    if (processingState !== 'all') count++;
     setActiveFiltersCount(count);
-  }, [search, vendor, dateFrom, dateTo, productCode, quantityRange, processingState]);
+  }, [search, vendor, quantityRange]);
 
   // Debounce filter changes
   const debouncedFilterChange = debounce((newFilters: FilterValues) => {
@@ -53,61 +40,40 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     debouncedFilterChange({
       search,
       vendor,
-      dateFrom,
-      dateTo,
       dateField,
       sortOrder,
-      productCode,
       quantityRange,
-      processingState
+      processingState: 'completed'
     });
-  }, [search, vendor, dateFrom, dateTo, dateField, sortOrder, productCode, quantityRange, processingState]);
+  }, [search, vendor, dateField, sortOrder, quantityRange]);
 
   const resetFilters = () => {
     setSearch("");
     setVendor("all");
-    setDateFrom(undefined);
-    setDateTo(undefined);
     setDateField('purchase_date');
     setSortOrder("desc");
-    setProductCode('all');
     setQuantityRange('all');
-    setProcessingState('all');
   };
 
   const FilterContent = () => (
     <div className="flex flex-col space-y-6">
-      {/* Search bar - Full width on mobile */}
       <div className="w-full">
         <SearchFilter value={search} onChange={setSearch} />
       </div>
 
-      {/* Main filters grid */}
       <div className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          <ProductCodeFilter value={productCode} onChange={setProductCode} />
-          <QuantityFilter value={quantityRange} onChange={setQuantityRange} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           <VendorFilter value={vendor} vendors={vendors} onChange={setVendor} />
-          <ProcessingStateFilter value={processingState} onChange={setProcessingState} />
+          <QuantityFilter value={quantityRange} onChange={setQuantityRange} />
+          <DateRangeFilter
+            dateField={dateField}
+            sortOrder={sortOrder}
+            onDateFieldChange={setDateField}
+            onSortOrderChange={setSortOrder}
+          />
         </div>
       </div>
 
-      <Separator className="my-2" />
-
-      {/* Date Range Section */}
-      <div className="space-y-2">
-        <h3 className="text-sm font-medium">Date Range</h3>
-        <DateRangeFilter
-          dateFrom={dateFrom}
-          dateTo={dateTo}
-          dateField={dateField}
-          onDateFromChange={setDateFrom}
-          onDateToChange={setDateTo}
-          onDateFieldChange={setDateField}
-        />
-      </div>
-
-      {/* Active Filters & Reset */}
       {activeFiltersCount > 0 && (
         <div className="flex items-center justify-between pt-2">
           <span className="text-sm text-muted-foreground">

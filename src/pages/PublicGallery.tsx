@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, FilterValues, analyzedContentToJson } from "@/types";
+import { MediaItem, FilterValues } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
@@ -22,11 +22,8 @@ const PublicGallery = () => {
   const [filters, setFilters] = useState<FilterValues>({
     search: "",
     vendor: "all",
-    dateFrom: undefined,
-    dateTo: undefined,
     dateField: 'purchase_date',
     sortOrder: "desc",
-    productCode: "all",
     quantityRange: "all",
     processingState: "completed"
   });
@@ -34,16 +31,24 @@ const PublicGallery = () => {
   // Fetch unique vendors
   useEffect(() => {
     const fetchVendors = async () => {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('analyzed_content->vendor_uid')
-        .not('analyzed_content->vendor_uid', 'is', null);
+      try {
+        const { data, error } = await supabase
+          .from('messages')
+          .select('analyzed_content')
+          .not('analyzed_content', 'is', null);
 
-      if (!error && data) {
-        const uniqueVendors = [...new Set(data
-          .map(item => item.analyzed_content?.vendor_uid)
-          .filter(Boolean))] as string[];
-        setVendors(uniqueVendors);
+        if (!error && data) {
+          const uniqueVendors = new Set<string>();
+          data.forEach((item) => {
+            const content = item.analyzed_content as { vendor_uid?: string };
+            if (content?.vendor_uid) {
+              uniqueVendors.add(content.vendor_uid);
+            }
+          });
+          setVendors(Array.from(uniqueVendors).sort());
+        }
+      } catch (error) {
+        console.error("Error fetching vendors:", error);
       }
     };
 
@@ -126,10 +131,10 @@ const PublicGallery = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-6 space-y-6">
         {/* Filters Section */}
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="bg-card rounded-lg shadow-sm p-4">
           <ProductFilters
             vendors={vendors}
             filters={filters}
