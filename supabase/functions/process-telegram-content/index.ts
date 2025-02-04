@@ -92,7 +92,7 @@ serve(async (req) => {
 
     // 3. Update the database with the analyzed content
     const { error: updateError } = await supabase.rpc(
-      'process_media_group_content',
+      'sync_media_group_content',
       {
         p_message_id: message_id,
         p_media_group_id: media_group_id,
@@ -198,7 +198,7 @@ async function analyzeWithAI(text: string, apiKey: string): Promise<AnalyzedCont
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4',
       messages: [
         {
           role: 'system',
