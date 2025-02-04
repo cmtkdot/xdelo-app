@@ -13,6 +13,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client";
+import { ThemeProvider } from "./components/Theme/ThemeProvider";
 
 const queryClient = new QueryClient();
 
@@ -47,33 +48,35 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <BrowserRouter>
+  <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
+    <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/p/gallery" element={<PublicGallery />} />
+            <Route
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <Outlet />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/gallery" element={<ProductGallery />} />
+              <Route path="/vendors" element={<Vendors />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
         <Toaster />
         <Sonner />
-        <Routes>
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/p/gallery" element={<PublicGallery />} />
-          <Route
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Outlet />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          >
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/gallery" element={<ProductGallery />} />
-            <Route path="/vendors" element={<Vendors />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
       </TooltipProvider>
-    </BrowserRouter>
-  </QueryClientProvider>
+    </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;

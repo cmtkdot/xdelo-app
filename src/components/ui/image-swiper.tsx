@@ -3,9 +3,9 @@
 import * as React from 'react'
 import { motion, useMotionValue } from 'framer-motion'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { MediaItem } from '@/types'
+import { cn } from '@/lib/utils'
 
 interface ImageSwiperProps extends React.HTMLAttributes<HTMLDivElement> {
   media: MediaItem[]
@@ -78,7 +78,7 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
   return (
     <div
       className={cn(
-        'group relative aspect-video h-full w-full overflow-hidden rounded-lg',
+        'group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-black/90',
         className
       )}
       onMouseEnter={() => {
@@ -95,13 +95,13 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="pointer-events-auto h-8 w-8 rounded-full bg-white/80 opacity-0 transition-opacity group-hover:opacity-100"
+              className="pointer-events-auto h-8 w-8 rounded-full bg-black/50 hover:bg-black/75 text-white opacity-0 transition-opacity group-hover:opacity-100"
               onClick={(e) => {
                 e.stopPropagation()
                 setMediaIndex((prev) => prev - 1)
               }}
             >
-              <ChevronLeft className="h-4 w-4 text-neutral-600" />
+              <ChevronLeft className="h-4 w-4" />
             </Button>
           </div>
         )}
@@ -111,13 +111,13 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
             <Button
               variant="ghost" 
               size="icon"
-              className="pointer-events-auto h-8 w-8 rounded-full bg-white/80 opacity-0 transition-opacity group-hover:opacity-100"
+              className="pointer-events-auto h-8 w-8 rounded-full bg-black/50 hover:bg-black/75 text-white opacity-0 transition-opacity group-hover:opacity-100"
               onClick={(e) => {
                 e.stopPropagation()
                 setMediaIndex((prev) => prev + 1)
               }}
             >
-              <ChevronRight className="h-4 w-4 text-neutral-600" />
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         )}

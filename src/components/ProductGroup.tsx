@@ -237,7 +237,7 @@ export const ProductGroup = ({
         {hasError && (
           <div className="absolute top-2 right-2">
             <div className="bg-red-100 p-2 rounded-full">
-              <AlertCircle className="h-5 w-5 text-red-600" />
+              <AlertCircle className="h-5 w-5 text-red-600 dark:text-white" />
             </div>
           </div>
         )}
@@ -290,7 +290,7 @@ export const ProductGroup = ({
                       onClick={() => setIsViewerOpen(true)} 
                       className="py-2 text-black hover:text-black/80"
                     >
-                      <Eye className="w-4 h-4 text-black" />
+                      <Eye className="w-4 h-4 text-black dark:text-white" />
                     </TabsTrigger>
                   </TooltipTrigger>
                   <TooltipContent className="px-2 py-1 text-xs">View</TooltipContent>
@@ -305,7 +305,7 @@ export const ProductGroup = ({
                       onClick={() => onEdit(mainMedia)} 
                       className="py-2 text-black hover:text-black/80"
                     >
-                      <Pencil className="w-4 h-4 text-black" />
+                      <Pencil className="w-4 h-4 text-black dark:text-white" />
                     </TabsTrigger>
                   </TooltipTrigger>
                   <TooltipContent className="px-2 py-1 text-xs">Edit</TooltipContent>
@@ -320,7 +320,7 @@ export const ProductGroup = ({
                       onClick={handleReanalyze} 
                       className="py-2 text-black hover:text-black/80"
                     >
-                      <RotateCw className="w-4 h-4 text-black" />
+                      <RotateCw className="w-4 h-4 text-black dark:text-white" />
                     </TabsTrigger>
                   </TooltipTrigger>
                   <TooltipContent className="px-2 py-1 text-xs">Reanalyze</TooltipContent>
@@ -335,7 +335,7 @@ export const ProductGroup = ({
                       onClick={handleDelete} 
                       className="py-2 text-destructive hover:text-destructive/80"
                     >
-                      <Trash2 className="w-4 h-4 text-destructive" />
+                      <Trash2 className="w-4 h-4 text-destructive dark:text-white" />
                     </TabsTrigger>
                   </TooltipTrigger>
                   <TooltipContent className="px-2 py-1 text-xs">Delete</TooltipContent>

@@ -1,21 +1,28 @@
-import { Bell } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ThemeToggle } from "../Theme/ThemeToggle";
+import { useTheme } from "../Theme/ThemeProvider";
 
 export const Header = () => {
+  const { theme } = useTheme();
+  const logoSrc = theme === "dark" 
+    ? "/lovable-uploads/xdelo-white-logo.png"
+    : "/lovable-uploads/xdelo-blackfont.png";
+
   return (
-    <header className="border-b bg-white">
-      <div className="flex h-16 items-center px-4 gap-4">
-        <img 
-          src="/lovable-uploads/23e0dfcc-40e5-4d70-9d82-e9603faa2563.png" 
-          alt="Xdelo" 
-          className="h-8"
-        />
-        <div className="ml-auto flex items-center gap-4">
-          <button className="relative">
-            <Bell className="h-5 w-5 text-gray-500" />
-            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-[10px] font-medium text-white flex items-center justify-center">
-              3
-            </span>
-          </button>
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container flex h-14 items-center">
+        <div className="flex flex-1 items-center justify-between">
+          <div className="flex-1" /> {/* Left spacer */}
+          <Link to="/" className="flex items-center justify-center">
+            <img 
+              src={logoSrc} 
+              alt="Xdelo" 
+              className="h-8"
+            />
+          </Link>
+          <div className="flex-1 flex justify-end"> {/* Right spacer with theme toggle */}
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </header>

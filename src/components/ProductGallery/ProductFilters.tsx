@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { FilterValues, ProcessingState } from "@/types";
-import { Filter } from "lucide-react";
+import { Filter, X } from "lucide-react";
 import debounce from 'lodash/debounce';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { QuantityFilter } from "./Filters/QuantityFilter";
 import { VendorFilter } from "./Filters/VendorFilter";
 import { ProcessingStateFilter } from "./Filters/ProcessingStateFilter";
 import { DateRangeFilter } from "./Filters/DateRangeFilter";
+import { Separator } from "@/components/ui/separator";
 
 interface ProductFiltersProps {
   vendors: string[];
@@ -62,16 +63,40 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     });
   }, [search, vendor, dateFrom, dateTo, dateField, sortOrder, productCode, quantityRange, processingState]);
 
+  const resetFilters = () => {
+    setSearch("");
+    setVendor("all");
+    setDateFrom(undefined);
+    setDateTo(undefined);
+    setDateField('purchase_date');
+    setSortOrder("desc");
+    setProductCode('all');
+    setQuantityRange('all');
+    setProcessingState('all');
+  };
+
   const FilterContent = () => (
-    <div className="flex flex-col space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+    <div className="flex flex-col space-y-6">
+      {/* Search bar - Full width on mobile */}
+      <div className="w-full">
         <SearchFilter value={search} onChange={setSearch} />
-        <ProductCodeFilter value={productCode} onChange={setProductCode} />
-        <QuantityFilter value={quantityRange} onChange={setQuantityRange} />
-        <VendorFilter value={vendor} vendors={vendors} onChange={setVendor} />
-        <ProcessingStateFilter value={processingState} onChange={setProcessingState} />
       </div>
-      <div className="flex justify-start">
+
+      {/* Main filters grid */}
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <ProductCodeFilter value={productCode} onChange={setProductCode} />
+          <QuantityFilter value={quantityRange} onChange={setQuantityRange} />
+          <VendorFilter value={vendor} vendors={vendors} onChange={setVendor} />
+          <ProcessingStateFilter value={processingState} onChange={setProcessingState} />
+        </div>
+      </div>
+
+      <Separator className="my-2" />
+
+      {/* Date Range Section */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-medium">Date Range</h3>
         <DateRangeFilter
           dateFrom={dateFrom}
           dateTo={dateTo}
@@ -81,6 +106,24 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
           onDateFieldChange={setDateField}
         />
       </div>
+
+      {/* Active Filters & Reset */}
+      {activeFiltersCount > 0 && (
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-sm text-muted-foreground">
+            {activeFiltersCount} active filter{activeFiltersCount !== 1 ? 's' : ''}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={resetFilters}
+            className="h-8 px-2 text-xs"
+          >
+            <X className="w-3 h-3 mr-1" />
+            Clear all
+          </Button>
+        </div>
+      )}
     </div>
   );
 
@@ -105,11 +148,24 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
               )}
             </Button>
           </SheetTrigger>
-          <SheetContent side="bottom" className="h-[80vh]">
+          <SheetContent side="bottom" className="h-[85vh] px-4">
             <SheetHeader>
-              <SheetTitle>Filters</SheetTitle>
+              <div className="flex items-center justify-between">
+                <SheetTitle>Filters</SheetTitle>
+                {activeFiltersCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetFilters}
+                    className="h-8"
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    Clear all
+                  </Button>
+                )}
+              </div>
             </SheetHeader>
-            <div className="mt-4 overflow-y-auto">
+            <div className="mt-6 overflow-y-auto pb-20">
               <FilterContent />
             </div>
           </SheetContent>

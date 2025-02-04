@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ImageSwiper } from "@/components/ui/image-swiper";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface MediaViewerProps {
   isOpen: boolean;
@@ -39,79 +40,104 @@ export const MediaViewer = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-4xl h-[90vh] p-0">
+      <DialogContent className="max-w-4xl h-[90vh] p-0 dark:bg-transparent">
         <div className="relative h-full flex flex-col">
-          <DialogHeader className="border-b border-border px-6 py-4">
-            <DialogTitle className="text-base">
+          <DialogHeader className="border-b border-border px-6 py-4 bg-background dark:bg-transparent">
+            <DialogTitle className="text-base font-medium">
               {analyzedContent?.product_name || 'Untitled Product'}
             </DialogTitle>
           </DialogHeader>
           
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 bg-black/90">
             <ImageSwiper media={currentGroup} />
           </div>
 
-          <div className="p-4 bg-background border-t space-y-3">
-            {/* Caption section in a single row */}
+          <div className="p-6 bg-background dark:bg-transparent border-t space-y-4">
+            {/* Caption section */}
             {(analyzedContent?.quantity || mainMedia.caption) && (
-              <p className="border-b pb-2">
-                <span className="font-semibold text-primary">Caption:</span> {analyzedContent?.quantity || mainMedia.caption}
-              </p>
+              <div className="border-b border-border pb-4">
+                <p className="text-sm text-muted-foreground font-medium mb-1">Caption</p>
+                <p className="text-foreground">{analyzedContent?.quantity || mainMedia.caption}</p>
+              </div>
             )}
 
             {/* Two column grid for other information */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
               {analyzedContent?.product_code && (
-                <p><span className="font-semibold text-primary">PO #:</span> PO#{analyzedContent.product_code}</p>
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">PO Number</p>
+                  <p className="text-foreground">PO#{analyzedContent.product_code}</p>
+                </div>
               )}
               {analyzedContent?.vendor_uid && (
-                <p><span className="font-semibold text-primary">Vendor:</span> {analyzedContent.vendor_uid}</p>
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Vendor</p>
+                  <p className="text-foreground">{analyzedContent.vendor_uid}</p>
+                </div>
               )}
               {analyzedContent?.purchase_date && (
-                <p><span className="font-semibold text-primary">Purchase Date:</span> {formatDate(analyzedContent.purchase_date)}</p>
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Purchase Date</p>
+                  <p className="text-foreground">{formatDate(analyzedContent.purchase_date)}</p>
+                </div>
               )}
               {mainMedia.created_at && (
-                <p><span className="font-semibold text-primary">Created:</span> {formatDate(mainMedia.created_at)}</p>
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Created</p>
+                  <p className="text-foreground">{formatDate(mainMedia.created_at)}</p>
+                </div>
               )}
               {mainMedia.updated_at && (
-                <p><span className="font-semibold text-primary">Updated:</span> {formatDate(mainMedia.updated_at)}</p>
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Updated</p>
+                  <p className="text-foreground">{formatDate(mainMedia.updated_at)}</p>
+                </div>
               )}
               {mainMedia.processing_state && (
-                <p><span className="font-semibold text-primary">Processing State:</span> {mainMedia.processing_state}</p>
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Processing State</p>
+                  <p className="text-foreground capitalize">{mainMedia.processing_state}</p>
+                </div>
               )}
               {mainMedia.media_group_id && (
-                <p><span className="font-semibold text-primary">Media Group ID:</span> {mainMedia.media_group_id}</p>
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Media Group ID</p>
+                  <p className="text-foreground">{mainMedia.media_group_id}</p>
+                </div>
               )}
               {mainMedia.group_message_count && (
-                <p><span className="font-semibold text-primary">Group Size:</span> {mainMedia.group_message_count}</p>
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Group Size</p>
+                  <p className="text-foreground">{mainMedia.group_message_count}</p>
+                </div>
               )}
             </div>
 
             {analyzedContent?.notes && (
-              <div className="mt-4 pt-4 border-t border-border">
-                <p className="text-sm font-semibold text-primary mb-1">Notes:</p>
-                <p className="text-sm text-muted-foreground">{analyzedContent.notes}</p>
+              <div className="border-t border-border pt-4">
+                <p className="text-sm text-muted-foreground font-medium mb-1">Notes</p>
+                <p className="text-foreground">{analyzedContent.notes}</p>
               </div>
             )}
 
-            <div className="flex justify-between mt-4">
+            <div className="flex justify-between pt-4 border-t border-border">
               <Button
                 variant="outline"
                 onClick={onPrevious}
                 disabled={!hasPrevious}
-                className="w-[100px]"
+                className="bg-secondary hover:bg-secondary/80"
               >
-                <ChevronLeft className="h-4 w-4 text-black" />
+                <ChevronLeft className="w-4 h-4 mr-2" />
                 Previous
               </Button>
               <Button
                 variant="outline"
                 onClick={onNext}
                 disabled={!hasNext}
-                className="w-[100px]"
+                className="bg-secondary hover:bg-secondary/80"
               >
                 Next
-                <ChevronRight className="h-4 w-4 text-black" />
+                <ChevronRight className="w-4 h-4 ml-2" />
               </Button>
             </div>
           </div>
