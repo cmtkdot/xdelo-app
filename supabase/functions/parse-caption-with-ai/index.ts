@@ -265,11 +265,13 @@ Important: Return ONLY valid JSON with these exact lowercase field names. Exampl
           }
 
           // Then call the sync procedure
+          const completedAt = processedContent.parsing_metadata.method === 'pending' ? null : new Date().toISOString();
           const { error: syncError } = await supabase.rpc('process_media_group_analysis', {
             p_message_id: message_id,
             p_media_group_id: media_group_id,
             p_analyzed_content: processedContent,
-            p_correlation_id: correlation_id
+            p_correlation_id: correlation_id,
+            p_processing_completed_at: completedAt
           });
 
           if (syncError) {
