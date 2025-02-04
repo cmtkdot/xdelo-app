@@ -262,7 +262,6 @@ export const ProductGroup = ({
           {analyzedContent?.vendor_uid && (
             <p>Vendor: {analyzedContent.vendor_uid}</p>
           )}
-          {/* Caption removed as requested */}
         </div>
 
         {analyzedContent?.parsing_metadata?.confidence < 0.7 && (
