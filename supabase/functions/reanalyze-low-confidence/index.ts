@@ -25,7 +25,28 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // First, call the parse-caption-with-ai function
+    // First, update all messages in the group to pending state
+    if (media_group_id) {
+      console.log('Updating media group messages to pending state:', media_group_id);
+      const { error: groupUpdateError } = await supabase
+        .from('messages')
+        .update({
+          processing_state: 'pending',
+          group_caption_synced: false,
+          retry_count: 0,
+          error_message: null,
+          last_error_at: null
+        })
+        .eq('media_group_id', media_group_id);
+
+      if (groupUpdateError) {
+        console.error('Error updating media group:', groupUpdateError);
+        throw groupUpdateError;
+      }
+    }
+
+    // Call the parse-caption-with-ai function
+    console.log('Calling parse-caption-with-ai function');
     const parseResponse = await fetch(`${supabaseUrl}/functions/v1/parse-caption-with-ai`, {
       method: 'POST',
       headers: {
@@ -36,7 +57,8 @@ serve(async (req) => {
         message_id,
         media_group_id,
         caption,
-        correlation_id
+        correlation_id,
+        is_reanalysis: true
       }),
     });
 
@@ -49,60 +71,27 @@ serve(async (req) => {
     const parseResult = await parseResponse.json();
     console.log('Caption parsed successfully:', parseResult);
 
-    if (!parseResult.analyzed_content) {
-      throw new Error('No analyzed content returned from parser');
-    }
-
-    // Update the source message
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update({
-        analyzed_content: parseResult.analyzed_content,
-        processing_completed_at: new Date().toISOString(),
-        processing_correlation_id: correlation_id || crypto.randomUUID(),
-        processing_status: 'completed',
-        processing_attempts: 1,
-        last_processed_at: new Date().toISOString()
-      })
-      .eq('id', message_id);
-
-    if (updateError) {
-      console.error('Error updating message:', updateError);
-      throw updateError;
-    }
-
-    console.log('Message updated successfully');
-
-    // If this is part of a media group, update all related messages
-    if (media_group_id) {
-      console.log('Updating media group messages:', media_group_id);
-      
-      const { error: groupError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: parseResult.analyzed_content,
-          processing_completed_at: new Date().toISOString(),
-          processing_correlation_id: correlation_id || crypto.randomUUID(),
-          processing_status: 'completed',
-          last_processed_at: new Date().toISOString()
-        })
-        .eq('media_group_id', media_group_id)
-        .neq('id', message_id); // Don't update the source message again
-
-      if (groupError) {
-        console.error('Error updating media group:', groupError);
-        throw groupError;
+    // Log reanalysis completion
+    await supabase.from('analysis_audit_log').insert({
+      message_id,
+      media_group_id,
+      event_type: 'REANALYSIS_COMPLETED',
+      old_state: 'pending',
+      new_state: 'completed',
+      analyzed_content: parseResult.analyzed_content,
+      processing_details: {
+        correlation_id,
+        reanalysis_timestamp: new Date().toISOString(),
+        is_media_group: !!media_group_id
       }
-
-      console.log('Media group updated successfully');
-    }
+    });
 
     return new Response(
       JSON.stringify({ 
         success: true,
         message: 'Reanalysis completed successfully',
         analyzed_content: parseResult.analyzed_content,
-        correlation_id: correlation_id
+        correlation_id
       }),
       { 
         headers: { 
