@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, FilterValues } from "@/types";
+import { MediaItem, FilterValues, analyzedContentToJson } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
@@ -38,7 +38,7 @@ const PublicGallery = () => {
         return;
       }
 
-      const { data, error } = await supabase.rpc('validate_secure_token', {
+      const { data: { valid }, error } = await supabase.rpc('validate_secure_token', {
         token: token
       });
 
@@ -53,7 +53,7 @@ const PublicGallery = () => {
         return;
       }
 
-      setIsValidToken(data);
+      setIsValidToken(valid);
     };
 
     validateToken();
@@ -104,10 +104,13 @@ const PublicGallery = () => {
     if (!editItem) return;
 
     try {
+      const analyzedContentJson = editItem.analyzed_content ? 
+        analyzedContentToJson(editItem.analyzed_content) : null;
+
       const { error } = await supabase
         .from('messages')
         .update({
-          analyzed_content: editItem.analyzed_content,
+          analyzed_content: analyzedContentJson,
           processing_state: 'completed',
           group_caption_synced: true
         })
