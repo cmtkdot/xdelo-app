@@ -3,7 +3,7 @@ import { MediaItem } from '@/types';
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ImageSwiper } from "@/components/ui/image-swiper";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, MessageSquare } from "lucide-react";
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -49,60 +49,68 @@ export const MediaViewer = ({
           </div>
 
           <div className="p-6 space-y-4">
-            {/* Caption and Purchase Date Row */}
-            <div className="flex justify-between items-start gap-4">
+            {/* Enhanced Caption and Purchase Date Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {mainMedia.caption && (
-                <div className="flex-1">
-                  <p className="text-sm text-muted-foreground font-medium mb-1">Caption</p>
-                  <p className="text-foreground text-sm">{mainMedia.caption}</p>
+                <div className="bg-secondary/10 rounded-lg p-4 flex items-start space-x-3">
+                  <MessageSquare className="w-4 h-4 text-muted-foreground mt-1 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-muted-foreground font-medium mb-1">Caption</p>
+                    <p className="text-foreground text-sm break-words">{mainMedia.caption}</p>
+                  </div>
                 </div>
               )}
               {analyzedContent?.purchase_date && (
-                <div className="text-right">
-                  <p className="text-sm text-muted-foreground font-medium mb-1">Purchase Date</p>
-                  <p className="text-foreground text-sm">{formatDate(analyzedContent.purchase_date)}</p>
+                <div className="bg-secondary/10 rounded-lg p-4 flex items-start space-x-3">
+                  <Calendar className="w-4 h-4 text-muted-foreground mt-1 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-muted-foreground font-medium mb-1">Purchase Date</p>
+                    <p className="text-foreground text-sm font-medium">
+                      {formatDate(analyzedContent.purchase_date)}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Product Information Grid */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {analyzedContent?.quantity && (
-                <div className="bg-secondary/20 rounded-lg p-3">
+                <div className="bg-secondary/20 rounded-lg p-4 hover:bg-secondary/30 transition-colors">
                   <p className="text-xs text-muted-foreground font-medium mb-1">Quantity</p>
                   <p className="text-foreground text-sm font-medium">{analyzedContent.quantity}</p>
                 </div>
               )}
               {analyzedContent?.product_code && (
-                <div className="bg-secondary/20 rounded-lg p-3">
+                <div className="bg-secondary/20 rounded-lg p-4 hover:bg-secondary/30 transition-colors">
                   <p className="text-xs text-muted-foreground font-medium mb-1">PO Number</p>
                   <p className="text-foreground text-sm font-medium">PO#{analyzedContent.product_code}</p>
                 </div>
               )}
               {analyzedContent?.vendor_uid && (
-                <div className="bg-secondary/20 rounded-lg p-3">
+                <div className="bg-secondary/20 rounded-lg p-4 hover:bg-secondary/30 transition-colors">
                   <p className="text-xs text-muted-foreground font-medium mb-1">Vendor</p>
                   <p className="text-foreground text-sm font-medium">{analyzedContent.vendor_uid}</p>
                 </div>
               )}
             </div>
 
-            {/* Notes Section */}
+            {/* Notes Section with enhanced styling */}
             {analyzedContent?.notes && (
-              <div className="bg-secondary/10 rounded-lg p-4 mt-4">
-                <p className="text-sm text-muted-foreground font-medium mb-1">Notes</p>
-                <p className="text-foreground text-sm">{analyzedContent.notes}</p>
+              <div className="bg-secondary/10 rounded-lg p-4 hover:bg-secondary/15 transition-colors">
+                <p className="text-sm text-muted-foreground font-medium mb-2">Notes</p>
+                <p className="text-foreground text-sm leading-relaxed">{analyzedContent.notes}</p>
               </div>
             )}
 
-            {/* Navigation Buttons */}
+            {/* Navigation Buttons with enhanced styling */}
             <div className="flex justify-between pt-4 border-t border-border">
               <Button
                 variant="outline"
                 onClick={onPrevious}
                 disabled={!hasPrevious}
                 size="sm"
-                className="bg-secondary hover:bg-secondary/80"
+                className="bg-secondary hover:bg-secondary/80 transition-colors"
               >
                 <ChevronLeft className="w-4 h-4 mr-1" />
                 Previous
@@ -112,7 +120,7 @@ export const MediaViewer = ({
                 onClick={onNext}
                 disabled={!hasNext}
                 size="sm"
-                className="bg-secondary hover:bg-secondary/80"
+                className="bg-secondary hover:bg-secondary/80 transition-colors"
               >
                 Next
                 <ChevronRight className="w-4 h-4 ml-1" />
