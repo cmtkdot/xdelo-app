@@ -41,11 +41,10 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
 
   const getMediaUrl = (item: MediaItem) => {
     if (item.public_url) return item.public_url
-    return `https://ovpsyrhigencvzlxqwqz.supabase.co/storage/v1/object/public/telegram-media/${item.file_unique_id}.${item.mime_type?.split('/')[1]}`
+    return `https://xjhhehxcxkiumnwbirel.supabase.co/storage/v1/object/public/telegram-media/${item.file_unique_id}.${item.mime_type?.split('/')[1]}`
   }
 
   React.useEffect(() => {
-    // Pause all videos when not hovered or when changing slides
     videoRefs.current.forEach((video, index) => {
       if (video) {
         if (isHovered && index === mediaIndex) {
@@ -59,7 +58,6 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
     })
   }, [isHovered, mediaIndex])
 
-  // Auto-swipe to first video on hover/click if we're not already on a video
   const handleInteraction = React.useCallback(() => {
     const firstVideoIndex = findFirstVideoIndex()
     if (firstVideoIndex !== -1 && !sortedMedia[mediaIndex].mime_type?.startsWith('video')) {
@@ -67,7 +65,7 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
     }
   }, [findFirstVideoIndex, mediaIndex, sortedMedia])
 
-  if (sortedMedia.length === 0) {
+  if (!sortedMedia?.length) {
     return (
       <div className="group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
         <span className="text-gray-400">No media available</span>

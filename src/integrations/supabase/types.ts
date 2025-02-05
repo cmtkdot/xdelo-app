@@ -853,14 +853,6 @@ export type Database = {
         }
         Returns: string
       }
-      cleanup_old_logs: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_old_webhook_logs: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
       compute_data_hash: {
         Args: {
           data: Json
@@ -885,6 +877,12 @@ export type Database = {
         }
         Returns: number
       }
+      extract_product_code: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
+      }
       extract_product_name: {
         Args: {
           analyzed_content: Json
@@ -896,12 +894,6 @@ export type Database = {
           analyzed_content: Json
         }
         Returns: number
-      }
-      extract_product_unit: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: string
       }
       extract_vendor_name: {
         Args: {
@@ -1032,26 +1024,16 @@ export type Database = {
           reanalysis_attempted: boolean
         }[]
       }
-      process_media_group_content:
-        | {
-            Args: {
-              p_message_id: string
-              p_media_group_id: string
-              p_analyzed_content: Json
-              p_processing_completed_at?: string
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_message_id: string
-              p_media_group_id: string
-              p_analyzed_content: Json
-              p_processing_completed_at?: string
-              p_correlation_id?: string
-            }
-            Returns: undefined
-          }
+      process_media_group_content: {
+        Args: {
+          p_message_id: string
+          p_media_group_id: string
+          p_analyzed_content: Json
+          p_processing_completed_at?: string
+          p_correlation_id?: string
+        }
+        Returns: undefined
+      }
       text_to_bytea: {
         Args: {
           data: string
