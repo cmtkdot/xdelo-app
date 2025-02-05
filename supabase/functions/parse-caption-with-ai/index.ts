@@ -9,19 +9,28 @@ const corsHeaders = {
 };
 
 async function findMediaGroupAnalysis(supabase: any, mediaGroupId: string) {
-  const { data, error } = await supabase
+  // Always check for video with caption first, as it might be a late upload
+  const { data: videoMessage } = await supabase
     .from('messages')
-    .select('analyzed_content, is_original_caption')
+    .select('analyzed_content, caption')
     .eq('media_group_id', mediaGroupId)
-    .eq('is_original_caption', true)
+    .eq('file_type', 'video')
+    .not('caption', 'is', null)
     .maybeSingle();
 
-  if (error) {
-    console.error('Error finding media group analysis:', error);
-    throw error;
+  if (videoMessage?.analyzed_content) {
+    return videoMessage.analyzed_content;
   }
 
-  return data?.analyzed_content;
+  // Fallback to any message with caption and analysis
+  const { data: message } = await supabase
+    .from('messages')
+    .select('analyzed_content')
+    .eq('media_group_id', mediaGroupId)
+    .not('analyzed_content', 'is', null)
+    .maybeSingle();
+
+  return message?.analyzed_content;
 }
 
 async function updateMediaGroupMessages(
@@ -32,38 +41,58 @@ async function updateMediaGroupMessages(
   hasCaption: boolean
 ) {
   try {
-    console.log('Updating media group messages:', { mediaGroupId, messageId });
-
-    // Get all messages in the group
-    const { data: groupMessages, error: groupError } = await supabase
+    // Check if this message has a caption and if there's already a video with caption
+    const { data: groupMessages } = await supabase
       .from('messages')
-      .select('*')
+      .select('id, file_type, caption')
       .eq('media_group_id', mediaGroupId);
 
-    if (groupError) throw groupError;
-    if (!groupMessages) return;
+    if (!groupMessages?.length) return;
 
-    // Update all messages in the group
-    const updates = groupMessages.map(async (msg) => {
-      // For the message with caption, mark it as original
-      const isOriginalCaption = msg.id === messageId && hasCaption;
-      
-      // Always update processing state to completed
-      const { error: updateError } = await supabase
+    // Check if there's a video with caption in the group
+    const videoWithCaption = groupMessages.find(msg => 
+      msg.file_type === 'video' && msg.caption
+    );
+
+    // Current message info
+    const currentMessage = groupMessages.find(msg => msg.id === messageId);
+    const isVideo = currentMessage?.file_type === 'video';
+
+    // Sync rules:
+    // 1. If this is a video with caption, always sync to group
+    // 2. If this is an image/message with caption and no video with caption exists, sync to group
+    // 3. Otherwise, just update this message
+    if ((isVideo && hasCaption) || (hasCaption && !videoWithCaption)) {
+      console.log('Syncing caption to entire group:', {
+        isVideo,
+        hasCaption,
+        hasVideoWithCaption: !!videoWithCaption
+      });
+
+      await supabase
         .from('messages')
         .update({
           analyzed_content: analyzedContent,
           processing_state: 'completed',
-          processing_completed_at: new Date().toISOString(),
-          is_original_caption: isOriginalCaption
+          processing_completed_at: new Date().toISOString()
         })
-        .eq('id', msg.id);
+        .eq('media_group_id', mediaGroupId);
+    } else {
+      console.log('Updating single message:', {
+        isVideo,
+        hasCaption,
+        hasVideoWithCaption: !!videoWithCaption
+      });
 
-      if (updateError) throw updateError;
-    });
-
-    await Promise.all(updates);
-    console.log('Successfully updated all media group messages');
+      await supabase
+        .from('messages')
+        .update({
+          analyzed_content: analyzedContent,
+          processing_state: 'completed',
+          processing_completed_at: new Date().toISOString()
+        })
+        .eq('id', messageId);
+    }
   } catch (error) {
     console.error('Error updating media group messages:', error);
     throw error;
@@ -85,7 +114,6 @@ serve(async (req) => {
       correlation_id
     });
 
-    // Initialize Supabase client early as we'll need it for both paths
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
@@ -94,15 +122,12 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Initialize empty caption handling
     const textToAnalyze = caption?.trim() || '';
     let analyzedContent: ParsedContent;
     const hasCaption = Boolean(textToAnalyze);
 
     if (!hasCaption && media_group_id) {
       console.log('Empty caption received, checking media group for analysis');
-      // Try to find existing analysis from the media group
       const existingAnalysis = await findMediaGroupAnalysis(supabase, media_group_id);
       
       if (existingAnalysis) {
@@ -120,7 +145,6 @@ serve(async (req) => {
         };
       }
     } else if (!hasCaption) {
-      console.log('No caption or media group ID, using default values');
       analyzedContent = {
         product_name: 'Untitled Product',
         parsing_metadata: {
@@ -130,36 +154,22 @@ serve(async (req) => {
         }
       };
     } else {
-      // Analyze the caption
       analyzedContent = await analyzeCaption(textToAnalyze);
     }
 
-    console.log('Analysis completed:', {
-      correlation_id,
-      product_name: analyzedContent.product_name,
-      confidence: analyzedContent.parsing_metadata?.confidence,
-      has_caption: hasCaption
-    });
-
     if (media_group_id) {
-      // Handle media group updates
       await updateMediaGroupMessages(supabase, media_group_id, message_id, analyzedContent, hasCaption);
     } else {
-      // Single message update
       const { error: updateError } = await supabase
         .from('messages')
         .update({
           analyzed_content: analyzedContent,
           processing_state: 'completed',
-          processing_completed_at: new Date().toISOString(),
-          is_original_caption: hasCaption
+          processing_completed_at: new Date().toISOString()
         })
         .eq('id', message_id);
 
-      if (updateError) {
-        console.error('Error updating message:', updateError);
-        throw updateError;
-      }
+      if (updateError) throw updateError;
     }
 
     return new Response(
