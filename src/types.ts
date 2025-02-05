@@ -1,3 +1,43 @@
+
+export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
+
+export interface AnalyzedContent {
+  product_code?: string;
+  vendor_uid?: string;
+  purchase_date?: string;
+  quantity?: number;
+  unit_price?: number;
+  total_price?: number;
+  notes?: string;
+  parsing_metadata?: {
+    method: 'manual' | 'ai';
+    confidence: number;
+    timestamp: string;
+  };
+}
+
+export interface ProcessingMetadata {
+  correlation_id: string;
+  timestamp: string;
+  method: string;
+  confidence: number;
+  original_caption: string;
+  message_id: string;
+  reanalysis_attempted: boolean;
+  group_message_count?: number;
+  is_original_caption?: boolean;
+}
+
+export interface TelegramMedia {
+  file_id: string;
+  file_unique_id: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  mime_type?: string;
+}
+
 export interface MediaItem {
   id: string;
   telegram_message_id: number;
@@ -33,17 +73,43 @@ export interface MediaItem {
   message_url?: string;
 }
 
-interface TelegramMessage {
-  message_id: number;
-  chat: {
-    id: number;
-    type: string;
-    title?: string;
-    username?: string;
-  };
-  caption?: string;
-  photo?: TelegramMedia[];
-  video?: TelegramMedia;
-  document?: TelegramMedia;
-  media_group_id?: string;
+export interface FilterValues {
+  search: string;
+  vendor: string;
+  dateFrom?: Date;
+  dateTo?: Date;
+  dateField: 'purchase_date' | 'created_at';
+  sortOrder: 'asc' | 'desc';
+  productCode?: string;
+  quantityRange?: string;
+  processingState?: ProcessingState | 'all';
 }
+
+// Helper functions to convert types to JSON
+export const analyzedContentToJson = (content: AnalyzedContent): Record<string, unknown> => {
+  return {
+    product_code: content.product_code,
+    vendor_uid: content.vendor_uid,
+    purchase_date: content.purchase_date,
+    quantity: content.quantity,
+    unit_price: content.unit_price,
+    total_price: content.total_price,
+    notes: content.notes,
+    parsing_metadata: content.parsing_metadata
+  };
+};
+
+export const processingMetadataToJson = (metadata: ProcessingMetadata): Record<string, unknown> => {
+  return {
+    correlation_id: metadata.correlation_id,
+    timestamp: metadata.timestamp,
+    method: metadata.method,
+    confidence: metadata.confidence,
+    original_caption: metadata.original_caption,
+    message_id: metadata.message_id,
+    reanalysis_attempted: metadata.reanalysis_attempted,
+    group_message_count: metadata.group_message_count,
+    is_original_caption: metadata.is_original_caption
+  };
+};
+
