@@ -25,7 +25,7 @@ serve(async (req) => {
 
   try {
     const { page = 1, filters = {} } = await req.json() as { page: number; filters: FilterValues };
-    const ITEMS_PER_PAGE = 16;
+    const ITEMS_PER_PAGE = 15; // Updated from 16 to 15
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
