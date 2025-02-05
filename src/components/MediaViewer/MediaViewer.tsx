@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { MediaItem } from '@/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -43,12 +42,6 @@ export const MediaViewer = ({
     <Dialog open={isOpen} onOpenChange={() => onClose()}>
       <DialogContent className="max-w-2xl w-[90vw] max-h-[80vh] h-auto p-0 overflow-y-auto">
         <div className="relative flex flex-col bg-background dark:bg-background">
-          <DialogHeader className="border-b border-border px-4 py-2">
-            <DialogTitle className="text-base font-medium">
-              {analyzedContent?.product_name || 'Untitled Product'}
-            </DialogTitle>
-          </DialogHeader>
-          
           <div className="flex-1 min-h-0 bg-black/90">
             <div className="aspect-video w-full">
               <ImageSwiper media={currentGroup} />

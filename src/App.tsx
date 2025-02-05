@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom
 import { DashboardLayout } from "./components/Layout/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import ProductGallery from "./pages/ProductGallery";
+import MediaTable from "./pages/MediaTable";
 import PublicGallery from "./pages/PublicGallery";
 import Vendors from "./pages/Vendors";
 import Settings from "./pages/Settings";
@@ -82,6 +84,7 @@ const App = () => (
             >
               <Route path="/" element={<Dashboard />} />
               <Route path="/gallery" element={<ProductGallery />} />
+              <Route path="/media-table" element={<MediaTable />} />
               <Route path="/vendors" element={<Vendors />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<NotFound />} />
