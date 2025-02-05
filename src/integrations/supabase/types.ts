@@ -662,7 +662,7 @@ export type Database = {
           product_quantity: number | null
           product_unit: string | null
           public_url: string | null
-          purchase_order_uid: string | null
+          purchase_order: string | null
           retry_count: number | null
           storage_path: string | null
           supabase_sync_json: Json | null
@@ -710,7 +710,7 @@ export type Database = {
           product_quantity?: number | null
           product_unit?: string | null
           public_url?: string | null
-          purchase_order_uid?: string | null
+          purchase_order?: string | null
           retry_count?: number | null
           storage_path?: string | null
           supabase_sync_json?: Json | null
@@ -758,7 +758,7 @@ export type Database = {
           product_quantity?: number | null
           product_unit?: string | null
           public_url?: string | null
-          purchase_order_uid?: string | null
+          purchase_order?: string | null
           retry_count?: number | null
           storage_path?: string | null
           supabase_sync_json?: Json | null
@@ -856,6 +856,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      a_delete_analysis_audit_log_limit_500: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       bytea_to_text: {
         Args: {
           data: string
@@ -1075,6 +1079,10 @@ export type Database = {
           data: string
         }
         Returns: string
+      }
+      update_purchase_order: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       urlencode:
         | {

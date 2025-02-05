@@ -1,7 +1,9 @@
-
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 
+export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
+
 export interface AnalyzedContent {
+  product_name?: string;
   product_code?: string;
   vendor_uid?: string;
   purchase_date?: string;
@@ -86,8 +88,9 @@ export interface FilterValues {
 }
 
 // Helper functions to convert types to JSON
-export const analyzedContentToJson = (content: AnalyzedContent): Record<string, unknown> => {
+export const analyzedContentToJson = (content: AnalyzedContent): Json => {
   return {
+    product_name: content.product_name,
     product_code: content.product_code,
     vendor_uid: content.vendor_uid,
     purchase_date: content.purchase_date,
@@ -99,7 +102,7 @@ export const analyzedContentToJson = (content: AnalyzedContent): Record<string, 
   };
 };
 
-export const processingMetadataToJson = (metadata: ProcessingMetadata): Record<string, unknown> => {
+export const processingMetadataToJson = (metadata: ProcessingMetadata): Json => {
   return {
     correlation_id: metadata.correlation_id,
     timestamp: metadata.timestamp,
@@ -112,4 +115,3 @@ export const processingMetadataToJson = (metadata: ProcessingMetadata): Record<s
     is_original_caption: metadata.is_original_caption
   };
 };
-

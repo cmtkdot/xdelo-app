@@ -131,25 +131,17 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
       }
 
       // Log reanalysis request
-      await supabase.from('analysis_audit_log').insert({
-        message_id: mainMedia.id,
-        media_group_id: mainMedia.media_group_id,
-        event_type: 'MANUAL_REANALYSIS_REQUESTED',
-        old_state: mainMedia.processing_state,
-        new_state: 'pending',
-        analyzed_content: analyzedContent ? analyzedContentToJson(analyzedContent) : null,
-        processing_details: processingMetadataToJson(processingMetadata)
-      });
-
-      const { error } = await supabase.functions.invoke('reanalyze-low-confidence', {
-        body: {
+      const { error } = await supabase
+        .from('analysis_audit_log')
+        .insert([{
+          event_type: 'MANUAL_REANALYSIS_REQUESTED',
           message_id: mainMedia.id,
           media_group_id: mainMedia.media_group_id,
-          caption: mainMedia.caption,
-          analyzed_content: analyzedContent,
-          correlation_id: correlationId
-        }
-      });
+          old_state: mainMedia.processing_state,
+          new_state: 'pending',
+          analyzed_content: analyzedContent ? analyzedContentToJson(analyzedContent) : null,
+          processing_details: processingMetadataToJson(processingMetadata)
+        }]);
 
       if (error) throw error;
 
