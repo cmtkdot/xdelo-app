@@ -48,59 +48,55 @@ export const MediaViewer = ({
             </div>
           </div>
 
-          <div className="p-4 space-y-3">
-            {/* Caption section */}
-            {mainMedia.caption && (
-              <div className="border-b border-border pb-3">
-                <p className="text-sm text-muted-foreground font-medium mb-1">Caption</p>
-                <p className="text-foreground text-sm">{mainMedia.caption}</p>
-              </div>
-            )}
-
-            {/* Quantity section */}
-            {analyzedContent?.quantity && (
-              <div className="border-b border-border pb-3">
-                <p className="text-sm text-muted-foreground font-medium mb-1">Quantity</p>
-                <p className="text-foreground text-sm">{analyzedContent.quantity}</p>
-              </div>
-            )}
-
-            {/* Two column grid for other information */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-              {analyzedContent?.product_code && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">PO Number</p>
-                  <p className="text-foreground">PO#{analyzedContent.product_code}</p>
-                </div>
-              )}
-              {analyzedContent?.vendor_uid && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Vendor</p>
-                  <p className="text-foreground">{analyzedContent.vendor_uid}</p>
+          <div className="p-6 space-y-4">
+            {/* Caption and Purchase Date Row */}
+            <div className="flex justify-between items-start gap-4">
+              {mainMedia.caption && (
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground font-medium mb-1">Caption</p>
+                  <p className="text-foreground text-sm">{mainMedia.caption}</p>
                 </div>
               )}
               {analyzedContent?.purchase_date && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Purchase Date</p>
-                  <p className="text-foreground">{formatDate(analyzedContent.purchase_date)}</p>
-                </div>
-              )}
-              {mainMedia.created_at && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Created</p>
-                  <p className="text-foreground">{formatDate(mainMedia.created_at)}</p>
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground font-medium mb-1">Purchase Date</p>
+                  <p className="text-foreground text-sm">{formatDate(analyzedContent.purchase_date)}</p>
                 </div>
               )}
             </div>
 
+            {/* Product Information Grid */}
+            <div className="grid grid-cols-3 gap-4">
+              {analyzedContent?.quantity && (
+                <div className="bg-secondary/20 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground font-medium mb-1">Quantity</p>
+                  <p className="text-foreground text-sm font-medium">{analyzedContent.quantity}</p>
+                </div>
+              )}
+              {analyzedContent?.product_code && (
+                <div className="bg-secondary/20 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground font-medium mb-1">PO Number</p>
+                  <p className="text-foreground text-sm font-medium">PO#{analyzedContent.product_code}</p>
+                </div>
+              )}
+              {analyzedContent?.vendor_uid && (
+                <div className="bg-secondary/20 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground font-medium mb-1">Vendor</p>
+                  <p className="text-foreground text-sm font-medium">{analyzedContent.vendor_uid}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Notes Section */}
             {analyzedContent?.notes && (
-              <div className="pt-3 border-t border-border">
+              <div className="bg-secondary/10 rounded-lg p-4 mt-4">
                 <p className="text-sm text-muted-foreground font-medium mb-1">Notes</p>
                 <p className="text-foreground text-sm">{analyzedContent.notes}</p>
               </div>
             )}
 
-            <div className="flex justify-between pt-3 border-t border-border">
+            {/* Navigation Buttons */}
+            <div className="flex justify-between pt-4 border-t border-border">
               <Button
                 variant="outline"
                 onClick={onPrevious}
