@@ -14,6 +14,7 @@ interface ImageSwiperProps extends React.HTMLAttributes<HTMLDivElement> {
 export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
   const [mediaIndex, setMediaIndex] = React.useState(0)
   const [isHovered, setIsHovered] = React.useState(false)
+  const [previousIndex, setPreviousIndex] = React.useState(0)
   const dragX = useMotionValue(0)
   const videoRefs = React.useRef<(HTMLVideoElement | null)[]>([])
 
@@ -47,23 +48,34 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
   React.useEffect(() => {
     videoRefs.current.forEach((video, index) => {
       if (video) {
-        if (isHovered && index === mediaIndex) {
+        if (isHovered && index === mediaIndex && sortedMedia[index].mime_type?.startsWith('video')) {
           video.play().catch(() => {
             // Handle autoplay failure silently
           })
         } else {
           video.pause()
+          video.currentTime = 0
         }
       }
     })
-  }, [isHovered, mediaIndex])
+  }, [isHovered, mediaIndex, sortedMedia])
 
-  const handleInteraction = React.useCallback(() => {
-    const firstVideoIndex = findFirstVideoIndex()
-    if (firstVideoIndex !== -1 && !sortedMedia[mediaIndex].mime_type?.startsWith('video')) {
-      setMediaIndex(firstVideoIndex)
+  const handleMouseEnter = React.useCallback(() => {
+    setIsHovered(true)
+    setPreviousIndex(mediaIndex)
+  }, [mediaIndex])
+
+  const handleMouseLeave = React.useCallback(() => {
+    setIsHovered(false)
+    if (sortedMedia[mediaIndex].mime_type?.startsWith('video')) {
+      setMediaIndex(previousIndex)
     }
-  }, [findFirstVideoIndex, mediaIndex, sortedMedia])
+  }, [mediaIndex, previousIndex, sortedMedia])
+
+  const handleButtonClick = (e: React.MouseEvent, newIndex: number) => {
+    e.stopPropagation()
+    setMediaIndex(newIndex)
+  }
 
   if (!sortedMedia?.length) {
     return (
@@ -79,12 +91,8 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
         'group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-black/90',
         className
       )}
-      onMouseEnter={() => {
-        setIsHovered(true)
-        handleInteraction()
-      }}
-      onMouseLeave={() => setIsHovered(false)}
-      onClick={handleInteraction}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       {...props}
     >
       <div className="pointer-events-none absolute inset-0 z-10">
@@ -94,32 +102,24 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
               variant="ghost"
               size="icon"
               className="pointer-events-auto h-8 w-8 rounded-full bg-black/50 hover:bg-black/75 text-white opacity-0 transition-opacity group-hover:opacity-100"
-              onClick={(e) => {
-                e.stopPropagation()
-                setMediaIndex((prev) => prev - 1)
-              }}
+              onClick={(e) => handleButtonClick(e, mediaIndex - 1)}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
           </div>
         )}
-        
         {mediaIndex < sortedMedia.length - 1 && (
           <div className="absolute right-5 top-1/2 -translate-y-1/2">
             <Button
-              variant="ghost" 
+              variant="ghost"
               size="icon"
               className="pointer-events-auto h-8 w-8 rounded-full bg-black/50 hover:bg-black/75 text-white opacity-0 transition-opacity group-hover:opacity-100"
-              onClick={(e) => {
-                e.stopPropagation()
-                setMediaIndex((prev) => prev + 1)
-              }}
+              onClick={(e) => handleButtonClick(e, mediaIndex + 1)}
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         )}
-
         <div className="absolute bottom-2 w-full flex justify-center">
           <div className="flex min-w-9 items-center justify-center rounded-md bg-black/80 px-2 py-0.5 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
             {mediaIndex + 1}/{sortedMedia.length}
