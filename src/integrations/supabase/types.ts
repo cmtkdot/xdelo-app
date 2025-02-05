@@ -631,7 +631,7 @@ export type Database = {
           caption: string | null
           chat_id: number | null
           chat_type: string | null
-          confidence_score: number | null
+          confidence: number | null
           created_at: string | null
           deleted_at: string | null
           duration: number | null
@@ -678,7 +678,7 @@ export type Database = {
           caption?: string | null
           chat_id?: number | null
           chat_type?: string | null
-          confidence_score?: number | null
+          confidence?: number | null
           created_at?: string | null
           deleted_at?: string | null
           duration?: number | null
@@ -725,7 +725,7 @@ export type Database = {
           caption?: string | null
           chat_id?: number | null
           chat_type?: string | null
-          confidence_score?: number | null
+          confidence?: number | null
           created_at?: string | null
           deleted_at?: string | null
           duration?: number | null
