@@ -842,57 +842,6 @@ export type Database = {
         }
         Relationships: []
       }
-      webhook_logs: {
-        Row: {
-          chat_id: number | null
-          correlation_id: string | null
-          created_at: string | null
-          error_message: string | null
-          event_type: string
-          id: string
-          media_group_id: string | null
-          message_id: string | null
-          processing_state: string | null
-          request_payload: Json | null
-          response_payload: Json | null
-          status_code: number | null
-          telegram_message_id: number | null
-          trigger_event: string | null
-        }
-        Insert: {
-          chat_id?: number | null
-          correlation_id?: string | null
-          created_at?: string | null
-          error_message?: string | null
-          event_type?: string
-          id?: string
-          media_group_id?: string | null
-          message_id?: string | null
-          processing_state?: string | null
-          request_payload?: Json | null
-          response_payload?: Json | null
-          status_code?: number | null
-          telegram_message_id?: number | null
-          trigger_event?: string | null
-        }
-        Update: {
-          chat_id?: number | null
-          correlation_id?: string | null
-          created_at?: string | null
-          error_message?: string | null
-          event_type?: string
-          id?: string
-          media_group_id?: string | null
-          message_id?: string | null
-          processing_state?: string | null
-          request_payload?: Json | null
-          response_payload?: Json | null
-          status_code?: number | null
-          telegram_message_id?: number | null
-          trigger_event?: string | null
-        }
-        Relationships: []
-      }
     }
     Views: {
       [_ in never]: never
