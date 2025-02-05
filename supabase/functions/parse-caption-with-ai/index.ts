@@ -38,11 +38,13 @@ async function getMediaGroupInfo(supabase: any, mediaGroupId: string) {
 
   const totalCount = data?.length || 0;
   const uploadedCount = data?.filter(msg => msg.file_id !== null).length || 0;
-  const isComplete = totalCount === uploadedCount && totalCount > 0;
+  const hasCaption = data?.some(msg => msg.caption) || false;
+  const isComplete = totalCount === uploadedCount && totalCount > 0 && hasCaption;
 
   return {
     totalCount,
     uploadedCount,
+    hasCaption,
     isComplete
   };
 }
@@ -78,7 +80,8 @@ async function updateMediaGroupMessages(
     console.log('Successfully processed media group analysis:', {
       groupSize: groupInfo.totalCount,
       uploadedCount: groupInfo.uploadedCount,
-      isComplete: groupInfo.isComplete
+      isComplete: groupInfo.isComplete,
+      hasCaption: groupInfo.hasCaption
     });
   } catch (error) {
     console.error('Error updating media group messages:', error);
