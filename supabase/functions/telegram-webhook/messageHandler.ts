@@ -1,3 +1,4 @@
+
 import { TelegramMedia, MediaUploadResult, ProcessedMedia, WebhookResponse } from "./types.ts";
 import { downloadTelegramFile, uploadMedia } from "./mediaUtils.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
@@ -157,23 +158,6 @@ export async function handleMediaMessage(
       } else {
         console.log("➕ Creating new message");
         newMessage = await createNewMessage(supabase, messageData);
-      }
-
-      // Only after message is created/updated, log the webhook event
-      try {
-        const { error: webhookLogError } = await supabase.from("webhook_logs").insert({
-          message_id: newMessage.id,
-          event_type: existingMessage ? 'MESSAGE_UPDATED' : 'MESSAGE_CREATED',
-          request_payload: messageData,
-          status_code: 200,
-          processing_state: messageData.processing_state
-        });
-
-        if (webhookLogError) {
-          console.error("❌ Failed to create webhook log:", webhookLogError);
-        }
-      } catch (logError) {
-        console.error("❌ Error creating webhook log:", logError);
       }
 
       // Trigger AI analysis only for messages with captions that need analysis

@@ -1015,51 +1015,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      log_webhook_event:
-        | {
-            Args: {
-              p_telegram_message_id: number
-              p_chat_id: number
-              p_event_type: string
-              p_request_payload?: Json
-              p_response_payload?: Json
-              p_status_code?: number
-              p_error_message?: string
-              p_media_group_id?: string
-              p_correlation_id?: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_telegram_message_id: number
-              p_chat_id: number
-              p_event_type: string
-              p_request_payload?: Json
-              p_response_payload?: Json
-              p_status_code?: number
-              p_error_message?: string
-              p_media_group_id?: string
-              p_correlation_id?: string
-              p_processing_state?: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_telegram_message_id: number
-              p_chat_id: number
-              p_event_type: string
-              p_request_payload?: Json
-              p_response_payload?: Json
-              p_status_code?: number
-              p_error_message?: string
-              p_media_group_id?: string
-              p_correlation_id?: string
-              p_processing_state?: string
-            }
-            Returns: string
-          }
       parse_analyzed_content: {
         Args: {
           content: Json
