@@ -1,3 +1,4 @@
+
 import { MediaItem, AnalyzedContent, ProcessingMetadata, processingMetadataToJson, analyzedContentToJson } from "@/types";
 import { AlertCircle, Pencil, Trash2, RotateCw, Eye } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -43,88 +44,6 @@ export const ProductGroup = ({
       return '';
     }
   };
-
-  useEffect(() => {
-    const checkConfidence = async () => {
-      if (
-        mainMedia.caption &&
-        analyzedContent?.parsing_metadata?.confidence < 0.7 &&
-        !analyzedContent?.parsing_metadata?.reanalysis_attempted
-      ) {
-        console.log('Low confidence detected, triggering reanalysis:', {
-          confidence: analyzedContent?.parsing_metadata?.confidence,
-          message_id: mainMedia.id,
-          media_group_id: mainMedia.media_group_id
-        });
-
-        try {
-          const correlationId = crypto.randomUUID();
-          const processingMetadata: ProcessingMetadata = {
-            correlation_id: correlationId,
-            timestamp: new Date().toISOString(),
-            method: 'hybrid',
-            confidence: analyzedContent?.parsing_metadata?.confidence || 0,
-            original_caption: mainMedia.caption || '',
-            message_id: mainMedia.id,
-            reanalysis_attempted: true,
-            group_message_count: mainMedia.group_message_count,
-            is_original_caption: mainMedia.is_original_caption
-          };
-
-          // First, update all messages in the group to pending state
-          if (mainMedia.media_group_id) {
-            const { error: updateError } = await supabase
-              .from('messages')
-              .update({
-                processing_state: 'pending',
-                group_caption_synced: false
-              })
-              .eq('media_group_id', mainMedia.media_group_id)
-              .select();
-
-            if (updateError) throw updateError;
-          }
-
-          // Log reanalysis attempt to audit log
-          await supabase.from('analysis_audit_log').insert({
-            message_id: mainMedia.id,
-            media_group_id: mainMedia.media_group_id,
-            event_type: 'REANALYSIS_REQUESTED',
-            old_state: mainMedia.processing_state,
-            new_state: 'pending',
-            analyzed_content: analyzedContent ? analyzedContentToJson(analyzedContent) : null,
-            processing_details: processingMetadataToJson(processingMetadata)
-          });
-
-          const { error } = await supabase.functions.invoke('reanalyze-low-confidence', {
-            body: {
-              message_id: mainMedia.id,
-              media_group_id: mainMedia.media_group_id,
-              caption: mainMedia.caption,
-              analyzed_content: analyzedContent,
-              correlation_id: correlationId
-            }
-          });
-
-          if (error) throw error;
-
-          toast({
-            title: "Reanalysis Started",
-            description: "The content is being reanalyzed for better accuracy.",
-          });
-        } catch (error) {
-          console.error("Error triggering reanalysis:", error);
-          toast({
-            title: "Error",
-            description: "Failed to start reanalysis",
-            variant: "destructive",
-          });
-        }
-      }
-    };
-
-    checkConfidence();
-  }, [mainMedia.id, mainMedia.caption, analyzedContent, toast, mainMedia.media_group_id, mainMedia.processing_state, mainMedia.group_message_count]);
 
   const handleDelete = async () => {
     try {
@@ -273,7 +192,6 @@ export const ProductGroup = ({
           {analyzedContent?.vendor_uid && (
             <p>Vendor: {analyzedContent.vendor_uid}</p>
           )}
-          {/* Caption removed as requested */}
         </div>
 
         {analyzedContent?.parsing_metadata?.confidence < 0.7 && (
@@ -369,3 +287,4 @@ export const ProductGroup = ({
     </div>
   );
 };
+
