@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
@@ -34,7 +35,7 @@ serve(async (req) => {
       .from("messages")
       .select("*", { count: "exact" })
       .eq('is_original_caption', true)
-      .not('analyzed_content', 'is', null);
+      .is('is_deleted', false); // Add this line to exclude deleted messages
 
     // Apply text search filter
     if (filters.search) {
@@ -84,7 +85,7 @@ serve(async (req) => {
     if (dateField === 'purchase_date') {
       query = query.order(`analyzed_content->>${dateField}`, { 
         ascending: sortOrder === "asc",
-        nullsFirst: false // This ensures null dates are always last
+        nullsFirst: false
       });
     } else {
       query = query.order(dateField, { 
@@ -119,7 +120,8 @@ serve(async (req) => {
       const { data: allGroupMedia, error: groupMediaError } = await supabase
         .from("messages")
         .select("*")
-        .in("media_group_id", mediaGroupIds);
+        .in("media_group_id", mediaGroupIds)
+        .is('is_deleted', false); // Add this line to exclude deleted messages
 
       if (groupMediaError) {
         console.error('Error fetching group media:', groupMediaError);
@@ -145,6 +147,16 @@ serve(async (req) => {
         });
       }
     }
+
+    // Handle single messages (not in a group)
+    originalMessages?.forEach((message) => {
+      if (!message.media_group_id) {
+        const groupKey = message.id;
+        if (!groups[groupKey]) {
+          groups[groupKey] = [message];
+        }
+      }
+    });
 
     return new Response(
       JSON.stringify({
