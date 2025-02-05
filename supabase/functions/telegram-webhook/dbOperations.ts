@@ -197,8 +197,8 @@ export async function syncMediaGroupAnalysis(
 
 export async function logWebhookEvent(
   supabase: SupabaseClient,
-  telegramMessageId: number,
-  chatId: number,
+  telegramMessageId: number | null,
+  chatId: number | null,
   eventType: string,
   options: {
     requestPayload?: any;
@@ -207,19 +207,25 @@ export async function logWebhookEvent(
     errorMessage?: string;
     mediaGroupId?: string;
     correlationId?: string;
+    processingState?: string;
   } = {}
 ) {
   try {
+    // For internal events that don't have a telegram message id, use a placeholder
+    const effectiveTelegramMessageId = telegramMessageId || -1;
+    const effectiveChatId = chatId || -1;
+
     const { data, error } = await supabase.rpc('log_webhook_event', {
-      p_telegram_message_id: telegramMessageId,
-      p_chat_id: chatId,
+      p_telegram_message_id: effectiveTelegramMessageId,
+      p_chat_id: effectiveChatId,
       p_event_type: eventType,
       p_request_payload: options.requestPayload,
       p_response_payload: options.responsePayload,
       p_status_code: options.statusCode,
       p_error_message: options.errorMessage,
       p_media_group_id: options.mediaGroupId,
-      p_correlation_id: options.correlationId
+      p_correlation_id: options.correlationId,
+      p_processing_state: options.processingState
     });
 
     if (error) {
