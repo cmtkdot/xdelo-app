@@ -28,7 +28,10 @@ async function findMediaGroupAnalysis(supabase: any, mediaGroupId: string) {
 async function getMediaGroupInfo(supabase: any, mediaGroupId: string) {
   const { data, error } = await supabase
     .from('messages')
-    .select('*')
+    .select(`
+      *,
+      scheduled_sync_time
+    `)
     .eq('media_group_id', mediaGroupId);
 
   if (error) {
@@ -40,12 +43,14 @@ async function getMediaGroupInfo(supabase: any, mediaGroupId: string) {
   const uploadedCount = data?.filter(msg => msg.file_id !== null).length || 0;
   const hasCaption = data?.some(msg => msg.caption) || false;
   const isComplete = totalCount === uploadedCount && totalCount > 0 && hasCaption;
+  const scheduledSyncTime = data?.find(msg => msg.scheduled_sync_time)?.scheduled_sync_time;
 
   return {
     totalCount,
     uploadedCount,
     hasCaption,
-    isComplete
+    isComplete,
+    scheduledSyncTime
   };
 }
 
@@ -62,6 +67,12 @@ async function updateMediaGroupMessages(
     // Get media group completion status
     const groupInfo = await getMediaGroupInfo(supabase, mediaGroupId);
     console.log('Media group info:', groupInfo);
+
+    // If there's a scheduled sync time in the future, exit early
+    if (groupInfo.scheduledSyncTime && new Date(groupInfo.scheduledSyncTime) > new Date()) {
+      console.log('Sync delayed until:', groupInfo.scheduledSyncTime);
+      return;
+    }
 
     // Update all messages in the group via the stored procedure
     const { error: procError } = await supabase
@@ -81,7 +92,8 @@ async function updateMediaGroupMessages(
       groupSize: groupInfo.totalCount,
       uploadedCount: groupInfo.uploadedCount,
       isComplete: groupInfo.isComplete,
-      hasCaption: groupInfo.hasCaption
+      hasCaption: groupInfo.hasCaption,
+      scheduledSyncTime: groupInfo.scheduledSyncTime
     });
   } catch (error) {
     console.error('Error updating media group messages:', error);
@@ -137,7 +149,6 @@ serve(async (req) => {
         };
       }
     } else if (!hasCaption) {
-      console.log('No caption or media group ID, using default values');
       analyzedContent = {
         product_name: 'Untitled Product',
         parsing_metadata: {
