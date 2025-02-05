@@ -1,6 +1,6 @@
 import React from 'react';
 import { MediaItem } from '@/types';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ImageSwiper } from "@/components/ui/image-swiper";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -50,10 +50,18 @@ export const MediaViewer = ({
 
           <div className="p-4 space-y-3">
             {/* Caption section */}
-            {(analyzedContent?.quantity || mainMedia.caption) && (
+            {mainMedia.caption && (
               <div className="border-b border-border pb-3">
                 <p className="text-sm text-muted-foreground font-medium mb-1">Caption</p>
-                <p className="text-foreground text-sm">{analyzedContent?.quantity || mainMedia.caption}</p>
+                <p className="text-foreground text-sm">{mainMedia.caption}</p>
+              </div>
+            )}
+
+            {/* Quantity section */}
+            {analyzedContent?.quantity && (
+              <div className="border-b border-border pb-3">
+                <p className="text-sm text-muted-foreground font-medium mb-1">Quantity</p>
+                <p className="text-foreground text-sm">{analyzedContent.quantity}</p>
               </div>
             )}
 
