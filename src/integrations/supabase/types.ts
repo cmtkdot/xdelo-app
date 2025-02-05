@@ -851,7 +851,7 @@ export type Database = {
       }
       webhook_logs: {
         Row: {
-          chat_id: number
+          chat_id: number | null
           correlation_id: string | null
           created_at: string | null
           error_message: string | null
@@ -867,7 +867,7 @@ export type Database = {
           trigger_event: string | null
         }
         Insert: {
-          chat_id: number
+          chat_id?: number | null
           correlation_id?: string | null
           created_at?: string | null
           error_message?: string | null
@@ -883,7 +883,7 @@ export type Database = {
           trigger_event?: string | null
         }
         Update: {
-          chat_id?: number
+          chat_id?: number | null
           correlation_id?: string | null
           created_at?: string | null
           error_message?: string | null
@@ -1151,6 +1151,21 @@ export type Database = {
               p_error_message?: string
               p_media_group_id?: string
               p_correlation_id?: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_telegram_message_id: number
+              p_chat_id: number
+              p_event_type: string
+              p_request_payload?: Json
+              p_response_payload?: Json
+              p_status_code?: number
+              p_error_message?: string
+              p_media_group_id?: string
+              p_correlation_id?: string
+              p_processing_state?: string
             }
             Returns: string
           }
