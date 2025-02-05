@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { analyzeCaption } from "./utils/aiAnalyzer.ts";
@@ -24,6 +25,28 @@ async function findMediaGroupAnalysis(supabase: any, mediaGroupId: string) {
   return data?.analyzed_content;
 }
 
+async function getMediaGroupInfo(supabase: any, mediaGroupId: string) {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('media_group_id', mediaGroupId);
+
+  if (error) {
+    console.error('Error getting media group info:', error);
+    throw error;
+  }
+
+  const totalCount = data?.length || 0;
+  const uploadedCount = data?.filter(msg => msg.file_id !== null).length || 0;
+  const isComplete = totalCount === uploadedCount && totalCount > 0;
+
+  return {
+    totalCount,
+    uploadedCount,
+    isComplete
+  };
+}
+
 async function updateMediaGroupMessages(
   supabase: any,
   mediaGroupId: string,
@@ -32,38 +55,31 @@ async function updateMediaGroupMessages(
   hasCaption: boolean
 ) {
   try {
-    console.log('Updating media group messages:', { mediaGroupId, messageId });
+    console.log('Starting media group sync:', { mediaGroupId, messageId, hasCaption });
 
-    // Get all messages in the group
-    const { data: groupMessages, error: groupError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('media_group_id', mediaGroupId);
+    // Get media group completion status
+    const groupInfo = await getMediaGroupInfo(supabase, mediaGroupId);
+    console.log('Media group info:', groupInfo);
 
-    if (groupError) throw groupError;
-    if (!groupMessages) return;
+    // Update all messages in the group via the stored procedure
+    const { error: procError } = await supabase
+      .rpc('process_media_group_analysis', {
+        p_message_id: messageId,
+        p_media_group_id: mediaGroupId,
+        p_analyzed_content: analyzedContent,
+        p_processing_completed_at: new Date().toISOString()
+      });
 
-    // Update all messages in the group
-    const updates = groupMessages.map(async (msg) => {
-      // For the message with caption, mark it as original
-      const isOriginalCaption = msg.id === messageId && hasCaption;
-      
-      // Always update processing state to completed
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: analyzedContent,
-          processing_state: 'completed',
-          processing_completed_at: new Date().toISOString(),
-          is_original_caption: isOriginalCaption
-        })
-        .eq('id', msg.id);
+    if (procError) {
+      console.error('Error in process_media_group_analysis:', procError);
+      throw procError;
+    }
 
-      if (updateError) throw updateError;
+    console.log('Successfully processed media group analysis:', {
+      groupSize: groupInfo.totalCount,
+      uploadedCount: groupInfo.uploadedCount,
+      isComplete: groupInfo.isComplete
     });
-
-    await Promise.all(updates);
-    console.log('Successfully updated all media group messages');
   } catch (error) {
     console.error('Error updating media group messages:', error);
     throw error;
@@ -85,7 +101,6 @@ serve(async (req) => {
       correlation_id
     });
 
-    // Initialize Supabase client early as we'll need it for both paths
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
@@ -102,7 +117,6 @@ serve(async (req) => {
 
     if (!hasCaption && media_group_id) {
       console.log('Empty caption received, checking media group for analysis');
-      // Try to find existing analysis from the media group
       const existingAnalysis = await findMediaGroupAnalysis(supabase, media_group_id);
       
       if (existingAnalysis) {
@@ -130,7 +144,6 @@ serve(async (req) => {
         }
       };
     } else {
-      // Analyze the caption
       analyzedContent = await analyzeCaption(textToAnalyze);
     }
 
@@ -142,10 +155,8 @@ serve(async (req) => {
     });
 
     if (media_group_id) {
-      // Handle media group updates
       await updateMediaGroupMessages(supabase, media_group_id, message_id, analyzedContent, hasCaption);
     } else {
-      // Single message update
       const { error: updateError } = await supabase
         .from('messages')
         .update({
@@ -157,7 +168,7 @@ serve(async (req) => {
         .eq('id', message_id);
 
       if (updateError) {
-        console.error('Error updating message:', updateError);
+        console.error('Error updating single message:', updateError);
         throw updateError;
       }
     }

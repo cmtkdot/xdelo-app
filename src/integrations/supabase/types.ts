@@ -901,6 +901,10 @@ export type Database = {
         }
         Returns: string
       }
+      fix_media_groups: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       http: {
         Args: {
           request: Database["public"]["CompositeTypes"]["http_request"]
@@ -1007,6 +1011,12 @@ export type Database = {
         }
         Returns: boolean
       }
+      manual_sync_media_group: {
+        Args: {
+          p_media_group_id: string
+        }
+        Returns: undefined
+      }
       parse_analyzed_content: {
         Args: {
           content: Json
@@ -1023,6 +1033,15 @@ export type Database = {
           fallbacks_used: string[]
           reanalysis_attempted: boolean
         }[]
+      }
+      process_media_group_analysis: {
+        Args: {
+          p_message_id: string
+          p_media_group_id: string
+          p_analyzed_content: Json
+          p_processing_completed_at?: string
+        }
+        Returns: undefined
       }
       process_media_group_content: {
         Args: {
