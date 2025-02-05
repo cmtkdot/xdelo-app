@@ -1,3 +1,4 @@
+
 import { TelegramMedia, MediaUploadResult, ProcessedMedia, WebhookResponse } from "./types.ts";
 import { downloadTelegramFile, uploadMedia } from "./mediaUtils.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
@@ -11,6 +12,7 @@ export async function handleTextMessage(
     console.log('📝 Processing text message:', {
       message_id: message.message_id,
       chat_id: message.chat.id,
+      chat_type: message.chat.type,
       text_length: message.text?.length || 0
     });
 
@@ -54,7 +56,9 @@ export async function handleMediaMessage(
     correlation_id: correlationId,
     message_id: message.message_id,
     media_group_id: message.media_group_id,
-    has_caption: !!message.caption
+    has_caption: !!message.caption,
+    chat_id: message.chat.id,
+    chat_type: message.chat.type
   });
 
   try {
@@ -156,14 +160,14 @@ export async function handleMediaMessage(
         duration: mediaItem.duration,
         user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
         telegram_data: { message },
-        // Set to pending if needs analysis, completed if update without analysis, or initialized if new without caption
         processing_state: shouldReanalyze ? 'pending' : (existingMessage ? 'completed' : (message.caption ? 'pending' : 'initialized')),
         processing_completed_at: shouldReanalyze ? null : new Date().toISOString(),
         group_first_message_time: message.media_group_id ? new Date().toISOString() : null,
         group_last_message_time: message.media_group_id ? new Date().toISOString() : null,
         group_message_count: message.media_group_id ? currentGroupCount : null,
         is_original_caption: message.caption ? true : false,
-        // Only preserve analyzed content if not reanalyzing
+        chat_id: message.chat.id,
+        chat_type: message.chat.type,
         analyzed_content: existingMessage && !shouldReanalyze ? existingMessage.analyzed_content : null
       };
 
@@ -177,7 +181,6 @@ export async function handleMediaMessage(
         newMessage = await createNewMessage(supabase, messageData);
       }
 
-      // Trigger AI analysis only for messages with captions that need analysis
       if ((message.caption && !existingMessage) || shouldReanalyze) {
         try {
           console.log("🤖 Triggering AI analysis for message:", newMessage.id);

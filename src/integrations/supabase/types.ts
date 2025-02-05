@@ -651,6 +651,7 @@ export type Database = {
           last_error_at: string | null
           media_group_id: string | null
           message_caption_id: string | null
+          message_url: string | null
           mime_type: string | null
           processing_completed_at: string | null
           processing_started_at: string | null
@@ -698,6 +699,7 @@ export type Database = {
           last_error_at?: string | null
           media_group_id?: string | null
           message_caption_id?: string | null
+          message_url?: string | null
           mime_type?: string | null
           processing_completed_at?: string | null
           processing_started_at?: string | null
@@ -745,6 +747,7 @@ export type Database = {
           last_error_at?: string | null
           media_group_id?: string | null
           message_caption_id?: string | null
+          message_url?: string | null
           mime_type?: string | null
           processing_completed_at?: string | null
           processing_started_at?: string | null
@@ -785,6 +788,7 @@ export type Database = {
           id: string
           message_text: string | null
           message_type: string
+          message_url: string | null
           processing_completed_at: string | null
           processing_state: string | null
           telegram_data: Json | null
@@ -800,6 +804,7 @@ export type Database = {
           id?: string
           message_text?: string | null
           message_type: string
+          message_url?: string | null
           processing_completed_at?: string | null
           processing_state?: string | null
           telegram_data?: Json | null
@@ -815,6 +820,7 @@ export type Database = {
           id?: string
           message_text?: string | null
           message_type?: string
+          message_url?: string | null
           processing_completed_at?: string | null
           processing_state?: string | null
           telegram_data?: Json | null
@@ -859,6 +865,14 @@ export type Database = {
       compute_data_hash: {
         Args: {
           data: Json
+        }
+        Returns: string
+      }
+      construct_telegram_message_url: {
+        Args: {
+          chat_type: string
+          chat_id: number
+          message_id: number
         }
         Returns: string
       }
