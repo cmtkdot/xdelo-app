@@ -13,21 +13,17 @@ import { MediaViewer } from "./MediaViewer/MediaViewer";
 
 interface ProductGroupProps {
   group: MediaItem[];
-  onEdit: (item: MediaItem) => void;
-  onPrevious?: () => void;
-  onNext?: () => void;
-  hasPrevious?: boolean;
-  hasNext?: boolean;
+  onEdit: (media: MediaItem) => void;
+  onDelete: (media: MediaItem) => void;
+  onView: () => void;
 }
 
-export const ProductGroup = ({ 
-  group, 
+export const ProductGroup: React.FC<ProductGroupProps> = ({
+  group,
   onEdit,
-  onPrevious,
-  onNext,
-  hasPrevious,
-  hasNext 
-}: ProductGroupProps) => {
+  onDelete,
+  onView
+}) => {
   // Find the main media item (original caption or first analyzed item)
   const mainMedia = group.find(media => media.is_original_caption) || 
                    group.find(media => media.analyzed_content) || 
@@ -210,15 +206,18 @@ export const ProductGroup = ({
           </Alert>
         )}
         
-        <div className="flex justify-center gap-2 pt-1">
+        <div className="flex justify-between pt-1">
           <Tabs defaultValue="edit" className="w-full max-w-xs">
-            <TabsList className="grid grid-cols-4 gap-2">
+            <TabsList className="grid grid-cols-3 gap-2">
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <TabsTrigger 
                       value="view" 
-                      onClick={() => setIsViewerOpen(true)} 
+                      onClick={() => {
+                        onView();
+                        setIsViewerOpen(true);
+                      }}
                       className="py-2 text-black hover:text-black/80"
                     >
                       <Eye className="w-4 h-4 text-black dark:text-white" />
@@ -247,23 +246,8 @@ export const ProductGroup = ({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <TabsTrigger 
-                      value="reanalyze" 
-                      onClick={handleReanalyze} 
-                      className="py-2 text-black hover:text-black/80"
-                    >
-                      <RotateCw className="w-4 h-4 text-black dark:text-white" />
-                    </TabsTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent className="px-2 py-1 text-xs">Reanalyze</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
-              <TooltipProvider delayDuration={0}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <TabsTrigger 
                       value="delete" 
-                      onClick={handleDelete} 
+                      onClick={() => onDelete(mainMedia)} 
                       className="py-2 text-destructive hover:text-destructive/80"
                     >
                       <Trash2 className="w-4 h-4 text-destructive dark:text-white" />
@@ -281,10 +265,6 @@ export const ProductGroup = ({
         isOpen={isViewerOpen}
         onClose={() => setIsViewerOpen(false)}
         currentGroup={sortedMedia}
-        onPrevious={onPrevious}
-        onNext={onNext}
-        hasPrevious={hasPrevious}
-        hasNext={hasNext}
       />
     </div>
   );

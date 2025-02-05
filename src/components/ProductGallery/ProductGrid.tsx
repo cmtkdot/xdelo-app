@@ -1,24 +1,37 @@
 import { MediaItem } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
 import { Card } from "@/components/ui/card";
+import { useState } from "react";
+import { MediaViewer } from "@/components/MediaViewer/MediaViewer"; // Assuming MediaViewer is a component
 
 interface ProductGridProps {
   mediaGroups: { [key: string]: MediaItem[] };
   onEdit: (media: MediaItem) => void;
-  onGroupSelect: (index: number) => void;
-  selectedGroupIndex: number | null;
-  onPrevious: () => void;
-  onNext: () => void;
+  onDelete: (media: MediaItem) => void; // Added onDelete prop
 }
 
-export const ProductGrid = ({ 
-  mediaGroups, 
-  onEdit,
-  onGroupSelect,
-  selectedGroupIndex,
-  onPrevious,
-  onNext
-}: ProductGridProps) => {
+const ProductGrid: React.FC<ProductGridProps> = ({ mediaGroups, onEdit, onDelete }) => {
+  const [selectedGroupIndex, setSelectedGroupIndex] = useState<number>(-1);
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+
+  const handleOpenViewer = (index: number) => {
+    setSelectedGroupIndex(index);
+    setIsViewerOpen(true);
+  };
+
+  const handleCloseViewer = () => {
+    setIsViewerOpen(false);
+    setSelectedGroupIndex(-1);
+  };
+
+  const handlePreviousGroup = () => {
+    setSelectedGroupIndex((prev) => Math.max(0, prev - 1));
+  };
+
+  const handleNextGroup = () => {
+    setSelectedGroupIndex((prev) => Math.min(Object.values(mediaGroups).length - 1, prev + 1));
+  };
+
   const groupsArray = Object.values(mediaGroups);
 
   if (groupsArray.length === 0) {
@@ -39,12 +52,24 @@ export const ProductGrid = ({
           key={group[0].id}
           group={group}
           onEdit={onEdit}
-          onPrevious={onPrevious}
-          onNext={onNext}
-          hasPrevious={selectedGroupIndex !== null && selectedGroupIndex > 0}
-          hasNext={selectedGroupIndex !== null && selectedGroupIndex < groupsArray.length - 1}
+          onDelete={onDelete}
+          onView={() => handleOpenViewer(index)}
         />
       ))}
+
+      {isViewerOpen && selectedGroupIndex >= 0 && (
+        <MediaViewer
+          isOpen={isViewerOpen}
+          onClose={handleCloseViewer}
+          currentGroup={groupsArray[selectedGroupIndex]}
+          onPrevious={handlePreviousGroup}
+          onNext={handleNextGroup}
+          hasPrevious={selectedGroupIndex > 0}
+          hasNext={selectedGroupIndex < groupsArray.length - 1}
+        />
+      )}
     </div>
   );
 };
+
+export default ProductGrid;
