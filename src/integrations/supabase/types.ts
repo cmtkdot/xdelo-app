@@ -774,13 +774,6 @@ export type Database = {
             referencedRelation: "messages"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "messages_message_caption_id_fkey"
-            columns: ["message_caption_id"]
-            isOneToOne: false
-            referencedRelation: "messages_parsed"
-            referencedColumns: ["id"]
-          },
         ]
       }
       other_messages: {
@@ -902,73 +895,7 @@ export type Database = {
       }
     }
     Views: {
-      messages_parsed: {
-        Row: {
-          analyzed_content: Json | null
-          caption: string | null
-          chat_id: number | null
-          chat_type: string | null
-          confidence: number | null
-          created_at: string | null
-          duration: number | null
-          error_message: string | null
-          fallbacks_used: string[] | null
-          file_id: string | null
-          file_size: number | null
-          file_unique_id: string | null
-          glide_row_id: string | null
-          group_caption_synced: boolean | null
-          group_first_message_time: string | null
-          group_last_message_time: string | null
-          group_message_count: number | null
-          height: number | null
-          id: string | null
-          is_original_caption: boolean | null
-          last_error_at: string | null
-          media_group_id: string | null
-          message_caption_id: string | null
-          mime_type: string | null
-          notes: string | null
-          parsing_method: string | null
-          processing_completed_at: string | null
-          processing_started_at: string | null
-          processing_state:
-            | Database["public"]["Enums"]["message_processing_state"]
-            | null
-          product_code: string | null
-          product_name: string | null
-          public_url: string | null
-          purchase_date: string | null
-          purchase_order_uid: string | null
-          quantity: number | null
-          reanalysis_attempted: boolean | null
-          retry_count: number | null
-          storage_path: string | null
-          supabase_sync_json: Json | null
-          telegram_data: Json | null
-          telegram_message_id: number | null
-          updated_at: string | null
-          user_id: string | null
-          vendor_uid: string | null
-          width: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "messages_message_caption_id_fkey"
-            columns: ["message_caption_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "messages_message_caption_id_fkey"
-            columns: ["message_caption_id"]
-            isOneToOne: false
-            referencedRelation: "messages_parsed"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
       bytea_to_text: {
