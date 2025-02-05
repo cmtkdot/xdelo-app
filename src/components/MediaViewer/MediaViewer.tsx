@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { MediaItem } from '@/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -54,10 +55,10 @@ export const MediaViewer = ({
 
           <div className="p-6 bg-background dark:bg-transparent border-t space-y-4">
             {/* Caption section */}
-            {(analyzedContent?.quantity || mainMedia.caption) && (
+            {mainMedia.caption && (
               <div className="border-b border-border pb-4">
                 <p className="text-sm text-muted-foreground font-medium mb-1">Caption</p>
-                <p className="text-foreground">{analyzedContent?.quantity || mainMedia.caption}</p>
+                <p className="text-foreground whitespace-pre-wrap">{mainMedia.caption}</p>
               </div>
             )}
 
@@ -73,6 +74,12 @@ export const MediaViewer = ({
                 <div>
                   <p className="text-sm text-muted-foreground font-medium">Vendor</p>
                   <p className="text-foreground">{analyzedContent.vendor_uid}</p>
+                </div>
+              )}
+              {analyzedContent?.quantity && (
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Quantity</p>
+                  <p className="text-foreground">{analyzedContent.quantity}</p>
                 </div>
               )}
               {analyzedContent?.purchase_date && (
