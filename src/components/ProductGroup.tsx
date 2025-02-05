@@ -1,5 +1,5 @@
 import { MediaItem, AnalyzedContent, ProcessingMetadata, processingMetadataToJson, analyzedContentToJson } from "@/types";
-import { AlertCircle, Pencil, Trash2, RotateCw, Eye } from "lucide-react";
+import { AlertCircle, Pencil, Trash2, RotateCw, Eye, Package, Calendar, Tag, Building } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageSwiper } from "@/components/ui/image-swiper";
 import { format } from "date-fns";
@@ -160,7 +160,7 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden transition-all hover:shadow-lg">
       <div className="relative h-72 md:h-80">
         <ImageSwiper media={sortedMedia} />
         
@@ -173,19 +173,59 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
         )}
       </div>
       
-      <div className="p-3 space-y-2">
-        {/* Secondary info in compact form */}
-        <div className="space-y-1 text-xs text-gray-600">
+      <div className="p-4 space-y-3">
+        {/* Product Details Grid */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* Purchase Order */}
           {analyzedContent?.product_code && (
-            <p>PO#: {analyzedContent.product_code}</p>
+            <div className="bg-secondary/10 rounded-lg p-3 flex items-center space-x-2 hover:bg-secondary/20 transition-colors">
+              <Tag className="w-4 h-4 text-primary" />
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Purchase Order</p>
+                <p className="text-sm font-medium">{analyzedContent.product_code}</p>
+              </div>
+            </div>
           )}
+          
+          {/* Quantity */}
+          {analyzedContent?.quantity && (
+            <div className="bg-secondary/10 rounded-lg p-3 flex items-center space-x-2 hover:bg-secondary/20 transition-colors">
+              <Package className="w-4 h-4 text-primary" />
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Quantity</p>
+                <p className="text-sm font-medium">{analyzedContent.quantity}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Vendor and Date Row */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* Vendor */}
           {analyzedContent?.vendor_uid && (
-            <p>Vendor: {analyzedContent.vendor_uid}</p>
+            <div className="bg-secondary/10 rounded-lg p-3 flex items-center space-x-2 hover:bg-secondary/20 transition-colors">
+              <Building className="w-4 h-4 text-primary" />
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Vendor</p>
+                <p className="text-sm font-medium">{analyzedContent.vendor_uid}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Purchase Date */}
+          {analyzedContent?.purchase_date && (
+            <div className="bg-secondary/10 rounded-lg p-3 flex items-center space-x-2 hover:bg-secondary/20 transition-colors">
+              <Calendar className="w-4 h-4 text-primary" />
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Purchase Date</p>
+                <p className="text-sm font-medium">{formatDate(analyzedContent.purchase_date)}</p>
+              </div>
+            </div>
           )}
         </div>
 
         {analyzedContent?.parsing_metadata?.confidence < 0.7 && (
-          <p className="text-xs text-yellow-600">
+          <p className="text-xs text-yellow-600 dark:text-yellow-400">
             Low confidence analysis ({Math.round(analyzedContent.parsing_metadata.confidence * 100)}%)
           </p>
         )}
@@ -198,7 +238,7 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
           </Alert>
         )}
         
-        <div className="flex justify-between pt-1">
+        <div className="flex justify-between pt-2 border-t border-border">
           <Tabs defaultValue="edit" className="w-full max-w-xs">
             <TabsList className="grid grid-cols-3 gap-2">
               <TooltipProvider delayDuration={0}>
@@ -210,9 +250,9 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
                         onView();
                         setIsViewerOpen(true);
                       }}
-                      className="py-2 text-black hover:text-black/80"
+                      className="py-2 text-black hover:text-black/80 dark:text-white dark:hover:text-white/80"
                     >
-                      <Eye className="w-4 h-4 text-black dark:text-white" />
+                      <Eye className="w-4 h-4" />
                     </TabsTrigger>
                   </TooltipTrigger>
                   <TooltipContent className="px-2 py-1 text-xs">View</TooltipContent>
@@ -225,9 +265,9 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
                     <TabsTrigger 
                       value="edit" 
                       onClick={() => onEdit(mainMedia)} 
-                      className="py-2 text-black hover:text-black/80"
+                      className="py-2 text-black hover:text-black/80 dark:text-white dark:hover:text-white/80"
                     >
-                      <Pencil className="w-4 h-4 text-black dark:text-white" />
+                      <Pencil className="w-4 h-4" />
                     </TabsTrigger>
                   </TooltipTrigger>
                   <TooltipContent className="px-2 py-1 text-xs">Edit</TooltipContent>
@@ -242,7 +282,7 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
                       onClick={() => onDelete(mainMedia)} 
                       className="py-2 text-destructive hover:text-destructive/80"
                     >
-                      <Trash2 className="w-4 h-4 text-destructive dark:text-white" />
+                      <Trash2 className="w-4 h-4" />
                     </TabsTrigger>
                   </TooltipTrigger>
                   <TooltipContent className="px-2 py-1 text-xs">Delete</TooltipContent>
