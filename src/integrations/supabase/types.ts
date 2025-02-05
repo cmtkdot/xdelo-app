@@ -788,6 +788,7 @@ export type Database = {
           processing_completed_at: string | null
           processing_state: string | null
           telegram_data: Json | null
+          telegram_message_id: number | null
           updated_at: string | null
           user_id: string
         }
@@ -802,6 +803,7 @@ export type Database = {
           processing_completed_at?: string | null
           processing_state?: string | null
           telegram_data?: Json | null
+          telegram_message_id?: number | null
           updated_at?: string | null
           user_id: string
         }
@@ -816,6 +818,7 @@ export type Database = {
           processing_completed_at?: string | null
           processing_state?: string | null
           telegram_data?: Json | null
+          telegram_message_id?: number | null
           updated_at?: string | null
           user_id?: string
         }
