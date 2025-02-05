@@ -1,5 +1,5 @@
 
-import { MediaItem, ProcessingMetadata, analyzedContentToJson } from "@/types";
+import { MediaItem, ProcessingMetadata, analyzedContentToJson, processingMetadataToJson } from "@/types";
 import { Eye, Pencil, RotateCw, Trash2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
