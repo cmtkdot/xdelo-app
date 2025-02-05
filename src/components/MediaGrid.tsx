@@ -1,3 +1,4 @@
+
 import { MediaItem } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
 
@@ -27,10 +28,8 @@ export const MediaGrid = ({
           key={group[0].id}
           group={group}
           onEdit={onEdit}
-          onPrevious={onPrevious}
-          onNext={onNext}
-          hasPrevious={hasPrevious}
-          hasNext={hasNext}
+          onView={() => {}}
+          onDelete={() => {}}
         />
       ))}
     </div>

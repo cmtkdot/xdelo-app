@@ -14,11 +14,9 @@ const SECURE_ACCESS_TOKEN = "cmtktrading-gallery-2024";
 const PublicGallery = () => {
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedGroupIndex, setSelectedGroupIndex] = useState<number | null>(null);
   const { toast } = useToast();
   const [vendors, setVendors] = useState<string[]>([]);
 
-  // Default filters for public view
   const [filters, setFilters] = useState<FilterValues>({
     search: "",
     vendor: "all",
@@ -28,7 +26,6 @@ const PublicGallery = () => {
     processingState: "completed"
   });
 
-  // Fetch unique vendors
   useEffect(() => {
     const fetchVendors = async () => {
       try {
@@ -145,18 +142,7 @@ const PublicGallery = () => {
         <ProductGrid 
           mediaGroups={mediaGroups} 
           onEdit={handleEdit}
-          onGroupSelect={(index) => setSelectedGroupIndex(index)}
-          selectedGroupIndex={selectedGroupIndex}
-          onPrevious={() => {
-            if (selectedGroupIndex !== null && selectedGroupIndex > 0) {
-              setSelectedGroupIndex(selectedGroupIndex - 1);
-            }
-          }}
-          onNext={() => {
-            if (selectedGroupIndex !== null && selectedGroupIndex < groupsArray.length - 1) {
-              setSelectedGroupIndex(selectedGroupIndex + 1);
-            }
-          }}
+          onDelete={() => {}}
         />
         
         {Object.keys(mediaGroups).length > 0 && (
