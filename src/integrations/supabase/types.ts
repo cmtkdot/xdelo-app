@@ -863,7 +863,7 @@ export type Database = {
           request_payload: Json | null
           response_payload: Json | null
           status_code: number | null
-          telegram_message_id: number
+          telegram_message_id: number | null
           trigger_event: string | null
         }
         Insert: {
@@ -871,7 +871,7 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string | null
           error_message?: string | null
-          event_type: string
+          event_type?: string
           id?: string
           media_group_id?: string | null
           message_id?: string | null
@@ -879,7 +879,7 @@ export type Database = {
           request_payload?: Json | null
           response_payload?: Json | null
           status_code?: number | null
-          telegram_message_id: number
+          telegram_message_id?: number | null
           trigger_event?: string | null
         }
         Update: {
@@ -895,7 +895,7 @@ export type Database = {
           request_payload?: Json | null
           response_payload?: Json | null
           status_code?: number | null
-          telegram_message_id?: number
+          telegram_message_id?: number | null
           trigger_event?: string | null
         }
         Relationships: []
