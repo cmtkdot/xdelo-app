@@ -15,6 +15,7 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
   const [mediaIndex, setMediaIndex] = React.useState(0)
   const [isHovered, setIsHovered] = React.useState(false)
   const [previousIndex, setPreviousIndex] = React.useState(0)
+  const [manualNavigation, setManualNavigation] = React.useState(false)
   const dragX = useMotionValue(0)
   const videoRefs = React.useRef<(HTMLVideoElement | null)[]>([])
 
@@ -35,8 +36,10 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
     const x = dragX.get()
     if (x <= -10 && mediaIndex < sortedMedia.length - 1) {
       setMediaIndex((prev) => prev + 1)
+      setManualNavigation(true)
     } else if (x >= 10 && mediaIndex > 0) {
       setMediaIndex((prev) => prev - 1)
+      setManualNavigation(true)
     }
   }
 
@@ -63,10 +66,18 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
   const handleMouseEnter = React.useCallback(() => {
     setIsHovered(true)
     setPreviousIndex(mediaIndex)
-  }, [mediaIndex])
+    
+    if (!manualNavigation) {
+      const firstVideoIndex = findFirstVideoIndex()
+      if (firstVideoIndex !== -1 && !sortedMedia[mediaIndex].mime_type?.startsWith('video')) {
+        setMediaIndex(firstVideoIndex)
+      }
+    }
+  }, [findFirstVideoIndex, mediaIndex, sortedMedia, manualNavigation])
 
   const handleMouseLeave = React.useCallback(() => {
     setIsHovered(false)
+    setManualNavigation(false)
     if (sortedMedia[mediaIndex].mime_type?.startsWith('video')) {
       setMediaIndex(previousIndex)
     }
@@ -74,7 +85,9 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
 
   const handleButtonClick = (e: React.MouseEvent, newIndex: number) => {
     e.stopPropagation()
+    setPreviousIndex(mediaIndex)
     setMediaIndex(newIndex)
+    setManualNavigation(true)
   }
 
   if (!sortedMedia?.length) {
