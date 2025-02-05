@@ -41,9 +41,9 @@ export const MediaViewer = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] h-auto p-0 overflow-y-auto dark:bg-transparent">
-        <div className="relative flex flex-col">
-          <DialogHeader className="border-b border-border px-4 py-2 bg-background dark:bg-transparent">
+      <DialogContent className="max-w-2xl w-[90vw] max-h-[80vh] h-auto p-0 overflow-y-auto">
+        <div className="relative flex flex-col bg-background dark:bg-background">
+          <DialogHeader className="border-b border-border px-4 py-2">
             <DialogTitle className="text-base font-medium">
               {analyzedContent?.product_name || 'Untitled Product'}
             </DialogTitle>
@@ -55,7 +55,7 @@ export const MediaViewer = ({
             </div>
           </div>
 
-          <div className="p-4 bg-background dark:bg-transparent border-t space-y-3">
+          <div className="p-4 space-y-3">
             {/* Caption section */}
             {(analyzedContent?.quantity || mainMedia.caption) && (
               <div className="border-b border-border pb-3">
