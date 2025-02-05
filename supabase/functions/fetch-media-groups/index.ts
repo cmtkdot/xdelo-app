@@ -31,11 +31,12 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    console.log('Building query with filters:', filters);
+
     let query = supabase
       .from("messages")
       .select("*", { count: "exact" })
-      .eq('is_original_caption', true)
-      .is('is_deleted', false); // Add this line to exclude deleted messages
+      .is('is_deleted', false); // Exclude deleted messages
 
     // Apply text search filter
     if (filters.search) {
@@ -99,64 +100,53 @@ serve(async (req) => {
     const to = from + ITEMS_PER_PAGE - 1;
     query = query.range(from, to);
 
-    console.log('Executing query for original messages...');
-    const { data: originalMessages, count, error: originalMessagesError } = await query;
+    console.log('Executing query for messages...');
+    const { data: messages, count, error: messagesError } = await query;
 
-    if (originalMessagesError) {
-      console.error('Error fetching original messages:', originalMessagesError);
-      throw originalMessagesError;
+    if (messagesError) {
+      console.error('Error fetching messages:', messagesError);
+      throw messagesError;
     }
 
-    // Get all media group IDs from the original messages
-    const mediaGroupIds = originalMessages
-      ?.map(msg => msg.media_group_id)
-      .filter(Boolean) || [];
+    console.log(`Found ${messages?.length || 0} messages`);
 
+    // Initialize groups object
     const groups: Record<string, any[]> = {};
 
-    // If we have media groups, fetch all related media
-    if (mediaGroupIds.length > 0) {
-      console.log('Fetching related media for groups:', mediaGroupIds);
-      const { data: allGroupMedia, error: groupMediaError } = await supabase
-        .from("messages")
-        .select("*")
-        .in("media_group_id", mediaGroupIds)
-        .is('is_deleted', false); // Add this line to exclude deleted messages
+    // Process messages and organize them into groups
+    if (messages) {
+      // First, separate original caption messages
+      const originalCaptionMessages = messages.filter(msg => msg.is_original_caption);
+      const nonOriginalMessages = messages.filter(msg => !msg.is_original_caption);
 
-      if (groupMediaError) {
-        console.error('Error fetching group media:', groupMediaError);
-        throw groupMediaError;
-      }
+      // Add original caption messages to groups
+      originalCaptionMessages.forEach(msg => {
+        const groupKey = msg.media_group_id || msg.id;
+        groups[groupKey] = [msg];
+      });
 
-      if (allGroupMedia) {
-        allGroupMedia.forEach((message) => {
-          const groupKey = message.media_group_id || message.id;
-          if (!groups[groupKey]) {
-            groups[groupKey] = [];
-          }
-          groups[groupKey].push(message);
+      // Add non-original messages to their respective groups
+      nonOriginalMessages.forEach(msg => {
+        const groupKey = msg.media_group_id || msg.id;
+        if (groups[groupKey]) {
+          groups[groupKey].push(msg);
+        } else {
+          // If we don't have the original caption message, start a new group
+          groups[groupKey] = [msg];
+        }
+      });
+
+      // Sort messages within each group
+      Object.keys(groups).forEach(key => {
+        groups[key].sort((a, b) => {
+          if (a.is_original_caption && !b.is_original_caption) return -1;
+          if (!a.is_original_caption && b.is_original_caption) return 1;
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
         });
-
-        // Sort groups internally
-        Object.keys(groups).forEach(key => {
-          groups[key].sort((a, b) => {
-            if (a.is_original_caption && !b.is_original_caption) return -1;
-            if (!a.is_original_caption && b.is_original_caption) return 1;
-            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-          });
-        });
-      }
+      });
     }
 
-    // Handle single messages (not in a group)
-    originalMessages?.forEach((message) => {
-      if (!message.media_group_id) {
-        const groupKey = message.id;
-        if (!groups[groupKey]) {
-          groups[groupKey] = [message];
-        }
-      }
-    });
+    console.log(`Organized into ${Object.keys(groups).length} groups`);
 
     return new Response(
       JSON.stringify({
