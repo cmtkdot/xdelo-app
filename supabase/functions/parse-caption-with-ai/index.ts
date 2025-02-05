@@ -35,15 +35,15 @@ async function findMediaGroupAnalysis(supabase: any, mediaGroupId: string) {
 
 async function updateMediaGroupMessages(
   supabase: any,
-  mediaGroupId: string,
+  mediaGroupId: string | null,
   messageId: string,
   analyzedContent: any,
   hasCaption: boolean
 ) {
   try {
-    if (hasCaption) {
-      // If message has caption, sync to entire group
-      console.log('Message has caption, syncing to group:', { messageId, mediaGroupId });
+    if (mediaGroupId && hasCaption) {
+      // Message has caption and is part of group - sync to all
+      console.log('Message has caption and group, syncing to group:', { messageId, mediaGroupId });
       await supabase
         .from('messages')
         .update({
@@ -52,8 +52,13 @@ async function updateMediaGroupMessages(
           processing_completed_at: new Date().toISOString()
         })
         .eq('media_group_id', mediaGroupId);
+        
+      // Trigger resync to ensure counts are updated
+      await supabase.rpc('resync', {
+        p_media_group_id: mediaGroupId
+      });
     } else if (mediaGroupId) {
-      // No caption but part of media group - check for existing analysis
+      // Part of group but no caption - get existing analysis
       const existingAnalysis = await findMediaGroupAnalysis(supabase, mediaGroupId);
       
       if (existingAnalysis) {
@@ -66,8 +71,14 @@ async function updateMediaGroupMessages(
             processing_completed_at: new Date().toISOString()
           })
           .eq('id', messageId);
+          
+        // Trigger resync to ensure counts are updated
+        await supabase.rpc('resync', {
+          p_media_group_id: mediaGroupId
+        });
       } else {
-        console.log('No group analysis found, updating with default:', { messageId });
+        // No analysis yet, just update this message
+        console.log('No group analysis yet, updating message:', { messageId });
         await supabase
           .from('messages')
           .update({
@@ -78,19 +89,30 @@ async function updateMediaGroupMessages(
           .eq('id', messageId);
       }
     } else {
-      // Single message without caption
-      console.log('Single message update:', { messageId });
+      // Single message - always analyze and update
+      console.log('Single message, analyzing and updating:', { messageId });
+      const singleAnalyzedContent = hasCaption ? 
+        await analyzeCaption(caption) : 
+        {
+          product_name: 'Untitled Product',
+          parsing_metadata: {
+            method: 'manual',
+            confidence: 0.1,
+            timestamp: new Date().toISOString()
+          }
+        };
+
       await supabase
         .from('messages')
         .update({
-          analyzed_content: analyzedContent,
+          analyzed_content: singleAnalyzedContent,
           processing_state: 'completed',
           processing_completed_at: new Date().toISOString()
         })
         .eq('id', messageId);
     }
   } catch (error) {
-    console.error('Error updating media group messages:', error);
+    console.error('Error updating messages:', error);
     throw error;
   }
 }
@@ -123,27 +145,11 @@ serve(async (req) => {
 
     let analyzedContent: ParsedContent;
 
-    if (!hasCaption && media_group_id) {
-      // No caption but part of media group - check for existing analysis first
-      console.log('Checking media group for existing analysis');
-      const existingAnalysis = await findMediaGroupAnalysis(supabase, media_group_id);
-      
-      if (existingAnalysis) {
-        console.log('Found existing media group analysis');
-        analyzedContent = existingAnalysis;
-      } else {
-        console.log('No existing analysis found, using default');
-        analyzedContent = {
-          product_name: 'Untitled Product',
-          parsing_metadata: {
-            method: 'manual',
-            confidence: 0.1,
-            timestamp: new Date().toISOString()
-          }
-        };
-      }
-    } else if (!hasCaption) {
-      // Single message without caption
+    if (hasCaption) {
+      // Has caption - analyze it
+      analyzedContent = await analyzeCaption(textToAnalyze);
+    } else {
+      // No caption - use default values
       analyzedContent = {
         product_name: 'Untitled Product',
         parsing_metadata: {
@@ -152,9 +158,6 @@ serve(async (req) => {
           timestamp: new Date().toISOString()
         }
       };
-    } else {
-      // Has caption - analyze it
-      analyzedContent = await analyzeCaption(textToAnalyze);
     }
 
     // Update messages
