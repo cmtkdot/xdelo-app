@@ -160,14 +160,57 @@ export async function handleMediaMessage(
       let newMessage;
       if (existingMessage) {
         console.log("🔄 Updating existing message:", existingMessage.id);
-        newMessage = await updateExistingMessage(supabase, existingMessage.id, messageData);
+        const { data: updatedMessage, error: updateError } = await supabase
+          .from("messages")
+          .update(messageData)
+          .eq("id", existingMessage.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error("❌ Failed to update message:", updateError);
+          throw updateError;
+        }
+        newMessage = updatedMessage;
       } else {
         console.log("➕ Creating new message");
-        newMessage = await createNewMessage(supabase, messageData);
+        const { data: createdMessage, error: createError } = await supabase
+          .from("messages")
+          .insert(messageData)
+          .select()
+          .single();
+
+        if (createError) {
+          console.error("❌ Failed to create message:", createError);
+          throw createError;
+        }
+        newMessage = createdMessage;
       }
 
       if (!newMessage || !newMessage.id) {
         throw new Error('Failed to get valid message ID after create/update operation');
+      }
+
+      try {
+        const { error: webhookLogError } = await supabase
+          .from("webhook_logs")
+          .insert({
+            message_id: newMessage.id,
+            event_type: existingMessage ? 'MESSAGE_UPDATED' : 'MESSAGE_CREATED',
+            request_payload: messageData,
+            status_code: 200,
+            processing_state: messageData.processing_state,
+            created_at: new Date().toISOString(),
+            analyzed_content_hash: newMessage.analyzed_content ? JSON.stringify(newMessage.analyzed_content) : null
+          });
+
+        if (webhookLogError) {
+          console.error("❌ Failed to create webhook log:", webhookLogError);
+          // Don't throw here as the message was still processed successfully
+        }
+      } catch (logError) {
+        console.error("❌ Error creating webhook log:", logError);
+        // Don't throw here as the message was still processed successfully
       }
 
       // Trigger AI analysis only for messages with captions that need analysis

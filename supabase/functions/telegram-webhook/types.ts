@@ -36,6 +36,20 @@ export type ProcessingState =
   | 'completed' 
   | 'error';
 
+// Essential Telegram data we need to store
+export interface TelegramMessageData {
+  chat_id: number;
+  chat_type: string;
+  message_id: number;
+  from_id?: number;
+  date: number;
+  edit_date?: number;
+  forward_from_chat?: Record<string, any>;
+  forward_from_message_id?: number;
+  media_group_id?: string;
+  deleted_at?: string;
+}
+
 export interface ExistingMessage {
   id: string;
   telegram_message_id: number;
@@ -45,8 +59,9 @@ export interface ExistingMessage {
   analyzed_content?: Record<string, any>;
   processing_state: ProcessingState;
   is_original_caption: boolean;
-  group_caption_synced: boolean;
-  message_caption_id?: string;
+  is_deleted?: boolean;
+  deleted_at?: string;
+  telegram_data: TelegramMessageData;
   public_url?: string;
 }
 
@@ -63,12 +78,12 @@ export interface MessageData {
   height?: number;
   duration?: number;
   user_id: string;
-  telegram_data: Record<string, any>;
+  telegram_data: TelegramMessageData;
   processing_state: ProcessingState;
-  group_first_message_time?: string | null;
-  group_last_message_time?: string | null;
   group_message_count?: number | null;
   is_original_caption?: boolean;
+  is_deleted?: boolean;
+  deleted_at?: string;
   analyzed_content?: Record<string, any> | null;
   error_message?: string;
 }
