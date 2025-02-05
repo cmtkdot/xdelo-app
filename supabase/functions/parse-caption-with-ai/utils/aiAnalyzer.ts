@@ -10,6 +10,7 @@ const SYSTEM_PROMPT = `You are a specialized product information extractor. Extr
 
 2. Notes (OPTIONAL):
    - Preserve all emojis in flavor descriptions
+   - Format flavor lists with proper emoji handling
    - Keep original emoji characters intact
 
 Example Input: "Blue Dream 🌿 #ABC123 (indoor grow 🏠)"
@@ -18,8 +19,6 @@ Expected Output: {
   "product_code": "ABC123",
   "notes": "indoor grow 🏠"
 }`;
-
-const AI_TIMEOUT_MS = 15000; // 15 seconds timeout
 
 export async function analyzeCaption(caption: string): Promise<ParsedContent> {
   try {
@@ -39,85 +38,81 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
       throw new Error('OpenAI API key not configured');
     }
 
-    // Add timeout to AI request
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
-
-    try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openAIApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4',
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: caption }
-          ],
-          temperature: 0.3,
-          max_tokens: 500
-        }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      const aiResponse = data.choices[0]?.message?.content;
-      
-      if (!aiResponse) {
-        throw new Error('No response from AI');
-      }
-
-      try {
-        const parsedResponse = JSON.parse(aiResponse);
-        return {
-          ...parsedResponse,
-          parsing_metadata: {
-            method: 'ai',
-            confidence: 0.95,
-            timestamp: new Date().toISOString()
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { 
+            role: 'user', 
+            content: `Please analyze this product caption, preserving all emojis:\n${caption}`
           }
-        };
-      } catch (parseError) {
-        console.error('Failed to parse AI response, falling back to manual');
-        return {
-          ...manualResult,
-          parsing_metadata: {
-            method: 'manual_fallback',
-            confidence: 0.8,
-            error: 'AI parse error'
-          }
-        };
-      }
-    } catch (aiError) {
-      console.error('AI analysis failed, falling back to manual:', aiError);
-      return {
-        ...manualResult,
-        parsing_metadata: {
-          method: 'manual_fallback',
-          confidence: 0.8,
-          error: aiError.message
-        }
-      };
+        ],
+        temperature: 0.3,
+        max_tokens: 500
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.statusText}`);
     }
-  } catch (error) {
-    console.error('Error in analyzeCaption:', error);
-    // Final fallback to manual parsing
-    const fallbackResult = await manualParse(caption);
-    return {
-      ...fallbackResult,
+
+    const data = await response.json();
+    const result = JSON.parse(data.choices[0].message.content);
+
+    // Clean up and validate the result
+    const cleanResult: ParsedContent = {
+      product_name: result.product_name?.trim() || caption.split('\n')[0]?.trim() || 'Untitled Product',
+      product_code: result.product_code || '',
+      vendor_uid: result.vendor_uid || '',
+      purchase_date: result.purchase_date || '',
+      quantity: typeof result.quantity === 'number' ? Math.max(0, Math.floor(result.quantity)) : undefined,
+      notes: result.notes || formatFlavorList(caption),
       parsing_metadata: {
-        method: 'manual_fallback',
+        method: 'ai',
         confidence: 0.8,
-        error: error.message
+        timestamp: new Date().toISOString()
       }
     };
+
+    console.log('AI analysis result:', cleanResult);
+    return cleanResult;
+
+  } catch (error) {
+    console.error('Error analyzing caption:', error);
+    // Return basic info even if analysis fails
+    return {
+      product_name: caption.split('\n')[0]?.trim() || 'Untitled Product',
+      notes: formatFlavorList(caption),
+      parsing_metadata: {
+        method: 'ai',
+        confidence: 0.1,
+        timestamp: new Date().toISOString(),
+        fallbacks_used: ['error_fallback']
+      }
+    };
+  }
+}
+
+function formatFlavorList(caption: string): string {
+  try {
+    const lines = caption.split('\n');
+    const flavorSection = lines
+      .slice(lines.findIndex(line => line.toLowerCase().includes('flavor')) + 1)
+      .filter(line => line.trim() && !line.toLowerCase().includes('flavor'));
+
+    if (flavorSection.length === 0) {
+      return '';
+    }
+
+    return flavorSection.join('\n').trim();
+  } catch (error) {
+    console.error('Error formatting flavor list:', error);
+    return '';
   }
 }

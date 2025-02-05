@@ -1,135 +1,95 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const MAX_BATCH_SIZE = 500; // Glide's maximum batch size
-
-interface SyncData {
-  id: string;
-  analyzed_content: Record<string, any>;
-  caption?: string;
-  public_url?: string;
-  media_group_id?: string;
-  processing_state: string;
-  created_at: string;
-  updated_at: string;
-  mime_type?: string;
-  file_size?: number;
-  width?: number;
-  height?: number;
-}
-
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    console.log('🔄 Starting Glide sync process');
+    const PABBLY_WEBHOOK_URL = Deno.env.get('PABBLY_WEBHOOK_URL')
 
-    // Get query parameters
-    const url = new URL(req.url);
-    const lastSyncTime = url.searchParams.get('last_sync') || '';
-    const batchSize = MAX_BATCH_SIZE; // Always use max batch size for Glide
-
-    // Create Supabase client
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
-
-    // Build query for messages that need syncing
-    let query = supabaseClient
-      .from('messages')
-      .select(`
-        id,
-        analyzed_content,
-        caption,
-        public_url,
-        media_group_id,
-        processing_state,
-        created_at,
-        updated_at,
-        mime_type,
-        file_size,
-        width,
-        height
-      `)
-      .order('updated_at', { ascending: true })
-      .limit(batchSize);
-
-    // Add last sync filter if provided
-    if (lastSyncTime) {
-      query = query.gt('updated_at', lastSyncTime);
+    if (!PABBLY_WEBHOOK_URL) {
+      console.error('❌ Configuration Error: Missing PABBLY_WEBHOOK_URL')
+      throw new Error('Missing PABBLY_WEBHOOK_URL')
     }
 
-    console.log('📥 Fetching messages:', {
-      last_sync: lastSyncTime || 'none',
-      batch_size: batchSize
-    });
+    const { operation, data } = await req.json()
 
-    const { data: messages, error } = await query;
+    console.log('📥 Received webhook request:', {
+      operation,
+      data_id: data?.id,
+      has_sync_json: !!data?.supabase_sync_json,
+      webhook_url: PABBLY_WEBHOOK_URL.substring(0, 30) + '...' // Log partial URL for debugging
+    })
 
-    if (error) {
-      console.error('❌ Database error:', error);
-      throw error;
+    if (!data) {
+      throw new Error('No data provided in webhook request')
     }
 
-    if (!messages || messages.length === 0) {
-      console.log('ℹ️ No messages found');
-      return new Response(
-        JSON.stringify([]), // Return empty array for Glide
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200
-        }
-      );
+    const payload = {
+      operation,
+      data: data.supabase_sync_json || data
     }
 
-    // Process messages for Glide - add next_sync_time to each record
-    const lastUpdate = messages[messages.length - 1]?.updated_at;
-    const processedMessages = messages.map((msg: SyncData) => ({
-      id: msg.id,
-      analyzed_content: msg.analyzed_content || {},
-      caption: msg.caption || '',
-      public_url: msg.public_url || '',
-      media_group_id: msg.media_group_id || '',
-      processing_state: msg.processing_state,
-      created_at: msg.created_at,
-      updated_at: msg.updated_at,
-      mime_type: msg.mime_type || '',
-      file_size: msg.file_size || 0,
-      width: msg.width || 0,
-      height: msg.height || 0,
-      next_sync_time: lastUpdate // Add this to each record for Glide to use
-    }));
+    console.log('📤 Preparing to send data to Pabbly:', {
+      operation,
+      has_data: !!payload.data,
+      data_keys: Object.keys(payload.data || {})
+    })
 
-    console.log('✅ Sync successful:', {
-      messages_processed: processedMessages.length,
-      last_update: lastUpdate,
-      data_size: JSON.stringify(processedMessages).length
-    });
+    // Send request to Pabbly webhook
+    const response = await fetch(PABBLY_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
 
-    // Return just the array for Glide
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('❌ Pabbly webhook error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
+      })
+      throw new Error(`Pabbly webhook error: ${response.status} - ${errorText}`)
+    }
+
+    const result = await response.json()
+    console.log('✅ Successfully sent data to Pabbly webhook:', {
+      status: response.status,
+      result_keys: Object.keys(result)
+    })
+
     return new Response(
-      JSON.stringify(processedMessages),
+      JSON.stringify(result),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
       }
     )
-
   } catch (error) {
-    console.error('❌ Error in sync process:', error);
+    console.error('❌ Error in webhook handler:', {
+      error: error.message,
+      stack: error.stack
+    })
     return new Response(
-      JSON.stringify([]), // Return empty array on error for Glide
+      JSON.stringify({ error: error.message }),
       { 
-        status: 200, // Return 200 even on error for Glide
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        status: 400,
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
       }
     )
   }
