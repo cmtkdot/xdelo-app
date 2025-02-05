@@ -1,4 +1,5 @@
-import { QuantityParseResult } from "../types.ts";
+
+import { QuantityParseResult } from "../../_shared/types.ts";
 
 export function parseQuantity(caption: string): QuantityParseResult | null {
   // Look for patterns like "x2", "x 2", "qty: 2", "quantity: 2"

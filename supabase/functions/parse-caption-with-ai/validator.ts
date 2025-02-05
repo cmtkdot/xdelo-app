@@ -1,4 +1,5 @@
-import { ParsedContent, QuantityParseResult } from './types.ts';
+
+import { ParsedContent, QuantityParseResult } from "../_shared/types.ts";
 
 export function validateParsedContent(content: ParsedContent): boolean {
   // Only require that content is an object and has a product name

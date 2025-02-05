@@ -1,4 +1,4 @@
-import { ParsedContent } from "../types.ts";
+import { ParsedContent } from "../../_shared/types.ts";
 import { manualParse } from "./manualParser.ts";
 
 const SYSTEM_PROMPT = `You are a specialized product information extractor. Extract structured information following these rules:
