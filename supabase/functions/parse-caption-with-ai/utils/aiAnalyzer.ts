@@ -3,21 +3,34 @@ import { manualParse } from "./manualParser.ts";
 
 const SYSTEM_PROMPT = `You are a specialized product information extractor. Extract structured information following these rules:
 
-1. Product Name (REQUIRED):
-   - Keep all emojis in their original form
-   - Include emojis if they are part of the product name
-   - Clean up any trailing spaces or newlines
+1. Required Structure:
+   - product_name: Text before '#', REQUIRED, must always be present
+   - product_code: Value after '#' (format: #[vendor_uid][purchasedate])
+   - vendor_uid: 1-4 letters after '#' before numeric date
+   - purchase_date: Convert mmDDyy/mDDyy to YYYY-MM-DD format (add leading zero for 5-digit dates)
+   - quantity: Integer after 'x'
+   - notes: Any other values (in parentheses or remaining text)
 
-2. Notes (OPTIONAL):
-   - Preserve all emojis in flavor descriptions
-   - Format flavor lists with proper emoji handling
-   - Keep original emoji characters intact
+2. Parsing Rules:
+   - Dates: 
+     * 6 digits: mmDDyy (120523 → 2023-12-05)
+     * 5 digits: mDDyy (31524 → 2024-03-15)
+   - Vendor IDs:
+     * First 1-4 letters followed by optional valid date digits
+     * If invalid date digits, append with hyphen (CHAD123 → CHAD-123)
 
-Example Input: "Blue Dream 🌿 #ABC123 (indoor grow 🏠)"
+3. Validation:
+   - Only product_name is required
+   - All other fields nullable if not found
+   - Flag validation errors in 'notes' field
+
+Example Input: "Blue Dream #CHAD120523 x2"
 Expected Output: {
-  "product_name": "Blue Dream 🌿",
-  "product_code": "ABC123",
-  "notes": "indoor grow 🏠"
+  "product_name": "Blue Dream",
+  "product_code": "CHAD120523",
+  "vendor_uid": "CHAD",
+  "purchase_date": "2023-12-05",
+  "quantity": 2
 }`;
 
 export async function analyzeCaption(caption: string): Promise<ParsedContent> {
@@ -72,7 +85,7 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
       vendor_uid: result.vendor_uid || '',
       purchase_date: result.purchase_date || '',
       quantity: typeof result.quantity === 'number' ? Math.max(0, Math.floor(result.quantity)) : undefined,
-      notes: result.notes || formatFlavorList(caption),
+      notes: result.notes || '',
       parsing_metadata: {
         method: 'ai',
         confidence: 0.8,
@@ -88,7 +101,7 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
     // Return basic info even if analysis fails
     return {
       product_name: caption.split('\n')[0]?.trim() || 'Untitled Product',
-      notes: formatFlavorList(caption),
+      notes: '',
       parsing_metadata: {
         method: 'ai',
         confidence: 0.1,
