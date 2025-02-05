@@ -25,46 +25,48 @@ async function findMediaGroupAnalysis(supabase: any, mediaGroupId: string) {
 }
 
 async function updateMediaGroupMessages(
-  supabase: any, 
-  mediaGroupId: string, 
-  messageId: string, 
-  analyzedContent: ParsedContent,
+  supabase: any,
+  mediaGroupId: string,
+  messageId: string,
+  analyzedContent: any,
   hasCaption: boolean
 ) {
-  // If this message has a caption, mark it as the original caption
-  if (hasCaption) {
-    const { error: updateSelfError } = await supabase
+  try {
+    console.log('Updating media group messages:', { mediaGroupId, messageId });
+
+    // Get all messages in the group
+    const { data: groupMessages, error: groupError } = await supabase
       .from('messages')
-      .update({
-        is_original_caption: true,
-        analyzed_content: analyzedContent,
-        processing_state: 'completed',
-        processing_completed_at: new Date().toISOString()
-      })
-      .eq('id', messageId);
+      .select('*')
+      .eq('media_group_id', mediaGroupId);
 
-    if (updateSelfError) {
-      console.error('Error updating original message:', updateSelfError);
-      throw updateSelfError;
-    }
-  }
+    if (groupError) throw groupError;
+    if (!groupMessages) return;
 
-  // Update all other messages in the group
-  const { error: groupUpdateError } = await supabase
-    .from('messages')
-    .update({
-      analyzed_content: analyzedContent,
-      processing_state: 'completed',
-      processing_completed_at: new Date().toISOString(),
-      message_caption_id: hasCaption ? messageId : null,
-      is_original_caption: false // Ensure other messages are not marked as original
-    })
-    .eq('media_group_id', mediaGroupId)
-    .neq('id', messageId);
+    // Update all messages in the group
+    const updates = groupMessages.map(async (msg) => {
+      // For the message with caption, mark it as original
+      const isOriginalCaption = msg.id === messageId && hasCaption;
+      
+      // Always update processing state to completed
+      const { error: updateError } = await supabase
+        .from('messages')
+        .update({
+          analyzed_content: analyzedContent,
+          processing_state: 'completed',
+          processing_completed_at: new Date().toISOString(),
+          is_original_caption: isOriginalCaption
+        })
+        .eq('id', msg.id);
 
-  if (groupUpdateError) {
-    console.error('Error updating media group:', groupUpdateError);
-    throw groupUpdateError;
+      if (updateError) throw updateError;
+    });
+
+    await Promise.all(updates);
+    console.log('Successfully updated all media group messages');
+  } catch (error) {
+    console.error('Error updating media group messages:', error);
+    throw error;
   }
 }
 

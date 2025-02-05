@@ -32,9 +32,12 @@ serve(async (req) => {
 
     let query = supabase
       .from("messages")
-      .select("*", { count: "exact" })
-      .eq('is_original_caption', true)
-      .not('analyzed_content', 'is', null);
+      .select("*", { count: "exact" });
+
+    // Always filter for completed items unless explicitly showing all states
+    if (!filters.processingState || filters.processingState !== 'all') {
+      query = query.eq('processing_state', 'completed');
+    }
 
     // Apply text search filter
     if (filters.search) {
@@ -108,10 +111,19 @@ serve(async (req) => {
 
     // Get all media group IDs from the original messages
     const mediaGroupIds = originalMessages
-      ?.map(msg => msg.media_group_id)
-      .filter(Boolean) || [];
+      ?.filter(msg => msg.media_group_id)
+      .map(msg => msg.media_group_id) || [];
 
     const groups: Record<string, any[]> = {};
+
+    // First, add all original messages to their groups
+    originalMessages?.forEach((message) => {
+      const groupKey = message.media_group_id || message.id;
+      if (!groups[groupKey]) {
+        groups[groupKey] = [];
+      }
+      groups[groupKey].push(message);
+    });
 
     // If we have media groups, fetch all related media
     if (mediaGroupIds.length > 0) {
@@ -119,7 +131,9 @@ serve(async (req) => {
       const { data: allGroupMedia, error: groupMediaError } = await supabase
         .from("messages")
         .select("*")
-        .in("media_group_id", mediaGroupIds);
+        .in("media_group_id", mediaGroupIds)
+        .eq('processing_state', 'completed') // Only get completed related media
+        .not('id', 'in', originalMessages?.map(m => m.id) || []); // Exclude already fetched messages
 
       if (groupMediaError) {
         console.error('Error fetching group media:', groupMediaError);
@@ -138,8 +152,21 @@ serve(async (req) => {
         // Sort groups internally
         Object.keys(groups).forEach(key => {
           groups[key].sort((a, b) => {
+            // First priority: message with original caption
             if (a.is_original_caption && !b.is_original_caption) return -1;
             if (!a.is_original_caption && b.is_original_caption) return 1;
+            
+            // Second priority: message with analyzed content
+            if (a.analyzed_content && !b.analyzed_content) return -1;
+            if (!a.analyzed_content && b.analyzed_content) return 1;
+            
+            // Third priority: media type (image before video)
+            const aIsImage = a.mime_type?.startsWith('image/');
+            const bIsImage = b.mime_type?.startsWith('image/');
+            if (aIsImage && !bIsImage) return -1;
+            if (!aIsImage && bIsImage) return 1;
+            
+            // Fourth priority: creation time
             return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
           });
         });

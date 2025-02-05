@@ -1,4 +1,3 @@
-
 import { MediaItem, AnalyzedContent, ProcessingMetadata, processingMetadataToJson, analyzedContentToJson } from "@/types";
 import { AlertCircle, Pencil, Trash2, RotateCw, Eye } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -29,9 +28,22 @@ export const ProductGroup = ({
   hasPrevious,
   hasNext 
 }: ProductGroupProps) => {
-  const mainMedia = group.find(media => media.is_original_caption) || group[0];
+  // Find the main media item (original caption or first analyzed item)
+  const mainMedia = group.find(media => media.is_original_caption) || 
+                   group.find(media => media.analyzed_content) || 
+                   group[0];
+                   
+  // Sort media items: images first, then videos
+  const sortedMedia = [...group].sort((a, b) => {
+    const aIsImage = a.mime_type?.startsWith('image/') || false;
+    const bIsImage = b.mime_type?.startsWith('image/') || false;
+    if (aIsImage && !bIsImage) return -1;
+    if (!aIsImage && bIsImage) return 1;
+    return 0;
+  });
+
   const hasError = mainMedia.processing_state === 'error';
-  const analyzedContent = group.find(media => media.is_original_caption)?.analyzed_content || mainMedia.analyzed_content;
+  const analyzedContent = mainMedia.analyzed_content;
   const { toast } = useToast();
   const [isViewerOpen, setIsViewerOpen] = useState(false);
 
@@ -162,7 +174,7 @@ export const ProductGroup = ({
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
       <div className="relative h-72 md:h-80">
-        <ImageSwiper media={group} />
+        <ImageSwiper media={sortedMedia} />
         
         {hasError && (
           <div className="absolute top-2 right-2">
@@ -278,7 +290,7 @@ export const ProductGroup = ({
       <MediaViewer
         isOpen={isViewerOpen}
         onClose={() => setIsViewerOpen(false)}
-        currentGroup={group}
+        currentGroup={sortedMedia}
         onPrevious={onPrevious}
         onNext={onNext}
         hasPrevious={hasPrevious}
@@ -287,4 +299,3 @@ export const ProductGroup = ({
     </div>
   );
 };
-
