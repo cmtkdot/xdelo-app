@@ -29,7 +29,12 @@ export interface WebhookResponse {
 
 export type SupabaseClient = ReturnType<typeof createClient>;
 
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
+export type ProcessingState = 
+  | 'initialized' 
+  | 'pending' 
+  | 'processing' 
+  | 'completed' 
+  | 'error';
 
 export interface ExistingMessage {
   id: string;

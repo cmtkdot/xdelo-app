@@ -9,9 +9,12 @@ export async function findExistingMessage(
       .from("messages")
       .select("*")
       .eq("file_unique_id", fileUniqueId)
-      .maybeSingle();
+      .single();
 
     if (error) {
+      if (error.code === "PGRST116") { // Not found error
+        return null;
+      }
       console.error("❌ Error checking for existing message:", error);
       throw error;
     }
@@ -29,6 +32,20 @@ export async function updateExistingMessage(
   updateData: Partial<MessageData>
 ) {
   try {
+    // Validate processing state if it's being updated
+    if (updateData.processing_state) {
+      const validStates: ProcessingState[] = [
+        'initialized',
+        'pending',
+        'processing',
+        'completed',
+        'error'
+      ];
+      if (!validStates.includes(updateData.processing_state)) {
+        throw new Error(`Invalid processing_state: ${updateData.processing_state}`);
+      }
+    }
+
     const { data: updatedMessage, error } = await supabase
       .from("messages")
       .update({
@@ -60,6 +77,20 @@ export async function createNewMessage(
   messageData: MessageData
 ) {
   try {
+    // Validate processing state
+    if (messageData.processing_state) {
+      const validStates: ProcessingState[] = [
+        'initialized',
+        'pending',
+        'processing',
+        'completed',
+        'error'
+      ];
+      if (!validStates.includes(messageData.processing_state)) {
+        throw new Error(`Invalid processing_state: ${messageData.processing_state}`);
+      }
+    }
+
     const { data: newMessage, error: messageError } = await supabase
       .from("messages")
       .insert({
@@ -91,9 +122,9 @@ export async function triggerCaptionParsing(
   try {
     console.log("🔄 Triggering caption parsing for message:", messageId);
     
-    // Update message state to pending
+    // Update message state to processing
     await updateExistingMessage(supabase, messageId, {
-      processing_state: 'pending'
+      processing_state: 'processing'
     });
 
     // Call parse-caption-with-ai edge function
@@ -106,17 +137,60 @@ export async function triggerCaptionParsing(
       }
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error("❌ Caption parsing failed:", error);
+      
+      // Update message state to error
+      await updateExistingMessage(supabase, messageId, {
+        processing_state: 'error',
+        error_message: error.message
+      });
+      
+      throw error;
+    }
+
     console.log("✅ Caption parsing triggered successfully");
   } catch (error) {
     console.error("❌ Error triggering caption parsing:", error);
     
-    // Update message state to error
-    await updateExistingMessage(supabase, messageId, {
-      processing_state: 'error',
-      error_message: error.message
-    });
+    // Update message state to error if not already done
+    try {
+      await updateExistingMessage(supabase, messageId, {
+        processing_state: 'error',
+        error_message: error.message
+      });
+    } catch (updateError) {
+      console.error("❌ Failed to update error state:", updateError);
+    }
     
+    throw error;
+  }
+}
+
+export async function syncMediaGroupAnalysis(
+  supabase: SupabaseClient,
+  mediaGroupId: string,
+  analyzedContent: any,
+  originalMessageId: string
+) {
+  try {
+    console.log("🔄 Syncing media group analysis:", { mediaGroupId, originalMessageId });
+    
+    const { error } = await supabase.rpc('process_media_group_analysis', {
+      p_message_id: originalMessageId,
+      p_media_group_id: mediaGroupId,
+      p_analyzed_content: analyzedContent,
+      p_processing_completed_at: new Date().toISOString()
+    });
+
+    if (error) {
+      console.error("❌ Failed to sync media group analysis:", error);
+      throw error;
+    }
+
+    console.log("✅ Media group analysis synced successfully");
+  } catch (error) {
+    console.error("❌ Error in syncMediaGroupAnalysis:", error);
     throw error;
   }
 }
