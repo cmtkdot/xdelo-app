@@ -9,16 +9,28 @@ const corsHeaders = {
 };
 
 async function findMediaGroupAnalysis(supabase: any, mediaGroupId: string) {
-  // Find any message with analyzed content, prioritizing ones with captions
-  const { data: message } = await supabase
+  // First try to find any message with caption and analyzed content
+  const { data: captionMessage } = await supabase
     .from('messages')
-    .select('analyzed_content, caption')
+    .select('analyzed_content')
     .eq('media_group_id', mediaGroupId)
+    .not('caption', 'is', null)
     .not('analyzed_content', 'is', null)
-    .order('caption', { ascending: false }) // Messages with captions first
     .maybeSingle();
 
-  return message?.analyzed_content;
+  if (captionMessage?.analyzed_content) {
+    return captionMessage.analyzed_content;
+  }
+
+  // Fallback to any message with analyzed content
+  const { data: anyMessage } = await supabase
+    .from('messages')
+    .select('analyzed_content')
+    .eq('media_group_id', mediaGroupId)
+    .not('analyzed_content', 'is', null)
+    .maybeSingle();
+
+  return anyMessage?.analyzed_content;
 }
 
 async function updateMediaGroupMessages(
@@ -29,8 +41,8 @@ async function updateMediaGroupMessages(
   hasCaption: boolean
 ) {
   try {
-    // If this message has a caption, always sync to group
     if (hasCaption) {
+      // If message has caption, sync to entire group
       console.log('Message has caption, syncing to group:', { messageId, mediaGroupId });
       await supabase
         .from('messages')
@@ -40,13 +52,12 @@ async function updateMediaGroupMessages(
           processing_completed_at: new Date().toISOString()
         })
         .eq('media_group_id', mediaGroupId);
-    } else {
-      // No caption - find if there's any analyzed content in the group
+    } else if (mediaGroupId) {
+      // No caption but part of media group - check for existing analysis
       const existingAnalysis = await findMediaGroupAnalysis(supabase, mediaGroupId);
       
       if (existingAnalysis) {
-        // Use existing analysis for this message
-        console.log('Using existing group analysis for message:', { messageId });
+        console.log('Using existing group analysis:', { messageId });
         await supabase
           .from('messages')
           .update({
@@ -56,8 +67,7 @@ async function updateMediaGroupMessages(
           })
           .eq('id', messageId);
       } else {
-        // No existing analysis, just update this message
-        console.log('No group analysis found, updating single message:', { messageId });
+        console.log('No group analysis found, updating with default:', { messageId });
         await supabase
           .from('messages')
           .update({
@@ -67,6 +77,17 @@ async function updateMediaGroupMessages(
           })
           .eq('id', messageId);
       }
+    } else {
+      // Single message without caption
+      console.log('Single message update:', { messageId });
+      await supabase
+        .from('messages')
+        .update({
+          analyzed_content: analyzedContent,
+          processing_state: 'completed',
+          processing_completed_at: new Date().toISOString()
+        })
+        .eq('id', messageId);
     }
   } catch (error) {
     console.error('Error updating media group messages:', error);
@@ -98,18 +119,20 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
     const textToAnalyze = caption?.trim() || '';
-    let analyzedContent: ParsedContent;
     const hasCaption = Boolean(textToAnalyze);
 
+    let analyzedContent: ParsedContent;
+
     if (!hasCaption && media_group_id) {
-      console.log('Empty caption received, checking media group for analysis');
+      // No caption but part of media group - check for existing analysis first
+      console.log('Checking media group for existing analysis');
       const existingAnalysis = await findMediaGroupAnalysis(supabase, media_group_id);
       
       if (existingAnalysis) {
-        console.log('Found existing media group analysis, using it');
+        console.log('Found existing media group analysis');
         analyzedContent = existingAnalysis;
       } else {
-        console.log('No existing analysis found, using default values');
+        console.log('No existing analysis found, using default');
         analyzedContent = {
           product_name: 'Untitled Product',
           parsing_metadata: {
@@ -120,6 +143,7 @@ serve(async (req) => {
         };
       }
     } else if (!hasCaption) {
+      // Single message without caption
       analyzedContent = {
         product_name: 'Untitled Product',
         parsing_metadata: {
@@ -129,23 +153,12 @@ serve(async (req) => {
         }
       };
     } else {
+      // Has caption - analyze it
       analyzedContent = await analyzeCaption(textToAnalyze);
     }
 
-    if (media_group_id) {
-      await updateMediaGroupMessages(supabase, media_group_id, message_id, analyzedContent, hasCaption);
-    } else {
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: analyzedContent,
-          processing_state: 'completed',
-          processing_completed_at: new Date().toISOString()
-        })
-        .eq('id', message_id);
-
-      if (updateError) throw updateError;
-    }
+    // Update messages
+    await updateMediaGroupMessages(supabase, media_group_id, message_id, analyzedContent, hasCaption);
 
     return new Response(
       JSON.stringify({
