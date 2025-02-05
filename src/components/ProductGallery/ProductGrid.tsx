@@ -1,16 +1,17 @@
+
 import { MediaItem } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
 import { Card } from "@/components/ui/card";
 import { useState } from "react";
-import { MediaViewer } from "@/components/MediaViewer/MediaViewer"; // Assuming MediaViewer is a component
+import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
 
 interface ProductGridProps {
   mediaGroups: { [key: string]: MediaItem[] };
   onEdit: (media: MediaItem) => void;
-  onDelete: (media: MediaItem) => void; // Added onDelete prop
+  onDelete: (media: MediaItem) => void;
 }
 
-const ProductGrid: React.FC<ProductGridProps> = ({ mediaGroups, onEdit, onDelete }) => {
+export const ProductGrid: React.FC<ProductGridProps> = ({ mediaGroups, onEdit, onDelete }) => {
   const [selectedGroupIndex, setSelectedGroupIndex] = useState<number>(-1);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
 
@@ -42,7 +43,6 @@ const ProductGrid: React.FC<ProductGridProps> = ({ mediaGroups, onEdit, onDelete
     );
   }
 
-  // Updated grid columns to maintain 2 columns on mobile
   const gridCols = "grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
 
   return (
@@ -71,5 +71,3 @@ const ProductGrid: React.FC<ProductGridProps> = ({ mediaGroups, onEdit, onDelete
     </div>
   );
 };
-
-export default ProductGrid;
