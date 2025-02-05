@@ -9,25 +9,13 @@ const corsHeaders = {
 };
 
 async function findMediaGroupAnalysis(supabase: any, mediaGroupId: string) {
-  // Always check for video with caption first, as it might be a late upload
-  const { data: videoMessage } = await supabase
+  // Find any message with analyzed content, prioritizing ones with captions
+  const { data: message } = await supabase
     .from('messages')
     .select('analyzed_content, caption')
     .eq('media_group_id', mediaGroupId)
-    .eq('file_type', 'video')
-    .not('caption', 'is', null)
-    .maybeSingle();
-
-  if (videoMessage?.analyzed_content) {
-    return videoMessage.analyzed_content;
-  }
-
-  // Fallback to any message with caption and analysis
-  const { data: message } = await supabase
-    .from('messages')
-    .select('analyzed_content')
-    .eq('media_group_id', mediaGroupId)
     .not('analyzed_content', 'is', null)
+    .order('caption', { ascending: false }) // Messages with captions first
     .maybeSingle();
 
   return message?.analyzed_content;
@@ -41,34 +29,9 @@ async function updateMediaGroupMessages(
   hasCaption: boolean
 ) {
   try {
-    // Check if this message has a caption and if there's already a video with caption
-    const { data: groupMessages } = await supabase
-      .from('messages')
-      .select('id, file_type, caption')
-      .eq('media_group_id', mediaGroupId);
-
-    if (!groupMessages?.length) return;
-
-    // Check if there's a video with caption in the group
-    const videoWithCaption = groupMessages.find(msg => 
-      msg.file_type === 'video' && msg.caption
-    );
-
-    // Current message info
-    const currentMessage = groupMessages.find(msg => msg.id === messageId);
-    const isVideo = currentMessage?.file_type === 'video';
-
-    // Sync rules:
-    // 1. If this is a video with caption, always sync to group
-    // 2. If this is an image/message with caption and no video with caption exists, sync to group
-    // 3. Otherwise, just update this message
-    if ((isVideo && hasCaption) || (hasCaption && !videoWithCaption)) {
-      console.log('Syncing caption to entire group:', {
-        isVideo,
-        hasCaption,
-        hasVideoWithCaption: !!videoWithCaption
-      });
-
+    // If this message has a caption, always sync to group
+    if (hasCaption) {
+      console.log('Message has caption, syncing to group:', { messageId, mediaGroupId });
       await supabase
         .from('messages')
         .update({
@@ -78,20 +41,32 @@ async function updateMediaGroupMessages(
         })
         .eq('media_group_id', mediaGroupId);
     } else {
-      console.log('Updating single message:', {
-        isVideo,
-        hasCaption,
-        hasVideoWithCaption: !!videoWithCaption
-      });
-
-      await supabase
-        .from('messages')
-        .update({
-          analyzed_content: analyzedContent,
-          processing_state: 'completed',
-          processing_completed_at: new Date().toISOString()
-        })
-        .eq('id', messageId);
+      // No caption - find if there's any analyzed content in the group
+      const existingAnalysis = await findMediaGroupAnalysis(supabase, mediaGroupId);
+      
+      if (existingAnalysis) {
+        // Use existing analysis for this message
+        console.log('Using existing group analysis for message:', { messageId });
+        await supabase
+          .from('messages')
+          .update({
+            analyzed_content: existingAnalysis,
+            processing_state: 'completed',
+            processing_completed_at: new Date().toISOString()
+          })
+          .eq('id', messageId);
+      } else {
+        // No existing analysis, just update this message
+        console.log('No group analysis found, updating single message:', { messageId });
+        await supabase
+          .from('messages')
+          .update({
+            analyzed_content: analyzedContent,
+            processing_state: 'completed',
+            processing_completed_at: new Date().toISOString()
+          })
+          .eq('id', messageId);
+      }
     }
   } catch (error) {
     console.error('Error updating media group messages:', error);
