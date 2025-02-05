@@ -1,7 +1,7 @@
 import { TelegramMedia, MediaUploadResult, ProcessedMedia, WebhookResponse } from "./types.ts";
 import { downloadTelegramFile, uploadMedia } from "./mediaUtils.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { findExistingMessage, updateExistingMessage, createNewMessage, triggerCaptionParsing, logWebhookEvent } from "./dbOperations.ts";
+import { findExistingMessage, updateExistingMessage, createNewMessage, triggerCaptionParsing, logWebhookEvent, deleteMediaGroupMessages } from "./dbOperations.ts";
 
 export async function handleTextMessage(
   supabase: ReturnType<typeof createClient>,
@@ -86,29 +86,10 @@ export async function handleMediaMessage(
       const existingMessage = await findExistingMessage(supabase, mediaItem.file_unique_id);
       let messageData;
       let uploadResult: MediaUploadResult | null = null;
-      let shouldReanalyze = false;
 
-      if (existingMessage) {
-        // Log fetch event
-        await logWebhookEvent(supabase, message.message_id, message.chat.id, 'FETCH_COMPLETED', {
-          mediaGroupId: message.media_group_id,
-          correlationId: correlationId,
-          requestPayload: message
-        });
-
-        // Only reanalyze if caption changed or previous analysis failed
-        shouldReanalyze = message.caption && (
-          message.caption !== existingMessage.caption || 
-          existingMessage.processing_state === 'error'
-        );
-
-        console.log("🔄 Duplicate check:", {
-          exists: true,
-          caption_changed: message.caption !== existingMessage.caption,
-          needs_analysis: message.caption ? true : false,
-          had_error: existingMessage.processing_state === 'error',
-          will_reanalyze: shouldReanalyze
-        });
+      // If this is part of a media group and it exists, mark all messages as deleted
+      if (message.media_group_id && existingMessage) {
+        await deleteMediaGroupMessages(supabase, message.media_group_id);
       }
 
       // Get current group count for new messages
@@ -117,23 +98,23 @@ export async function handleMediaMessage(
         const { count } = await supabase
           .from('messages')
           .select('*', { count: 'exact', head: true})
-          .eq('media_group_id', message.media_group_id);
+          .eq('media_group_id', message.media_group_id)
+          .eq('is_deleted', false);
         
         currentGroupCount = (count || 0) + 1;
       }
 
-      if (!existingMessage) {
-        console.log("📥 Downloading new media file");
-        const fileResponse = await downloadTelegramFile(mediaItem.file_id, TELEGRAM_BOT_TOKEN);
-        const fileBuffer = await fileResponse.arrayBuffer();
-        
-        uploadResult = await uploadMedia(supabase, fileBuffer, {
-          fileUniqueId: mediaItem.file_unique_id,
-          mimeType: mediaItem.mime_type,
-          fileSize: mediaItem.file_size,
-        });
-        console.log("✅ New file uploaded successfully");
-      }
+      // Always download and upload for new message
+      console.log("📥 Downloading media file");
+      const fileResponse = await downloadTelegramFile(mediaItem.file_id, TELEGRAM_BOT_TOKEN);
+      const fileBuffer = await fileResponse.arrayBuffer();
+      
+      uploadResult = await uploadMedia(supabase, fileBuffer, {
+        fileUniqueId: mediaItem.file_unique_id,
+        mimeType: mediaItem.mime_type,
+        fileSize: mediaItem.file_size,
+      });
+      console.log("✅ File uploaded successfully");
 
       messageData = {
         telegram_message_id: message.message_id,
@@ -141,16 +122,14 @@ export async function handleMediaMessage(
         caption: message.caption || "",
         file_id: mediaItem.file_id,
         file_unique_id: mediaItem.file_unique_id,
-        public_url: uploadResult?.publicUrl || existingMessage?.public_url,
+        public_url: uploadResult.publicUrl,
         mime_type: mediaItem.mime_type,
         file_size: mediaItem.file_size,
         width: mediaItem.width,
         height: mediaItem.height,
         duration: mediaItem.duration,
         user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
-        processing_state: existingMessage ? 
-          (shouldReanalyze ? 'pending' : existingMessage.processing_state) : 
-          (message.caption ? 'pending' : 'initialized'),
+        processing_state: message.caption ? 'pending' : 'initialized',
         group_message_count: message.media_group_id ? currentGroupCount : null,
         is_original_caption: message.caption ? true : false,
         // Essential Telegram data for syncing
@@ -167,63 +146,20 @@ export async function handleMediaMessage(
         }
       };
 
-      let newMessage;
-      if (existingMessage) {
-        console.log("🔄 Updating existing message:", existingMessage.id);
-        const { data: updatedMessage, error: updateError } = await supabase
-          .from("messages")
-          .update(messageData)
-          .eq("id", existingMessage.id)
-          .select()
-          .single();
-
-        if (updateError) {
-          console.error("❌ Failed to update message:", updateError);
-          throw updateError;
-        }
-        newMessage = updatedMessage;
-      } else {
-        console.log("➕ Creating new message");
-        const { data: createdMessage, error: createError } = await supabase
-          .from("messages")
-          .insert(messageData)
-          .select()
-          .single();
-
-        if (createError) {
-          console.error("❌ Failed to create message:", createError);
-          throw createError;
-        }
-        newMessage = createdMessage;
-      }
+      // Create new message
+      const newMessage = await createNewMessage(supabase, messageData);
 
       if (!newMessage || !newMessage.id) {
-        throw new Error('Failed to get valid message ID after create/update operation');
+        throw new Error('Failed to get valid message ID after create operation');
       }
 
-      await logWebhookEvent(
-        supabase,
-        message.message_id,
-        message.chat.id,
-        existingMessage ? 'FETCH_COMPLETED' : 'MEDIA_DOWNLOAD_COMPLETED',
-        {
-          mediaGroupId: message.media_group_id,
-          correlationId: correlationId,
-          requestPayload: messageData,
-          responsePayload: newMessage,
-          statusCode: 200
-        }
-      );
-
-      // Trigger AI analysis only for messages with captions that need analysis
-      if (message.caption && (!existingMessage || shouldReanalyze)) {
+      // Trigger AI analysis for messages with captions
+      if (message.caption) {
         try {
-          console.log("🤖 Triggering AI analysis for message:", newMessage.id);
           await triggerCaptionParsing(supabase, newMessage.id, message.media_group_id, message.caption);
-          console.log("✅ AI analysis triggered successfully");
         } catch (error) {
-          console.error("❌ Failed to trigger AI analysis:", error);
-          // Don't throw here, we still want to process the message
+          console.error("❌ Failed to trigger caption parsing:", error);
+          // Continue processing despite caption parsing error
         }
       }
 

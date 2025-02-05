@@ -26,48 +26,23 @@ export async function findExistingMessage(
   }
 }
 
-export async function updateExistingMessage(
+export async function deleteMediaGroupMessages(
   supabase: SupabaseClient,
-  messageId: string,
-  updateData: Partial<MessageData>
+  mediaGroupId: string
 ) {
   try {
-    // Validate processing state if it's being updated
-    if (updateData.processing_state) {
-      const validStates: ProcessingState[] = [
-        'initialized',
-        'pending',
-        'processing',
-        'completed',
-        'error'
-      ];
-      if (!validStates.includes(updateData.processing_state)) {
-        throw new Error(`Invalid processing_state: ${updateData.processing_state}`);
-      }
-    }
-
-    const { data: updatedMessage, error } = await supabase
+    console.log("🗑️ Deleting existing media group messages:", mediaGroupId);
+    const { error } = await supabase
       .from("messages")
-      .update({
-        ...updateData,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", messageId)
-      .select()
-      .single();
+      .update({ is_deleted: true })
+      .eq("media_group_id", mediaGroupId);
 
     if (error) {
-      console.error("❌ Failed to update existing message:", error);
+      console.error("❌ Error deleting media group messages:", error);
       throw error;
     }
-
-    if (!updatedMessage) {
-      throw new Error(`No message found with id ${messageId}`);
-    }
-
-    return updatedMessage;
   } catch (error) {
-    console.error("❌ Error in updateExistingMessage:", error);
+    console.error("❌ Error in deleteMediaGroupMessages:", error);
     throw error;
   }
 }
@@ -77,33 +52,15 @@ export async function createNewMessage(
   messageData: MessageData
 ) {
   try {
-    // Validate processing state
-    if (messageData.processing_state) {
-      const validStates: ProcessingState[] = [
-        'initialized',
-        'pending',
-        'processing',
-        'completed',
-        'error'
-      ];
-      if (!validStates.includes(messageData.processing_state)) {
-        throw new Error(`Invalid processing_state: ${messageData.processing_state}`);
-      }
-    }
-
-    const { data: newMessage, error: messageError } = await supabase
+    const { data: newMessage, error } = await supabase
       .from("messages")
-      .insert({
-        ...messageData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+      .insert(messageData)
       .select()
       .single();
 
-    if (messageError) {
-      console.error("❌ Failed to store message:", messageError);
-      throw messageError;
+    if (error) {
+      console.error("❌ Failed to create message:", error);
+      throw error;
     }
 
     return newMessage;
@@ -121,48 +78,18 @@ export async function triggerCaptionParsing(
 ) {
   try {
     console.log("🔄 Triggering caption parsing for message:", messageId);
-    
-    // Update message state to processing
-    await updateExistingMessage(supabase, messageId, {
-      processing_state: 'processing'
-    });
-
-    // Call parse-caption-with-ai edge function
-    const { error } = await supabase.functions.invoke('parse-caption-with-ai', {
-      body: {
-        message_id: messageId,
-        media_group_id: mediaGroupId,
-        caption,
-        correlation_id: crypto.randomUUID()
-      }
+    const { error } = await supabase.rpc('process_message_caption', {
+      p_message_id: messageId,
+      p_media_group_id: mediaGroupId,
+      p_caption: caption
     });
 
     if (error) {
-      console.error("❌ Caption parsing failed:", error);
-      
-      // Update message state to error
-      await updateExistingMessage(supabase, messageId, {
-        processing_state: 'error',
-        error_message: error.message
-      });
-      
+      console.error("❌ Failed to trigger caption parsing:", error);
       throw error;
     }
-
-    console.log("✅ Caption parsing triggered successfully");
   } catch (error) {
-    console.error("❌ Error triggering caption parsing:", error);
-    
-    // Update message state to error if not already done
-    try {
-      await updateExistingMessage(supabase, messageId, {
-        processing_state: 'error',
-        error_message: error.message
-      });
-    } catch (updateError) {
-      console.error("❌ Failed to update error state:", updateError);
-    }
-    
+    console.error("❌ Error in triggerCaptionParsing:", error);
     throw error;
   }
 }
@@ -174,17 +101,18 @@ export async function syncMediaGroupAnalysis(
   originalMessageId: string
 ) {
   try {
-    console.log("🔄 Syncing media group analysis:", { mediaGroupId, originalMessageId });
-    
-    const { error } = await supabase.rpc('process_media_group_analysis', {
-      p_message_id: originalMessageId,
-      p_media_group_id: mediaGroupId,
-      p_analyzed_content: analyzedContent,
-      p_processing_completed_at: new Date().toISOString()
-    });
+    const { error } = await supabase
+      .from('messages')
+      .update({
+        analyzed_content: analyzedContent,
+        processing_state: 'completed',
+        updated_at: new Date().toISOString()
+      })
+      .eq('media_group_id', mediaGroupId)
+      .neq('id', originalMessageId);
 
     if (error) {
-      console.error("❌ Failed to sync media group analysis:", error);
+      console.error("❌ Error syncing media group analysis:", error);
       throw error;
     }
 
@@ -192,50 +120,5 @@ export async function syncMediaGroupAnalysis(
   } catch (error) {
     console.error("❌ Error in syncMediaGroupAnalysis:", error);
     throw error;
-  }
-}
-
-export async function logWebhookEvent(
-  supabase: SupabaseClient,
-  telegramMessageId: number | null,
-  chatId: number | null,
-  eventType: string,
-  options: {
-    requestPayload?: any;
-    responsePayload?: any;
-    statusCode?: number;
-    errorMessage?: string;
-    mediaGroupId?: string;
-    correlationId?: string;
-    processingState?: string;
-  } = {}
-) {
-  try {
-    // For internal events that don't have a telegram message id, use a placeholder
-    const effectiveTelegramMessageId = telegramMessageId || -1;
-    const effectiveChatId = chatId || -1;
-
-    const { data, error } = await supabase.rpc('log_webhook_event', {
-      p_telegram_message_id: effectiveTelegramMessageId,
-      p_chat_id: effectiveChatId,
-      p_event_type: eventType,
-      p_request_payload: options.requestPayload,
-      p_response_payload: options.responsePayload,
-      p_status_code: options.statusCode,
-      p_error_message: options.errorMessage,
-      p_media_group_id: options.mediaGroupId,
-      p_correlation_id: options.correlationId,
-      p_processing_state: options.processingState
-    });
-
-    if (error) {
-      console.error("❌ Failed to log webhook event:", error);
-      // Don't throw here - we don't want webhook logging to break the main flow
-    }
-
-    return data;
-  } catch (error) {
-    console.error("❌ Error in logWebhookEvent:", error);
-    // Don't throw here - we don't want webhook logging to break the main flow
   }
 }
