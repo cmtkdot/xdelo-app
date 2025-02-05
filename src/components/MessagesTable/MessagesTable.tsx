@@ -1,6 +1,5 @@
 
 import { useState } from "react";
-import { MediaItem } from "@/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,17 +7,20 @@ import { Edit2, Save, X, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { Database } from "@/types";
 
-interface MessagesTableProps {
-  messages: MediaItem[];
-}
+type Message = Database['public']['Tables']['messages']['Row'];
 
-interface EditableRow extends MediaItem {
+interface EditableMessage extends Message {
   isEditing?: boolean;
 }
 
+interface MessagesTableProps {
+  messages: Message[];
+}
+
 export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialMessages }) => {
-  const [messages, setMessages] = useState<EditableRow[]>(initialMessages);
+  const [messages, setMessages] = useState<EditableMessage[]>(initialMessages);
   const { toast } = useToast();
 
   const handleEdit = (id: string) => {
@@ -104,7 +106,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     }
   };
 
-  const handleChange = (id: string, field: string, value: string | number) => {
+  const handleChange = (id: string, field: keyof Message, value: string | number) => {
     setMessages(prev =>
       prev.map(message =>
         message.id === id

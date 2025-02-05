@@ -1,9 +1,11 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem } from "@/types";
+import { Database } from "@/types";
 import { MessagesTable } from "@/components/MessagesTable/MessagesTable";
 import { Card } from "@/components/ui/card";
+
+type Message = Database['public']['Tables']['messages']['Row'];
 
 const MediaTable = () => {
   const { data: messages, isLoading } = useQuery({
@@ -15,7 +17,7 @@ const MediaTable = () => {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data as MediaItem[];
+      return data as Message[];
     }
   });
 
