@@ -1,9 +1,10 @@
-import { SupabaseClient, ExistingMessage, ProcessingState, MessageData } from "./types.ts";
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { MessageData, ProcessingState } from "./types.ts";
 
 export async function findExistingMessage(
   supabase: SupabaseClient,
   fileUniqueId: string
-): Promise<ExistingMessage | null> {
+): Promise<any> {
   try {
     const { data, error } = await supabase
       .from("messages")
@@ -29,7 +30,7 @@ export async function findExistingMessage(
 export async function deleteMediaGroupMessages(
   supabase: SupabaseClient,
   mediaGroupId: string
-) {
+): Promise<void> {
   try {
     console.log("🗑️ Deleting existing media group messages:", mediaGroupId);
     const { error } = await supabase
@@ -50,75 +51,83 @@ export async function deleteMediaGroupMessages(
 export async function createNewMessage(
   supabase: SupabaseClient,
   messageData: MessageData
-) {
+): Promise<any> {
   try {
-    const { data: newMessage, error } = await supabase
+    console.log("📝 Creating new message:", messageData.message_id);
+    
+    const { data, error } = await supabase
       .from("messages")
-      .insert(messageData)
+      .insert([{
+        ...messageData,
+        processing_state: ProcessingState.Pending,
+        created_at: new Date().toISOString(),
+      }])
       .select()
       .single();
 
     if (error) {
-      console.error("❌ Failed to create message:", error);
+      console.error("❌ Error creating new message:", error);
       throw error;
     }
 
-    return newMessage;
+    return data;
   } catch (error) {
     console.error("❌ Error in createNewMessage:", error);
     throw error;
   }
 }
 
-export async function triggerCaptionParsing(
+export async function updateExistingMessage(
   supabase: SupabaseClient,
   messageId: string,
-  mediaGroupId: string | undefined,
-  caption: string
-) {
+  updates: Partial<MessageData>
+): Promise<any> {
   try {
-    console.log("🔄 Triggering caption parsing for message:", messageId);
-    const { error } = await supabase.rpc('process_message_caption', {
-      p_message_id: messageId,
-      p_media_group_id: mediaGroupId,
-      p_caption: caption
-    });
+    const { data, error } = await supabase
+      .from("messages")
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", messageId)
+      .select()
+      .single();
 
     if (error) {
-      console.error("❌ Failed to trigger caption parsing:", error);
+      console.error("❌ Error updating message:", error);
       throw error;
     }
+
+    return data;
   } catch (error) {
-    console.error("❌ Error in triggerCaptionParsing:", error);
+    console.error("❌ Error in updateExistingMessage:", error);
     throw error;
   }
 }
 
-export async function syncMediaGroupAnalysis(
+export async function syncMediaGroupCaption(
   supabase: SupabaseClient,
   mediaGroupId: string,
-  analyzedContent: any,
-  originalMessageId: string
-) {
+  caption: string,
+  analyzedContent: any
+): Promise<void> {
   try {
     const { error } = await supabase
-      .from('messages')
+      .from("messages")
       .update({
+        message_caption: caption,
         analyzed_content: analyzedContent,
-        processing_state: 'completed',
-        updated_at: new Date().toISOString()
+        processing_state: ProcessingState.Completed,
+        processing_completed_at: new Date().toISOString()
       })
-      .eq('media_group_id', mediaGroupId)
-      .neq('id', originalMessageId);
+      .eq("media_group_id", mediaGroupId);
 
     if (error) {
-      console.error("❌ Error syncing media group analysis:", error);
+      console.error("❌ Error syncing media group caption:", error);
       throw error;
     }
-
-    console.log("✅ Media group analysis synced successfully");
   } catch (error) {
-    console.error("❌ Error in syncMediaGroupAnalysis:", error);
+    console.error("❌ Error in syncMediaGroupCaption:", error);
     throw error;
   }
 }

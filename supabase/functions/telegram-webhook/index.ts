@@ -34,6 +34,12 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Debug logging
+    console.log("🔍 Debug: Update object structure:", JSON.stringify(update, null, 2));
+    
+    // Disable Glide sync temporarily
+    const ENABLE_GLIDE_SYNC = false;
+    
     let result;
 
     // Handle different types of updates
