@@ -194,3 +194,42 @@ export async function syncMediaGroupAnalysis(
     throw error;
   }
 }
+
+export async function logWebhookEvent(
+  supabase: SupabaseClient,
+  telegramMessageId: number,
+  chatId: number,
+  eventType: string,
+  options: {
+    requestPayload?: any;
+    responsePayload?: any;
+    statusCode?: number;
+    errorMessage?: string;
+    mediaGroupId?: string;
+    correlationId?: string;
+  } = {}
+) {
+  try {
+    const { data, error } = await supabase.rpc('log_webhook_event', {
+      p_telegram_message_id: telegramMessageId,
+      p_chat_id: chatId,
+      p_event_type: eventType,
+      p_request_payload: options.requestPayload,
+      p_response_payload: options.responsePayload,
+      p_status_code: options.statusCode,
+      p_error_message: options.errorMessage,
+      p_media_group_id: options.mediaGroupId,
+      p_correlation_id: options.correlationId
+    });
+
+    if (error) {
+      console.error("❌ Failed to log webhook event:", error);
+      // Don't throw here - we don't want webhook logging to break the main flow
+    }
+
+    return data;
+  } catch (error) {
+    console.error("❌ Error in logWebhookEvent:", error);
+    // Don't throw here - we don't want webhook logging to break the main flow
+  }
+}

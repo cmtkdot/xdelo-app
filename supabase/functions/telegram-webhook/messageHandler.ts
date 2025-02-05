@@ -1,7 +1,7 @@
 import { TelegramMedia, MediaUploadResult, ProcessedMedia, WebhookResponse } from "./types.ts";
 import { downloadTelegramFile, uploadMedia } from "./mediaUtils.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { findExistingMessage, updateExistingMessage, createNewMessage, triggerCaptionParsing } from "./dbOperations.ts";
+import { findExistingMessage, updateExistingMessage, createNewMessage, triggerCaptionParsing, logWebhookEvent } from "./dbOperations.ts";
 
 export async function handleTextMessage(
   supabase: ReturnType<typeof createClient>,
@@ -89,6 +89,13 @@ export async function handleMediaMessage(
       let shouldReanalyze = false;
 
       if (existingMessage) {
+        // Log fetch event
+        await logWebhookEvent(supabase, message.message_id, message.chat.id, 'FETCH_COMPLETED', {
+          mediaGroupId: message.media_group_id,
+          correlationId: correlationId,
+          requestPayload: message
+        });
+
         // Only reanalyze if caption changed or previous analysis failed
         shouldReanalyze = message.caption && (
           message.caption !== existingMessage.caption || 
@@ -98,6 +105,7 @@ export async function handleMediaMessage(
         console.log("🔄 Duplicate check:", {
           exists: true,
           caption_changed: message.caption !== existingMessage.caption,
+          needs_analysis: message.caption ? true : false,
           had_error: existingMessage.processing_state === 'error',
           will_reanalyze: shouldReanalyze
         });
@@ -140,7 +148,9 @@ export async function handleMediaMessage(
         height: mediaItem.height,
         duration: mediaItem.duration,
         user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
-        processing_state: message.caption ? 'pending' : 'initialized',
+        processing_state: existingMessage ? 
+          (shouldReanalyze ? 'pending' : existingMessage.processing_state) : 
+          (message.caption ? 'pending' : 'initialized'),
         group_message_count: message.media_group_id ? currentGroupCount : null,
         is_original_caption: message.caption ? true : false,
         // Essential Telegram data for syncing
@@ -191,27 +201,19 @@ export async function handleMediaMessage(
         throw new Error('Failed to get valid message ID after create/update operation');
       }
 
-      try {
-        const { error: webhookLogError } = await supabase
-          .from("webhook_logs")
-          .insert({
-            message_id: newMessage.id,
-            event_type: existingMessage ? 'MESSAGE_UPDATED' : 'MESSAGE_CREATED',
-            request_payload: messageData,
-            status_code: 200,
-            processing_state: messageData.processing_state,
-            created_at: new Date().toISOString(),
-            analyzed_content_hash: newMessage.analyzed_content ? JSON.stringify(newMessage.analyzed_content) : null
-          });
-
-        if (webhookLogError) {
-          console.error("❌ Failed to create webhook log:", webhookLogError);
-          // Don't throw here as the message was still processed successfully
+      await logWebhookEvent(
+        supabase,
+        message.message_id,
+        message.chat.id,
+        existingMessage ? 'FETCH_COMPLETED' : 'MEDIA_DOWNLOAD_COMPLETED',
+        {
+          mediaGroupId: message.media_group_id,
+          correlationId: correlationId,
+          requestPayload: messageData,
+          responsePayload: newMessage,
+          statusCode: 200
         }
-      } catch (logError) {
-        console.error("❌ Error creating webhook log:", logError);
-        // Don't throw here as the message was still processed successfully
-      }
+      );
 
       // Trigger AI analysis only for messages with captions that need analysis
       if (message.caption && (!existingMessage || shouldReanalyze)) {
