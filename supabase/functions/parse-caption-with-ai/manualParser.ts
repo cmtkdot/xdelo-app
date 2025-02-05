@@ -1,4 +1,4 @@
-import { ParsedContent } from "../types.ts";
+import { ParsedContent } from "./types.ts";
 import { parseQuantity } from "./quantityParser.ts";
 
 export async function manualParse(caption: string): Promise<ParsedContent> {
