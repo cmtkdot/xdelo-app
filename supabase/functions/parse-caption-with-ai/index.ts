@@ -90,34 +90,20 @@ async function updateMediaGroupMessages(
           .eq('id', messageId);
       }
     } else {
-      // Single message - always analyze if has caption
-      console.log('Single message, analyzing:', { messageId, hasCaption });
-      
-      let singleAnalyzedContent;
-      if (hasCaption && caption) {
-        console.log('Analyzing single message caption');
-        singleAnalyzedContent = await analyzeCaption(caption);
-      } else {
-        console.log('Using default content for single message');
-        singleAnalyzedContent = {
-          product_name: 'Untitled Product',
-          parsing_metadata: {
-            method: 'manual',
-            confidence: 0.1,
-            timestamp: new Date().toISOString()
-          }
-        };
+      // For single messages, set count and mark as completed
+      if (!mediaGroupId) {
+        await supabase
+          .from('messages')
+          .update({
+            analyzed_content: analyzedContent,
+            processing_state: 'completed',
+            processing_completed_at: new Date().toISOString(),
+            // Single messages always have count=1
+            group_message_count: 1
+          })
+          .eq('id', messageId);
+        return;
       }
-
-      await supabase
-        .from('messages')
-        .update({
-          analyzed_content: singleAnalyzedContent,
-          processing_state: 'completed',
-          processing_completed_at: new Date().toISOString(),
-          group_message_count: 1
-        })
-        .eq('id', messageId);
     }
   } catch (error) {
     console.error('Error updating messages:', error);
