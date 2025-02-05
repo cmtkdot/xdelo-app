@@ -18,6 +18,7 @@ interface FilterValues {
 }
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -161,7 +162,12 @@ serve(async (req) => {
         mediaGroups: groups,
         totalPages: Math.ceil((count || 0) / ITEMS_PER_PAGE)
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json'
+        } 
+      }
     );
 
   } catch (error) {
@@ -170,7 +176,10 @@ serve(async (req) => {
       JSON.stringify({ error: error.message }),
       { 
         status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json'
+        }
       }
     );
   }
