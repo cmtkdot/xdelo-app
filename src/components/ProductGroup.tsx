@@ -7,6 +7,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MediaViewer } from "./MediaViewer/MediaViewer";
 import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 interface ProductGroupProps {
   group: MediaItem[];
@@ -35,6 +37,38 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
 
   const hasError = mainMedia.processing_state === 'error';
   const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
+  const { toast } = useToast();
+
+  const handleReanalyze = async () => {
+    if (isReanalyzing) return;
+    
+    setIsReanalyzing(true);
+    try {
+      const response = await supabase.functions.invoke('reanalyze-media-group', {
+        body: {
+          media_group_id: mainMedia.media_group_id,
+          message_id: mainMedia.id
+        }
+      });
+
+      if (response.error) throw response.error;
+
+      toast({
+        title: "Success",
+        description: "Content reanalysis started successfully",
+      });
+    } catch (error) {
+      console.error('Reanalysis error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to start reanalysis. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsReanalyzing(false);
+    }
+  };
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden transition-all hover:shadow-md">
@@ -54,15 +88,15 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
                     variant="outline" 
                     size="icon" 
                     className="h-8 w-8 rounded-full bg-white/90 backdrop-blur-sm hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800"
-                    onClick={() => {
-                      // Handle reanalysis here
-                      console.log("Reanalyze clicked for:", mainMedia.id);
-                    }}
+                    onClick={handleReanalyze}
+                    disabled={isReanalyzing}
                   >
-                    <RefreshCw className="h-4 w-4" />
+                    <RefreshCw className={`h-4 w-4 ${isReanalyzing ? 'animate-spin' : ''}`} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent className="px-2 py-1 text-xs">Reanalyze</TooltipContent>
+                <TooltipContent className="px-2 py-1 text-xs">
+                  {isReanalyzing ? 'Reanalyzing...' : 'Reanalyze'}
+                </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
