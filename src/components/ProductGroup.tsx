@@ -1,5 +1,5 @@
 import { MediaItem } from "@/types";
-import { AlertCircle, Pencil, Trash2, Eye } from "lucide-react";
+import { AlertCircle, Pencil, Trash2, Eye, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageSwiper } from "@/components/ui/image-swiper";
 import { Button } from "@/components/ui/button";
@@ -41,13 +41,32 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
       <div className="relative h-64">
         <ImageSwiper media={sortedMedia} />
         
-        {hasError && (
-          <div className="absolute top-2 right-2">
+        <div className="absolute top-2 right-2 flex gap-2">
+          {hasError ? (
             <div className="bg-red-100 p-2 rounded-full">
               <AlertCircle className="h-4 w-4 text-red-600 dark:text-white" />
             </div>
-          </div>
-        )}
+          ) : (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    className="h-8 w-8 rounded-full bg-white/90 backdrop-blur-sm hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800"
+                    onClick={() => {
+                      // Handle reanalysis here
+                      console.log("Reanalyze clicked for:", mainMedia.id);
+                    }}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="px-2 py-1 text-xs">Reanalyze</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
       </div>
       
       <div className="p-3 space-y-2">
