@@ -1,4 +1,3 @@
-
 'use client'
 
 import * as React from 'react'
@@ -110,6 +109,7 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
       {...props}
     >
       <div className="pointer-events-none absolute inset-0 z-10">
+        {/* Navigation buttons */}
         {mediaIndex > 0 && (
           <div className="absolute left-2 top-1/2 -translate-y-1/2">
             <Button
@@ -134,6 +134,16 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
             </Button>
           </div>
         )}
+        {/* Product info at the top */}
+        <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 to-transparent p-4">
+          <h3 className="text-xl font-semibold text-white">
+            {sortedMedia[mediaIndex].analyzed_content?.product_name || 'Untitled Product'}
+          </h3>
+          <p className="text-sm text-gray-300">
+            {new Date(sortedMedia[mediaIndex].created_at).toLocaleDateString()}
+          </p>
+        </div>
+        {/* Page counter */}
         <div className="absolute bottom-2 w-full flex justify-center">
           <div className="flex min-w-7 items-center justify-center rounded-md bg-black/80 px-2 py-0.5 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
             {mediaIndex + 1}/{sortedMedia.length}
@@ -165,13 +175,13 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
           return (
             <motion.div
               key={i}
-              className="h-full w-full shrink-0 overflow-hidden bg-neutral-800 first:rounded-l-[inherit] last:rounded-r-[inherit]"
+              className="relative h-full w-full shrink-0 overflow-hidden bg-neutral-800 first:rounded-l-[inherit] last:rounded-r-[inherit]"
             >
               {isVideo ? (
                 <video
                   ref={el => videoRefs.current[i] = el}
                   src={mediaUrl}
-                  className="h-full w-full object-contain"
+                  className="h-full w-full object-cover"
                   muted
                   loop
                   playsInline
@@ -180,7 +190,7 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
                 <img 
                   src={mediaUrl} 
                   alt={item.analyzed_content?.product_name || 'Product image'}
-                  className="h-full w-full object-contain" 
+                  className="h-full w-full object-cover" 
                 />
               )}
             </motion.div>
