@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
@@ -31,12 +30,11 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('Building query with filters:', filters);
-
     let query = supabase
       .from("messages")
       .select("*", { count: "exact" })
-      .is('is_deleted', false); // Exclude deleted messages
+      .eq('is_original_caption', true)
+      .not('analyzed_content', 'is', null);
 
     // Apply text search filter
     if (filters.search) {
@@ -86,7 +84,7 @@ serve(async (req) => {
     if (dateField === 'purchase_date') {
       query = query.order(`analyzed_content->>${dateField}`, { 
         ascending: sortOrder === "asc",
-        nullsFirst: false
+        nullsFirst: false // This ensures null dates are always last
       });
     } else {
       query = query.order(dateField, { 
@@ -100,53 +98,53 @@ serve(async (req) => {
     const to = from + ITEMS_PER_PAGE - 1;
     query = query.range(from, to);
 
-    console.log('Executing query for messages...');
-    const { data: messages, count, error: messagesError } = await query;
+    console.log('Executing query for original messages...');
+    const { data: originalMessages, count, error: originalMessagesError } = await query;
 
-    if (messagesError) {
-      console.error('Error fetching messages:', messagesError);
-      throw messagesError;
+    if (originalMessagesError) {
+      console.error('Error fetching original messages:', originalMessagesError);
+      throw originalMessagesError;
     }
 
-    console.log(`Found ${messages?.length || 0} messages`);
+    // Get all media group IDs from the original messages
+    const mediaGroupIds = originalMessages
+      ?.map(msg => msg.media_group_id)
+      .filter(Boolean) || [];
 
-    // Initialize groups object
     const groups: Record<string, any[]> = {};
 
-    // Process messages and organize them into groups
-    if (messages) {
-      // First, separate original caption messages
-      const originalCaptionMessages = messages.filter(msg => msg.is_original_caption);
-      const nonOriginalMessages = messages.filter(msg => !msg.is_original_caption);
+    // If we have media groups, fetch all related media
+    if (mediaGroupIds.length > 0) {
+      console.log('Fetching related media for groups:', mediaGroupIds);
+      const { data: allGroupMedia, error: groupMediaError } = await supabase
+        .from("messages")
+        .select("*")
+        .in("media_group_id", mediaGroupIds);
 
-      // Add original caption messages to groups
-      originalCaptionMessages.forEach(msg => {
-        const groupKey = msg.media_group_id || msg.id;
-        groups[groupKey] = [msg];
-      });
+      if (groupMediaError) {
+        console.error('Error fetching group media:', groupMediaError);
+        throw groupMediaError;
+      }
 
-      // Add non-original messages to their respective groups
-      nonOriginalMessages.forEach(msg => {
-        const groupKey = msg.media_group_id || msg.id;
-        if (groups[groupKey]) {
-          groups[groupKey].push(msg);
-        } else {
-          // If we don't have the original caption message, start a new group
-          groups[groupKey] = [msg];
-        }
-      });
-
-      // Sort messages within each group
-      Object.keys(groups).forEach(key => {
-        groups[key].sort((a, b) => {
-          if (a.is_original_caption && !b.is_original_caption) return -1;
-          if (!a.is_original_caption && b.is_original_caption) return 1;
-          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      if (allGroupMedia) {
+        allGroupMedia.forEach((message) => {
+          const groupKey = message.media_group_id || message.id;
+          if (!groups[groupKey]) {
+            groups[groupKey] = [];
+          }
+          groups[groupKey].push(message);
         });
-      });
-    }
 
-    console.log(`Organized into ${Object.keys(groups).length} groups`);
+        // Sort groups internally
+        Object.keys(groups).forEach(key => {
+          groups[key].sort((a, b) => {
+            if (a.is_original_caption && !b.is_original_caption) return -1;
+            if (!a.is_original_caption && b.is_original_caption) return 1;
+            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          });
+        });
+      }
+    }
 
     return new Response(
       JSON.stringify({
