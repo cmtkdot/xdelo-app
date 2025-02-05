@@ -45,11 +45,14 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
     
     setIsReanalyzing(true);
     try {
+      // Get the message with caption for reanalysis
+      const messageToReanalyze = group.find(m => m.caption) || mainMedia;
+      
       const response = await supabase.functions.invoke('reanalyze-low-confidence', {
         body: {
-          message_id: mainMedia.id,
-          media_group_id: mainMedia.media_group_id,
-          caption: mainMedia.caption,
+          message_id: messageToReanalyze.id,
+          media_group_id: messageToReanalyze.media_group_id,
+          caption: messageToReanalyze.caption,
           correlation_id: crypto.randomUUID()
         }
       });
@@ -57,8 +60,8 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
       if (response.error) throw response.error;
 
       toast({
-        title: "Success",
-        description: "Content reanalysis started successfully",
+        title: "Reanalysis Started",
+        description: "Content reanalysis and media group sync initiated",
       });
     } catch (error) {
       console.error('Reanalysis error:', error);
