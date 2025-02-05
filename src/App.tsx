@@ -23,16 +23,16 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: (failureCount, error: any) => {
-        // If we get an auth error, don't retry and redirect to login
         if (error?.status === 401 || error?.message?.includes('Invalid Refresh Token')) {
           return false;
         }
         return failureCount < 3;
       },
-      onError: (error: any) => {
-        // If we get an auth error, redirect to login
-        if (error?.status === 401 || error?.message?.includes('Invalid Refresh Token')) {
-          window.location.href = '/auth';
+      meta: {
+        errorHandler: (error: any) => {
+          if (error?.status === 401 || error?.message?.includes('Invalid Refresh Token')) {
+            window.location.href = '/auth';
+          }
         }
       }
     }

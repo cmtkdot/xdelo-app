@@ -1,11 +1,17 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/types";
 import { MessagesTable } from "@/components/MessagesTable/MessagesTable";
 import { Card } from "@/components/ui/card";
 
-type Message = Database['public']['Tables']['messages']['Row'];
+interface Message {
+  id: string;
+  created_at: string;
+  caption?: string;
+  product_name?: string;
+  vendor_name?: string;
+  product_quantity?: number;
+}
 
 const MediaTable = () => {
   const { data: messages, isLoading } = useQuery({

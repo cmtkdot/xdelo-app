@@ -7,9 +7,15 @@ import { Edit2, Save, X, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { Database } from "@/types";
 
-type Message = Database['public']['Tables']['messages']['Row'];
+interface Message {
+  id: string;
+  created_at: string;
+  caption?: string;
+  product_name?: string;
+  vendor_name?: string;
+  product_quantity?: number;
+}
 
 interface EditableMessage extends Message {
   isEditing?: boolean;
