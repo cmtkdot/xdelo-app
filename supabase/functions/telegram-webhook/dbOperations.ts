@@ -29,18 +29,26 @@ export async function updateExistingMessage(
   updateData: Partial<MessageData>
 ) {
   try {
-    const { error } = await supabase
+    const { data: updatedMessage, error } = await supabase
       .from("messages")
       .update({
         ...updateData,
         updated_at: new Date().toISOString()
       })
-      .eq("id", messageId);
+      .eq("id", messageId)
+      .select()
+      .single();
 
     if (error) {
       console.error("❌ Failed to update existing message:", error);
       throw error;
     }
+
+    if (!updatedMessage) {
+      throw new Error(`No message found with id ${messageId}`);
+    }
+
+    return updatedMessage;
   } catch (error) {
     console.error("❌ Error in updateExistingMessage:", error);
     throw error;

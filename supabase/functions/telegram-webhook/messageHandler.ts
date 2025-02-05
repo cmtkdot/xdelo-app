@@ -152,11 +152,14 @@ export async function handleMediaMessage(
       let newMessage;
       if (existingMessage) {
         console.log("🔄 Updating existing message:", existingMessage.id);
-        await updateExistingMessage(supabase, existingMessage.id, messageData);
-        newMessage = existingMessage;
+        newMessage = await updateExistingMessage(supabase, existingMessage.id, messageData);
       } else {
         console.log("➕ Creating new message");
         newMessage = await createNewMessage(supabase, messageData);
+      }
+
+      if (!newMessage || !newMessage.id) {
+        throw new Error('Failed to get valid message ID after create/update operation');
       }
 
       // Only after message is created/updated, log the webhook event
