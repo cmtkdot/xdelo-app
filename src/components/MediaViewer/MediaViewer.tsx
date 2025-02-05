@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { MediaItem } from '@/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -40,104 +41,84 @@ export const MediaViewer = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-4xl h-[90vh] p-0 dark:bg-transparent">
-        <div className="relative h-full flex flex-col">
-          <DialogHeader className="border-b border-border px-6 py-4 bg-background dark:bg-transparent">
+      <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] h-auto p-0 overflow-y-auto dark:bg-transparent">
+        <div className="relative flex flex-col">
+          <DialogHeader className="border-b border-border px-4 py-2 bg-background dark:bg-transparent">
             <DialogTitle className="text-base font-medium">
               {analyzedContent?.product_name || 'Untitled Product'}
             </DialogTitle>
           </DialogHeader>
           
           <div className="flex-1 min-h-0 bg-black/90">
-            <ImageSwiper media={currentGroup} />
+            <div className="aspect-video w-full">
+              <ImageSwiper media={currentGroup} />
+            </div>
           </div>
 
-          <div className="p-6 bg-background dark:bg-transparent border-t space-y-4">
+          <div className="p-4 bg-background dark:bg-transparent border-t space-y-3">
             {/* Caption section */}
             {(analyzedContent?.quantity || mainMedia.caption) && (
-              <div className="border-b border-border pb-4">
+              <div className="border-b border-border pb-3">
                 <p className="text-sm text-muted-foreground font-medium mb-1">Caption</p>
-                <p className="text-foreground">{analyzedContent?.quantity || mainMedia.caption}</p>
+                <p className="text-foreground text-sm">{analyzedContent?.quantity || mainMedia.caption}</p>
               </div>
             )}
 
             {/* Two column grid for other information */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
               {analyzedContent?.product_code && (
                 <div>
-                  <p className="text-sm text-muted-foreground font-medium">PO Number</p>
+                  <p className="text-xs text-muted-foreground font-medium">PO Number</p>
                   <p className="text-foreground">PO#{analyzedContent.product_code}</p>
                 </div>
               )}
               {analyzedContent?.vendor_uid && (
                 <div>
-                  <p className="text-sm text-muted-foreground font-medium">Vendor</p>
+                  <p className="text-xs text-muted-foreground font-medium">Vendor</p>
                   <p className="text-foreground">{analyzedContent.vendor_uid}</p>
                 </div>
               )}
               {analyzedContent?.purchase_date && (
                 <div>
-                  <p className="text-sm text-muted-foreground font-medium">Purchase Date</p>
+                  <p className="text-xs text-muted-foreground font-medium">Purchase Date</p>
                   <p className="text-foreground">{formatDate(analyzedContent.purchase_date)}</p>
                 </div>
               )}
               {mainMedia.created_at && (
                 <div>
-                  <p className="text-sm text-muted-foreground font-medium">Created</p>
+                  <p className="text-xs text-muted-foreground font-medium">Created</p>
                   <p className="text-foreground">{formatDate(mainMedia.created_at)}</p>
-                </div>
-              )}
-              {mainMedia.updated_at && (
-                <div>
-                  <p className="text-sm text-muted-foreground font-medium">Updated</p>
-                  <p className="text-foreground">{formatDate(mainMedia.updated_at)}</p>
-                </div>
-              )}
-              {mainMedia.processing_state && (
-                <div>
-                  <p className="text-sm text-muted-foreground font-medium">Processing State</p>
-                  <p className="text-foreground capitalize">{mainMedia.processing_state}</p>
-                </div>
-              )}
-              {mainMedia.media_group_id && (
-                <div>
-                  <p className="text-sm text-muted-foreground font-medium">Media Group ID</p>
-                  <p className="text-foreground">{mainMedia.media_group_id}</p>
-                </div>
-              )}
-              {mainMedia.group_message_count && (
-                <div>
-                  <p className="text-sm text-muted-foreground font-medium">Group Size</p>
-                  <p className="text-foreground">{mainMedia.group_message_count}</p>
                 </div>
               )}
             </div>
 
             {analyzedContent?.notes && (
-              <div className="border-t border-border pt-4">
+              <div className="pt-3 border-t border-border">
                 <p className="text-sm text-muted-foreground font-medium mb-1">Notes</p>
-                <p className="text-foreground">{analyzedContent.notes}</p>
+                <p className="text-foreground text-sm">{analyzedContent.notes}</p>
               </div>
             )}
 
-            <div className="flex justify-between pt-4 border-t border-border">
+            <div className="flex justify-between pt-3 border-t border-border">
               <Button
                 variant="outline"
                 onClick={onPrevious}
                 disabled={!hasPrevious}
+                size="sm"
                 className="bg-secondary hover:bg-secondary/80"
               >
-                <ChevronLeft className="w-4 h-4 mr-2" />
+                <ChevronLeft className="w-4 h-4 mr-1" />
                 Previous
               </Button>
               <Button
                 variant="outline"
                 onClick={onNext}
                 disabled={!hasNext}
+                size="sm"
                 className="bg-secondary hover:bg-secondary/80"
               >
                 Next
-                <ChevronRight className="w-4 h-4 ml-2" />
+                <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
           </div>
