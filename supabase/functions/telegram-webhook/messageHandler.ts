@@ -89,16 +89,15 @@ export async function handleMediaMessage(
       let shouldReanalyze = false;
 
       if (existingMessage) {
-        shouldReanalyze = (
+        // Only reanalyze if caption changed or previous analysis failed
+        shouldReanalyze = message.caption && (
           message.caption !== existingMessage.caption || 
-          !existingMessage.analyzed_content || 
           existingMessage.processing_state === 'error'
         );
 
         console.log("🔄 Duplicate check:", {
           exists: true,
           caption_changed: message.caption !== existingMessage.caption,
-          needs_analysis: !existingMessage.analyzed_content,
           had_error: existingMessage.processing_state === 'error',
           will_reanalyze: shouldReanalyze
         });
@@ -109,7 +108,7 @@ export async function handleMediaMessage(
       if (message.media_group_id) {
         const { count } = await supabase
           .from('messages')
-          .select('*', { count: 'exact', head: true })
+          .select('*', { count: 'exact', head: true})
           .eq('media_group_id', message.media_group_id);
         
         currentGroupCount = (count || 0) + 1;
@@ -141,12 +140,21 @@ export async function handleMediaMessage(
         height: mediaItem.height,
         duration: mediaItem.duration,
         user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
-        telegram_data: { message },
         processing_state: message.caption ? 'pending' : 'initialized',
-        group_first_message_time: message.media_group_id ? new Date().toISOString() : null,
-        group_last_message_time: message.media_group_id ? new Date().toISOString() : null,
         group_message_count: message.media_group_id ? currentGroupCount : null,
-        is_original_caption: message.caption ? true : false
+        is_original_caption: message.caption ? true : false,
+        // Essential Telegram data for syncing
+        telegram_data: {
+          chat_id: message.chat.id,
+          chat_type: message.chat.type,
+          message_id: message.message_id,
+          from_id: message.from?.id,
+          date: message.date,
+          edit_date: message.edit_date,
+          forward_from_chat: message.forward_from_chat,
+          forward_from_message_id: message.forward_from_message_id,
+          media_group_id: message.media_group_id
+        }
       };
 
       let newMessage;
@@ -162,31 +170,15 @@ export async function handleMediaMessage(
         throw new Error('Failed to get valid message ID after create/update operation');
       }
 
-      // Only after message is created/updated, log the webhook event
-      try {
-        const { error: webhookLogError } = await supabase.from("webhook_logs").insert({
-          message_id: newMessage.id,
-          event_type: existingMessage ? 'MESSAGE_UPDATED' : 'MESSAGE_CREATED',
-          request_payload: messageData,
-          status_code: 200,
-          processing_state: messageData.processing_state
-        });
-
-        if (webhookLogError) {
-          console.error("❌ Failed to create webhook log:", webhookLogError);
-        }
-      } catch (logError) {
-        console.error("❌ Error creating webhook log:", logError);
-      }
-
       // Trigger AI analysis only for messages with captions that need analysis
-      if ((message.caption && !existingMessage) || shouldReanalyze) {
+      if (message.caption && (!existingMessage || shouldReanalyze)) {
         try {
           console.log("🤖 Triggering AI analysis for message:", newMessage.id);
           await triggerCaptionParsing(supabase, newMessage.id, message.media_group_id, message.caption);
           console.log("✅ AI analysis triggered successfully");
         } catch (error) {
           console.error("❌ Failed to trigger AI analysis:", error);
+          // Don't throw here, we still want to process the message
         }
       }
 
@@ -237,6 +229,99 @@ export async function handleChatMemberUpdate(
     };
   } catch (error) {
     console.error("❌ Error in handleChatMemberUpdate:", error);
+    throw error;
+  }
+}
+
+export async function handleMessageEdit(
+  supabase: ReturnType<typeof createClient>,
+  message: any
+): Promise<WebhookResponse> {
+  try {
+    console.log("✏️ Processing message edit:", {
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      edit_date: message.edit_date
+    });
+
+    // Find all messages with this telegram_message_id and chat_id
+    const { data: existingMessages } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("telegram_message_id", message.message_id)
+      .eq("telegram_data->chat_id", message.chat.id);
+
+    if (!existingMessages?.length) {
+      console.log("⚠️ No matching messages found for edit");
+      return { message: "No messages found to edit" };
+    }
+
+    for (const existingMessage of existingMessages) {
+      // Update caption and trigger reanalysis if needed
+      if (message.caption !== existingMessage.caption) {
+        await updateExistingMessage(supabase, existingMessage.id, {
+          caption: message.caption || "",
+          processing_state: message.caption ? 'pending' : 'initialized',
+          telegram_data: {
+            ...existingMessage.telegram_data,
+            edit_date: message.edit_date
+          }
+        });
+
+        if (message.caption) {
+          await triggerCaptionParsing(supabase, existingMessage.id, existingMessage.media_group_id, message.caption);
+        }
+      }
+    }
+
+    return {
+      message: "Successfully processed message edit",
+    };
+  } catch (error) {
+    console.error("❌ Error in handleMessageEdit:", error);
+    throw error;
+  }
+}
+
+export async function handleMessageDelete(
+  supabase: ReturnType<typeof createClient>,
+  message: any
+): Promise<WebhookResponse> {
+  try {
+    console.log("🗑️ Processing message delete:", {
+      message_id: message.message_id,
+      chat_id: message.chat.id
+    });
+
+    // Find all messages with this telegram_message_id and chat_id
+    const { data: existingMessages } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("telegram_message_id", message.message_id)
+      .eq("telegram_data->chat_id", message.chat.id);
+
+    if (!existingMessages?.length) {
+      console.log("⚠️ No matching messages found for deletion");
+      return { message: "No messages found to delete" };
+    }
+
+    // Mark messages as deleted instead of actually deleting them
+    for (const existingMessage of existingMessages) {
+      await updateExistingMessage(supabase, existingMessage.id, {
+        is_deleted: true,
+        deleted_at: new Date().toISOString(),
+        telegram_data: {
+          ...existingMessage.telegram_data,
+          deleted_at: new Date().toISOString()
+        }
+      });
+    }
+
+    return {
+      message: "Successfully processed message deletion",
+    };
+  } catch (error) {
+    console.error("❌ Error in handleMessageDelete:", error);
     throw error;
   }
 }
