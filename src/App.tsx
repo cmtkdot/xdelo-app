@@ -17,26 +17,50 @@ import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client";
 import { ThemeProvider } from "./components/Theme/ThemeProvider";
 import { Session } from "@supabase/supabase-js";
+import { useNavigate } from "react-router-dom";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error: any) => {
+        // If we get an auth error, don't retry and redirect to login
+        if (error?.status === 401 || error?.message?.includes('Invalid Refresh Token')) {
+          return false;
+        }
+        return failureCount < 3;
+      },
+      onError: (error: any) => {
+        // If we get an auth error, redirect to login
+        if (error?.status === 401 || error?.message?.includes('Invalid Refresh Token')) {
+          window.location.href = '/auth';
+        }
+      }
+    }
+  }
+});
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
+      if (!session) {
+        navigate('/auth');
+      }
     });
 
     // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (_event === 'SIGNED_OUT') {
+      if (_event === 'SIGNED_OUT' || _event === 'TOKEN_REFRESHED' && !session) {
         setSession(null);
+        navigate('/auth');
       } else {
         setSession(session);
       }
@@ -46,7 +70,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [navigate]);
 
   // Show loading state
   if (loading) {
@@ -57,9 +81,9 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     );
   }
 
-  // If no session, redirect to auth page
+  // If no session, this will trigger a redirect in the useEffect
   if (!session) {
-    return <Navigate to="/auth" replace />;
+    return null;
   }
 
   return children;
