@@ -3,11 +3,6 @@ import { downloadTelegramFile, uploadMedia } from "./mediaUtils.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { findExistingMessage, updateExistingMessage, createNewMessage, triggerCaptionParsing } from "./dbOperations.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
 export async function handleTextMessage(
   supabase: ReturnType<typeof createClient>,
   message: any
@@ -87,6 +82,7 @@ export async function handleMediaMessage(
         mime_type: mediaItem.mime_type
       });
 
+      // First check if message exists to avoid foreign key constraint issues
       const existingMessage = await findExistingMessage(supabase, mediaItem.file_unique_id);
       let messageData;
       let uploadResult: MediaUploadResult | null = null;
@@ -108,6 +104,17 @@ export async function handleMediaMessage(
         });
       }
 
+      // Get current group count for new messages
+      let currentGroupCount = 1;
+      if (message.media_group_id) {
+        const { count } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('media_group_id', message.media_group_id);
+        
+        currentGroupCount = (count || 0) + 1;
+      }
+
       if (!existingMessage) {
         console.log("📥 Downloading new media file");
         const fileResponse = await downloadTelegramFile(mediaItem.file_id, TELEGRAM_BOT_TOKEN);
@@ -119,17 +126,6 @@ export async function handleMediaMessage(
           fileSize: mediaItem.file_size,
         });
         console.log("✅ New file uploaded successfully");
-      }
-
-      // Get current group count for new messages
-      let currentGroupCount = 1;
-      if (message.media_group_id) {
-        const { count } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('media_group_id', message.media_group_id);
-        
-        currentGroupCount = (count || 0) + 1;
       }
 
       messageData = {
@@ -163,6 +159,23 @@ export async function handleMediaMessage(
         newMessage = await createNewMessage(supabase, messageData);
       }
 
+      // Only after message is created/updated, log the webhook event
+      try {
+        const { error: webhookLogError } = await supabase.from("webhook_logs").insert({
+          message_id: newMessage.id,
+          event_type: existingMessage ? 'MESSAGE_UPDATED' : 'MESSAGE_CREATED',
+          request_payload: messageData,
+          status_code: 200,
+          processing_state: messageData.processing_state
+        });
+
+        if (webhookLogError) {
+          console.error("❌ Failed to create webhook log:", webhookLogError);
+        }
+      } catch (logError) {
+        console.error("❌ Error creating webhook log:", logError);
+      }
+
       // Trigger AI analysis only for messages with captions that need analysis
       if ((message.caption && !existingMessage) || shouldReanalyze) {
         try {
@@ -171,7 +184,6 @@ export async function handleMediaMessage(
           console.log("✅ AI analysis triggered successfully");
         } catch (error) {
           console.error("❌ Failed to trigger AI analysis:", error);
-          // Continue processing other items even if analysis fails
         }
       }
 
