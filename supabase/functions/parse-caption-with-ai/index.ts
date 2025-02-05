@@ -37,6 +37,7 @@ async function updateMediaGroupMessages(
   supabase: any,
   mediaGroupId: string | null,
   messageId: string,
+  caption: string | null,
   analyzedContent: any,
   hasCaption: boolean
 ) {
@@ -89,11 +90,16 @@ async function updateMediaGroupMessages(
           .eq('id', messageId);
       }
     } else {
-      // Single message - always analyze and update
-      console.log('Single message, analyzing and updating:', { messageId });
-      const singleAnalyzedContent = hasCaption ? 
-        await analyzeCaption(caption) : 
-        {
+      // Single message - always analyze if has caption
+      console.log('Single message, analyzing:', { messageId, hasCaption });
+      
+      let singleAnalyzedContent;
+      if (hasCaption && caption) {
+        console.log('Analyzing single message caption');
+        singleAnalyzedContent = await analyzeCaption(caption);
+      } else {
+        console.log('Using default content for single message');
+        singleAnalyzedContent = {
           product_name: 'Untitled Product',
           parsing_metadata: {
             method: 'manual',
@@ -101,13 +107,15 @@ async function updateMediaGroupMessages(
             timestamp: new Date().toISOString()
           }
         };
+      }
 
       await supabase
         .from('messages')
         .update({
           analyzed_content: singleAnalyzedContent,
           processing_state: 'completed',
-          processing_completed_at: new Date().toISOString()
+          processing_completed_at: new Date().toISOString(),
+          group_message_count: 1
         })
         .eq('id', messageId);
     }
@@ -161,7 +169,7 @@ serve(async (req) => {
     }
 
     // Update messages
-    await updateMediaGroupMessages(supabase, media_group_id, message_id, analyzedContent, hasCaption);
+    await updateMediaGroupMessages(supabase, media_group_id, message_id, textToAnalyze, analyzedContent, hasCaption);
 
     return new Response(
       JSON.stringify({

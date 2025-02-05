@@ -161,7 +161,7 @@ export async function handleMediaMessage(
         processing_completed_at: shouldReanalyze ? null : new Date().toISOString(),
         group_first_message_time: message.media_group_id ? new Date().toISOString() : null,
         group_last_message_time: message.media_group_id ? new Date().toISOString() : null,
-        group_message_count: message.media_group_id ? currentGroupCount : null,
+        // Don't set group_message_count here, let resync handle it
         is_original_caption: message.caption ? true : false,
         // Only preserve analyzed content if not reanalyzing
         analyzed_content: existingMessage && !shouldReanalyze ? existingMessage.analyzed_content : null
