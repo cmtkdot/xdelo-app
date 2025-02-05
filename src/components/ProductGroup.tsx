@@ -13,17 +13,21 @@ import { MediaViewer } from "./MediaViewer/MediaViewer";
 
 interface ProductGroupProps {
   group: MediaItem[];
-  onEdit: (media: MediaItem) => void;
-  onDelete: (media: MediaItem) => void;
-  onView: () => void;
+  onEdit: (item: MediaItem) => void;
+  onPrevious?: () => void;
+  onNext?: () => void;
+  hasPrevious?: boolean;
+  hasNext?: boolean;
 }
 
-export const ProductGroup: React.FC<ProductGroupProps> = ({
-  group,
+export const ProductGroup = ({ 
+  group, 
   onEdit,
-  onDelete,
-  onView
-}) => {
+  onPrevious,
+  onNext,
+  hasPrevious,
+  hasNext 
+}: ProductGroupProps) => {
   // Find the main media item (original caption or first analyzed item)
   const mainMedia = group.find(media => media.is_original_caption) || 
                    group.find(media => media.analyzed_content) || 
@@ -179,6 +183,16 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
             </div>
           </div>
         )}
+
+        {/* Core product info overlaid on image bottom */}
+        <div className="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm p-3 text-white">
+          <h3 className="text-base md:text-lg font-semibold mb-1">
+            {analyzedContent?.product_name || 'Untitled Product'}
+          </h3>
+          <div className="text-sm opacity-90">
+            {formatDate(analyzedContent?.purchase_date)}
+          </div>
+        </div>
       </div>
       
       <div className="p-3 space-y-2">
@@ -206,18 +220,15 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
           </Alert>
         )}
         
-        <div className="flex justify-between pt-1">
+        <div className="flex justify-center gap-2 pt-1">
           <Tabs defaultValue="edit" className="w-full max-w-xs">
-            <TabsList className="grid grid-cols-3 gap-2">
+            <TabsList className="grid grid-cols-4 gap-2">
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <TabsTrigger 
                       value="view" 
-                      onClick={() => {
-                        onView();
-                        setIsViewerOpen(true);
-                      }}
+                      onClick={() => setIsViewerOpen(true)} 
                       className="py-2 text-black hover:text-black/80"
                     >
                       <Eye className="w-4 h-4 text-black dark:text-white" />
@@ -246,8 +257,23 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <TabsTrigger 
+                      value="reanalyze" 
+                      onClick={handleReanalyze} 
+                      className="py-2 text-black hover:text-black/80"
+                    >
+                      <RotateCw className="w-4 h-4 text-black dark:text-white" />
+                    </TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent className="px-2 py-1 text-xs">Reanalyze</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger 
                       value="delete" 
-                      onClick={() => onDelete(mainMedia)} 
+                      onClick={handleDelete} 
                       className="py-2 text-destructive hover:text-destructive/80"
                     >
                       <Trash2 className="w-4 h-4 text-destructive dark:text-white" />
@@ -265,6 +291,10 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
         isOpen={isViewerOpen}
         onClose={() => setIsViewerOpen(false)}
         currentGroup={sortedMedia}
+        onPrevious={onPrevious}
+        onNext={onNext}
+        hasPrevious={hasPrevious}
+        hasNext={hasNext}
       />
     </div>
   );

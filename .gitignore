@@ -24,4 +24,3 @@ dist-ssr
 *.sw?
 .windsurfrules
 package-lock.json
-supabase/.temp/cli-latest

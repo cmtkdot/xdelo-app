@@ -1,222 +1,202 @@
 
 import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Edit2, Save, X, Trash2 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
-import { Database } from "@/types";
+import { Input } from "@/components/ui/input";
+import { EditableRow, MessagesTableProps } from "./types";
+import { Pencil, Trash2, X, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
-type Message = Database['public']['Tables']['messages']['Row'];
-
-interface EditableMessage extends Message {
-  isEditing?: boolean;
-}
-
-interface MessagesTableProps {
-  messages: Message[];
-}
-
-export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialMessages }) => {
-  const [messages, setMessages] = useState<EditableMessage[]>(initialMessages);
-  const { toast } = useToast();
+export const MessagesTable = ({ data, isLoading, onUpdate, onDelete }: MessagesTableProps) => {
+  const [editableRows, setEditableRows] = useState<Record<string, EditableRow>>({});
 
   const handleEdit = (id: string) => {
-    setMessages(prev =>
-      prev.map(message =>
-        message.id === id
-          ? { ...message, isEditing: true }
-          : message
-      )
-    );
+    const row = data.find((item) => item.id === id);
+    if (row) {
+      setEditableRows((prev) => ({
+        ...prev,
+        [id]: {
+          ...row,
+          isEditing: true,
+        },
+      }));
+    }
   };
 
-  const handleCancel = (id: string) => {
-    setMessages(prev =>
-      prev.map(message =>
-        message.id === id
-          ? { ...initialMessages.find(m => m.id === id)!, isEditing: false }
-          : message
-      )
-    );
+  const handleCancelEdit = (id: string) => {
+    setEditableRows((prev) => {
+      const newState = { ...prev };
+      delete newState[id];
+      return newState;
+    });
   };
 
   const handleSave = async (id: string) => {
-    const message = messages.find(m => m.id === id);
-    if (!message) return;
+    const editedRow = editableRows[id];
+    if (!editedRow) return;
 
     try {
-      const { error } = await supabase
-        .from('messages')
-        .update({
-          caption: message.caption,
-          product_name: message.product_name,
-          vendor_name: message.vendor_name,
-          product_quantity: message.product_quantity,
-        })
-        .eq('id', id);
+      const updatedData = {
+        caption: editedRow.caption,
+        analyzed_content: {
+          ...(editedRow.analyzed_content || {}),
+          product_name: editedRow.analyzed_content?.product_name,
+          vendor_uid: editedRow.analyzed_content?.vendor_uid,
+          quantity: editedRow.analyzed_content?.quantity,
+        }
+      };
 
-      if (error) throw error;
-
-      setMessages(prev =>
-        prev.map(m =>
-          m.id === id
-            ? { ...m, isEditing: false }
-            : m
-        )
-      );
-
-      toast({
-        title: "Success",
-        description: "Message updated successfully",
+      await onUpdate(id, updatedData);
+      setEditableRows((prev) => {
+        const newState = { ...prev };
+        delete newState[id];
+        return newState;
       });
+      toast.success("Row updated successfully");
     } catch (error) {
-      console.error('Error updating message:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update message",
-        variant: "destructive",
-      });
+      toast.error("Failed to update row");
     }
   };
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('messages')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      setMessages(prev => prev.filter(m => m.id !== id));
-      toast({
-        title: "Success",
-        description: "Message deleted successfully",
-      });
+      await onDelete(id);
+      toast.success("Row deleted successfully");
     } catch (error) {
-      console.error('Error deleting message:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete message",
-        variant: "destructive",
-      });
+      toast.error("Failed to delete row");
     }
   };
 
-  const handleChange = (id: string, field: keyof Message, value: string | number) => {
-    setMessages(prev =>
-      prev.map(message =>
-        message.id === id
-          ? { ...message, [field]: value }
-          : message
-      )
-    );
+  const handleInputChange = (id: string, field: string, value: string) => {
+    setEditableRows((prev) => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        analyzed_content: {
+          ...prev[id].analyzed_content,
+          [field]: value,
+        },
+      },
+    }));
   };
+
+  const handleCaptionChange = (id: string, value: string) => {
+    setEditableRows((prev) => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        caption: value,
+      },
+    }));
+  };
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="rounded-md border">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Created At</TableHead>
             <TableHead>Caption</TableHead>
             <TableHead>Product Name</TableHead>
             <TableHead>Vendor</TableHead>
             <TableHead>Quantity</TableHead>
-            <TableHead className="w-[100px]">Actions</TableHead>
+            <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {messages.map((message) => (
-            <TableRow key={message.id}>
-              <TableCell>
-                {message.created_at ? format(new Date(message.created_at), 'MM/dd/yyyy HH:mm') : '-'}
-              </TableCell>
-              <TableCell>
-                {message.isEditing ? (
-                  <Input
-                    value={message.caption || ''}
-                    onChange={(e) => handleChange(message.id, 'caption', e.target.value)}
-                  />
-                ) : (
-                  message.caption || '-'
-                )}
-              </TableCell>
-              <TableCell>
-                {message.isEditing ? (
-                  <Input
-                    value={message.product_name || ''}
-                    onChange={(e) => handleChange(message.id, 'product_name', e.target.value)}
-                  />
-                ) : (
-                  message.product_name || '-'
-                )}
-              </TableCell>
-              <TableCell>
-                {message.isEditing ? (
-                  <Input
-                    value={message.vendor_name || ''}
-                    onChange={(e) => handleChange(message.id, 'vendor_name', e.target.value)}
-                  />
-                ) : (
-                  message.vendor_name || '-'
-                )}
-              </TableCell>
-              <TableCell>
-                {message.isEditing ? (
-                  <Input
-                    type="number"
-                    value={message.product_quantity || ''}
-                    onChange={(e) => handleChange(message.id, 'product_quantity', parseFloat(e.target.value))}
-                  />
-                ) : (
-                  message.product_quantity || '-'
-                )}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-2">
-                  {message.isEditing ? (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleSave(message.id)}
-                      >
-                        <Save className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleCancel(message.id)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </>
+          {data.map((row) => {
+            const isEditing = editableRows[row.id]?.isEditing;
+
+            return (
+              <TableRow key={row.id}>
+                <TableCell className="max-w-[300px]">
+                  {isEditing ? (
+                    <Input
+                      value={editableRows[row.id]?.caption || ""}
+                      onChange={(e) => handleCaptionChange(row.id, e.target.value)}
+                    />
                   ) : (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEdit(message.id)}
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(message.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </>
+                    <span className="line-clamp-2">{row.caption}</span>
                   )}
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
+                </TableCell>
+                <TableCell>
+                  {isEditing ? (
+                    <Input
+                      value={editableRows[row.id]?.analyzed_content?.product_name || ""}
+                      onChange={(e) => handleInputChange(row.id, "product_name", e.target.value)}
+                    />
+                  ) : (
+                    row.analyzed_content?.product_name
+                  )}
+                </TableCell>
+                <TableCell>
+                  {isEditing ? (
+                    <Input
+                      value={editableRows[row.id]?.analyzed_content?.vendor_uid || ""}
+                      onChange={(e) => handleInputChange(row.id, "vendor_uid", e.target.value)}
+                    />
+                  ) : (
+                    row.analyzed_content?.vendor_uid
+                  )}
+                </TableCell>
+                <TableCell>
+                  {isEditing ? (
+                    <Input
+                      value={editableRows[row.id]?.analyzed_content?.quantity?.toString() || ""}
+                      onChange={(e) => handleInputChange(row.id, "quantity", e.target.value)}
+                      type="number"
+                    />
+                  ) : (
+                    row.analyzed_content?.quantity
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-2">
+                    {isEditing ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleSave(row.id)}
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleCancelEdit(row.id)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEdit(row.id)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(row.id)}
+                          className={cn("text-destructive")}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
