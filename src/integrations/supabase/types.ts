@@ -626,11 +626,14 @@ export type Database = {
       }
       messages: {
         Row: {
+          analyzed_at: string | null
           analyzed_content: Json | null
           caption: string | null
           chat_id: number | null
           chat_type: string | null
+          confidence_score: number | null
           created_at: string | null
+          deleted_at: string | null
           duration: number | null
           error_message: string | null
           file_id: string | null
@@ -643,6 +646,7 @@ export type Database = {
           group_message_count: number | null
           height: number | null
           id: string
+          is_deleted: boolean | null
           is_original_caption: boolean | null
           last_error_at: string | null
           media_group_id: string | null
@@ -653,6 +657,9 @@ export type Database = {
           processing_state:
             | Database["public"]["Enums"]["message_processing_state"]
             | null
+          product_name: string | null
+          product_quantity: number | null
+          product_unit: string | null
           public_url: string | null
           purchase_order_uid: string | null
           retry_count: number | null
@@ -662,14 +669,18 @@ export type Database = {
           telegram_message_id: number | null
           updated_at: string | null
           user_id: string | null
+          vendor_name: string | null
           width: number | null
         }
         Insert: {
+          analyzed_at?: string | null
           analyzed_content?: Json | null
           caption?: string | null
           chat_id?: number | null
           chat_type?: string | null
+          confidence_score?: number | null
           created_at?: string | null
+          deleted_at?: string | null
           duration?: number | null
           error_message?: string | null
           file_id?: string | null
@@ -682,6 +693,7 @@ export type Database = {
           group_message_count?: number | null
           height?: number | null
           id?: string
+          is_deleted?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
           media_group_id?: string | null
@@ -692,6 +704,9 @@ export type Database = {
           processing_state?:
             | Database["public"]["Enums"]["message_processing_state"]
             | null
+          product_name?: string | null
+          product_quantity?: number | null
+          product_unit?: string | null
           public_url?: string | null
           purchase_order_uid?: string | null
           retry_count?: number | null
@@ -701,14 +716,18 @@ export type Database = {
           telegram_message_id?: number | null
           updated_at?: string | null
           user_id?: string | null
+          vendor_name?: string | null
           width?: number | null
         }
         Update: {
+          analyzed_at?: string | null
           analyzed_content?: Json | null
           caption?: string | null
           chat_id?: number | null
           chat_type?: string | null
+          confidence_score?: number | null
           created_at?: string | null
+          deleted_at?: string | null
           duration?: number | null
           error_message?: string | null
           file_id?: string | null
@@ -721,6 +740,7 @@ export type Database = {
           group_message_count?: number | null
           height?: number | null
           id?: string
+          is_deleted?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
           media_group_id?: string | null
@@ -731,6 +751,9 @@ export type Database = {
           processing_state?:
             | Database["public"]["Enums"]["message_processing_state"]
             | null
+          product_name?: string | null
+          product_quantity?: number | null
+          product_unit?: string | null
           public_url?: string | null
           purchase_order_uid?: string | null
           retry_count?: number | null
@@ -740,6 +763,7 @@ export type Database = {
           telegram_message_id?: number | null
           updated_at?: string | null
           user_id?: string | null
+          vendor_name?: string | null
           width?: number | null
         }
         Relationships: [
@@ -827,60 +851,54 @@ export type Database = {
       }
       webhook_logs: {
         Row: {
-          analyzed_content_hash: string | null
+          chat_id: number
+          correlation_id: string | null
           created_at: string | null
           error_message: string | null
           event_type: string
           id: string
+          media_group_id: string | null
           message_id: string | null
           processing_state: string | null
           request_payload: Json | null
           response_payload: Json | null
           status_code: number | null
+          telegram_message_id: number
           trigger_event: string | null
         }
         Insert: {
-          analyzed_content_hash?: string | null
+          chat_id: number
+          correlation_id?: string | null
           created_at?: string | null
           error_message?: string | null
           event_type: string
           id?: string
+          media_group_id?: string | null
           message_id?: string | null
           processing_state?: string | null
           request_payload?: Json | null
           response_payload?: Json | null
           status_code?: number | null
+          telegram_message_id: number
           trigger_event?: string | null
         }
         Update: {
-          analyzed_content_hash?: string | null
+          chat_id?: number
+          correlation_id?: string | null
           created_at?: string | null
           error_message?: string | null
           event_type?: string
           id?: string
+          media_group_id?: string | null
           message_id?: string | null
           processing_state?: string | null
           request_payload?: Json | null
           response_payload?: Json | null
           status_code?: number | null
+          telegram_message_id?: number
           trigger_event?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "webhook_logs_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "webhook_logs_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages_parsed"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
@@ -959,6 +977,14 @@ export type Database = {
         }
         Returns: string
       }
+      cleanup_old_logs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      cleanup_old_webhook_logs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       compute_data_hash: {
         Args: {
           data: Json
@@ -970,6 +996,42 @@ export type Database = {
           p_media_group_id: string
         }
         Returns: undefined
+      }
+      extract_analyzed_at: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
+      }
+      extract_confidence_score: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: number
+      }
+      extract_product_name: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
+      }
+      extract_product_quantity: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: number
+      }
+      extract_product_unit: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
+      }
+      extract_vendor_name: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
       }
       http: {
         Args: {
@@ -1077,6 +1139,36 @@ export type Database = {
         }
         Returns: boolean
       }
+      log_webhook_event:
+        | {
+            Args: {
+              p_telegram_message_id: number
+              p_chat_id: number
+              p_event_type: string
+              p_request_payload?: Json
+              p_response_payload?: Json
+              p_status_code?: number
+              p_error_message?: string
+              p_media_group_id?: string
+              p_correlation_id?: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_telegram_message_id: number
+              p_chat_id: number
+              p_event_type: string
+              p_request_payload?: Json
+              p_response_payload?: Json
+              p_status_code?: number
+              p_error_message?: string
+              p_media_group_id?: string
+              p_correlation_id?: string
+              p_processing_state?: string
+            }
+            Returns: string
+          }
       parse_analyzed_content: {
         Args: {
           content: Json
@@ -1114,15 +1206,6 @@ export type Database = {
             }
             Returns: undefined
           }
-      sync_media_group_content: {
-        Args: {
-          p_message_id: string
-          p_media_group_id: string
-          p_analyzed_content: Json
-          p_correlation_id?: string
-        }
-        Returns: undefined
-      }
       text_to_bytea: {
         Args: {
           data: string
