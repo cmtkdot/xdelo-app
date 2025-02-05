@@ -73,6 +73,7 @@ export interface MediaItem {
   chat_id?: number;
   chat_type?: string;
   message_url?: string;
+  purchase_order?: string;
 }
 
 export interface FilterValues {
