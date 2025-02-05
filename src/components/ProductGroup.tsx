@@ -45,10 +45,12 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
     
     setIsReanalyzing(true);
     try {
-      const response = await supabase.functions.invoke('reanalyze-media-group', {
+      const response = await supabase.functions.invoke('reanalyze-low-confidence', {
         body: {
+          message_id: mainMedia.id,
           media_group_id: mainMedia.media_group_id,
-          message_id: mainMedia.id
+          caption: mainMedia.caption,
+          correlation_id: crypto.randomUUID()
         }
       });
 
