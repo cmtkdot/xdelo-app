@@ -4,9 +4,9 @@ import { Label } from "@/components/ui/label";
 import { CalendarIcon } from "lucide-react";
 
 interface DateRangeFilterProps {
-  dateField: 'purchase_date' | 'created_at' | 'updated_at';
+  dateField: 'purchase_date' | 'created_at';
   sortOrder: "asc" | "desc";
-  onDateFieldChange: (field: 'purchase_date' | 'created_at' | 'updated_at') => void;
+  onDateFieldChange: (field: 'purchase_date' | 'created_at') => void;
   onSortOrderChange: (order: "asc" | "desc") => void;
 }
 
@@ -17,22 +17,21 @@ export const DateRangeFilter = ({
   onSortOrderChange
 }: DateRangeFilterProps) => {
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <label className="text-xs font-medium flex items-center gap-1">
-          <CalendarIcon className="w-3 h-3" />
-          Sort by
-        </label>
+    <div className="flex items-end gap-4">
+      <div className="space-y-2">
+        <Label className="text-xs font-medium">Sort by</Label>
         <Select value={dateField} onValueChange={onDateFieldChange}>
-          <SelectTrigger className="h-7 text-xs w-[120px]">
+          <SelectTrigger className="h-8 text-sm w-[140px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="purchase_date">Purchase Date</SelectItem>
             <SelectItem value="created_at">Created Date</SelectItem>
-            <SelectItem value="updated_at">Updated Date</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+      <div className="space-y-2">
+        <Label className="text-xs font-medium">Order</Label>
         <div className="flex items-center space-x-2">
           <Switch
             id="sort-order"

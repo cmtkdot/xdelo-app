@@ -23,7 +23,6 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   const [quantityRange, setQuantityRange] = useState(filters.quantityRange || 'all');
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
-  // Count active filters
   useEffect(() => {
     let count = 0;
     if (search) count++;
@@ -32,7 +31,6 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     setActiveFiltersCount(count);
   }, [search, vendor, quantityRange]);
 
-  // Update filters when any value changes
   useEffect(() => {
     onFilterChange({
       search,
@@ -54,21 +52,18 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
 
   const FilterContent = () => (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-4">
-        <SearchFilter value={search} onChange={setSearch} />
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-4">
+          <SearchFilter value={search} onChange={setSearch} />
+          <VendorFilter value={vendor} vendors={vendors} onChange={setVendor} />
+          <QuantityFilter value={quantityRange} onChange={setQuantityRange} />
+        </div>
         <DateRangeFilter
           dateField={dateField}
           sortOrder={sortOrder}
           onDateFieldChange={setDateField}
           onSortOrderChange={setSortOrder}
         />
-      </div>
-
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <VendorFilter value={vendor} vendors={vendors} onChange={setVendor} />
-          <QuantityFilter value={quantityRange} onChange={setQuantityRange} />
-        </div>
       </div>
 
       {activeFiltersCount > 0 && (
