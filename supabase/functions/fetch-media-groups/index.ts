@@ -29,7 +29,7 @@ serve(async (req) => {
 
     // Apply text search filter
     if (filters.search) {
-      query = query.or(`caption.ilike.%${filters.search}%,analyzed_content->product_name.ilike.%${filters.search}%`);
+      query = query.or(`caption.ilike.%${filters.search}%,analyzed_content->>'product_name'.ilike.%${filters.search}%`);
     }
 
     // Apply vendor filter
