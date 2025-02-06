@@ -53,7 +53,6 @@ const PublicGallery = () => {
   const { data } = useMediaGroups(currentPage, filters);
   const mediaGroups = data?.mediaGroups ?? {};
   const totalPages = data?.totalPages ?? 1;
-  const groupsArray = Object.values(mediaGroups);
 
   const handleEdit = (media: MediaItem) => {
     const groupKey = media.media_group_id || media.id;
@@ -63,20 +62,26 @@ const PublicGallery = () => {
   };
 
   const handleItemChange = (field: string, value: any) => {
-    if (editItem) {
-      const updatedContent = {
-        ...(editItem.analyzed_content || {}),
-        [field]: value,
-        parsing_metadata: {
-          method: 'manual' as const,
-          confidence: 1.0,
-          timestamp: new Date().toISOString()
-        }
-      };
+    if (!editItem) return;
 
+    if (field === 'caption') {
       setEditItem({
         ...editItem,
-        analyzed_content: updatedContent
+        caption: value
+      });
+    } else if (field.startsWith('analyzed_content.')) {
+      const key = field.split('.')[1];
+      setEditItem({
+        ...editItem,
+        analyzed_content: {
+          ...(editItem.analyzed_content || {}),
+          [key]: value,
+          parsing_metadata: {
+            method: 'manual' as const,
+            confidence: 1.0,
+            timestamp: new Date().toISOString()
+          }
+        }
       });
     }
   };
@@ -125,29 +130,6 @@ const PublicGallery = () => {
     }
   };
 
-  const handleDelete = async (media: MediaItem) => {
-    try {
-      const { error } = await supabase
-        .from('messages')
-        .update({ is_deleted: true })
-        .eq('id', media.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Product deleted successfully",
-      });
-    } catch (error) {
-      console.error('Error deleting message:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete product",
-        variant: "destructive",
-      });
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-6 space-y-6">
@@ -162,7 +144,7 @@ const PublicGallery = () => {
         <ProductGrid 
           mediaGroups={mediaGroups} 
           onEdit={handleEdit}
-          onDelete={handleDelete}
+          onDelete={() => {}}
         />
         
         {Object.keys(mediaGroups).length > 0 && (
