@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { FilterValues, ProcessingState } from "@/types";
 import { Filter, X } from "lucide-react";
-import debounce from 'lodash/debounce';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +10,6 @@ import { QuantityFilter } from "./Filters/QuantityFilter";
 import { VendorFilter } from "./Filters/VendorFilter";
 import { ProcessingStateFilter } from "./Filters/ProcessingStateFilter";
 import { DateRangeFilter } from "./Filters/DateRangeFilter";
-import { Separator } from "@/components/ui/separator";
 
 interface ProductFiltersProps {
   vendors: string[];
@@ -22,7 +20,7 @@ interface ProductFiltersProps {
 export default function ProductFilters({ vendors, filters, onFilterChange }: ProductFiltersProps) {
   const [search, setSearch] = useState(filters.search);
   const [vendor, setVendor] = useState(filters.vendor);
-  const [dateField, setDateField] = useState<'purchase_date' | 'created_at' | 'updated_at'>(filters.dateField);
+  const [dateField, setDateField] = useState<'purchase_date' | 'created_at'>(filters.dateField);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder);
   const [quantityRange, setQuantityRange] = useState(filters.quantityRange || 'all');
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
@@ -36,14 +34,9 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     setActiveFiltersCount(count);
   }, [search, vendor, quantityRange]);
 
-  // Debounce filter changes
-  const debouncedFilterChange = debounce((newFilters: FilterValues) => {
-    onFilterChange(newFilters);
-  }, 300);
-
   // Update filters when any value changes
   useEffect(() => {
-    debouncedFilterChange({
+    onFilterChange({
       search,
       vendor,
       dateField,

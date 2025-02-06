@@ -1879,6 +1879,10 @@ export type Database = {
           reanalysis_attempted: boolean
         }[]
       }
+      process_glide_sync_queue: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       process_media_group_analysis: {
         Args: {
           p_message_id: string
@@ -1896,6 +1900,10 @@ export type Database = {
           p_processing_completed_at?: string
           p_correlation_id?: string
         }
+        Returns: undefined
+      }
+      schedule_sync_check: {
+        Args: Record<PropertyKey, never>
         Returns: undefined
       }
       text_to_bytea: {
