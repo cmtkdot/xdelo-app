@@ -20,8 +20,10 @@ serve(async (req) => {
 
   try {
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY is not set');
+    const ELEVEN_LABS_API_KEY = Deno.env.get('ELEVEN_LABS_API_KEY');
+    
+    if (!OPENAI_API_KEY || !ELEVEN_LABS_API_KEY) {
+      throw new Error('Required API keys are not set');
     }
 
     // Create an ephemeral token for this session
@@ -80,9 +82,55 @@ serve(async (req) => {
       openAISocket.send(event.data);
     };
 
-    openAISocket.onmessage = (event) => {
+    openAISocket.onmessage = async (event) => {
       console.log("Message from OpenAI:", event.data);
-      socket.send(event.data);
+      
+      const data = JSON.parse(event.data);
+      
+      // If we receive text, convert it to speech using ElevenLabs
+      if (data.type === 'response.text.delta') {
+        try {
+          const voiceId = 'EXAVITQu4vr4xnSDxMaL'; // Sarah voice
+          const elevenLabsResponse = await fetch(
+            `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'xi-api-key': ELEVEN_LABS_API_KEY,
+              },
+              body: JSON.stringify({
+                text: data.delta,
+                model_id: 'eleven_multilingual_v2',
+                voice_settings: {
+                  stability: 0.5,
+                  similarity_boost: 0.75,
+                }
+              }),
+            }
+          );
+
+          if (!elevenLabsResponse.ok) {
+            throw new Error('Failed to generate speech with ElevenLabs');
+          }
+
+          const audioData = await elevenLabsResponse.arrayBuffer();
+          const base64Audio = btoa(
+            String.fromCharCode(...new Uint8Array(audioData))
+          );
+
+          // Send audio data back to client
+          socket.send(JSON.stringify({
+            type: 'response.audio.delta',
+            delta: base64Audio,
+          }));
+        } catch (error) {
+          console.error('ElevenLabs API error:', error);
+        }
+      } else {
+        // Forward other messages directly to client
+        socket.send(event.data);
+      }
     };
 
     socket.onclose = () => {
