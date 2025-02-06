@@ -27,15 +27,16 @@ export const MediaEditDialog = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   useEffect(() => {
-    if (textareaRef.current && editItem?.caption) {
+    if (textareaRef.current && editItem?.telegram_data?.message?.caption) {
       textareaRef.current.style.height = '80px';
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
-  }, [editItem?.caption]);
+  }, [editItem?.telegram_data?.message?.caption]);
 
   if (!editItem) return null;
 
   const content = editItem.analyzed_content || {};
+  const telegramCaption = editItem.telegram_data?.message?.caption || '';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +46,7 @@ export const MediaEditDialog = ({
       const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
         body: {
           messageId: editItem.id,
-          newCaption: editItem.caption || ''  // Use the message's caption field
+          newCaption: telegramCaption
         }
       });
 
@@ -70,6 +71,17 @@ export const MediaEditDialog = ({
     }
   };
 
+  const handleCaptionChange = (value: string) => {
+    const updatedTelegramData = {
+      ...editItem.telegram_data,
+      message: {
+        ...editItem.telegram_data?.message,
+        caption: value
+      }
+    };
+    onItemChange('telegram_data', updatedTelegramData);
+  };
+
   return (
     <Dialog open={!!editItem} onOpenChange={() => onClose()}>
       <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
@@ -80,12 +92,12 @@ export const MediaEditDialog = ({
             <Textarea
               ref={textareaRef}
               id="caption"
-              value={editItem.caption || ''}
+              value={telegramCaption}
               onChange={(e) => {
                 const textarea = e.target;
                 textarea.style.height = '80px';
                 textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
-                onItemChange('caption', e.target.value);
+                handleCaptionChange(e.target.value);
               }}
               placeholder="Enter caption"
               className="min-h-[80px] max-h-[200px] resize-none"
