@@ -6,17 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface FilterValues {
-  search?: string;
-  vendor?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  sortOrder?: "desc" | "asc";
-  productCode?: string;
-  quantityRange?: string;
-  processingState?: string;
-}
-
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -24,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { page = 1, filters = {} } = await req.json() as { page: number; filters: FilterValues };
+    const { page = 1, filters = {} } = await req.json();
     const ITEMS_PER_PAGE = 15;
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -74,10 +63,10 @@ serve(async (req) => {
 
     // Apply date range filters
     if (filters.dateFrom) {
-      query = query.gte('analyzed_content->purchase_date', filters.dateFrom);
+      query = query.gte(`analyzed_content->${filters.dateField}`, filters.dateFrom);
     }
     if (filters.dateTo) {
-      query = query.lte('analyzed_content->purchase_date', filters.dateTo);
+      query = query.lte(`analyzed_content->${filters.dateField}`, filters.dateTo);
     }
 
     // Apply sorting with NULLS LAST

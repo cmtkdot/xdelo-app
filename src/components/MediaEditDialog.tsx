@@ -31,11 +31,11 @@ export const MediaEditDialog = ({
     
     try {
       // If caption was changed, update it in Telegram
-      if (editItem.caption !== content.caption) {
+      if (editItem.caption !== editItem.caption) {
         const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
           body: {
             messageId: editItem.telegram_message_id,
-            newCaption: content.caption || ''
+            newCaption: editItem.caption || ''
           }
         });
 
@@ -69,7 +69,7 @@ export const MediaEditDialog = ({
             <Label htmlFor="caption">Caption</Label>
             <Input
               id="caption"
-              value={content.caption || editItem.caption || ''}
+              value={editItem.caption || ''}
               onChange={(e) => onItemChange('caption', e.target.value)}
             />
           </div>
