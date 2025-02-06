@@ -198,6 +198,45 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.construct_telegram_message_url(chat_type text, chat_id bigint, message_id bigint)
+RETURNS text
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    base_url text := 'https://t.me/';
+    processed_chat_id text;
+BEGIN
+    -- Convert chat_id to text, removing -100 prefix if present
+    IF chat_id < -100000000000 THEN
+        -- For private channels/groups that start with -100
+        processed_chat_id := substring(ABS(chat_id)::text, 3);
+    ELSIF chat_id < 0 THEN
+        -- For other negative IDs
+        processed_chat_id := ABS(chat_id)::text;
+    ELSE
+        processed_chat_id := chat_id::text;
+    END IF;
+
+    -- Construct URL based on chat type
+    RETURN CASE chat_type
+        WHEN 'channel' THEN
+            -- Format: https://t.me/c/{chat_id}/{message_id}
+            base_url || 'c/' || processed_chat_id || '/' || message_id::text
+        WHEN 'private' THEN
+            -- Format: https://t.me/c/{chat_id}/{message_id}
+            base_url || 'c/' || processed_chat_id || '/' || message_id::text
+        WHEN 'group' THEN
+            -- Format: https://t.me/c/{chat_id}/{message_id}
+            base_url || 'c/' || processed_chat_id || '/' || message_id::text
+        WHEN 'supergroup' THEN
+            -- Format: https://t.me/c/{chat_id}/{message_id}
+            base_url || 'c/' || processed_chat_id || '/' || message_id::text
+        ELSE
+            NULL
+    END;
+END;
+$$;
+
 -- Create triggers
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
