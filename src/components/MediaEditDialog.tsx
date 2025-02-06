@@ -41,10 +41,11 @@ export const MediaEditDialog = ({
     e.preventDefault();
     
     try {
+      // Update caption in Telegram
       const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
         body: {
           messageId: editItem.id,
-          newCaption: editItem.caption
+          newCaption: content.caption || ''  // Use caption from analyzed_content
         }
       });
 
@@ -79,12 +80,12 @@ export const MediaEditDialog = ({
             <Textarea
               ref={textareaRef}
               id="caption"
-              value={editItem.caption || ''}
+              value={content.caption || editItem.caption || ''}
               onChange={(e) => {
                 const textarea = e.target;
                 textarea.style.height = '80px';
                 textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
-                onItemChange('caption', e.target.value);
+                onItemChange('analyzed_content.caption', e.target.value);
               }}
               placeholder="Enter caption"
               className="min-h-[80px] max-h-[200px] resize-none"

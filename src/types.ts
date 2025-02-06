@@ -3,6 +3,7 @@ export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'comple
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
 export interface AnalyzedContent {
+  caption?: string;
   product_name?: string;
   product_code?: string;
   vendor_uid?: string;
@@ -11,7 +12,6 @@ export interface AnalyzedContent {
   unit_price?: number;
   total_price?: number;
   notes?: string;
-  caption?: string;
   parsing_metadata?: {
     method: 'manual' | 'ai';
     confidence: number;
