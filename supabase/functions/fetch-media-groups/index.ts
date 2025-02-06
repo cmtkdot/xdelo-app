@@ -25,11 +25,13 @@ serve(async (req) => {
 
   try {
     const { page = 1, filters = {} } = await req.json() as { page: number; filters: FilterValues };
-    const ITEMS_PER_PAGE = 15; // Updated from 16 to 15
+    const ITEMS_PER_PAGE = 15;
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    console.log('Starting fetch-media-groups with filters:', filters);
 
     let query = supabase
       .from("messages")
@@ -71,27 +73,19 @@ serve(async (req) => {
     }
 
     // Apply date range filters
-    const dateField = filters.dateField || 'purchase_date';
     if (filters.dateFrom) {
-      query = query.gte(`analyzed_content->>${dateField}`, filters.dateFrom);
+      query = query.gte('analyzed_content->purchase_date', filters.dateFrom);
     }
     if (filters.dateTo) {
-      query = query.lte(`analyzed_content->>${dateField}`, filters.dateTo);
+      query = query.lte('analyzed_content->purchase_date', filters.dateTo);
     }
 
     // Apply sorting with NULLS LAST
     const sortOrder = filters.sortOrder || 'desc';
-    if (dateField === 'purchase_date') {
-      query = query.order(`analyzed_content->>${dateField}`, { 
-        ascending: sortOrder === "asc",
-        nullsFirst: false
-      });
-    } else {
-      query = query.order(dateField, { 
-        ascending: sortOrder === "asc",
-        nullsFirst: false
-      });
-    }
+    query = query.order('created_at', { 
+      ascending: sortOrder === "asc",
+      nullsFirst: false
+    });
 
     // Apply pagination
     const from = (page - 1) * ITEMS_PER_PAGE;
@@ -144,18 +138,18 @@ serve(async (req) => {
           groups[groupKey].push(message);
         }
       });
-
-      // Sort groups internally
-      Object.keys(groups).forEach(key => {
-        groups[key].sort((a, b) => {
-          if (a.is_original_caption && !b.is_original_caption) return -1;
-          if (!a.is_original_caption && b.is_original_caption) return 1;
-          if (a.analyzed_content && !b.analyzed_content) return -1;
-          if (!a.analyzed_content && b.analyzed_content) return 1;
-          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        });
-      });
     }
+
+    // Sort groups internally by creation date
+    Object.keys(groups).forEach(key => {
+      groups[key].sort((a, b) => {
+        if (a.is_original_caption && !b.is_original_caption) return -1;
+        if (!a.is_original_caption && b.is_original_caption) return 1;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+    });
+
+    console.log(`Returning ${Object.keys(groups).length} groups with total count ${count}`);
 
     return new Response(
       JSON.stringify({
@@ -164,9 +158,9 @@ serve(async (req) => {
       }),
       { 
         headers: { 
-          ...corsHeaders, 
+          ...corsHeaders,
           'Content-Type': 'application/json'
-        } 
+        }
       }
     );
 
@@ -175,9 +169,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
-        status: 500, 
+        status: 500,
         headers: { 
-          ...corsHeaders, 
+          ...corsHeaders,
           'Content-Type': 'application/json'
         }
       }
