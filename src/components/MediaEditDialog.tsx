@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -70,7 +71,7 @@ export const MediaEditDialog = ({
           }
         };
 
-        // Update the message in database
+        // First update the message in database
         const { error: updateError } = await supabase
           .from('messages')
           .update({
@@ -82,9 +83,30 @@ export const MediaEditDialog = ({
 
         if (updateError) throw updateError;
 
+        // Trigger reanalysis
+        console.log('Triggering reanalysis for updated content');
+        const { error: reanalysisError } = await supabase.functions.invoke('parse-caption-with-ai', {
+          body: {
+            message_id: editItem.id,
+            media_group_id: editItem.media_group_id,
+            caption: caption,
+            correlation_id: crypto.randomUUID()
+          }
+        });
+
+        if (reanalysisError) {
+          console.error('Reanalysis error:', reanalysisError);
+          // Don't throw here, we still want to show success for the caption update
+          toast({
+            title: "Warning",
+            description: "Caption updated but content reanalysis failed. It will be retried automatically.",
+            variant: "default",
+          });
+        }
+
         toast({
           title: "Success",
-          description: "Caption has been updated",
+          description: "Caption has been updated and content analysis triggered",
         });
 
         onSave();
