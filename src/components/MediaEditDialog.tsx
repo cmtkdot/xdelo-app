@@ -3,10 +3,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { MediaItem, TelegramData, AnalyzedContent } from "@/types";
+import { MediaItem } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import { useEffect, useRef } from "react";
 
 interface MediaEditDialogProps {
   editItem: MediaItem | null;
@@ -24,66 +23,24 @@ export const MediaEditDialog = ({
   formatDate,
 }: MediaEditDialogProps) => {
   const { toast } = useToast();
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  
-  useEffect(() => {
-    if (textareaRef.current && getTelegramCaption()) {
-      textareaRef.current.style.height = '80px';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
-    }
-  }, [editItem?.telegram_data?.message?.caption]);
-
   if (!editItem) return null;
 
   const content = editItem.analyzed_content || {};
-  
-  const getTelegramCaption = (): string => {
-    return (editItem.telegram_data as TelegramData)?.message?.caption || '';
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
-      const originalCaption = (editItem.telegram_data as TelegramData)?.message?.caption || '';
-      const newCaption = getTelegramCaption();
-      
-      // Update caption in Telegram if changed
-      if (originalCaption !== newCaption) {
-        const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
-          body: {
-            messageId: editItem.id,
-            newCaption: newCaption
-          }
-        });
-
-        if (captionError) {
-          throw captionError;
+      const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
+        body: {
+          messageId: editItem.id,
+          newCaption: editItem.caption
         }
+      });
+
+      if (captionError) {
+        throw captionError;
       }
-
-      // Update analyzed content with new metadata
-      const updatedContent: AnalyzedContent = {
-        ...content,
-        parsing_metadata: {
-          ...(content.parsing_metadata || {}),
-          method: 'manual' as const,
-          confidence: 1.0,
-          timestamp: new Date().toISOString(),
-          last_modified: new Date().toISOString(),
-          modification_source: 'user' as const,
-          caption_history: [
-            ...(content.parsing_metadata?.caption_history || []),
-            {
-              original: originalCaption,
-              modified: newCaption,
-              modified_at: new Date().toISOString()
-            }
-          ]
-        }
-      };
-
-      onItemChange('analyzed_content', updatedContent);
 
       toast({
         title: "Success",
@@ -102,17 +59,6 @@ export const MediaEditDialog = ({
     }
   };
 
-  const handleCaptionChange = (value: string) => {
-    const updatedTelegramData = {
-      ...(editItem.telegram_data as TelegramData),
-      message: {
-        ...(editItem.telegram_data as TelegramData)?.message,
-        caption: value
-      }
-    };
-    onItemChange('telegram_data', updatedTelegramData);
-  };
-
   return (
     <Dialog open={!!editItem} onOpenChange={() => onClose()}>
       <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
@@ -121,17 +67,11 @@ export const MediaEditDialog = ({
           <div className="space-y-2">
             <Label htmlFor="caption">Caption</Label>
             <Textarea
-              ref={textareaRef}
               id="caption"
-              value={getTelegramCaption()}
-              onChange={(e) => {
-                const textarea = e.target;
-                textarea.style.height = '80px';
-                textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
-                handleCaptionChange(e.target.value);
-              }}
+              defaultValue={editItem.caption || ''}
+              onChange={(e) => onItemChange('caption', e.target.value)}
               placeholder="Enter caption"
-              className="min-h-[80px] max-h-[200px] resize-y"
+              className="min-h-[100px] resize-y"
             />
           </div>
           
@@ -139,7 +79,7 @@ export const MediaEditDialog = ({
             <Label htmlFor="product_name">Product Name</Label>
             <Input
               id="product_name"
-              value={content.product_name || ''}
+              defaultValue={content.product_name || ''}
               onChange={(e) => onItemChange('analyzed_content.product_name', e.target.value)}
               placeholder="Enter product name"
             />
@@ -149,7 +89,7 @@ export const MediaEditDialog = ({
             <Label htmlFor="product_code">Product Code</Label>
             <Input
               id="product_code"
-              value={content.product_code || ''}
+              defaultValue={content.product_code || ''}
               onChange={(e) => onItemChange('analyzed_content.product_code', e.target.value)}
               placeholder="Enter product code"
             />
@@ -159,7 +99,7 @@ export const MediaEditDialog = ({
             <Label htmlFor="vendor_uid">Vendor UID</Label>
             <Input
               id="vendor_uid"
-              value={content.vendor_uid || ''}
+              defaultValue={content.vendor_uid || ''}
               onChange={(e) => onItemChange('analyzed_content.vendor_uid', e.target.value)}
               placeholder="Enter vendor UID"
             />
@@ -170,7 +110,7 @@ export const MediaEditDialog = ({
             <Input
               id="purchase_date"
               type="date"
-              value={formatDate(content.purchase_date || null) || ''}
+              defaultValue={formatDate(content.purchase_date || null) || ''}
               onChange={(e) => onItemChange('analyzed_content.purchase_date', e.target.value)}
             />
           </div>
@@ -180,7 +120,7 @@ export const MediaEditDialog = ({
             <Input
               id="quantity"
               type="number"
-              value={content.quantity || ''}
+              defaultValue={content.quantity || ''}
               onChange={(e) => onItemChange('analyzed_content.quantity', parseInt(e.target.value))}
               placeholder="Enter quantity"
             />
@@ -190,7 +130,7 @@ export const MediaEditDialog = ({
             <Label htmlFor="notes">Notes</Label>
             <Textarea
               id="notes"
-              value={content.notes || ''}
+              defaultValue={content.notes || ''}
               onChange={(e) => onItemChange('analyzed_content.notes', e.target.value)}
               placeholder="Enter notes"
               className="min-h-[80px] resize-y"

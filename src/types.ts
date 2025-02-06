@@ -2,23 +2,6 @@ export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'comple
 
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
-// Telegram specific types
-export interface TelegramMessage {
-  message_id: number;
-  caption?: string;
-  date: number;
-  chat: {
-    id: number;
-    type: string;
-    title?: string;
-  };
-}
-
-export interface TelegramData {
-  message: TelegramMessage;
-  update_id: number;
-}
-
 export interface AnalyzedContent {
   product_name?: string;
   product_code?: string;
@@ -28,17 +11,11 @@ export interface AnalyzedContent {
   unit_price?: number;
   total_price?: number;
   notes?: string;
+  caption?: string;
   parsing_metadata?: {
     method: 'manual' | 'ai';
     confidence: number;
     timestamp: string;
-    last_modified?: string;
-    modification_source?: 'user' | 'system';
-    caption_history?: {
-      original: string;
-      modified: string;
-      modified_at: string;
-    }[];
   };
 }
 
@@ -54,6 +31,16 @@ export interface ProcessingMetadata {
   is_original_caption?: boolean;
 }
 
+export interface TelegramMedia {
+  file_id: string;
+  file_unique_id: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  mime_type?: string;
+}
+
 export interface MediaItem {
   id: string;
   telegram_message_id: number;
@@ -61,6 +48,7 @@ export interface MediaItem {
   message_caption_id?: string;
   is_original_caption?: boolean;
   group_caption_synced?: boolean;
+  caption?: string;
   file_id?: string;
   file_unique_id: string;
   public_url?: string;
@@ -76,7 +64,7 @@ export interface MediaItem {
   processing_started_at?: string;
   processing_completed_at?: string;
   analyzed_content?: AnalyzedContent | null;
-  telegram_data?: TelegramData;
+  telegram_data?: Record<string, unknown>;
   error_message?: string;
   retry_count?: number;
   last_error_at?: string;

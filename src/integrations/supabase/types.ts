@@ -105,73 +105,7 @@ export type Database = {
         }
         Relationships: []
       }
-      gl_accounts: {
-        Row: {
-          created_at: string | null
-          data: Json | null
-          glide_id: string | null
-          id: string
-          last_sync_time: string | null
-          name: string
-          sync_status: Database["public"]["Enums"]["sync_status"] | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          data?: Json | null
-          glide_id?: string | null
-          id?: string
-          last_sync_time?: string | null
-          name: string
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          data?: Json | null
-          glide_id?: string | null
-          id?: string
-          last_sync_time?: string | null
-          name?: string
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      gl_column_mappings: {
-        Row: {
-          created_at: string | null
-          data_type: string
-          glide_column_id: string
-          glide_column_name: string
-          id: string
-          supabase_column_name: string
-          table_name: string
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          data_type: string
-          glide_column_id: string
-          glide_column_name: string
-          id?: string
-          supabase_column_name: string
-          table_name: string
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          data_type?: string
-          glide_column_id?: string
-          glide_column_name?: string
-          id?: string
-          supabase_column_name?: string
-          table_name?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      gl_configuration: {
+      glide_configuration: {
         Row: {
           api_endpoint: string
           api_key: string
@@ -216,1028 +150,370 @@ export type Database = {
         }
         Relationships: []
       }
-      gl_customer_credits: {
-        Row: {
-          created_at: string | null
-          glide_id: string | null
-          id: string
-          last_sync_time: string | null
-          main_customeruid: string | null
-          main_date_of_payment: string | null
-          main_email_of_user: string | null
-          main_payment_amount: number | null
-          main_payment_note: string | null
-          main_payment_typ: string | null
-          rowid_accountrowid: string | null
-          rowid_estimatorowid: string | null
-          rowid_invoice_row_id: string | null
-          sync_status: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_added: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          glide_id?: string | null
-          id?: string
-          last_sync_time?: string | null
-          main_customeruid?: string | null
-          main_date_of_payment?: string | null
-          main_email_of_user?: string | null
-          main_payment_amount?: number | null
-          main_payment_note?: string | null
-          main_payment_typ?: string | null
-          rowid_accountrowid?: string | null
-          rowid_estimatorowid?: string | null
-          rowid_invoice_row_id?: string | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_added?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          glide_id?: string | null
-          id?: string
-          last_sync_time?: string | null
-          main_customeruid?: string | null
-          main_date_of_payment?: string | null
-          main_email_of_user?: string | null
-          main_payment_amount?: number | null
-          main_payment_note?: string | null
-          main_payment_typ?: string | null
-          rowid_accountrowid?: string | null
-          rowid_estimatorowid?: string | null
-          rowid_invoice_row_id?: string | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_added?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gl_customer_credits_rowid_accountrowid_fkey"
-            columns: ["rowid_accountrowid"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_customer_credits_rowid_estimatorowid_fkey"
-            columns: ["rowid_estimatorowid"]
-            isOneToOne: false
-            referencedRelation: "gl_estimates"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_customer_credits_rowid_invoice_row_id_fkey"
-            columns: ["rowid_invoice_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["glide_id"]
-          },
-        ]
-      }
-      gl_customer_payments: {
-        Row: {
-          created_at: string | null
-          email_of_user: string | null
-          glide_id: string | null
-          id: string
-          last_sync_time: string | null
-          main_customeruid: string | null
-          main_date_of_payment: string | null
-          main_payment_amount: number | null
-          main_payment_note: string | null
-          main_type_of_payment: string | null
-          rowid_accountrowid: string | null
-          rowid_invoice_row_id: string | null
-          rowid_invoiceline_row_id: string | null
-          sync_status: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_added: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          email_of_user?: string | null
-          glide_id?: string | null
-          id?: string
-          last_sync_time?: string | null
-          main_customeruid?: string | null
-          main_date_of_payment?: string | null
-          main_payment_amount?: number | null
-          main_payment_note?: string | null
-          main_type_of_payment?: string | null
-          rowid_accountrowid?: string | null
-          rowid_invoice_row_id?: string | null
-          rowid_invoiceline_row_id?: string | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_added?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          email_of_user?: string | null
-          glide_id?: string | null
-          id?: string
-          last_sync_time?: string | null
-          main_customeruid?: string | null
-          main_date_of_payment?: string | null
-          main_payment_amount?: number | null
-          main_payment_note?: string | null
-          main_type_of_payment?: string | null
-          rowid_accountrowid?: string | null
-          rowid_invoice_row_id?: string | null
-          rowid_invoiceline_row_id?: string | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_added?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gl_customer_payments_rowid_accountrowid_fkey"
-            columns: ["rowid_accountrowid"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_customer_payments_rowid_invoice_row_id_fkey"
-            columns: ["rowid_invoice_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_customer_payments_rowid_invoiceline_row_id_fkey"
-            columns: ["rowid_invoiceline_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoice_lines"
-            referencedColumns: ["glide_id"]
-          },
-        ]
-      }
-      gl_estimate_lines: {
-        Row: {
-          created_at: string | null
-          glide_id: string | null
-          id: string
-          last_sync_time: string | null
-          main_date_of_sale: string | null
-          main_original_product_name: string | null
-          main_product_sale_note: string | null
-          main_qty_sold: number | null
-          main_sale_product_name: string | null
-          main_selling_price: number | null
-          main_total_stock_after_sell: number | null
-          main_user_email_of_added: string | null
-          product_sold: boolean | null
-          rowid_estimate_row_id: string | null
-          rowid_invline_row_id: string | null
-          rowid_productid_estline_items: string | null
-          rowid_userid_est_lineitems: string | null
-          sync_status: Database["public"]["Enums"]["sync_status"] | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          glide_id?: string | null
-          id?: string
-          last_sync_time?: string | null
-          main_date_of_sale?: string | null
-          main_original_product_name?: string | null
-          main_product_sale_note?: string | null
-          main_qty_sold?: number | null
-          main_sale_product_name?: string | null
-          main_selling_price?: number | null
-          main_total_stock_after_sell?: number | null
-          main_user_email_of_added?: string | null
-          product_sold?: boolean | null
-          rowid_estimate_row_id?: string | null
-          rowid_invline_row_id?: string | null
-          rowid_productid_estline_items?: string | null
-          rowid_userid_est_lineitems?: string | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          glide_id?: string | null
-          id?: string
-          last_sync_time?: string | null
-          main_date_of_sale?: string | null
-          main_original_product_name?: string | null
-          main_product_sale_note?: string | null
-          main_qty_sold?: number | null
-          main_sale_product_name?: string | null
-          main_selling_price?: number | null
-          main_total_stock_after_sell?: number | null
-          main_user_email_of_added?: string | null
-          product_sold?: boolean | null
-          rowid_estimate_row_id?: string | null
-          rowid_invline_row_id?: string | null
-          rowid_productid_estline_items?: string | null
-          rowid_userid_est_lineitems?: string | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gl_estimate_lines_rowid_estimate_row_id_fkey"
-            columns: ["rowid_estimate_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_estimates"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_estimate_lines_rowid_productid_estline_items_fkey"
-            columns: ["rowid_productid_estline_items"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_estimate_lines_rowid_userid_est_lineitems_fkey"
-            columns: ["rowid_userid_est_lineitems"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-        ]
-      }
-      gl_estimates: {
-        Row: {
-          add_note: string | null
-          created_at: string | null
-          date_created_timestamp: string | null
-          date_invoice_created_date: string | null
-          date_processed_timestamp: string | null
-          date_submitted_timestamp: string | null
-          glide_id: string | null
-          id: string
-          last_sync_time: string | null
-          main_estimate_date: string | null
-          main_estimate_notes: string | null
-          main_is_a_sample: boolean | null
-          main_payment_type: string | null
-          order_items_est: Json | null
-          paymentpdf: string | null
-          pdf_docs: string | null
-          rowids_accountrowid_estimates: string | null
-          rowids_invoice_created: string | null
-          short_link_pdf: string | null
-          short_link_pdf_copy: Json | null
-          shortlink_pdf2: string | null
-          sync_status: Database["public"]["Enums"]["sync_status"] | null
-          updated_at: string | null
-          user_user_email: string | null
-          valid_final_create_invoice_clicked: boolean | null
-        }
-        Insert: {
-          add_note?: string | null
-          created_at?: string | null
-          date_created_timestamp?: string | null
-          date_invoice_created_date?: string | null
-          date_processed_timestamp?: string | null
-          date_submitted_timestamp?: string | null
-          glide_id?: string | null
-          id?: string
-          last_sync_time?: string | null
-          main_estimate_date?: string | null
-          main_estimate_notes?: string | null
-          main_is_a_sample?: boolean | null
-          main_payment_type?: string | null
-          order_items_est?: Json | null
-          paymentpdf?: string | null
-          pdf_docs?: string | null
-          rowids_accountrowid_estimates?: string | null
-          rowids_invoice_created?: string | null
-          short_link_pdf?: string | null
-          short_link_pdf_copy?: Json | null
-          shortlink_pdf2?: string | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          updated_at?: string | null
-          user_user_email?: string | null
-          valid_final_create_invoice_clicked?: boolean | null
-        }
-        Update: {
-          add_note?: string | null
-          created_at?: string | null
-          date_created_timestamp?: string | null
-          date_invoice_created_date?: string | null
-          date_processed_timestamp?: string | null
-          date_submitted_timestamp?: string | null
-          glide_id?: string | null
-          id?: string
-          last_sync_time?: string | null
-          main_estimate_date?: string | null
-          main_estimate_notes?: string | null
-          main_is_a_sample?: boolean | null
-          main_payment_type?: string | null
-          order_items_est?: Json | null
-          paymentpdf?: string | null
-          pdf_docs?: string | null
-          rowids_accountrowid_estimates?: string | null
-          rowids_invoice_created?: string | null
-          short_link_pdf?: string | null
-          short_link_pdf_copy?: Json | null
-          shortlink_pdf2?: string | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          updated_at?: string | null
-          user_user_email?: string | null
-          valid_final_create_invoice_clicked?: boolean | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gl_estimates_rowids_accountrowid_estimates_fkey"
-            columns: ["rowids_accountrowid_estimates"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-        ]
-      }
-      gl_expenses: {
+      glide_customer_credits: {
         Row: {
           amount: number | null
           created_at: string | null
-          date: string | null
-          expense_address: string | null
-          expense_ai_text: string | null
-          expense_cash: string | null
-          expense_change: string | null
-          expense_list_of_items: string | null
-          expense_receipt_image: string | null
-          expense_supplier_name: string | null
-          expense_tax: string | null
-          expense_text_to_json: string | null
-          expense_total: string | null
+          credit_date: string | null
+          customer_id: string | null
           glide_id: string | null
           id: string
           last_sync_time: string | null
-          main_category: string | null
-          main_notes_of_expense: string | null
-          main_submitted_by: string | null
-          processing: boolean | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
         Insert: {
           amount?: number | null
           created_at?: string | null
-          date?: string | null
-          expense_address?: string | null
-          expense_ai_text?: string | null
-          expense_cash?: string | null
-          expense_change?: string | null
-          expense_list_of_items?: string | null
-          expense_receipt_image?: string | null
-          expense_supplier_name?: string | null
-          expense_tax?: string | null
-          expense_text_to_json?: string | null
-          expense_total?: string | null
+          credit_date?: string | null
+          customer_id?: string | null
           glide_id?: string | null
           id?: string
           last_sync_time?: string | null
-          main_category?: string | null
-          main_notes_of_expense?: string | null
-          main_submitted_by?: string | null
-          processing?: boolean | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
         Update: {
           amount?: number | null
           created_at?: string | null
-          date?: string | null
-          expense_address?: string | null
-          expense_ai_text?: string | null
-          expense_cash?: string | null
-          expense_change?: string | null
-          expense_list_of_items?: string | null
-          expense_receipt_image?: string | null
-          expense_supplier_name?: string | null
-          expense_tax?: string | null
-          expense_text_to_json?: string | null
-          expense_total?: string | null
+          credit_date?: string | null
+          customer_id?: string | null
           glide_id?: string | null
           id?: string
           last_sync_time?: string | null
-          main_category?: string | null
-          main_notes_of_expense?: string | null
-          main_submitted_by?: string | null
-          processing?: boolean | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
         Relationships: []
       }
-      gl_invoice_lines: {
+      glide_customer_payments: {
         Row: {
-          cart_id: string | null
-          confirm_submit_newprod_line: boolean | null
+          amount: number | null
           created_at: string | null
-          edit_price: boolean | null
-          edit_quantity: boolean | null
+          customer_id: string | null
           glide_id: string | null
           id: string
           last_sync_time: string | null
-          main_date_of_sale: string | null
-          main_product_sale_note: string | null
-          main_qty_sold: number | null
-          main_rename_product: boolean | null
-          main_renamed_product_name: string | null
-          main_selling_price: number | null
-          main_total_stock_after_sell: number | null
-          main_user_email_of_added: string | null
-          rowid_estimate_rowid: string | null
-          rowid_invoice_rowid: string | null
-          rowid_logrowid: string | null
-          rowid_productid: string | null
-          rowid_productid_question: string | null
+          payment_date: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
         Insert: {
-          cart_id?: string | null
-          confirm_submit_newprod_line?: boolean | null
+          amount?: number | null
           created_at?: string | null
-          edit_price?: boolean | null
-          edit_quantity?: boolean | null
+          customer_id?: string | null
           glide_id?: string | null
           id?: string
           last_sync_time?: string | null
-          main_date_of_sale?: string | null
-          main_product_sale_note?: string | null
-          main_qty_sold?: number | null
-          main_rename_product?: boolean | null
-          main_renamed_product_name?: string | null
-          main_selling_price?: number | null
-          main_total_stock_after_sell?: number | null
-          main_user_email_of_added?: string | null
-          rowid_estimate_rowid?: string | null
-          rowid_invoice_rowid?: string | null
-          rowid_logrowid?: string | null
-          rowid_productid?: string | null
-          rowid_productid_question?: string | null
+          payment_date?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
         Update: {
-          cart_id?: string | null
-          confirm_submit_newprod_line?: boolean | null
+          amount?: number | null
           created_at?: string | null
-          edit_price?: boolean | null
-          edit_quantity?: boolean | null
+          customer_id?: string | null
           glide_id?: string | null
           id?: string
           last_sync_time?: string | null
-          main_date_of_sale?: string | null
-          main_product_sale_note?: string | null
-          main_qty_sold?: number | null
-          main_rename_product?: boolean | null
-          main_renamed_product_name?: string | null
-          main_selling_price?: number | null
-          main_total_stock_after_sell?: number | null
-          main_user_email_of_added?: string | null
-          rowid_estimate_rowid?: string | null
-          rowid_invoice_rowid?: string | null
-          rowid_logrowid?: string | null
-          rowid_productid?: string | null
-          rowid_productid_question?: string | null
+          payment_date?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_invoice_lines_rowid_estimate_rowid_fkey"
-            columns: ["rowid_estimate_rowid"]
-            isOneToOne: false
-            referencedRelation: "gl_estimates"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_invoice_lines_rowid_invoice_rowid_fkey"
-            columns: ["rowid_invoice_rowid"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_invoice_lines_rowid_productid_fkey"
-            columns: ["rowid_productid"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_invoice_lines_rowid_productid_question_fkey"
-            columns: ["rowid_productid_question"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["glide_id"]
-          },
-        ]
+        Relationships: []
       }
-      gl_invoices: {
+      glide_estimate_lines: {
         Row: {
           created_at: string | null
-          doc_document: string | null
-          doc_glideforeverlink: string | null
+          estimate_id: string | null
           glide_id: string | null
           id: string
           last_sync_time: string | null
-          main_created_timestamp: string | null
-          main_edit_date: string | null
-          main_invoice_order_date: string | null
-          main_notes: string | null
-          main_processed: boolean | null
-          main_submitted_timestamp: string | null
-          main_user_email: string | null
-          rowids_accountid_sales_invoices: string | null
-          rowids_accountsid_new: string | null
-          rowids_credit_row_id: string | null
-          rowids_editordeletelogid: string | null
-          rowids_estimatorowid: string | null
-          rowids_userid_sales_invoices: string | null
-          sync_status: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_estimate_converted: string | null
-          tre_order_items_invoice: Json | null
-          tre_total: number | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          doc_document?: string | null
-          doc_glideforeverlink?: string | null
-          glide_id?: string | null
-          id?: string
-          last_sync_time?: string | null
-          main_created_timestamp?: string | null
-          main_edit_date?: string | null
-          main_invoice_order_date?: string | null
-          main_notes?: string | null
-          main_processed?: boolean | null
-          main_submitted_timestamp?: string | null
-          main_user_email?: string | null
-          rowids_accountid_sales_invoices?: string | null
-          rowids_accountsid_new?: string | null
-          rowids_credit_row_id?: string | null
-          rowids_editordeletelogid?: string | null
-          rowids_estimatorowid?: string | null
-          rowids_userid_sales_invoices?: string | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_estimate_converted?: string | null
-          tre_order_items_invoice?: Json | null
-          tre_total?: number | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          doc_document?: string | null
-          doc_glideforeverlink?: string | null
-          glide_id?: string | null
-          id?: string
-          last_sync_time?: string | null
-          main_created_timestamp?: string | null
-          main_edit_date?: string | null
-          main_invoice_order_date?: string | null
-          main_notes?: string | null
-          main_processed?: boolean | null
-          main_submitted_timestamp?: string | null
-          main_user_email?: string | null
-          rowids_accountid_sales_invoices?: string | null
-          rowids_accountsid_new?: string | null
-          rowids_credit_row_id?: string | null
-          rowids_editordeletelogid?: string | null
-          rowids_estimatorowid?: string | null
-          rowids_userid_sales_invoices?: string | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_estimate_converted?: string | null
-          tre_order_items_invoice?: Json | null
-          tre_total?: number | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gl_invoices_rowids_accountid_sales_invoices_fkey"
-            columns: ["rowids_accountid_sales_invoices"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_invoices_rowids_estimatorowid_fkey"
-            columns: ["rowids_estimatorowid"]
-            isOneToOne: false
-            referencedRelation: "gl_estimates"
-            referencedColumns: ["glide_id"]
-          },
-        ]
-      }
-      gl_products: {
-        Row: {
-          cart_add_note: boolean | null
-          cart_rename: boolean | null
-          created_at: string | null
-          date_timestamp_subm: string | null
-          email_email_of_user_who_added_product: string | null
-          glide_id: string | null
-          id: string
-          last_edited_date: string | null
-          last_sync_time: string | null
-          main_category: string | null
-          main_cost: number | null
-          main_cost_update: number | null
-          main_fronted: boolean | null
-          main_leave_no: boolean | null
-          main_miscellaneous_items: boolean | null
-          main_more_units_behind: boolean | null
-          main_new_product_name: string | null
-          main_product_image1: string | null
-          main_product_name: string | null
-          main_product_purchase_date: string | null
-          main_purchase_notes: string | null
-          main_rename_product: boolean | null
-          main_samples: boolean | null
-          main_samples_or_fronted: boolean | null
-          main_terms_for_fronted_product: string | null
-          main_total_qty_purchased: number | null
-          main_total_units_behind_sample: number | null
-          main_vendor_product_name: string | null
-          main_vendor_uid: string | null
-          po_converted_po: boolean | null
-          po_old_po_rowid: boolean | null
-          po_old_po_uid: boolean | null
-          po_po_date: string | null
-          po_pouid_from_add_prod: string | null
-          rowid_account_rowid: string | null
-          rowid_product_rowid_for_choice_add_item: string | null
-          rowid_purchase_order_rowid: string | null
-          rowid_sheet21pics: string | null
-          rowid_vpay_rowid: string | null
-          sync_status: Database["public"]["Enums"]["sync_status"] | null
-          updated_at: string | null
-        }
-        Insert: {
-          cart_add_note?: boolean | null
-          cart_rename?: boolean | null
-          created_at?: string | null
-          date_timestamp_subm?: string | null
-          email_email_of_user_who_added_product?: string | null
-          glide_id?: string | null
-          id?: string
-          last_edited_date?: string | null
-          last_sync_time?: string | null
-          main_category?: string | null
-          main_cost?: number | null
-          main_cost_update?: number | null
-          main_fronted?: boolean | null
-          main_leave_no?: boolean | null
-          main_miscellaneous_items?: boolean | null
-          main_more_units_behind?: boolean | null
-          main_new_product_name?: string | null
-          main_product_image1?: string | null
-          main_product_name?: string | null
-          main_product_purchase_date?: string | null
-          main_purchase_notes?: string | null
-          main_rename_product?: boolean | null
-          main_samples?: boolean | null
-          main_samples_or_fronted?: boolean | null
-          main_terms_for_fronted_product?: string | null
-          main_total_qty_purchased?: number | null
-          main_total_units_behind_sample?: number | null
-          main_vendor_product_name?: string | null
-          main_vendor_uid?: string | null
-          po_converted_po?: boolean | null
-          po_old_po_rowid?: boolean | null
-          po_old_po_uid?: boolean | null
-          po_po_date?: string | null
-          po_pouid_from_add_prod?: string | null
-          rowid_account_rowid?: string | null
-          rowid_product_rowid_for_choice_add_item?: string | null
-          rowid_purchase_order_rowid?: string | null
-          rowid_sheet21pics?: string | null
-          rowid_vpay_rowid?: string | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          updated_at?: string | null
-        }
-        Update: {
-          cart_add_note?: boolean | null
-          cart_rename?: boolean | null
-          created_at?: string | null
-          date_timestamp_subm?: string | null
-          email_email_of_user_who_added_product?: string | null
-          glide_id?: string | null
-          id?: string
-          last_edited_date?: string | null
-          last_sync_time?: string | null
-          main_category?: string | null
-          main_cost?: number | null
-          main_cost_update?: number | null
-          main_fronted?: boolean | null
-          main_leave_no?: boolean | null
-          main_miscellaneous_items?: boolean | null
-          main_more_units_behind?: boolean | null
-          main_new_product_name?: string | null
-          main_product_image1?: string | null
-          main_product_name?: string | null
-          main_product_purchase_date?: string | null
-          main_purchase_notes?: string | null
-          main_rename_product?: boolean | null
-          main_samples?: boolean | null
-          main_samples_or_fronted?: boolean | null
-          main_terms_for_fronted_product?: string | null
-          main_total_qty_purchased?: number | null
-          main_total_units_behind_sample?: number | null
-          main_vendor_product_name?: string | null
-          main_vendor_uid?: string | null
-          po_converted_po?: boolean | null
-          po_old_po_rowid?: boolean | null
-          po_old_po_uid?: boolean | null
-          po_po_date?: string | null
-          po_pouid_from_add_prod?: string | null
-          rowid_account_rowid?: string | null
-          rowid_product_rowid_for_choice_add_item?: string | null
-          rowid_purchase_order_rowid?: string | null
-          rowid_sheet21pics?: string | null
-          rowid_vpay_rowid?: string | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gl_products_rowid_account_rowid_fkey"
-            columns: ["rowid_account_rowid"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-        ]
-      }
-      gl_purchase_orders: {
-        Row: {
-          created_at: string | null
-          date_payment_date_mddyyyy: string | null
-          docs_pdf_created_on: string | null
-          docs_pdf_link: string | null
-          docs_shortlink: string | null
-          glide_id: string | null
-          id: string
-          last_edited_date: string | null
-          last_sync_time: string | null
-          main_po_date_used_for_uid: string | null
-          main_purchase_order_uid_from_product: string | null
-          rowid_accntrowid: string | null
-          rowid_vpayrowid: string | null
+          price: number | null
+          product_id: string | null
+          quantity: number | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
-          date_payment_date_mddyyyy?: string | null
-          docs_pdf_created_on?: string | null
-          docs_pdf_link?: string | null
-          docs_shortlink?: string | null
+          estimate_id?: string | null
           glide_id?: string | null
           id?: string
-          last_edited_date?: string | null
           last_sync_time?: string | null
-          main_po_date_used_for_uid?: string | null
-          main_purchase_order_uid_from_product?: string | null
-          rowid_accntrowid?: string | null
-          rowid_vpayrowid?: string | null
+          price?: number | null
+          product_id?: string | null
+          quantity?: number | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
-          date_payment_date_mddyyyy?: string | null
-          docs_pdf_created_on?: string | null
-          docs_pdf_link?: string | null
-          docs_shortlink?: string | null
+          estimate_id?: string | null
           glide_id?: string | null
           id?: string
-          last_edited_date?: string | null
           last_sync_time?: string | null
-          main_po_date_used_for_uid?: string | null
-          main_purchase_order_uid_from_product?: string | null
-          rowid_accntrowid?: string | null
-          rowid_vpayrowid?: string | null
+          price?: number | null
+          product_id?: string | null
+          quantity?: number | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_purchase_orders_rowid_accntrowid_fkey"
-            columns: ["rowid_accntrowid"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-        ]
+        Relationships: []
       }
-      gl_shipping_records: {
+      glide_estimates: {
         Row: {
-          ai_ai_extracted_text: string | null
-          ai_ai_json: Json | null
-          ai_label_upload: Json | null
-          ai_tracking_ai_extracted_text: string | null
-          ai_tracking_json_extracted: Json | null
           created_at: string | null
+          customer_id: string | null
+          estimate_date: string | null
           glide_id: string | null
-          ical_calendar_google_updated: boolean | null
-          ical_end_date: string | null
-          ical_last_tracked: string | null
-          ical_last_updated: string | null
-          ical_state_abbrievation: string | null
-          ical_status: string | null
           id: string
           last_sync_time: string | null
-          main_account_rowid: string | null
-          main_account_rowid_2: string | null
-          main_account_uid: string | null
-          main_account_uid_2: string | null
-          main_account_uid_3: string | null
-          main_accounuid_list: string | null
-          main_box_sizes: string | null
-          main_box_weight: number | null
-          main_delivery_time_end: string | null
-          main_delivery_time_range: string | null
-          main_delivery_time_start: string | null
-          main_drop_off_address: string | null
-          main_drop_off_city: string | null
-          main_drop_off_location_uid: string | null
-          main_email_of_user_sub: string | null
-          main_invoices_row_id: string | null
-          main_notes_for_tp_split_orders: string | null
-          main_service_used: string | null
-          main_ship_date: string | null
-          main_ship_date_ical: string | null
-          main_timestamp_submit: string | null
-          main_total_units_1st_account: number | null
-          main_total_units_2nd_account: number | null
-          main_total_units_3rd_account_copy: number | null
-          main_total_units_inside: number | null
-          main_tp_id: string | null
-          main_tp_id_ical: string | null
-          main_tracking_link: string | null
-          main_tracking_number: string | null
-          multiple_accounts: boolean | null
-          receiver_receiver_address: string | null
-          receiver_receiver_name: string | null
-          receiver_state: string | null
-          rowid_invoicerelated: string | null
-          sender_sender_address: string | null
-          sender_sender_name_company: string | null
-          sender_sender_phone: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
-          tp_history_rowid: string | null
+          total_amount: number | null
           updated_at: string | null
         }
         Insert: {
-          ai_ai_extracted_text?: string | null
-          ai_ai_json?: Json | null
-          ai_label_upload?: Json | null
-          ai_tracking_ai_extracted_text?: string | null
-          ai_tracking_json_extracted?: Json | null
           created_at?: string | null
+          customer_id?: string | null
+          estimate_date?: string | null
           glide_id?: string | null
-          ical_calendar_google_updated?: boolean | null
-          ical_end_date?: string | null
-          ical_last_tracked?: string | null
-          ical_last_updated?: string | null
-          ical_state_abbrievation?: string | null
-          ical_status?: string | null
           id?: string
           last_sync_time?: string | null
-          main_account_rowid?: string | null
-          main_account_rowid_2?: string | null
-          main_account_uid?: string | null
-          main_account_uid_2?: string | null
-          main_account_uid_3?: string | null
-          main_accounuid_list?: string | null
-          main_box_sizes?: string | null
-          main_box_weight?: number | null
-          main_delivery_time_end?: string | null
-          main_delivery_time_range?: string | null
-          main_delivery_time_start?: string | null
-          main_drop_off_address?: string | null
-          main_drop_off_city?: string | null
-          main_drop_off_location_uid?: string | null
-          main_email_of_user_sub?: string | null
-          main_invoices_row_id?: string | null
-          main_notes_for_tp_split_orders?: string | null
-          main_service_used?: string | null
-          main_ship_date?: string | null
-          main_ship_date_ical?: string | null
-          main_timestamp_submit?: string | null
-          main_total_units_1st_account?: number | null
-          main_total_units_2nd_account?: number | null
-          main_total_units_3rd_account_copy?: number | null
-          main_total_units_inside?: number | null
-          main_tp_id?: string | null
-          main_tp_id_ical?: string | null
-          main_tracking_link?: string | null
-          main_tracking_number?: string | null
-          multiple_accounts?: boolean | null
-          receiver_receiver_address?: string | null
-          receiver_receiver_name?: string | null
-          receiver_state?: string | null
-          rowid_invoicerelated?: string | null
-          sender_sender_address?: string | null
-          sender_sender_name_company?: string | null
-          sender_sender_phone?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          tp_history_rowid?: string | null
+          total_amount?: number | null
           updated_at?: string | null
         }
         Update: {
-          ai_ai_extracted_text?: string | null
-          ai_ai_json?: Json | null
-          ai_label_upload?: Json | null
-          ai_tracking_ai_extracted_text?: string | null
-          ai_tracking_json_extracted?: Json | null
           created_at?: string | null
+          customer_id?: string | null
+          estimate_date?: string | null
           glide_id?: string | null
-          ical_calendar_google_updated?: boolean | null
-          ical_end_date?: string | null
-          ical_last_tracked?: string | null
-          ical_last_updated?: string | null
-          ical_state_abbrievation?: string | null
-          ical_status?: string | null
           id?: string
           last_sync_time?: string | null
-          main_account_rowid?: string | null
-          main_account_rowid_2?: string | null
-          main_account_uid?: string | null
-          main_account_uid_2?: string | null
-          main_account_uid_3?: string | null
-          main_accounuid_list?: string | null
-          main_box_sizes?: string | null
-          main_box_weight?: number | null
-          main_delivery_time_end?: string | null
-          main_delivery_time_range?: string | null
-          main_delivery_time_start?: string | null
-          main_drop_off_address?: string | null
-          main_drop_off_city?: string | null
-          main_drop_off_location_uid?: string | null
-          main_email_of_user_sub?: string | null
-          main_invoices_row_id?: string | null
-          main_notes_for_tp_split_orders?: string | null
-          main_service_used?: string | null
-          main_ship_date?: string | null
-          main_ship_date_ical?: string | null
-          main_timestamp_submit?: string | null
-          main_total_units_1st_account?: number | null
-          main_total_units_2nd_account?: number | null
-          main_total_units_3rd_account_copy?: number | null
-          main_total_units_inside?: number | null
-          main_tp_id?: string | null
-          main_tp_id_ical?: string | null
-          main_tracking_link?: string | null
-          main_tracking_number?: string | null
-          multiple_accounts?: boolean | null
-          receiver_receiver_address?: string | null
-          receiver_receiver_name?: string | null
-          receiver_state?: string | null
-          rowid_invoicerelated?: string | null
-          sender_sender_address?: string | null
-          sender_sender_name_company?: string | null
-          sender_sender_phone?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          tp_history_rowid?: string | null
+          total_amount?: number | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_shipping_records_main_account_rowid_2_fkey"
-            columns: ["main_account_rowid_2"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_shipping_records_main_account_rowid_fkey"
-            columns: ["main_account_rowid"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_shipping_records_main_invoices_row_id_fkey"
-            columns: ["main_invoices_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_shipping_records_rowid_invoicerelated_fkey"
-            columns: ["rowid_invoicerelated"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["glide_id"]
-          },
-        ]
+        Relationships: []
       }
-      gl_sync_logs: {
+      glide_expenses: {
+        Row: {
+          amount: number | null
+          category: string | null
+          created_at: string | null
+          expense_date: string | null
+          glide_id: string | null
+          id: string
+          last_sync_time: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number | null
+          category?: string | null
+          created_at?: string | null
+          expense_date?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number | null
+          category?: string | null
+          created_at?: string | null
+          expense_date?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_invoice_lines: {
+        Row: {
+          created_at: string | null
+          glide_id: string | null
+          id: string
+          invoice_id: string | null
+          last_sync_time: string | null
+          price: number | null
+          product_id: string | null
+          quantity: number | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          invoice_id?: string | null
+          last_sync_time?: string | null
+          price?: number | null
+          product_id?: string | null
+          quantity?: number | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          invoice_id?: string | null
+          last_sync_time?: string | null
+          price?: number | null
+          product_id?: string | null
+          quantity?: number | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_invoices: {
+        Row: {
+          created_at: string | null
+          customer_id: string | null
+          glide_id: string | null
+          id: string
+          invoice_date: string | null
+          last_sync_time: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          total_amount: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          customer_id?: string | null
+          glide_id?: string | null
+          id?: string
+          invoice_date?: string | null
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          customer_id?: string | null
+          glide_id?: string | null
+          id?: string
+          invoice_date?: string | null
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_products: {
+        Row: {
+          cost: number | null
+          created_at: string | null
+          glide_id: string | null
+          id: string
+          last_sync_time: string | null
+          name: string
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          cost?: number | null
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          name: string
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          cost?: number | null
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          name?: string
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_purchase_orders: {
+        Row: {
+          created_at: string | null
+          glide_id: string | null
+          id: string
+          last_sync_time: string | null
+          order_date: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          total_amount: number | null
+          updated_at: string | null
+          vendor_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          order_date?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          total_amount?: number | null
+          updated_at?: string | null
+          vendor_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          order_date?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          total_amount?: number | null
+          updated_at?: string | null
+          vendor_id?: string | null
+        }
+        Relationships: []
+      }
+      glide_shipping_records: {
+        Row: {
+          created_at: string | null
+          glide_id: string | null
+          id: string
+          last_sync_time: string | null
+          order_id: string | null
+          shipping_date: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          tracking_number: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          order_id?: string | null
+          shipping_date?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          tracking_number?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          glide_id?: string | null
+          id?: string
+          last_sync_time?: string | null
+          order_id?: string | null
+          shipping_date?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          tracking_number?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      glide_sync_logs: {
         Row: {
           created_at: string | null
           error_message: string | null
@@ -1270,7 +546,7 @@ export type Database = {
         }
         Relationships: []
       }
-      gl_sync_metadata: {
+      glide_sync_metadata: {
         Row: {
           created_at: string | null
           error_message: string | null
@@ -1300,7 +576,7 @@ export type Database = {
         }
         Relationships: []
       }
-      gl_sync_queue: {
+      glide_sync_queue: {
         Row: {
           created_at: string | null
           error_message: string | null
@@ -1342,87 +618,41 @@ export type Database = {
         }
         Relationships: []
       }
-      gl_vendor_payments: {
+      glide_vendor_payments: {
         Row: {
-          automatically_recorded: boolean | null
+          amount: number | null
           created_at: string | null
-          date_timestamp_date: string | null
           glide_id: string | null
           id: string
           last_sync_time: string | null
-          main_date_of_payment: string | null
-          main_dateofpurchaseorder: string | null
-          main_payment_amount: number | null
-          main_productnotestoo: string | null
-          rowid_account_row_id: string | null
-          rowid_po_uid_from_addprod: string | null
-          rowid_productrowid: string | null
-          rowid_purchaseorderrowid: string | null
+          payment_date: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
-          user_emailuseradded: string | null
+          vendor_id: string | null
         }
         Insert: {
-          automatically_recorded?: boolean | null
+          amount?: number | null
           created_at?: string | null
-          date_timestamp_date?: string | null
           glide_id?: string | null
           id?: string
           last_sync_time?: string | null
-          main_date_of_payment?: string | null
-          main_dateofpurchaseorder?: string | null
-          main_payment_amount?: number | null
-          main_productnotestoo?: string | null
-          rowid_account_row_id?: string | null
-          rowid_po_uid_from_addprod?: string | null
-          rowid_productrowid?: string | null
-          rowid_purchaseorderrowid?: string | null
+          payment_date?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
-          user_emailuseradded?: string | null
+          vendor_id?: string | null
         }
         Update: {
-          automatically_recorded?: boolean | null
+          amount?: number | null
           created_at?: string | null
-          date_timestamp_date?: string | null
           glide_id?: string | null
           id?: string
           last_sync_time?: string | null
-          main_date_of_payment?: string | null
-          main_dateofpurchaseorder?: string | null
-          main_payment_amount?: number | null
-          main_productnotestoo?: string | null
-          rowid_account_row_id?: string | null
-          rowid_po_uid_from_addprod?: string | null
-          rowid_productrowid?: string | null
-          rowid_purchaseorderrowid?: string | null
+          payment_date?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
-          user_emailuseradded?: string | null
+          vendor_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_vendor_payments_rowid_account_row_id_fkey"
-            columns: ["rowid_account_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_vendor_payments_rowid_productrowid_fkey"
-            columns: ["rowid_productrowid"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_vendor_payments_rowid_purchaseorderrowid_fkey"
-            columns: ["rowid_purchaseorderrowid"]
-            isOneToOne: false
-            referencedRelation: "gl_purchase_orders"
-            referencedColumns: ["glide_id"]
-          },
-        ]
+        Relationships: []
       }
       messages: {
         Row: {

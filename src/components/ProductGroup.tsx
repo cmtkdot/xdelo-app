@@ -1,4 +1,4 @@
-import { MediaItem, TelegramData } from "@/types";
+import { MediaItem } from "@/types";
 import { AlertCircle, Pencil, Trash2, Eye, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageSwiper } from "@/components/ui/image-swiper";
@@ -51,22 +51,18 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const { toast } = useToast();
 
-  const getMessageCaption = (message: MediaItem): string => {
-    return (message.telegram_data as TelegramData)?.message?.caption || '';
-  };
-
   const handleReanalyze = async () => {
     if (isReanalyzing) return;
     
     setIsReanalyzing(true);
     try {
-      const messageToReanalyze = group.find(m => getMessageCaption(m)) || mainMedia;
+      const messageToReanalyze = group.find(m => m.caption) || mainMedia;
       
       const response = await supabase.functions.invoke('reanalyze-low-confidence', {
         body: {
           message_id: messageToReanalyze.id,
           media_group_id: messageToReanalyze.media_group_id,
-          caption: getMessageCaption(messageToReanalyze),
+          caption: messageToReanalyze.caption,
           correlation_id: crypto.randomUUID()
         }
       });
