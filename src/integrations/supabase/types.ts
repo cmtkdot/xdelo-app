@@ -678,7 +678,7 @@ export type Database = {
           height: number | null
           id: string
           is_deleted: boolean | null
-          is_miscellaneous_item: boolean | null
+          is_miscellaneous_item: string | null
           is_original_caption: boolean | null
           last_error_at: string | null
           media_group_id: string | null
@@ -730,7 +730,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_deleted?: boolean | null
-          is_miscellaneous_item?: boolean | null
+          is_miscellaneous_item?: string | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
           media_group_id?: string | null
@@ -782,7 +782,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_deleted?: boolean | null
-          is_miscellaneous_item?: boolean | null
+          is_miscellaneous_item?: string | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
           media_group_id?: string | null
