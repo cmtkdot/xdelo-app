@@ -3,16 +3,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { MediaItem } from "@/types";
+import { MediaItem, analyzedContentToJson } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
+import { format } from "date-fns";
 
 interface MediaEditDialogProps {
   editItem: MediaItem | null;
   onClose: () => void;
   onSave: () => void;
   onItemChange: (field: string, value: any) => void;
-  formatDate: (date: string | null) => string | null;
 }
 
 export const MediaEditDialog = ({
@@ -20,7 +20,6 @@ export const MediaEditDialog = ({
   onClose,
   onSave,
   onItemChange,
-  formatDate,
 }: MediaEditDialogProps) => {
   const { toast } = useToast();
   
@@ -29,12 +28,22 @@ export const MediaEditDialog = ({
   const content = editItem.analyzed_content || {};
   const caption = editItem.caption || '';
 
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return '';
+    try {
+      return format(new Date(dateString), 'yyyy-MM-dd');
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return '';
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
       // Only update if caption has changed
-      const currentTelegramData = editItem.telegram_data || {};
+      const currentTelegramData = editItem.telegram_data as { message?: { caption?: string } } || {};
       const originalCaption = currentTelegramData.message?.caption || '';
       
       if (caption !== originalCaption) {
@@ -63,10 +72,13 @@ export const MediaEditDialog = ({
         const updatedTelegramData = {
           ...currentTelegramData,
           message: {
-            ...currentTelegramData.message,
+            ...(currentTelegramData.message || {}),
             caption: caption
           }
         };
+
+        // Convert analyzed content to the correct format
+        const analyzedContentJson = analyzedContentToJson(content);
 
         // Update the message in database with new telegram_data
         const { error: updateError } = await supabase
@@ -74,7 +86,7 @@ export const MediaEditDialog = ({
           .update({
             caption: caption,
             telegram_data: updatedTelegramData,
-            analyzed_content: content,
+            analyzed_content: analyzedContentJson,
             processing_state: 'completed',
             group_caption_synced: true,
             updated_at: new Date().toISOString()

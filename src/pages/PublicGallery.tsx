@@ -6,7 +6,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
 import { ProductPagination } from "@/components/ProductGallery/ProductPagination";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
-import { format } from "date-fns";
 import ProductFilters from "@/components/ProductGallery/ProductFilters";
 
 const PublicGallery = () => {
@@ -155,7 +154,6 @@ const PublicGallery = () => {
           onClose={() => setEditItem(null)}
           onSave={handleSave}
           onItemChange={handleItemChange}
-          formatDate={formatDate}
         />
       </div>
     </div>
