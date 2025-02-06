@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { MediaItem } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
+import { useEffect, useRef } from "react";
 
 interface MediaEditDialogProps {
   editItem: MediaItem | null;
@@ -23,6 +24,17 @@ export const MediaEditDialog = ({
   formatDate,
 }: MediaEditDialogProps) => {
   const { toast } = useToast();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  useEffect(() => {
+    if (textareaRef.current) {
+      // Reset height to auto to get the correct scrollHeight
+      textareaRef.current.style.height = 'auto';
+      // Set the height to match the content
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [editItem?.caption]);
+
   if (!editItem) return null;
 
   const content = editItem.analyzed_content || {};
@@ -67,11 +79,16 @@ export const MediaEditDialog = ({
           <div className="space-y-2">
             <Label htmlFor="caption">Caption</Label>
             <Textarea
+              ref={textareaRef}
               id="caption"
               defaultValue={editItem.caption || ''}
-              onChange={(e) => onItemChange('caption', e.target.value)}
+              onChange={(e) => {
+                e.target.style.height = 'auto';
+                e.target.style.height = `${e.target.scrollHeight}px`;
+                onItemChange('caption', e.target.value);
+              }}
               placeholder="Enter caption"
-              className="min-h-[100px] resize-y"
+              className="min-h-[100px] resize-none overflow-hidden"
             />
           </div>
           
