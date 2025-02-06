@@ -45,6 +45,66 @@ export type Database = {
         }
         Relationships: []
       }
+      deleted_messages: {
+        Row: {
+          analyzed_content: Json | null
+          caption: string | null
+          deleted_at: string | null
+          deleted_from_telegram: boolean | null
+          deleted_via_telegram: boolean | null
+          deletion_error: string | null
+          file_id: string | null
+          file_unique_id: string | null
+          id: string
+          media_group_id: string | null
+          message_caption_id: string | null
+          mime_type: string | null
+          original_message_id: string
+          public_url: string | null
+          telegram_data: Json | null
+          telegram_message_id: number | null
+          user_id: string | null
+        }
+        Insert: {
+          analyzed_content?: Json | null
+          caption?: string | null
+          deleted_at?: string | null
+          deleted_from_telegram?: boolean | null
+          deleted_via_telegram?: boolean | null
+          deletion_error?: string | null
+          file_id?: string | null
+          file_unique_id?: string | null
+          id?: string
+          media_group_id?: string | null
+          message_caption_id?: string | null
+          mime_type?: string | null
+          original_message_id: string
+          public_url?: string | null
+          telegram_data?: Json | null
+          telegram_message_id?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          analyzed_content?: Json | null
+          caption?: string | null
+          deleted_at?: string | null
+          deleted_from_telegram?: boolean | null
+          deleted_via_telegram?: boolean | null
+          deletion_error?: string | null
+          file_id?: string | null
+          file_unique_id?: string | null
+          id?: string
+          media_group_id?: string | null
+          message_caption_id?: string | null
+          mime_type?: string | null
+          original_message_id?: string
+          public_url?: string | null
+          telegram_data?: Json | null
+          telegram_message_id?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       glide_accounts: {
         Row: {
           created_at: string | null

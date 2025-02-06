@@ -88,6 +88,7 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
   const handleDeleteConfirm = async (deleteTelegram: boolean) => {
     try {
       if (deleteTelegram && mainMedia.telegram_message_id && mainMedia.chat_id) {
+        // First delete from Telegram if requested
         const response = await supabase.functions.invoke('delete-telegram-message', {
           body: {
             message_id: mainMedia.telegram_message_id,
@@ -99,11 +100,20 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
         if (response.error) throw response.error;
       }
 
+      // Delete from database
+      const { error } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', mainMedia.id);
+
+      if (error) throw error;
+
+      // Call the onDelete callback
       await onDelete(mainMedia);
       
       toast({
         title: "Success",
-        description: "Product deleted successfully",
+        description: `Product deleted successfully${deleteTelegram ? ' from both Telegram and database' : ' from database'}`,
       });
     } catch (error) {
       console.error('Delete error:', error);
@@ -250,6 +260,11 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
             <AlertDialogTitle>Delete Product</AlertDialogTitle>
             <AlertDialogDescription>
               Do you want to delete this product from Telegram as well?
+              {mainMedia.media_group_id && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Note: This will delete all related media in the group.
+                </p>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
