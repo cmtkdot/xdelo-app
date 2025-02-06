@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { MediaViewer } from "./MediaViewer/MediaViewer";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProductGroupProps {
   group: MediaItem[];
@@ -45,7 +45,6 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
     
     setIsReanalyzing(true);
     try {
-      // Get the message with caption for reanalysis
       const messageToReanalyze = group.find(m => m.caption) || mainMedia;
       
       const response = await supabase.functions.invoke('reanalyze-low-confidence', {
@@ -72,6 +71,14 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
       });
     } finally {
       setIsReanalyzing(false);
+    }
+  };
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onDelete) {
+      onDelete(mainMedia);
     }
   };
 
@@ -109,26 +116,23 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
       </div>
       
       <div className="p-3 space-y-2">
-        {/* Product Info */}
-        <div className="space-y-1">
-          {mainMedia.purchase_order && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Order ID</span>
-              <span className="text-sm font-medium truncate max-w-[60%] text-right">
-                {mainMedia.purchase_order}
-              </span>
-            </div>
-          )}
-          
-          {mainMedia.analyzed_content?.quantity && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Quantity</span>
-              <span className="text-sm font-medium">
-                {mainMedia.analyzed_content.quantity}
-              </span>
-            </div>
-          )}
-        </div>
+        {mainMedia.purchase_order && (
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Order ID</span>
+            <span className="text-sm font-medium truncate max-w-[60%] text-right">
+              {mainMedia.purchase_order}
+            </span>
+          </div>
+        )}
+        
+        {mainMedia.analyzed_content?.quantity && (
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Quantity</span>
+            <span className="text-sm font-medium">
+              {mainMedia.analyzed_content.quantity}
+            </span>
+          </div>
+        )}
 
         {hasError && (
           <Alert variant="destructive" className="py-1 px-2 text-xs">
@@ -138,7 +142,6 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
           </Alert>
         )}
         
-        {/* Actions */}
         <div className="flex justify-between pt-2 border-t border-border">
           <Tabs defaultValue="edit" className="w-full max-w-xs">
             <TabsList className="grid grid-cols-3 gap-2">
@@ -180,7 +183,7 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
                   <TooltipTrigger asChild>
                     <TabsTrigger 
                       value="delete" 
-                      onClick={() => onDelete(mainMedia)} 
+                      onClick={handleDelete}
                       className="py-1.5 text-destructive hover:text-destructive/80"
                     >
                       <Trash2 className="w-4 h-4" />
