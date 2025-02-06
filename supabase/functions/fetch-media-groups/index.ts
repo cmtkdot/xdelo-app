@@ -35,7 +35,7 @@ serve(async (req) => {
 
     // Apply vendor filter using the new function
     if (filters.vendor && filters.vendor !== "all") {
-      query = query.eq('analyzed_content->vendor_uid', filters.vendor);
+      query = query.filter('analyzed_content->vendor_uid', 'eq', filters.vendor);
       console.log('Applying vendor filter:', filters.vendor);
     }
 
