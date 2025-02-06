@@ -70,6 +70,8 @@ export const MediaEditDialog = ({
               id="caption"
               value={editItem.caption || ''}
               onChange={(e) => onItemChange('caption', e.target.value)}
+              placeholder="Enter caption"
+              className="mt-1"
             />
           </div>
           <div>
@@ -78,6 +80,8 @@ export const MediaEditDialog = ({
               id="product_name"
               value={content.product_name || ''}
               onChange={(e) => onItemChange('analyzed_content.product_name', e.target.value)}
+              placeholder="Enter product name"
+              className="mt-1"
             />
           </div>
           <div>
@@ -86,6 +90,8 @@ export const MediaEditDialog = ({
               id="product_code"
               value={content.product_code || ''}
               onChange={(e) => onItemChange('analyzed_content.product_code', e.target.value)}
+              placeholder="Enter product code"
+              className="mt-1"
             />
           </div>
           <div>
@@ -94,6 +100,8 @@ export const MediaEditDialog = ({
               id="vendor_uid"
               value={content.vendor_uid || ''}
               onChange={(e) => onItemChange('analyzed_content.vendor_uid', e.target.value)}
+              placeholder="Enter vendor UID"
+              className="mt-1"
             />
           </div>
           <div>
@@ -103,6 +111,7 @@ export const MediaEditDialog = ({
               type="date"
               value={formatDate(content.purchase_date || null) || ''}
               onChange={(e) => onItemChange('analyzed_content.purchase_date', e.target.value)}
+              className="mt-1"
             />
           </div>
           <div>
@@ -112,6 +121,8 @@ export const MediaEditDialog = ({
               type="number"
               value={content.quantity || ''}
               onChange={(e) => onItemChange('analyzed_content.quantity', parseInt(e.target.value))}
+              placeholder="Enter quantity"
+              className="mt-1"
             />
           </div>
           <div>
@@ -120,6 +131,8 @@ export const MediaEditDialog = ({
               id="notes"
               value={content.notes || ''}
               onChange={(e) => onItemChange('analyzed_content.notes', e.target.value)}
+              placeholder="Enter notes"
+              className="mt-1"
             />
           </div>
           <div className="flex justify-end gap-2">
