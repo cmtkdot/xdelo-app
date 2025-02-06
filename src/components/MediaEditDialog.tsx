@@ -37,7 +37,7 @@ export const MediaEditDialog = ({
         const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
           body: {
             messageId: editItem.id,
-            newCaption: editItem.caption
+            newCaption: caption
           }
         });
 
@@ -63,10 +63,6 @@ export const MediaEditDialog = ({
     }
   };
 
-  const handleCaptionChange = (value: string) => {
-    onItemChange('caption', value);
-  };
-
   return (
     <Dialog open={!!editItem} onOpenChange={() => onClose()}>
       <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
@@ -77,7 +73,7 @@ export const MediaEditDialog = ({
             <Textarea
               id="caption"
               value={caption}
-              onChange={(e) => handleCaptionChange(e.target.value)}
+              onChange={(e) => onItemChange('caption', e.target.value)}
               placeholder="Enter caption"
               className="min-h-[100px] resize-y"
             />
