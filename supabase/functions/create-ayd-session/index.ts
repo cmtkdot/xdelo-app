@@ -19,19 +19,18 @@ serve(async (req) => {
       throw new Error('AYD_API_KEY is not set')
     }
 
-    // Get user info from request if needed
-    const { name, email } = await req.json()
-
     // Create session with AYD API
     const response = await fetch('https://www.askyourdatabase.com/api/chatbot/v2/session', {
       method: 'POST',
       headers: {
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en',
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${AYD_API_KEY}`,
       },
       body: JSON.stringify({
-        name: name || 'Guest',
-        email: email || 'guest@example.com'
+        name: 'Guest',
+        email: 'guest@example.com'
       }),
     })
 
@@ -40,6 +39,7 @@ serve(async (req) => {
     }
 
     const data = await response.json()
+    console.log('Session created successfully:', data)
 
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
