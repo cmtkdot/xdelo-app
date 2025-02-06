@@ -62,8 +62,6 @@ const PublicGallery = () => {
   };
 
   const handleItemChange = (field: string, value: any) => {
-    if (!editItem) return;
-
     setEditItem(prev => {
       if (!prev) return null;
 

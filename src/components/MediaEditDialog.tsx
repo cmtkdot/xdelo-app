@@ -43,7 +43,12 @@ export const MediaEditDialog = ({
         });
 
         if (captionError) {
-          throw captionError;
+          // Check if it's just a "message not modified" error
+          if (captionError.message?.includes('message is not modified')) {
+            console.log('Caption unchanged, proceeding with other updates');
+          } else {
+            throw captionError;
+          }
         }
       }
 
