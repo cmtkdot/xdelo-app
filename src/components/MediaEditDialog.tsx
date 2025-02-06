@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { MediaItem } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import { useState, useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 interface MediaEditDialogProps {
   editItem: MediaItem | null;
@@ -24,37 +24,27 @@ export const MediaEditDialog = ({
   formatDate,
 }: MediaEditDialogProps) => {
   const { toast } = useToast();
-  const [localCaption, setLocalCaption] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Initialize local state when editItem changes
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
   useEffect(() => {
-    if (editItem) {
-      setLocalCaption(editItem.caption || "");
+    if (textareaRef.current && editItem?.caption) {
+      textareaRef.current.style.height = '80px';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
-  }, [editItem]);
+  }, [editItem?.caption]);
 
   if (!editItem) return null;
 
   const content = editItem.analyzed_content || {};
 
-  const handleCaptionChange = (value: string) => {
-    setLocalCaption(value);
-    onItemChange("caption", value);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return;
-
+    
     try {
-      setIsSubmitting(true);
-
-      // Update caption in Telegram
-      const { error: captionError } = await supabase.functions.invoke("update-telegram-caption", {
+      const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
         body: {
           messageId: editItem.id,
-          newCaption: localCaption
+          newCaption: editItem.caption
         }
       });
 
@@ -70,14 +60,12 @@ export const MediaEditDialog = ({
       onSave();
       onClose();
     } catch (error) {
-      console.error("Error updating message:", error);
+      console.error('Error updating message:', error);
       toast({
         title: "Error",
         description: "Failed to update details. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -89,15 +77,17 @@ export const MediaEditDialog = ({
           <div className="space-y-2">
             <Label htmlFor="caption">Caption</Label>
             <Textarea
+              ref={textareaRef}
               id="caption"
-              value={localCaption}
-              onChange={(e) => handleCaptionChange(e.target.value)}
+              value={editItem.caption || ''}
+              onChange={(e) => {
+                const textarea = e.target;
+                textarea.style.height = '80px';
+                textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+                onItemChange('caption', e.target.value);
+              }}
               placeholder="Enter caption"
               className="min-h-[80px] max-h-[200px] resize-none"
-              style={{
-                height: "80px",
-                overflow: "auto"
-              }}
             />
           </div>
           
@@ -105,8 +95,8 @@ export const MediaEditDialog = ({
             <Label htmlFor="product_name">Product Name</Label>
             <Input
               id="product_name"
-              value={content.product_name || ""}
-              onChange={(e) => onItemChange("analyzed_content.product_name", e.target.value)}
+              value={content.product_name || ''}
+              onChange={(e) => onItemChange('analyzed_content.product_name', e.target.value)}
               placeholder="Enter product name"
             />
           </div>
@@ -115,8 +105,8 @@ export const MediaEditDialog = ({
             <Label htmlFor="product_code">Product Code</Label>
             <Input
               id="product_code"
-              value={content.product_code || ""}
-              onChange={(e) => onItemChange("analyzed_content.product_code", e.target.value)}
+              value={content.product_code || ''}
+              onChange={(e) => onItemChange('analyzed_content.product_code', e.target.value)}
               placeholder="Enter product code"
             />
           </div>
@@ -125,8 +115,8 @@ export const MediaEditDialog = ({
             <Label htmlFor="vendor_uid">Vendor UID</Label>
             <Input
               id="vendor_uid"
-              value={content.vendor_uid || ""}
-              onChange={(e) => onItemChange("analyzed_content.vendor_uid", e.target.value)}
+              value={content.vendor_uid || ''}
+              onChange={(e) => onItemChange('analyzed_content.vendor_uid', e.target.value)}
               placeholder="Enter vendor UID"
             />
           </div>
@@ -136,8 +126,8 @@ export const MediaEditDialog = ({
             <Input
               id="purchase_date"
               type="date"
-              value={formatDate(content.purchase_date || null) || ""}
-              onChange={(e) => onItemChange("analyzed_content.purchase_date", e.target.value)}
+              value={formatDate(content.purchase_date || null) || ''}
+              onChange={(e) => onItemChange('analyzed_content.purchase_date', e.target.value)}
             />
           </div>
 
@@ -146,8 +136,8 @@ export const MediaEditDialog = ({
             <Input
               id="quantity"
               type="number"
-              value={content.quantity || ""}
-              onChange={(e) => onItemChange("analyzed_content.quantity", parseInt(e.target.value))}
+              value={content.quantity || ''}
+              onChange={(e) => onItemChange('analyzed_content.quantity', parseInt(e.target.value))}
               placeholder="Enter quantity"
             />
           </div>
@@ -156,25 +146,18 @@ export const MediaEditDialog = ({
             <Label htmlFor="notes">Notes</Label>
             <Textarea
               id="notes"
-              value={content.notes || ""}
-              onChange={(e) => onItemChange("analyzed_content.notes", e.target.value)}
+              value={content.notes || ''}
+              onChange={(e) => onItemChange('analyzed_content.notes', e.target.value)}
               placeholder="Enter notes"
               className="min-h-[80px] resize-y"
             />
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={onClose}
-              disabled={isSubmitting}
-            >
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : "Save"}
-            </Button>
+            <Button type="submit">Save</Button>
           </div>
           
           {/* Telegram Channel Information */}
