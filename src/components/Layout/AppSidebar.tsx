@@ -1,6 +1,7 @@
+
 import { useState } from "react";
 import { Sidebar, SidebarBody, SidebarLink } from "@/components/ui/sidebar";
-import { LayoutDashboard, MessageSquare, Package, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, MessageSquare, Package, Settings, LogOut, Bot } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
@@ -48,6 +49,12 @@ export function AppSidebar() {
       href: "/vendors",
       icon: <Package className="text-[#0066FF] h-5 w-5 flex-shrink-0" />,
       onClick: () => navigate("/vendors")
+    },
+    {
+      label: "AI Chat",
+      href: "/ai-chat",
+      icon: <Bot className="text-[#0066FF] h-5 w-5 flex-shrink-0" />,
+      onClick: () => navigate("/ai-chat")
     },
     {
       label: "Settings",

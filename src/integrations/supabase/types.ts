@@ -1300,48 +1300,6 @@ export type Database = {
         }
         Relationships: []
       }
-      gl_sync_queue: {
-        Row: {
-          created_at: string | null
-          error_message: string | null
-          id: string
-          mapped_data: Json | null
-          operation_type: string
-          raw_data: Json | null
-          record_id: string
-          retry_count: number | null
-          status: Database["public"]["Enums"]["sync_status"] | null
-          table_name: string
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          error_message?: string | null
-          id?: string
-          mapped_data?: Json | null
-          operation_type: string
-          raw_data?: Json | null
-          record_id: string
-          retry_count?: number | null
-          status?: Database["public"]["Enums"]["sync_status"] | null
-          table_name: string
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          error_message?: string | null
-          id?: string
-          mapped_data?: Json | null
-          operation_type?: string
-          raw_data?: Json | null
-          record_id?: string
-          retry_count?: number | null
-          status?: Database["public"]["Enums"]["sync_status"] | null
-          table_name?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       gl_vendor_payments: {
         Row: {
           automatically_recorded: boolean | null
@@ -1746,6 +1704,21 @@ export type Database = {
         }
         Returns: string
       }
+      filter_by_vendor: {
+        Args: {
+          vendor_param: string
+        }
+        Returns: {
+          id: string
+          analyzed_content: Json
+          telegram_message_id: string
+          caption: string
+          media_group_id: string
+          created_at: string
+          is_original_caption: boolean
+          purchase_date: string
+        }[]
+      }
       fix_media_groups: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -1879,6 +1852,10 @@ export type Database = {
           reanalysis_attempted: boolean
         }[]
       }
+      process_glide_sync_queue: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       process_media_group_analysis: {
         Args: {
           p_message_id: string
@@ -1896,6 +1873,10 @@ export type Database = {
           p_processing_completed_at?: string
           p_correlation_id?: string
         }
+        Returns: undefined
+      }
+      schedule_sync_check: {
+        Args: Record<PropertyKey, never>
         Returns: undefined
       }
       text_to_bytea: {

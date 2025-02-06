@@ -1,17 +1,13 @@
 import { useState, useEffect } from "react";
-import { FilterValues, ProcessingState } from "@/types";
+import { FilterValues } from "@/types";
 import { Filter, X } from "lucide-react";
-import debounce from 'lodash/debounce';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SearchFilter } from "./Filters/SearchFilter";
-import { ProductCodeFilter } from "./Filters/ProductCodeFilter";
 import { QuantityFilter } from "./Filters/QuantityFilter";
 import { VendorFilter } from "./Filters/VendorFilter";
-import { ProcessingStateFilter } from "./Filters/ProcessingStateFilter";
 import { DateRangeFilter } from "./Filters/DateRangeFilter";
-import { Separator } from "@/components/ui/separator";
 
 interface ProductFiltersProps {
   vendors: string[];
@@ -22,12 +18,11 @@ interface ProductFiltersProps {
 export default function ProductFilters({ vendors, filters, onFilterChange }: ProductFiltersProps) {
   const [search, setSearch] = useState(filters.search);
   const [vendor, setVendor] = useState(filters.vendor);
-  const [dateField, setDateField] = useState<'purchase_date' | 'created_at' | 'updated_at'>(filters.dateField);
+  const [dateField, setDateField] = useState<'purchase_date' | 'created_at'>(filters.dateField);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder);
   const [quantityRange, setQuantityRange] = useState(filters.quantityRange || 'all');
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
-  // Count active filters
   useEffect(() => {
     let count = 0;
     if (search) count++;
@@ -36,14 +31,8 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     setActiveFiltersCount(count);
   }, [search, vendor, quantityRange]);
 
-  // Debounce filter changes
-  const debouncedFilterChange = debounce((newFilters: FilterValues) => {
-    onFilterChange(newFilters);
-  }, 300);
-
-  // Update filters when any value changes
   useEffect(() => {
-    debouncedFilterChange({
+    onFilterChange({
       search,
       vendor,
       dateField,
@@ -62,21 +51,22 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   };
 
   const FilterContent = () => (
-    <div className="flex flex-col space-y-6">
-      <div className="w-full">
-        <SearchFilter value={search} onChange={setSearch} />
-      </div>
-
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-6 flex-1">
+          <div className="flex-1">
+            <SearchFilter value={search} onChange={setSearch} />
+          </div>
           <VendorFilter value={vendor} vendors={vendors} onChange={setVendor} />
           <QuantityFilter value={quantityRange} onChange={setQuantityRange} />
-          <DateRangeFilter
-            dateField={dateField}
-            sortOrder={sortOrder}
-            onDateFieldChange={setDateField}
-            onSortOrderChange={setSortOrder}
-          />
+          <div className="ml-auto">
+            <DateRangeFilter
+              dateField={dateField}
+              sortOrder={sortOrder}
+              onDateFieldChange={setDateField}
+              onSortOrderChange={setSortOrder}
+            />
+          </div>
         </div>
       </div>
 
