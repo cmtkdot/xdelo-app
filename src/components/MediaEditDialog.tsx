@@ -70,7 +70,6 @@ export const MediaEditDialog = ({
               id="caption"
               value={editItem.caption || ''}
               onChange={(e) => onItemChange('caption', e.target.value)}
-              placeholder="Enter caption"
             />
           </div>
           <div>
