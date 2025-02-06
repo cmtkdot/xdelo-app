@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { MediaItem } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
@@ -30,7 +31,6 @@ export const MediaEditDialog = ({
     e.preventDefault();
     
     try {
-      // Update caption in Telegram
       const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
         body: {
           messageId: editItem.id,
@@ -61,81 +61,83 @@ export const MediaEditDialog = ({
 
   return (
     <Dialog open={!!editItem} onOpenChange={() => onClose()}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogTitle>Edit Media Details</DialogTitle>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="caption">Caption</Label>
-            <Input
+            <Textarea
               id="caption"
-              value={editItem.caption || ''}
+              defaultValue={editItem.caption || ''}
               onChange={(e) => onItemChange('caption', e.target.value)}
               placeholder="Enter caption"
-              className="mt-1"
+              className="min-h-[100px] resize-y"
             />
           </div>
-          <div>
+          
+          <div className="space-y-2">
             <Label htmlFor="product_name">Product Name</Label>
             <Input
               id="product_name"
-              value={content.product_name || ''}
+              defaultValue={content.product_name || ''}
               onChange={(e) => onItemChange('analyzed_content.product_name', e.target.value)}
               placeholder="Enter product name"
-              className="mt-1"
             />
           </div>
-          <div>
+
+          <div className="space-y-2">
             <Label htmlFor="product_code">Product Code</Label>
             <Input
               id="product_code"
-              value={content.product_code || ''}
+              defaultValue={content.product_code || ''}
               onChange={(e) => onItemChange('analyzed_content.product_code', e.target.value)}
               placeholder="Enter product code"
-              className="mt-1"
             />
           </div>
-          <div>
+
+          <div className="space-y-2">
             <Label htmlFor="vendor_uid">Vendor UID</Label>
             <Input
               id="vendor_uid"
-              value={content.vendor_uid || ''}
+              defaultValue={content.vendor_uid || ''}
               onChange={(e) => onItemChange('analyzed_content.vendor_uid', e.target.value)}
               placeholder="Enter vendor UID"
-              className="mt-1"
             />
           </div>
-          <div>
+
+          <div className="space-y-2">
             <Label htmlFor="purchase_date">Purchase Date</Label>
             <Input
               id="purchase_date"
               type="date"
-              value={formatDate(content.purchase_date || null) || ''}
+              defaultValue={formatDate(content.purchase_date || null) || ''}
               onChange={(e) => onItemChange('analyzed_content.purchase_date', e.target.value)}
-              className="mt-1"
             />
           </div>
-          <div>
+
+          <div className="space-y-2">
             <Label htmlFor="quantity">Quantity</Label>
             <Input
               id="quantity"
               type="number"
-              value={content.quantity || ''}
+              defaultValue={content.quantity || ''}
               onChange={(e) => onItemChange('analyzed_content.quantity', parseInt(e.target.value))}
               placeholder="Enter quantity"
-              className="mt-1"
             />
           </div>
-          <div>
+
+          <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>
-            <Input
+            <Textarea
               id="notes"
-              value={content.notes || ''}
+              defaultValue={content.notes || ''}
               onChange={(e) => onItemChange('analyzed_content.notes', e.target.value)}
               placeholder="Enter notes"
-              className="mt-1"
+              className="min-h-[80px] resize-y"
             />
           </div>
-          <div className="flex justify-end gap-2">
+
+          <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
