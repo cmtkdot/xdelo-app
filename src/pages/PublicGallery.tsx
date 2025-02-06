@@ -9,8 +9,6 @@ import { useMediaGroups } from "@/hooks/useMediaGroups";
 import { format } from "date-fns";
 import ProductFilters from "@/components/ProductGallery/ProductFilters";
 
-const SECURE_ACCESS_TOKEN = "cmtktrading-gallery-2024";
-
 const PublicGallery = () => {
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -127,10 +125,32 @@ const PublicGallery = () => {
     }
   };
 
+  const handleDelete = async (media: MediaItem) => {
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({ is_deleted: true })
+        .eq('id', media.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Product deleted successfully",
+      });
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete product",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-6 space-y-6">
-        {/* Filters Section */}
         <div className="bg-card rounded-lg shadow-sm p-4">
           <ProductFilters
             vendors={vendors}
@@ -142,7 +162,7 @@ const PublicGallery = () => {
         <ProductGrid 
           mediaGroups={mediaGroups} 
           onEdit={handleEdit}
-          onDelete={() => {}}
+          onDelete={handleDelete}
         />
         
         {Object.keys(mediaGroups).length > 0 && (

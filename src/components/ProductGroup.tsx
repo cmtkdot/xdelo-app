@@ -74,11 +74,24 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
     }
   };
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (onDelete) {
-      onDelete(mainMedia);
+    try {
+      if (onDelete && mainMedia) {
+        await onDelete(mainMedia);
+        toast({
+          title: "Success",
+          description: "Product deleted successfully",
+        });
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete product. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -168,7 +181,7 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
                   <TooltipTrigger asChild>
                     <TabsTrigger 
                       value="edit" 
-                      onClick={() => onEdit(mainMedia)} 
+                      onClick={() => onEdit(mainMedia)}
                       className="py-1.5 text-black hover:text-black/80 dark:text-white dark:hover:text-white/80"
                     >
                       <Pencil className="w-4 h-4" />
