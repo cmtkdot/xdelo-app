@@ -105,36 +105,6 @@ export type Database = {
         }
         Relationships: []
       }
-      glide_accounts: {
-        Row: {
-          created_at: string | null
-          glide_id: string | null
-          id: string
-          last_sync_time: string | null
-          name: string
-          sync_status: Database["public"]["Enums"]["sync_status"] | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          glide_id?: string | null
-          id?: string
-          last_sync_time?: string | null
-          name: string
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          glide_id?: string | null
-          id?: string
-          last_sync_time?: string | null
-          name?: string
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       glide_configuration: {
         Row: {
           api_endpoint: string
@@ -700,7 +670,7 @@ export type Database = {
           file_size: number | null
           file_unique_id: string | null
           glide_row_id: string | null
-          glide_stock: number | null
+          glide_stock: string | null
           group_caption_synced: boolean | null
           group_first_message_time: string | null
           group_last_message_time: string | null
@@ -708,6 +678,7 @@ export type Database = {
           height: number | null
           id: string
           is_deleted: boolean | null
+          is_miscellaneous_item: boolean | null
           is_original_caption: boolean | null
           last_error_at: string | null
           media_group_id: string | null
@@ -751,7 +722,7 @@ export type Database = {
           file_size?: number | null
           file_unique_id?: string | null
           glide_row_id?: string | null
-          glide_stock?: number | null
+          glide_stock?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
@@ -759,6 +730,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_deleted?: boolean | null
+          is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
           media_group_id?: string | null
@@ -802,7 +774,7 @@ export type Database = {
           file_size?: number | null
           file_unique_id?: string | null
           glide_row_id?: string | null
-          glide_stock?: number | null
+          glide_stock?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
@@ -810,6 +782,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_deleted?: boolean | null
+          is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
           media_group_id?: string | null

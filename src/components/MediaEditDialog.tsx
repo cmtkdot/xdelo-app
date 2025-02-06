@@ -1,4 +1,4 @@
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -30,11 +30,11 @@ export const MediaEditDialog = ({
     e.preventDefault();
     
     try {
-      // If caption was changed, update it in Telegram
+      // Update caption in Telegram if it was changed
       if (editItem.caption !== editItem.caption) {
         const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
           body: {
-            messageId: editItem.telegram_message_id,
+            messageId: editItem.id,
             newCaption: editItem.caption || ''
           }
         });
@@ -64,6 +64,7 @@ export const MediaEditDialog = ({
   return (
     <Dialog open={!!editItem} onOpenChange={() => onClose()}>
       <DialogContent className="sm:max-w-[425px]">
+        <DialogTitle>Edit Media Details</DialogTitle>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="caption">Caption</Label>
@@ -78,7 +79,7 @@ export const MediaEditDialog = ({
             <Input
               id="product_name"
               value={content.product_name || ''}
-              onChange={(e) => onItemChange('product_name', e.target.value)}
+              onChange={(e) => onItemChange('analyzed_content.product_name', e.target.value)}
             />
           </div>
           <div>
@@ -86,7 +87,7 @@ export const MediaEditDialog = ({
             <Input
               id="product_code"
               value={content.product_code || ''}
-              onChange={(e) => onItemChange('product_code', e.target.value)}
+              onChange={(e) => onItemChange('analyzed_content.product_code', e.target.value)}
             />
           </div>
           <div>
@@ -94,7 +95,7 @@ export const MediaEditDialog = ({
             <Input
               id="vendor_uid"
               value={content.vendor_uid || ''}
-              onChange={(e) => onItemChange('vendor_uid', e.target.value)}
+              onChange={(e) => onItemChange('analyzed_content.vendor_uid', e.target.value)}
             />
           </div>
           <div>
@@ -103,7 +104,7 @@ export const MediaEditDialog = ({
               id="purchase_date"
               type="date"
               value={formatDate(content.purchase_date || null) || ''}
-              onChange={(e) => onItemChange('purchase_date', e.target.value)}
+              onChange={(e) => onItemChange('analyzed_content.purchase_date', e.target.value)}
             />
           </div>
           <div>
@@ -112,7 +113,7 @@ export const MediaEditDialog = ({
               id="quantity"
               type="number"
               value={content.quantity || ''}
-              onChange={(e) => onItemChange('quantity', parseInt(e.target.value))}
+              onChange={(e) => onItemChange('analyzed_content.quantity', parseInt(e.target.value))}
             />
           </div>
           <div>
@@ -120,7 +121,7 @@ export const MediaEditDialog = ({
             <Input
               id="notes"
               value={content.notes || ''}
-              onChange={(e) => onItemChange('notes', e.target.value)}
+              onChange={(e) => onItemChange('analyzed_content.notes', e.target.value)}
             />
           </div>
           <div className="flex justify-end gap-2">
@@ -128,6 +129,33 @@ export const MediaEditDialog = ({
               Cancel
             </Button>
             <Button type="submit">Save</Button>
+          </div>
+          
+          {/* Telegram Channel Information */}
+          <div className="mt-6 border-t pt-4">
+            <p className="text-xs text-gray-500">
+              Telegram Info:
+              {editItem.chat_id && (
+                <span className="block">
+                  Channel ID: {editItem.chat_id}
+                </span>
+              )}
+              {editItem.chat_type && (
+                <span className="block">
+                  Type: {editItem.chat_type}
+                </span>
+              )}
+              {editItem.message_url && (
+                <a 
+                  href={editItem.message_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="block text-blue-500 hover:underline"
+                >
+                  View in Telegram
+                </a>
+              )}
+            </p>
           </div>
         </form>
       </DialogContent>
