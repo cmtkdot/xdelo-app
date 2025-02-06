@@ -48,6 +48,7 @@ export const MediaEditDialog = ({
       const originalCaption = (editItem.telegram_data as TelegramData)?.message?.caption || '';
       const newCaption = getTelegramCaption();
       
+      // Update caption in Telegram if changed
       if (originalCaption !== newCaption) {
         const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
           body: {
@@ -61,6 +62,7 @@ export const MediaEditDialog = ({
         }
       }
 
+      // Update analyzed content with new metadata
       const updatedContent: AnalyzedContent = {
         ...content,
         parsing_metadata: {
