@@ -19,6 +19,11 @@ serve(async (req) => {
       throw new Error('AYD_API_KEY is not set')
     }
 
+    const CHATBOT_ID = Deno.env.get('AYD_CHATBOT_ID')
+    if (!CHATBOT_ID) {
+      throw new Error('AYD_CHATBOT_ID is not set')
+    }
+
     // Create session with AYD API
     const response = await fetch('https://www.askyourdatabase.com/api/chatbot/v2/session', {
       method: 'POST',
@@ -29,13 +34,20 @@ serve(async (req) => {
         'Authorization': `Bearer ${AYD_API_KEY}`,
       },
       body: JSON.stringify({
+        chatbotid: CHATBOT_ID,
         name: 'Guest',
         email: 'guest@example.com'
       }),
     })
 
     if (!response.ok) {
-      throw new Error(`Failed to create session: ${response.statusText}`)
+      const errorText = await response.text()
+      console.error('AYD API Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText
+      })
+      throw new Error(`Failed to create session: ${response.statusText}. ${errorText}`)
     }
 
     const data = await response.json()
