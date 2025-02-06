@@ -1,14 +1,12 @@
 import { useState, useEffect } from "react";
-import { FilterValues, ProcessingState } from "@/types";
+import { FilterValues } from "@/types";
 import { Filter, X } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SearchFilter } from "./Filters/SearchFilter";
-import { ProductCodeFilter } from "./Filters/ProductCodeFilter";
 import { QuantityFilter } from "./Filters/QuantityFilter";
 import { VendorFilter } from "./Filters/VendorFilter";
-import { ProcessingStateFilter } from "./Filters/ProcessingStateFilter";
 import { DateRangeFilter } from "./Filters/DateRangeFilter";
 
 interface ProductFiltersProps {
@@ -55,21 +53,21 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   };
 
   const FilterContent = () => (
-    <div className="flex flex-col space-y-6">
-      <div className="w-full">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-4">
         <SearchFilter value={search} onChange={setSearch} />
+        <DateRangeFilter
+          dateField={dateField}
+          sortOrder={sortOrder}
+          onDateFieldChange={setDateField}
+          onSortOrderChange={setSortOrder}
+        />
       </div>
 
       <div className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <VendorFilter value={vendor} vendors={vendors} onChange={setVendor} />
           <QuantityFilter value={quantityRange} onChange={setQuantityRange} />
-          <DateRangeFilter
-            dateField={dateField}
-            sortOrder={sortOrder}
-            onDateFieldChange={setDateField}
-            onSortOrderChange={setSortOrder}
-          />
         </div>
       </div>
 

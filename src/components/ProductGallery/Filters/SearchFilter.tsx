@@ -1,7 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
-import debounce from 'lodash/debounce';
+import { Button } from "@/components/ui/button";
 
 interface SearchFilterProps {
   value: string;
@@ -11,34 +11,39 @@ interface SearchFilterProps {
 export const SearchFilter = ({ value, onChange }: SearchFilterProps) => {
   const [localValue, setLocalValue] = useState(value);
 
-  // Create a debounced version of onChange
-  const debouncedOnChange = debounce((newValue: string) => {
-    onChange(newValue);
-  }, 300);
-
   // Update local value when prop changes
   useEffect(() => {
     setLocalValue(value);
   }, [value]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    setLocalValue(newValue);
-    debouncedOnChange(newValue);
+  const handleSubmit = () => {
+    onChange(localValue);
   };
 
   return (
-    <div className="space-y-1">
-      <label className="text-xs font-medium flex items-center gap-1">
-        <Search className="w-3 h-3" />
+    <div className="flex items-center gap-2">
+      <div className="relative flex-1">
+        <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search products..."
+          value={localValue}
+          onChange={(e) => setLocalValue(e.target.value)}
+          className="h-8 pl-7 text-sm w-[200px]"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleSubmit();
+            }
+          }}
+        />
+      </div>
+      <Button 
+        variant="secondary" 
+        size="sm" 
+        onClick={handleSubmit}
+        className="h-8"
+      >
         Search
-      </label>
-      <Input
-        placeholder="Search products..."
-        value={localValue}
-        onChange={handleChange}
-        className="h-8 text-sm"
-      />
+      </Button>
     </div>
   );
 };
