@@ -105,6 +105,12 @@ export type Database = {
         }
         Relationships: []
       }
+      gl_configuration: {
+        Row: {}
+        Insert: {}
+        Update: {}
+        Relationships: []
+      }
       glide_configuration: {
         Row: {
           api_endpoint: string
