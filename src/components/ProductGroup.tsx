@@ -87,23 +87,48 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
 
   const handleDeleteConfirm = async (deleteTelegram: boolean) => {
     try {
-      if (deleteTelegram && mainMedia.telegram_message_id && mainMedia.chat_id) {
+      const mediaToDelete = mainMedia;
+      
+      if (deleteTelegram && mediaToDelete.telegram_message_id && mediaToDelete.chat_id) {
+        // First delete from Telegram if requested
         const response = await supabase.functions.invoke('delete-telegram-message', {
           body: {
-            message_id: mainMedia.telegram_message_id,
-            chat_id: mainMedia.chat_id,
-            media_group_id: mainMedia.media_group_id
+            message_id: mediaToDelete.telegram_message_id,
+            chat_id: mediaToDelete.chat_id,
+            media_group_id: mediaToDelete.media_group_id
           }
         });
 
         if (response.error) throw response.error;
+      } else {
+        // If we're only deleting from database, we need to delete the media file
+        // The storage file deletion is handled by the cleanup_storage_on_delete trigger
+        // which is only triggered when deleteTelegram is false
+        const { error: storageError } = await supabase.storage
+          .from('telegram-media')
+          .remove([`${mediaToDelete.file_unique_id}.${mediaToDelete.mime_type?.split('/')[1] || 'jpg'}`]);
+
+        if (storageError) {
+          console.error('Storage deletion error:', storageError);
+          // Continue with database deletion even if storage deletion fails
+        }
       }
 
-      await onDelete(mainMedia);
+      // Delete from database - this will trigger the appropriate deletion trigger
+      // based on whether we deleted from Telegram or not
+      const { error } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', mediaToDelete.id);
+
+      if (error) throw error;
+
+      // Call the onDelete callback
+      await onDelete(mediaToDelete);
       
       toast({
         title: "Success",
-        description: "Product deleted successfully",
+        description: `Product deleted successfully${deleteTelegram ? ' from both Telegram and database' : ' from database'}`,
       });
     } catch (error) {
       console.error('Delete error:', error);
@@ -250,6 +275,11 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
             <AlertDialogTitle>Delete Product</AlertDialogTitle>
             <AlertDialogDescription>
               Do you want to delete this product from Telegram as well?
+              {mainMedia.media_group_id && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Note: This will delete all related media in the group.
+                </p>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

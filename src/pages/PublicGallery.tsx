@@ -1,12 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, FilterValues, analyzedContentToJson } from "@/types";
+import { MediaItem, FilterValues } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
 import { ProductPagination } from "@/components/ProductGallery/ProductPagination";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
-import { format } from "date-fns";
 import ProductFilters from "@/components/ProductGallery/ProductFilters";
 
 const PublicGallery = () => {
@@ -53,7 +52,6 @@ const PublicGallery = () => {
   const { data } = useMediaGroups(currentPage, filters);
   const mediaGroups = data?.mediaGroups ?? {};
   const totalPages = data?.totalPages ?? 1;
-  const groupsArray = Object.values(mediaGroups);
 
   const handleEdit = (media: MediaItem) => {
     const groupKey = media.media_group_id || media.id;
@@ -62,56 +60,13 @@ const PublicGallery = () => {
     setEditItem(mainMedia);
   };
 
-  const handleItemChange = (field: string, value: any) => {
-    if (editItem) {
-      const updatedContent = {
-        ...(editItem.analyzed_content || {}),
-        [field]: value,
-        parsing_metadata: {
-          method: 'manual' as const,
-          confidence: 1.0,
-          timestamp: new Date().toISOString()
-        }
-      };
-
-      setEditItem({
-        ...editItem,
-        analyzed_content: updatedContent
-      });
-    }
-  };
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return null;
-    try {
-      return format(new Date(dateString), 'yyyy-MM-dd');
-    } catch (error) {
-      console.error("Error formatting date:", error);
-      return null;
-    }
-  };
-
   const handleSave = async () => {
     if (!editItem) return;
 
     try {
-      const analyzedContentJson = editItem.analyzed_content ? 
-        analyzedContentToJson(editItem.analyzed_content) : null;
-
-      const { error } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: analyzedContentJson,
-          processing_state: 'completed',
-          group_caption_synced: true
-        })
-        .eq('id', editItem.id);
-
-      if (error) throw error;
-
       toast({
         title: "Success",
-        description: "Product details updated successfully.",
+        description: "Caption updated successfully.",
       });
       
       setEditItem(null);
@@ -119,30 +74,7 @@ const PublicGallery = () => {
       console.error('Error updating message:', error);
       toast({
         title: "Error",
-        description: "Failed to update product details.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDelete = async (media: MediaItem) => {
-    try {
-      const { error } = await supabase
-        .from('messages')
-        .update({ is_deleted: true })
-        .eq('id', media.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Product deleted successfully",
-      });
-    } catch (error) {
-      console.error('Error deleting message:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete product",
+        description: "Failed to update caption.",
         variant: "destructive",
       });
     }
@@ -162,7 +94,7 @@ const PublicGallery = () => {
         <ProductGrid 
           mediaGroups={mediaGroups} 
           onEdit={handleEdit}
-          onDelete={handleDelete}
+          onDelete={() => {}}
         />
         
         {Object.keys(mediaGroups).length > 0 && (
@@ -177,8 +109,6 @@ const PublicGallery = () => {
           editItem={editItem}
           onClose={() => setEditItem(null)}
           onSave={handleSave}
-          onItemChange={handleItemChange}
-          formatDate={formatDate}
         />
       </div>
     </div>
