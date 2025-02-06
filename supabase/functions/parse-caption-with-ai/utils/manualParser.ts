@@ -6,9 +6,11 @@ export async function manualParse(caption: string): Promise<ParsedContent> {
   const result: ParsedContent = {};
   const fallbacks_used: string[] = [];
 
-  // Extract product name (text before # or x)
+  // Extract product name (text before line break, dash, # or x)
   const xIndex = caption.toLowerCase().indexOf('x');
   const hashIndex = caption.indexOf('#');
+  const lineBreakIndex = caption.indexOf('\n');
+  const dashIndex = caption.indexOf('-');
   let endIndex = caption.length;
   
   if (xIndex > 0) {
@@ -16,6 +18,12 @@ export async function manualParse(caption: string): Promise<ParsedContent> {
   }
   if (hashIndex > 0) {
     endIndex = Math.min(endIndex, hashIndex);
+  }
+  if (lineBreakIndex > 0) {
+    endIndex = Math.min(endIndex, lineBreakIndex);
+  }
+  if (dashIndex > 0) {
+    endIndex = Math.min(endIndex, dashIndex);
   }
   
   const productNameMatch = caption.substring(0, endIndex).trim();
