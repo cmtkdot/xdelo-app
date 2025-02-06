@@ -11,19 +11,28 @@ export default function AIChat() {
   useEffect(() => {
     const initChat = async () => {
       try {
+        console.log("Initializing chat session...");
         const { data, error } = await supabase.functions.invoke('create-ayd-session', {
           body: { }
         });
 
-        if (error) throw error;
-        if (!data?.url) throw new Error('No URL returned from session creation');
+        if (error) {
+          console.error('Supabase function error:', error);
+          throw error;
+        }
+
+        console.log("Response from create-ayd-session:", data);
+        
+        if (!data?.url) {
+          throw new Error('No URL returned from session creation');
+        }
 
         setIframeUrl(data.url);
       } catch (error: any) {
         console.error('Error initializing chat:', error);
         toast({
           title: "Error",
-          description: "Failed to initialize chat. Please try again.",
+          description: error?.message || "Failed to initialize chat. Please try again.",
           variant: "destructive",
         });
       } finally {
@@ -58,3 +67,4 @@ export default function AIChat() {
     </div>
   );
 }
+
