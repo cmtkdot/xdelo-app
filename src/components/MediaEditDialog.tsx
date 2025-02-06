@@ -34,7 +34,7 @@ export const MediaEditDialog = ({
       if (editItem.caption !== content.caption) {
         const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
           body: {
-            messageId: editItem.id,
+            messageId: editItem.telegram_message_id,
             newCaption: content.caption || ''
           }
         });

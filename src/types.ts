@@ -11,6 +11,7 @@ export interface AnalyzedContent {
   unit_price?: number;
   total_price?: number;
   notes?: string;
+  caption?: string;
   parsing_metadata?: {
     method: 'manual' | 'ai';
     confidence: number;

@@ -639,8 +639,8 @@ export type Database = {
           file_id: string | null
           file_size: number | null
           file_unique_id: string | null
-          glide_quantity: number | null
           glide_row_id: string | null
+          glide_stock: number | null
           group_caption_synced: boolean | null
           group_first_message_time: string | null
           group_last_message_time: string | null
@@ -690,8 +690,8 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
-          glide_quantity?: number | null
           glide_row_id?: string | null
+          glide_stock?: number | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
@@ -741,8 +741,8 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
-          glide_quantity?: number | null
           glide_row_id?: string | null
+          glide_stock?: number | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
