@@ -32,45 +32,23 @@ export const MediaEditDialog = ({
     e.preventDefault();
     
     try {
-      // Update both the caption and telegram_data
-      const telegramData = editItem.telegram_data || {};
-      const updatedTelegramData = {
-        ...telegramData,
-        message: {
-          ...(telegramData.message || {}),
-          caption: editItem.caption
+      // Only update if caption has changed
+      if (caption !== editItem.caption) {
+        const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
+          body: {
+            messageId: editItem.id,
+            newCaption: editItem.caption
+          }
+        });
+
+        if (captionError) {
+          throw captionError;
         }
-      };
-
-      // First update the message in Telegram
-      const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
-        body: {
-          messageId: editItem.id,
-          newCaption: editItem.caption
-        }
-      });
-
-      if (captionError) {
-        throw captionError;
-      }
-
-      // Then update our database
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          caption: editItem.caption,
-          telegram_data: updatedTelegramData,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', editItem.id);
-
-      if (updateError) {
-        throw updateError;
       }
 
       toast({
         title: "Success",
-        description: "Product details and caption have been updated",
+        description: "Product details have been updated",
       });
 
       onSave();

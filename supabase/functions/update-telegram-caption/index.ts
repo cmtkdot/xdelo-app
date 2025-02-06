@@ -37,6 +37,16 @@ serve(async (req) => {
       throw new Error('Message not found');
     }
 
+    // Check if the caption is actually different
+    const currentCaption = message.caption || '';
+    if (currentCaption === newCaption) {
+      console.log('Caption unchanged, skipping update');
+      return new Response(
+        JSON.stringify({ success: true, message: 'Caption unchanged' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Update caption in Telegram
     const telegramResponse = await fetch(
       `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageCaption`,
@@ -57,14 +67,29 @@ serve(async (req) => {
     console.log('Telegram API response:', telegramResult);
 
     if (!telegramResponse.ok) {
-      throw new Error(`Telegram API error: ${JSON.stringify(telegramResult)}`);
+      // Check if it's just a "message not modified" error
+      if (telegramResult.description?.includes('message is not modified')) {
+        console.log('Message not modified, proceeding with database update');
+      } else {
+        throw new Error(`Telegram API error: ${JSON.stringify(telegramResult)}`);
+      }
     }
+
+    // Update telegram_data with new caption
+    const updatedTelegramData = {
+      ...message.telegram_data,
+      message: {
+        ...(message.telegram_data?.message || {}),
+        caption: newCaption
+      }
+    };
 
     // Update caption in database
     const { error: updateError } = await supabase
       .from('messages')
       .update({ 
         caption: newCaption,
+        telegram_data: updatedTelegramData,
         updated_at: new Date().toISOString(),
       })
       .eq('id', messageId);
