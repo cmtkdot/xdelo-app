@@ -3,6 +3,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { MediaItem } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 interface MediaEditDialogProps {
   editItem: MediaItem | null;
@@ -19,20 +21,58 @@ export const MediaEditDialog = ({
   onItemChange,
   formatDate,
 }: MediaEditDialogProps) => {
+  const { toast } = useToast();
   if (!editItem) return null;
 
   const content = editItem.analyzed_content || {};
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave();
-    onClose();
+    
+    try {
+      // If caption was changed, update it in Telegram
+      if (editItem.caption !== content.caption) {
+        const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
+          body: {
+            messageId: editItem.id,
+            newCaption: content.caption || ''
+          }
+        });
+
+        if (captionError) {
+          throw captionError;
+        }
+
+        toast({
+          title: "Caption Updated",
+          description: "Caption has been updated in Telegram and database",
+        });
+      }
+
+      onSave();
+      onClose();
+    } catch (error) {
+      console.error('Error updating caption:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update caption. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
     <Dialog open={!!editItem} onOpenChange={() => onClose()}>
       <DialogContent className="sm:max-w-[425px]">
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="caption">Caption</Label>
+            <Input
+              id="caption"
+              value={content.caption || editItem.caption || ''}
+              onChange={(e) => onItemChange('caption', e.target.value)}
+            />
+          </div>
           <div>
             <Label htmlFor="product_name">Product Name</Label>
             <Input
