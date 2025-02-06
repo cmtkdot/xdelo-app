@@ -33,9 +33,9 @@ serve(async (req) => {
       query = query.or(`caption.ilike.%${filters.search}%,analyzed_content->>'product_name'.ilike.%${filters.search}%`);
     }
 
-    // Apply vendor filter using the new function
+    // Apply vendor filter using the direct column
     if (filters.vendor && filters.vendor !== "all") {
-      query = query.filter('analyzed_content->vendor_uid', 'eq', filters.vendor);
+      query = query.eq('vendor_name', filters.vendor);
       console.log('Applying vendor filter:', filters.vendor);
     }
 
@@ -182,3 +182,4 @@ serve(async (req) => {
     );
   }
 });
+
