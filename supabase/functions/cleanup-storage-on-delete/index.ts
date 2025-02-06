@@ -13,12 +13,16 @@ serve(async (req) => {
   }
 
   try {
+    const { message_id } = await req.json()
+
+    if (!message_id) {
+      throw new Error('Message ID is required')
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
-
-    const { message_id } = await req.json()
 
     // Get message details before deletion
     const { data: message, error: fetchError } = await supabaseClient
@@ -38,19 +42,7 @@ serve(async (req) => {
       )
     }
 
-    // Delete storage files
-    if (message.storage_path) {
-      const { error: storageError } = await supabaseClient
-        .storage
-        .from('telegram-media')
-        .remove([message.storage_path])
-
-      if (storageError) {
-        console.error('Storage deletion error:', storageError)
-      }
-    }
-
-    // Delete from database
+    // Delete from database - this will trigger the cleanup_storage_on_delete function
     const { error: deleteError } = await supabaseClient
       .from('messages')
       .delete()
