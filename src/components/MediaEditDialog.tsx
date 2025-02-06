@@ -26,36 +26,47 @@ export const MediaEditDialog = ({
 
   const content = editItem.analyzed_content || {};
 
+  const generateCaption = (content: any) => {
+    const parts = [];
+    if (content.product_name) parts.push(`Product: ${content.product_name}`);
+    if (content.product_code) parts.push(`Code: ${content.product_code}`);
+    if (content.vendor_uid) parts.push(`Vendor: ${content.vendor_uid}`);
+    if (content.quantity) parts.push(`Qty: ${content.quantity}`);
+    if (content.notes) parts.push(`Notes: ${content.notes}`);
+    return parts.join('\n');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
-      // Update caption in Telegram if it was changed
-      if (editItem.caption !== editItem.caption) {
-        const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
-          body: {
-            messageId: editItem.id,
-            newCaption: editItem.caption || ''
-          }
-        });
-
-        if (captionError) {
-          throw captionError;
+      // Generate new caption from analyzed content
+      const newCaption = generateCaption(content);
+      
+      // Update caption in Telegram
+      const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
+        body: {
+          messageId: editItem.id,
+          newCaption: newCaption
         }
+      });
 
-        toast({
-          title: "Caption Updated",
-          description: "Caption has been updated in Telegram and database",
-        });
+      if (captionError) {
+        throw captionError;
       }
+
+      toast({
+        title: "Success",
+        description: "Product details and caption have been updated",
+      });
 
       onSave();
       onClose();
     } catch (error) {
-      console.error('Error updating caption:', error);
+      console.error('Error updating message:', error);
       toast({
         title: "Error",
-        description: "Failed to update caption. Please try again.",
+        description: "Failed to update details. Please try again.",
         variant: "destructive",
       });
     }
@@ -67,11 +78,12 @@ export const MediaEditDialog = ({
         <DialogTitle>Edit Media Details</DialogTitle>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="caption">Caption</Label>
+            <Label htmlFor="caption">Current Caption (Will be updated automatically)</Label>
             <Input
               id="caption"
               value={editItem.caption || ''}
-              onChange={(e) => onItemChange('caption', e.target.value)}
+              disabled
+              className="bg-gray-100"
             />
           </div>
           <div>
