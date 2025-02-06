@@ -28,12 +28,8 @@ export const MediaEditDialog = ({
   
   useEffect(() => {
     if (textareaRef.current && editItem?.caption) {
-      // Reset height to auto to get the correct scrollHeight
-      textareaRef.current.style.height = 'auto';
-      // Set the height to match the content
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-      // Ensure the caption is set
-      textareaRef.current.value = editItem.caption;
+      textareaRef.current.style.height = '80px'; // Set initial height
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`; // Cap at 200px
     }
   }, [editItem?.caption]);
 
@@ -85,12 +81,13 @@ export const MediaEditDialog = ({
               id="caption"
               value={editItem.caption || ''}
               onChange={(e) => {
-                e.target.style.height = 'auto';
-                e.target.style.height = `${e.target.scrollHeight}px`;
+                const textarea = e.target;
+                textarea.style.height = '80px';
+                textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
                 onItemChange('caption', e.target.value);
               }}
               placeholder="Enter caption"
-              className="min-h-[100px] resize-none overflow-hidden"
+              className="min-h-[80px] max-h-[200px] resize-none"
             />
           </div>
           
