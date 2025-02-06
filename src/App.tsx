@@ -13,6 +13,7 @@ import Vendors from "./pages/Vendors";
 import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import AIChat from "./pages/AIChat";
 import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client";
 import { ThemeProvider } from "./components/Theme/ThemeProvider";
@@ -111,6 +112,7 @@ const App = () => (
               <Route path="/media-table" element={<MediaTable />} />
               <Route path="/vendors" element={<Vendors />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/ai-chat" element={<AIChat />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
