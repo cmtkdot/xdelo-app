@@ -639,6 +639,7 @@ export type Database = {
           file_id: string | null
           file_size: number | null
           file_unique_id: string | null
+          glide_quantity: number | null
           glide_row_id: string | null
           group_caption_synced: boolean | null
           group_first_message_time: string | null
@@ -653,6 +654,7 @@ export type Database = {
           message_caption_id: string | null
           message_url: string | null
           mime_type: string | null
+          notes: string | null
           processing_completed_at: string | null
           processing_started_at: string | null
           processing_state:
@@ -660,6 +662,7 @@ export type Database = {
             | null
           product_name: string | null
           product_quantity: number | null
+          product_sku: string | null
           product_unit: string | null
           public_url: string | null
           purchase_order: string | null
@@ -687,6 +690,7 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
+          glide_quantity?: number | null
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
@@ -701,6 +705,7 @@ export type Database = {
           message_caption_id?: string | null
           message_url?: string | null
           mime_type?: string | null
+          notes?: string | null
           processing_completed_at?: string | null
           processing_started_at?: string | null
           processing_state?:
@@ -708,6 +713,7 @@ export type Database = {
             | null
           product_name?: string | null
           product_quantity?: number | null
+          product_sku?: string | null
           product_unit?: string | null
           public_url?: string | null
           purchase_order?: string | null
@@ -735,6 +741,7 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
+          glide_quantity?: number | null
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
@@ -749,6 +756,7 @@ export type Database = {
           message_caption_id?: string | null
           message_url?: string | null
           mime_type?: string | null
+          notes?: string | null
           processing_completed_at?: string | null
           processing_started_at?: string | null
           processing_state?:
@@ -756,6 +764,7 @@ export type Database = {
             | null
           product_name?: string | null
           product_quantity?: number | null
+          product_sku?: string | null
           product_unit?: string | null
           public_url?: string | null
           purchase_order?: string | null
@@ -872,6 +881,12 @@ export type Database = {
         }
         Returns: string
       }
+      construct_purchase_order: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
+      }
       construct_telegram_message_url: {
         Args: {
           chat_type: string
@@ -897,6 +912,12 @@ export type Database = {
           analyzed_content: Json
         }
         Returns: number
+      }
+      extract_notes: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
       }
       extract_product_code: {
         Args: {
@@ -1080,7 +1101,7 @@ export type Database = {
         }
         Returns: string
       }
-      update_purchase_order: {
+      update_product_sku: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
