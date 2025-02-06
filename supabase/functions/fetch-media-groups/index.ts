@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
@@ -32,14 +33,10 @@ serve(async (req) => {
       query = query.or(`caption.ilike.%${filters.search}%,analyzed_content->>'product_name'.ilike.%${filters.search}%`);
     }
 
-    // Apply vendor filter
+    // Apply vendor filter using the new function
     if (filters.vendor && filters.vendor !== "all") {
       query = query.eq('analyzed_content->vendor_uid', filters.vendor);
-    }
-
-    // Apply product code filter
-    if (filters.productCode && filters.productCode !== 'all') {
-      query = query.eq('analyzed_content->product_code', filters.productCode);
+      console.log('Applying vendor filter:', filters.vendor);
     }
 
     // Apply quantity range filter
@@ -87,7 +84,7 @@ serve(async (req) => {
 
     console.log(`Fetching range ${from} to ${to} of ${totalCount} total items`);
 
-    // Apply sorting with NULLS LAST
+    // Apply sorting
     const sortOrder = filters.sortOrder || 'desc';
     query = query.order('created_at', { 
       ascending: sortOrder === "asc",

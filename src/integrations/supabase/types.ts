@@ -1704,6 +1704,21 @@ export type Database = {
         }
         Returns: string
       }
+      filter_by_vendor: {
+        Args: {
+          vendor_param: string
+        }
+        Returns: {
+          id: string
+          analyzed_content: Json
+          telegram_message_id: string
+          caption: string
+          media_group_id: string
+          created_at: string
+          is_original_caption: boolean
+          purchase_date: string
+        }[]
+      }
       fix_media_groups: {
         Args: Record<PropertyKey, never>
         Returns: undefined
