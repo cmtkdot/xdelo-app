@@ -28,8 +28,8 @@ export const MediaEditDialog = ({
   
   useEffect(() => {
     if (textareaRef.current && editItem?.caption) {
-      textareaRef.current.style.height = '80px'; // Set initial height
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`; // Cap at 200px
+      textareaRef.current.style.height = '80px';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
   }, [editItem?.caption]);
 
@@ -95,7 +95,7 @@ export const MediaEditDialog = ({
             <Label htmlFor="product_name">Product Name</Label>
             <Input
               id="product_name"
-              defaultValue={content.product_name || ''}
+              value={content.product_name || ''}
               onChange={(e) => onItemChange('analyzed_content.product_name', e.target.value)}
               placeholder="Enter product name"
             />
@@ -105,7 +105,7 @@ export const MediaEditDialog = ({
             <Label htmlFor="product_code">Product Code</Label>
             <Input
               id="product_code"
-              defaultValue={content.product_code || ''}
+              value={content.product_code || ''}
               onChange={(e) => onItemChange('analyzed_content.product_code', e.target.value)}
               placeholder="Enter product code"
             />
@@ -115,7 +115,7 @@ export const MediaEditDialog = ({
             <Label htmlFor="vendor_uid">Vendor UID</Label>
             <Input
               id="vendor_uid"
-              defaultValue={content.vendor_uid || ''}
+              value={content.vendor_uid || ''}
               onChange={(e) => onItemChange('analyzed_content.vendor_uid', e.target.value)}
               placeholder="Enter vendor UID"
             />
@@ -126,7 +126,7 @@ export const MediaEditDialog = ({
             <Input
               id="purchase_date"
               type="date"
-              defaultValue={formatDate(content.purchase_date || null) || ''}
+              value={formatDate(content.purchase_date || null) || ''}
               onChange={(e) => onItemChange('analyzed_content.purchase_date', e.target.value)}
             />
           </div>
@@ -136,7 +136,7 @@ export const MediaEditDialog = ({
             <Input
               id="quantity"
               type="number"
-              defaultValue={content.quantity || ''}
+              value={content.quantity || ''}
               onChange={(e) => onItemChange('analyzed_content.quantity', parseInt(e.target.value))}
               placeholder="Enter quantity"
             />
@@ -146,7 +146,7 @@ export const MediaEditDialog = ({
             <Label htmlFor="notes">Notes</Label>
             <Textarea
               id="notes"
-              defaultValue={content.notes || ''}
+              value={content.notes || ''}
               onChange={(e) => onItemChange('analyzed_content.notes', e.target.value)}
               placeholder="Enter notes"
               className="min-h-[80px] resize-y"
