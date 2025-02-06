@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, FilterValues, analyzedContentToJson } from "@/types";
+import { MediaItem, FilterValues } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
@@ -37,46 +37,13 @@ const ProductGallery = () => {
     setEditItem(mainMedia);
   };
 
-  const handleItemChange = (field: string, value: any) => {
-    if (editItem) {
-      const updatedContent = {
-        ...(editItem.analyzed_content || {}),
-        [field]: value,
-        parsing_metadata: {
-          method: 'manual' as const,
-          confidence: 1.0,
-          timestamp: new Date().toISOString()
-        }
-      };
-
-      setEditItem({
-        ...editItem,
-        analyzed_content: updatedContent
-      });
-    }
-  };
-
   const handleSave = async () => {
     if (!editItem) return;
 
     try {
-      const analyzedContentJson = editItem.analyzed_content ? 
-        analyzedContentToJson(editItem.analyzed_content) : null;
-
-      const { error } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: analyzedContentJson,
-          processing_state: 'completed',
-          group_caption_synced: true
-        })
-        .eq('id', editItem.id);
-
-      if (error) throw error;
-
       toast({
         title: "Success",
-        description: "Product details updated successfully.",
+        description: "Caption updated successfully.",
       });
       
       setEditItem(null);
@@ -84,15 +51,10 @@ const ProductGallery = () => {
       console.error('Error updating message:', error);
       toast({
         title: "Error",
-        description: "Failed to update product details.",
+        description: "Failed to update caption.",
         variant: "destructive",
       });
     }
-  };
-
-  const handleFilterChange = (newFilters: FilterValues) => {
-    setFilters(newFilters);
-    setCurrentPage(1);
   };
 
   const handleDelete = (media: MediaItem) => {
@@ -108,7 +70,7 @@ const ProductGallery = () => {
       <ProductFilters
         vendors={vendors}
         filters={filters}
-        onFilterChange={handleFilterChange}
+        onFilterChange={setFilters}
       />
 
       <ProductGrid 
@@ -129,7 +91,6 @@ const ProductGallery = () => {
         editItem={editItem}
         onClose={() => setEditItem(null)}
         onSave={handleSave}
-        onItemChange={handleItemChange}
       />
     </div>
   );

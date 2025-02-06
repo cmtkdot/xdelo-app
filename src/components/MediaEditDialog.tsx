@@ -1,42 +1,33 @@
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { MediaItem, analyzedContentToJson } from "@/types";
+import { MediaItem } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import { format } from "date-fns";
 
 interface MediaEditDialogProps {
   editItem: MediaItem | null;
   onClose: () => void;
   onSave: () => void;
-  onItemChange: (field: string, value: any) => void;
 }
 
 export const MediaEditDialog = ({
   editItem,
   onClose,
   onSave,
-  onItemChange,
 }: MediaEditDialogProps) => {
   const { toast } = useToast();
+  const [caption, setCaption] = useState('');
   
-  if (!editItem) return null;
-
-  const content = editItem.analyzed_content || {};
-  const caption = editItem.caption || '';
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return '';
-    try {
-      return format(new Date(dateString), 'yyyy-MM-dd');
-    } catch (error) {
-      console.error("Error formatting date:", error);
-      return '';
+  useEffect(() => {
+    if (editItem) {
+      // Extract caption from telegram_data
+      const telegramData = editItem.telegram_data as { message?: { caption?: string } } || {};
+      setCaption(telegramData.message?.caption || '');
     }
-  };
+  }, [editItem]);
+
+  if (!editItem) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,6 +44,7 @@ export const MediaEditDialog = ({
           messageId: editItem.telegram_message_id
         });
 
+        // Update caption in Telegram
         const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
           body: {
             messageId: editItem.id,
@@ -77,120 +69,74 @@ export const MediaEditDialog = ({
           }
         };
 
-        // Convert analyzed content to the correct format
-        const analyzedContentJson = analyzedContentToJson(content);
-
-        // Update the message in database with new telegram_data
+        // Update the message in database
         const { error: updateError } = await supabase
           .from('messages')
           .update({
             caption: caption,
             telegram_data: updatedTelegramData,
-            analyzed_content: analyzedContentJson,
-            processing_state: 'completed',
-            group_caption_synced: true,
             updated_at: new Date().toISOString()
           })
           .eq('id', editItem.id);
 
         if (updateError) throw updateError;
+
+        toast({
+          title: "Success",
+          description: "Caption has been updated",
+        });
+
+        onSave();
+        onClose();
+      } else {
+        onClose();
       }
-
-      toast({
-        title: "Success",
-        description: "Product details have been updated",
-      });
-
-      onSave();
-      onClose();
     } catch (error) {
-      console.error('Error updating message:', error);
+      console.error('Error updating caption:', error);
       toast({
         title: "Error",
-        description: "Failed to update details. Please try again.",
+        description: "Failed to update caption. Please try again.",
         variant: "destructive",
       });
     }
   };
 
+  // Display analyzed content in read-only format
+  const renderAnalyzedContent = () => {
+    const content = editItem.analyzed_content || {};
+    return (
+      <div className="space-y-4 mt-4 p-4 bg-gray-50 rounded-md">
+        <h3 className="font-medium text-sm text-gray-700">Analyzed Content (Read-only)</h3>
+        <div className="space-y-2 text-sm text-gray-600">
+          {Object.entries(content).map(([key, value]) => (
+            key !== 'parsing_metadata' && (
+              <div key={key} className="flex">
+                <span className="font-medium w-32">{key.replace(/_/g, ' ')}:</span>
+                <span>{String(value)}</span>
+              </div>
+            )
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Dialog open={!!editItem} onOpenChange={() => onClose()}>
       <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
-        <DialogTitle>Edit Media Details</DialogTitle>
+        <DialogTitle>Edit Caption</DialogTitle>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="caption">Caption</Label>
             <Textarea
-              id="caption"
               value={caption}
-              onChange={(e) => onItemChange('caption', e.target.value)}
+              onChange={(e) => setCaption(e.target.value)}
               placeholder="Enter caption"
               className="min-h-[100px] resize-y"
             />
           </div>
+
+          {renderAnalyzedContent()}
           
-          <div className="space-y-2">
-            <Label htmlFor="product_name">Product Name</Label>
-            <Input
-              id="product_name"
-              value={content.product_name || ''}
-              onChange={(e) => onItemChange('analyzed_content.product_name', e.target.value)}
-              placeholder="Enter product name"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="product_code">Product Code</Label>
-            <Input
-              id="product_code"
-              value={content.product_code || ''}
-              onChange={(e) => onItemChange('analyzed_content.product_code', e.target.value)}
-              placeholder="Enter product code"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="vendor_uid">Vendor UID</Label>
-            <Input
-              id="vendor_uid"
-              value={content.vendor_uid || ''}
-              onChange={(e) => onItemChange('analyzed_content.vendor_uid', e.target.value)}
-              placeholder="Enter vendor UID"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="purchase_date">Purchase Date</Label>
-            <Input
-              id="purchase_date"
-              type="date"
-              value={formatDate(content.purchase_date || null) || ''}
-              onChange={(e) => onItemChange('analyzed_content.purchase_date', e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="quantity">Quantity</Label>
-            <Input
-              id="quantity"
-              type="number"
-              value={content.quantity || ''}
-              onChange={(e) => onItemChange('analyzed_content.quantity', parseInt(e.target.value))}
-              placeholder="Enter quantity"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              value={content.notes || ''}
-              onChange={(e) => onItemChange('analyzed_content.notes', e.target.value)}
-              placeholder="Enter notes"
-              className="min-h-[80px] resize-y"
-            />
-          </div>
-
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel

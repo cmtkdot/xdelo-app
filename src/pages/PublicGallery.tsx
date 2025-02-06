@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, FilterValues, analyzedContentToJson } from "@/types";
+import { MediaItem, FilterValues } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
@@ -60,57 +60,13 @@ const PublicGallery = () => {
     setEditItem(mainMedia);
   };
 
-  const handleItemChange = (field: string, value: any) => {
-    setEditItem(prev => {
-      if (!prev) return null;
-
-      if (field === 'caption') {
-        return {
-          ...prev,
-          caption: value
-        };
-      } else if (field.startsWith('analyzed_content.')) {
-        const key = field.split('.')[1];
-        return {
-          ...prev,
-          analyzed_content: {
-            ...(prev.analyzed_content || {}),
-            [key]: value,
-            parsing_metadata: {
-              method: 'manual' as const,
-              confidence: 1.0,
-              timestamp: new Date().toISOString()
-            }
-          }
-        };
-      }
-      return prev;
-    });
-  };
-
   const handleSave = async () => {
     if (!editItem) return;
 
     try {
-      const analyzedContentJson = editItem.analyzed_content ? 
-        analyzedContentToJson(editItem.analyzed_content) : null;
-
-      // Update the message in database
-      const { error } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: analyzedContentJson,
-          caption: editItem.caption,
-          processing_state: 'completed',
-          group_caption_synced: true
-        })
-        .eq('id', editItem.id);
-
-      if (error) throw error;
-
       toast({
         title: "Success",
-        description: "Product details updated successfully.",
+        description: "Caption updated successfully.",
       });
       
       setEditItem(null);
@@ -118,7 +74,7 @@ const PublicGallery = () => {
       console.error('Error updating message:', error);
       toast({
         title: "Error",
-        description: "Failed to update product details.",
+        description: "Failed to update caption.",
         variant: "destructive",
       });
     }
@@ -153,7 +109,6 @@ const PublicGallery = () => {
           editItem={editItem}
           onClose={() => setEditItem(null)}
           onSave={handleSave}
-          onItemChange={handleItemChange}
         />
       </div>
     </div>
