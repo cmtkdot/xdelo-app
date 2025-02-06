@@ -45,7 +45,7 @@ export const MediaEditDialog = ({
       const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
         body: {
           messageId: editItem.id,
-          newCaption: content.caption || ''  // Use caption from analyzed_content
+          newCaption: editItem.caption || ''  // Use the message's caption field
         }
       });
 
@@ -80,12 +80,12 @@ export const MediaEditDialog = ({
             <Textarea
               ref={textareaRef}
               id="caption"
-              value={content.caption || editItem.caption || ''}
+              value={editItem.caption || ''}
               onChange={(e) => {
                 const textarea = e.target;
                 textarea.style.height = '80px';
                 textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
-                onItemChange('analyzed_content.caption', e.target.value);
+                onItemChange('caption', e.target.value);
               }}
               placeholder="Enter caption"
               className="min-h-[80px] max-h-[200px] resize-none"
