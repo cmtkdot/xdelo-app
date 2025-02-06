@@ -40,14 +40,11 @@ export const MediaEditDialog = ({
     e.preventDefault();
     
     try {
-      // Generate new caption from analyzed content
-      const newCaption = generateCaption(content);
-      
       // Update caption in Telegram
       const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
         body: {
           messageId: editItem.id,
-          newCaption: newCaption
+          newCaption: editItem.caption
         }
       });
 
@@ -78,13 +75,22 @@ export const MediaEditDialog = ({
         <DialogTitle>Edit Media Details</DialogTitle>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="caption">Current Caption (Will be updated automatically)</Label>
+            <Label htmlFor="caption">Caption</Label>
             <Input
               id="caption"
               value={editItem.caption || ''}
-              disabled
-              className="bg-gray-100"
+              onChange={(e) => onItemChange('caption', e.target.value)}
+              placeholder="Enter caption or use auto-generate"
             />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2 text-xs"
+              onClick={() => onItemChange('caption', generateCaption(content))}
+            >
+              Auto-generate Caption
+            </Button>
           </div>
           <div>
             <Label htmlFor="product_name">Product Name</Label>
