@@ -1,5 +1,5 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users } from "lucide-react";
+import { Store } from "lucide-react";
 import { Label } from "@/components/ui/label";
 
 interface VendorFilterProps {
@@ -10,13 +10,13 @@ interface VendorFilterProps {
 
 export const VendorFilter = ({ value, vendors, onChange }: VendorFilterProps) => {
   return (
-    <div className="space-y-2">
-      <Label className="text-xs font-medium flex items-center gap-1">
-        <Users className="w-3 h-3" />
+    <div className="space-y-2 min-w-[120px]">
+      <Label className="text-xs font-medium flex items-center justify-center gap-1">
+        <Store className="w-3 h-3" />
         Vendor
       </Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-8 text-sm w-[120px]">
+        <SelectTrigger className="h-8 text-sm">
           <SelectValue placeholder="Vendor" />
         </SelectTrigger>
         <SelectContent>

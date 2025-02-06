@@ -1,7 +1,7 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { CalendarIcon } from "lucide-react";
+import { CalendarRange, ArrowUpDown } from "lucide-react";
 
 interface DateRangeFilterProps {
   dateField: 'purchase_date' | 'created_at';
@@ -18,10 +18,13 @@ export const DateRangeFilter = ({
 }: DateRangeFilterProps) => {
   return (
     <div className="flex items-end gap-4">
-      <div className="space-y-2">
-        <Label className="text-xs font-medium">Sort by</Label>
+      <div className="space-y-2 min-w-[160px]">
+        <Label className="text-xs font-medium flex items-center justify-center gap-1">
+          <CalendarRange className="w-3 h-3" />
+          Sort by Date
+        </Label>
         <Select value={dateField} onValueChange={onDateFieldChange}>
-          <SelectTrigger className="h-8 text-sm w-[140px]">
+          <SelectTrigger className="h-8 text-sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -31,7 +34,10 @@ export const DateRangeFilter = ({
         </Select>
       </div>
       <div className="space-y-2">
-        <Label className="text-xs font-medium">Order</Label>
+        <Label className="text-xs font-medium flex items-center justify-center gap-1">
+          <ArrowUpDown className="w-3 h-3" />
+          Order
+        </Label>
         <div className="flex items-center space-x-2">
           <Switch
             id="sort-order"

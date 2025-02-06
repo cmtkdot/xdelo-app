@@ -2,6 +2,7 @@ import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 
 interface SearchFilterProps {
   value: string;
@@ -11,7 +12,6 @@ interface SearchFilterProps {
 export const SearchFilter = ({ value, onChange }: SearchFilterProps) => {
   const [localValue, setLocalValue] = useState(value);
 
-  // Update local value when prop changes
   useEffect(() => {
     setLocalValue(value);
   }, [value]);
@@ -21,29 +21,32 @@ export const SearchFilter = ({ value, onChange }: SearchFilterProps) => {
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="relative flex-1">
-        <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+    <div className="space-y-2 min-w-[200px]">
+      <Label className="text-xs font-medium flex items-center justify-center gap-1">
+        <Search className="w-3 h-3" />
+        Search Products
+      </Label>
+      <div className="flex items-center gap-2">
         <Input
           placeholder="Search products..."
           value={localValue}
           onChange={(e) => setLocalValue(e.target.value)}
-          className="h-8 pl-7 text-sm w-[200px]"
+          className="h-8 text-sm"
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               handleSubmit();
             }
           }}
         />
+        <Button 
+          variant="secondary" 
+          size="sm" 
+          onClick={handleSubmit}
+          className="h-8"
+        >
+          Search
+        </Button>
       </div>
-      <Button 
-        variant="secondary" 
-        size="sm" 
-        onClick={handleSubmit}
-        className="h-8"
-      >
-        Search
-      </Button>
     </div>
   );
 };

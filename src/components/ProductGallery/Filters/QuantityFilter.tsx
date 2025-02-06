@@ -9,13 +9,13 @@ interface QuantityFilterProps {
 
 export const QuantityFilter = ({ value, onChange }: QuantityFilterProps) => {
   return (
-    <div className="space-y-2">
-      <Label className="text-xs font-medium flex items-center gap-1">
+    <div className="space-y-2 min-w-[120px]">
+      <Label className="text-xs font-medium flex items-center justify-center gap-1">
         <Package2 className="w-3 h-3" />
         Quantity
       </Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-8 text-sm w-[120px]">
+        <SelectTrigger className="h-8 text-sm">
           <SelectValue placeholder="Quantity" />
         </SelectTrigger>
         <SelectContent>

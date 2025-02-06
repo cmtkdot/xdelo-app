@@ -52,18 +52,22 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
 
   const FilterContent = () => (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-4">
-          <SearchFilter value={search} onChange={setSearch} />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-6 flex-1">
+          <div className="flex-1">
+            <SearchFilter value={search} onChange={setSearch} />
+          </div>
           <VendorFilter value={vendor} vendors={vendors} onChange={setVendor} />
           <QuantityFilter value={quantityRange} onChange={setQuantityRange} />
+          <div className="ml-auto">
+            <DateRangeFilter
+              dateField={dateField}
+              sortOrder={sortOrder}
+              onDateFieldChange={setDateField}
+              onSortOrderChange={setSortOrder}
+            />
+          </div>
         </div>
-        <DateRangeFilter
-          dateField={dateField}
-          sortOrder={sortOrder}
-          onDateFieldChange={setDateField}
-          onSortOrderChange={setSortOrder}
-        />
       </div>
 
       {activeFiltersCount > 0 && (
