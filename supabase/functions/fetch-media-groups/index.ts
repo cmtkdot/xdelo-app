@@ -69,6 +69,24 @@ serve(async (req) => {
       query = query.lte(`analyzed_content->${filters.dateField}`, filters.dateTo);
     }
 
+    // Get total count first
+    const { count, error: countError } = await query;
+    
+    if (countError) {
+      console.error('Error getting count:', countError);
+      throw countError;
+    }
+
+    const totalCount = count || 0;
+    const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+    
+    // Validate page number
+    const validatedPage = Math.max(1, Math.min(page, totalPages || 1));
+    const from = (validatedPage - 1) * ITEMS_PER_PAGE;
+    const to = Math.min(from + ITEMS_PER_PAGE - 1, totalCount - 1);
+
+    console.log(`Fetching range ${from} to ${to} of ${totalCount} total items`);
+
     // Apply sorting with NULLS LAST
     const sortOrder = filters.sortOrder || 'desc';
     query = query.order('created_at', { 
@@ -76,13 +94,13 @@ serve(async (req) => {
       nullsFirst: false
     });
 
-    // Apply pagination
-    const from = (page - 1) * ITEMS_PER_PAGE;
-    const to = from + ITEMS_PER_PAGE - 1;
-    query = query.range(from, to);
+    // Apply pagination with validated range
+    if (totalCount > 0) {
+      query = query.range(from, to);
+    }
 
     console.log('Executing query for original messages...');
-    const { data: messages, count, error: messagesError } = await query;
+    const { data: messages, error: messagesError } = await query;
 
     if (messagesError) {
       console.error('Error fetching messages:', messagesError);
@@ -138,12 +156,12 @@ serve(async (req) => {
       });
     });
 
-    console.log(`Returning ${Object.keys(groups).length} groups with total count ${count}`);
+    console.log(`Returning ${Object.keys(groups).length} groups with total pages ${totalPages}`);
 
     return new Response(
       JSON.stringify({
         mediaGroups: groups,
-        totalPages: Math.ceil((count || 0) / ITEMS_PER_PAGE)
+        totalPages: totalPages || 1
       }),
       { 
         headers: { 
