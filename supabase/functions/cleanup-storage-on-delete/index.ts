@@ -1,44 +1,75 @@
-CREATE OR REPLACE FUNCTION public.cleanup_storage_on_delete()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    -- Only delete storage files if this is not a Telegram deletion
-    -- We check this by looking at the trigger that called us
-    IF TG_NAME = 'trg_handle_regular_deletion' THEN
-        -- Delete storage files
-        IF OLD.storage_path IS NOT NULL THEN
-            DELETE FROM storage.objects
-            WHERE bucket_id = 'telegram-media'
-            AND name = OLD.storage_path;
-        END IF;
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from '@supabase/supabase-js'
 
-        IF OLD.file_unique_id IS NOT NULL AND OLD.mime_type IS NOT NULL THEN
-            DELETE FROM storage.objects
-            WHERE bucket_id = 'telegram-media'
-            AND name LIKE OLD.file_unique_id || '.%';
-        END IF;
-    END IF;
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
-    -- Log deletion regardless of type
-    INSERT INTO analysis_audit_log (
-        message_id,
-        media_group_id,
-        event_type,
-        old_state,
-        processing_details
-    ) VALUES (
-        OLD.id,
-        OLD.media_group_id,
-        'MESSAGE_DELETED',
-        OLD.processing_state::text,
-        jsonb_build_object(
-            'deletion_time', now(),
-            'group_message_count', OLD.group_message_count,
-            'deleted_from_telegram', TG_NAME = 'trg_handle_telegram_deletion'
-        )
-    );
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
 
-    RETURN OLD;
-END;
-$$;
+  try {
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    const { message_id } = await req.json()
+
+    // Get message details before deletion
+    const { data: message, error: fetchError } = await supabaseClient
+      .from('messages')
+      .select('*')
+      .eq('id', message_id)
+      .single()
+
+    if (fetchError) {
+      throw fetchError
+    }
+
+    if (!message) {
+      return new Response(
+        JSON.stringify({ error: 'Message not found' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      )
+    }
+
+    // Delete storage files
+    if (message.storage_path) {
+      const { error: storageError } = await supabaseClient
+        .storage
+        .from('telegram-media')
+        .remove([message.storage_path])
+
+      if (storageError) {
+        console.error('Storage deletion error:', storageError)
+      }
+    }
+
+    // Delete from database
+    const { error: deleteError } = await supabaseClient
+      .from('messages')
+      .delete()
+      .eq('id', message_id)
+
+    if (deleteError) {
+      throw deleteError
+    }
+
+    return new Response(
+      JSON.stringify({ success: true }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+
+  } catch (error) {
+    console.error('Error:', error)
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+    )
+  }
+})
