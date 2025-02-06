@@ -255,13 +255,13 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              variant="default"
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={() => handleDeleteConfirm(false)}
             >
               Delete from Database Only
             </AlertDialogAction>
             <AlertDialogAction
-              variant="destructive"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => handleDeleteConfirm(true)}
             >
               Delete from Both
