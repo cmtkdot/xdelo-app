@@ -1,4 +1,5 @@
 
+import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -91,37 +92,39 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const App = () => (
-  <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/p/gallery" element={<PublicGallery />} />
-            <Route
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <Outlet />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/gallery" element={<ProductGallery />} />
-              <Route path="/media-table" element={<MediaTable />} />
-              <Route path="/vendors" element={<Vendors />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/ai-chat" element={<AIChat />} />
-              <Route path="*" element={<NotFound />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
-        <Toaster />
-        <Sonner />
-      </TooltipProvider>
-    </QueryClientProvider>
-  </ThemeProvider>
+  <React.StrictMode>
+    <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/p/gallery" element={<PublicGallery />} />
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <DashboardLayout>
+                      <Outlet />
+                    </DashboardLayout>
+                  </ProtectedRoute>
+                }
+              >
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/gallery" element={<ProductGallery />} />
+                <Route path="/media-table" element={<MediaTable />} />
+                <Route path="/vendors" element={<Vendors />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/ai-chat" element={<AIChat />} />
+                <Route path="*" element={<NotFound />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+          <Toaster />
+          <Sonner />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
+  </React.StrictMode>
 );
 
 export default App;
