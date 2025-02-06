@@ -34,6 +34,11 @@ export interface AnalyzedContent {
     timestamp: string;
     last_modified?: string;
     modification_source?: 'user' | 'system';
+    caption_history?: {
+      original: string;
+      modified: string;
+      modified_at: string;
+    }[];
   };
 }
 
@@ -47,16 +52,6 @@ export interface ProcessingMetadata {
   reanalysis_attempted: boolean;
   group_message_count?: number;
   is_original_caption?: boolean;
-}
-
-export interface TelegramMedia {
-  file_id: string;
-  file_unique_id: string;
-  file_size?: number;
-  width?: number;
-  height?: number;
-  duration?: number;
-  mime_type?: string;
 }
 
 export interface MediaItem {

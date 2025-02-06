@@ -106,23 +106,17 @@ export type Database = {
         Relationships: []
       }
       gl_configuration: {
-        Row: {}
-        Insert: {}
-        Update: {}
-        Relationships: []
-      }
-      glide_configuration: {
         Row: {
           api_endpoint: string
           api_key: string
           app_id: string
           created_at: string | null
-          field_mappings: Json
+          field_mappings: Json | null
           glide_table_name: string
           id: string
-          is_active: boolean
+          is_active: boolean | null
           supabase_table_name: string
-          supported_operations: string[]
+          supported_operations: string[] | null
           table_id: string
           updated_at: string | null
         }
@@ -131,12 +125,12 @@ export type Database = {
           api_key: string
           app_id: string
           created_at?: string | null
-          field_mappings?: Json
+          field_mappings?: Json | null
           glide_table_name: string
           id?: string
-          is_active?: boolean
+          is_active?: boolean | null
           supabase_table_name: string
-          supported_operations?: string[]
+          supported_operations?: string[] | null
           table_id: string
           updated_at?: string | null
         }
@@ -145,13 +139,43 @@ export type Database = {
           api_key?: string
           app_id?: string
           created_at?: string | null
-          field_mappings?: Json
+          field_mappings?: Json | null
           glide_table_name?: string
           id?: string
-          is_active?: boolean
+          is_active?: boolean | null
           supabase_table_name?: string
-          supported_operations?: string[]
+          supported_operations?: string[] | null
           table_id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      gl_sync_metadata: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          id: string
+          last_sync_time: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          table_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          table_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_sync_time?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          table_name?: string
           updated_at?: string | null
         }
         Relationships: []

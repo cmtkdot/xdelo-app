@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { MediaItem, TelegramData } from "@/types";
+import { MediaItem, TelegramData, AnalyzedContent } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { useEffect, useRef } from "react";
@@ -45,20 +45,26 @@ export const MediaEditDialog = ({
     e.preventDefault();
     
     try {
-      // Update caption in Telegram
-      const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
-        body: {
-          messageId: editItem.id,
-          newCaption: getTelegramCaption()
-        }
-      });
+      const originalCaption = (editItem.telegram_data as TelegramData)?.message?.caption || '';
+      const newCaption = getTelegramCaption();
+      
+      // Only update if caption has changed
+      if (originalCaption !== newCaption) {
+        // Update caption in Telegram
+        const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
+          body: {
+            messageId: editItem.id,
+            newCaption: newCaption
+          }
+        });
 
-      if (captionError) {
-        throw captionError;
+        if (captionError) {
+          throw captionError;
+        }
       }
 
       // Update parsing metadata
-      const updatedContent = {
+      const updatedContent: AnalyzedContent = {
         ...content,
         parsing_metadata: {
           ...(content.parsing_metadata || {}),
@@ -66,7 +72,15 @@ export const MediaEditDialog = ({
           confidence: 1.0,
           timestamp: new Date().toISOString(),
           last_modified: new Date().toISOString(),
-          modification_source: 'user' as const
+          modification_source: 'user' as const,
+          caption_history: [
+            ...(content.parsing_metadata?.caption_history || []),
+            {
+              original: originalCaption,
+              modified: newCaption,
+              modified_at: new Date().toISOString()
+            }
+          ]
         }
       };
       onItemChange('analyzed_content', updatedContent);
