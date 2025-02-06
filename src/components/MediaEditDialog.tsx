@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { MediaItem } from "@/types";
+import { MediaItem, TelegramData } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { useEffect, useRef } from "react";
@@ -27,7 +27,7 @@ export const MediaEditDialog = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   useEffect(() => {
-    if (textareaRef.current && editItem?.telegram_data?.message?.caption) {
+    if (textareaRef.current && getTelegramCaption()) {
       textareaRef.current.style.height = '80px';
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
@@ -36,7 +36,10 @@ export const MediaEditDialog = ({
   if (!editItem) return null;
 
   const content = editItem.analyzed_content || {};
-  const telegramCaption = editItem.telegram_data?.message?.caption || '';
+  
+  const getTelegramCaption = (): string => {
+    return (editItem.telegram_data as TelegramData)?.message?.caption || '';
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,13 +49,27 @@ export const MediaEditDialog = ({
       const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
         body: {
           messageId: editItem.id,
-          newCaption: telegramCaption
+          newCaption: getTelegramCaption()
         }
       });
 
       if (captionError) {
         throw captionError;
       }
+
+      // Update parsing metadata
+      const updatedContent = {
+        ...content,
+        parsing_metadata: {
+          ...(content.parsing_metadata || {}),
+          method: 'manual' as const,
+          confidence: 1.0,
+          timestamp: new Date().toISOString(),
+          last_modified: new Date().toISOString(),
+          modification_source: 'user' as const
+        }
+      };
+      onItemChange('analyzed_content', updatedContent);
 
       toast({
         title: "Success",
@@ -73,9 +90,9 @@ export const MediaEditDialog = ({
 
   const handleCaptionChange = (value: string) => {
     const updatedTelegramData = {
-      ...editItem.telegram_data,
+      ...(editItem.telegram_data as TelegramData),
       message: {
-        ...editItem.telegram_data?.message,
+        ...(editItem.telegram_data as TelegramData)?.message,
         caption: value
       }
     };
@@ -92,7 +109,7 @@ export const MediaEditDialog = ({
             <Textarea
               ref={textareaRef}
               id="caption"
-              value={telegramCaption}
+              value={getTelegramCaption()}
               onChange={(e) => {
                 const textarea = e.target;
                 textarea.style.height = '80px';
@@ -100,7 +117,7 @@ export const MediaEditDialog = ({
                 handleCaptionChange(e.target.value);
               }}
               placeholder="Enter caption"
-              className="min-h-[80px] max-h-[200px] resize-none"
+              className="min-h-[80px] max-h-[200px] resize-y"
             />
           </div>
           
