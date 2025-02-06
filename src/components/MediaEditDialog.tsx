@@ -26,16 +26,6 @@ export const MediaEditDialog = ({
 
   const content = editItem.analyzed_content || {};
 
-  const generateCaption = (content: any) => {
-    const parts = [];
-    if (content.product_name) parts.push(`Product: ${content.product_name}`);
-    if (content.product_code) parts.push(`Code: ${content.product_code}`);
-    if (content.vendor_uid) parts.push(`Vendor: ${content.vendor_uid}`);
-    if (content.quantity) parts.push(`Qty: ${content.quantity}`);
-    if (content.notes) parts.push(`Notes: ${content.notes}`);
-    return parts.join('\n');
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -80,17 +70,8 @@ export const MediaEditDialog = ({
               id="caption"
               value={editItem.caption || ''}
               onChange={(e) => onItemChange('caption', e.target.value)}
-              placeholder="Enter caption or use auto-generate"
+              placeholder="Enter caption"
             />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="mt-2 text-xs"
-              onClick={() => onItemChange('caption', generateCaption(content))}
-            >
-              Auto-generate Caption
-            </Button>
           </div>
           <div>
             <Label htmlFor="product_name">Product Name</Label>
