@@ -27,11 +27,13 @@ export const MediaEditDialog = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   useEffect(() => {
-    if (textareaRef.current) {
+    if (textareaRef.current && editItem?.caption) {
       // Reset height to auto to get the correct scrollHeight
       textareaRef.current.style.height = 'auto';
       // Set the height to match the content
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      // Ensure the caption is set
+      textareaRef.current.value = editItem.caption;
     }
   }, [editItem?.caption]);
 
@@ -81,7 +83,7 @@ export const MediaEditDialog = ({
             <Textarea
               ref={textareaRef}
               id="caption"
-              defaultValue={editItem.caption || ''}
+              value={editItem.caption || ''}
               onChange={(e) => {
                 e.target.style.height = 'auto';
                 e.target.style.height = `${e.target.scrollHeight}px`;
