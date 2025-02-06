@@ -1300,48 +1300,6 @@ export type Database = {
         }
         Relationships: []
       }
-      gl_sync_queue: {
-        Row: {
-          created_at: string | null
-          error_message: string | null
-          id: string
-          mapped_data: Json | null
-          operation_type: string
-          raw_data: Json | null
-          record_id: string
-          retry_count: number | null
-          status: Database["public"]["Enums"]["sync_status"] | null
-          table_name: string
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          error_message?: string | null
-          id?: string
-          mapped_data?: Json | null
-          operation_type: string
-          raw_data?: Json | null
-          record_id: string
-          retry_count?: number | null
-          status?: Database["public"]["Enums"]["sync_status"] | null
-          table_name: string
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          error_message?: string | null
-          id?: string
-          mapped_data?: Json | null
-          operation_type?: string
-          raw_data?: Json | null
-          record_id?: string
-          retry_count?: number | null
-          status?: Database["public"]["Enums"]["sync_status"] | null
-          table_name?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       gl_vendor_payments: {
         Row: {
           automatically_recorded: boolean | null

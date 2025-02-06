@@ -22,7 +22,7 @@ export const SearchFilter = ({ value, onChange }: SearchFilterProps) => {
 
   return (
     <div className="space-y-2 min-w-[200px]">
-      <Label className="text-xs font-medium flex items-center justify-center gap-1">
+      <Label className="text-xs font-medium flex items-center gap-1 pl-1">
         <Search className="w-3 h-3" />
         Search Products
       </Label>

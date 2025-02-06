@@ -19,7 +19,7 @@ export const DateRangeFilter = ({
   return (
     <div className="flex items-end gap-4">
       <div className="space-y-2 min-w-[160px]">
-        <Label className="text-xs font-medium flex items-center justify-center gap-1">
+        <Label className="text-xs font-medium flex items-center gap-1 pl-1">
           <CalendarRange className="w-3 h-3" />
           Sort by Date
         </Label>
@@ -34,7 +34,7 @@ export const DateRangeFilter = ({
         </Select>
       </div>
       <div className="space-y-2">
-        <Label className="text-xs font-medium flex items-center justify-center gap-1">
+        <Label className="text-xs font-medium flex items-center gap-1 pl-1">
           <ArrowUpDown className="w-3 h-3" />
           Order
         </Label>

@@ -11,7 +11,7 @@ interface VendorFilterProps {
 export const VendorFilter = ({ value, vendors, onChange }: VendorFilterProps) => {
   return (
     <div className="space-y-2 min-w-[120px]">
-      <Label className="text-xs font-medium flex items-center justify-center gap-1">
+      <Label className="text-xs font-medium flex items-center gap-1 pl-1">
         <Store className="w-3 h-3" />
         Vendor
       </Label>
