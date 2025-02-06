@@ -89,16 +89,6 @@ const PublicGallery = () => {
     });
   };
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return null;
-    try {
-      return format(new Date(dateString), 'yyyy-MM-dd');
-    } catch (error) {
-      console.error("Error formatting date:", error);
-      return null;
-    }
-  };
-
   const handleSave = async () => {
     if (!editItem) return;
 
@@ -106,6 +96,7 @@ const PublicGallery = () => {
       const analyzedContentJson = editItem.analyzed_content ? 
         analyzedContentToJson(editItem.analyzed_content) : null;
 
+      // Update the message in database
       const { error } = await supabase
         .from('messages')
         .update({

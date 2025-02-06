@@ -34,7 +34,16 @@ export const MediaEditDialog = ({
     
     try {
       // Only update if caption has changed
-      if (caption !== editItem.caption) {
+      const currentTelegramData = editItem.telegram_data || {};
+      const originalCaption = currentTelegramData.message?.caption || '';
+      
+      if (caption !== originalCaption) {
+        console.log('Updating caption:', {
+          old: originalCaption,
+          new: caption,
+          messageId: editItem.telegram_message_id
+        });
+
         const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
           body: {
             messageId: editItem.id,
@@ -43,13 +52,36 @@ export const MediaEditDialog = ({
         });
 
         if (captionError) {
-          // Check if it's just a "message not modified" error
           if (captionError.message?.includes('message is not modified')) {
-            console.log('Caption unchanged, proceeding with other updates');
+            console.log('Caption unchanged in Telegram, proceeding with other updates');
           } else {
             throw captionError;
           }
         }
+
+        // Update telegram_data with new caption
+        const updatedTelegramData = {
+          ...currentTelegramData,
+          message: {
+            ...currentTelegramData.message,
+            caption: caption
+          }
+        };
+
+        // Update the message in database with new telegram_data
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({
+            caption: caption,
+            telegram_data: updatedTelegramData,
+            analyzed_content: content,
+            processing_state: 'completed',
+            group_caption_synced: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editItem.id);
+
+        if (updateError) throw updateError;
       }
 
       toast({
