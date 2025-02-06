@@ -23,6 +23,7 @@ export const MediaEditDialog = ({
   formatDate,
 }: MediaEditDialogProps) => {
   const { toast } = useToast();
+  
   if (!editItem) return null;
 
   const content = editItem.analyzed_content || {};

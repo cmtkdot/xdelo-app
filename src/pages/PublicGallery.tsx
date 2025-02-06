@@ -64,26 +64,31 @@ const PublicGallery = () => {
   const handleItemChange = (field: string, value: any) => {
     if (!editItem) return;
 
-    if (field === 'caption') {
-      setEditItem({
-        ...editItem,
-        caption: value
-      });
-    } else if (field.startsWith('analyzed_content.')) {
-      const key = field.split('.')[1];
-      setEditItem({
-        ...editItem,
-        analyzed_content: {
-          ...(editItem.analyzed_content || {}),
-          [key]: value,
-          parsing_metadata: {
-            method: 'manual' as const,
-            confidence: 1.0,
-            timestamp: new Date().toISOString()
+    setEditItem(prev => {
+      if (!prev) return null;
+
+      if (field === 'caption') {
+        return {
+          ...prev,
+          caption: value
+        };
+      } else if (field.startsWith('analyzed_content.')) {
+        const key = field.split('.')[1];
+        return {
+          ...prev,
+          analyzed_content: {
+            ...(prev.analyzed_content || {}),
+            [key]: value,
+            parsing_metadata: {
+              method: 'manual' as const,
+              confidence: 1.0,
+              timestamp: new Date().toISOString()
+            }
           }
-        }
-      });
-    }
+        };
+      }
+      return prev;
+    });
   };
 
   const formatDate = (dateString: string | null) => {
@@ -107,6 +112,7 @@ const PublicGallery = () => {
         .from('messages')
         .update({
           analyzed_content: analyzedContentJson,
+          caption: editItem.caption,
           processing_state: 'completed',
           group_caption_synced: true
         })
