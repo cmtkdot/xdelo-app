@@ -38,6 +38,16 @@ export const MediaViewer = ({
     }
   };
 
+  const handlePrevious = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onPrevious) onPrevious();
+  };
+
+  const handleNext = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onNext) onNext();
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={() => onClose()}>
       <DialogContent className="max-w-2xl w-[90vw] max-h-[80vh] h-auto p-0 overflow-y-auto">
@@ -88,7 +98,7 @@ export const MediaViewer = ({
             <div className="flex justify-between pt-2 border-t border-border">
               <Button
                 variant="outline"
-                onClick={onPrevious}
+                onClick={handlePrevious}
                 disabled={!hasPrevious}
                 size="sm"
                 className="bg-secondary hover:bg-secondary/80 transition-colors"
@@ -98,7 +108,7 @@ export const MediaViewer = ({
               </Button>
               <Button
                 variant="outline"
-                onClick={onNext}
+                onClick={handleNext}
                 disabled={!hasNext}
                 size="sm"
                 className="bg-secondary hover:bg-secondary/80 transition-colors"
