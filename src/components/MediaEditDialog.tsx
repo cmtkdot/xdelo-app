@@ -50,7 +50,6 @@ export const MediaEditDialog = ({
       
       // Only update if caption has changed
       if (originalCaption !== newCaption) {
-        // Update caption in Telegram
         const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
           body: {
             messageId: editItem.id,
@@ -66,6 +65,14 @@ export const MediaEditDialog = ({
       // Update parsing metadata
       const updatedContent: AnalyzedContent = {
         ...content,
+        product_name: content.product_name,
+        product_code: content.product_code,
+        vendor_uid: content.vendor_uid,
+        purchase_date: content.purchase_date,
+        quantity: content.quantity,
+        unit_price: content.unit_price,
+        total_price: content.total_price,
+        notes: content.notes,
         parsing_metadata: {
           ...(content.parsing_metadata || {}),
           method: 'manual' as const,
