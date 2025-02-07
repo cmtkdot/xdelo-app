@@ -1,4 +1,3 @@
-
 import { TelegramMedia, MediaUploadResult, ProcessedMedia, WebhookResponse } from "./types.ts";
 import { downloadTelegramFile, uploadMedia } from "./mediaUtils.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
@@ -238,6 +237,80 @@ export async function handleChatMemberUpdate(
     };
   } catch (error) {
     console.error("❌ Error in handleChatMemberUpdate:", error);
+    throw error;
+  }
+}
+
+export async function handleEditedMessage(
+  supabase: ReturnType<typeof createClient>,
+  editedMessage: any,
+  TELEGRAM_BOT_TOKEN: string
+): Promise<WebhookResponse> {
+  try {
+    console.log('📝 Processing edited message:', {
+      message_id: editedMessage.message_id,
+      chat_id: editedMessage.chat.id,
+      chat_type: editedMessage.chat.type,
+      edited_caption: editedMessage.caption
+    });
+
+    // Find the existing message in our database
+    const { data: existingMessage, error: findError } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("telegram_message_id", editedMessage.message_id)
+      .eq("chat_id", editedMessage.chat.id)
+      .single();
+
+    if (findError || !existingMessage) {
+      console.error("❌ Could not find original message:", findError);
+      throw new Error("Original message not found");
+    }
+
+    // Only process if the caption has changed
+    if (existingMessage.caption !== editedMessage.caption) {
+      console.log("🔄 Caption has changed, updating message");
+
+      // Update the message with new caption
+      const { error: updateError } = await supabase
+        .from("messages")
+        .update({
+          caption: editedMessage.caption,
+          telegram_data: { 
+            ...existingMessage.telegram_data,
+            edited_message: editedMessage 
+          },
+          processing_state: "pending",
+          is_original_caption: true,
+          processing_completed_at: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", existingMessage.id);
+
+      if (updateError) {
+        console.error("❌ Failed to update message:", updateError);
+        throw updateError;
+      }
+
+      // Trigger reanalysis of the caption
+      await triggerCaptionParsing(
+        supabase,
+        existingMessage.id,
+        existingMessage.media_group_id,
+        editedMessage.caption
+      );
+
+      return {
+        message: "Successfully processed edited message",
+      };
+    } else {
+      console.log("ℹ️ Caption unchanged, no update needed");
+      return {
+        message: "Caption unchanged, no update needed",
+      };
+    }
+  } catch (error) {
+    console.error("❌ Error in handleEditedMessage:", error);
     throw error;
   }
 }

@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -19,7 +20,7 @@ serve(async (req) => {
 
     const webhookUrl = `https://xjhhehxcxkiumnwbirel.supabase.co/functions/v1/telegram-webhook`;
     
-    // Set the webhook
+    // Set the webhook with edited_message in allowed_updates
     const setWebhookUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook`;
     const response = await fetch(setWebhookUrl, {
       method: "POST",
@@ -28,7 +29,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         url: webhookUrl,
-        allowed_updates: ["message", "channel_post", "my_chat_member"],
+        allowed_updates: ["message", "edited_message", "channel_post", "my_chat_member"],
       }),
     });
 
