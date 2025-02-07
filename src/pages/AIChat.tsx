@@ -1,47 +1,49 @@
-
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function AIChat() {
-  const [iframeUrl, setIframeUrl] = useState("");
+  const [iframeUrl, setIframeUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  useEffect(() => {
-    const initChat = async () => {
-      try {
-        console.log("Initializing chat session...");
-        const { data, error } = await supabase.functions.invoke('create-ayd-session', {
-          body: { }
-        });
+  const initChat = useCallback(async () => {
+    try {
+      console.log("Initializing chat session...");
+      const { data, error } = await supabase.functions.invoke('create-ayd-session', {
+        body: { }
+      });
 
-        if (error) {
-          console.error('Supabase function error:', error);
-          throw error;
-        }
-
-        console.log("Response from create-ayd-session:", data);
-        
-        if (!data?.url) {
-          throw new Error('No URL returned from session creation');
-        }
-
-        setIframeUrl(data.url);
-      } catch (error: any) {
-        console.error('Error initializing chat:', error);
-        toast({
-          title: "Error",
-          description: error?.message || "Failed to initialize chat. Please try again.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw error;
       }
-    };
 
-    initChat();
-  }, []);
+      console.log("Response from create-ayd-session:", data);
+      
+      if (!data?.url) {
+        throw new Error('No URL returned from session creation');
+      }
+
+      setIframeUrl(data.url);
+    } catch (error: any) {
+      console.error('Error initializing chat:', error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to initialize chat. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    // Only initialize if we don't already have a URL
+    if (!iframeUrl) {
+      initChat();
+    }
+  }, [initChat, iframeUrl]);
 
   if (isLoading) {
     return (
@@ -55,6 +57,7 @@ export default function AIChat() {
     <div className="flex justify-center items-start p-4 min-h-[calc(100vh-4rem)]">
       {iframeUrl && (
         <iframe
+          key={iframeUrl} // Add key to prevent unnecessary re-renders
           className="rounded-lg shadow-lg bg-background"
           style={{
             height: "80vh",
@@ -62,9 +65,11 @@ export default function AIChat() {
             maxWidth: "800px",
           }}
           src={iframeUrl}
+          title="AI Chat Interface"
+          loading="lazy"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
         />
       )}
     </div>
   );
 }
-

@@ -271,29 +271,7 @@ export type Database = {
           timestamp_added?: string | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_customer_credits_rowid_accountrowid_fkey"
-            columns: ["rowid_accountrowid"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_customer_credits_rowid_estimatorowid_fkey"
-            columns: ["rowid_estimatorowid"]
-            isOneToOne: false
-            referencedRelation: "gl_estimates"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_customer_credits_rowid_invoice_row_id_fkey"
-            columns: ["rowid_invoice_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["glide_id"]
-          },
-        ]
+        Relationships: []
       }
       gl_customer_payments: {
         Row: {
@@ -350,29 +328,7 @@ export type Database = {
           timestamp_added?: string | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_customer_payments_rowid_accountrowid_fkey"
-            columns: ["rowid_accountrowid"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_customer_payments_rowid_invoice_row_id_fkey"
-            columns: ["rowid_invoice_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_customer_payments_rowid_invoiceline_row_id_fkey"
-            columns: ["rowid_invoiceline_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoice_lines"
-            referencedColumns: ["glide_id"]
-          },
-        ]
+        Relationships: []
       }
       gl_estimate_lines: {
         Row: {
@@ -438,29 +394,7 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_estimate_lines_rowid_estimate_row_id_fkey"
-            columns: ["rowid_estimate_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_estimates"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_estimate_lines_rowid_productid_estline_items_fkey"
-            columns: ["rowid_productid_estline_items"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_estimate_lines_rowid_userid_est_lineitems_fkey"
-            columns: ["rowid_userid_est_lineitems"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-        ]
+        Relationships: []
       }
       gl_estimates: {
         Row: {
@@ -544,15 +478,7 @@ export type Database = {
           user_user_email?: string | null
           valid_final_create_invoice_clicked?: boolean | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_estimates_rowids_accountrowid_estimates_fkey"
-            columns: ["rowids_accountrowid_estimates"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-        ]
+        Relationships: []
       }
       gl_expenses: {
         Row: {
@@ -705,36 +631,7 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_invoice_lines_rowid_estimate_rowid_fkey"
-            columns: ["rowid_estimate_rowid"]
-            isOneToOne: false
-            referencedRelation: "gl_estimates"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_invoice_lines_rowid_invoice_rowid_fkey"
-            columns: ["rowid_invoice_rowid"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_invoice_lines_rowid_productid_fkey"
-            columns: ["rowid_productid"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_invoice_lines_rowid_productid_question_fkey"
-            columns: ["rowid_productid_question"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["glide_id"]
-          },
-        ]
+        Relationships: []
       }
       gl_invoices: {
         Row: {
@@ -815,22 +712,7 @@ export type Database = {
           tre_total?: number | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_invoices_rowids_accountid_sales_invoices_fkey"
-            columns: ["rowids_accountid_sales_invoices"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_invoices_rowids_estimatorowid_fkey"
-            columns: ["rowids_estimatorowid"]
-            isOneToOne: false
-            referencedRelation: "gl_estimates"
-            referencedColumns: ["glide_id"]
-          },
-        ]
+        Relationships: []
       }
       gl_products: {
         Row: {
@@ -962,15 +844,7 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_products_rowid_account_rowid_fkey"
-            columns: ["rowid_account_rowid"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-        ]
+        Relationships: []
       }
       gl_purchase_orders: {
         Row: {
@@ -1024,15 +898,7 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_purchase_orders_rowid_accntrowid_fkey"
-            columns: ["rowid_accntrowid"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-        ]
+        Relationships: []
       }
       gl_shipping_records: {
         Row: {
@@ -1206,36 +1072,7 @@ export type Database = {
           tp_history_rowid?: string | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_shipping_records_main_account_rowid_2_fkey"
-            columns: ["main_account_rowid_2"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_shipping_records_main_account_rowid_fkey"
-            columns: ["main_account_rowid"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_shipping_records_main_invoices_row_id_fkey"
-            columns: ["main_invoices_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_shipping_records_rowid_invoicerelated_fkey"
-            columns: ["rowid_invoicerelated"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["glide_id"]
-          },
-        ]
+        Relationships: []
       }
       gl_sync_logs: {
         Row: {
@@ -1300,6 +1137,33 @@ export type Database = {
         }
         Relationships: []
       }
+      gl_table_mappings: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          glide_table_id: string
+          id: string
+          supabase_table: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          glide_table_id: string
+          id?: string
+          supabase_table: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          glide_table_id?: string
+          id?: string
+          supabase_table?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       gl_vendor_payments: {
         Row: {
           automatically_recorded: boolean | null
@@ -1358,29 +1222,7 @@ export type Database = {
           updated_at?: string | null
           user_emailuseradded?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_vendor_payments_rowid_account_row_id_fkey"
-            columns: ["rowid_account_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_vendor_payments_rowid_productrowid_fkey"
-            columns: ["rowid_productrowid"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_vendor_payments_rowid_purchaseorderrowid_fkey"
-            columns: ["rowid_purchaseorderrowid"]
-            isOneToOne: false
-            referencedRelation: "gl_purchase_orders"
-            referencedColumns: ["glide_id"]
-          },
-        ]
+        Relationships: []
       }
       messages: {
         Row: {
@@ -1916,6 +1758,7 @@ export type Database = {
         | "processing"
         | "completed"
         | "error"
+      sync_operation: "sync" | "create" | "update" | "delete"
       sync_status: "pending" | "synced" | "error" | "locked"
     }
     CompositeTypes: {
