@@ -1,3 +1,4 @@
+
 import { TelegramMedia, MediaUploadResult, ProcessedMedia, WebhookResponse } from "./types.ts";
 import { downloadTelegramFile, uploadMedia } from "./mediaUtils.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
@@ -271,7 +272,26 @@ export async function handleEditedMessage(
     if (existingMessage.caption !== editedMessage.caption) {
       console.log("🔄 Caption has changed, updating message");
 
-      // Update the message with new caption
+      // If this is part of a media group, set all other messages in the group to not be original caption
+      if (existingMessage.media_group_id) {
+        console.log("📑 Updating media group caption statuses");
+        const { error: groupUpdateError } = await supabase
+          .from("messages")
+          .update({
+            is_original_caption: false,
+            group_caption_synced: false,
+            message_caption_id: existingMessage.id
+          })
+          .eq("media_group_id", existingMessage.media_group_id)
+          .neq("id", existingMessage.id);
+
+        if (groupUpdateError) {
+          console.error("❌ Failed to update media group messages:", groupUpdateError);
+          throw groupUpdateError;
+        }
+      }
+
+      // Update the edited message with new caption and mark it as original
       const { error: updateError } = await supabase
         .from("messages")
         .update({
@@ -282,6 +302,7 @@ export async function handleEditedMessage(
           },
           processing_state: "pending",
           is_original_caption: true,
+          group_caption_synced: true,
           processing_completed_at: null,
           updated_at: new Date().toISOString()
         })
