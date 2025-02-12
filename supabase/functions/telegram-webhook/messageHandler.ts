@@ -261,12 +261,24 @@ export async function handleEditedMessage(
       .select("*")
       .eq("telegram_message_id", editedMessage.message_id)
       .eq("chat_id", editedMessage.chat.id)
-      .single();
+      .maybeSingle();
 
-    if (findError || !existingMessage) {
-      console.error("❌ Could not find original message:", findError);
+    if (findError) {
+      console.error("❌ Error finding original message:", findError);
+      throw findError;
+    }
+
+    if (!existingMessage) {
+      console.error("❌ Message not found in database");
       throw new Error("Original message not found");
     }
+
+    console.log("✅ Found existing message:", {
+      id: existingMessage.id,
+      old_caption: existingMessage.caption,
+      new_caption: editedMessage.caption,
+      media_group_id: existingMessage.media_group_id
+    });
 
     // Only process if the caption has changed
     if (existingMessage.caption !== editedMessage.caption) {
@@ -274,13 +286,24 @@ export async function handleEditedMessage(
 
       // If this is part of a media group, set all other messages in the group to not be original caption
       if (existingMessage.media_group_id) {
-        console.log("📑 Updating media group caption statuses");
+        console.log("📑 Updating media group caption statuses for group:", existingMessage.media_group_id);
+        
+        // Get current group count for proper syncing
+        const { count } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('media_group_id', existingMessage.media_group_id);
+        
+        const groupCount = count || 1;
+        console.log(`Found ${groupCount} messages in group`);
+
         const { error: groupUpdateError } = await supabase
           .from("messages")
           .update({
             is_original_caption: false,
             group_caption_synced: false,
-            message_caption_id: existingMessage.id
+            message_caption_id: existingMessage.id,
+            group_message_count: groupCount
           })
           .eq("media_group_id", existingMessage.media_group_id)
           .neq("id", existingMessage.id);
@@ -289,6 +312,8 @@ export async function handleEditedMessage(
           console.error("❌ Failed to update media group messages:", groupUpdateError);
           throw groupUpdateError;
         }
+
+        console.log("✅ Successfully updated media group messages");
       }
 
       // Update the edited message with new caption and mark it as original
@@ -304,6 +329,10 @@ export async function handleEditedMessage(
           is_original_caption: true,
           group_caption_synced: true,
           processing_completed_at: null,
+          group_message_count: existingMessage.media_group_id ? (await supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('media_group_id', existingMessage.media_group_id)).count || 1 : 1,
           updated_at: new Date().toISOString()
         })
         .eq("id", existingMessage.id);
@@ -313,13 +342,22 @@ export async function handleEditedMessage(
         throw updateError;
       }
 
+      console.log("✅ Successfully updated message with new caption");
+
       // Trigger reanalysis of the caption
-      await triggerCaptionParsing(
-        supabase,
-        existingMessage.id,
-        existingMessage.media_group_id,
-        editedMessage.caption
-      );
+      try {
+        console.log("🤖 Triggering caption reanalysis");
+        await triggerCaptionParsing(
+          supabase,
+          existingMessage.id,
+          existingMessage.media_group_id,
+          editedMessage.caption
+        );
+        console.log("✅ Successfully triggered caption reanalysis");
+      } catch (error) {
+        console.error("❌ Failed to trigger caption reanalysis:", error);
+        throw error;
+      }
 
       return {
         message: "Successfully processed edited message",
