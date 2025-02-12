@@ -29,7 +29,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         url: webhookUrl,
-        allowed_updates: ["message", "edited_message", "channel_post", "my_chat_member"],
+        allowed_updates: ["message", "edited_message", "channel_post", "edited_channel_post", "my_chat_member"],
       }),
     });
 
