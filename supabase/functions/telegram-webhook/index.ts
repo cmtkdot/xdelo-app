@@ -1,7 +1,8 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "./authUtils.ts";
-import { handleTextMessage, handleMediaMessage, handleChatMemberUpdate } from "./messageHandler.ts";
+import { handleTextMessage, handleMediaMessage, handleChatMemberUpdate, handleEditedMessage } from "./messageHandler.ts";
 
 serve(async (req) => {
   console.log("📥 Received webhook request");
@@ -28,6 +29,13 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Handle edited messages
+    if (update.edited_message) {
+      console.log("📝 Handling edited message");
+      return await handleEditedMessage(supabase, update.edited_message, TELEGRAM_BOT_TOKEN);
+    }
+
+    // Original message handling logic
     const message = update.message || update.channel_post;
     if (!message) {
       return new Response(

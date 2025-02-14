@@ -241,3 +241,135 @@ export async function handleChatMemberUpdate(
     throw error;
   }
 }
+
+export async function handleEditedMessage(
+  supabase: ReturnType<typeof createClient>,
+  editedMessage: any,
+  TELEGRAM_BOT_TOKEN: string
+): Promise<WebhookResponse> {
+  try {
+    console.log('📝 Processing edited message:', {
+      message_id: editedMessage.message_id,
+      chat_id: editedMessage.chat.id,
+      chat_type: editedMessage.chat.type,
+      edited_caption: editedMessage.caption
+    });
+
+    // Find the existing message in our database
+    const { data: existingMessage, error: findError } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("telegram_message_id", editedMessage.message_id)
+      .eq("chat_id", editedMessage.chat.id)
+      .maybeSingle();
+
+    if (findError) {
+      console.error("❌ Error finding original message:", findError);
+      throw findError;
+    }
+
+    if (!existingMessage) {
+      console.error("❌ Message not found in database");
+      throw new Error("Original message not found");
+    }
+
+    console.log("✅ Found existing message:", {
+      id: existingMessage.id,
+      old_caption: existingMessage.caption,
+      new_caption: editedMessage.caption,
+      media_group_id: existingMessage.media_group_id
+    });
+
+    // Only process if the caption has changed
+    if (existingMessage.caption !== editedMessage.caption) {
+      console.log("🔄 Caption has changed, updating message");
+
+      // If this is part of a media group, set all other messages in the group to not be original caption
+      if (existingMessage.media_group_id) {
+        console.log("📑 Updating media group caption statuses for group:", existingMessage.media_group_id);
+        
+        // Get current group count for proper syncing
+        const { count } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('media_group_id', existingMessage.media_group_id);
+        
+        const groupCount = count || 1;
+        console.log(`Found ${groupCount} messages in group`);
+
+        const { error: groupUpdateError } = await supabase
+          .from("messages")
+          .update({
+            is_original_caption: false,
+            group_caption_synced: false,
+            message_caption_id: existingMessage.id,
+            group_message_count: groupCount
+          })
+          .eq("media_group_id", existingMessage.media_group_id)
+          .neq("id", existingMessage.id);
+
+        if (groupUpdateError) {
+          console.error("❌ Failed to update media group messages:", groupUpdateError);
+          throw groupUpdateError;
+        }
+
+        console.log("✅ Successfully updated media group messages");
+      }
+
+      // Update the edited message with new caption and mark it as original
+      const { error: updateError } = await supabase
+        .from("messages")
+        .update({
+          caption: editedMessage.caption,
+          telegram_data: { 
+            ...existingMessage.telegram_data,
+            edited_message: editedMessage 
+          },
+          processing_state: "pending",
+          is_original_caption: true,
+          group_caption_synced: true,
+          processing_completed_at: null,
+          group_message_count: existingMessage.media_group_id ? (await supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('media_group_id', existingMessage.media_group_id)).count || 1 : 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", existingMessage.id);
+
+      if (updateError) {
+        console.error("❌ Failed to update message:", updateError);
+        throw updateError;
+      }
+
+      console.log("✅ Successfully updated message with new caption");
+
+      // Trigger reanalysis of the caption
+      try {
+        console.log("🤖 Triggering caption reanalysis");
+        await triggerCaptionParsing(
+          supabase,
+          existingMessage.id,
+          existingMessage.media_group_id,
+          editedMessage.caption
+        );
+        console.log("✅ Successfully triggered caption reanalysis");
+      } catch (error) {
+        console.error("❌ Failed to trigger caption reanalysis:", error);
+        throw error;
+      }
+
+      return {
+        message: "Successfully processed edited message",
+      };
+    } else {
+      console.log("ℹ️ Caption unchanged, no update needed");
+      return {
+        message: "Caption unchanged, no update needed",
+      };
+    }
+  } catch (error) {
+    console.error("❌ Error in handleEditedMessage:", error);
+    throw error;
+  }
+}
