@@ -256,9 +256,155 @@ export async function handleEditedMessage(
       edit_date: message.edit_date
     });
 
-    // If no media, store in other_messages
-    if (!media) {
-      console.log("ℹ️ Non-media edit, storing in other_messages", {
+    // First check if the message exists in our messages table regardless of media
+    const { data: existingMessage, error: findError } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("telegram_message_id", message.message_id)
+      .eq("chat_id", message.chat.id)
+      .maybeSingle();
+
+    // If we found a matching message in our messages table, handle the update
+    if (existingMessage) {
+      // Check if this edit is newer
+      const editDate = new Date(message.edit_date * 1000);
+      const lastUpdate = existingMessage.edit_date ? new Date(existingMessage.edit_date) : null;
+
+      if (lastUpdate && editDate <= lastUpdate) {
+        console.log("⏭️ Skipping older edit", {
+          correlation_id: correlationId,
+          edit_date: editDate,
+          last_update: lastUpdate
+        });
+        return { message: "Edit skipped - not newer" };
+      }
+
+      // Update message with new data
+      const newCaption = message.caption || "";
+      const updatedTelegramData = {
+        ...existingMessage.telegram_data,
+        message: {
+          ...(existingMessage.telegram_data?.message || {}),
+          caption: newCaption,
+          edit_date: message.edit_date,
+          edited_message: true
+        }
+      };
+
+      // Update the message
+      const { error: updateError } = await supabase
+        .from("messages")
+        .update({
+          caption: newCaption,
+          telegram_data: updatedTelegramData,
+          is_edited: true,
+          edit_date: editDate.toISOString(),
+          processing_state: 'pending',
+          processing_completed_at: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", existingMessage.id);
+
+      if (updateError) {
+        console.error("❌ Failed to update message:", {
+          correlation_id: correlationId,
+          error: updateError.message
+        });
+        throw updateError;
+      }
+
+      // If part of a media group, update related messages
+      if (existingMessage.media_group_id && existingMessage.is_original_caption) {
+        console.log("🔄 Syncing media group caption:", {
+          correlation_id: correlationId,
+          media_group_id: existingMessage.media_group_id
+        });
+
+        const { error: groupUpdateError } = await supabase
+          .from("messages")
+          .update({
+            caption: newCaption,
+            processing_state: 'pending',
+            processing_completed_at: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq("media_group_id", existingMessage.media_group_id)
+          .neq("id", existingMessage.id);
+
+        if (groupUpdateError) {
+          console.error("❌ Error updating group:", {
+            correlation_id: correlationId,
+            error: groupUpdateError.message
+          });
+        }
+      }
+
+      // Log the edit
+      await supabase
+        .from("analysis_audit_log")
+        .insert({
+          message_id: existingMessage.id,
+          media_group_id: existingMessage.media_group_id,
+          event_type: 'MESSAGE_EDITED',
+          old_state: existingMessage.processing_state,
+          new_state: 'pending',
+          processing_details: {
+            correlation_id: correlationId,
+            edit_date: message.edit_date,
+            previous_caption: existingMessage.caption,
+            new_caption: newCaption
+          }
+        });
+
+      // Trigger reanalysis if caption changed
+      if (newCaption !== existingMessage.caption) {
+        console.log("🔄 Starting reanalysis:", {
+          correlation_id: correlationId,
+          message_id: existingMessage.id
+        });
+
+        const { error: reanalysisError } = await supabase.functions.invoke(
+          'parse-caption-with-ai',
+          {
+            body: {
+              message_id: existingMessage.id,
+              media_group_id: existingMessage.media_group_id,
+              caption: newCaption,
+              correlation_id: correlationId,
+              is_edit: true
+            }
+          }
+        );
+
+        if (reanalysisError) {
+          console.error("❌ Reanalysis error:", {
+            correlation_id: correlationId,
+            error: reanalysisError.message
+          });
+        }
+      }
+
+      return {
+        message: "Edit processed successfully",
+        details: {
+          message_id: existingMessage.id,
+          media_group_id: existingMessage.media_group_id,
+          reanalysis_triggered: newCaption !== existingMessage.caption
+        }
+      };
+    }
+    
+    // If we reach here, this is a new message we haven't seen before
+    if (media) {
+      // If it has media but we don't have it, treat it as a new message
+      console.log("📥 Processing as new media message:", {
+        correlation_id: correlationId,
+        message_id: message.message_id
+      });
+      return await handleMediaMessage(supabase, message, Deno.env.get("TELEGRAM_BOT_TOKEN")!);
+    } else {
+      // Only store in other_messages if it's truly a non-media message we haven't seen before
+      console.log("📝 Storing new non-media message:", {
         correlation_id: correlationId,
         message_id: message.message_id
       });
@@ -276,150 +422,8 @@ export async function handleEditedMessage(
       });
 
       if (insertError) throw insertError;
-      return { message: "Non-media edit stored" };
+      return { message: "New non-media message stored" };
     }
-
-    // Find the existing message by file_unique_id
-    const { data: existingMessage, error: findError } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("file_unique_id", media.file_unique_id)
-      .single();
-
-    if (findError) {
-      console.error("❌ Error finding message:", {
-        correlation_id: correlationId,
-        error: findError.message
-      });
-      throw findError;
-    }
-
-    // Check if this edit is newer
-    const editDate = new Date(message.edit_date * 1000);
-    const lastUpdate = existingMessage.edit_date ? new Date(existingMessage.edit_date) : null;
-
-    if (lastUpdate && editDate <= lastUpdate) {
-      console.log("⏭️ Skipping older edit", {
-        correlation_id: correlationId,
-        edit_date: editDate,
-        last_update: lastUpdate
-      });
-      return { message: "Edit skipped - not newer" };
-    }
-
-    // Update message with new data
-    const newCaption = message.caption || "";
-    const updatedTelegramData = {
-      ...existingMessage.telegram_data,
-      message: {
-        ...(existingMessage.telegram_data?.message || {}),
-        caption: newCaption,
-        edit_date: message.edit_date,
-        edited_message: true
-      }
-    };
-
-    // Update the message
-    const { error: updateError } = await supabase
-      .from("messages")
-      .update({
-        caption: newCaption,
-        telegram_data: updatedTelegramData,
-        is_edited: true,
-        edit_date: editDate.toISOString(),
-        processing_state: 'pending',
-        processing_completed_at: null,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", existingMessage.id);
-
-    if (updateError) {
-      console.error("❌ Failed to update message:", {
-        correlation_id: correlationId,
-        error: updateError.message
-      });
-      throw updateError;
-    }
-
-    // If part of a media group, update related messages
-    if (existingMessage.media_group_id && existingMessage.is_original_caption) {
-      console.log("🔄 Syncing media group caption:", {
-        correlation_id: correlationId,
-        media_group_id: existingMessage.media_group_id
-      });
-
-      const { error: groupUpdateError } = await supabase
-        .from("messages")
-        .update({
-          caption: newCaption,
-          processing_state: 'pending',
-          processing_completed_at: null,
-          updated_at: new Date().toISOString()
-        })
-        .eq("media_group_id", existingMessage.media_group_id)
-        .neq("id", existingMessage.id);
-
-      if (groupUpdateError) {
-        console.error("❌ Error updating group:", {
-          correlation_id: correlationId,
-          error: groupUpdateError.message
-        });
-      }
-    }
-
-    // Log the edit
-    await supabase
-      .from("analysis_audit_log")
-      .insert({
-        message_id: existingMessage.id,
-        media_group_id: existingMessage.media_group_id,
-        event_type: 'MESSAGE_EDITED',
-        old_state: existingMessage.processing_state,
-        new_state: 'pending',
-        processing_details: {
-          correlation_id: correlationId,
-          edit_date: message.edit_date,
-          previous_caption: existingMessage.caption,
-          new_caption: newCaption
-        }
-      });
-
-    // Trigger reanalysis if caption changed
-    if (newCaption !== existingMessage.caption) {
-      console.log("🔄 Starting reanalysis:", {
-        correlation_id: correlationId,
-        message_id: existingMessage.id
-      });
-
-      const { error: reanalysisError } = await supabase.functions.invoke(
-        'parse-caption-with-ai',
-        {
-          body: {
-            message_id: existingMessage.id,
-            media_group_id: existingMessage.media_group_id,
-            caption: newCaption,
-            correlation_id: correlationId,
-            is_edit: true
-          }
-        }
-      );
-
-      if (reanalysisError) {
-        console.error("❌ Reanalysis error:", {
-          correlation_id: correlationId,
-          error: reanalysisError.message
-        });
-      }
-    }
-
-    return {
-      message: "Edit processed successfully",
-      details: {
-        message_id: existingMessage.id,
-        media_group_id: existingMessage.media_group_id,
-        reanalysis_triggered: newCaption !== existingMessage.caption
-      }
-    };
   } catch (error) {
     console.error("❌ Error in handleEditedMessage:", {
       error,
