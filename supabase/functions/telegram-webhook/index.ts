@@ -29,10 +29,11 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Handle edited messages
-    if (update.edited_message) {
-      console.log("📝 Handling edited message");
-      return await handleEditedMessage(supabase, update.edited_message, TELEGRAM_BOT_TOKEN);
+    // Handle both regular edited messages and edited channel posts
+    if (update.edited_message || update.edited_channel_post) {
+      console.log("📝 Handling edited message/post");
+      const editedContent = update.edited_message || update.edited_channel_post;
+      return await handleEditedMessage(supabase, editedContent, TELEGRAM_BOT_TOKEN);
     }
 
     // Original message handling logic
