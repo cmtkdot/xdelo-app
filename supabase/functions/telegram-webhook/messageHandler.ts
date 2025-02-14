@@ -244,73 +244,23 @@ export async function handleEditedMessage(
   const correlationId = crypto.randomUUID();
   
   try {
-    console.log("🔄 Starting edit processing:", {
+    // Get media content if present
+    const media = message.photo?.[message.photo.length - 1] || 
+                 message.video || 
+                 message.document;
+
+    console.log("🔄 Processing edited message:", {
       correlation_id: correlationId,
       message_id: message.message_id,
-      chat_id: message.chat.id,
-      chat_type: message.chat.type,
-      edit_date: message.edit_date,
-      has_media: !!(message.photo || message.video || message.document)
+      has_media: !!media,
+      edit_date: message.edit_date
     });
 
-    // Find the existing message in our database using both message_id and chat_id
-    const { data: existingMessage, error: findError } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("telegram_message_id", message.message_id)
-      .eq("chat_id", message.chat.id)
-      .maybeSingle();
-
-    if (findError) {
-      console.error("❌ Database error finding message:", {
+    // If no media, store in other_messages
+    if (!media) {
+      console.log("ℹ️ Non-media edit, storing in other_messages", {
         correlation_id: correlationId,
-        error: findError.message
-      });
-      throw findError;
-    }
-
-    // Try finding in telegram_data if not found in direct columns
-    if (!existingMessage) {
-      console.log("🔍 Searching in telegram_data for message...", {
-        correlation_id: correlationId,
-        message_id: message.message_id,
-        chat_id: message.chat.id
-      });
-
-      const { data: tdataMessage, error: tdataError } = await supabase
-        .from("messages")
-        .select("*")
-        .contains('telegram_data', {
-          message: {
-            message_id: message.message_id,
-            chat: {
-              id: message.chat.id
-            }
-          }
-        })
-        .maybeSingle();
-
-      if (tdataError) {
-        console.error("❌ Error searching telegram_data:", {
-          correlation_id: correlationId,
-          error: tdataError.message
-        });
-      }
-
-      if (tdataMessage) {
-        console.log("✅ Found message in telegram_data", {
-          correlation_id: correlationId,
-          message_id: tdataMessage.id
-        });
-        existingMessage = tdataMessage;
-      }
-    }
-
-    if (!existingMessage) {
-      console.log("ℹ️ Message not found in messages table, storing in other_messages", {
-        correlation_id: correlationId,
-        message_id: message.message_id,
-        chat_id: message.chat.id
+        message_id: message.message_id
       });
       
       const { error: insertError } = await supabase.from("other_messages").insert({
@@ -325,31 +275,39 @@ export async function handleEditedMessage(
         processing_state: "completed"
       });
 
-      if (insertError) {
-        throw insertError;
-      }
-
-      return {
-        message: "Edit stored in other_messages",
-      };
+      if (insertError) throw insertError;
+      return { message: "Non-media edit stored" };
     }
 
-    // Check if this edit is newer than our last update
+    // Find the existing message by file_unique_id
+    const { data: existingMessage, error: findError } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("file_unique_id", media.file_unique_id)
+      .single();
+
+    if (findError) {
+      console.error("❌ Error finding message:", {
+        correlation_id: correlationId,
+        error: findError.message
+      });
+      throw findError;
+    }
+
+    // Check if this edit is newer
     const editDate = new Date(message.edit_date * 1000);
     const lastUpdate = existingMessage.edit_date ? new Date(existingMessage.edit_date) : null;
 
     if (lastUpdate && editDate <= lastUpdate) {
-      console.log("⏭️ Skipping older or duplicate edit", {
+      console.log("⏭️ Skipping older edit", {
         correlation_id: correlationId,
         edit_date: editDate,
         last_update: lastUpdate
       });
-      return {
-        message: "Edit skipped - not newer than existing version"
-      };
+      return { message: "Edit skipped - not newer" };
     }
 
-    // Extract the new caption and prepare update
+    // Update message with new data
     const newCaption = message.caption || "";
     const updatedTelegramData = {
       ...existingMessage.telegram_data,
@@ -361,7 +319,7 @@ export async function handleEditedMessage(
       }
     };
 
-    // Update the source message
+    // Update the message
     const { error: updateError } = await supabase
       .from("messages")
       .update({
@@ -383,9 +341,9 @@ export async function handleEditedMessage(
       throw updateError;
     }
 
-    // If this is part of a media group and has the original caption
+    // If part of a media group, update related messages
     if (existingMessage.media_group_id && existingMessage.is_original_caption) {
-      console.log("🔄 Updating media group:", {
+      console.log("🔄 Syncing media group caption:", {
         correlation_id: correlationId,
         media_group_id: existingMessage.media_group_id
       });
@@ -402,14 +360,14 @@ export async function handleEditedMessage(
         .neq("id", existingMessage.id);
 
       if (groupUpdateError) {
-        console.error("❌ Error updating media group:", {
+        console.error("❌ Error updating group:", {
           correlation_id: correlationId,
           error: groupUpdateError.message
         });
       }
     }
 
-    // Log the edit event
+    // Log the edit
     await supabase
       .from("analysis_audit_log")
       .insert({
@@ -421,16 +379,14 @@ export async function handleEditedMessage(
         processing_details: {
           correlation_id: correlationId,
           edit_date: message.edit_date,
-          chat_id: message.chat.id,
-          chat_type: message.chat.type,
           previous_caption: existingMessage.caption,
           new_caption: newCaption
         }
       });
 
-    // Trigger reanalysis if needed
+    // Trigger reanalysis if caption changed
     if (newCaption !== existingMessage.caption) {
-      console.log("🔄 Triggering reanalysis:", {
+      console.log("🔄 Starting reanalysis:", {
         correlation_id: correlationId,
         message_id: existingMessage.id
       });
@@ -449,7 +405,7 @@ export async function handleEditedMessage(
       );
 
       if (reanalysisError) {
-        console.error("❌ Error triggering reanalysis:", {
+        console.error("❌ Reanalysis error:", {
           correlation_id: correlationId,
           error: reanalysisError.message
         });
@@ -457,7 +413,7 @@ export async function handleEditedMessage(
     }
 
     return {
-      message: "Successfully processed edit",
+      message: "Edit processed successfully",
       details: {
         message_id: existingMessage.id,
         media_group_id: existingMessage.media_group_id,
@@ -465,7 +421,10 @@ export async function handleEditedMessage(
       }
     };
   } catch (error) {
-    console.error("❌ Error in handleEditedMessage:", error);
+    console.error("❌ Error in handleEditedMessage:", {
+      error,
+      correlation_id: correlationId
+    });
     throw error;
   }
 }
