@@ -1,3 +1,4 @@
+
 import { SupabaseClient, ExistingMessage, ProcessingState, MessageData } from "./types.ts";
 
 export async function findExistingMessage(
@@ -72,6 +73,69 @@ export async function createNewMessage(
     console.error("❌ Error in createNewMessage:", error);
     throw error;
   }
+}
+
+export async function handleExistingMessage(
+  supabase: SupabaseClient,
+  existingMessage: ExistingMessage,
+  newMessageData: MessageData,
+  correlationId: string
+) {
+  const editDate = new Date();
+  const lastUpdate = existingMessage.edit_date ? new Date(existingMessage.edit_date) : null;
+
+  // Always update Telegram data and timestamp
+  const updateData = {
+    telegram_data: {
+      ...existingMessage.telegram_data,
+      message: newMessageData.telegram_data.message
+    },
+    updated_at: editDate.toISOString(),
+    edit_date: editDate.toISOString()
+  };
+
+  // If caption changed, trigger reanalysis
+  if (existingMessage.caption !== newMessageData.caption) {
+    Object.assign(updateData, {
+      caption: newMessageData.caption,
+      processing_state: 'pending' as ProcessingState,
+      processing_completed_at: null
+    });
+  }
+
+  console.log("🔄 Updating existing message:", {
+    message_id: existingMessage.id,
+    correlation_id: correlationId,
+    caption_changed: existingMessage.caption !== newMessageData.caption
+  });
+
+  await updateExistingMessage(supabase, existingMessage.id, updateData);
+
+  // Log the update
+  await supabase.from("analysis_audit_log").insert({
+    message_id: existingMessage.id,
+    media_group_id: existingMessage.media_group_id,
+    event_type: 'MESSAGE_UPDATED',
+    old_state: existingMessage.processing_state,
+    new_state: updateData.processing_state || existingMessage.processing_state,
+    processing_details: {
+      correlation_id: correlationId,
+      update_time: editDate.toISOString(),
+      caption_changed: existingMessage.caption !== newMessageData.caption
+    }
+  });
+
+  // If caption changed, trigger reanalysis
+  if (existingMessage.caption !== newMessageData.caption) {
+    await triggerCaptionParsing(
+      supabase,
+      existingMessage.id,
+      existingMessage.media_group_id,
+      newMessageData.caption
+    );
+  }
+
+  return existingMessage;
 }
 
 export async function triggerCaptionParsing(

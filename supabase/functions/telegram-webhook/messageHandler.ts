@@ -61,14 +61,7 @@ export async function handleMediaMessage(
 
     // Check for existing message
     const existingMessage = await findExistingMessage(supabase, media.file_unique_id);
-    if (existingMessage) {
-      console.log("🔄 Message already exists:", {
-        correlation_id: correlationId,
-        message_id: existingMessage.id
-      });
-      return { message: "Message already processed" };
-    }
-
+    
     // Get group metadata first
     const { currentGroupCount, groupFirstMessageTime, groupLastMessageTime } = 
       await getGroupMetadata(supabase, message.media_group_id);
@@ -81,7 +74,50 @@ export async function handleMediaMessage(
       groupLastMessageTime
     });
 
-    // Download and upload media
+    // Prepare message data with group information
+    const messageData: MessageData = {
+      telegram_message_id: message.message_id,
+      media_group_id: message.media_group_id || null,
+      caption: message.caption || "",
+      file_id: media.file_id,
+      file_unique_id: media.file_unique_id,
+      mime_type: media.mime_type,
+      file_size: media.file_size,
+      width: media.width,
+      height: media.height,
+      duration: media.duration,
+      user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
+      telegram_data: { message },
+      processing_state: "initialized",
+      group_message_count: currentGroupCount,
+      group_first_message_time: groupFirstMessageTime,
+      group_last_message_time: groupLastMessageTime,
+      chat_id: message.chat.id,
+      chat_type: message.chat.type,
+      chat_title: message.chat.title,
+      is_original_caption: message.media_group_id ? currentGroupCount === 1 : true
+    };
+
+    if (existingMessage) {
+      console.log("🔄 Updating existing message:", {
+        correlation_id: correlationId,
+        message_id: existingMessage.id
+      });
+      
+      // Update existing message with new data while preserving file storage
+      messageData.public_url = existingMessage.public_url;
+      const updatedMessage = await handleExistingMessage(supabase, existingMessage, messageData, correlationId);
+      
+      return {
+        message: "Message updated successfully",
+        processed_media: [{
+          file_unique_id: media.file_unique_id,
+          public_url: updatedMessage.public_url
+        }]
+      };
+    }
+
+    // If message doesn't exist, download and upload media
     const mediaResponse = await downloadTelegramFile(media.file_id, botToken);
     const buffer = await mediaResponse.arrayBuffer();
     
@@ -91,31 +127,8 @@ export async function handleMediaMessage(
       fileSize: media.file_size
     });
 
-    // Prepare message data with group information
-    const messageData: MessageData = {
-      telegram_message_id: message.message_id,
-      media_group_id: message.media_group_id || null,
-      caption: message.caption || "",
-      file_id: media.file_id,
-      file_unique_id: media.file_unique_id,
-      public_url: uploadResult.publicUrl,
-      mime_type: uploadResult.mimeType,
-      file_size: media.file_size,
-      width: media.width,
-      height: media.height,
-      duration: media.duration,
-      user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
-      telegram_data: message,
-      processing_state: "initialized",
-      group_message_count: currentGroupCount,
-      group_first_message_time: groupFirstMessageTime,
-      group_last_message_time: groupLastMessageTime,
-      chat_id: message.chat.id,
-      chat_type: message.chat.type,
-      chat_title: message.chat.title,
-      // Set is_original_caption for group messages
-      is_original_caption: message.media_group_id ? currentGroupCount === 1 : true
-    };
+    // Add public URL to message data
+    messageData.public_url = uploadResult.publicUrl;
 
     // Create new message in database
     const newMessage = await createNewMessage(supabase, messageData);
@@ -431,4 +444,34 @@ export async function handleEditedMessage(
     });
     throw error;
   }
+}
+
+async function handleExistingMessage(
+  supabase: SupabaseClient,
+  existingMessage: any,
+  messageData: MessageData,
+  correlationId: string
+): Promise<MessageData> {
+  const { error: updateError } = await supabase
+    .from("messages")
+    .update({
+      caption: messageData.caption,
+      telegram_data: messageData.telegram_data,
+      is_edited: true,
+      edit_date: messageData.edit_date,
+      processing_state: 'pending',
+      processing_completed_at: null,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", existingMessage.id);
+
+  if (updateError) {
+    console.error("❌ Failed to update existing message:", {
+      correlation_id: correlationId,
+      error: updateError.message
+    });
+    throw updateError;
+  }
+
+  return messageData;
 }
