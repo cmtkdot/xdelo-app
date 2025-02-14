@@ -1,6 +1,42 @@
+
 import { SupabaseClient, WebhookResponse, MessageData } from "./types.ts";
 import { downloadTelegramFile, uploadMedia } from "./mediaUtils.ts";
 import { findExistingMessage, createNewMessage, updateExistingMessage, triggerCaptionParsing } from "./dbOperations.ts";
+
+async function getGroupMetadata(supabase: SupabaseClient, mediaGroupId: string | null) {
+  if (!mediaGroupId) {
+    return {
+      currentGroupCount: 1,
+      groupFirstMessageTime: new Date().toISOString(),
+      groupLastMessageTime: new Date().toISOString()
+    };
+  }
+
+  const { data: groupMessages, error: countError } = await supabase
+    .from("messages")
+    .select("created_at")
+    .eq("media_group_id", mediaGroupId)
+    .order("created_at", { ascending: true });
+
+  if (countError) {
+    console.error("❌ Error getting group count:", countError);
+    throw countError;
+  }
+
+  if (!groupMessages || groupMessages.length === 0) {
+    return {
+      currentGroupCount: 1,
+      groupFirstMessageTime: new Date().toISOString(),
+      groupLastMessageTime: new Date().toISOString()
+    };
+  }
+
+  return {
+    currentGroupCount: groupMessages.length + 1,
+    groupFirstMessageTime: new Date(groupMessages[0].created_at).toISOString(),
+    groupLastMessageTime: new Date().toISOString()
+  };
+}
 
 export async function handleMediaMessage(
   supabase: SupabaseClient,
@@ -34,33 +70,17 @@ export async function handleMediaMessage(
       return { message: "Message already processed" };
     }
 
-    // Initialize group count and position
-    let currentGroupCount = 1;
-    let groupFirstMessageTime = new Date().toISOString();
-    let groupLastMessageTime = new Date().toISOString();
+    // Get group metadata first
+    const { currentGroupCount, groupFirstMessageTime, groupLastMessageTime } = 
+      await getGroupMetadata(supabase, message.media_group_id);
 
-    // If part of a media group, get current count and timestamps
-    if (message.media_group_id) {
-      const { data: groupMessages, error: countError } = await supabase
-        .from("messages")
-        .select("created_at")
-        .eq("media_group_id", message.media_group_id);
-
-      if (countError) {
-        console.error("❌ Error getting group count:", {
-          correlation_id: correlationId,
-          error: countError.message
-        });
-        throw countError;
-      }
-
-      if (groupMessages && groupMessages.length > 0) {
-        currentGroupCount = groupMessages.length + 1;
-        const timestamps = groupMessages.map(msg => new Date(msg.created_at));
-        groupFirstMessageTime = new Date(Math.min(...timestamps)).toISOString();
-        groupLastMessageTime = new Date().toISOString();
-      }
-    }
+    console.log("📊 Group metadata:", {
+      correlation_id: correlationId,
+      media_group_id: message.media_group_id,
+      currentGroupCount,
+      groupFirstMessageTime,
+      groupLastMessageTime
+    });
 
     // Download and upload media
     const mediaResponse = await downloadTelegramFile(media.file_id, botToken);
@@ -72,7 +92,7 @@ export async function handleMediaMessage(
       fileSize: media.file_size
     });
 
-    // Prepare message data
+    // Prepare message data with group information
     const messageData: MessageData = {
       telegram_message_id: message.message_id,
       media_group_id: message.media_group_id || null,
@@ -88,12 +108,14 @@ export async function handleMediaMessage(
       user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
       telegram_data: message,
       processing_state: "initialized",
-      group_message_count: message.media_group_id ? currentGroupCount : 1,
-      group_first_message_time: message.media_group_id ? groupFirstMessageTime : null,
-      group_last_message_time: message.media_group_id ? groupLastMessageTime : null,
+      group_message_count: currentGroupCount,
+      group_first_message_time: groupFirstMessageTime,
+      group_last_message_time: groupLastMessageTime,
       chat_id: message.chat.id,
       chat_type: message.chat.type,
-      chat_title: message.chat.title
+      chat_title: message.chat.title,
+      // Set is_original_caption for group messages
+      is_original_caption: message.media_group_id ? currentGroupCount === 1 : true
     };
 
     // Create new message in database
@@ -107,6 +129,24 @@ export async function handleMediaMessage(
         message.media_group_id,
         message.caption
       );
+    }
+
+    // After successful processing, update group counts for all messages in the group
+    if (message.media_group_id) {
+      const { error: updateGroupError } = await supabase
+        .from("messages")
+        .update({ 
+          group_message_count: currentGroupCount,
+          group_last_message_time: groupLastMessageTime 
+        })
+        .eq("media_group_id", message.media_group_id);
+
+      if (updateGroupError) {
+        console.error("❌ Error updating group counts:", {
+          correlation_id: correlationId,
+          error: updateGroupError.message
+        });
+      }
     }
 
     return {
