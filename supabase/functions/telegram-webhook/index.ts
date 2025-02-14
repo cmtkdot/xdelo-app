@@ -29,10 +29,18 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Handle both regular edited messages and edited channel posts
+    // Handle all types of edited messages:
+    // - edited_message: for private chats and groups
+    // - edited_channel_post: for channel posts
     if (update.edited_message || update.edited_channel_post) {
-      console.log("📝 Handling edited message/post");
+      const editType = update.edited_message ? 'message' : 'channel_post';
       const editedContent = update.edited_message || update.edited_channel_post;
+      console.log(`📝 Handling edited ${editType}:`, {
+        message_id: editedContent.message_id,
+        chat_id: editedContent.chat.id,
+        chat_type: editedContent.chat.type,
+        edit_date: editedContent.edit_date
+      });
       return await handleEditedMessage(supabase, editedContent, TELEGRAM_BOT_TOKEN);
     }
 

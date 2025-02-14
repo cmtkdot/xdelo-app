@@ -247,7 +247,12 @@ export async function handleEditedMessage(
   botToken: string
 ): Promise<Response> {
   try {
-    console.log("Processing edited message:", message);
+    console.log("Processing edited message:", {
+      message_id: message.message_id,
+      chat_type: message.chat.type,
+      edit_date: message.edit_date,
+      has_caption: !!message.caption
+    });
 
     // Find the existing message in our database
     const { data: existingMessage, error: findError } = await supabase
@@ -264,12 +269,13 @@ export async function handleEditedMessage(
     // Extract the new caption
     const newCaption = message.caption || "";
     
-    // Update telegram_data with new caption
+    // Update telegram_data with new caption and edit metadata
     const updatedTelegramData = {
       ...existingMessage.telegram_data,
       message: {
         ...(existingMessage.telegram_data?.message || {}),
-        caption: newCaption
+        caption: newCaption,
+        edit_date: message.edit_date
       }
     };
 
@@ -279,11 +285,31 @@ export async function handleEditedMessage(
       .update({
         caption: newCaption,
         telegram_data: updatedTelegramData,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        is_edited: true,
+        edit_date: new Date(message.edit_date * 1000).toISOString() // Convert Unix timestamp to ISO
       })
       .eq("id", existingMessage.id);
 
     if (updateError) throw updateError;
+
+    // If this message is part of a media group, we need to check if it's the group's caption
+    if (existingMessage.media_group_id && existingMessage.is_original_caption) {
+      console.log("Updating media group caption:", existingMessage.media_group_id);
+      
+      // Update all messages in the same media group
+      const { error: groupUpdateError } = await supabase
+        .from("messages")
+        .update({
+          caption: newCaption,
+          updated_at: new Date().toISOString()
+        })
+        .eq("media_group_id", existingMessage.media_group_id);
+
+      if (groupUpdateError) {
+        console.error("Error updating media group captions:", groupUpdateError);
+      }
+    }
 
     // Trigger reanalysis of the content
     console.log("Triggering reanalysis for edited content");
@@ -304,7 +330,13 @@ export async function handleEditedMessage(
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: "Edited message processed successfully" 
+        message: "Edited message processed successfully",
+        details: {
+          message_id: message.message_id,
+          chat_type: message.chat.type,
+          edit_date: message.edit_date,
+          media_group_id: existingMessage.media_group_id
+        }
       }),
       { 
         headers: { 
