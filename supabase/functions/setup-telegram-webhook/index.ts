@@ -20,7 +20,7 @@ serve(async (req) => {
 
     const webhookUrl = `https://xjhhehxcxkiumnwbirel.supabase.co/functions/v1/telegram-webhook`;
     
-    // Set the webhook with edited_message in allowed_updates
+    // Set the webhook with ALL updates enabled
     const setWebhookUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook`;
     const response = await fetch(setWebhookUrl, {
       method: "POST",
@@ -29,7 +29,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         url: webhookUrl,
-        allowed_updates: ["message", "edited_message", "channel_post", "edited_channel_post", "my_chat_member"],
+        allowed_updates: [], // Empty array means ALL update types are allowed
         max_connections: 100 // Allow up to 100 simultaneous HTTPS connections
       }),
     });
