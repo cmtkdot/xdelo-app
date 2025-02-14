@@ -4,6 +4,7 @@ import { ProductGroup } from "@/components/ProductGroup";
 import { Card } from "@/components/ui/card";
 import { useState } from "react";
 import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ProductGridProps {
   mediaGroups: { [key: string]: MediaItem[] };
@@ -14,6 +15,7 @@ interface ProductGridProps {
 export const ProductGrid: React.FC<ProductGridProps> = ({ mediaGroups, onEdit, onDelete }) => {
   const [selectedGroupIndex, setSelectedGroupIndex] = useState<number>(-1);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const handleOpenViewer = (index: number) => {
     setSelectedGroupIndex(index);
@@ -41,6 +43,14 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ mediaGroups, onEdit, o
         <p className="text-gray-500">No products yet</p>
       </Card>
     );
+  }
+
+  // Calculate grid columns based on screen size
+  let gridColumns = 4; // xl default
+  if (isMobile) {
+    gridColumns = 2;
+  } else if (window.innerWidth < 1280) { // lg breakpoint
+    gridColumns = 3;
   }
 
   const gridCols = "grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";

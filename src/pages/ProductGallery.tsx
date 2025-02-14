@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem, FilterValues } from "@/types";
@@ -8,6 +9,7 @@ import { ProductPagination } from "@/components/ProductGallery/ProductPagination
 import ProductFilters from "@/components/ProductGallery/ProductFilters";
 import { useVendors } from "@/hooks/useVendors";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const ProductGallery = () => {
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
@@ -26,7 +28,24 @@ const ProductGallery = () => {
 
   const { toast } = useToast();
   const vendors = useVendors();
-  const { data } = useMediaGroups(currentPage, filters);
+  const isMobile = useIsMobile();
+
+  // Calculate items per page based on grid layout
+  const getItemsPerPage = () => {
+    const rows = 3; // Number of rows we want per page
+    let cols = 4; // Default columns for xl screens
+    
+    if (isMobile) {
+      cols = 2; // Mobile shows 2 columns
+    } else if (window.innerWidth < 1280) { // lg breakpoint
+      cols = 3; // Large screens show 3 columns
+    }
+    
+    return rows * cols; // This ensures full rows on each page
+  };
+
+  const itemsPerPage = getItemsPerPage();
+  const { data } = useMediaGroups(currentPage, filters, itemsPerPage);
   const mediaGroups = data?.mediaGroups ?? {};
   const totalPages = data?.totalPages ?? 1;
 
