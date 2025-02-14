@@ -242,10 +242,9 @@ export async function handleChatMemberUpdate(
 }
 
 export async function handleEditedMessage(
-  supabase: ReturnType<typeof createClient>,
-  message: any,
-  botToken: string
-): Promise<Response> {
+  supabase: SupabaseClient,
+  message: any
+): Promise<WebhookResponse> {
   const correlationId = crypto.randomUUID();
   
   try {
@@ -274,21 +273,27 @@ export async function handleEditedMessage(
     }
 
     if (!existingMessage) {
-      console.error("❌ Original message not found:", {
-        correlation_id: correlationId,
-        message_id: message.message_id
+      console.log("ℹ️ Message not found in messages table, might be a non-media message");
+      // Store in other_messages table instead
+      const { error: insertError } = await supabase.from("other_messages").insert({
+        user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
+        message_type: "edited_message",
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        chat_type: message.chat.type,
+        chat_title: message.chat.title,
+        message_text: message.text || message.caption || "",
+        telegram_data: { message },
+        processing_state: "completed"
       });
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: "Original message not found",
-          correlation_id: correlationId
-        }),
-        { 
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        }
-      );
+
+      if (insertError) {
+        throw insertError;
+      }
+
+      return {
+        message: "Edit stored in other_messages",
+      };
     }
 
     // Extract the new caption and prepare update
@@ -303,7 +308,7 @@ export async function handleEditedMessage(
       }
     };
 
-    // First update the source message
+    // Update the source message
     const { error: updateError } = await supabase
       .from("messages")
       .update({
@@ -341,14 +346,13 @@ export async function handleEditedMessage(
           updated_at: new Date().toISOString()
         })
         .eq("media_group_id", existingMessage.media_group_id)
-        .neq("id", existingMessage.id); // Don't update the source message again
+        .neq("id", existingMessage.id);
 
       if (groupUpdateError) {
         console.error("❌ Error updating media group:", {
           correlation_id: correlationId,
           error: groupUpdateError.message
         });
-        // Continue processing despite group update error
       }
     }
 
@@ -371,67 +375,44 @@ export async function handleEditedMessage(
         }
       });
 
-    // Trigger reanalysis
-    console.log("🔄 Triggering reanalysis:", {
-      correlation_id: correlationId,
-      message_id: existingMessage.id
-    });
-
-    const { error: reanalysisError } = await supabase
-      .functions.invoke("parse-caption-with-ai", {
-        body: {
-          message_id: existingMessage.id,
-          media_group_id: existingMessage.media_group_id,
-          caption: newCaption,
-          correlation_id: correlationId,
-          is_edit: true
-        }
-      });
-
-    if (reanalysisError) {
-      console.error("❌ Error triggering reanalysis:", {
+    // Trigger reanalysis if needed
+    if (newCaption !== existingMessage.caption) {
+      console.log("🔄 Triggering reanalysis:", {
         correlation_id: correlationId,
-        error: reanalysisError.message
+        message_id: existingMessage.id
       });
-      // Continue despite reanalysis error - it will be retried automatically
+
+      const { error: reanalysisError } = await supabase.functions.invoke(
+        'parse-caption-with-ai',
+        {
+          body: {
+            message_id: existingMessage.id,
+            media_group_id: existingMessage.media_group_id,
+            caption: newCaption,
+            correlation_id: correlationId,
+            is_edit: true
+          }
+        }
+      );
+
+      if (reanalysisError) {
+        console.error("❌ Error triggering reanalysis:", {
+          correlation_id: correlationId,
+          error: reanalysisError.message
+        });
+      }
     }
 
-    console.log("✅ Edit processing completed:", {
-      correlation_id: correlationId,
-      message_id: existingMessage.id,
-      reanalysis_triggered: !reanalysisError
-    });
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: "Edit processed successfully",
-        details: {
-          correlation_id: correlationId,
-          message_id: message.message_id,
-          media_group_id: existingMessage.media_group_id,
-          reanalysis_triggered: !reanalysisError
-        }
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-
-  } catch (error) {
-    console.error("❌ Error handling edit:", {
-      correlation_id: correlationId,
-      error: error.message
-    });
-    
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message,
-        correlation_id: correlationId
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+    return {
+      message: "Successfully processed edit",
+      details: {
+        message_id: existingMessage.id,
+        media_group_id: existingMessage.media_group_id,
+        reanalysis_triggered: newCaption !== existingMessage.caption
       }
-    );
+    };
+  } catch (error) {
+    console.error("❌ Error in handleEditedMessage:", error);
+    throw error;
   }
 }
