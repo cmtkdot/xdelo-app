@@ -242,7 +242,7 @@ export async function handleChatMemberUpdate(
 }
 
 export async function handleEditedMessage(
-  supabase: SupabaseClient,
+  supabase: ReturnType<typeof createClient>,
   message: any,
   botToken: string
 ): Promise<Response> {
@@ -255,7 +255,6 @@ export async function handleEditedMessage(
       chat_id: message.chat.id,
       chat_type: message.chat.type,
       edit_date: message.edit_date,
-      has_caption: !!message.caption,
       has_media: !!(message.photo || message.video || message.document)
     });
 
@@ -264,24 +263,35 @@ export async function handleEditedMessage(
       .from("messages")
       .select("*")
       .eq("telegram_message_id", message.message_id)
-      .single();
+      .maybeSingle();
 
-    if (findError || !existingMessage) {
-      console.error("❌ Could not find original message:", {
+    if (findError) {
+      console.error("❌ Database error finding message:", {
         correlation_id: correlationId,
-        error: findError?.message || "Message not found"
+        error: findError.message
       });
-      throw new Error("Original message not found");
+      throw findError;
     }
 
-    console.log("✅ Found existing message:", {
-      correlation_id: correlationId,
-      message_id: existingMessage.id,
-      media_group_id: existingMessage.media_group_id,
-      previous_caption: existingMessage.caption
-    });
+    if (!existingMessage) {
+      console.error("❌ Original message not found:", {
+        correlation_id: correlationId,
+        message_id: message.message_id
+      });
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: "Original message not found",
+          correlation_id: correlationId
+        }),
+        { 
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        }
+      );
+    }
 
-    // Extract the new caption and update telegram data
+    // Extract the new caption and prepare update
     const newCaption = message.caption || "";
     const updatedTelegramData = {
       ...existingMessage.telegram_data,
@@ -293,20 +303,18 @@ export async function handleEditedMessage(
       }
     };
 
-    // Prepare base update
-    const baseUpdate = {
-      caption: newCaption,
-      telegram_data: updatedTelegramData,
-      updated_at: new Date().toISOString(),
-      is_edited: true,
-      edit_date: new Date(message.edit_date * 1000).toISOString(),
-      processing_state: 'pending' as const // Reset to pending for reprocessing
-    };
-
-    // Update the message
+    // First update the source message
     const { error: updateError } = await supabase
       .from("messages")
-      .update(baseUpdate)
+      .update({
+        caption: newCaption,
+        telegram_data: updatedTelegramData,
+        is_edited: true,
+        edit_date: new Date(message.edit_date * 1000).toISOString(),
+        processing_state: 'pending',
+        processing_completed_at: null,
+        updated_at: new Date().toISOString()
+      })
       .eq("id", existingMessage.id);
 
     if (updateError) {
@@ -317,61 +325,35 @@ export async function handleEditedMessage(
       throw updateError;
     }
 
-    console.log("✅ Updated message with new content:", {
-      correlation_id: correlationId,
-      message_id: existingMessage.id,
-      new_caption: newCaption
-    });
-
-    // Handle media group updates if necessary
+    // If this is part of a media group and has the original caption
     if (existingMessage.media_group_id && existingMessage.is_original_caption) {
-      console.log("🔄 Updating media group caption:", {
+      console.log("🔄 Updating media group:", {
         correlation_id: correlationId,
         media_group_id: existingMessage.media_group_id
       });
-      
+
       const { error: groupUpdateError } = await supabase
         .from("messages")
         .update({
           caption: newCaption,
-          updated_at: new Date().toISOString(),
-          processing_state: 'pending' // Reset all group messages to pending
+          processing_state: 'pending',
+          processing_completed_at: null,
+          updated_at: new Date().toISOString()
         })
-        .eq("media_group_id", existingMessage.media_group_id);
+        .eq("media_group_id", existingMessage.media_group_id)
+        .neq("id", existingMessage.id); // Don't update the source message again
 
       if (groupUpdateError) {
-        console.error("❌ Error updating media group captions:", {
+        console.error("❌ Error updating media group:", {
           correlation_id: correlationId,
           error: groupUpdateError.message
         });
+        // Continue processing despite group update error
       }
     }
 
-    // Trigger reanalysis
-    console.log("🔄 Triggering reanalysis for edited content:", {
-      correlation_id: correlationId,
-      message_id: existingMessage.id
-    });
-
-    const { error: reanalysisError } = await supabase.functions.invoke("parse-caption-with-ai", {
-      body: {
-        message_id: existingMessage.id,
-        media_group_id: existingMessage.media_group_id,
-        caption: newCaption,
-        correlation_id: correlationId,
-        is_edit: true
-      }
-    });
-
-    if (reanalysisError) {
-      console.error("❌ Error triggering reanalysis:", {
-        correlation_id: correlationId,
-        error: reanalysisError.message
-      });
-    }
-
-    // Log edit in audit log
-    const { error: auditError } = await supabase
+    // Log the edit event
+    await supabase
       .from("analysis_audit_log")
       .insert({
         message_id: existingMessage.id,
@@ -382,64 +364,73 @@ export async function handleEditedMessage(
         processing_details: {
           correlation_id: correlationId,
           edit_date: message.edit_date,
+          chat_id: message.chat.id,
+          chat_type: message.chat.type,
           previous_caption: existingMessage.caption,
-          new_caption: newCaption,
-          editor_id: message.from?.id
+          new_caption: newCaption
         }
       });
 
-    if (auditError) {
-      console.error("❌ Error creating audit log:", {
-        correlation_id: correlationId,
-        error: auditError.message
+    // Trigger reanalysis
+    console.log("🔄 Triggering reanalysis:", {
+      correlation_id: correlationId,
+      message_id: existingMessage.id
+    });
+
+    const { error: reanalysisError } = await supabase
+      .functions.invoke("parse-caption-with-ai", {
+        body: {
+          message_id: existingMessage.id,
+          media_group_id: existingMessage.media_group_id,
+          caption: newCaption,
+          correlation_id: correlationId,
+          is_edit: true
+        }
       });
+
+    if (reanalysisError) {
+      console.error("❌ Error triggering reanalysis:", {
+        correlation_id: correlationId,
+        error: reanalysisError.message
+      });
+      // Continue despite reanalysis error - it will be retried automatically
     }
 
-    console.log("✅ Edit processing completed successfully:", {
+    console.log("✅ Edit processing completed:", {
       correlation_id: correlationId,
       message_id: existingMessage.id,
-      media_group_id: existingMessage.media_group_id
+      reanalysis_triggered: !reanalysisError
     });
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: "Edited message processed successfully",
+      JSON.stringify({
+        success: true,
+        message: "Edit processed successfully",
         details: {
           correlation_id: correlationId,
           message_id: message.message_id,
-          chat_type: message.chat.type,
-          edit_date: message.edit_date,
           media_group_id: existingMessage.media_group_id,
           reanalysis_triggered: !reanalysisError
         }
       }),
-      { 
-        headers: { 
-          ...corsHeaders, 
-          "Content-Type": "application/json" 
-        } 
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
-    console.error("❌ Error handling edited message:", {
+    console.error("❌ Error handling edit:", {
       correlation_id: correlationId,
       error: error.message
     });
     
     return new Response(
-      JSON.stringify({ 
-        success: false, 
+      JSON.stringify({
+        success: false,
         error: error.message,
         correlation_id: correlationId
       }),
-      { 
+      {
         status: 500,
-        headers: { 
-          ...corsHeaders, 
-          "Content-Type": "application/json" 
-        } 
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
       }
     );
   }
