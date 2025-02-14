@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "./authUtils.ts";
-import { handleTextMessage, handleMediaMessage, handleChatMemberUpdate, handleEditedMessage } from "./messageHandler.ts";
+import { handleTextMessage, handleMediaMessage, handleChatMemberUpdate } from "./messageHandler.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -11,11 +11,10 @@ serve(async (req) => {
 
   try {
     const update = await req.json();
-    console.log("📥 Received update type:", {
-      has_edited_message: !!update.edited_message,
-      has_edited_channel_post: !!update.edited_channel_post,
+    console.log("📥 Received update:", {
       has_message: !!update.message,
-      has_channel_post: !!update.channel_post
+      has_channel_post: !!update.channel_post,
+      message_type: update.message?.text ? 'text' : update.message?.photo ? 'photo' : update.message?.video ? 'video' : update.message?.document ? 'document' : 'other'
     });
 
     const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
@@ -30,17 +29,6 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Handle edited messages (both private and channel)
-    const editedContent = update.edited_message || update.edited_channel_post;
-    if (editedContent) {
-      console.log("📝 Processing edited content:", {
-        message_id: editedContent.message_id,
-        chat_id: editedContent.chat.id,
-        edit_date: editedContent.edit_date
-      });
-      return await handleEditedMessage(supabase, editedContent, TELEGRAM_BOT_TOKEN);
-    }
 
     // Handle regular messages
     const message = update.message || update.channel_post;
