@@ -1,4 +1,3 @@
-
 import { SupabaseClient, WebhookResponse, MessageData } from "./types.ts";
 import { downloadTelegramFile, uploadMedia } from "./mediaUtils.ts";
 import { findExistingMessage, createNewMessage, updateExistingMessage, triggerCaptionParsing } from "./dbOperations.ts";
@@ -254,11 +253,12 @@ export async function handleEditedMessage(
       has_media: !!(message.photo || message.video || message.document)
     });
 
-    // Find the existing message in our database
+    // Find the existing message in our database using both message_id and chat_id
     const { data: existingMessage, error: findError } = await supabase
       .from("messages")
       .select("*")
       .eq("telegram_message_id", message.message_id)
+      .eq("chat_id", message.chat.id)
       .maybeSingle();
 
     if (findError) {
@@ -269,9 +269,50 @@ export async function handleEditedMessage(
       throw findError;
     }
 
+    // Try finding in telegram_data if not found in direct columns
     if (!existingMessage) {
-      console.log("ℹ️ Message not found in messages table, might be a non-media message");
-      // Store in other_messages table instead
+      console.log("🔍 Searching in telegram_data for message...", {
+        correlation_id: correlationId,
+        message_id: message.message_id,
+        chat_id: message.chat.id
+      });
+
+      const { data: tdataMessage, error: tdataError } = await supabase
+        .from("messages")
+        .select("*")
+        .contains('telegram_data', {
+          message: {
+            message_id: message.message_id,
+            chat: {
+              id: message.chat.id
+            }
+          }
+        })
+        .maybeSingle();
+
+      if (tdataError) {
+        console.error("❌ Error searching telegram_data:", {
+          correlation_id: correlationId,
+          error: tdataError.message
+        });
+      }
+
+      if (tdataMessage) {
+        console.log("✅ Found message in telegram_data", {
+          correlation_id: correlationId,
+          message_id: tdataMessage.id
+        });
+        existingMessage = tdataMessage;
+      }
+    }
+
+    if (!existingMessage) {
+      console.log("ℹ️ Message not found in messages table, storing in other_messages", {
+        correlation_id: correlationId,
+        message_id: message.message_id,
+        chat_id: message.chat.id
+      });
+      
       const { error: insertError } = await supabase.from("other_messages").insert({
         user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
         message_type: "edited_message",
@@ -290,6 +331,21 @@ export async function handleEditedMessage(
 
       return {
         message: "Edit stored in other_messages",
+      };
+    }
+
+    // Check if this edit is newer than our last update
+    const editDate = new Date(message.edit_date * 1000);
+    const lastUpdate = existingMessage.edit_date ? new Date(existingMessage.edit_date) : null;
+
+    if (lastUpdate && editDate <= lastUpdate) {
+      console.log("⏭️ Skipping older or duplicate edit", {
+        correlation_id: correlationId,
+        edit_date: editDate,
+        last_update: lastUpdate
+      });
+      return {
+        message: "Edit skipped - not newer than existing version"
       };
     }
 
@@ -312,7 +368,7 @@ export async function handleEditedMessage(
         caption: newCaption,
         telegram_data: updatedTelegramData,
         is_edited: true,
-        edit_date: new Date(message.edit_date * 1000).toISOString(),
+        edit_date: editDate.toISOString(),
         processing_state: 'pending',
         processing_completed_at: null,
         updated_at: new Date().toISOString()
