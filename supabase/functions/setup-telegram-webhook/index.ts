@@ -30,6 +30,7 @@ serve(async (req) => {
       body: JSON.stringify({
         url: webhookUrl,
         allowed_updates: ["message", "edited_message", "channel_post", "edited_channel_post", "my_chat_member"],
+        max_connections: 100 // Allow up to 100 simultaneous HTTPS connections
       }),
     });
 

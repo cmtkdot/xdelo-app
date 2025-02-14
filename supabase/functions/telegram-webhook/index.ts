@@ -11,6 +11,39 @@ serve(async (req) => {
 
   try {
     const update = await req.json();
+    
+    // Check if this is an edited message
+    if (update.edited_message || update.edited_channel_post) {
+      console.log("📝 Routing edited message to edit handler");
+      
+      // Forward to the edited-webhook function
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error("Supabase credentials not configured");
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      
+      const { error: editHandlerError } = await supabase.functions.invoke(
+        'telegram-edited-webhook',
+        {
+          body: update
+        }
+      );
+
+      if (editHandlerError) {
+        throw editHandlerError;
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, message: "Edit processed" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Handle regular messages as before
     console.log("📥 Received update:", {
       has_message: !!update.message,
       has_channel_post: !!update.channel_post,
