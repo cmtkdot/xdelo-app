@@ -1,4 +1,3 @@
-
 import { ParsedContent } from "../types.ts";
 import { parseQuantity } from "./quantityParser.ts";
 
@@ -77,61 +76,21 @@ export async function manualParse(caption: string): Promise<ParsedContent> {
     fallbacks_used.push('no_quantity');
   }
 
-  // Extract notes (capture flavor list and any remaining text)
-  const flavorListMatch = caption.match(/FLAVORS?\n([\s\S]+)$/i);
-  const notesInParentheses = caption.match(/\((.*?)\)/g);
-  
-  let notes: string[] = [];
-
-  // Add flavor list if found
-  if (flavorListMatch) {
-    const flavorList = flavorListMatch[1]
-      .split('\n')
-      .filter(line => line.trim().startsWith('-'))
-      .map(line => line.trim())
-      .join('\n');
-    if (flavorList) {
-      notes.push(flavorList);
+  // Extract notes (text in parentheses or remaining text)
+  const notesMatch = caption.match(/\((.*?)\)/);
+  if (notesMatch) {
+    result.notes = notesMatch[1].trim();
+  } else {
+    // If no parentheses, look for any remaining text after the product code and quantity
+    const remainingText = caption
+      .replace(/#[A-Za-z0-9-]+/, '') // Remove product code
+      .replace(/x\s*\d+/, '')        // Remove quantity
+      .replace(productNameMatch, '')  // Remove product name
+      .trim();
+    
+    if (remainingText) {
+      result.notes = remainingText;
     }
-  }
-
-  // Add any text in parentheses
-  if (notesInParentheses) {
-    const parentheticalNotes = notesInParentheses
-      .map(note => note.replace(/[()]/g, '').trim())
-      .filter(note => note && !note.match(/^(Indica|Sativa|Hybrid)$/i)); // Filter out strain types alone
-    if (parentheticalNotes.length) {
-      notes.push(...parentheticalNotes);
-    }
-  }
-
-  // Look for any remaining text that might be notes
-  const analyzedParts = [
-    result.product_name,
-    result.product_code ? `#${result.product_code}` : '',
-    result.quantity ? `x${result.quantity}` : ''
-  ].filter(Boolean).join(' ');
-
-  const remainingText = caption
-    .replace(analyzedParts, '')
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => 
-      line && 
-      !line.toLowerCase().includes('flavor') &&
-      !line.startsWith('-') &&
-      !line.startsWith('#')
-    )
-    .join('\n')
-    .trim();
-
-  if (remainingText) {
-    notes.push(remainingText);
-  }
-
-  // Combine all notes
-  if (notes.length) {
-    result.notes = notes.join('\n').trim();
   }
 
   const confidence = calculateConfidence(result, fallbacks_used, caption);
