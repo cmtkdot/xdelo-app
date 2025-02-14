@@ -1321,6 +1321,7 @@ export type Database = {
           created_at: string | null
           deleted_at: string | null
           duration: number | null
+          edit_date: string | null
           error_message: string | null
           file_id: string | null
           file_size: number | null
@@ -1334,6 +1335,7 @@ export type Database = {
           height: number | null
           id: string
           is_deleted: boolean | null
+          is_edited: boolean | null
           is_miscellaneous_item: string | null
           is_original_caption: boolean | null
           last_error_at: string | null
@@ -1373,6 +1375,7 @@ export type Database = {
           created_at?: string | null
           deleted_at?: string | null
           duration?: number | null
+          edit_date?: string | null
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
@@ -1386,6 +1389,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_deleted?: boolean | null
+          is_edited?: boolean | null
           is_miscellaneous_item?: string | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
@@ -1425,6 +1429,7 @@ export type Database = {
           created_at?: string | null
           deleted_at?: string | null
           duration?: number | null
+          edit_date?: string | null
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
@@ -1438,6 +1443,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_deleted?: boolean | null
+          is_edited?: boolean | null
           is_miscellaneous_item?: string | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
