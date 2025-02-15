@@ -1730,18 +1730,9 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      glide_sync_products_messages: {
+      glide_sync_products: {
         Args: Record<PropertyKey, never>
-        Returns: {
-          created_at: string | null
-          error_message: string | null
-          glide_id: string | null
-          id: string
-          operation: string
-          record_id: string
-          status: string
-          table_name: string
-        }[]
+        Returns: number
       }
       http: {
         Args: {
