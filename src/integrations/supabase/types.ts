@@ -1361,6 +1361,8 @@ export type Database = {
           is_miscellaneous_item: string | null
           is_original_caption: boolean | null
           last_error_at: string | null
+          last_match_attempt_at: string | null
+          match_attempt_count: number | null
           media_group_id: string | null
           message_caption_id: string | null
           message_url: string | null
@@ -1373,12 +1375,11 @@ export type Database = {
             | null
           product_code: string | null
           product_name: string | null
-          product_quantity: number | null
           product_sku: string | null
-          product_unit: string | null
           public_url: string | null
           purchase_date: string | null
           purchase_order: string | null
+          quantity: number | null
           retry_count: number | null
           storage_path: string | null
           supabase_sync_json: Json | null
@@ -1386,7 +1387,7 @@ export type Database = {
           telegram_message_id: number | null
           updated_at: string | null
           user_id: string | null
-          vendor_name: string | null
+          vendor_uid: string | null
           width: number | null
         }
         Insert: {
@@ -1417,6 +1418,8 @@ export type Database = {
           is_miscellaneous_item?: string | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
+          last_match_attempt_at?: string | null
+          match_attempt_count?: number | null
           media_group_id?: string | null
           message_caption_id?: string | null
           message_url?: string | null
@@ -1429,12 +1432,11 @@ export type Database = {
             | null
           product_code?: string | null
           product_name?: string | null
-          product_quantity?: number | null
           product_sku?: string | null
-          product_unit?: string | null
           public_url?: string | null
           purchase_date?: string | null
           purchase_order?: string | null
+          quantity?: number | null
           retry_count?: number | null
           storage_path?: string | null
           supabase_sync_json?: Json | null
@@ -1442,7 +1444,7 @@ export type Database = {
           telegram_message_id?: number | null
           updated_at?: string | null
           user_id?: string | null
-          vendor_name?: string | null
+          vendor_uid?: string | null
           width?: number | null
         }
         Update: {
@@ -1473,6 +1475,8 @@ export type Database = {
           is_miscellaneous_item?: string | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
+          last_match_attempt_at?: string | null
+          match_attempt_count?: number | null
           media_group_id?: string | null
           message_caption_id?: string | null
           message_url?: string | null
@@ -1485,12 +1489,11 @@ export type Database = {
             | null
           product_code?: string | null
           product_name?: string | null
-          product_quantity?: number | null
           product_sku?: string | null
-          product_unit?: string | null
           public_url?: string | null
           purchase_date?: string | null
           purchase_order?: string | null
+          quantity?: number | null
           retry_count?: number | null
           storage_path?: string | null
           supabase_sync_json?: Json | null
@@ -1498,7 +1501,7 @@ export type Database = {
           telegram_message_id?: number | null
           updated_at?: string | null
           user_id?: string | null
-          vendor_name?: string | null
+          vendor_uid?: string | null
           width?: number | null
         }
         Relationships: [
@@ -1590,6 +1593,90 @@ export type Database = {
         }
         Relationships: []
       }
+      sync_logs: {
+        Row: {
+          created_at: string | null
+          details: Json | null
+          entity_id: string | null
+          error_message: string | null
+          id: string
+          operation_type: string
+          status: string
+        }
+        Insert: {
+          created_at?: string | null
+          details?: Json | null
+          entity_id?: string | null
+          error_message?: string | null
+          id?: string
+          operation_type: string
+          status: string
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json | null
+          entity_id?: string | null
+          error_message?: string | null
+          id?: string
+          operation_type?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      sync_matches: {
+        Row: {
+          applied: boolean | null
+          confidence_score: number | null
+          created_at: string | null
+          id: string
+          match_details: Json | null
+          match_priority: number | null
+          message_id: string | null
+          product_id: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          applied?: boolean | null
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          match_details?: Json | null
+          match_priority?: number | null
+          message_id?: string | null
+          product_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          applied?: boolean | null
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          match_details?: Json | null
+          match_priority?: number | null
+          message_id?: string | null
+          product_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_matches_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sync_matches_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_records: {
         Row: {
           error_message: string | null
@@ -1616,7 +1703,22 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      invoice_summary: {
+        Row: {
+          invoice_id: string | null
+          invoice_line_id: string | null
+          invoice_number: string | null
+          invoice_sync_status: Database["public"]["Enums"]["sync_status"] | null
+          line_sync_status: Database["public"]["Enums"]["sync_status"] | null
+          order_date: string | null
+          product_name: string | null
+          quantity_sold: number | null
+          selling_price: number | null
+          stock_after_sale: number | null
+          user_email: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       a_delete_analysis_audit_log_limit_500: {
@@ -1712,6 +1814,12 @@ export type Database = {
         Returns: string
       }
       extract_vendor_name: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
+      }
+      extract_vendor_uid: {
         Args: {
           analyzed_content: Json
         }
