@@ -702,6 +702,7 @@ export type Database = {
       gl_invoices: {
         Row: {
           account_name: string | null
+          account_uid: string | null
           created_at: string | null
           doc_document: string | null
           doc_glideforeverlink: string | null
@@ -731,6 +732,7 @@ export type Database = {
         }
         Insert: {
           account_name?: string | null
+          account_uid?: string | null
           created_at?: string | null
           doc_document?: string | null
           doc_glideforeverlink?: string | null
@@ -760,6 +762,7 @@ export type Database = {
         }
         Update: {
           account_name?: string | null
+          account_uid?: string | null
           created_at?: string | null
           doc_document?: string | null
           doc_glideforeverlink?: string | null
