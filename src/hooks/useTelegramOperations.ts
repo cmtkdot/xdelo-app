@@ -41,11 +41,11 @@ export const useTelegramOperations = () => {
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['messages'] });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Delete error:', error);
       toast({
         title: "Error",
-        description: `Failed to delete message: ${error.message}`,
+        description: `Failed to delete message: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive",
       });
       throw error;
