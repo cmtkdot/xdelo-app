@@ -1375,7 +1375,13 @@ export type Database = {
             | null
           product_code: string | null
           product_name: string | null
+<<<<<<< Updated upstream
           product_sku: string | null
+=======
+          quantity: number | null
+          product_sku: string | null
+          product_code: string | null
+>>>>>>> Stashed changes
           public_url: string | null
           purchase_date: string | null
           purchase_order: string | null
@@ -1432,7 +1438,13 @@ export type Database = {
             | null
           product_code?: string | null
           product_name?: string | null
+<<<<<<< Updated upstream
           product_sku?: string | null
+=======
+          quantity?: number | null
+          product_sku?: string | null
+          product_code?: string | null
+>>>>>>> Stashed changes
           public_url?: string | null
           purchase_date?: string | null
           purchase_order?: string | null
@@ -1489,7 +1501,13 @@ export type Database = {
             | null
           product_code?: string | null
           product_name?: string | null
+<<<<<<< Updated upstream
           product_sku?: string | null
+=======
+          quantity?: number | null
+          product_sku?: string | null
+          product_code?: string | null
+>>>>>>> Stashed changes
           public_url?: string | null
           purchase_date?: string | null
           purchase_order?: string | null
@@ -1801,7 +1819,7 @@ export type Database = {
         }
         Returns: string
       }
-      extract_product_quantity: {
+      extract_quantity: {
         Args: {
           analyzed_content: Json
         }
@@ -1813,7 +1831,7 @@ export type Database = {
         }
         Returns: string
       }
-      extract_vendor_name: {
+      extract_vendor_uid: {
         Args: {
           analyzed_content: Json
         }

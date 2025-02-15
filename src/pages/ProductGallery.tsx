@@ -1,6 +1,10 @@
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 
 import { useState } from "react";
+=======
+import { useState, useEffect } from "react";
+>>>>>>> Stashed changes
 =======
 import { useState, useEffect } from "react";
 >>>>>>> Stashed changes

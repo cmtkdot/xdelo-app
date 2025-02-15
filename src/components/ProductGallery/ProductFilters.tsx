@@ -5,10 +5,17 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 import { SearchFilter } from "./Filters/SearchFilter";
 import { QuantityFilter } from "./Filters/QuantityFilter";
 import { VendorFilter } from "./Filters/VendorFilter";
 import { DateRangeFilter } from "./Filters/DateRangeFilter";
+=======
+import { Input } from "@/components/ui/input";
+import { VendorFilter } from "./Filters/VendorFilter";
+import { SortOrderFilter } from "./Filters/SortOrderFilter";
+import { DateFieldFilter } from "./Filters/DateFieldFilter";
+>>>>>>> Stashed changes
 =======
 import { Input } from "@/components/ui/input";
 import { VendorFilter } from "./Filters/VendorFilter";
@@ -109,12 +116,16 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
       sortOrder: "desc",
       dateField: "created_at",
     });
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
   };
 
   const FilterContent = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
         <div className="flex items-center gap-6 flex-1">
           <div className="flex-1">
@@ -132,6 +143,8 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
           </div>
         </div>
 =======
+=======
+>>>>>>> Stashed changes
         <div className="flex-1 min-w-[200px]">
           <Input
             type="search"
@@ -141,6 +154,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
             className="h-8"
           />
         </div>
+<<<<<<< Updated upstream
       </div>
 
       <div className="flex flex-wrap gap-4 items-end">
@@ -159,6 +173,25 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
         />
 >>>>>>> Stashed changes
       </div>
+=======
+      </div>
+
+      <div className="flex flex-wrap gap-4 items-end">
+        <VendorFilter
+          value={vendor}
+          vendors={vendors}
+          onChange={handleVendorChange}
+        />
+        <SortOrderFilter
+          value={sortOrder}
+          onChange={handleSortOrderChange}
+        />
+        <DateFieldFilter
+          value={dateField}
+          onChange={handleDateFieldChange}
+        />
+      </div>
+>>>>>>> Stashed changes
     </div>
   );
 

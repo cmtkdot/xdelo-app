@@ -1,9 +1,7 @@
-
 import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Edit2, Save, X, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { format } from "date-fns";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
@@ -21,6 +19,7 @@ import {
 interface Message {
   id: string;
   created_at: string;
+<<<<<<< Updated upstream
   caption?: string;
   product_name?: string;
   vendor_name?: string;
@@ -30,10 +29,21 @@ interface Message {
   media_group_id?: string;
   file_unique_id?: string;
   mime_type?: string;
+=======
+  glide_row_id?: string;
+  glide_stock?: number;
+  analyzed_content?: {
+    product_name?: string;
+    vendor_uid?: string;
+    product_code?: string;
+    quantity?: number;
+    purchase_date?: string;
+  };
+>>>>>>> Stashed changes
 }
 
 interface EditableMessage extends Message {
-  isEditing?: boolean;
+  isEditing: boolean;
 }
 
 interface MessagesTableProps {
@@ -41,10 +51,21 @@ interface MessagesTableProps {
 }
 
 export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialMessages }) => {
+<<<<<<< Updated upstream
   const [messages, setMessages] = useState<EditableMessage[]>(initialMessages);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
   const { handleDelete, handleSave, isProcessing } = useTelegramOperations();
+=======
+  const [messages, setMessages] = useState<EditableMessage[]>(initialMessages.map(message => ({
+    id: message.id,
+    isEditing: false,
+    created_at: message.created_at,
+    glide_row_id: message.glide_row_id,
+    glide_stock: message.glide_stock,
+    analyzed_content: message.analyzed_content,
+  })));
+>>>>>>> Stashed changes
   const { toast } = useToast();
 
   const handleEdit = (id: string) => {
@@ -61,7 +82,14 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     setMessages(prev =>
       prev.map(message =>
         message.id === id
-          ? { ...initialMessages.find(m => m.id === id)!, isEditing: false }
+          ? {
+              id: message.id,
+              isEditing: false,
+              created_at: initialMessages.find(m => m.id === id)!.created_at,
+              glide_row_id: initialMessages.find(m => m.id === id)!.glide_row_id,
+              glide_stock: initialMessages.find(m => m.id === id)!.glide_stock,
+              analyzed_content: initialMessages.find(m => m.id === id)!.analyzed_content,
+            }
           : message
       )
     );
@@ -71,6 +99,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     const message = messages.find(m => m.id === id);
     if (!message) return;
 
+<<<<<<< Updated upstream
     await handleSave(message, message.caption || '');
     
     setMessages(prev =>
@@ -96,6 +125,50 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     setMessageToDelete(null);
   };
 
+=======
+    const updateData = {
+      glide_row_id: message.glide_row_id,
+      glide_stock: message.glide_stock,
+      analyzed_content: {
+        product_name: message.analyzed_content?.product_name,
+        vendor_uid: message.analyzed_content?.vendor_uid,
+        product_code: message.analyzed_content?.product_code,
+        quantity: message.analyzed_content?.quantity,
+        purchase_date: message.analyzed_content?.purchase_date
+      }
+    };
+
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update(updateData)
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === id
+            ? { ...msg, isEditing: false }
+            : msg
+        )
+      );
+
+      toast({
+        title: "Success",
+        description: "Message updated successfully",
+      });
+    } catch (error) {
+      console.error('Error updating message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update message",
+        variant: "destructive",
+      });
+    }
+  };
+
+>>>>>>> Stashed changes
   const handleChange = (id: string, field: keyof Message, value: string | number) => {
     setMessages(prev =>
       prev.map(message =>
@@ -106,7 +179,18 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     );
   };
 
+  const handleAnalyzedContentChange = (id: string, field: keyof Message['analyzed_content'], value: string | number) => {
+    setMessages(prev =>
+      prev.map(message =>
+        message.id === id
+          ? { ...message, analyzed_content: { ...message.analyzed_content, [field]: value } }
+          : message
+      )
+    );
+  };
+
   return (
+<<<<<<< Updated upstream
     <>
       <div className="rounded-md border">
         <Table>
@@ -118,6 +202,136 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
               <TableHead>Vendor</TableHead>
               <TableHead>Quantity</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
+=======
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Created At</TableHead>
+            <TableHead>Product Name</TableHead>
+            <TableHead>Vendor UID</TableHead>
+            <TableHead>Product Code</TableHead>
+            <TableHead>Quantity</TableHead>
+            <TableHead>Purchase Date</TableHead>
+            <TableHead>Glide Synced</TableHead>
+            <TableHead>Current Stock</TableHead>
+            <TableHead className="w-[100px]">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {messages.map((message) => (
+            <TableRow key={message.id}>
+              <TableCell>
+                {format(new Date(message.created_at), 'yyyy-MM-dd HH:mm:ss')}
+              </TableCell>
+              <TableCell>
+                {message.isEditing ? (
+                  <Input
+                    value={message.analyzed_content?.product_name || ''}
+                    onChange={(e) => handleAnalyzedContentChange(message.id, 'product_name', e.target.value)}
+                    className="w-full"
+                  />
+                ) : (
+                  message.analyzed_content?.product_name || '-'
+                )}
+              </TableCell>
+              <TableCell>
+                {message.isEditing ? (
+                  <Input
+                    value={message.analyzed_content?.vendor_uid || ''}
+                    onChange={(e) => handleAnalyzedContentChange(message.id, 'vendor_uid', e.target.value)}
+                    className="w-full"
+                  />
+                ) : (
+                  message.analyzed_content?.vendor_uid || '-'
+                )}
+              </TableCell>
+              <TableCell>
+                {message.isEditing ? (
+                  <Input
+                    value={message.analyzed_content?.product_code || ''}
+                    onChange={(e) => handleAnalyzedContentChange(message.id, 'product_code', e.target.value)}
+                    className="w-full"
+                  />
+                ) : (
+                  message.analyzed_content?.product_code || '-'
+                )}
+              </TableCell>
+              <TableCell>
+                {message.isEditing ? (
+                  <Input
+                    type="number"
+                    value={message.analyzed_content?.quantity || ''}
+                    onChange={(e) => handleAnalyzedContentChange(message.id, 'quantity', parseFloat(e.target.value))}
+                    className="w-full"
+                  />
+                ) : (
+                  message.analyzed_content?.quantity || '-'
+                )}
+              </TableCell>
+              <TableCell>
+                {message.isEditing ? (
+                  <Input
+                    value={message.analyzed_content?.purchase_date || ''}
+                    onChange={(e) => handleAnalyzedContentChange(message.id, 'purchase_date', e.target.value)}
+                    className="w-full"
+                  />
+                ) : (
+                  message.analyzed_content?.purchase_date || '-'
+                )}
+              </TableCell>
+              <TableCell>
+                {message.isEditing ? (
+                  <Input
+                    value={message.glide_row_id || ''}
+                    onChange={(e) => handleChange(message.id, 'glide_row_id', e.target.value)}
+                  />
+                ) : (
+                  message.glide_row_id || 'Not synced'
+                )}
+              </TableCell>
+              <TableCell>
+                {message.isEditing ? (
+                  <Input
+                    type="number"
+                    value={message.glide_stock || 0}
+                    onChange={(e) => handleChange(message.id, 'glide_stock', Number(e.target.value))}
+                  />
+                ) : (
+                  message.glide_stock ?? 'N/A'
+                )}
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  {message.isEditing ? (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSave(message.id)}
+                      >
+                        Save
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCancel(message.id)}
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEdit(message.id)}
+                    >
+                      Edit
+                    </Button>
+                  )}
+                </div>
+              </TableCell>
+>>>>>>> Stashed changes
             </TableRow>
           </TableHeader>
           <TableBody>
