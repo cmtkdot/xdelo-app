@@ -1643,6 +1643,14 @@ export type Database = {
         }
         Returns: string
       }
+      dates_within_range: {
+        Args: {
+          date1: string
+          date2: string
+          days?: number
+        }
+        Returns: boolean
+      }
       delete_media_group: {
         Args: {
           p_media_group_id: string
@@ -1707,6 +1715,22 @@ export type Database = {
         }[]
       }
       fix_media_groups: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      fuzzy_match: {
+        Args: {
+          text1: string
+          text2: string
+          threshold?: number
+        }
+        Returns: boolean
+      }
+      glapp_manual_sync_products_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      glapp_sync_products_messages: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
