@@ -1,9 +1,8 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { DashboardLayout } from "./components/Layout/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import ProductGallery from "./pages/ProductGallery";
@@ -20,6 +19,7 @@ import { supabase } from "./integrations/supabase/client";
 import { ThemeProvider } from "./components/Theme/ThemeProvider";
 import { Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
+import { Sidebar } from "@/components/Sidebar/Sidebar";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -95,32 +95,37 @@ const App = () => (
   <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <BrowserRouter>
+        <Router>
           <Routes>
             <Route path="/auth" element={<Auth />} />
-            <Route path="/p/gallery" element={<PublicGallery />} />
+            <Route path="/p/:id" element={<PublicGallery />} />
             <Route
               element={
                 <ProtectedRoute>
-                  <DashboardLayout>
-                    <Outlet />
-                  </DashboardLayout>
+                  <div className="h-full relative">
+                    <div className="hidden h-full md:flex md:w-72 md:flex-col md:fixed md:inset-y-0 z-[80] bg-gray-900">
+                      <Sidebar />
+                    </div>
+                    <main className="md:pl-72 min-h-screen bg-background">
+                      <div className="container mx-auto px-4 py-8">
+                        <Outlet />
+                      </div>
+                    </main>
+                  </div>
                 </ProtectedRoute>
               }
             >
               <Route path="/" element={<Dashboard />} />
               <Route path="/gallery" element={<ProductGallery />} />
               <Route path="/media-table" element={<MediaTable />} />
-              <Route path="/vendors" element={<Vendors />} />
-              <Route path="/gl-products" element={<GlProducts />} />
-              <Route path="/settings" element={<Settings />} />
               <Route path="/ai-chat" element={<AIChat />} />
+              <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
-        </BrowserRouter>
-        <Toaster />
-        <Sonner />
+          <Toaster />
+          <Sonner />
+        </Router>
       </TooltipProvider>
     </QueryClientProvider>
   </ThemeProvider>

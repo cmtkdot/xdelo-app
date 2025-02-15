@@ -3,8 +3,8 @@ import { Label } from "@/components/ui/label";
 import { ArrowUpDown } from "lucide-react";
 
 interface SortOrderFilterProps {
-  value: string;
-  onChange: (value: string) => void;
+  value: 'asc' | 'desc';
+  onChange: (value: 'asc' | 'desc') => void;
 }
 
 export const SortOrderFilter = ({ value, onChange }: SortOrderFilterProps) => {
