@@ -16,12 +16,9 @@ const ProductGallery = () => {
   const [filters, setFilters] = useState<FilterValues>({
     search: "",
     vendor: "all",
-    dateField: 'purchase_date',
+    dateField: 'created_at',
     sortOrder: "desc",
-    sortBy: 'date',
-    processingState: "all",
-    hasGlideMatch: undefined,
-    chatId: undefined
+    processingState: "completed"
   });
 
   const { toast } = useToast();

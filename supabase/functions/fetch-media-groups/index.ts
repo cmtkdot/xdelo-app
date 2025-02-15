@@ -1,10 +1,26 @@
+// @ts-expect-error - Deno imports
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// @ts-expect-error - Deno imports
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+interface MessageGroup {
+  [key: string]: Array<{
+    id: string;
+    caption: string | null;
+    media_group_id: string | null;
+    chat_id: string;
+    vendor_name: string | null;
+    analyzed_content: Record<string, unknown>;
+    created_at: string;
+    is_deleted: boolean;
+    processing_state: string;
+  }>;
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -13,9 +29,11 @@ serve(async (req) => {
   }
 
   try {
-    const { page = 1, filters = {}, itemsPerPage = 15 } = await req.json();
+    const { page = 1, filters = {}, itemsPerPage = 16 } = await req.json();
 
+    // @ts-expect-error - Deno environment
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    // @ts-expect-error - Deno environment
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -35,22 +53,6 @@ serve(async (req) => {
     if (filters.vendor && filters.vendor !== "all") {
       query = query.eq('vendor_name', filters.vendor);
       console.log('Applying vendor filter:', filters.vendor);
-    }
-
-    // Apply chat ID filter
-    if (filters.chatId) {
-      query = query.eq('chat_id', filters.chatId);
-      console.log('Applying chat ID filter:', filters.chatId);
-    }
-
-    // Apply Glide match filter
-    if (filters.hasGlideMatch !== undefined) {
-      if (filters.hasGlideMatch) {
-        query = query.not('glide_match_id', 'is', null);
-      } else {
-        query = query.is('glide_match_id', null);
-      }
-      console.log('Applying Glide match filter:', filters.hasGlideMatch);
     }
 
     // Apply processing state filter
@@ -84,26 +86,14 @@ serve(async (req) => {
 
     console.log(`Fetching range ${from} to ${to} of ${totalCount} total items`);
 
-    // Apply sorting based on sortBy field
+    // Apply simple sorting based on dateField
     const sortOrder = filters.sortOrder || 'desc';
-    const sortBy = filters.sortBy || 'date';
+    const dateField = filters.dateField || 'created_at';
     
-    switch (sortBy) {
-      case 'date':
-        query = query.order('created_at', { ascending: sortOrder === 'asc', nullsLast: true });
-        break;
-      case 'product_name':
-        query = query.order('analyzed_content->product_name', { ascending: sortOrder === 'asc', nullsLast: true });
-        break;
-      case 'vendor':
-        query = query.order('vendor_name', { ascending: sortOrder === 'asc', nullsLast: true });
-        break;
-      case 'chat_id':
-        query = query.order('chat_id', { ascending: sortOrder === 'asc', nullsLast: true });
-        break;
-      default:
-        query = query.order('created_at', { ascending: sortOrder === 'asc', nullsLast: true });
-    }
+    query = query.order(dateField === 'purchase_date' ? 'analyzed_content->purchase_date' : 'created_at', { 
+      ascending: sortOrder === 'asc',
+      nullsLast: true 
+    });
 
     // Apply pagination with validated range
     if (totalCount > 0) {
@@ -119,7 +109,7 @@ serve(async (req) => {
     }
 
     // Group messages by media_group_id
-    const groups: { [key: string]: any[] } = {};
+    const groups: MessageGroup = {};
     messages?.forEach((message) => {
       const groupId = message.media_group_id || message.id;
       if (!groups[groupId]) {

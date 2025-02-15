@@ -3,10 +3,7 @@ export interface FilterValues {
   vendor: string;
   dateField: 'purchase_date' | 'created_at';
   sortOrder: "asc" | "desc";
-  sortBy: 'date' | 'product_name' | 'vendor' | 'chat_id';
   processingState: string;
-  hasGlideMatch?: boolean;
-  chatId?: string;
 }
 
 export interface MediaItem {
