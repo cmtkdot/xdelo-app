@@ -8,14 +8,14 @@ import { useToast } from "@/components/ui/use-toast";
 import { useQuery } from "@tanstack/react-query";
 
 interface SyncLog {
-  id: string;  // Changed from number to string
+  id: string;
   table_name: string;
   record_id: string;
   glide_id: string;
   operation: string;
   status: string;
   created_at: string;
-  error_message?: string;  // Added optional error_message field
+  error_message?: string;
 }
 
 const Settings = () => {
@@ -92,14 +92,21 @@ const Settings = () => {
   const triggerSync = async () => {
     try {
       setIsSyncing(true);
-      const { error } = await supabase.rpc('glapp_manual_sync_products_messages');
+      const { data, error } = await supabase.rpc('glapp_manual_sync_products_messages');
       
       if (error) throw error;
       
-      toast({
-        title: "Success",
-        description: "Product-Message sync has been triggered successfully.",
-      });
+      if (data && Array.isArray(data) && data.length > 0) {
+        const [result] = data;
+        if (result.error_message) {
+          throw new Error(result.error_message);
+        }
+        
+        toast({
+          title: "Success",
+          description: `Successfully matched ${result.matched_count} messages with products.`,
+        });
+      }
 
       // Refresh the logs
       refetchLogs();

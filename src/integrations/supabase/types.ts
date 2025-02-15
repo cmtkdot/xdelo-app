@@ -1730,21 +1730,19 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      fuzzy_match: {
-        Args: {
-          text1: string
-          text2: string
-          threshold?: number
-        }
-        Returns: boolean
-      }
       glapp_manual_sync_products_messages: {
         Args: Record<PropertyKey, never>
-        Returns: undefined
+        Returns: {
+          matched_count: number
+          error_message: string
+        }[]
       }
       glapp_sync_products_messages: {
         Args: Record<PropertyKey, never>
-        Returns: undefined
+        Returns: {
+          matched_count: number
+          error_message: string
+        }[]
       }
       http: {
         Args: {
