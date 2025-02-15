@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { AnalyzedContent } from "@/types";
+import { PageContainer } from "@/components/Layout/PageContainer";
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -47,23 +48,25 @@ const Dashboard = () => {
   }, []);
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Dashboard</h1>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-4">
-          <h2 className="text-lg font-semibold">Total Messages</h2>
-          <p className="text-3xl font-bold">{stats.totalMessages}</p>
-        </Card>
-        <Card className="p-4">
-          <h2 className="text-lg font-semibold">Unique Products</h2>
-          <p className="text-3xl font-bold">{stats.totalProducts}</p>
-        </Card>
-        <Card className="p-4">
-          <h2 className="text-lg font-semibold">Unique Vendors</h2>
-          <p className="text-3xl font-bold">{stats.uniqueVendors}</p>
-        </Card>
+    <PageContainer>
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="p-4">
+            <h2 className="text-lg font-semibold">Total Messages</h2>
+            <p className="text-3xl font-bold">{stats.totalMessages}</p>
+          </Card>
+          <Card className="p-4">
+            <h2 className="text-lg font-semibold">Unique Products</h2>
+            <p className="text-3xl font-bold">{stats.totalProducts}</p>
+          </Card>
+          <Card className="p-4">
+            <h2 className="text-lg font-semibold">Unique Vendors</h2>
+            <p className="text-3xl font-bold">{stats.uniqueVendors}</p>
+          </Card>
+        </div>
       </div>
-    </div>
+    </PageContainer>
   );
 };
 

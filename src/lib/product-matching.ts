@@ -113,14 +113,18 @@ export async function findProductMatches(
       .single();
 
     if (messageError || !message) {
-      await logSyncOperation('product_match', {
-        success: false,
-        entityId: messageId,
-        error: messageError?.message || 'Message not found',
-        metadata: {
-          duration: Date.now() - startTime
-        }
-      });
+      await logSyncOperation(
+        supabase,
+        'product_match',
+        {
+          entityId: messageId,
+          metadata: {
+            duration: Date.now() - startTime
+          }
+        },
+        false,
+        messageError?.message || 'Message not found'
+      );
       throw new Error(messageError?.message || 'Message not found');
     }
 
@@ -129,14 +133,18 @@ export async function findProductMatches(
       .select('*');
 
     if (productsError || !products) {
-      await logSyncOperation('product_match', {
-        success: false,
-        entityId: messageId,
-        error: productsError?.message || 'Products not found',
-        metadata: {
-          duration: Date.now() - startTime
-        }
-      });
+      await logSyncOperation(
+        supabase,
+        'product_match',
+        {
+          entityId: messageId,
+          metadata: {
+            duration: Date.now() - startTime
+          }
+        },
+        false,
+        productsError?.message || 'Products not found'
+      );
       throw new Error(productsError?.message || 'Products not found');
     }
 
@@ -268,28 +276,35 @@ export async function findProductMatches(
     }
 
     // Log successful matches
-    await logSyncOperation('product_match', {
-      success: true,
-      entityId: messageId,
-      details: {
-        matches_found: bestMatch.length,
-        confidence_scores: bestMatch.map(m => m.confidence_score)
+    await logSyncOperation(
+      supabase,
+      'product_match',
+      {
+        entityId: messageId,
+        matches: matches.length,
+        metadata: {
+          duration: Date.now() - startTime,
+          matchCount: matches.length
+        }
       },
-      metadata: {
-        duration: Date.now() - startTime
-      }
-    });
+      true
+    );
 
     return bestMatch;
   } catch (error) {
-    await logSyncOperation('product_match', {
-      success: false,
-      entityId: messageId,
-      error: error instanceof Error ? error.message : 'Unknown error during product matching',
-      metadata: {
-        duration: Date.now() - startTime
-      }
-    });
+    await logSyncOperation(
+      supabase,
+      'product_match',
+      {
+        entityId: messageId,
+        error: error.message,
+        metadata: {
+          duration: Date.now() - startTime
+        }
+      },
+      false,
+      error.message
+    );
     throw error;
   }
 }
@@ -376,7 +391,7 @@ export async function processAndApplyMatches(
           result: {
             success: false,
             entityId: messageId,
-            error: error instanceof Error ? error.message : 'Unknown error processing match',
+            error: error.message,
             metadata: { duration: Date.now() - startTime }
           }
         });
@@ -386,14 +401,19 @@ export async function processAndApplyMatches(
     // Log all operations in batch
     await logSyncOperationBatch(batchOperations);
   } catch (error) {
-    await logSyncOperation('product_match', {
-      success: false,
-      details: { messageIds },
-      error: error instanceof Error ? error.message : 'Unknown error in batch processing',
-      metadata: {
-        duration: Date.now() - startTime
-      }
-    });
+    await logSyncOperation(
+      supabase,
+      'process_matches',
+      {
+        messageIds,
+        error: error.message,
+        metadata: {
+          duration: Date.now() - startTime
+        }
+      },
+      false,
+      error.message
+    );
     throw error;
   }
 }
@@ -410,24 +430,33 @@ export async function reprocessExistingMatches(
       .is('processed_at', null);
 
     if (fetchError) {
-      await logSyncOperation('bulk_sync', {
-        success: false,
-        error: fetchError.message,
-        metadata: {
-          duration: Date.now() - startTime
-        }
-      });
+      await logSyncOperation(
+        supabase,
+        'reprocess_matches',
+        {
+          error: fetchError.message,
+          metadata: {
+            duration: Date.now() - startTime
+          }
+        },
+        false,
+        fetchError.message
+      );
       throw fetchError;
     }
 
     if (!messages || messages.length === 0) {
-      await logSyncOperation('bulk_sync', {
-        success: true,
-        details: { status: 'no_messages_to_process' },
-        metadata: {
-          duration: Date.now() - startTime
-        }
-      });
+      await logSyncOperation(
+        supabase,
+        'reprocess_matches',
+        {
+          details: { status: 'no_messages_to_process' },
+          metadata: {
+            duration: Date.now() - startTime
+          }
+        },
+        true
+      );
       return;
     }
 
@@ -436,23 +465,32 @@ export async function reprocessExistingMatches(
       supabase
     );
 
-    await logSyncOperation('bulk_sync', {
-      success: true,
-      details: {
-        messages_processed: messages.length
+    await logSyncOperation(
+      supabase,
+      'reprocess_matches',
+      {
+        details: {
+          messages_processed: messages.length
+        },
+        metadata: {
+          duration: Date.now() - startTime
+        }
       },
-      metadata: {
-        duration: Date.now() - startTime
-      }
-    });
+      true
+    );
   } catch (error) {
-    await logSyncOperation('bulk_sync', {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error in bulk reprocessing',
-      metadata: {
-        duration: Date.now() - startTime
-      }
-    });
+    await logSyncOperation(
+      supabase,
+      'reprocess_matches',
+      {
+        error: error.message,
+        metadata: {
+          duration: Date.now() - startTime
+        }
+      },
+      false,
+      error.message
+    );
     throw error;
   }
 }

@@ -3,8 +3,8 @@ import { Label } from "@/components/ui/label";
 import { CalendarDays } from "lucide-react";
 
 interface DateFieldFilterProps {
-  value: string;
-  onChange: (value: string) => void;
+  value: 'purchase_date' | 'created_at';
+  onChange: (value: 'purchase_date' | 'created_at') => void;
 }
 
 export const DateFieldFilter = ({ value, onChange }: DateFieldFilterProps) => {
