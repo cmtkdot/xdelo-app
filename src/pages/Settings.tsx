@@ -106,11 +106,12 @@ const Settings = () => {
           title: "Success",
           description: `Successfully matched ${result.matched_count} messages with products.`,
         });
-      }
 
-      // Refresh the logs
-      refetchLogs();
+        // Refresh the logs to show the new sync logs
+        await refetchLogs();
+      }
     } catch (error: any) {
+      console.error('Sync error:', error);
       toast({
         title: "Error",
         description: `Failed to trigger sync: ${error.message}`,
@@ -179,6 +180,7 @@ const Settings = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Table</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Operation</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Message</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
                 </tr>
               </thead>
@@ -196,6 +198,7 @@ const Settings = () => {
                         {log.status}
                       </span>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">{log.error_message}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {new Date(log.created_at).toLocaleString()}
                     </td>
