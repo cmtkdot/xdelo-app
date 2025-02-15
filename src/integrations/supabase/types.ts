@@ -607,6 +607,7 @@ export type Database = {
           created_at: string | null
           edit_price: boolean | null
           edit_quantity: boolean | null
+          gl_products: Json | null
           glide_id: string | null
           id: string
           last_modified_at: string | null
@@ -633,6 +634,7 @@ export type Database = {
           created_at?: string | null
           edit_price?: boolean | null
           edit_quantity?: boolean | null
+          gl_products?: Json | null
           glide_id?: string | null
           id?: string
           last_modified_at?: string | null
@@ -659,6 +661,7 @@ export type Database = {
           created_at?: string | null
           edit_price?: boolean | null
           edit_quantity?: boolean | null
+          gl_products?: Json | null
           glide_id?: string | null
           id?: string
           last_modified_at?: string | null
@@ -698,6 +701,7 @@ export type Database = {
       }
       gl_invoices: {
         Row: {
+          account_name: string | null
           created_at: string | null
           doc_document: string | null
           doc_glideforeverlink: string | null
@@ -726,6 +730,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          account_name?: string | null
           created_at?: string | null
           doc_document?: string | null
           doc_glideforeverlink?: string | null
@@ -754,6 +759,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          account_name?: string | null
           created_at?: string | null
           doc_document?: string | null
           doc_glideforeverlink?: string | null
