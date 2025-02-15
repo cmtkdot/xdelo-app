@@ -382,3 +382,4 @@ export type TablesUpdate<T extends keyof Database['public']['Tables']> = Databas
 
 // Helper type for database functions
 export type DatabaseFunction<T extends keyof Database['public']['Functions']> = Database['public']['Functions'][T]
+

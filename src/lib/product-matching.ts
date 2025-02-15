@@ -180,7 +180,7 @@ export async function findProductMatches(
       const productNameSimilarity = calculateProductNameSimilarity(message.product_name, product);
       if (
         productNameSimilarity > 0.9 &&
-        message.vendor_name === product.main_vendor_uid &&
+        message.vendor_uid === product.main_vendor_uid &&
         areDatesWithinRange(message.purchase_date, product.main_product_purchase_date)
       ) {
         const match: MatchResult = {
@@ -193,7 +193,7 @@ export async function findProductMatches(
             criteria: ['exact_product_name', 'exact_vendor', 'date_range'],
             matched_fields: {
               product_name: message.product_name,
-              vendor: message.vendor_name,
+              vendor: message.vendor_uid,
               purchase_date: message.purchase_date,
               similarity_score: productNameSimilarity
             }
@@ -239,7 +239,7 @@ export async function findProductMatches(
       // Priority 4: Fuzzy product name, exact vendor, date range (60-75% confidence)
       if (
         productNameSimilarity > CONFIDENCE_THRESHOLDS.FUZZY_MATCH &&
-        message.vendor_name === product.main_vendor_uid &&
+        message.vendor_uid === product.main_vendor_uid &&
         areDatesWithinRange(message.purchase_date, product.main_product_purchase_date)
       ) {
         const confidence = 0.6 + (productNameSimilarity - CONFIDENCE_THRESHOLDS.FUZZY_MATCH) * 0.375;
@@ -253,7 +253,7 @@ export async function findProductMatches(
             criteria: ['fuzzy_product_name', 'exact_vendor', 'date_range'],
             matched_fields: {
               similarity_score: productNameSimilarity,
-              vendor: message.vendor_name,
+              vendor: message.vendor_uid,
               purchase_date: message.purchase_date
             }
           }

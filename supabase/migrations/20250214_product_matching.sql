@@ -35,7 +35,7 @@ CREATE TRIGGER update_sync_matches_updated_at
 
 -- Create indexes for frequently queried fields
 CREATE INDEX IF NOT EXISTS idx_messages_product_name ON messages (product_name);
-CREATE INDEX IF NOT EXISTS idx_messages_vendor_name ON messages (vendor_name);
+CREATE INDEX IF NOT EXISTS idx_messages_vendor_uid ON messages (vendor_uid);
 CREATE INDEX IF NOT EXISTS idx_messages_purchase_order ON messages (purchase_order);
 CREATE INDEX IF NOT EXISTS idx_gl_products_main_product_name ON gl_products (main_product_name);
 CREATE INDEX IF NOT EXISTS idx_gl_products_vendor_product_name ON gl_products (main_vendor_product_name);

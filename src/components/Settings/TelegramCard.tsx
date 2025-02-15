@@ -1,50 +1,66 @@
 
-import { Card } from "@/components/ui/card";
+import React from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
-export const TelegramCard = () => {
-  const [isSettingWebhook, setIsSettingWebhook] = useState(false);
+interface TelegramCardProps {
+  botToken: string | null;
+  webhookUrl: string | null;
+  onUpdate: () => void;
+}
+
+export const TelegramCard: React.FC<TelegramCardProps> = ({ botToken, webhookUrl, onUpdate }) => {
   const { toast } = useToast();
 
-  const setupTelegramWebhook = async () => {
+  const handleSetWebhook = async () => {
     try {
-      setIsSettingWebhook(true);
-      const { error } = await supabase.functions.invoke('setup-telegram-webhook');
-      
+      const { error } = await supabase.functions.invoke("set-telegram-webhook", {
+        body: { webhookUrl },
+      });
+
       if (error) throw error;
-      
+
       toast({
         title: "Success",
-        description: "Telegram webhook has been set up successfully.",
+        description: "Telegram webhook set successfully",
       });
-    } catch (error: any) {
+      
+      onUpdate();
+    } catch (error) {
+      console.error("Error setting webhook:", error);
       toast({
         title: "Error",
-        description: `Failed to set up webhook: ${error.message}`,
+        description: "Failed to set Telegram webhook",
         variant: "destructive",
       });
-    } finally {
-      setIsSettingWebhook(false);
     }
   };
 
   return (
-    <Card className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
+    <Card>
+      <CardHeader>
+        <CardTitle>Telegram Integration</CardTitle>
+        <CardDescription>Configure your Telegram bot settings</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
         <div>
-          <h3 className="text-lg font-medium">Telegram Integration</h3>
-          <p className="text-sm text-gray-500">Manage Telegram webhook settings</p>
+          <h3 className="text-sm font-medium mb-2">Bot Token</h3>
+          <p className="text-sm text-muted-foreground">
+            {botToken ? "••••••••" + botToken.slice(-4) : "Not set"}
+          </p>
         </div>
-        <Button 
-          onClick={setupTelegramWebhook} 
-          disabled={isSettingWebhook}
-        >
-          {isSettingWebhook ? "Setting up..." : "Setup Webhook"}
+        <div>
+          <h3 className="text-sm font-medium mb-2">Webhook URL</h3>
+          <p className="text-sm text-muted-foreground break-all">
+            {webhookUrl || "Not set"}
+          </p>
+        </div>
+        <Button onClick={handleSetWebhook} disabled={!webhookUrl}>
+          Set Webhook
         </Button>
-      </div>
+      </CardContent>
     </Card>
   );
 };

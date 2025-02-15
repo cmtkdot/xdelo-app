@@ -6,89 +6,78 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MediaItem } from '@/types'
 import { cn } from '@/lib/utils'
+import { format } from "date-fns";
 
 interface ImageSwiperProps extends React.HTMLAttributes<HTMLDivElement> {
-  media: MediaItem[]
+  media: MediaItem[];
+  showNavigation?: boolean;
+  className?: string;
 }
 
-export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
-  const [mediaIndex, setMediaIndex] = React.useState(0)
-  const [isHovered, setIsHovered] = React.useState(false)
-  const [previousIndex, setPreviousIndex] = React.useState(0)
-  const [manualNavigation, setManualNavigation] = React.useState(false)
-  const dragX = useMotionValue(0)
-  const videoRefs = React.useRef<(HTMLVideoElement | null)[]>([])
+export function ImageSwiper({ media, className, showNavigation, ...props }: ImageSwiperProps) {
+  const [mediaIndex, setMediaIndex] = React.useState(0);
+  const [isHovered, setIsHovered] = React.useState(false);
+  const [lastNonVideoIndex, setLastNonVideoIndex] = React.useState(0);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
 
-  // Sort media to show images first, then videos
+  // Find first video in the media array
+  const firstVideoIndex = React.useMemo(() => {
+    return media.findIndex(m => m.mime_type?.startsWith('video/'));
+  }, [media]);
+
   const sortedMedia = React.useMemo(() => {
     return [...media].sort((a, b) => {
-      const aIsImage = a.mime_type?.startsWith('image') || false
-      const bIsImage = b.mime_type?.startsWith('image') || false
-      return bIsImage ? 1 : aIsImage ? -1 : 0
-    })
-  }, [media])
+      const aIsImage = a.mime_type?.startsWith('image') || false;
+      const bIsImage = b.mime_type?.startsWith('image') || false;
+      return bIsImage ? 1 : aIsImage ? -1 : 0;
+    });
+  }, [media]);
 
-  const findFirstVideoIndex = React.useCallback(() => {
-    return sortedMedia.findIndex(item => item.mime_type?.startsWith('video'))
-  }, [sortedMedia])
+  const currentMedia = sortedMedia[mediaIndex];
+  const isVideo = currentMedia?.mime_type?.startsWith("video/");
 
-  const onDragEnd = () => {
-    const x = dragX.get()
-    if (x <= -10 && mediaIndex < sortedMedia.length - 1) {
-      setMediaIndex((prev) => prev + 1)
-      setManualNavigation(true)
-    } else if (x >= 10 && mediaIndex > 0) {
-      setMediaIndex((prev) => prev - 1)
-      setManualNavigation(true)
-    }
-  }
-
-  const getMediaUrl = (item: MediaItem) => {
-    if (item.public_url) return item.public_url
-    return `https://xjhhehxcxkiumnwbirel.supabase.co/storage/v1/object/public/telegram-media/${item.file_unique_id}.${item.mime_type?.split('/')[1]}`
-  }
-
+  // Store the last non-video index when changing media
   React.useEffect(() => {
-    videoRefs.current.forEach((video, index) => {
-      if (video) {
-        if (isHovered && index === mediaIndex && sortedMedia[index].mime_type?.startsWith('video')) {
-          video.play().catch(() => {
-            // Handle autoplay failure silently
-          })
-        } else {
-          video.pause()
-          video.currentTime = 0
-        }
-      }
-    })
-  }, [isHovered, mediaIndex, sortedMedia])
+    if (!isVideo) {
+      setLastNonVideoIndex(mediaIndex);
+    }
+  }, [mediaIndex, isVideo]);
 
-  const handleMouseEnter = React.useCallback(() => {
-    setIsHovered(true)
-    setPreviousIndex(mediaIndex)
-    
-    if (!manualNavigation) {
-      const firstVideoIndex = findFirstVideoIndex()
-      if (firstVideoIndex !== -1 && !sortedMedia[mediaIndex].mime_type?.startsWith('video')) {
-        setMediaIndex(firstVideoIndex)
+  // Handle hover state changes
+  React.useEffect(() => {
+    if (isHovered) {
+      // Find first video in the group
+      const videoIndex = sortedMedia.findIndex(m => m.mime_type?.startsWith('video/'));
+      if (videoIndex !== -1) {
+        setMediaIndex(videoIndex);
+      }
+    } else {
+      // Return to last non-video index when leaving hover
+      setMediaIndex(lastNonVideoIndex);
+    }
+  }, [isHovered, sortedMedia, lastNonVideoIndex]);
+
+  // Handle video playback
+  React.useEffect(() => {
+    if (isVideo && videoRef.current) {
+      if (isHovered) {
+        videoRef.current.currentTime = 0;
+        videoRef.current.play().catch(console.error);
+      } else {
+        videoRef.current.pause();
       }
     }
-  }, [findFirstVideoIndex, mediaIndex, sortedMedia, manualNavigation])
+  }, [isHovered, isVideo]);
 
-  const handleMouseLeave = React.useCallback(() => {
-    setIsHovered(false)
-    setManualNavigation(false)
-    if (!manualNavigation && sortedMedia[mediaIndex].mime_type?.startsWith('video')) {
-      setMediaIndex(previousIndex)
-    }
-  }, [mediaIndex, previousIndex, sortedMedia, manualNavigation])
+  const handleNext = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setMediaIndex((prev) => (prev + 1) % sortedMedia.length);
+  };
 
-  const handleButtonClick = (e: React.MouseEvent, newIndex: number) => {
-    e.stopPropagation()
-    setPreviousIndex(mediaIndex)
-    setMediaIndex(newIndex)
-    setManualNavigation(true)
-  }
+  const handlePrev = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setMediaIndex((prev) => (prev - 1 + sortedMedia.length) % sortedMedia.length);
+  };
 
   if (!sortedMedia?.length) {
     return (
@@ -100,101 +89,68 @@ export function ImageSwiper({ media, className, ...props }: ImageSwiperProps) {
 
   return (
     <div
-      className={cn(
-        'group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-black/90',
-        className
-      )}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      className={cn("group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-black/90", className)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       {...props}
     >
-      <div className="pointer-events-none absolute inset-0 z-10">
-        {mediaIndex > 0 && (
-          <div className="absolute left-5 top-1/2 -translate-y-1/2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="pointer-events-auto h-8 w-8 rounded-full bg-black/50 hover:bg-black/75 text-white opacity-0 transition-opacity group-hover:opacity-100"
-              onClick={(e) => handleButtonClick(e, mediaIndex - 1)}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-        {mediaIndex < sortedMedia.length - 1 && (
-          <div className="absolute right-5 top-1/2 -translate-y-1/2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="pointer-events-auto h-8 w-8 rounded-full bg-black/50 hover:bg-black/75 text-white opacity-0 transition-opacity group-hover:opacity-100"
-              onClick={(e) => handleButtonClick(e, mediaIndex + 1)}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-        {/* Product info overlay */}
-        <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 via-black/50 to-transparent p-4">
-          <h3 className="text-xl font-semibold text-white">
-            {sortedMedia[mediaIndex].analyzed_content?.product_name || 'Untitled Product'}
-          </h3>
-          <p className="text-sm text-gray-300">
-            {new Date(sortedMedia[mediaIndex].created_at).toLocaleDateString()}
-          </p>
-        </div>
-        <div className="absolute bottom-2 w-full flex justify-center">
-          <div className="flex min-w-9 items-center justify-center rounded-md bg-black/80 px-2 py-0.5 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
-            {mediaIndex + 1}/{sortedMedia.length}
-          </div>
+      {/* Product info overlay */}
+      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 via-black/50 to-transparent p-4">
+        <h3 className="text-xl font-semibold text-white">
+          {sortedMedia[mediaIndex].analyzed_content?.product_name || 'Untitled Product'}
+        </h3>
+        <p className="text-sm text-gray-300">
+          {format(new Date(sortedMedia[mediaIndex].created_at), 'MMM d, yyyy')}
+        </p>
+      </div>
+      <div className="absolute bottom-2 w-full flex justify-center">
+        <div className="flex min-w-9 items-center justify-center rounded-md bg-black/80 px-2 py-0.5 text-xs text-white opacity-100 transition-opacity">
+          {mediaIndex + 1}/{sortedMedia.length}
         </div>
       </div>
 
-      <motion.div
-        drag="x"
-        dragConstraints={{
-          left: 0,
-          right: 0
-        }}
-        dragMomentum={false}
-        style={{
-          x: dragX
-        }}
-        animate={{
-          translateX: `-${mediaIndex * 100}%`
-        }}
-        onDragEnd={onDragEnd}
-        transition={{ damping: 18, stiffness: 90, type: 'spring', duration: 0.2 }}
-        className="flex h-full cursor-grab items-center rounded-[inherit] active:cursor-grabbing"
-      >
-        {sortedMedia.map((item, i) => {
-          const isVideo = item.mime_type?.startsWith('video')
-          const mediaUrl = getMediaUrl(item)
+      {showNavigation && mediaIndex > 0 && (
+        <div className="absolute left-5 top-1/2 -translate-y-1/2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="pointer-events-auto h-8 w-8 rounded-full bg-black/50 hover:bg-black/75 text-white opacity-100 transition-opacity"
+            onClick={handlePrev}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+      {showNavigation && mediaIndex < sortedMedia.length - 1 && (
+        <div className="absolute right-5 top-1/2 -translate-y-1/2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="pointer-events-auto h-8 w-8 rounded-full bg-black/50 hover:bg-black/75 text-white opacity-100 transition-opacity"
+            onClick={handleNext}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
 
-          return (
-            <motion.div
-              key={i}
-              className="h-full w-full shrink-0 overflow-hidden bg-neutral-800 first:rounded-l-[inherit] last:rounded-r-[inherit]"
-            >
-              {isVideo ? (
-                <video
-                  ref={el => videoRefs.current[i] = el}
-                  src={mediaUrl}
-                  className="h-full w-full object-cover"
-                  muted
-                  loop
-                  playsInline
-                />
-              ) : (
-                <img 
-                  src={mediaUrl} 
-                  alt={item.analyzed_content?.product_name || 'Product image'}
-                  className="h-full w-full object-cover" 
-                />
-              )}
-            </motion.div>
-          )
-        })}
-      </motion.div>
+      {isVideo ? (
+        <video
+          ref={videoRef}
+          src={currentMedia.public_url}
+          className="h-full w-full object-cover"
+          loop
+          muted
+          playsInline
+          autoPlay={true}
+        />
+      ) : (
+        <img 
+          src={currentMedia.public_url} 
+          alt={sortedMedia[mediaIndex].analyzed_content?.product_name || 'Product image'}
+          className="h-full w-full object-cover" 
+        />
+      )}
     </div>
   )
 }

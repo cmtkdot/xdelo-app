@@ -8,20 +8,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+
 interface MessageGroup {
   [key: string]: Array<{
     id: string;
     caption: string | null;
     media_group_id: string | null;
     chat_id: string;
-    vendor_name: string | null;
+
+    vendor_uid: string | null;
+
     analyzed_content: Record<string, unknown>;
     created_at: string;
     is_deleted: boolean;
     processing_state: string;
   }>;
 }
-
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -51,7 +53,7 @@ serve(async (req) => {
 
     // Apply vendor filter using the direct column
     if (filters.vendor && filters.vendor !== "all") {
-      query = query.eq('vendor_name', filters.vendor);
+      query = query.eq('vendor_uid', filters.vendor);
       console.log('Applying vendor filter:', filters.vendor);
     }
 
