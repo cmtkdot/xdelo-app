@@ -89,6 +89,28 @@ export interface FilterValues {
   processingState?: ProcessingState | 'all';
 }
 
+export interface GlProduct {
+  id: string;
+  main_product_name: string;
+  main_vendor_uid: string;
+  main_vendor_product_name: string;
+  main_product_purchase_date: string;
+  main_total_qty_purchased: number;
+  main_cost: number;
+  main_category: string;
+  main_product_image1: string;
+  main_purchase_notes: string;
+  product_name_display: string;
+  created_at: string;
+  updated_at: string;
+  sync_status: string;
+  message_public_url?: string | null;
+  messages?: {
+    public_url: string;
+    media_group_id: string;
+  }[];
+}
+
 // Helper functions to convert types to JSON
 export const analyzedContentToJson = (content: AnalyzedContent): Json => {
   return {

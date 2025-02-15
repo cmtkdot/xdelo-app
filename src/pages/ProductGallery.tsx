@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem, FilterValues } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
@@ -15,13 +15,9 @@ const ProductGallery = () => {
   const [filters, setFilters] = useState<FilterValues>({
     search: "",
     vendor: "all",
-    dateFrom: undefined,
-    dateTo: undefined,
-    dateField: 'purchase_date',
+    dateField: 'created_at',
     sortOrder: "desc",
-    productCode: "all",
-    quantityRange: "all",
-    processingState: "all"
+    processingState: "completed"
   });
 
   const { toast } = useToast();

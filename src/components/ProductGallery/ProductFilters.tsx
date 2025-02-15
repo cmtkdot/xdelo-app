@@ -1,15 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { FilterValues } from "@/types";
 import { Filter, X } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { SearchFilter } from "./Filters/SearchFilter";
-import { QuantityFilter } from "./Filters/QuantityFilter";
 import { VendorFilter } from "./Filters/VendorFilter";
-import { SortOrderFilter } from "./Filters/SortOrderFilter";
-import { DateFieldFilter } from "./Filters/DateFieldFilter";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 interface ProductFiltersProps {
   vendors: string[];
@@ -20,101 +18,150 @@ interface ProductFiltersProps {
 export default function ProductFilters({ vendors, filters, onFilterChange }: ProductFiltersProps) {
   const [search, setSearch] = useState(filters.search);
   const [vendor, setVendor] = useState(filters.vendor);
-  const [dateField, setDateField] = useState<'purchase_date' | 'created_at'>(filters.dateField);
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder);
-  const [quantityRange, setQuantityRange] = useState(filters.quantityRange || 'all');
+  const [dateField, setDateField] = useState<'purchase_date' | 'created_at'>(filters.dateField || 'created_at');
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder || "desc");
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
   useEffect(() => {
     let count = 0;
     if (search) count++;
     if (vendor !== 'all') count++;
-    if (quantityRange !== 'all') count++;
     setActiveFiltersCount(count);
-  }, [search, vendor, quantityRange]);
+  }, [search, vendor]);
 
-  useEffect(() => {
+  const handleFilterChange = useCallback(() => {
     onFilterChange({
       search,
       vendor,
       dateField,
       sortOrder,
-      quantityRange,
       processingState: 'completed'
     });
-  }, [search, vendor, dateField, sortOrder, quantityRange, onFilterChange]);
+  }, [search, vendor, dateField, sortOrder, onFilterChange]);
 
-  const handleReset = () => {
+  useEffect(() => {
+    handleFilterChange();
+  }, [handleFilterChange]);
+
+  const resetFilters = () => {
     setSearch("");
     setVendor("all");
-    setDateField('purchase_date');
+    setDateField('created_at');
     setSortOrder("desc");
-    setQuantityRange('all');
-    
-    onFilterChange({
-      search: "",
-      vendor: "all",
-      dateField: 'purchase_date',
-      sortOrder: "desc",
-      quantityRange: 'all',
-      processingState: 'completed'
-    });
+  };
+
+  const handleSortOrderChange = (value: string) => {
+    setSortOrder(value as "asc" | "desc");
+  };
+
+  const handleDateFieldChange = (value: string) => {
+    setDateField(value as 'purchase_date' | 'created_at');
   };
 
   const FilterContent = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-6 flex-1">
-          <div className="flex-1">
-            <SearchFilter value={search} onChange={setSearch} />
-          </div>
-          <VendorFilter value={vendor} vendors={vendors} onChange={setVendor} />
-          <QuantityFilter value={quantityRange} onChange={setQuantityRange} />
-          <div className="ml-auto flex items-center gap-4">
-            <DateFieldFilter value={dateField} onChange={setDateField} />
-            <SortOrderFilter value={sortOrder} onChange={setSortOrder} />
-          </div>
+        <div className="flex-1">
+          <SearchFilter value={search} onChange={setSearch} />
         </div>
-        {activeFiltersCount > 0 && (
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Vendor</Label>
+          <VendorFilter value={vendor} vendors={vendors} onChange={setVendor} />
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Sort Order</Label>
+          <Select value={sortOrder} onValueChange={handleSortOrderChange}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">Newest First</SelectItem>
+              <SelectItem value="asc">Oldest First</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Date Field</Label>
+          <Select value={dateField} onValueChange={handleDateFieldChange}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="purchase_date">Purchase Date</SelectItem>
+              <SelectItem value="created_at">Created At</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {activeFiltersCount > 0 && (
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-sm text-muted-foreground">
+            {activeFiltersCount} active filter{activeFiltersCount !== 1 ? 's' : ''}
+          </span>
           <Button
             variant="ghost"
             size="sm"
-            className="ml-2"
-            onClick={handleReset}
+            onClick={resetFilters}
+            className="h-8 px-2 text-xs"
           >
-            <X className="h-4 w-4" />
+            <X className="w-3 h-3 mr-1" />
+            Clear all
           </Button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 
   return (
-    <div>
-      <Sheet>
-        <SheetTrigger asChild>
-          <Button variant="outline" size="sm" className="lg:hidden">
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
-            {activeFiltersCount > 0 && (
-              <Badge variant="secondary" className="ml-2">
-                {activeFiltersCount}
-              </Badge>
-            )}
-          </Button>
-        </SheetTrigger>
-        <SheetContent>
-          <SheetHeader>
-            <SheetTitle>Filters</SheetTitle>
-          </SheetHeader>
-          <div className="mt-4">
-            <FilterContent />
-          </div>
-        </SheetContent>
-      </Sheet>
-      <div className="hidden lg:block">
+    <>
+      {/* Desktop view */}
+      <div className="hidden md:block">
         <FilterContent />
       </div>
-    </div>
+
+      {/* Mobile view */}
+      <div className="md:hidden">
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="outline" className="w-full">
+              <Filter className="w-4 h-4 mr-2" />
+              Filters
+              {activeFiltersCount > 0 && (
+                <Badge variant="secondary" className="ml-2">
+                  {activeFiltersCount}
+                </Badge>
+              )}
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="h-[85vh] px-4">
+            <SheetHeader>
+              <div className="flex items-center justify-between">
+                <SheetTitle>Filters</SheetTitle>
+                {activeFiltersCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetFilters}
+                    className="h-8"
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    Clear all
+                  </Button>
+                )}
+              </div>
+            </SheetHeader>
+            <div className="mt-4">
+              <FilterContent />
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
   );
 }

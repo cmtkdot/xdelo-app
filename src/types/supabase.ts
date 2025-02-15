@@ -142,21 +142,9 @@ export interface Database {
           last_match_attempt_at: string | null
           match_attempt_count: number
           product_name: string | null
-          vendor_uid: string | null
+          vendor_name: string | null
           purchase_order: string | null
           purchase_date: string | null
-          processing_state: "initialized" | "pending" | "processing" | "completed" | "error" | null
-          is_original_caption: boolean | null
-          error_message: string | null
-          processing_completed_at: string | null
-          confidence: number | null
-          width: number | null
-          height: number | null
-          duration: number | null
-          file_size: number | null
-          storage_path: string | null
-          thumbnail_url: string | null
-          url: string | null
         }
         Insert: {
           id?: string
@@ -178,21 +166,9 @@ export interface Database {
           last_match_attempt_at?: string | null
           match_attempt_count?: number
           product_name?: string | null
-          vendor_uid?: string | null
+          vendor_name?: string | null
           purchase_order?: string | null
           purchase_date?: string | null
-          processing_state?: "initialized" | "pending" | "processing" | "completed" | "error" | null
-          is_original_caption?: boolean | null
-          error_message?: string | null
-          processing_completed_at?: string | null
-          confidence?: number | null
-          width?: number | null
-          height?: number | null
-          duration?: number | null
-          file_size?: number | null
-          storage_path?: string | null
-          thumbnail_url?: string | null
-          url?: string | null
         }
         Update: {
           id?: string
@@ -214,21 +190,9 @@ export interface Database {
           last_match_attempt_at?: string | null
           match_attempt_count?: number
           product_name?: string | null
-          vendor_uid?: string | null
+          vendor_name?: string | null
           purchase_order?: string | null
           purchase_date?: string | null
-          processing_state?: "initialized" | "pending" | "processing" | "completed" | "error" | null
-          is_original_caption?: boolean | null
-          error_message?: string | null
-          processing_completed_at?: string | null
-          confidence?: number | null
-          width?: number | null
-          height?: number | null
-          duration?: number | null
-          file_size?: number | null
-          storage_path?: string | null
-          thumbnail_url?: string | null
-          url?: string | null
         }
         Relationships: [
           {
@@ -243,7 +207,7 @@ export interface Database {
         Row: {
           id: string
           glide_id: string | null
-          sync_status: 'pending' | 'synced' | 'error' | 'locked' | null
+          sync_status: 'pending' | 'synced' | 'error' | null
           last_sync_time: string | null
           created_at: string | null
           updated_at: string | null
@@ -289,7 +253,7 @@ export interface Database {
         Insert: {
           id?: string
           glide_id?: string | null
-          sync_status?: 'pending' | 'synced' | 'error' | 'locked' | null
+          sync_status?: 'pending' | 'synced' | 'error' | null
           last_sync_time?: string | null
           created_at?: string | null
           updated_at?: string | null
@@ -335,7 +299,7 @@ export interface Database {
         Update: {
           id?: string
           glide_id?: string | null
-          sync_status?: 'pending' | 'synced' | 'error' | 'locked' | null
+          sync_status?: 'pending' | 'synced' | 'error' | null
           last_sync_time?: string | null
           created_at?: string | null
           updated_at?: string | null
@@ -401,8 +365,7 @@ export interface Database {
       }
     }
     Enums: {
-      message_processing_state: "initialized" | "pending" | "processing" | "completed" | "error"
-      sync_status: "pending" | "synced" | "error" | "locked"
+      sync_status: 'pending' | 'synced' | 'error'
     }
   }
 }
@@ -420,21 +383,3 @@ export type TablesUpdate<T extends keyof Database['public']['Tables']> = Databas
 // Helper type for database functions
 export type DatabaseFunction<T extends keyof Database['public']['Functions']> = Database['public']['Functions'][T]
 
-export interface AnalyzedContent {
-  product_name: string;
-  product_code: string;
-  quantity: number;
-  vendor_uid: string;
-  purchase_date: string;
-  parsing_metadata: {
-    method: string;
-    timestamp: string;
-    confidence: number;
-  };
-}
-
-export type MediaItem = Database["public"]["Tables"]["messages"]["Row"] & {
-  analyzed_content: AnalyzedContent | null
-  thumbnail_url?: string
-  url?: string
-}

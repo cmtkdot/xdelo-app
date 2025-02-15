@@ -16,6 +16,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+import { MediaItem } from "@/types";
+
+interface EditableMessage extends MediaItem {
+  isEditing?: boolean;
+
 import { MediaItem, ProcessingState, AnalyzedContent } from "@/types";
 
 interface Message {
@@ -48,13 +54,17 @@ interface Message {
 
 interface EditableMessage extends Message {
   isEditing: boolean;
+
 }
 
 interface MessagesTableProps {
-  messages: Message[];
+  messages: MediaItem[];
 }
 
 export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialMessages }) => {
+  const [messages, setMessages] = useState<EditableMessage[]>(initialMessages);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [messageToDelete, setMessageToDelete] = useState<MediaItem | null>(null);
   const [messages, setMessages] = useState<EditableMessage[]>(initialMessages.map(message => ({ ...message, isEditing: false })));
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
@@ -98,6 +108,18 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     const message = messages.find(m => m.id === id);
     if (!message) return;
 
+    await handleSave(message, message.caption || '');
+    
+    setMessages(prev =>
+      prev.map(m =>
+        m.id === id
+          ? { ...m, isEditing: false }
+          : m
+      )
+    );
+  };
+
+  const handleDeleteClick = (message: MediaItem) => {
     try {
       await handleSave(message, message.caption || '');
       
@@ -136,6 +158,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     setMessageToDelete(null);
   };
 
+  const handleChange = (id: string, field: keyof MediaItem, value: string | number) => {
   const handleAnalyzedContentChange = (id: string, field: keyof AnalyzedContent, value: string | number) => {
     setMessages(prev =>
       prev.map(message =>
@@ -179,6 +202,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
                   {message.isEditing ? (
                     <Input
                       value={message.caption || ''}
+                      onChange={(e) => handleChange(message.id, 'caption', e.target.value)}
                       onChange={(e) => handleCaptionChange(message.id, e.target.value)}
                     />
                   ) : (
@@ -188,6 +212,11 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
                 <TableCell>
                   {message.isEditing ? (
                     <Input
+                      value={message.product_name || ''}
+                      onChange={(e) => handleChange(message.id, 'product_name', e.target.value)}
+                    />
+                  ) : (
+                    message.product_name || '-'
                       value={message.analyzed_content?.product_name || ''}
                       onChange={(e) => handleAnalyzedContentChange(message.id, 'product_name', e.target.value)}
                     />
@@ -198,6 +227,11 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
                 <TableCell>
                   {message.isEditing ? (
                     <Input
+                      value={message.vendor || ''}
+                      onChange={(e) => handleChange(message.id, 'vendor', e.target.value)}
+                    />
+                  ) : (
+                    message.vendor || '-'
                       value={message.analyzed_content?.vendor_uid || ''}
                       onChange={(e) => handleAnalyzedContentChange(message.id, 'vendor_uid', e.target.value)}
                     />
@@ -210,6 +244,14 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
                     <Input
                       type="number"
                       value={message.analyzed_content?.quantity || ''}
+                      onChange={(e) => {
+                        const newContent = {
+                          ...message.analyzed_content,
+                          quantity: parseFloat(e.target.value)
+                        };
+                        handleChange(message.id, 'analyzed_content', newContent);
+                      }}
+
                       onChange={(e) => handleAnalyzedContentChange(message.id, 'quantity', parseFloat(e.target.value))}
                     />
                   ) : (

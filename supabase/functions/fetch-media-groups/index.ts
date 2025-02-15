@@ -1,5 +1,6 @@
-
+// @ts-expect-error - Deno imports
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// @ts-expect-error - Deno imports
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
@@ -7,23 +8,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-<<<<<<< Updated upstream
-=======
+
 interface MessageGroup {
   [key: string]: Array<{
     id: string;
     caption: string | null;
     media_group_id: string | null;
     chat_id: string;
+
     vendor_uid: string | null;
+
     analyzed_content: Record<string, unknown>;
     created_at: string;
     is_deleted: boolean;
     processing_state: string;
   }>;
 }
-
->>>>>>> Stashed changes
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -31,10 +31,11 @@ serve(async (req) => {
   }
 
   try {
-    const { page = 1, filters = {} } = await req.json();
-    const ITEMS_PER_PAGE = 15;
+    const { page = 1, filters = {}, itemsPerPage = 16 } = await req.json();
 
+    // @ts-expect-error - Deno environment
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    // @ts-expect-error - Deno environment
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -54,20 +55,6 @@ serve(async (req) => {
     if (filters.vendor && filters.vendor !== "all") {
       query = query.eq('vendor_uid', filters.vendor);
       console.log('Applying vendor filter:', filters.vendor);
-    }
-
-    // Apply quantity range filter
-    if (filters.quantityRange && filters.quantityRange !== 'all') {
-      if (filters.quantityRange === 'undefined') {
-        query = query.is('analyzed_content->quantity', null);
-      } else if (filters.quantityRange === '21+') {
-        query = query.gte('analyzed_content->quantity', '21');
-      } else {
-        const [min, max] = filters.quantityRange.split('-').map(Number);
-        query = query
-          .gte('analyzed_content->quantity', min.toString())
-          .lte('analyzed_content->quantity', max.toString());
-      }
     }
 
     // Apply processing state filter
@@ -92,20 +79,22 @@ serve(async (req) => {
     }
 
     const totalCount = count || 0;
-    const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+    const totalPages = Math.ceil(totalCount / itemsPerPage);
     
     // Validate page number
     const validatedPage = Math.max(1, Math.min(page, totalPages || 1));
-    const from = (validatedPage - 1) * ITEMS_PER_PAGE;
-    const to = Math.min(from + ITEMS_PER_PAGE - 1, totalCount - 1);
+    const from = (validatedPage - 1) * itemsPerPage;
+    const to = Math.min(from + itemsPerPage - 1, totalCount - 1);
 
     console.log(`Fetching range ${from} to ${to} of ${totalCount} total items`);
 
-    // Apply sorting
+    // Apply simple sorting based on dateField
     const sortOrder = filters.sortOrder || 'desc';
-    query = query.order('created_at', { 
-      ascending: sortOrder === "asc",
-      nullsFirst: false
+    const dateField = filters.dateField || 'created_at';
+    
+    query = query.order(dateField === 'purchase_date' ? 'analyzed_content->purchase_date' : 'created_at', { 
+      ascending: sortOrder === 'asc',
+      nullsLast: true 
     });
 
     // Apply pagination with validated range
@@ -121,67 +110,28 @@ serve(async (req) => {
       throw messagesError;
     }
 
-    // Group messages by media_group_id or individual message id
-    const groups: Record<string, any[]> = {};
+    // Group messages by media_group_id
+    const groups: MessageGroup = {};
     messages?.forEach((message) => {
-      const groupKey = message.media_group_id || message.id;
-      if (!groups[groupKey]) {
-        groups[groupKey] = [];
+      const groupId = message.media_group_id || message.id;
+      if (!groups[groupId]) {
+        groups[groupId] = [];
       }
-      groups[groupKey].push(message);
+      groups[groupId].push(message);
     });
 
-    // If we have media groups, fetch all related media
-    const mediaGroupIds = messages
-      ?.filter(msg => msg.media_group_id)
-      .map(msg => msg.media_group_id) || [];
-
-    if (mediaGroupIds.length > 0) {
-      console.log('Fetching related media for groups:', mediaGroupIds);
-      const { data: groupMedia, error: groupMediaError } = await supabase
-        .from("messages")
-        .select("*")
-        .in("media_group_id", mediaGroupIds)
-        .eq('is_deleted', false);
-
-      if (groupMediaError) {
-        console.error('Error fetching group media:', groupMediaError);
-        throw groupMediaError;
-      }
-
-      // Add group media to their respective groups
-      groupMedia?.forEach((message) => {
-        const groupKey = message.media_group_id || message.id;
-        if (!groups[groupKey]) {
-          groups[groupKey] = [];
-        }
-        if (!groups[groupKey].some(m => m.id === message.id)) {
-          groups[groupKey].push(message);
-        }
-      });
-    }
-
-    // Sort groups internally by creation date
-    Object.keys(groups).forEach(key => {
-      groups[key].sort((a, b) => {
-        if (a.is_original_caption && !b.is_original_caption) return -1;
-        if (!a.is_original_caption && b.is_original_caption) return 1;
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      });
-    });
-
-    console.log(`Returning ${Object.keys(groups).length} groups with total pages ${totalPages}`);
+    console.log(`Returning ${Object.keys(groups).length} media groups`);
 
     return new Response(
       JSON.stringify({
         mediaGroups: groups,
         totalPages: totalPages || 1
       }),
-      { 
-        headers: { 
+      {
+        headers: {
           ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+        },
       }
     );
 
@@ -191,12 +141,11 @@ serve(async (req) => {
       JSON.stringify({ error: error.message }),
       { 
         status: 500,
-        headers: { 
+        headers: {
           ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+        },
       }
     );
   }
 });
-

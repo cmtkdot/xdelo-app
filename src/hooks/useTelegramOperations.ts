@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
@@ -8,7 +9,6 @@ export const useTelegramOperations = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
   const handleDelete = async (message: Message, deleteTelegram: boolean = true) => {
     try {
       setIsProcessing(true);

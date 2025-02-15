@@ -13,6 +13,7 @@ import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import AIChat from "./pages/AIChat";
+import GlProducts from "./pages/GlProducts";
 import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client";
 import { ThemeProvider } from "./components/Theme/ThemeProvider";

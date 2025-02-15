@@ -136,8 +136,8 @@ async function processBulkMatch(
       const { matches, bestMatch } = findBestProductMatch(
         glProducts,
         message.product_name || '',
-        message.vendor_uid,
-        message.po_number,
+
+        message.vendor_uid,        message.po_number,
         message.vendor_uid,
         message.purchase_date
       )
