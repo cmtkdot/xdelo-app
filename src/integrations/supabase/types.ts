@@ -1705,6 +1705,12 @@ export type Database = {
         }
         Returns: number
       }
+      extract_purchase_date: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
+      }
       extract_vendor_name: {
         Args: {
           analyzed_content: Json

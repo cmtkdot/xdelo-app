@@ -4,10 +4,27 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { SyncLogsTable } from "./SyncLogsTable";
+import { useQuery } from "@tanstack/react-query";
+import { SyncLog } from "./types";
 
 export const SyncCard = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
+
+  const { data: syncLogs, refetch: refetchLogs } = useQuery({
+    queryKey: ["sync_logs"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("gl_sync_logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      return data as SyncLog[];
+    },
+  });
 
   const triggerSync = async () => {
     try {
@@ -15,12 +32,14 @@ export const SyncCard = () => {
       const { data, error } = await supabase.rpc('glide_sync_products');
       
       if (error) throw error;
-      
+
       toast({
         title: "Success",
         description: `Successfully matched ${data} messages with products.`,
       });
 
+      // Refresh the logs to show the new sync entries
+      await refetchLogs();
     } catch (error: any) {
       console.error('Sync error:', error);
       toast({
@@ -46,6 +65,11 @@ export const SyncCard = () => {
         >
           {isSyncing ? "Syncing..." : "Trigger Sync"}
         </Button>
+      </div>
+
+      <div className="mt-4">
+        <h4 className="text-md font-medium mb-2">Recent Sync Logs</h4>
+        <SyncLogsTable logs={syncLogs || []} />
       </div>
     </Card>
   );
