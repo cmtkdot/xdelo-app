@@ -814,6 +814,7 @@ export type Database = {
           po_old_po_uid: boolean | null
           po_po_date: string | null
           po_pouid_from_add_prod: string | null
+          product_name_display: string | null
           rowid_account_rowid: string | null
           rowid_product_row_id_for_choice_add_item: string | null
           rowid_purchase_order_row_id: string | null
@@ -859,6 +860,7 @@ export type Database = {
           po_old_po_uid?: boolean | null
           po_po_date?: string | null
           po_pouid_from_add_prod?: string | null
+          product_name_display?: string | null
           rowid_account_rowid?: string | null
           rowid_product_row_id_for_choice_add_item?: string | null
           rowid_purchase_order_row_id?: string | null
@@ -904,6 +906,7 @@ export type Database = {
           po_old_po_uid?: boolean | null
           po_po_date?: string | null
           po_pouid_from_add_prod?: string | null
+          product_name_display?: string | null
           rowid_account_rowid?: string | null
           rowid_product_row_id_for_choice_add_item?: string | null
           rowid_purchase_order_row_id?: string | null
@@ -1474,6 +1477,13 @@ export type Database = {
           width?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_glide_row_id_fkey"
+            columns: ["glide_row_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["glide_id"]
+          },
           {
             foreignKeyName: "messages_message_caption_id_fkey"
             columns: ["message_caption_id"]
