@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
-import type { Message, MatchResult } from "@/types";
+import type { Message, MatchResult, AnalyzedContent } from "@/types";
 
 const similarityThreshold = 0.7;
 
@@ -26,7 +26,8 @@ const findMatches = async (
       return { success: true, data: { matches: [], bestMatch: null } };
     }
 
-    const { product_name, vendor_uid, purchase_date } = message.analyzed_content;
+    const analyzedContent = message.analyzed_content as AnalyzedContent;
+    const { product_name, vendor_uid, purchase_date } = analyzedContent;
 
     if (!product_name && !vendor_uid && !purchase_date) {
       console.warn('Insufficient data for matching in message:', messageId);
@@ -109,79 +110,6 @@ const findMatches = async (
   }
 };
 
-const applyMatch = async (
-  messageId: string,
-  productId: string,
-  supabaseClient: SupabaseClient<Database>
-): Promise<{ success: boolean }> => {
-  try {
-    const { data: message, error: messageError } = await supabaseClient
-      .from('messages')
-      .select('*')
-      .eq('id', messageId)
-      .single();
-
-    if (messageError) {
-      console.error('Error fetching message:', messageError);
-      return { success: false };
-    }
-
-    if (!message || !message.analyzed_content) {
-      console.warn('No analyzed content found for message:', messageId);
-      return { success: false };
-    }
-
-    const { data: product, error: productError } = await supabaseClient
-      .from('gl_products')
-      .select('*')
-      .eq('id', productId)
-      .single();
-
-    if (productError) {
-      console.error('Error fetching product:', productError);
-      return { success: false };
-    }
-
-    if (!product) {
-      console.warn('Product not found:', productId);
-      return { success: false };
-    }
-
-    const updates: any = {};
-
-    if (!message.product_name && product.main_product_name) {
-      updates.product_name = product.main_product_name;
-    }
-
-    if (!message.vendor_name && product.main_vendor_uid) {
-      updates.vendor_name = product.main_vendor_uid;
-    }
-
-    if (!message.purchase_order && product.rowid_purchase_order_row_id) {
-      updates.purchase_order = product.rowid_purchase_order_row_id;
-    }
-
-    if (!message.purchase_date && product.main_product_purchase_date) {
-      updates.purchase_date = product.main_product_purchase_date;
-    }
-
-    const { error: updateError } = await supabaseClient
-      .from('messages')
-      .update(updates)
-      .eq('id', messageId);
-
-    if (updateError) {
-      console.error('Error updating message:', updateError);
-      return { success: false };
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error('Error in applyMatch:', error);
-    return { success: false };
-  }
-};
-
 const stringSimilarity = (str1: string, str2: string): number => {
   if (!str1 || !str2) return 0;
 
@@ -252,4 +180,4 @@ const logSyncOperation = async (
   }
 };
 
-export { findMatches, applyMatch, logSyncOperation };
+export { findMatches, logSyncOperation };

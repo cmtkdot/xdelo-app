@@ -9,6 +9,7 @@ export const useTelegramOperations = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
   const handleDelete = async (message: Message, deleteTelegram: boolean = true) => {
     try {
       setIsProcessing(true);
@@ -25,7 +26,6 @@ export const useTelegramOperations = () => {
         if (response.error) throw response.error;
       }
 
-      // Delete from database
       const { error } = await supabase
         .from('messages')
         .delete()
@@ -38,7 +38,6 @@ export const useTelegramOperations = () => {
         description: `Message deleted successfully${deleteTelegram ? ' from both Telegram and database' : ' from database'}`,
       });
 
-      // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['messages'] });
 
     } catch (error: unknown) {
@@ -57,7 +56,6 @@ export const useTelegramOperations = () => {
   const handleSave = async (message: Message, newCaption: string) => {
     setIsProcessing(true);
     try {
-      // Update caption in Telegram
       const { data: telegramResponse, error: telegramError } = await supabase
         .functions.invoke('update-telegram-caption', {
           body: {
@@ -69,19 +67,17 @@ export const useTelegramOperations = () => {
 
       if (telegramError) throw telegramError;
 
-      // Update caption in database
       const { error: dbError } = await supabase
         .from('messages')
         .update({ 
           caption: newCaption,
           updated_at: new Date().toISOString(),
-          processing_state: 'pending' // Set to pending to trigger reanalysis
+          processing_state: 'pending'
         })
         .eq('id', message.id);
 
       if (dbError) throw dbError;
 
-      // Trigger reanalysis
       await supabase.functions.invoke('parse-caption-with-ai', {
         body: { 
           messageId: message.id,
@@ -89,7 +85,6 @@ export const useTelegramOperations = () => {
         }
       });
 
-      // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['messages'] });
 
     } catch (error) {

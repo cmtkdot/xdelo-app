@@ -1,4 +1,6 @@
 
+export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
+
 export interface FilterValues {
   search: string;
   vendor: string;
@@ -48,15 +50,13 @@ export interface Message {
   processing_state?: ProcessingState;
   processing_started_at?: string;
   processing_completed_at?: string;
-  analyzed_content?: AnalyzedContent | null;
+  analyzed_content?: AnalyzedContent;
   telegram_data?: Record<string, unknown>;
   error_message?: string;
   chat_id?: number;
   vendor_uid?: string;
   purchase_date?: string;
 }
-
-export type MediaItem = Message;
 
 export interface MatchResult {
   id: string;
@@ -70,3 +70,5 @@ export interface MatchResult {
     confidence: number;
   };
 }
+
+export type MediaItem = Message;
