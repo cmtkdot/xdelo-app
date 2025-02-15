@@ -1,83 +1,46 @@
-
 import { MediaItem } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
-import { Card } from "@/components/ui/card";
-import { useState } from "react";
-import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 interface ProductGridProps {
-  mediaGroups: { [key: string]: MediaItem[] };
+  products: MediaItem[][];
   onEdit: (media: MediaItem) => void;
   onDelete: (media: MediaItem) => void;
+  onView: () => void;
+  className?: string;
 }
 
-export const ProductGrid: React.FC<ProductGridProps> = ({ mediaGroups, onEdit, onDelete }) => {
-  const [selectedGroupIndex, setSelectedGroupIndex] = useState<number>(-1);
-  const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const isMobile = useIsMobile();
-
-  const handleOpenViewer = (index: number) => {
-    setSelectedGroupIndex(index);
-    setIsViewerOpen(true);
-  };
-
-  const handleCloseViewer = () => {
-    setIsViewerOpen(false);
-    setSelectedGroupIndex(-1);
-  };
-
-  const handlePreviousGroup = () => {
-    setSelectedGroupIndex((prev) => Math.max(0, prev - 1));
-  };
-
-  const handleNextGroup = () => {
-    setSelectedGroupIndex((prev) => Math.min(Object.values(mediaGroups).length - 1, prev + 1));
-  };
-
-  const groupsArray = Object.values(mediaGroups);
-
-  if (groupsArray.length === 0) {
-    return (
-      <Card className="p-6">
-        <p className="text-gray-500">No products yet</p>
-      </Card>
-    );
-  }
-
-  // Calculate grid columns based on screen size
-  let gridColumns = 4; // xl default
-  if (isMobile) {
-    gridColumns = 2;
-  } else if (window.innerWidth < 1280) { // lg breakpoint
-    gridColumns = 3;
-  }
-
-  const gridCols = "grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
-
+export const ProductGrid = ({
+  products,
+  onEdit,
+  onDelete,
+  onView,
+  className
+}: ProductGridProps) => {
   return (
-    <div className={`grid ${gridCols} gap-3 md:gap-4 auto-rows-fr`}>
-      {groupsArray.map((group, index) => (
+    <div
+      className={cn(
+        "grid gap-4 sm:gap-5",
+        // Default to 1 column on mobile, 2 on small tablets
+        "grid-cols-1 sm:grid-cols-2",
+        // 3 columns on medium screens
+        "md:grid-cols-3",
+        // Max out at 4 columns on large screens
+        "lg:grid-cols-4",
+        // Optional 5th column on extra large screens
+        "2xl:grid-cols-5",
+        className
+      )}
+    >
+      {products.map((group, index) => (
         <ProductGroup
-          key={group[0].id}
+          key={group[0]?.id || index}
           group={group}
           onEdit={onEdit}
           onDelete={onDelete}
-          onView={() => handleOpenViewer(index)}
+          onView={onView}
         />
       ))}
-
-      {isViewerOpen && selectedGroupIndex >= 0 && (
-        <MediaViewer
-          isOpen={isViewerOpen}
-          onClose={handleCloseViewer}
-          currentGroup={groupsArray[selectedGroupIndex]}
-          onPrevious={handlePreviousGroup}
-          onNext={handleNextGroup}
-          hasPrevious={selectedGroupIndex > 0}
-          hasNext={selectedGroupIndex < groupsArray.length - 1}
-        />
-      )}
     </div>
   );
 };

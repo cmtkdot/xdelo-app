@@ -145,7 +145,7 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
   return (
     <>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden transition-all hover:shadow-md">
-        <div className="relative h-64">
+        <div className="relative h-64" onClick={() => setIsViewerOpen(true)}>
           <ImageSwiper media={sortedMedia} />
           
           <div className="absolute top-2 right-2 flex gap-2">
@@ -161,7 +161,10 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
                       variant="outline" 
                       size="icon" 
                       className="h-8 w-8 rounded-full bg-white/90 backdrop-blur-sm hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800"
-                      onClick={handleReanalyze}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleReanalyze();
+                      }}
                       disabled={isReanalyzing}
                     >
                       <RefreshCw className={`h-4 w-4 ${isReanalyzing ? 'animate-spin' : ''}`} />
@@ -211,7 +214,8 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
                     <TooltipTrigger asChild>
                       <TabsTrigger 
                         value="view" 
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           onView();
                           setIsViewerOpen(true);
                         }}
@@ -229,7 +233,10 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
                     <TooltipTrigger asChild>
                       <TabsTrigger 
                         value="edit" 
-                        onClick={() => onEdit(mainMedia)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(mainMedia);
+                        }}
                         className="py-1.5 text-black hover:text-black/80 dark:text-white dark:hover:text-white/80"
                       >
                         <Pencil className="w-4 h-4" />
@@ -245,7 +252,6 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
                       <TabsTrigger 
                         value="delete" 
                         onClick={(e) => {
-                          e.preventDefault();
                           e.stopPropagation();
                           setIsDeleteDialogOpen(true);
                         }}

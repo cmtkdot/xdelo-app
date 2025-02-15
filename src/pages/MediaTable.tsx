@@ -9,8 +9,8 @@ interface Message {
   created_at: string;
   caption?: string;
   product_name?: string;
-  vendor_name?: string;
-  product_quantity?: number;
+  vendor_uid?: string;
+  quantity?: number;
 }
 
 const MediaTable = () => {
