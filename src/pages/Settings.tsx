@@ -8,13 +8,14 @@ import { useToast } from "@/components/ui/use-toast";
 import { useQuery } from "@tanstack/react-query";
 
 interface SyncLog {
-  id: number;
+  id: string;  // Changed from number to string
   table_name: string;
   record_id: string;
   glide_id: string;
   operation: string;
   status: string;
   created_at: string;
+  error_message?: string;  // Added optional error_message field
 }
 
 const Settings = () => {
