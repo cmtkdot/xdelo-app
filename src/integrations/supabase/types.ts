@@ -1593,6 +1593,30 @@ export type Database = {
         }
         Relationships: []
       }
+      settings: {
+        Row: {
+          bot_token: string | null
+          created_at: string | null
+          id: string
+          updated_at: string | null
+          webhook_url: string | null
+        }
+        Insert: {
+          bot_token?: string | null
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Update: {
+          bot_token?: string | null
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Relationships: []
+      }
       sync_logs: {
         Row: {
           created_at: string | null

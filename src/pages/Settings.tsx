@@ -10,29 +10,25 @@ const Settings = () => {
   const [botToken, setBotToken] = useState<string | null>(null);
   const [webhookUrl, setWebhookUrl] = useState<string | null>(null);
 
+  const loadSettings = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    setUserEmail(user?.email || null);
+
+    // Load Telegram settings
+    const { data: settings, error } = await supabase
+      .from('settings')
+      .select('bot_token, webhook_url')
+      .single();
+
+    if (!error && settings) {
+      setBotToken(settings.bot_token);
+      setWebhookUrl(settings.webhook_url);
+    }
+  };
+
   useEffect(() => {
-    const loadSettings = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserEmail(user?.email || null);
-
-      // Load Telegram settings
-      const { data: settings } = await supabase
-        .from('settings')
-        .select('bot_token, webhook_url')
-        .single();
-
-      if (settings) {
-        setBotToken(settings.bot_token);
-        setWebhookUrl(settings.webhook_url);
-      }
-    };
-
     loadSettings();
   }, []);
-
-  const handleUpdate = async () => {
-    await loadSettings();
-  };
 
   return (
     <div className="space-y-6">
@@ -44,7 +40,7 @@ const Settings = () => {
       <TelegramCard 
         botToken={botToken} 
         webhookUrl={webhookUrl} 
-        onUpdate={handleUpdate}
+        onUpdate={loadSettings}
       />
       <SyncCard />
     </div>

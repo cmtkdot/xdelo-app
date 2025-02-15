@@ -53,7 +53,20 @@ export interface Message {
   error_message?: string;
   chat_id?: number;
   vendor_uid?: string;
+  purchase_date?: string;
 }
 
-// MediaItem is now the same as Message
 export type MediaItem = Message;
+
+export interface MatchResult {
+  id: string;
+  glide_id?: string;
+  confidence: number;
+  matchType: string;
+  message_id: string;
+  product_id: string;
+  details: {
+    matchedFields: string[];
+    confidence: number;
+  };
+}
