@@ -29,24 +29,29 @@ export const SyncCard = () => {
   const triggerSync = async () => {
     try {
       setIsSyncing(true);
-      const { data, error } = await supabase.rpc('glapp_manual_sync_products_messages');
+      const { data, error } = await supabase.rpc('glide_sync_products_messages');
       
       if (error) throw error;
       
-      if (data && Array.isArray(data) && data.length > 0) {
-        const [result] = data;
-        if (result.error_message) {
-          throw new Error(result.error_message);
-        }
-        
+      // Find the completion log entry
+      const completionLog = data?.find(entry => 
+        entry.status === 'success' && entry.record_id === 'sync-complete'
+      );
+
+      if (completionLog) {
         toast({
           title: "Success",
-          description: `Successfully matched ${result.matched_count} messages with products.`,
+          description: completionLog.error_message || "Sync completed successfully",
         });
-
-        // Refresh the logs to show the new sync logs
-        await refetchLogs();
+      } else {
+        const errorLog = data?.find(entry => entry.status === 'error');
+        if (errorLog) {
+          throw new Error(errorLog.error_message);
+        }
       }
+
+      // Refresh the logs to show the new sync entries
+      await refetchLogs();
     } catch (error: any) {
       console.error('Sync error:', error);
       toast({

@@ -1730,18 +1730,17 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      glapp_manual_sync_products_messages: {
+      glide_sync_products_messages: {
         Args: Record<PropertyKey, never>
         Returns: {
-          matched_count: number
-          error_message: string
-        }[]
-      }
-      glapp_sync_products_messages: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          matched_count: number
-          error_message: string
+          created_at: string | null
+          error_message: string | null
+          glide_id: string | null
+          id: string
+          operation: string
+          record_id: string
+          status: string
+          table_name: string
         }[]
       }
       http: {
