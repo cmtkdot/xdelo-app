@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { MediaItem } from '@/types';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -16,6 +15,7 @@ interface MediaViewerProps {
   onNext?: () => void;
   hasPrevious?: boolean;
   hasNext?: boolean;
+  editMode?: boolean;
 }
 
 export const MediaViewer = ({
@@ -25,7 +25,8 @@ export const MediaViewer = ({
   onPrevious,
   onNext,
   hasPrevious = false,
-  hasNext = false
+  hasNext = false,
+  editMode = false
 }: MediaViewerProps) => {
   const mainMedia = currentGroup.find(media => media.is_original_caption) || currentGroup[0];
   const analyzedContent = mainMedia?.analyzed_content;

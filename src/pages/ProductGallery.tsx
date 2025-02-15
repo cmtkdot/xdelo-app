@@ -1,5 +1,9 @@
+<<<<<<< Updated upstream
 
 import { useState } from "react";
+=======
+import { useState, useEffect } from "react";
+>>>>>>> Stashed changes
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem, FilterValues } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
@@ -9,11 +13,10 @@ import { ProductPagination } from "@/components/ProductGallery/ProductPagination
 import ProductFilters from "@/components/ProductGallery/ProductFilters";
 import { useVendors } from "@/hooks/useVendors";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 const ProductGallery = () => {
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<FilterValues>({
     search: "",
     vendor: "all",
@@ -28,35 +31,51 @@ const ProductGallery = () => {
 
   const { toast } = useToast();
   const vendors = useVendors();
-  const isMobile = useIsMobile();
 
-  // Calculate items per page based on grid layout
-  const getItemsPerPage = () => {
-    const rows = 3; // Number of rows we want per page
-    let cols = 4; // Default columns for xl screens
-    
-    if (isMobile) {
-      cols = 2; // Mobile shows 2 columns
-    } else if (window.innerWidth < 1280) { // lg breakpoint
-      cols = 3; // Large screens show 3 columns
-    }
-    
-    return rows * cols; // This ensures full rows on each page
-  };
+  // Calculate items per page based on viewport size
+  const [itemsPerPage, setItemsPerPage] = useState(15); 
 
-  const itemsPerPage = getItemsPerPage();
-  const { data } = useMediaGroups(currentPage, filters, itemsPerPage);
+  useEffect(() => {
+    const calculateItemsPerPage = () => {
+      // Get viewport width
+      const width = window.innerWidth;
+      
+      // Calculate approximate number of columns based on viewport width
+      let columns = Math.floor(width / 180); // 180px is our target card width
+      columns = Math.max(2, Math.min(6, columns)); // Ensure between 2 and 6 columns
+      
+      // Calculate rows (aim for roughly square layout)
+      const rows = Math.max(3, Math.min(6, Math.ceil(columns * 0.8))); // Slightly fewer rows than columns
+      
+      return columns * rows;
+    };
+
+    const handleResize = () => {
+      setItemsPerPage(calculateItemsPerPage());
+    };
+
+    // Initial calculation
+    handleResize();
+
+    // Add event listener
+    window.addEventListener('resize', handleResize);
+
+    // Cleanup
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const { data } = useMediaGroups(page, filters, itemsPerPage);
   const mediaGroups = data?.mediaGroups ?? {};
   const totalPages = data?.totalPages ?? 1;
 
-  const handleEdit = (media: MediaItem) => {
+  const handleEditMedia = (media: MediaItem) => {
     const groupKey = media.media_group_id || media.id;
     const group = mediaGroups[groupKey];
     const mainMedia = group.find(m => m.is_original_caption) || media;
     setEditItem(mainMedia);
   };
 
-  const handleSave = async () => {
+  const handleSaveEdit = async () => {
     if (!editItem) return;
 
     try {
@@ -76,7 +95,7 @@ const ProductGallery = () => {
     }
   };
 
-  const handleDelete = (media: MediaItem) => {
+  const handleDeleteMedia = (media: MediaItem) => {
     // Implement delete functionality if needed
   };
 
@@ -92,25 +111,30 @@ const ProductGallery = () => {
         onFilterChange={setFilters}
       />
 
-      <ProductGrid 
-        mediaGroups={mediaGroups} 
-        onEdit={handleEdit}
-        onDelete={handleDelete}
+      {/* Product Grid */}
+      <ProductGrid
+        products={Object.values(mediaGroups)}
+        onEdit={handleEditMedia}
+        onDelete={handleDeleteMedia}
+        onView={() => {}}
       />
       
       {Object.keys(mediaGroups).length > 0 && (
         <ProductPagination
-          currentPage={currentPage}
+          currentPage={page}
           totalPages={totalPages}
-          onPageChange={setCurrentPage}
+          onPageChange={setPage}
         />
       )}
 
-      <MediaEditDialog
-        editItem={editItem}
-        onClose={() => setEditItem(null)}
-        onSave={handleSave}
-      />
+      {/* Edit Dialog */}
+      {editItem && (
+        <MediaEditDialog
+          editItem={editItem}
+          onClose={() => setEditItem(null)}
+          onSave={handleSaveEdit}
+        />
+      )}
     </div>
   );
 };
