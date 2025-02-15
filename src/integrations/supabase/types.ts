@@ -1359,11 +1359,13 @@ export type Database = {
           processing_state:
             | Database["public"]["Enums"]["message_processing_state"]
             | null
+          product_code: string | null
           product_name: string | null
           product_quantity: number | null
           product_sku: string | null
           product_unit: string | null
           public_url: string | null
+          purchase_date: string | null
           purchase_order: string | null
           retry_count: number | null
           storage_path: string | null
@@ -1413,11 +1415,13 @@ export type Database = {
           processing_state?:
             | Database["public"]["Enums"]["message_processing_state"]
             | null
+          product_code?: string | null
           product_name?: string | null
           product_quantity?: number | null
           product_sku?: string | null
           product_unit?: string | null
           public_url?: string | null
+          purchase_date?: string | null
           purchase_order?: string | null
           retry_count?: number | null
           storage_path?: string | null
@@ -1467,11 +1471,13 @@ export type Database = {
           processing_state?:
             | Database["public"]["Enums"]["message_processing_state"]
             | null
+          product_code?: string | null
           product_name?: string | null
           product_quantity?: number | null
           product_sku?: string | null
           product_unit?: string | null
           public_url?: string | null
+          purchase_date?: string | null
           purchase_order?: string | null
           retry_count?: number | null
           storage_path?: string | null
