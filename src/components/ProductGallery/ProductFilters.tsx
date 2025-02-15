@@ -5,9 +5,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SearchFilter } from "./Filters/SearchFilter";
-import { QuantityFilter } from "./Filters/QuantityFilter";
 import { VendorFilter } from "./Filters/VendorFilter";
-import { DateRangeFilter } from "./Filters/DateRangeFilter";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 interface ProductFiltersProps {
   vendors: string[];
@@ -20,16 +22,19 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   const [vendor, setVendor] = useState(filters.vendor);
   const [dateField, setDateField] = useState<'purchase_date' | 'created_at'>(filters.dateField);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder);
-  const [quantityRange, setQuantityRange] = useState(filters.quantityRange || 'all');
+  const [sortBy, setSortBy] = useState(filters.sortBy);
+  const [hasGlideMatch, setHasGlideMatch] = useState(filters.hasGlideMatch);
+  const [chatId, setChatId] = useState(filters.chatId || '');
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
   useEffect(() => {
     let count = 0;
     if (search) count++;
     if (vendor !== 'all') count++;
-    if (quantityRange !== 'all') count++;
+    if (hasGlideMatch !== undefined) count++;
+    if (chatId) count++;
     setActiveFiltersCount(count);
-  }, [search, vendor, quantityRange]);
+  }, [search, vendor, hasGlideMatch, chatId]);
 
   useEffect(() => {
     onFilterChange({
@@ -37,35 +42,105 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
       vendor,
       dateField,
       sortOrder,
-      quantityRange,
-      processingState: 'completed'
+      sortBy,
+      processingState: 'completed',
+      hasGlideMatch,
+      chatId: chatId || undefined
     });
-  }, [search, vendor, dateField, sortOrder, quantityRange]);
+  }, [search, vendor, dateField, sortOrder, sortBy, hasGlideMatch, chatId]);
 
   const resetFilters = () => {
     setSearch("");
     setVendor("all");
     setDateField('purchase_date');
     setSortOrder("desc");
-    setQuantityRange('all');
+    setSortBy('date');
+    setHasGlideMatch(undefined);
+    setChatId('');
   };
 
   const FilterContent = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-6 flex-1">
-          <div className="flex-1">
-            <SearchFilter value={search} onChange={setSearch} />
-          </div>
+        <div className="flex-1">
+          <SearchFilter value={search} onChange={setSearch} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label>Vendor</Label>
           <VendorFilter value={vendor} vendors={vendors} onChange={setVendor} />
-          <QuantityFilter value={quantityRange} onChange={setQuantityRange} />
-          <div className="ml-auto">
-            <DateRangeFilter
-              dateField={dateField}
-              sortOrder={sortOrder}
-              onDateFieldChange={setDateField}
-              onSortOrderChange={setSortOrder}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Sort By</Label>
+          <div className="flex gap-2">
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="date">Date</SelectItem>
+                <SelectItem value="product_name">Product Name</SelectItem>
+                <SelectItem value="vendor">Vendor</SelectItem>
+                <SelectItem value="chat_id">Chat ID</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sortOrder} onValueChange={setSortOrder}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="asc">Ascending</SelectItem>
+                <SelectItem value="desc">Descending</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Date Field</Label>
+          <Select value={dateField} onValueChange={setDateField}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="purchase_date">Purchase Date</SelectItem>
+              <SelectItem value="created_at">Created At</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Chat ID</Label>
+          <Input 
+            value={chatId} 
+            onChange={(e) => setChatId(e.target.value)}
+            placeholder="Enter chat ID..."
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Glide Match Status</Label>
+          <div className="flex items-center space-x-2">
+            <Switch
+              checked={hasGlideMatch === true}
+              onCheckedChange={(checked) => {
+                if (checked === hasGlideMatch) {
+                  setHasGlideMatch(undefined);
+                } else {
+                  setHasGlideMatch(checked);
+                }
+              }}
             />
+            <span className="text-sm text-muted-foreground">
+              {hasGlideMatch === undefined 
+                ? "Show All" 
+                : hasGlideMatch 
+                  ? "Has Glide Match" 
+                  : "No Glide Match"}
+            </span>
           </div>
         </div>
       </div>

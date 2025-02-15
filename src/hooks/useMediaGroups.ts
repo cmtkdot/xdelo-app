@@ -1,4 +1,3 @@
-
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { FilterValues, MediaItem } from "@/types";
@@ -49,10 +48,11 @@ export const useMediaGroups = (page: number, filters: FilterValues, itemsPerPage
           page,
           filters: {
             ...filters,
-            dateFrom: filters.dateFrom?.toISOString(),
-            dateTo: filters.dateTo?.toISOString(),
             dateField: filters.dateField || 'purchase_date',
             sortOrder: filters.sortOrder || 'desc',
+            sortBy: filters.sortBy || 'date',
+            hasGlideMatch: filters.hasGlideMatch,
+            chatId: filters.chatId,
             nullsLast: true,
           },
           itemsPerPage,

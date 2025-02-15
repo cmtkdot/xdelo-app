@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaItem, FilterValues } from "@/types";
@@ -17,13 +16,12 @@ const ProductGallery = () => {
   const [filters, setFilters] = useState<FilterValues>({
     search: "",
     vendor: "all",
-    dateFrom: undefined,
-    dateTo: undefined,
     dateField: 'purchase_date',
     sortOrder: "desc",
-    productCode: "all",
-    quantityRange: "all",
-    processingState: "all"
+    sortBy: 'date',
+    processingState: "all",
+    hasGlideMatch: undefined,
+    chatId: undefined
   });
 
   const { toast } = useToast();
