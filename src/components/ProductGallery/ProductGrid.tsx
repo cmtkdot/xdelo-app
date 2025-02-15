@@ -1,3 +1,4 @@
+
 import { MediaItem } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
 import { cn } from "@/lib/utils";
@@ -11,12 +12,17 @@ interface ProductGridProps {
 }
 
 export const ProductGrid = ({
-  products,
+  products = [], // Provide default empty array
   onEdit,
   onDelete,
   onView,
   className
 }: ProductGridProps) => {
+  // Guard against undefined products
+  if (!Array.isArray(products)) {
+    return null;
+  }
+
   return (
     <div
       className={cn(
