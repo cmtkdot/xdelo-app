@@ -104,6 +104,11 @@ export interface GlProduct {
   created_at: string;
   updated_at: string;
   sync_status: string;
+  message_public_url?: string | null;
+  messages?: {
+    public_url: string;
+    media_group_id: string;
+  }[];
 }
 
 // Helper functions to convert types to JSON

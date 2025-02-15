@@ -12,11 +12,25 @@ const GlProducts = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("gl_products")
-        .select("*")
+        .select(`
+          *,
+          messages:messages(
+            public_url,
+            media_group_id
+          )
+        `)
+        .eq('messages.is_deleted', false)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data as GlProduct[];
+      
+      // Transform the data to include the first message's public_url
+      const productsWithImages = data.map(product => ({
+        ...product,
+        message_public_url: product.messages?.[0]?.public_url || null
+      }));
+
+      return productsWithImages as GlProduct[];
     },
   });
 

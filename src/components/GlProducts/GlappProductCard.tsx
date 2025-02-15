@@ -22,9 +22,9 @@ export function GlappProductCard({ product }: GlappProductCardProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          {product.main_product_image1 && (
+          {(product.message_public_url || product.main_product_image1) && (
             <img
-              src={product.main_product_image1}
+              src={product.message_public_url || product.main_product_image1}
               alt={product.main_product_name}
               className="w-full h-48 object-cover rounded-md"
             />

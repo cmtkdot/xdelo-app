@@ -687,6 +687,13 @@ export type Database = {
             referencedRelation: "gl_products"
             referencedColumns: ["glide_id"]
           },
+          {
+            foreignKeyName: "gl_invoice_lines_rowid_productid_fkey"
+            columns: ["rowid_productid"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["glide_id"]
+          },
         ]
       }
       gl_invoices: {
