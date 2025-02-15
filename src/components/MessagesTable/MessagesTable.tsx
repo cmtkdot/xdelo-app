@@ -81,19 +81,45 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     );
   };
 
+  const handleCaptionChange = (id: string, value: string) => {
+    setMessages(prev =>
+      prev.map(message =>
+        message.id === id
+          ? {
+              ...message,
+              caption: value,
+            }
+          : message
+      )
+    );
+  };
+
   const handleSaveClick = async (id: string) => {
     const message = messages.find(m => m.id === id);
     if (!message) return;
 
-    await handleSave(message, message.analyzed_content?.caption || message.caption || '');
-    
-    setMessages(prev =>
-      prev.map(m =>
-        m.id === id
-          ? { ...m, isEditing: false }
-          : m
-      )
-    );
+    try {
+      await handleSave(message, message.caption || '');
+      
+      toast({
+        title: "Success",
+        description: "Caption updated successfully",
+      });
+
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === id
+            ? { ...m, isEditing: false }
+            : m
+        )
+      );
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update caption",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDeleteClick = (message: Message) => {
@@ -153,7 +179,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
                   {message.isEditing ? (
                     <Input
                       value={message.caption || ''}
-                      onChange={(e) => handleAnalyzedContentChange(message.id, 'caption', e.target.value)}
+                      onChange={(e) => handleCaptionChange(message.id, e.target.value)}
                     />
                   ) : (
                     message.caption || '-'

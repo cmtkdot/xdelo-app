@@ -1,8 +1,7 @@
-
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import { MediaItem } from "@/types";
+import { Message } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
 
 export const useTelegramOperations = () => {
@@ -10,116 +9,92 @@ export const useTelegramOperations = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const handleDelete = async (media: MediaItem, deleteTelegram: boolean = true) => {
+  const handleDelete = async (message: Message, deleteTelegram: boolean = true) => {
     try {
       setIsProcessing(true);
       
-      if (deleteTelegram && media.telegram_message_id && media.chat_id) {
+      if (deleteTelegram && message.telegram_message_id && message.chat_id) {
         const response = await supabase.functions.invoke('delete-telegram-message', {
           body: {
-            message_id: media.telegram_message_id,
-            chat_id: media.chat_id,
-            media_group_id: media.media_group_id
+            message_id: message.telegram_message_id,
+            chat_id: message.chat_id,
+            media_group_id: message.media_group_id
           }
         });
 
         if (response.error) throw response.error;
       }
 
-      // If we're only deleting from database, we need to delete the media file
-      if (!deleteTelegram && media.file_unique_id) {
-        const { error: storageError } = await supabase.storage
-          .from('telegram-media')
-          .remove([`${media.file_unique_id}.${media.mime_type?.split('/')[1] || 'jpg'}`]);
-
-        if (storageError) {
-          console.error('Storage deletion error:', storageError);
-        }
-      }
-
       // Delete from database
       const { error } = await supabase
         .from('messages')
         .delete()
-        .eq('id', media.id);
+        .eq('id', message.id);
 
       if (error) throw error;
 
       toast({
         title: "Success",
-        description: `Media deleted successfully${deleteTelegram ? ' from both Telegram and database' : ' from database'}`,
+        description: `Message deleted successfully${deleteTelegram ? ' from both Telegram and database' : ' from database'}`,
       });
 
       // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['mediaGroups'] });
       queryClient.invalidateQueries({ queryKey: ['messages'] });
 
     } catch (error: any) {
       console.error('Delete error:', error);
       toast({
         title: "Error",
-        description: `Failed to delete media: ${error.message}`,
+        description: `Failed to delete message: ${error.message}`,
         variant: "destructive",
       });
+      throw error;
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleSave = async (media: MediaItem, updatedCaption: string) => {
+  const handleSave = async (message: Message, newCaption: string) => {
+    setIsProcessing(true);
     try {
-      setIsProcessing(true);
-      
       // Update caption in Telegram
-      const { error: telegramError } = await supabase.functions.invoke('update-telegram-caption', {
-        body: {
-          message_id: media.telegram_message_id,
-          chat_id: media.chat_id,
-          caption: updatedCaption
-        }
-      });
+      const { data: telegramResponse, error: telegramError } = await supabase
+        .functions.invoke('update-telegram-caption', {
+          body: {
+            messageId: message.telegram_message_id,
+            chatId: message.chat_id,
+            caption: newCaption,
+          },
+        });
 
       if (telegramError) throw telegramError;
 
-      // Update in database
+      // Update caption in database
       const { error: dbError } = await supabase
         .from('messages')
         .update({ 
-          caption: updatedCaption,
-          processing_state: 'pending' // Trigger reanalysis
+          caption: newCaption,
+          updated_at: new Date().toISOString(),
+          processing_state: 'pending' // Set to pending to trigger reanalysis
         })
-        .eq('id', media.id);
+        .eq('id', message.id);
 
       if (dbError) throw dbError;
 
       // Trigger reanalysis
-      const { error: reanalysisError } = await supabase.functions.invoke('parse-caption-with-ai', {
-        body: {
-          message_id: media.id,
-          media_group_id: media.media_group_id,
-          caption: updatedCaption,
-          correlation_id: crypto.randomUUID()
+      await supabase.functions.invoke('parse-caption-with-ai', {
+        body: { 
+          messageId: message.id,
+          caption: newCaption
         }
       });
 
-      if (reanalysisError) throw reanalysisError;
-
-      toast({
-        title: "Success",
-        description: "Media updated successfully and queued for reanalysis",
-      });
-
       // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['mediaGroups'] });
       queryClient.invalidateQueries({ queryKey: ['messages'] });
 
-    } catch (error: any) {
-      console.error('Update error:', error);
-      toast({
-        title: "Error",
-        description: `Failed to update media: ${error.message}`,
-        variant: "destructive",
-      });
+    } catch (error) {
+      console.error('Error updating caption:', error);
+      throw error;
     } finally {
       setIsProcessing(false);
     }
