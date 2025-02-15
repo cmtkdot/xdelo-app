@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Database, Tables } from '../types/supabase';
 import { logSyncOperation, logSyncOperationBatch, logSyncWarning } from './sync-utils';
+import { GlProduct, ProductMatch, NAME_MATCH_WEIGHTS, PRIORITY_LEVELS } from './types';
 
 // Constants
 const CONFIDENCE_THRESHOLDS = {
@@ -30,7 +31,6 @@ interface MatchResult {
       similarity_score: number;
     };
   };
-  glide_id?: string | null;
 }
 
 // Utility function for string similarity using Levenshtein distance
@@ -281,10 +281,10 @@ export async function findProductMatches(
       'product_match',
       {
         entityId: messageId,
-        matches: matches.length,
+        matches: bestMatch.length,
         metadata: {
           duration: Date.now() - startTime,
-          matchCount: matches.length
+          matchCount: bestMatch.length
         }
       },
       true

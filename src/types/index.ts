@@ -52,7 +52,8 @@ export interface Message {
   telegram_data?: Record<string, unknown>;
   error_message?: string;
   chat_id?: number;
+  vendor_uid?: string;
 }
 
-// Alias MediaItem to Message for backward compatibility
+// MediaItem is now the same as Message
 export type MediaItem = Message;
