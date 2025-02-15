@@ -24,34 +24,7 @@ export interface AnalyzedContent {
   };
 }
 
-export interface MediaItem {
-  id: string;
-  caption: string | null;
-  media_group_id: string | null;
-  is_original_caption?: boolean;
-  chat_id?: number;
-  telegram_message_id?: number;
-  file_unique_id?: string;
-  mime_type?: string;
-  analyzed_content?: AnalyzedContent;
-  glide_row_id?: string | null;
-  vendor?: string;
-  product_name?: string;
-  created_at: string;
-  purchase_date?: string;
-}
-=======
 export type ProcessingState = 'pending' | 'processing' | 'completed' | 'failed';
-
-export interface AnalyzedContent {
-  product_name?: string;
-  vendor_uid?: string;
-  quantity?: number;
-  caption?: string;
-  method?: string;
-  confidence?: number;
-  timestamp?: string;
-}
 
 export interface Message {
   id: string;
@@ -82,4 +55,4 @@ export interface Message {
 }
 
 // Alias MediaItem to Message for backward compatibility
-export type MediaItem = Message; 
+export type MediaItem = Message;
