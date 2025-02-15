@@ -108,33 +108,51 @@ export type Database = {
       gl_accounts: {
         Row: {
           created_at: string | null
-          data: Json | null
           glide_id: string | null
           id: string
+          last_modified_at: string | null
           last_sync_time: string | null
-          name: string
+          main_account_name: string | null
+          main_accounts_uid: string | null
+          main_client_type: string | null
+          main_date_added_client: string | null
+          main_email_of_who_added: string | null
+          main_photo: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
+          user_email_who_added: string | null
         }
         Insert: {
           created_at?: string | null
-          data?: Json | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
-          name: string
+          main_account_name?: string | null
+          main_accounts_uid?: string | null
+          main_client_type?: string | null
+          main_date_added_client?: string | null
+          main_email_of_who_added?: string | null
+          main_photo?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
+          user_email_who_added?: string | null
         }
         Update: {
           created_at?: string | null
-          data?: Json | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
-          name?: string
+          main_account_name?: string | null
+          main_accounts_uid?: string | null
+          main_client_type?: string | null
+          main_date_added_client?: string | null
+          main_email_of_who_added?: string | null
+          main_photo?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
+          user_email_who_added?: string | null
         }
         Relationships: []
       }
@@ -177,7 +195,6 @@ export type Database = {
           api_key: string
           app_id: string
           created_at: string | null
-          field_mappings: Json
           glide_table_name: string
           id: string
           is_active: boolean
@@ -196,7 +213,6 @@ export type Database = {
           api_key: string
           app_id: string
           created_at?: string | null
-          field_mappings?: Json
           glide_table_name: string
           id?: string
           is_active?: boolean
@@ -215,7 +231,6 @@ export type Database = {
           api_key?: string
           app_id?: string
           created_at?: string | null
-          field_mappings?: Json
           glide_table_name?: string
           id?: string
           is_active?: boolean
@@ -236,6 +251,7 @@ export type Database = {
           created_at: string | null
           glide_id: string | null
           id: string
+          last_modified_at: string | null
           last_sync_time: string | null
           main_customeruid: string | null
           main_date_of_payment: string | null
@@ -254,6 +270,7 @@ export type Database = {
           created_at?: string | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_customeruid?: string | null
           main_date_of_payment?: string | null
@@ -272,6 +289,7 @@ export type Database = {
           created_at?: string | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_customeruid?: string | null
           main_date_of_payment?: string | null
@@ -294,6 +312,7 @@ export type Database = {
           email_of_user: string | null
           glide_id: string | null
           id: string
+          last_modified_at: string | null
           last_sync_time: string | null
           main_customeruid: string | null
           main_date_of_payment: string | null
@@ -312,6 +331,7 @@ export type Database = {
           email_of_user?: string | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_customeruid?: string | null
           main_date_of_payment?: string | null
@@ -330,6 +350,7 @@ export type Database = {
           email_of_user?: string | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_customeruid?: string | null
           main_date_of_payment?: string | null
@@ -350,6 +371,7 @@ export type Database = {
           created_at: string | null
           glide_id: string | null
           id: string
+          last_modified_at: string | null
           last_sync_time: string | null
           main_date_of_sale: string | null
           main_original_product_name: string | null
@@ -371,6 +393,7 @@ export type Database = {
           created_at?: string | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_sale?: string | null
           main_original_product_name?: string | null
@@ -392,6 +415,7 @@ export type Database = {
           created_at?: string | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_sale?: string | null
           main_original_product_name?: string | null
@@ -421,6 +445,7 @@ export type Database = {
           date_submitted_timestamp: string | null
           glide_id: string | null
           id: string
+          last_modified_at: string | null
           last_sync_time: string | null
           main_estimate_date: string | null
           main_estimate_notes: string | null
@@ -448,6 +473,7 @@ export type Database = {
           date_submitted_timestamp?: string | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_estimate_date?: string | null
           main_estimate_notes?: string | null
@@ -475,6 +501,7 @@ export type Database = {
           date_submitted_timestamp?: string | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_estimate_date?: string | null
           main_estimate_notes?: string | null
@@ -512,6 +539,7 @@ export type Database = {
           expense_total: string | null
           glide_id: string | null
           id: string
+          last_modified_at: string | null
           last_sync_time: string | null
           main_category: string | null
           main_notes_of_expense: string | null
@@ -536,6 +564,7 @@ export type Database = {
           expense_total?: string | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_category?: string | null
           main_notes_of_expense?: string | null
@@ -560,6 +589,7 @@ export type Database = {
           expense_total?: string | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_category?: string | null
           main_notes_of_expense?: string | null
@@ -579,6 +609,7 @@ export type Database = {
           edit_quantity: boolean | null
           glide_id: string | null
           id: string
+          last_modified_at: string | null
           last_sync_time: string | null
           main_date_of_sale: string | null
           main_product_sale_note: string | null
@@ -604,6 +635,7 @@ export type Database = {
           edit_quantity?: boolean | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_sale?: string | null
           main_product_sale_note?: string | null
@@ -629,6 +661,7 @@ export type Database = {
           edit_quantity?: boolean | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_sale?: string | null
           main_product_sale_note?: string | null
@@ -646,7 +679,15 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_invoice_lines_product"
+            columns: ["rowid_productid"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["glide_id"]
+          },
+        ]
       }
       gl_invoices: {
         Row: {
@@ -655,10 +696,12 @@ export type Database = {
           doc_glideforeverlink: string | null
           glide_id: string | null
           id: string
+          last_modified_at: string | null
           last_sync_time: string | null
           main_created_timestamp: string | null
           main_edit_date: string | null
           main_invoice_order_date: string | null
+          main_invoice_uid: string | null
           main_notes: string | null
           main_processed: boolean | null
           main_submitted_timestamp: string | null
@@ -681,10 +724,12 @@ export type Database = {
           doc_glideforeverlink?: string | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_created_timestamp?: string | null
           main_edit_date?: string | null
           main_invoice_order_date?: string | null
+          main_invoice_uid?: string | null
           main_notes?: string | null
           main_processed?: boolean | null
           main_submitted_timestamp?: string | null
@@ -707,10 +752,12 @@ export type Database = {
           doc_glideforeverlink?: string | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_created_timestamp?: string | null
           main_edit_date?: string | null
           main_invoice_order_date?: string | null
+          main_invoice_uid?: string | null
           main_notes?: string | null
           main_processed?: boolean | null
           main_submitted_timestamp?: string | null
@@ -731,81 +778,138 @@ export type Database = {
       }
       gl_products: {
         Row: {
+          cart_add_note: boolean | null
+          cart_rename: boolean | null
           created_at: string | null
           date_timestamp_subm: string | null
           email_email_of_user_who_added_product: string | null
           glide_id: string | null
           id: string
+          last_edited_date: string | null
+          last_modified_at: string | null
           last_sync_time: string | null
           main_category: string | null
           main_cost: number | null
           main_cost_update: number | null
           main_fronted: boolean | null
+          main_leave_no: boolean | null
           main_miscellaneous_items: boolean | null
           main_more_units_behind: boolean | null
+          main_new_product_name: string | null
           main_product_image1: string | null
           main_product_name: string | null
           main_product_purchase_date: string | null
           main_purchase_notes: string | null
+          main_rename_product: boolean | null
           main_samples: boolean | null
           main_samples_or_fronted: boolean | null
           main_terms_for_fronted_product: string | null
           main_total_qty_purchased: number | null
+          main_total_units_behind_sample: number | null
           main_vendor_product_name: string | null
           main_vendor_uid: string | null
-          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          po_added_to_old_po: boolean | null
+          po_converted_po: boolean | null
+          po_old_po_rowid: boolean | null
+          po_old_po_uid: boolean | null
+          po_po_date: string | null
+          po_pouid_from_add_prod: string | null
+          rowid_account_rowid: string | null
+          rowid_product_row_id_for_choice_add_item: string | null
+          rowid_purchase_order_row_id: string | null
+          rowid_sheet21_pics: string | null
+          rowid_vpay_row_id: string | null
+          sync_status: string | null
           updated_at: string | null
         }
         Insert: {
+          cart_add_note?: boolean | null
+          cart_rename?: boolean | null
           created_at?: string | null
           date_timestamp_subm?: string | null
           email_email_of_user_who_added_product?: string | null
           glide_id?: string | null
           id?: string
+          last_edited_date?: string | null
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_category?: string | null
           main_cost?: number | null
           main_cost_update?: number | null
           main_fronted?: boolean | null
+          main_leave_no?: boolean | null
           main_miscellaneous_items?: boolean | null
           main_more_units_behind?: boolean | null
+          main_new_product_name?: string | null
           main_product_image1?: string | null
           main_product_name?: string | null
           main_product_purchase_date?: string | null
           main_purchase_notes?: string | null
+          main_rename_product?: boolean | null
           main_samples?: boolean | null
           main_samples_or_fronted?: boolean | null
           main_terms_for_fronted_product?: string | null
           main_total_qty_purchased?: number | null
+          main_total_units_behind_sample?: number | null
           main_vendor_product_name?: string | null
           main_vendor_uid?: string | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          po_added_to_old_po?: boolean | null
+          po_converted_po?: boolean | null
+          po_old_po_rowid?: boolean | null
+          po_old_po_uid?: boolean | null
+          po_po_date?: string | null
+          po_pouid_from_add_prod?: string | null
+          rowid_account_rowid?: string | null
+          rowid_product_row_id_for_choice_add_item?: string | null
+          rowid_purchase_order_row_id?: string | null
+          rowid_sheet21_pics?: string | null
+          rowid_vpay_row_id?: string | null
+          sync_status?: string | null
           updated_at?: string | null
         }
         Update: {
+          cart_add_note?: boolean | null
+          cart_rename?: boolean | null
           created_at?: string | null
           date_timestamp_subm?: string | null
           email_email_of_user_who_added_product?: string | null
           glide_id?: string | null
           id?: string
+          last_edited_date?: string | null
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_category?: string | null
           main_cost?: number | null
           main_cost_update?: number | null
           main_fronted?: boolean | null
+          main_leave_no?: boolean | null
           main_miscellaneous_items?: boolean | null
           main_more_units_behind?: boolean | null
+          main_new_product_name?: string | null
           main_product_image1?: string | null
           main_product_name?: string | null
           main_product_purchase_date?: string | null
           main_purchase_notes?: string | null
+          main_rename_product?: boolean | null
           main_samples?: boolean | null
           main_samples_or_fronted?: boolean | null
           main_terms_for_fronted_product?: string | null
           main_total_qty_purchased?: number | null
+          main_total_units_behind_sample?: number | null
           main_vendor_product_name?: string | null
           main_vendor_uid?: string | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          po_added_to_old_po?: boolean | null
+          po_converted_po?: boolean | null
+          po_old_po_rowid?: boolean | null
+          po_old_po_uid?: boolean | null
+          po_po_date?: string | null
+          po_pouid_from_add_prod?: string | null
+          rowid_account_rowid?: string | null
+          rowid_product_row_id_for_choice_add_item?: string | null
+          rowid_purchase_order_row_id?: string | null
+          rowid_sheet21_pics?: string | null
+          rowid_vpay_row_id?: string | null
+          sync_status?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -820,6 +924,7 @@ export type Database = {
           glide_id: string | null
           id: string
           last_edited_date: string | null
+          last_modified_at: string | null
           last_sync_time: string | null
           main_po_date_used_for_uid: string | null
           main_purchase_order_uid_from_product: string | null
@@ -837,6 +942,7 @@ export type Database = {
           glide_id?: string | null
           id?: string
           last_edited_date?: string | null
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_po_date_used_for_uid?: string | null
           main_purchase_order_uid_from_product?: string | null
@@ -854,6 +960,7 @@ export type Database = {
           glide_id?: string | null
           id?: string
           last_edited_date?: string | null
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_po_date_used_for_uid?: string | null
           main_purchase_order_uid_from_product?: string | null
@@ -880,6 +987,7 @@ export type Database = {
           ical_state_abbrievation: string | null
           ical_status: string | null
           id: string
+          last_modified_at: string | null
           last_sync_time: string | null
           main_account_rowid: string | null
           main_account_rowid_2: string | null
@@ -937,6 +1045,7 @@ export type Database = {
           ical_state_abbrievation?: string | null
           ical_status?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_account_rowid?: string | null
           main_account_rowid_2?: string | null
@@ -994,6 +1103,7 @@ export type Database = {
           ical_state_abbrievation?: string | null
           ical_status?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_account_rowid?: string | null
           main_account_rowid_2?: string | null
@@ -1035,45 +1145,6 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           tp_history_rowid?: string | null
           updated_at?: string | null
-        }
-        Relationships: []
-      }
-      gl_sync_history: {
-        Row: {
-          completed_at: string | null
-          error_message: string | null
-          id: string
-          records_failed: number | null
-          records_processed: number | null
-          records_succeeded: number | null
-          started_at: string | null
-          status: string
-          sync_metadata: Json | null
-          table_name: string
-        }
-        Insert: {
-          completed_at?: string | null
-          error_message?: string | null
-          id?: string
-          records_failed?: number | null
-          records_processed?: number | null
-          records_succeeded?: number | null
-          started_at?: string | null
-          status: string
-          sync_metadata?: Json | null
-          table_name: string
-        }
-        Update: {
-          completed_at?: string | null
-          error_message?: string | null
-          id?: string
-          records_failed?: number | null
-          records_processed?: number | null
-          records_succeeded?: number | null
-          started_at?: string | null
-          status?: string
-          sync_metadata?: Json | null
-          table_name?: string
         }
         Relationships: []
       }
@@ -1183,6 +1254,7 @@ export type Database = {
           date_timestamp_date: string | null
           glide_id: string | null
           id: string
+          last_modified_at: string | null
           last_sync_time: string | null
           main_date_of_payment: string | null
           main_dateofpurchaseorder: string | null
@@ -1202,6 +1274,7 @@ export type Database = {
           date_timestamp_date?: string | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_payment?: string | null
           main_dateofpurchaseorder?: string | null
@@ -1221,6 +1294,7 @@ export type Database = {
           date_timestamp_date?: string | null
           glide_id?: string | null
           id?: string
+          last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_payment?: string | null
           main_dateofpurchaseorder?: string | null
@@ -1247,6 +1321,7 @@ export type Database = {
           created_at: string | null
           deleted_at: string | null
           duration: number | null
+          edit_date: string | null
           error_message: string | null
           file_id: string | null
           file_size: number | null
@@ -1260,6 +1335,7 @@ export type Database = {
           height: number | null
           id: string
           is_deleted: boolean | null
+          is_edited: boolean | null
           is_miscellaneous_item: string | null
           is_original_caption: boolean | null
           last_error_at: string | null
@@ -1299,6 +1375,7 @@ export type Database = {
           created_at?: string | null
           deleted_at?: string | null
           duration?: number | null
+          edit_date?: string | null
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
@@ -1312,6 +1389,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_deleted?: boolean | null
+          is_edited?: boolean | null
           is_miscellaneous_item?: string | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
@@ -1351,6 +1429,7 @@ export type Database = {
           created_at?: string | null
           deleted_at?: string | null
           duration?: number | null
+          edit_date?: string | null
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
@@ -1364,6 +1443,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_deleted?: boolean | null
+          is_edited?: boolean | null
           is_miscellaneous_item?: string | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
@@ -1472,6 +1552,30 @@ export type Database = {
           email?: string | null
           id?: string
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      sync_records: {
+        Row: {
+          error_message: string | null
+          id: number
+          last_synced: string | null
+          supabase_table: string
+          sync_status: string
+        }
+        Insert: {
+          error_message?: string | null
+          id?: never
+          last_synced?: string | null
+          supabase_table: string
+          sync_status: string
+        }
+        Update: {
+          error_message?: string | null
+          id?: never
+          last_synced?: string | null
+          supabase_table?: string
+          sync_status?: string
         }
         Relationships: []
       }

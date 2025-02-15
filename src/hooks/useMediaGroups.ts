@@ -1,3 +1,4 @@
+
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { FilterValues, MediaItem } from "@/types";
@@ -8,7 +9,7 @@ interface MediaGroupsResponse {
   totalPages: number;
 }
 
-export const useMediaGroups = (page: number, filters: FilterValues) => {
+export const useMediaGroups = (page: number, filters: FilterValues, itemsPerPage: number = 12) => {
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -26,7 +27,7 @@ export const useMediaGroups = (page: number, filters: FilterValues) => {
           console.log('Real-time update received:', payload);
           // Invalidate the query to trigger a refetch
           queryClient.invalidateQueries({
-            queryKey: ['mediaGroups', page, filters]
+            queryKey: ['mediaGroups', page, filters, itemsPerPage]
           });
         }
       )
@@ -36,10 +37,10 @@ export const useMediaGroups = (page: number, filters: FilterValues) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [page, filters, queryClient]);
+  }, [page, filters, itemsPerPage, queryClient]);
 
   return useQuery<MediaGroupsResponse, Error>({
-    queryKey: ['mediaGroups', page, filters],
+    queryKey: ['mediaGroups', page, filters, itemsPerPage],
     queryFn: async () => {
       console.log('Fetching media groups with filters:', filters);
       
@@ -54,6 +55,7 @@ export const useMediaGroups = (page: number, filters: FilterValues) => {
             sortOrder: filters.sortOrder || 'desc',
             nullsLast: true,
           },
+          itemsPerPage,
         },
       });
 

@@ -1,8 +1,170 @@
-
-import { TelegramMedia, MediaUploadResult, ProcessedMedia, WebhookResponse } from "./types.ts";
+import { SupabaseClient, WebhookResponse, MessageData } from "./types.ts";
 import { downloadTelegramFile, uploadMedia } from "./mediaUtils.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { findExistingMessage, updateExistingMessage, createNewMessage, triggerCaptionParsing } from "./dbOperations.ts";
+import { findExistingMessage, createNewMessage, updateExistingMessage, triggerCaptionParsing } from "./dbOperations.ts";
+
+async function getGroupMetadata(supabase: SupabaseClient, mediaGroupId: string | null) {
+  if (!mediaGroupId) {
+    return {
+      currentGroupCount: 1,
+      groupFirstMessageTime: new Date().toISOString(),
+      groupLastMessageTime: new Date().toISOString()
+    };
+  }
+
+  const { data: groupMessages, error: countError } = await supabase
+    .from("messages")
+    .select("created_at")
+    .eq("media_group_id", mediaGroupId)
+    .order("created_at", { ascending: true });
+
+  if (countError) {
+    console.error("❌ Error getting group count:", countError);
+    throw countError;
+  }
+
+  if (!groupMessages || groupMessages.length === 0) {
+    return {
+      currentGroupCount: 1,
+      groupFirstMessageTime: new Date().toISOString(),
+      groupLastMessageTime: new Date().toISOString()
+    };
+  }
+
+  return {
+    currentGroupCount: groupMessages.length + 1,
+    groupFirstMessageTime: new Date(groupMessages[0].created_at).toISOString(),
+    groupLastMessageTime: new Date().toISOString()
+  };
+}
+
+export async function handleMediaMessage(
+  supabase: SupabaseClient,
+  message: any,
+  botToken: string
+): Promise<WebhookResponse> {
+  const correlationId = crypto.randomUUID();
+  console.log("📸 Processing media message:", {
+    correlation_id: correlationId,
+    message_id: message.message_id,
+    media_group_id: message.media_group_id
+  });
+
+  try {
+    // Get media content from message
+    const media = message.photo?.[message.photo.length - 1] || 
+                 message.video || 
+                 message.document;
+
+    if (!media) {
+      throw new Error("No media found in message");
+    }
+
+    // Check for existing message
+    const existingMessage = await findExistingMessage(supabase, media.file_unique_id);
+    if (existingMessage) {
+      console.log("🔄 Message already exists:", {
+        correlation_id: correlationId,
+        message_id: existingMessage.id
+      });
+      return { message: "Message already processed" };
+    }
+
+    // Get group metadata first
+    const { currentGroupCount, groupFirstMessageTime, groupLastMessageTime } = 
+      await getGroupMetadata(supabase, message.media_group_id);
+
+    console.log("📊 Group metadata:", {
+      correlation_id: correlationId,
+      media_group_id: message.media_group_id,
+      currentGroupCount,
+      groupFirstMessageTime,
+      groupLastMessageTime
+    });
+
+    // Download and upload media
+    const mediaResponse = await downloadTelegramFile(media.file_id, botToken);
+    const buffer = await mediaResponse.arrayBuffer();
+    
+    const uploadResult = await uploadMedia(supabase, buffer, {
+      fileUniqueId: media.file_unique_id,
+      mimeType: media.mime_type,
+      fileSize: media.file_size
+    });
+
+    // Prepare message data with group information
+    const messageData: MessageData = {
+      telegram_message_id: message.message_id,
+      media_group_id: message.media_group_id || null,
+      caption: message.caption || "",
+      file_id: media.file_id,
+      file_unique_id: media.file_unique_id,
+      public_url: uploadResult.publicUrl,
+      mime_type: uploadResult.mimeType,
+      file_size: media.file_size,
+      width: media.width,
+      height: media.height,
+      duration: media.duration,
+      user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
+      telegram_data: message,
+      processing_state: "initialized",
+      group_message_count: currentGroupCount,
+      group_first_message_time: groupFirstMessageTime,
+      group_last_message_time: groupLastMessageTime,
+      chat_id: message.chat.id,
+      chat_type: message.chat.type,
+      chat_title: message.chat.title,
+      // Set is_original_caption for group messages
+      is_original_caption: message.media_group_id ? currentGroupCount === 1 : true
+    };
+
+    // Create new message in database
+    const newMessage = await createNewMessage(supabase, messageData);
+
+    // If message has caption, trigger parsing
+    if (message.caption) {
+      await triggerCaptionParsing(
+        supabase,
+        newMessage.id,
+        message.media_group_id,
+        message.caption
+      );
+    }
+
+    // After successful processing, update group counts for all messages in the group
+    if (message.media_group_id) {
+      const { error: updateGroupError } = await supabase
+        .from("messages")
+        .update({ 
+          group_message_count: currentGroupCount,
+          group_last_message_time: groupLastMessageTime 
+        })
+        .eq("media_group_id", message.media_group_id);
+
+      if (updateGroupError) {
+        console.error("❌ Error updating group counts:", {
+          correlation_id: correlationId,
+          error: updateGroupError.message
+        });
+      }
+    }
+
+    return {
+      message: "Media processed successfully",
+      processed_media: [{
+        file_unique_id: media.file_unique_id,
+        public_url: uploadResult.publicUrl
+      }]
+    };
+
+  } catch (error) {
+    console.error("❌ Error in handleMediaMessage:", {
+      error,
+      correlation_id: correlationId,
+      message_id: message.message_id
+    });
+    throw error;
+  }
+}
 
 export async function handleTextMessage(
   supabase: ReturnType<typeof createClient>,
@@ -43,173 +205,6 @@ export async function handleTextMessage(
   }
 }
 
-export async function handleMediaMessage(
-  supabase: ReturnType<typeof createClient>,
-  message: any,
-  TELEGRAM_BOT_TOKEN: string
-): Promise<WebhookResponse> {
-  const mediaItems: TelegramMedia[] = [];
-  const processedMedia: ProcessedMedia[] = [];
-  const correlationId = crypto.randomUUID();
-
-  console.log('🖼️ Starting media message processing:', {
-    correlation_id: correlationId,
-    message_id: message.message_id,
-    media_group_id: message.media_group_id,
-    has_caption: !!message.caption,
-    chat_id: message.chat.id,
-    chat_type: message.chat.type
-  });
-
-  try {
-    // Collect media items
-    if (message.photo) {
-      console.log("📸 Found photo array, selecting largest size");
-      const largestPhoto = message.photo[message.photo.length - 1];
-      largestPhoto.mime_type = "image/jpeg";
-      mediaItems.push(largestPhoto);
-    }
-    if (message.video) {
-      console.log("🎥 Found video");
-      mediaItems.push(message.video);
-    }
-    if (message.document) {
-      console.log("📄 Found document");
-      mediaItems.push(message.document);
-    }
-
-    console.log(`🔄 Processing ${mediaItems.length} media items`);
-
-    for (const mediaItem of mediaItems) {
-      console.log("🔍 Processing media item:", {
-        file_unique_id: mediaItem.file_unique_id,
-        mime_type: mediaItem.mime_type
-      });
-
-      // First check if message exists to avoid foreign key constraint issues
-      const existingMessage = await findExistingMessage(supabase, mediaItem.file_unique_id);
-      let messageData;
-      let uploadResult: MediaUploadResult | null = null;
-      let shouldReanalyze = false;
-
-      if (existingMessage) {
-        // Always reanalyze if any of these conditions are met:
-        // 1. Caption changed
-        // 2. No analyzed content
-        // 3. Previous error state
-        // 4. Telegram data or group info changed
-        const telegramDataChanged = JSON.stringify(existingMessage.telegram_data) !== JSON.stringify({ message });
-        const groupInfoChanged = 
-          existingMessage.media_group_id !== message.media_group_id ||
-          existingMessage.group_message_count !== currentGroupCount;
-
-        shouldReanalyze = (
-          message.caption !== existingMessage.caption || 
-          !existingMessage.analyzed_content || 
-          existingMessage.processing_state === 'error' ||
-          telegramDataChanged ||
-          groupInfoChanged
-        );
-
-        console.log("🔄 Update check:", {
-          exists: true,
-          caption_changed: message.caption !== existingMessage.caption,
-          needs_analysis: !existingMessage.analyzed_content,
-          had_error: existingMessage.processing_state === 'error',
-          telegram_data_changed: telegramDataChanged,
-          group_info_changed: groupInfoChanged,
-          will_reanalyze: shouldReanalyze
-        });
-      }
-
-      // Get current group count for new messages
-      let currentGroupCount = 1;
-      if (message.media_group_id) {
-        const { count } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('media_group_id', message.media_group_id);
-        
-        currentGroupCount = (count || 0) + 1;
-      }
-
-      if (!existingMessage) {
-        console.log("📥 Downloading new media file");
-        const fileResponse = await downloadTelegramFile(mediaItem.file_id, TELEGRAM_BOT_TOKEN);
-        const fileBuffer = await fileResponse.arrayBuffer();
-        
-        uploadResult = await uploadMedia(supabase, fileBuffer, {
-          fileUniqueId: mediaItem.file_unique_id,
-          mimeType: mediaItem.mime_type,
-          fileSize: mediaItem.file_size,
-        });
-        console.log("✅ New file uploaded successfully");
-      }
-
-      messageData = {
-        telegram_message_id: message.message_id,
-        media_group_id: message.media_group_id,
-        caption: message.caption || "",
-        file_id: mediaItem.file_id,
-        file_unique_id: mediaItem.file_unique_id,
-        public_url: uploadResult?.publicUrl || existingMessage?.public_url,
-        mime_type: mediaItem.mime_type,
-        file_size: mediaItem.file_size,
-        width: mediaItem.width,
-        height: mediaItem.height,
-        duration: mediaItem.duration,
-        user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
-        telegram_data: { message },
-        processing_state: shouldReanalyze ? 'pending' : (existingMessage ? 'completed' : (message.caption ? 'pending' : 'initialized')),
-        processing_completed_at: shouldReanalyze ? null : new Date().toISOString(),
-        group_first_message_time: message.media_group_id ? new Date().toISOString() : null,
-        group_last_message_time: message.media_group_id ? new Date().toISOString() : null,
-        group_message_count: message.media_group_id ? currentGroupCount : null,
-        is_original_caption: message.caption ? true : false,
-        chat_id: message.chat.id,
-        chat_type: message.chat.type,
-        analyzed_content: existingMessage && !shouldReanalyze ? existingMessage.analyzed_content : null
-      };
-
-      let newMessage;
-      if (existingMessage) {
-        console.log("🔄 Updating existing message:", existingMessage.id);
-        await updateExistingMessage(supabase, existingMessage.id, messageData);
-        newMessage = existingMessage;
-      } else {
-        console.log("➕ Creating new message");
-        newMessage = await createNewMessage(supabase, messageData);
-      }
-
-      if ((message.caption && !existingMessage) || shouldReanalyze) {
-        try {
-          console.log("🤖 Triggering AI analysis for message:", newMessage.id);
-          await triggerCaptionParsing(supabase, newMessage.id, message.media_group_id, message.caption);
-          console.log("✅ AI analysis triggered successfully");
-        } catch (error) {
-          console.error("❌ Failed to trigger AI analysis:", error);
-        }
-      }
-
-      processedMedia.push({
-        file_unique_id: mediaItem.file_unique_id,
-        public_url: messageData.public_url,
-      });
-    }
-
-    return {
-      message: "Successfully processed media message",
-      processed_media: processedMedia,
-    };
-  } catch (error) {
-    console.error("❌ Error in handleMediaMessage:", error, {
-      correlation_id: correlationId,
-      message_id: message.message_id
-    });
-    throw error;
-  }
-}
-
 export async function handleChatMemberUpdate(
   supabase: ReturnType<typeof createClient>,
   update: any
@@ -243,133 +238,197 @@ export async function handleChatMemberUpdate(
 }
 
 export async function handleEditedMessage(
-  supabase: ReturnType<typeof createClient>,
-  editedMessage: any,
-  TELEGRAM_BOT_TOKEN: string
+  supabase: SupabaseClient,
+  message: any
 ): Promise<WebhookResponse> {
+  const correlationId = crypto.randomUUID();
+  
   try {
-    console.log('📝 Processing edited message:', {
-      message_id: editedMessage.message_id,
-      chat_id: editedMessage.chat.id,
-      chat_type: editedMessage.chat.type,
-      edited_caption: editedMessage.caption
+    // Get media content if present
+    const media = message.photo?.[message.photo.length - 1] || 
+                 message.video || 
+                 message.document;
+
+    console.log("🔄 Processing edited message:", {
+      correlation_id: correlationId,
+      message_id: message.message_id,
+      has_media: !!media,
+      edit_date: message.edit_date
     });
 
-    // Find the existing message in our database
+    // First check if the message exists in our messages table regardless of media
     const { data: existingMessage, error: findError } = await supabase
       .from("messages")
       .select("*")
-      .eq("telegram_message_id", editedMessage.message_id)
-      .eq("chat_id", editedMessage.chat.id)
+      .eq("telegram_message_id", message.message_id)
+      .eq("chat_id", message.chat.id)
       .maybeSingle();
 
-    if (findError) {
-      console.error("❌ Error finding original message:", findError);
-      throw findError;
-    }
+    // If we found a matching message in our messages table, handle the update
+    if (existingMessage) {
+      // Check if this edit is newer
+      const editDate = new Date(message.edit_date * 1000);
+      const lastUpdate = existingMessage.edit_date ? new Date(existingMessage.edit_date) : null;
 
-    if (!existingMessage) {
-      console.error("❌ Message not found in database");
-      throw new Error("Original message not found");
-    }
-
-    console.log("✅ Found existing message:", {
-      id: existingMessage.id,
-      old_caption: existingMessage.caption,
-      new_caption: editedMessage.caption,
-      media_group_id: existingMessage.media_group_id
-    });
-
-    // Only process if the caption has changed
-    if (existingMessage.caption !== editedMessage.caption) {
-      console.log("🔄 Caption has changed, updating message");
-
-      // If this is part of a media group, set all other messages in the group to not be original caption
-      if (existingMessage.media_group_id) {
-        console.log("📑 Updating media group caption statuses for group:", existingMessage.media_group_id);
-        
-        // Get current group count for proper syncing
-        const { count } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('media_group_id', existingMessage.media_group_id);
-        
-        const groupCount = count || 1;
-        console.log(`Found ${groupCount} messages in group`);
-
-        const { error: groupUpdateError } = await supabase
-          .from("messages")
-          .update({
-            is_original_caption: false,
-            group_caption_synced: false,
-            message_caption_id: existingMessage.id,
-            group_message_count: groupCount
-          })
-          .eq("media_group_id", existingMessage.media_group_id)
-          .neq("id", existingMessage.id);
-
-        if (groupUpdateError) {
-          console.error("❌ Failed to update media group messages:", groupUpdateError);
-          throw groupUpdateError;
-        }
-
-        console.log("✅ Successfully updated media group messages");
+      if (lastUpdate && editDate <= lastUpdate) {
+        console.log("⏭️ Skipping older edit", {
+          correlation_id: correlationId,
+          edit_date: editDate,
+          last_update: lastUpdate
+        });
+        return { message: "Edit skipped - not newer" };
       }
 
-      // Update the edited message with new caption and mark it as original
+      // Update message with new data
+      const newCaption = message.caption || "";
+      const updatedTelegramData = {
+        ...existingMessage.telegram_data,
+        message: {
+          ...(existingMessage.telegram_data?.message || {}),
+          caption: newCaption,
+          edit_date: message.edit_date,
+          edited_message: true
+        }
+      };
+
+      // Update the message
       const { error: updateError } = await supabase
         .from("messages")
         .update({
-          caption: editedMessage.caption,
-          telegram_data: { 
-            ...existingMessage.telegram_data,
-            edited_message: editedMessage 
-          },
-          processing_state: "pending",
-          is_original_caption: true,
-          group_caption_synced: true,
+          caption: newCaption,
+          telegram_data: updatedTelegramData,
+          is_edited: true,
+          edit_date: editDate.toISOString(),
+          processing_state: 'pending',
           processing_completed_at: null,
-          group_message_count: existingMessage.media_group_id ? (await supabase
-            .from('messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('media_group_id', existingMessage.media_group_id)).count || 1 : 1,
           updated_at: new Date().toISOString()
         })
         .eq("id", existingMessage.id);
 
       if (updateError) {
-        console.error("❌ Failed to update message:", updateError);
+        console.error("❌ Failed to update message:", {
+          correlation_id: correlationId,
+          error: updateError.message
+        });
         throw updateError;
       }
 
-      console.log("✅ Successfully updated message with new caption");
+      // If part of a media group, update related messages
+      if (existingMessage.media_group_id && existingMessage.is_original_caption) {
+        console.log("🔄 Syncing media group caption:", {
+          correlation_id: correlationId,
+          media_group_id: existingMessage.media_group_id
+        });
 
-      // Trigger reanalysis of the caption
-      try {
-        console.log("🤖 Triggering caption reanalysis");
-        await triggerCaptionParsing(
-          supabase,
-          existingMessage.id,
-          existingMessage.media_group_id,
-          editedMessage.caption
+        const { error: groupUpdateError } = await supabase
+          .from("messages")
+          .update({
+            caption: newCaption,
+            processing_state: 'pending',
+            processing_completed_at: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq("media_group_id", existingMessage.media_group_id)
+          .neq("id", existingMessage.id);
+
+        if (groupUpdateError) {
+          console.error("❌ Error updating group:", {
+            correlation_id: correlationId,
+            error: groupUpdateError.message
+          });
+        }
+      }
+
+      // Log the edit
+      await supabase
+        .from("analysis_audit_log")
+        .insert({
+          message_id: existingMessage.id,
+          media_group_id: existingMessage.media_group_id,
+          event_type: 'MESSAGE_EDITED',
+          old_state: existingMessage.processing_state,
+          new_state: 'pending',
+          processing_details: {
+            correlation_id: correlationId,
+            edit_date: message.edit_date,
+            previous_caption: existingMessage.caption,
+            new_caption: newCaption
+          }
+        });
+
+      // Trigger reanalysis if caption changed
+      if (newCaption !== existingMessage.caption) {
+        console.log("🔄 Starting reanalysis:", {
+          correlation_id: correlationId,
+          message_id: existingMessage.id
+        });
+
+        const { error: reanalysisError } = await supabase.functions.invoke(
+          'parse-caption-with-ai',
+          {
+            body: {
+              message_id: existingMessage.id,
+              media_group_id: existingMessage.media_group_id,
+              caption: newCaption,
+              correlation_id: correlationId,
+              is_edit: true
+            }
+          }
         );
-        console.log("✅ Successfully triggered caption reanalysis");
-      } catch (error) {
-        console.error("❌ Failed to trigger caption reanalysis:", error);
-        throw error;
+
+        if (reanalysisError) {
+          console.error("❌ Reanalysis error:", {
+            correlation_id: correlationId,
+            error: reanalysisError.message
+          });
+        }
       }
 
       return {
-        message: "Successfully processed edited message",
-      };
-    } else {
-      console.log("ℹ️ Caption unchanged, no update needed");
-      return {
-        message: "Caption unchanged, no update needed",
+        message: "Edit processed successfully",
+        details: {
+          message_id: existingMessage.id,
+          media_group_id: existingMessage.media_group_id,
+          reanalysis_triggered: newCaption !== existingMessage.caption
+        }
       };
     }
+    
+    // If we reach here, this is a new message we haven't seen before
+    if (media) {
+      // If it has media but we don't have it, treat it as a new message
+      console.log("📥 Processing as new media message:", {
+        correlation_id: correlationId,
+        message_id: message.message_id
+      });
+      return await handleMediaMessage(supabase, message, Deno.env.get("TELEGRAM_BOT_TOKEN")!);
+    } else {
+      // Only store in other_messages if it's truly a non-media message we haven't seen before
+      console.log("📝 Storing new non-media message:", {
+        correlation_id: correlationId,
+        message_id: message.message_id
+      });
+      
+      const { error: insertError } = await supabase.from("other_messages").insert({
+        user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
+        message_type: "edited_message",
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        chat_type: message.chat.type,
+        chat_title: message.chat.title,
+        message_text: message.text || message.caption || "",
+        telegram_data: { message },
+        processing_state: "completed"
+      });
+
+      if (insertError) throw insertError;
+      return { message: "New non-media message stored" };
+    }
   } catch (error) {
-    console.error("❌ Error in handleEditedMessage:", error);
+    console.error("❌ Error in handleEditedMessage:", {
+      error,
+      correlation_id: correlationId
+    });
     throw error;
   }
 }

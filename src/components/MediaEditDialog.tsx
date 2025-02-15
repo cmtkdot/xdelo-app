@@ -20,6 +20,7 @@ export const MediaEditDialog = ({
 }: MediaEditDialogProps) => {
   const { toast } = useToast();
   const [caption, setCaption] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   useEffect(() => {
     if (editItem) {
@@ -35,6 +36,7 @@ export const MediaEditDialog = ({
     e.preventDefault();
     
     try {
+      setIsSubmitting(true);
       // Only update if caption has changed
       const currentTelegramData = editItem.telegram_data as { message?: { caption?: string } } || {};
       const originalCaption = currentTelegramData.message?.caption || '';
@@ -121,6 +123,8 @@ export const MediaEditDialog = ({
         description: "Failed to update caption. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -128,9 +132,9 @@ export const MediaEditDialog = ({
   const renderAnalyzedContent = () => {
     const content = editItem.analyzed_content || {};
     return (
-      <div className="space-y-4 mt-4 p-4 bg-gray-50 rounded-md">
-        <h3 className="font-medium text-sm text-gray-700">Analyzed Content (Read-only)</h3>
-        <div className="space-y-2 text-sm text-gray-600">
+      <div className="space-y-4 mt-4 p-4 bg-gray-50 rounded-md dark:bg-gray-900">
+        <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300">Analyzed Content (Read-only)</h3>
+        <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
           {Object.entries(content).map(([key, value]) => (
             key !== 'parsing_metadata' && (
               <div key={key} className="flex">
@@ -155,21 +159,24 @@ export const MediaEditDialog = ({
               onChange={(e) => setCaption(e.target.value)}
               placeholder="Enter caption"
               className="min-h-[100px] resize-y"
+              disabled={isSubmitting}
             />
           </div>
 
           {renderAnalyzedContent()}
           
           <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit">Save</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Saving..." : "Save"}
+            </Button>
           </div>
           
           {/* Telegram Channel Information */}
           <div className="mt-6 border-t pt-4">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               Telegram Info:
               {editItem.chat_id && (
                 <span className="block">
