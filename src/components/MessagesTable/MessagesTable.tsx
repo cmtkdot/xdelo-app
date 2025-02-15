@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -16,45 +17,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
 import { MediaItem } from "@/types";
 
 interface EditableMessage extends MediaItem {
-  isEditing?: boolean;
-
-import { MediaItem, ProcessingState, AnalyzedContent } from "@/types";
-
-interface Message {
-  id: string;
-  created_at: string;
-  telegram_message_id: number;
-  file_unique_id: string;
-  user_id: string;
-  caption?: string;
-  media_group_id?: string;
-  message_caption_id?: string;
-  is_original_caption?: boolean;
-  group_caption_synced?: boolean;
-  file_id?: string;
-  public_url?: string;
-  mime_type?: string;
-  file_size?: number;
-  width?: number;
-  height?: number;
-  duration?: number;
-  updated_at?: string;
-  processing_state?: ProcessingState;
-  processing_started_at?: string;
-  processing_completed_at?: string;
-  analyzed_content?: AnalyzedContent | null;
-  telegram_data?: Record<string, unknown>;
-  error_message?: string;
-  chat_id?: number;
-}
-
-interface EditableMessage extends Message {
   isEditing: boolean;
-
 }
 
 interface MessagesTableProps {
@@ -62,12 +28,11 @@ interface MessagesTableProps {
 }
 
 export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialMessages }) => {
-  const [messages, setMessages] = useState<EditableMessage[]>(initialMessages);
+  const [messages, setMessages] = useState<EditableMessage[]>(
+    initialMessages.map(message => ({ ...message, isEditing: false }))
+  );
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [messageToDelete, setMessageToDelete] = useState<MediaItem | null>(null);
-  const [messages, setMessages] = useState<EditableMessage[]>(initialMessages.map(message => ({ ...message, isEditing: false })));
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
   const { handleDelete, handleSave, isProcessing } = useTelegramOperations();
   const { toast } = useToast();
 
@@ -82,10 +47,13 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
   };
 
   const handleCancel = (id: string) => {
+    const originalMessage = initialMessages.find(m => m.id === id);
+    if (!originalMessage) return;
+    
     setMessages(prev =>
       prev.map(message =>
         message.id === id
-          ? { ...initialMessages.find(m => m.id === id)!, isEditing: false }
+          ? { ...originalMessage, isEditing: false }
           : message
       )
     );
@@ -95,10 +63,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     setMessages(prev =>
       prev.map(message =>
         message.id === id
-          ? {
-              ...message,
-              caption: value,
-            }
+          ? { ...message, caption: value }
           : message
       )
     );
@@ -108,26 +73,9 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     const message = messages.find(m => m.id === id);
     if (!message) return;
 
-    await handleSave(message, message.caption || '');
-    
-    setMessages(prev =>
-      prev.map(m =>
-        m.id === id
-          ? { ...m, isEditing: false }
-          : m
-      )
-    );
-  };
-
-  const handleDeleteClick = (message: MediaItem) => {
     try {
       await handleSave(message, message.caption || '');
       
-      toast({
-        title: "Success",
-        description: "Caption updated successfully",
-      });
-
       setMessages(prev =>
         prev.map(m =>
           m.id === id
@@ -135,16 +83,21 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
             : m
         )
       );
+
+      toast({
+        title: "Success",
+        description: "Changes saved successfully",
+      });
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to update caption",
+        description: "Failed to save changes",
         variant: "destructive",
       });
     }
   };
 
-  const handleDeleteClick = (message: Message) => {
+  const handleDeleteClick = (message: MediaItem) => {
     setMessageToDelete(message);
     setIsDeleteDialogOpen(true);
   };
@@ -158,8 +111,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     setMessageToDelete(null);
   };
 
-  const handleChange = (id: string, field: keyof MediaItem, value: string | number) => {
-  const handleAnalyzedContentChange = (id: string, field: keyof AnalyzedContent, value: string | number) => {
+  const handleAnalyzedContentChange = (id: string, field: keyof typeof messages[0]['analyzed_content'], value: string | number) => {
     setMessages(prev =>
       prev.map(message =>
         message.id === id
@@ -168,7 +120,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
               analyzed_content: {
                 ...message.analyzed_content,
                 [field]: value,
-                method: 'manual',
+                method: 'manual' as const,
                 confidence: 1,
                 timestamp: new Date().toISOString()
               }
@@ -202,7 +154,6 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
                   {message.isEditing ? (
                     <Input
                       value={message.caption || ''}
-                      onChange={(e) => handleChange(message.id, 'caption', e.target.value)}
                       onChange={(e) => handleCaptionChange(message.id, e.target.value)}
                     />
                   ) : (
@@ -212,11 +163,6 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
                 <TableCell>
                   {message.isEditing ? (
                     <Input
-                      value={message.product_name || ''}
-                      onChange={(e) => handleChange(message.id, 'product_name', e.target.value)}
-                    />
-                  ) : (
-                    message.product_name || '-'
                       value={message.analyzed_content?.product_name || ''}
                       onChange={(e) => handleAnalyzedContentChange(message.id, 'product_name', e.target.value)}
                     />
@@ -227,11 +173,6 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
                 <TableCell>
                   {message.isEditing ? (
                     <Input
-                      value={message.vendor || ''}
-                      onChange={(e) => handleChange(message.id, 'vendor', e.target.value)}
-                    />
-                  ) : (
-                    message.vendor || '-'
                       value={message.analyzed_content?.vendor_uid || ''}
                       onChange={(e) => handleAnalyzedContentChange(message.id, 'vendor_uid', e.target.value)}
                     />
@@ -244,14 +185,6 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
                     <Input
                       type="number"
                       value={message.analyzed_content?.quantity || ''}
-                      onChange={(e) => {
-                        const newContent = {
-                          ...message.analyzed_content,
-                          quantity: parseFloat(e.target.value)
-                        };
-                        handleChange(message.id, 'analyzed_content', newContent);
-                      }}
-
                       onChange={(e) => handleAnalyzedContentChange(message.id, 'quantity', parseFloat(e.target.value))}
                     />
                   ) : (
