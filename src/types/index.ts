@@ -62,6 +62,7 @@ export interface Message {
   vendor_uid?: string;
   purchase_date?: string;
   purchase_order?: string;
+  glide_row_id?: string;
 }
 
 // Match result interface
@@ -78,7 +79,7 @@ export interface MatchResult {
   };
 }
 
-// MediaItem type
+// MediaItem type (now includes glide_row_id via Message interface)
 export type MediaItem = Message;
 
 // Processing Metadata interface
