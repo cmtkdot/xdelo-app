@@ -2,8 +2,8 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import { Message } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
+import type { Message } from "@/types";
 
 export const useTelegramOperations = () => {
   const [isProcessing, setIsProcessing] = useState(false);
