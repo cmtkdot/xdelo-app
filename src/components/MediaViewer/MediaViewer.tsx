@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { MediaItem } from '@/types';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -6,6 +7,7 @@ import { ImageSwiper } from "@/components/ui/image-swiper";
 import { ChevronLeft, ChevronRight, Tag, Package, Calendar } from "lucide-react";
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+
 interface MediaViewerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -16,6 +18,7 @@ interface MediaViewerProps {
   hasNext?: boolean;
   editMode?: boolean;
 }
+
 export const MediaViewer = ({
   isOpen,
   onClose,
@@ -28,6 +31,7 @@ export const MediaViewer = ({
 }: MediaViewerProps) => {
   const mainMedia = currentGroup.find(media => media.is_original_caption) || currentGroup[0];
   const analyzedContent = mainMedia?.analyzed_content;
+
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
     try {
@@ -36,69 +40,106 @@ export const MediaViewer = ({
       return '';
     }
   };
+
   const handlePrevious = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (onPrevious) onPrevious();
+    if (onPrevious && hasPrevious) onPrevious();
   };
+
   const handleNext = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (onNext) onNext();
+    if (onNext && hasNext) onNext();
   };
-  return <Dialog open={isOpen} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-2xl w-[90vw] max-h-[80vh] h-auto p-0 overflow-y-auto">
+
+  return (
+    <Dialog open={isOpen} onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] h-auto p-0 overflow-y-auto">
         <DialogTitle className="sr-only">Media Viewer</DialogTitle>
+        
         <div className="relative flex flex-col bg-background dark:bg-background">
-          <div className="flex-1 min-h-0 bg-black/90">
-            <div className="aspect-video w-full">
+          {/* Image Container */}
+          <div className="relative flex-1 min-h-0 bg-black/90">
+            <div className="aspect-video w-full relative">
               <ImageSwiper media={currentGroup} />
+              
+              {/* Navigation Buttons Overlay */}
+              <div className="absolute inset-0 flex items-center justify-between px-4 pointer-events-none">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handlePrevious}
+                  disabled={!hasPrevious}
+                  className={cn(
+                    "pointer-events-auto rounded-full bg-background/80 hover:bg-background/90 backdrop-blur",
+                    !hasPrevious && "opacity-0"
+                  )}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleNext}
+                  disabled={!hasNext}
+                  className={cn(
+                    "pointer-events-auto rounded-full bg-background/80 hover:bg-background/90 backdrop-blur",
+                    !hasNext && "opacity-0"
+                  )}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
 
-          <div className="p-4 space-y-2">
+          {/* Details Section */}
+          <div className="p-6 space-y-4">
             {/* Product Details Grid */}
-            <div className="grid grid-cols-2 gap-2">
-              {mainMedia.purchase_order && <div className="bg-secondary/10 rounded-lg p-2 flex items-center space-x-2 hover:bg-secondary/20 transition-colors mx-0 px-[67px]">
-                  <Tag className="w-4 h-4 text-primary" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {mainMedia.purchase_order && (
+                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Tag className="w-5 h-5 text-primary" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs text-muted-foreground">Order ID</p>
-                    <p className="text-sm font-medium truncate">{mainMedia.purchase_order}</p>
+                    <p className="text-sm text-muted-foreground">Order ID</p>
+                    <p className="text-base font-medium truncate">{mainMedia.purchase_order}</p>
                   </div>
-                </div>}
+                </div>
+              )}
               
-              {analyzedContent?.quantity && <div className="bg-secondary/10 rounded-lg p-2 flex items-center space-x-2 hover:bg-secondary/20 transition-colors">
-                  <Package className="w-4 h-4 text-primary" />
+              {analyzedContent?.quantity && (
+                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Package className="w-5 h-5 text-primary" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs text-muted-foreground">Quantity</p>
-                    <p className="text-sm font-medium truncate">{analyzedContent.quantity}</p>
+                    <p className="text-sm text-muted-foreground">Quantity</p>
+                    <p className="text-base font-medium truncate">{analyzedContent.quantity}</p>
                   </div>
-                </div>}
+                </div>
+              )}
 
-              {analyzedContent?.purchase_date && <div className="bg-secondary/10 rounded-lg p-2 flex items-center space-x-2 hover:bg-secondary/20 transition-colors py-0 px-[52px]">
-                  <Calendar className="w-4 h-4 text-primary" />
+              {analyzedContent?.purchase_date && (
+                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Calendar className="w-5 h-5 text-primary" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs text-muted-foreground">Purchase Date</p>
-                    <p className="text-sm font-medium truncate">
+                    <p className="text-sm text-muted-foreground">Purchase Date</p>
+                    <p className="text-base font-medium truncate">
                       {formatDate(analyzedContent.purchase_date)}
                     </p>
                   </div>
-                </div>}
+                </div>
+              )}
             </div>
 
-            {/* Navigation Buttons */}
-            <div className="flex justify-between pt-2 border-t border-border px-[115px]">
-              <Button variant="outline" onClick={handlePrevious} disabled={!hasPrevious} size="sm" className="bg-secondary hover:bg-secondary/80 transition-colors">
-                <ChevronLeft className="w-4 h-4 mr-1" />
-                Previous
-              </Button>
-              <Button variant="outline" onClick={handleNext} disabled={!hasNext} size="sm" className="bg-secondary hover:bg-secondary/80 transition-colors">
-                Next
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            </div>
+            {/* Caption or Additional Info */}
+            {mainMedia.caption && (
+              <div className="mt-4 p-4 bg-secondary/5 rounded-lg">
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{mainMedia.caption}</p>
+              </div>
+            )}
           </div>
         </div>
       </DialogContent>
-    </Dialog>;
+    </Dialog>
+  );
 };
