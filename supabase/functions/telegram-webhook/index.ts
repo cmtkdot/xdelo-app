@@ -1,8 +1,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { corsHeaders } from "./authUtils.ts";
 import { handleTextMessage, handleMediaMessage, handleChatMemberUpdate, handleEditedMessage } from "./messageHandler.ts";
+import { corsHeaders } from "./authUtils.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -91,7 +91,6 @@ serve(async (req) => {
       ) || "unknown",
       chat_id: update.message?.chat.id || update.channel_post?.chat.id || null,
       chat_type: update.message?.chat.type || update.channel_post?.chat.type || null,
-      chat_title: update.message?.chat.title || update.channel_post?.chat.title || null,
       message_text: JSON.stringify(update),
       telegram_data: update,
       processing_state: "completed"

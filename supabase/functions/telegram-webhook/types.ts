@@ -1,3 +1,4 @@
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 export interface TelegramMedia {
@@ -66,4 +67,6 @@ export interface MessageData {
   is_original_caption?: boolean;
   analyzed_content?: Record<string, any> | null;
   error_message?: string;
+  chat_id?: number;
+  chat_type?: string;
 }
