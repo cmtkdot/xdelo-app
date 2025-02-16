@@ -20,7 +20,6 @@ import { ThemeProvider } from "./components/Theme/ThemeProvider";
 import { Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { Sidebar } from "@/components/Sidebar/Sidebar";
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -40,15 +39,21 @@ const queryClient = new QueryClient({
     }
   }
 });
-
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+const ProtectedRoute = ({
+  children
+}: {
+  children: React.ReactNode;
+}) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({
+      data: {
+        session
+      }
+    }) => {
       setSession(session);
       setLoading(false);
       if (!session) {
@@ -58,7 +63,9 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
     // Listen for auth changes
     const {
-      data: { subscription },
+      data: {
+        subscription
+      }
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (_event === 'SIGNED_OUT' || _event === 'TOKEN_REFRESHED' && !session) {
         setSession(null);
@@ -68,7 +75,6 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       }
       setLoading(false);
     });
-
     return () => {
       subscription.unsubscribe();
     };
@@ -76,45 +82,36 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   // Show loading state
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
+    return <div className="flex items-center justify-center min-h-screen">
         <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
+      </div>;
   }
 
   // If no session, this will trigger a redirect in the useEffect
   if (!session) {
     return null;
   }
-
   return children;
 };
-
-const App = () => (
-  <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
+const App = () => <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Router>
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/p/:id" element={<PublicGallery />} />
-            <Route
-              element={
-                <ProtectedRoute>
+            <Route element={<ProtectedRoute>
                   <div className="h-full relative">
                     <div className="hidden h-full md:flex md:w-72 md:flex-col md:fixed md:inset-y-0 z-[80] bg-gray-900">
                       <Sidebar />
                     </div>
                     <main className="md:pl-72 min-h-screen bg-background">
-                      <div className="container mx-auto px-4 py-8">
+                      <div className="container py-[20px] px-[50px] mx-0 bg-slate-50">
                         <Outlet />
                       </div>
                     </main>
                   </div>
-                </ProtectedRoute>
-              }
-            >
+                </ProtectedRoute>}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/gallery" element={<ProductGallery />} />
               <Route path="/media-table" element={<MediaTable />} />
@@ -128,7 +125,5 @@ const App = () => (
         </Router>
       </TooltipProvider>
     </QueryClientProvider>
-  </ThemeProvider>
-);
-
+  </ThemeProvider>;
 export default App;
