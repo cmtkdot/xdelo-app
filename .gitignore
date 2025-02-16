@@ -30,3 +30,6 @@ package-lock.json
 .dockerignore
 docker-compose.yml
 Dockerfile
+src/env.d.ts
+tsconfig.app.json
+tsconfig.app.json
