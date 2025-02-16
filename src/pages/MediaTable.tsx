@@ -12,6 +12,8 @@ const MediaTable = () => {
       const { data, error } = await supabase
         .from('messages')
         .select('*')
+        .not('caption', 'is', null)
+        .not('caption', 'eq', '')
         .order('created_at', { ascending: false });
       
       if (error) throw error;

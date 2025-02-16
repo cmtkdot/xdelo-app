@@ -120,9 +120,11 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
               analyzed_content: {
                 ...message.analyzed_content,
                 [field]: value,
-                method: 'manual' as const,
-                confidence: 1,
-                timestamp: new Date().toISOString()
+                parsing_metadata: {
+                  method: 'manual' as const,
+                  confidence: 1,
+                  timestamp: new Date().toISOString()
+                }
               }
             }
           : message
@@ -136,7 +138,8 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Created At</TableHead>
+              <TableHead>Image</TableHead>
+              <TableHead>Purchase Date</TableHead>
               <TableHead>Caption</TableHead>
               <TableHead>Product Name</TableHead>
               <TableHead>Vendor</TableHead>
@@ -148,7 +151,18 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
             {messages.map((message) => (
               <TableRow key={message.id}>
                 <TableCell>
-                  {message.created_at ? format(new Date(message.created_at), 'MM/dd/yyyy HH:mm') : '-'}
+                  {message.public_url && (
+                    <img 
+                      src={message.public_url} 
+                      alt={message.caption || 'Product image'} 
+                      className="w-16 h-16 object-cover rounded-md"
+                    />
+                  )}
+                </TableCell>
+                <TableCell>
+                  {message.analyzed_content?.purchase_date ? 
+                    format(new Date(message.analyzed_content.purchase_date), 'MM/dd/yyyy') : 
+                    '-'}
                 </TableCell>
                 <TableCell>
                   {message.isEditing ? (
