@@ -28,7 +28,7 @@ export interface AnalyzedContent {
 
 export type ProcessingState = 'pending' | 'processing' | 'completed' | 'failed';
 
-export type MessageType = {
+export interface Message {
   id: string;
   created_at: string;
   telegram_message_id: number;
@@ -56,9 +56,7 @@ export type MessageType = {
   chat_id?: number;
   vendor_uid?: string;
   purchase_date?: string;
-};
-
-export type Message = MessageType;
+}
 
 export interface MatchResult {
   id: string;
