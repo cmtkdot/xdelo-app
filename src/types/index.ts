@@ -56,6 +56,7 @@ export interface Message {
   chat_id?: number;
   vendor_uid?: string;
   purchase_date?: string;
+  purchase_order?: string;
 }
 
 export interface MatchResult {
