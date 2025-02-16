@@ -1524,7 +1524,6 @@ export type Database = {
       other_messages: {
         Row: {
           chat_id: number | null
-          chat_title: string | null
           chat_type: string | null
           created_at: string | null
           id: string
@@ -1540,7 +1539,6 @@ export type Database = {
         }
         Insert: {
           chat_id?: number | null
-          chat_title?: string | null
           chat_type?: string | null
           created_at?: string | null
           id?: string
@@ -1556,7 +1554,6 @@ export type Database = {
         }
         Update: {
           chat_id?: number | null
-          chat_title?: string | null
           chat_type?: string | null
           created_at?: string | null
           id?: string

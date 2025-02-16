@@ -77,7 +77,6 @@ CREATE TABLE IF NOT EXISTS public.other_messages (
     message_type text NOT NULL,
     chat_id bigint,
     chat_type text,
-    chat_title text,
     message_text text,
     telegram_data jsonb,
     processing_state text DEFAULT 'completed'::text,

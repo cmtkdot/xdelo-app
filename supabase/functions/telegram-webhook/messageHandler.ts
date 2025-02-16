@@ -112,7 +112,6 @@ export async function handleMediaMessage(
       group_last_message_time: groupLastMessageTime,
       chat_id: message.chat.id,
       chat_type: message.chat.type,
-      chat_title: message.chat.title,
       // Set is_original_caption for group messages
       is_original_caption: message.media_group_id ? currentGroupCount === 1 : true
     };
@@ -184,7 +183,6 @@ export async function handleTextMessage(
       message_type: "text",
       chat_id: message.chat.id,
       chat_type: message.chat.type,
-      chat_title: message.chat.title,
       message_text: message.text || message.caption || "",
       telegram_data: { message },
       processing_state: "completed",
@@ -217,7 +215,6 @@ export async function handleChatMemberUpdate(
       message_type: "chat_member",
       chat_id: update.chat.id,
       chat_type: update.chat.type,
-      chat_title: update.chat.title,
       telegram_data: { update },
       processing_state: "completed",
       processing_completed_at: new Date().toISOString(),
@@ -415,7 +412,6 @@ export async function handleEditedMessage(
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         chat_type: message.chat.type,
-        chat_title: message.chat.title,
         message_text: message.text || message.caption || "",
         telegram_data: { message },
         processing_state: "completed"
