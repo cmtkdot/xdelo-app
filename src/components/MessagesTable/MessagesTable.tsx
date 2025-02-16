@@ -1,9 +1,8 @@
-
 import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Edit2, Save, X, Trash2 } from "lucide-react";
+import { Edit2, Save, X, Trash2, Play } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { format } from "date-fns";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
@@ -132,13 +131,41 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     );
   };
 
+  const renderMediaPreview = (message: MediaItem) => {
+    if (!message.public_url) return null;
+
+    if (message.mime_type?.startsWith('video/')) {
+      return (
+        <div className="relative w-16 h-16">
+          <video 
+            src={message.public_url}
+            className="w-16 h-16 object-cover rounded-md"
+          />
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+              <Play className="h-4 w-4 text-white" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <img 
+        src={message.public_url} 
+        alt={message.caption || 'Product image'} 
+        className="w-16 h-16 object-cover rounded-md"
+      />
+    );
+  };
+
   return (
     <>
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Image</TableHead>
+              <TableHead>Media</TableHead>
               <TableHead>Purchase Date</TableHead>
               <TableHead>Caption</TableHead>
               <TableHead>Product Name</TableHead>
@@ -151,13 +178,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
             {messages.map((message) => (
               <TableRow key={message.id}>
                 <TableCell>
-                  {message.public_url && (
-                    <img 
-                      src={message.public_url} 
-                      alt={message.caption || 'Product image'} 
-                      className="w-16 h-16 object-cover rounded-md"
-                    />
-                  )}
+                  {renderMediaPreview(message)}
                 </TableCell>
                 <TableCell>
                   {message.analyzed_content?.purchase_date ? 
