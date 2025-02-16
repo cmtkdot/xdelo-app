@@ -1,5 +1,6 @@
+
 import { MediaItem } from "@/types";
-import { AlertCircle, Pencil, Trash2, Eye, RefreshCw } from "lucide-react";
+import { AlertCircle, Pencil, Trash2, Eye, RefreshCw, Check } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageSwiper } from "@/components/ui/image-swiper";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,8 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const { toast } = useToast();
 
+  const isSynced = !!mainMedia.glide_row_id;
+
   const handleReanalyze = async () => {
     if (isReanalyzing) return;
     
@@ -90,7 +93,6 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
       const mediaToDelete = mainMedia;
       
       if (deleteTelegram && mediaToDelete.telegram_message_id && mediaToDelete.chat_id) {
-        // First delete from Telegram if requested
         const response = await supabase.functions.invoke('delete-telegram-message', {
           body: {
             message_id: mediaToDelete.telegram_message_id,
@@ -101,21 +103,15 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
 
         if (response.error) throw response.error;
       } else {
-        // If we're only deleting from database, we need to delete the media file
-        // The storage file deletion is handled by the cleanup_storage_on_delete trigger
-        // which is only triggered when deleteTelegram is false
         const { error: storageError } = await supabase.storage
           .from('telegram-media')
           .remove([`${mediaToDelete.file_unique_id}.${mediaToDelete.mime_type?.split('/')[1] || 'jpg'}`]);
 
         if (storageError) {
           console.error('Storage deletion error:', storageError);
-          // Continue with database deletion even if storage deletion fails
         }
       }
 
-      // Delete from database - this will trigger the appropriate deletion trigger
-      // based on whether we deleted from Telegram or not
       const { error } = await supabase
         .from('messages')
         .delete()
@@ -123,7 +119,6 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
 
       if (error) throw error;
 
-      // Call the onDelete callback
       await onDelete(mediaToDelete);
       
       toast({
@@ -148,35 +143,21 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
         <div className="relative h-64" onClick={() => setIsViewerOpen(true)}>
           <ImageSwiper media={sortedMedia} />
           
-          <div className="absolute top-2 right-2 flex gap-2">
-            {hasError ? (
-              <div className="bg-red-100 p-2 rounded-full">
-                <AlertCircle className="h-4 w-4 text-red-600 dark:text-white" />
+          {isSynced && (
+            <div className="absolute top-2 right-2">
+              <div className="bg-green-100 dark:bg-green-900/20 p-2 rounded-full">
+                <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
               </div>
-            ) : (
-              <TooltipProvider delayDuration={0}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      size="icon" 
-                      className="h-8 w-8 rounded-full bg-white/90 backdrop-blur-sm hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleReanalyze();
-                      }}
-                      disabled={isReanalyzing}
-                    >
-                      <RefreshCw className={`h-4 w-4 ${isReanalyzing ? 'animate-spin' : ''}`} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent className="px-2 py-1 text-xs">
-                    {isReanalyzing ? 'Reanalyzing...' : 'Reanalyze'}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-          </div>
+            </div>
+          )}
+
+          {hasError && (
+            <Alert variant="destructive" className="absolute bottom-0 left-0 right-0 m-2">
+              <AlertDescription>
+                {mainMedia.error_message || 'Processing error occurred'}
+              </AlertDescription>
+            </Alert>
+          )}
         </div>
         
         <div className="p-3 space-y-2">
@@ -197,18 +178,10 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
               </span>
             </div>
           )}
-
-          {hasError && (
-            <Alert variant="destructive" className="py-1 px-2 text-xs">
-              <AlertDescription>
-                {mainMedia.error_message || 'Processing error occurred'}
-              </AlertDescription>
-            </Alert>
-          )}
           
-          <div className="flex justify-between pt-2 border-t border-border">
-            <Tabs defaultValue="edit" className="w-full max-w-xs">
-              <TabsList className="grid grid-cols-3 gap-2">
+          <div className="flex justify-center pt-2 border-t border-border">
+            <Tabs defaultValue="view" className="w-full">
+              <TabsList className="grid w-full grid-cols-4 gap-2">
                 <TooltipProvider delayDuration={0}>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -243,6 +216,27 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
                       </TabsTrigger>
                     </TooltipTrigger>
                     <TooltipContent className="px-2 py-1 text-xs">Edit</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
+                <TooltipProvider delayDuration={0}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger 
+                        value="reanalyze" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReanalyze();
+                        }}
+                        disabled={isReanalyzing}
+                        className="py-1.5 text-black hover:text-black/80 dark:text-white dark:hover:text-white/80"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${isReanalyzing ? 'animate-spin' : ''}`} />
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent className="px-2 py-1 text-xs">
+                      {isReanalyzing ? 'Reanalyzing...' : 'Reanalyze'}
+                    </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
 
