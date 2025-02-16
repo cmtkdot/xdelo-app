@@ -45,17 +45,17 @@ export function ImageSwiper({ media, className, showNavigation, ...props }: Imag
 
   // Handle hover state changes
   React.useEffect(() => {
-    if (isHovered) {
+    if (isHovered && !showNavigation) { // Only auto-switch to video when not in navigation mode
       // Find first video in the group
       const videoIndex = sortedMedia.findIndex(m => m.mime_type?.startsWith('video/'));
       if (videoIndex !== -1) {
         setMediaIndex(videoIndex);
       }
-    } else {
+    } else if (!isHovered && !showNavigation) { // Only switch back when not in navigation mode
       // Return to last non-video index when leaving hover
       setMediaIndex(lastNonVideoIndex);
     }
-  }, [isHovered, sortedMedia, lastNonVideoIndex]);
+  }, [isHovered, sortedMedia, lastNonVideoIndex, showNavigation]);
 
   // Handle video playback
   React.useEffect(() => {
@@ -109,7 +109,7 @@ export function ImageSwiper({ media, className, showNavigation, ...props }: Imag
         </div>
       </div>
 
-      {showNavigation && mediaIndex > 0 && (
+      {showNavigation && (
         <div className="absolute left-5 top-1/2 -translate-y-1/2">
           <Button
             variant="ghost"
@@ -121,7 +121,7 @@ export function ImageSwiper({ media, className, showNavigation, ...props }: Imag
           </Button>
         </div>
       )}
-      {showNavigation && mediaIndex < sortedMedia.length - 1 && (
+      {showNavigation && (
         <div className="absolute right-5 top-1/2 -translate-y-1/2">
           <Button
             variant="ghost"
