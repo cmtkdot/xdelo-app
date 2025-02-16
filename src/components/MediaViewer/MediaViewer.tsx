@@ -29,7 +29,7 @@ export const MediaViewer = ({
   hasNext = false,
   editMode = false
 }: MediaViewerProps) => {
-  const mainMedia = currentGroup.find(media => media.is_original_caption) || currentGroup[0];
+  const mainMedia = currentGroup?.find(media => media?.is_original_caption) || currentGroup?.[0];
   const analyzedContent = mainMedia?.analyzed_content;
 
   const formatDate = (dateString?: string) => {
@@ -52,6 +52,11 @@ export const MediaViewer = ({
     e.stopPropagation();
     if (onNext && hasNext) onNext();
   };
+
+  // Guard against undefined currentGroup
+  if (!currentGroup || currentGroup.length === 0) {
+    return null;
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={() => onClose()}>
@@ -98,7 +103,7 @@ export const MediaViewer = ({
           <div className="p-6 space-y-4">
             {/* Product Details Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {mainMedia.purchase_order && (
+              {mainMedia?.purchase_order && (
                 <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
                   <Tag className="w-5 h-5 text-primary" />
                   <div className="min-w-0 flex-1">
@@ -132,7 +137,7 @@ export const MediaViewer = ({
             </div>
 
             {/* Caption or Additional Info */}
-            {mainMedia.caption && (
+            {mainMedia?.caption && (
               <div className="mt-4 p-4 bg-secondary/5 rounded-lg">
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap">{mainMedia.caption}</p>
               </div>
