@@ -1,11 +1,13 @@
+
 import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Edit2, Save, X, Trash2, Play } from "lucide-react";
+import { Edit2, Save, X, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { format } from "date-fns";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
+import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +34,8 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
   );
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [messageToDelete, setMessageToDelete] = useState<MediaItem | null>(null);
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [selectedMedia, setSelectedMedia] = useState<MediaItem[]>([]);
   const { handleDelete, handleSave, isProcessing } = useTelegramOperations();
   const { toast } = useToast();
 
@@ -131,21 +135,30 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     );
   };
 
+  const handleMediaClick = (message: MediaItem) => {
+    // If it's part of a media group, show all media from the group
+    if (message.media_group_id) {
+      const groupMedia = messages.filter(m => m.media_group_id === message.media_group_id);
+      setSelectedMedia(groupMedia);
+    } else {
+      setSelectedMedia([message]);
+    }
+    setIsViewerOpen(true);
+  };
+
   const renderMediaPreview = (message: MediaItem) => {
     if (!message.public_url) return null;
 
     if (message.mime_type?.startsWith('video/')) {
       return (
-        <div className="relative w-16 h-16">
+        <div 
+          className="relative w-16 h-16 cursor-pointer"
+          onClick={() => handleMediaClick(message)}
+        >
           <video 
             src={message.public_url}
             className="w-16 h-16 object-cover rounded-md"
           />
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-              <Play className="h-4 w-4 text-white" />
-            </div>
-          </div>
         </div>
       );
     }
@@ -154,7 +167,8 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
       <img 
         src={message.public_url} 
         alt={message.caption || 'Product image'} 
-        className="w-16 h-16 object-cover rounded-md"
+        className="w-16 h-16 object-cover rounded-md cursor-pointer"
+        onClick={() => handleMediaClick(message)}
       />
     );
   };
@@ -307,6 +321,12 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <MediaViewer
+        isOpen={isViewerOpen}
+        onClose={() => setIsViewerOpen(false)}
+        currentGroup={selectedMedia}
+      />
     </>
   );
 };
