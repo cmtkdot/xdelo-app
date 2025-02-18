@@ -2321,10 +2321,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
-      glide_sync_products: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
       http: {
         Args: {
           request: Database["public"]["CompositeTypes"]["http_request"]
@@ -2462,10 +2458,6 @@ export type Database = {
           reanalysis_attempted: boolean
         }[]
       }
-      process_glide_sync_queue: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
       process_media_group_analysis: {
         Args: {
           p_message_id: string
@@ -2486,10 +2478,6 @@ export type Database = {
         Returns: undefined
       }
       regenerate_all_pdfs: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      schedule_sync_check: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
@@ -2528,20 +2516,6 @@ export type Database = {
             }
             Returns: string
           }
-      validate_gl_relationships: {
-        Args: {
-          p_table_name?: string
-        }
-        Returns: {
-          source_table: string
-          reference_table: string
-          glide_column: string
-          supabase_column: string
-          missing_references: number
-          total_records: number
-          coverage_percentage: number
-        }[]
-      }
     }
     Enums: {
       message_processing_state:

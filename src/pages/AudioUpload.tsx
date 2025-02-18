@@ -1,15 +1,66 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, Upload, X } from "lucide-react";
+import { Mic, Upload, X, Check, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+interface AudioEntry {
+  id: string;
+  audio_url: string;
+  created_at: string;
+  processing_status: 'pending' | 'processing' | 'processed' | 'failed';
+  extracted_data: {
+    transcription?: string;
+    confidence?: number;
+  } | null;
+  needs_manual_review: boolean;
+}
 
 export default function AudioUpload() {
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Fetch audio entries
+  const { data: entries, isLoading } = useQuery({
+    queryKey: ['audio-entries'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('raw_product_entries')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data as AudioEntry[];
+    }
+  });
+
+  // Approve entry mutation
+  const approveMutation = useMutation({
+    mutationFn: async (entryId: string) => {
+      const { error } = await supabase
+        .from('raw_product_entries')
+        .update({ 
+          needs_manual_review: false,
+          processing_status: 'processed'
+        })
+        .eq('id', entryId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['audio-entries'] });
+      toast({
+        title: "Entry approved",
+        description: "The audio entry has been approved.",
+      });
+    }
+  });
 
   const startRecording = async () => {
     try {
@@ -108,6 +159,23 @@ export default function AudioUpload() {
 
       if (entryError) throw entryError;
 
+      // Call the processing function
+      const response = await fetch(
+        `${process.env.SUPABASE_URL}/functions/v1/process-audio-upload`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ entryId: entryData.id }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Processing failed');
+      }
+
       toast({
         title: "Success",
         description: "Audio uploaded successfully. It will be processed shortly.",
@@ -115,6 +183,7 @@ export default function AudioUpload() {
 
       // Reset state
       setAudioBlob(null);
+      queryClient.invalidateQueries({ queryKey: ['audio-entries'] });
 
     } catch (error) {
       console.error("Upload error:", error);
@@ -133,7 +202,7 @@ export default function AudioUpload() {
   };
 
   return (
-    <div className="container max-w-2xl py-10">
+    <div className="container max-w-4xl py-10">
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Audio Upload</h1>
@@ -186,10 +255,75 @@ export default function AudioUpload() {
                 disabled={isUploading}
                 className="w-full"
               >
-                {isUploading ? "Uploading..." : "Upload"}
+                {isUploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  "Upload"
+                )}
               </Button>
             </div>
           )}
+        </div>
+
+        <div className="border rounded-lg">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Transcription</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center">
+                    <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                  </TableCell>
+                </TableRow>
+              ) : entries?.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell>
+                    {new Date(entry.created_at).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${
+                      entry.processing_status === 'processed' ? 'bg-green-100 text-green-800' :
+                      entry.processing_status === 'processing' ? 'bg-blue-100 text-blue-800' :
+                      entry.processing_status === 'failed' ? 'bg-red-100 text-red-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {entry.processing_status}
+                    </span>
+                  </TableCell>
+                  <TableCell className="max-w-md truncate">
+                    {entry.extracted_data?.transcription || "Processing..."}
+                  </TableCell>
+                  <TableCell>
+                    {entry.needs_manual_review && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => approveMutation.mutate(entry.id)}
+                        disabled={approveMutation.isPending}
+                      >
+                        {approveMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Check className="w-4 h-4" />
+                        )}
+                        <span className="ml-2">Approve</span>
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       </div>
     </div>
