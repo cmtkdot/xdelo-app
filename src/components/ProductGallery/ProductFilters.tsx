@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { FilterValues } from "@/types";
 import { Filter, X } from "lucide-react";
@@ -62,7 +63,11 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label className="text-sm font-medium">Vendor</Label>
-          <VendorFilter value={selectedVendors} vendors={vendors} onChange={setSelectedVendors} />
+          <VendorFilter 
+            value={selectedVendors}
+            vendors={vendors} 
+            onChange={setSelectedVendors}
+          />
         </div>
 
         <div className="space-y-2">
