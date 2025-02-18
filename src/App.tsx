@@ -14,12 +14,14 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import AIChat from "./pages/AIChat";
 import GlProducts from "./pages/GlProducts";
+import AudioUpload from "./pages/AudioUpload";
 import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client";
 import { ThemeProvider } from "./components/Theme/ThemeProvider";
 import { Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { Sidebar } from "@/components/Sidebar/Sidebar";
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -39,6 +41,7 @@ const queryClient = new QueryClient({
     }
   }
 });
+
 const ProtectedRoute = ({
   children
 }: {
@@ -47,8 +50,8 @@ const ProtectedRoute = ({
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({
       data: {
         session
@@ -61,7 +64,6 @@ const ProtectedRoute = ({
       }
     });
 
-    // Listen for auth changes
     const {
       data: {
         subscription
@@ -75,24 +77,25 @@ const ProtectedRoute = ({
       }
       setLoading(false);
     });
+
     return () => {
       subscription.unsubscribe();
     };
   }, [navigate]);
 
-  // Show loading state
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">
         <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
       </div>;
   }
 
-  // If no session, this will trigger a redirect in the useEffect
   if (!session) {
     return null;
   }
+
   return children;
 };
+
 const App = () => <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -117,6 +120,7 @@ const App = () => <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
               <Route path="/media-table" element={<MediaTable />} />
               <Route path="/ai-chat" element={<AIChat />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/audio-upload" element={<AudioUpload />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
@@ -126,4 +130,5 @@ const App = () => <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
       </TooltipProvider>
     </QueryClientProvider>
   </ThemeProvider>;
+
 export default App;
