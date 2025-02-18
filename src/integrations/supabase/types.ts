@@ -262,6 +262,9 @@ export type Database = {
           rowid_accountrowid: string | null
           rowid_estimatorowid: string | null
           rowid_invoice_row_id: string | null
+          sb_accounts_id: string | null
+          sb_estimates_id: string | null
+          sb_invoices_id: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           timestamp_added: string | null
           updated_at: string | null
@@ -281,6 +284,9 @@ export type Database = {
           rowid_accountrowid?: string | null
           rowid_estimatorowid?: string | null
           rowid_invoice_row_id?: string | null
+          sb_accounts_id?: string | null
+          sb_estimates_id?: string | null
+          sb_invoices_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           timestamp_added?: string | null
           updated_at?: string | null
@@ -300,11 +306,43 @@ export type Database = {
           rowid_accountrowid?: string | null
           rowid_estimatorowid?: string | null
           rowid_invoice_row_id?: string | null
+          sb_accounts_id?: string | null
+          sb_estimates_id?: string | null
+          sb_invoices_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           timestamp_added?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_customer_credits_accounts"
+            columns: ["sb_accounts_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_customer_credits_estimates"
+            columns: ["sb_estimates_id"]
+            isOneToOne: false
+            referencedRelation: "gl_estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_customer_credits_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_customer_credits_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_summary"
+            referencedColumns: ["invoice_id"]
+          },
+        ]
       }
       gl_customer_payments: {
         Row: {
@@ -322,6 +360,9 @@ export type Database = {
           rowid_accountrowid: string | null
           rowid_invoice_row_id: string | null
           rowid_invoiceline_row_id: string | null
+          sb_accounts_id: string | null
+          sb_invoice_lines_id: string | null
+          sb_invoices_id: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           timestamp_added: string | null
           updated_at: string | null
@@ -341,6 +382,9 @@ export type Database = {
           rowid_accountrowid?: string | null
           rowid_invoice_row_id?: string | null
           rowid_invoiceline_row_id?: string | null
+          sb_accounts_id?: string | null
+          sb_invoice_lines_id?: string | null
+          sb_invoices_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           timestamp_added?: string | null
           updated_at?: string | null
@@ -360,11 +404,50 @@ export type Database = {
           rowid_accountrowid?: string | null
           rowid_invoice_row_id?: string | null
           rowid_invoiceline_row_id?: string | null
+          sb_accounts_id?: string | null
+          sb_invoice_lines_id?: string | null
+          sb_invoices_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           timestamp_added?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_customer_payments_accounts"
+            columns: ["sb_accounts_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_customer_payments_invoice_lines"
+            columns: ["sb_invoice_lines_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoice_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_customer_payments_invoice_lines"
+            columns: ["sb_invoice_lines_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_summary"
+            referencedColumns: ["invoice_line_id"]
+          },
+          {
+            foreignKeyName: "fk_customer_payments_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_customer_payments_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_summary"
+            referencedColumns: ["invoice_id"]
+          },
+        ]
       }
       gl_estimate_lines: {
         Row: {
@@ -386,6 +469,9 @@ export type Database = {
           rowid_invline_row_id: string | null
           rowid_productid_estline_items: string | null
           rowid_userid_est_lineitems: string | null
+          sb_estimates_id: string | null
+          sb_invoice_lines_id: string | null
+          sb_products_id: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
@@ -408,6 +494,9 @@ export type Database = {
           rowid_invline_row_id?: string | null
           rowid_productid_estline_items?: string | null
           rowid_userid_est_lineitems?: string | null
+          sb_estimates_id?: string | null
+          sb_invoice_lines_id?: string | null
+          sb_products_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
@@ -430,10 +519,42 @@ export type Database = {
           rowid_invline_row_id?: string | null
           rowid_productid_estline_items?: string | null
           rowid_userid_est_lineitems?: string | null
+          sb_estimates_id?: string | null
+          sb_invoice_lines_id?: string | null
+          sb_products_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_estimate_lines_estimates"
+            columns: ["sb_estimates_id"]
+            isOneToOne: false
+            referencedRelation: "gl_estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_estimate_lines_invoice_lines"
+            columns: ["sb_invoice_lines_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoice_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_estimate_lines_invoice_lines"
+            columns: ["sb_invoice_lines_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_summary"
+            referencedColumns: ["invoice_line_id"]
+          },
+          {
+            foreignKeyName: "fk_estimate_lines_products"
+            columns: ["sb_products_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gl_estimates: {
         Row: {
@@ -456,6 +577,8 @@ export type Database = {
           pdf_docs: string | null
           rowids_accountrowid_estimates: string | null
           rowids_invoice_created: string | null
+          sb_accounts_id: string | null
+          sb_invoices_id: string | null
           short_link_pdf: string | null
           short_link_pdf_copy: Json | null
           shortlink_pdf2: string | null
@@ -484,6 +607,8 @@ export type Database = {
           pdf_docs?: string | null
           rowids_accountrowid_estimates?: string | null
           rowids_invoice_created?: string | null
+          sb_accounts_id?: string | null
+          sb_invoices_id?: string | null
           short_link_pdf?: string | null
           short_link_pdf_copy?: Json | null
           shortlink_pdf2?: string | null
@@ -512,6 +637,8 @@ export type Database = {
           pdf_docs?: string | null
           rowids_accountrowid_estimates?: string | null
           rowids_invoice_created?: string | null
+          sb_accounts_id?: string | null
+          sb_invoices_id?: string | null
           short_link_pdf?: string | null
           short_link_pdf_copy?: Json | null
           shortlink_pdf2?: string | null
@@ -520,7 +647,29 @@ export type Database = {
           user_user_email?: string | null
           valid_final_create_invoice_clicked?: boolean | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_estimates_accounts"
+            columns: ["sb_accounts_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_estimates_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_estimates_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_summary"
+            referencedColumns: ["invoice_id"]
+          },
+        ]
       }
       gl_expenses: {
         Row: {
@@ -602,13 +751,8 @@ export type Database = {
       }
       gl_invoice_lines: {
         Row: {
-          cart_id: string | null
-          confirm_submit_newprod_line: boolean | null
           created_at: string | null
-          edit_price: boolean | null
-          edit_quantity: boolean | null
-          gl_products: Json | null
-          glide_id: string | null
+          glide_id: string
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -620,22 +764,18 @@ export type Database = {
           main_selling_price: number | null
           main_total_stock_after_sell: number | null
           main_user_email_of_added: string | null
-          rowid_estimate_rowid: string | null
+          product_sale_name_display: string | null
           rowid_invoice_rowid: string | null
           rowid_logrowid: string | null
           rowid_productid: string | null
-          rowid_productid_question: string | null
+          sb_invoices_id: string | null
+          sb_products_id: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
         Insert: {
-          cart_id?: string | null
-          confirm_submit_newprod_line?: boolean | null
           created_at?: string | null
-          edit_price?: boolean | null
-          edit_quantity?: boolean | null
-          gl_products?: Json | null
-          glide_id?: string | null
+          glide_id: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -647,22 +787,18 @@ export type Database = {
           main_selling_price?: number | null
           main_total_stock_after_sell?: number | null
           main_user_email_of_added?: string | null
-          rowid_estimate_rowid?: string | null
+          product_sale_name_display?: string | null
           rowid_invoice_rowid?: string | null
           rowid_logrowid?: string | null
           rowid_productid?: string | null
-          rowid_productid_question?: string | null
+          sb_invoices_id?: string | null
+          sb_products_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
         Update: {
-          cart_id?: string | null
-          confirm_submit_newprod_line?: boolean | null
           created_at?: string | null
-          edit_price?: boolean | null
-          edit_quantity?: boolean | null
-          gl_products?: Json | null
-          glide_id?: string | null
+          glide_id?: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -674,21 +810,43 @@ export type Database = {
           main_selling_price?: number | null
           main_total_stock_after_sell?: number | null
           main_user_email_of_added?: string | null
-          rowid_estimate_rowid?: string | null
+          product_sale_name_display?: string | null
           rowid_invoice_rowid?: string | null
           rowid_logrowid?: string | null
           rowid_productid?: string | null
-          rowid_productid_question?: string | null
+          sb_invoices_id?: string | null
+          sb_products_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_invoice_lines_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_invoice_lines_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_summary"
+            referencedColumns: ["invoice_id"]
+          },
           {
             foreignKeyName: "fk_invoice_lines_product"
             columns: ["rowid_productid"]
             isOneToOne: false
             referencedRelation: "gl_products"
             referencedColumns: ["glide_id"]
+          },
+          {
+            foreignKeyName: "fk_invoice_lines_products"
+            columns: ["sb_products_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "gl_invoice_lines_rowid_productid_fkey"
@@ -707,7 +865,7 @@ export type Database = {
           created_at: string | null
           doc_document: string | null
           doc_glideforeverlink: string | null
-          glide_id: string | null
+          glide_id: string
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -716,19 +874,18 @@ export type Database = {
           main_invoice_order_date: string | null
           main_invoice_uid: string | null
           main_notes: string | null
-          main_processed: boolean | null
+          main_processed: string | null
           main_submitted_timestamp: string | null
           main_user_email: string | null
-          rowids_accountid_sales_invoices: string | null
           rowids_accountsid_new: string | null
-          rowids_credit_row_id: string | null
           rowids_editordeletelogid: string | null
-          rowids_estimatorowid: string | null
           rowids_userid_sales_invoices: string | null
+          sb_accounts_id: string | null
+          sb_pdf_updated_at: string | null
+          sb_pdf_url: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           timestamp_estimate_converted: string | null
           tre_order_items_invoice: Json | null
-          tre_total: number | null
           updated_at: string | null
         }
         Insert: {
@@ -738,7 +895,7 @@ export type Database = {
           created_at?: string | null
           doc_document?: string | null
           doc_glideforeverlink?: string | null
-          glide_id?: string | null
+          glide_id: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -747,19 +904,18 @@ export type Database = {
           main_invoice_order_date?: string | null
           main_invoice_uid?: string | null
           main_notes?: string | null
-          main_processed?: boolean | null
+          main_processed?: string | null
           main_submitted_timestamp?: string | null
           main_user_email?: string | null
-          rowids_accountid_sales_invoices?: string | null
           rowids_accountsid_new?: string | null
-          rowids_credit_row_id?: string | null
           rowids_editordeletelogid?: string | null
-          rowids_estimatorowid?: string | null
           rowids_userid_sales_invoices?: string | null
+          sb_accounts_id?: string | null
+          sb_pdf_updated_at?: string | null
+          sb_pdf_url?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           timestamp_estimate_converted?: string | null
           tre_order_items_invoice?: Json | null
-          tre_total?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -769,7 +925,7 @@ export type Database = {
           created_at?: string | null
           doc_document?: string | null
           doc_glideforeverlink?: string | null
-          glide_id?: string | null
+          glide_id?: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -778,19 +934,18 @@ export type Database = {
           main_invoice_order_date?: string | null
           main_invoice_uid?: string | null
           main_notes?: string | null
-          main_processed?: boolean | null
+          main_processed?: string | null
           main_submitted_timestamp?: string | null
           main_user_email?: string | null
-          rowids_accountid_sales_invoices?: string | null
           rowids_accountsid_new?: string | null
-          rowids_credit_row_id?: string | null
           rowids_editordeletelogid?: string | null
-          rowids_estimatorowid?: string | null
           rowids_userid_sales_invoices?: string | null
+          sb_accounts_id?: string | null
+          sb_pdf_updated_at?: string | null
+          sb_pdf_url?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           timestamp_estimate_converted?: string | null
           tre_order_items_invoice?: Json | null
-          tre_total?: number | null
           updated_at?: string | null
         }
         Relationships: []
@@ -802,7 +957,7 @@ export type Database = {
           created_at: string | null
           date_timestamp_subm: string | null
           email_email_of_user_who_added_product: string | null
-          glide_id: string | null
+          glide_id: string
           id: string
           last_edited_date: string | null
           last_modified_at: string | null
@@ -813,10 +968,8 @@ export type Database = {
           main_fronted: boolean | null
           main_leave_no: boolean | null
           main_miscellaneous_items: boolean | null
-          main_more_units_behind: boolean | null
           main_new_product_name: string | null
           main_product_image1: string | null
-          main_product_name: string | null
           main_product_purchase_date: string | null
           main_purchase_notes: string | null
           main_rename_product: boolean | null
@@ -826,19 +979,16 @@ export type Database = {
           main_total_qty_purchased: number | null
           main_total_units_behind_sample: number | null
           main_vendor_product_name: string | null
-          main_vendor_uid: string | null
-          po_added_to_old_po: boolean | null
           po_converted_po: boolean | null
           po_old_po_rowid: boolean | null
-          po_old_po_uid: boolean | null
           po_po_date: string | null
           po_pouid_from_add_prod: string | null
           product_name_display: string | null
           rowid_account_rowid: string | null
-          rowid_product_row_id_for_choice_add_item: string | null
           rowid_purchase_order_row_id: string | null
-          rowid_sheet21_pics: string | null
           rowid_vpay_row_id: string | null
+          sb_accounts_id: string | null
+          sb_purchase_orders_id: string | null
           sync_status: string | null
           updated_at: string | null
         }
@@ -848,7 +998,7 @@ export type Database = {
           created_at?: string | null
           date_timestamp_subm?: string | null
           email_email_of_user_who_added_product?: string | null
-          glide_id?: string | null
+          glide_id: string
           id?: string
           last_edited_date?: string | null
           last_modified_at?: string | null
@@ -859,10 +1009,8 @@ export type Database = {
           main_fronted?: boolean | null
           main_leave_no?: boolean | null
           main_miscellaneous_items?: boolean | null
-          main_more_units_behind?: boolean | null
           main_new_product_name?: string | null
           main_product_image1?: string | null
-          main_product_name?: string | null
           main_product_purchase_date?: string | null
           main_purchase_notes?: string | null
           main_rename_product?: boolean | null
@@ -872,19 +1020,16 @@ export type Database = {
           main_total_qty_purchased?: number | null
           main_total_units_behind_sample?: number | null
           main_vendor_product_name?: string | null
-          main_vendor_uid?: string | null
-          po_added_to_old_po?: boolean | null
           po_converted_po?: boolean | null
           po_old_po_rowid?: boolean | null
-          po_old_po_uid?: boolean | null
           po_po_date?: string | null
           po_pouid_from_add_prod?: string | null
           product_name_display?: string | null
           rowid_account_rowid?: string | null
-          rowid_product_row_id_for_choice_add_item?: string | null
           rowid_purchase_order_row_id?: string | null
-          rowid_sheet21_pics?: string | null
           rowid_vpay_row_id?: string | null
+          sb_accounts_id?: string | null
+          sb_purchase_orders_id?: string | null
           sync_status?: string | null
           updated_at?: string | null
         }
@@ -894,7 +1039,7 @@ export type Database = {
           created_at?: string | null
           date_timestamp_subm?: string | null
           email_email_of_user_who_added_product?: string | null
-          glide_id?: string | null
+          glide_id?: string
           id?: string
           last_edited_date?: string | null
           last_modified_at?: string | null
@@ -905,10 +1050,8 @@ export type Database = {
           main_fronted?: boolean | null
           main_leave_no?: boolean | null
           main_miscellaneous_items?: boolean | null
-          main_more_units_behind?: boolean | null
           main_new_product_name?: string | null
           main_product_image1?: string | null
-          main_product_name?: string | null
           main_product_purchase_date?: string | null
           main_purchase_notes?: string | null
           main_rename_product?: boolean | null
@@ -918,23 +1061,42 @@ export type Database = {
           main_total_qty_purchased?: number | null
           main_total_units_behind_sample?: number | null
           main_vendor_product_name?: string | null
-          main_vendor_uid?: string | null
-          po_added_to_old_po?: boolean | null
           po_converted_po?: boolean | null
           po_old_po_rowid?: boolean | null
-          po_old_po_uid?: boolean | null
           po_po_date?: string | null
           po_pouid_from_add_prod?: string | null
           product_name_display?: string | null
           rowid_account_rowid?: string | null
-          rowid_product_row_id_for_choice_add_item?: string | null
           rowid_purchase_order_row_id?: string | null
-          rowid_sheet21_pics?: string | null
           rowid_vpay_row_id?: string | null
+          sb_accounts_id?: string | null
+          sb_purchase_orders_id?: string | null
           sync_status?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_products_accounts"
+            columns: ["sb_accounts_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_products_purchase_orders"
+            columns: ["sb_purchase_orders_id"]
+            isOneToOne: false
+            referencedRelation: "gl_purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_purchase_order"
+            columns: ["rowid_purchase_order_row_id"]
+            isOneToOne: false
+            referencedRelation: "gl_purchase_orders"
+            referencedColumns: ["glide_id"]
+          },
+        ]
       }
       gl_purchase_orders: {
         Row: {
@@ -943,7 +1105,7 @@ export type Database = {
           docs_pdf_created_on: string | null
           docs_pdf_link: string | null
           docs_shortlink: string | null
-          glide_id: string | null
+          glide_id: string
           id: string
           last_edited_date: string | null
           last_modified_at: string | null
@@ -952,6 +1114,14 @@ export type Database = {
           main_purchase_order_uid_from_product: string | null
           rowid_accntrowid: string | null
           rowid_vpayrowid: string | null
+          sb_accounts_id: string | null
+          sb_pdf_updated_at: string | null
+          sb_pdf_url: string | null
+          secure_share_id: string | null
+          share_last_viewed_at: string | null
+          share_pin_code: string | null
+          share_url: string | null
+          share_view_count: number | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
@@ -961,7 +1131,7 @@ export type Database = {
           docs_pdf_created_on?: string | null
           docs_pdf_link?: string | null
           docs_shortlink?: string | null
-          glide_id?: string | null
+          glide_id: string
           id?: string
           last_edited_date?: string | null
           last_modified_at?: string | null
@@ -970,6 +1140,14 @@ export type Database = {
           main_purchase_order_uid_from_product?: string | null
           rowid_accntrowid?: string | null
           rowid_vpayrowid?: string | null
+          sb_accounts_id?: string | null
+          sb_pdf_updated_at?: string | null
+          sb_pdf_url?: string | null
+          secure_share_id?: string | null
+          share_last_viewed_at?: string | null
+          share_pin_code?: string | null
+          share_url?: string | null
+          share_view_count?: number | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
@@ -979,7 +1157,7 @@ export type Database = {
           docs_pdf_created_on?: string | null
           docs_pdf_link?: string | null
           docs_shortlink?: string | null
-          glide_id?: string | null
+          glide_id?: string
           id?: string
           last_edited_date?: string | null
           last_modified_at?: string | null
@@ -988,10 +1166,26 @@ export type Database = {
           main_purchase_order_uid_from_product?: string | null
           rowid_accntrowid?: string | null
           rowid_vpayrowid?: string | null
+          sb_accounts_id?: string | null
+          sb_pdf_updated_at?: string | null
+          sb_pdf_url?: string | null
+          secure_share_id?: string | null
+          share_last_viewed_at?: string | null
+          share_pin_code?: string | null
+          share_url?: string | null
+          share_view_count?: number | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_purchase_orders_accounts"
+            columns: ["sb_accounts_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gl_shipping_records: {
         Row: {
@@ -1045,6 +1239,9 @@ export type Database = {
           receiver_receiver_name: string | null
           receiver_state: string | null
           rowid_invoicerelated: string | null
+          sb_account_id: string | null
+          sb_account_id_2: string | null
+          sb_invoices_id: string | null
           sender_sender_address: string | null
           sender_sender_name_company: string | null
           sender_sender_phone: string | null
@@ -1103,6 +1300,9 @@ export type Database = {
           receiver_receiver_name?: string | null
           receiver_state?: string | null
           rowid_invoicerelated?: string | null
+          sb_account_id?: string | null
+          sb_account_id_2?: string | null
+          sb_invoices_id?: string | null
           sender_sender_address?: string | null
           sender_sender_name_company?: string | null
           sender_sender_phone?: string | null
@@ -1161,6 +1361,9 @@ export type Database = {
           receiver_receiver_name?: string | null
           receiver_state?: string | null
           rowid_invoicerelated?: string | null
+          sb_account_id?: string | null
+          sb_account_id_2?: string | null
+          sb_invoices_id?: string | null
           sender_sender_address?: string | null
           sender_sender_name_company?: string | null
           sender_sender_phone?: string | null
@@ -1168,7 +1371,36 @@ export type Database = {
           tp_history_rowid?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_shipping_records_accounts"
+            columns: ["sb_account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_shipping_records_accounts_2"
+            columns: ["sb_account_id_2"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_shipping_records_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_shipping_records_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_summary"
+            referencedColumns: ["invoice_id"]
+          },
+        ]
       }
       gl_sync_logs: {
         Row: {
@@ -1269,6 +1501,36 @@ export type Database = {
         }
         Relationships: []
       }
+      gl_table_relationships: {
+        Row: {
+          created_at: string | null
+          glide_column: string
+          id: string
+          reference_table: string
+          source_table: string
+          supabase_column: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          glide_column: string
+          id?: string
+          reference_table: string
+          source_table: string
+          supabase_column: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          glide_column?: string
+          id?: string
+          reference_table?: string
+          source_table?: string
+          supabase_column?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       gl_vendor_payments: {
         Row: {
           automatically_recorded: boolean | null
@@ -1286,6 +1548,9 @@ export type Database = {
           rowid_po_uid_from_addprod: string | null
           rowid_productrowid: string | null
           rowid_purchaseorderrowid: string | null
+          sb_accounts_id: string | null
+          sb_products_id: string | null
+          sb_purchase_orders_id: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
           user_emailuseradded: string | null
@@ -1306,6 +1571,9 @@ export type Database = {
           rowid_po_uid_from_addprod?: string | null
           rowid_productrowid?: string | null
           rowid_purchaseorderrowid?: string | null
+          sb_accounts_id?: string | null
+          sb_products_id?: string | null
+          sb_purchase_orders_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
           user_emailuseradded?: string | null
@@ -1326,11 +1594,36 @@ export type Database = {
           rowid_po_uid_from_addprod?: string | null
           rowid_productrowid?: string | null
           rowid_purchaseorderrowid?: string | null
+          sb_accounts_id?: string | null
+          sb_products_id?: string | null
+          sb_purchase_orders_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
           user_emailuseradded?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_vendor_payments_accounts"
+            columns: ["sb_accounts_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_vendor_payments_products"
+            columns: ["sb_products_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_vendor_payments_purchase_orders"
+            columns: ["sb_purchase_orders_id"]
+            isOneToOne: false
+            referencedRelation: "gl_purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
@@ -1572,6 +1865,48 @@ export type Database = {
         }
         Relationships: []
       }
+      pdf_generation_queue: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          failed_at: string | null
+          id: string
+          priority: number
+          processing_started_at: string | null
+          record_id: string
+          retry_count: number | null
+          status: string
+          table_name: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          failed_at?: string | null
+          id?: string
+          priority?: number
+          processing_started_at?: string | null
+          record_id: string
+          retry_count?: number | null
+          status?: string
+          table_name: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          failed_at?: string | null
+          id?: string
+          priority?: number
+          processing_started_at?: string | null
+          record_id?: string
+          retry_count?: number | null
+          status?: string
+          table_name?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -1725,6 +2060,21 @@ export type Database = {
         }
         Relationships: []
       }
+      temp_orphaned_products: {
+        Row: {
+          id: string | null
+          rowid_purchase_order_row_id: string | null
+        }
+        Insert: {
+          id?: string | null
+          rowid_purchase_order_row_id?: string | null
+        }
+        Update: {
+          id?: string | null
+          rowid_purchase_order_row_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       invoice_summary: {
@@ -1760,6 +2110,10 @@ export type Database = {
           table_name: string
         }
         Returns: number
+      }
+      cleanup_pdf_queue: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       compute_data_hash: {
         Args: {
@@ -1867,6 +2221,10 @@ export type Database = {
       fix_media_groups: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      generate_share_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       glide_sync_products: {
         Args: Record<PropertyKey, never>
@@ -2024,6 +2382,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      regenerate_all_pdfs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       schedule_sync_check: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -2036,6 +2398,12 @@ export type Database = {
       }
       update_product_sku: {
         Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      update_share_view_stats: {
+        Args: {
+          po_id: string
+        }
         Returns: undefined
       }
       urlencode:
