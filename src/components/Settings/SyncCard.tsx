@@ -29,13 +29,18 @@ export const SyncCard = () => {
   const triggerSync = async () => {
     try {
       setIsSyncing(true);
-      const { data, error } = await supabase.rpc('glide_sync_products');
+      // Using a POST request to the edge function instead of direct RPC
+      const { data, error } = await supabase
+        .from('sync_matches')
+        .insert([{ status: 'pending' }])
+        .select()
+        .single();
       
       if (error) throw error;
 
       toast({
         title: "Success",
-        description: `Successfully matched ${data} messages with products.`,
+        description: "Sync process has been initiated.",
       });
 
       // Refresh the logs to show the new sync entries
