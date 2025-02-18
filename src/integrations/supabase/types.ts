@@ -554,6 +554,13 @@ export type Database = {
             referencedRelation: "gl_products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "gl_estimate_lines_sb_products_id_fkey"
+            columns: ["sb_products_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["id"]
+          },
         ]
       }
       gl_estimates: {
@@ -673,6 +680,7 @@ export type Database = {
       }
       gl_expenses: {
         Row: {
+          account_id: string | null
           amount: number | null
           created_at: string | null
           date: string | null
@@ -698,6 +706,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          account_id?: string | null
           amount?: number | null
           created_at?: string | null
           date?: string | null
@@ -723,6 +732,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          account_id?: string | null
           amount?: number | null
           created_at?: string | null
           date?: string | null
@@ -747,7 +757,15 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gl_expenses_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gl_invoice_lines: {
         Row: {
@@ -855,6 +873,20 @@ export type Database = {
             referencedRelation: "gl_products"
             referencedColumns: ["glide_id"]
           },
+          {
+            foreignKeyName: "gl_invoice_lines_sb_invoices_id_fkey"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_invoice_lines_sb_invoices_id_fkey"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_summary"
+            referencedColumns: ["invoice_id"]
+          },
         ]
       }
       gl_invoices: {
@@ -948,7 +980,15 @@ export type Database = {
           tre_order_items_invoice?: Json | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gl_invoices_sb_accounts_id_fkey"
+            columns: ["sb_accounts_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gl_products: {
         Row: {
