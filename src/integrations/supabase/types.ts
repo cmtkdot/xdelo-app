@@ -108,7 +108,7 @@ export type Database = {
       gl_accounts: {
         Row: {
           created_at: string | null
-          glide_id: string | null
+          glide_id: string
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -124,7 +124,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
-          glide_id?: string | null
+          glide_id: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -140,7 +140,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
-          glide_id?: string | null
+          glide_id?: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -249,7 +249,7 @@ export type Database = {
       gl_customer_credits: {
         Row: {
           created_at: string | null
-          glide_id: string | null
+          glide_id: string
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -271,7 +271,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
-          glide_id?: string | null
+          glide_id: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -293,7 +293,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
-          glide_id?: string | null
+          glide_id?: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -348,7 +348,7 @@ export type Database = {
         Row: {
           created_at: string | null
           email_of_user: string | null
-          glide_id: string | null
+          glide_id: string
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -370,7 +370,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           email_of_user?: string | null
-          glide_id?: string | null
+          glide_id: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -392,7 +392,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           email_of_user?: string | null
-          glide_id?: string | null
+          glide_id?: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -452,7 +452,7 @@ export type Database = {
       gl_estimate_lines: {
         Row: {
           created_at: string | null
-          glide_id: string | null
+          glide_id: string
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -477,7 +477,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
-          glide_id?: string | null
+          glide_id: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -502,7 +502,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
-          glide_id?: string | null
+          glide_id?: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -564,7 +564,7 @@ export type Database = {
           date_invoice_created_date: string | null
           date_processed_timestamp: string | null
           date_submitted_timestamp: string | null
-          glide_id: string | null
+          glide_id: string
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -594,7 +594,7 @@ export type Database = {
           date_invoice_created_date?: string | null
           date_processed_timestamp?: string | null
           date_submitted_timestamp?: string | null
-          glide_id?: string | null
+          glide_id: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -624,7 +624,7 @@ export type Database = {
           date_invoice_created_date?: string | null
           date_processed_timestamp?: string | null
           date_submitted_timestamp?: string | null
-          glide_id?: string | null
+          glide_id?: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -1195,7 +1195,7 @@ export type Database = {
           ai_tracking_ai_extracted_text: string | null
           ai_tracking_json_extracted: Json | null
           created_at: string | null
-          glide_id: string | null
+          glide_id: string
           ical_calendar_google_updated: boolean | null
           ical_end_date: string | null
           ical_last_tracked: string | null
@@ -1256,7 +1256,7 @@ export type Database = {
           ai_tracking_ai_extracted_text?: string | null
           ai_tracking_json_extracted?: Json | null
           created_at?: string | null
-          glide_id?: string | null
+          glide_id: string
           ical_calendar_google_updated?: boolean | null
           ical_end_date?: string | null
           ical_last_tracked?: string | null
@@ -1317,7 +1317,7 @@ export type Database = {
           ai_tracking_ai_extracted_text?: string | null
           ai_tracking_json_extracted?: Json | null
           created_at?: string | null
-          glide_id?: string | null
+          glide_id?: string
           ical_calendar_google_updated?: boolean | null
           ical_end_date?: string | null
           ical_last_tracked?: string | null
@@ -1409,7 +1409,7 @@ export type Database = {
           glide_id: string | null
           id: string
           operation: string
-          record_id: string
+          record_id: string | null
           status: string
           table_name: string
         }
@@ -1419,7 +1419,7 @@ export type Database = {
           glide_id?: string | null
           id?: string
           operation: string
-          record_id: string
+          record_id?: string | null
           status: string
           table_name: string
         }
@@ -1429,7 +1429,7 @@ export type Database = {
           glide_id?: string | null
           id?: string
           operation?: string
-          record_id?: string
+          record_id?: string | null
           status?: string
           table_name?: string
         }
@@ -1441,10 +1441,7 @@ export type Database = {
           error_message: string | null
           id: string
           last_sync_time: string | null
-          max_retries: number | null
-          next_retry_at: string | null
-          retry_count: number | null
-          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          sync_status: string
           table_name: string
           updated_at: string | null
         }
@@ -1453,10 +1450,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           last_sync_time?: string | null
-          max_retries?: number | null
-          next_retry_at?: string | null
-          retry_count?: number | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          sync_status?: string
           table_name: string
           updated_at?: string | null
         }
@@ -1465,10 +1459,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           last_sync_time?: string | null
-          max_retries?: number | null
-          next_retry_at?: string | null
-          retry_count?: number | null
-          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          sync_status?: string
           table_name?: string
           updated_at?: string | null
         }
@@ -1536,7 +1527,7 @@ export type Database = {
           automatically_recorded: boolean | null
           created_at: string | null
           date_timestamp_date: string | null
-          glide_id: string | null
+          glide_id: string
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -1559,7 +1550,7 @@ export type Database = {
           automatically_recorded?: boolean | null
           created_at?: string | null
           date_timestamp_date?: string | null
-          glide_id?: string | null
+          glide_id: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -1582,7 +1573,7 @@ export type Database = {
           automatically_recorded?: boolean | null
           created_at?: string | null
           date_timestamp_date?: string | null
-          glide_id?: string | null
+          glide_id?: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null

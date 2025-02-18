@@ -1,3 +1,4 @@
+
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
@@ -8,6 +9,7 @@ import {
   Store,
   Settings,
   Globe,
+  Mic,
 } from "lucide-react";
 
 const routes = [
@@ -28,6 +30,12 @@ const routes = [
     icon: Store,
     href: "/gallery",
     color: "text-violet-500",
+  },
+  {
+    label: "Audio Upload",
+    icon: Mic,
+    href: "/audio-upload",
+    color: "text-green-500",
   },
   {
     label: "AI Chat",
@@ -75,4 +83,4 @@ export function Sidebar() {
       </div>
     </div>
   );
-} 
+}
