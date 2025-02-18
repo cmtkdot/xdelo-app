@@ -1928,6 +1928,103 @@ export type Database = {
         }
         Relationships: []
       }
+      raw_product_entries: {
+        Row: {
+          audio_url: string
+          created_at: string | null
+          error_message: string | null
+          extracted_data: Json | null
+          gl_product_id: string | null
+          id: string
+          needs_manual_review: boolean | null
+          processing_status: string | null
+          review_notes: string | null
+          review_status: Database["public"]["Enums"]["review_status"] | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          transcription: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          audio_url: string
+          created_at?: string | null
+          error_message?: string | null
+          extracted_data?: Json | null
+          gl_product_id?: string | null
+          id?: string
+          needs_manual_review?: boolean | null
+          processing_status?: string | null
+          review_notes?: string | null
+          review_status?: Database["public"]["Enums"]["review_status"] | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          transcription?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          audio_url?: string
+          created_at?: string | null
+          error_message?: string | null
+          extracted_data?: Json | null
+          gl_product_id?: string | null
+          id?: string
+          needs_manual_review?: boolean | null
+          processing_status?: string | null
+          review_notes?: string | null
+          review_status?: Database["public"]["Enums"]["review_status"] | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          transcription?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "raw_product_entries_gl_product_id_fkey"
+            columns: ["gl_product_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      raw_product_entries_audit: {
+        Row: {
+          change_type: string | null
+          changed_by: string | null
+          created_at: string | null
+          entry_id: string | null
+          id: string
+          new_data: Json | null
+          old_data: Json | null
+        }
+        Insert: {
+          change_type?: string | null
+          changed_by?: string | null
+          created_at?: string | null
+          entry_id?: string | null
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+        }
+        Update: {
+          change_type?: string | null
+          changed_by?: string | null
+          created_at?: string | null
+          entry_id?: string | null
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "raw_product_entries_audit_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "raw_product_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       settings: {
         Row: {
           bot_token: string | null
@@ -2098,6 +2195,13 @@ export type Database = {
       a_delete_analysis_audit_log_limit_500: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      approve_and_sync_product: {
+        Args: {
+          entry_id: string
+          reviewer_id: string
+        }
+        Returns: string
       }
       bytea_to_text: {
         Args: {
@@ -2455,6 +2559,7 @@ export type Database = {
         | "processing"
         | "completed"
         | "error"
+      review_status: "pending" | "approved" | "rejected"
       sync_operation: "sync" | "create" | "update" | "delete"
       sync_status: "pending" | "synced" | "error" | "locked"
     }
