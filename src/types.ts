@@ -1,3 +1,4 @@
+
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
@@ -19,31 +20,9 @@ export interface AnalyzedContent {
   };
 }
 
-export interface ProcessingMetadata {
-  correlation_id: string;
-  timestamp: string;
-  method: string;
-  confidence: number;
-  original_caption: string;
-  message_id: string;
-  reanalysis_attempted: boolean;
-  group_message_count?: number;
-  is_original_caption?: boolean;
-}
-
-export interface TelegramMedia {
-  file_id: string;
-  file_unique_id: string;
-  file_size?: number;
-  width?: number;
-  height?: number;
-  duration?: number;
-  mime_type?: string;
-}
-
-export interface MediaItem {
+export interface Message {
   id: string;
-  telegram_message_id: number;
+  telegram_message_id?: number;
   media_group_id?: string;
   message_caption_id?: string;
   is_original_caption?: boolean;
@@ -57,13 +36,11 @@ export interface MediaItem {
   width?: number;
   height?: number;
   duration?: number;
-  created_at?: string;
-  updated_at?: string;
   user_id: string;
   processing_state?: ProcessingState;
   processing_started_at?: string;
   processing_completed_at?: string;
-  analyzed_content?: AnalyzedContent | null;
+  analyzed_content?: AnalyzedContent;
   telegram_data?: Record<string, unknown>;
   error_message?: string;
   retry_count?: number;
@@ -75,18 +52,25 @@ export interface MediaItem {
   chat_type?: string;
   message_url?: string;
   purchase_order?: string;
+  glide_row_id?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
-export interface FilterValues {
-  search: string;
-  vendor: string;
-  dateFrom?: Date;
-  dateTo?: Date;
-  dateField: 'purchase_date' | 'created_at';
-  sortOrder: 'asc' | 'desc';
-  productCode?: string;
-  quantityRange?: string;
-  processingState?: ProcessingState | 'all';
+export interface MediaItem extends Message {
+  glide_row_id?: string;
+}
+
+export interface MatchResult {
+  id: string;
+  message_id: string;
+  product_id: string;
+  confidence: number;
+  matchType: string;
+  details: {
+    matchedFields: string[];
+    confidence: number;
+  };
 }
 
 export interface GlProduct {
@@ -105,13 +89,18 @@ export interface GlProduct {
   updated_at: string;
   sync_status: string;
   message_public_url?: string | null;
+  cart_add_note?: boolean;
+  cart_rename?: boolean;
+  date_timestamp_subm?: string;
+  email_email_of_user_who_added_product?: string;
+  glide_id?: string;
   messages?: {
     public_url: string;
     media_group_id: string;
   }[];
 }
 
-// Helper functions to convert types to JSON
+// Helper functions
 export const analyzedContentToJson = (content: AnalyzedContent): Json => {
   return {
     product_name: content.product_name,
@@ -123,19 +112,5 @@ export const analyzedContentToJson = (content: AnalyzedContent): Json => {
     total_price: content.total_price,
     notes: content.notes,
     parsing_metadata: content.parsing_metadata
-  };
-};
-
-export const processingMetadataToJson = (metadata: ProcessingMetadata): Json => {
-  return {
-    correlation_id: metadata.correlation_id,
-    timestamp: metadata.timestamp,
-    method: metadata.method,
-    confidence: metadata.confidence,
-    original_caption: metadata.original_caption,
-    message_id: metadata.message_id,
-    reanalysis_attempted: metadata.reanalysis_attempted,
-    group_message_count: metadata.group_message_count,
-    is_original_caption: metadata.is_original_caption
   };
 };

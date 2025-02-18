@@ -2425,6 +2425,20 @@ export type Database = {
             }
             Returns: string
           }
+      validate_gl_relationships: {
+        Args: {
+          p_table_name?: string
+        }
+        Returns: {
+          source_table: string
+          reference_table: string
+          glide_column: string
+          supabase_column: string
+          missing_references: number
+          total_records: number
+          coverage_percentage: number
+        }[]
+      }
     }
     Enums: {
       message_processing_state:

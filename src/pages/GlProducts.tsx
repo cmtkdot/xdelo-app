@@ -24,13 +24,32 @@ const GlProducts = () => {
 
       if (error) throw error;
       
-      // Transform the data to include the first message's public_url
+      // Transform and type-cast the data to match GlProduct interface
       const productsWithImages = data.map(product => ({
-        ...product,
-        message_public_url: product.messages?.[0]?.public_url || null
-      }));
+        id: product.id,
+        main_product_name: product.main_product_name || '',
+        main_vendor_uid: product.main_vendor_uid || '',
+        main_vendor_product_name: product.main_vendor_product_name || '',
+        main_product_purchase_date: product.main_product_purchase_date || '',
+        main_total_qty_purchased: product.main_total_qty_purchased || 0,
+        main_cost: product.main_cost || 0,
+        main_category: product.main_category || '',
+        main_product_image1: product.main_product_image1 || '',
+        main_purchase_notes: product.main_purchase_notes || '',
+        product_name_display: product.product_name_display || '',
+        created_at: product.created_at,
+        updated_at: product.updated_at,
+        sync_status: product.sync_status || 'pending',
+        message_public_url: product.messages?.[0]?.public_url || null,
+        cart_add_note: product.cart_add_note,
+        cart_rename: product.cart_rename,
+        date_timestamp_subm: product.date_timestamp_subm,
+        email_email_of_user_who_added_product: product.email_email_of_user_who_added_product,
+        glide_id: product.glide_id,
+        messages: product.messages
+      })) as GlProduct[];
 
-      return productsWithImages as GlProduct[];
+      return productsWithImages;
     },
   });
 
