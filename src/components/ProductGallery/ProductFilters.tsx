@@ -17,27 +17,25 @@ interface ProductFiltersProps {
 
 export default function ProductFilters({ vendors, filters, onFilterChange }: ProductFiltersProps) {
   const [search, setSearch] = useState(filters.search);
-  const [vendor, setVendor] = useState(filters.vendor);
-  const [dateField, setDateField] = useState<'purchase_date' | 'created_at'>(filters.dateField || 'created_at');
+  const [selectedVendors, setSelectedVendors] = useState<string[]>(filters.vendors || []);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder || "desc");
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
   useEffect(() => {
     let count = 0;
     if (search) count++;
-    if (vendor !== 'all') count++;
+    if (selectedVendors.length > 0) count++;
     setActiveFiltersCount(count);
-  }, [search, vendor]);
+  }, [search, selectedVendors]);
 
   const handleFilterChange = useCallback(() => {
     onFilterChange({
       search,
-      vendor,
-      dateField,
+      vendors: selectedVendors,
       sortOrder,
-      processingState: 'completed'
+      processingState: ['completed']
     });
-  }, [search, vendor, dateField, sortOrder, onFilterChange]);
+  }, [search, selectedVendors, sortOrder, onFilterChange]);
 
   useEffect(() => {
     handleFilterChange();
@@ -45,17 +43,12 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
 
   const resetFilters = () => {
     setSearch("");
-    setVendor("all");
-    setDateField('created_at');
+    setSelectedVendors([]);
     setSortOrder("desc");
   };
 
   const handleSortOrderChange = (value: string) => {
     setSortOrder(value as "asc" | "desc");
-  };
-
-  const handleDateFieldChange = (value: string) => {
-    setDateField(value as 'purchase_date' | 'created_at');
   };
 
   const FilterContent = () => (
@@ -69,7 +62,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label className="text-sm font-medium">Vendor</Label>
-          <VendorFilter value={vendor} vendors={vendors} onChange={setVendor} />
+          <VendorFilter value={selectedVendors} vendors={vendors} onChange={setSelectedVendors} />
         </div>
 
         <div className="space-y-2">
@@ -81,19 +74,6 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
             <SelectContent>
               <SelectItem value="desc">Newest First</SelectItem>
               <SelectItem value="asc">Oldest First</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">Date Field</Label>
-          <Select value={dateField} onValueChange={handleDateFieldChange}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="purchase_date">Purchase Date</SelectItem>
-              <SelectItem value="created_at">Created At</SelectItem>
             </SelectContent>
           </Select>
         </div>

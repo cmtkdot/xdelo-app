@@ -13,19 +13,19 @@ export function GlappProductCard({ product }: GlappProductCardProps) {
       <CardHeader>
         <div className="space-y-1">
           <h3 className="font-semibold truncate">
-            {product.product_name_display || product.main_product_name}
+            {product.product_name_display || product.main_new_product_name}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {product.main_vendor_uid}
+            {product.main_vendor_product_name}
           </p>
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          {(product.message_public_url || product.main_product_image1) && (
+          {(product.messages?.[0]?.public_url || product.main_product_image1) && (
             <img
-              src={product.message_public_url || product.main_product_image1}
-              alt={product.main_product_name}
+              src={product.messages?.[0]?.public_url || product.main_product_image1}
+              alt={product.main_new_product_name}
               className="w-full h-48 object-cover rounded-md"
             />
           )}

@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, FilterValues } from "@/types";
+import { MediaItem, FilterValues, ProcessingState } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
@@ -15,29 +14,24 @@ const ProductGallery = () => {
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<FilterValues>({
     search: "",
-    vendor: "all",
-    dateField: 'created_at',
+    vendors: [],
     sortOrder: "desc",
-    processingState: "completed"
+    processingState: ['completed']
   });
 
   const { toast } = useToast();
   const vendors = useVendors();
 
-  // Calculate items per page based on viewport size
   const [itemsPerPage, setItemsPerPage] = useState(15); 
 
   useEffect(() => {
     const calculateItemsPerPage = () => {
-      // Get viewport width
       const width = window.innerWidth;
       
-      // Calculate approximate number of columns based on viewport width
-      let columns = Math.floor(width / 180); // 180px is our target card width
-      columns = Math.max(2, Math.min(6, columns)); // Ensure between 2 and 6 columns
+      let columns = Math.floor(width / 180);
+      columns = Math.max(2, Math.min(6, columns));
       
-      // Calculate rows (aim for roughly square layout)
-      const rows = Math.max(3, Math.min(6, Math.ceil(columns * 0.8))); // Slightly fewer rows than columns
+      const rows = Math.max(3, Math.min(6, Math.ceil(columns * 0.8)));
       
       return columns * rows;
     };
@@ -46,13 +40,10 @@ const ProductGallery = () => {
       setItemsPerPage(calculateItemsPerPage());
     };
 
-    // Initial calculation
     handleResize();
 
-    // Add event listener
     window.addEventListener('resize', handleResize);
 
-    // Cleanup
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
@@ -103,7 +94,6 @@ const ProductGallery = () => {
         onFilterChange={setFilters}
       />
 
-      {/* Product Grid */}
       <ProductGrid
         products={Object.values(mediaGroups)}
         onEdit={handleEditMedia}
@@ -119,7 +109,6 @@ const ProductGallery = () => {
         />
       )}
 
-      {/* Edit Dialog */}
       {editItem && (
         <MediaEditDialog
           editItem={editItem}

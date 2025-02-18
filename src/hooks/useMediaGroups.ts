@@ -1,3 +1,4 @@
+
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { FilterValues, MediaItem } from "@/types";
@@ -12,19 +13,17 @@ export const useMediaGroups = (page: number, filters: FilterValues, itemsPerPage
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    // Subscribe to all changes in the messages table
     const channel = supabase
       .channel('public:messages')
       .on(
         'postgres_changes',
         {
-          event: '*', // Listen to all changes (INSERT, UPDATE, DELETE)
+          event: '*',
           schema: 'public',
           table: 'messages'
         },
         (payload) => {
           console.log('Real-time update received:', payload);
-          // Invalidate the query to trigger a refetch
           queryClient.invalidateQueries({
             queryKey: ['mediaGroups', page, filters, itemsPerPage]
           });
@@ -32,7 +31,6 @@ export const useMediaGroups = (page: number, filters: FilterValues, itemsPerPage
       )
       .subscribe();
 
-    // Cleanup subscription on unmount
     return () => {
       supabase.removeChannel(channel);
     };
@@ -48,7 +46,6 @@ export const useMediaGroups = (page: number, filters: FilterValues, itemsPerPage
           page,
           filters: {
             ...filters,
-            dateField: filters.dateField || 'created_at',
             sortOrder: filters.sortOrder || 'desc',
             nullsLast: true,
           },
