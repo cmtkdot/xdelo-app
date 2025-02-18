@@ -2342,6 +2342,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      map_glide_id_to_uuid: {
+        Args: {
+          p_source_table: string
+          p_glide_id: string
+          p_reference_table: string
+        }
+        Returns: string
+      }
       parse_analyzed_content: {
         Args: {
           content: Json

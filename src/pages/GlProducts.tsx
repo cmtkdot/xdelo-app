@@ -27,8 +27,7 @@ const GlProducts = () => {
       // Transform and type-cast the data to match GlProduct interface
       const productsWithImages = data.map(product => ({
         id: product.id,
-        main_product_name: product.main_product_name || '',
-        main_vendor_uid: product.main_vendor_uid || '',
+        main_new_product_name: product.main_new_product_name || '',
         main_vendor_product_name: product.main_vendor_product_name || '',
         main_product_purchase_date: product.main_product_purchase_date || '',
         main_total_qty_purchased: product.main_total_qty_purchased || 0,
@@ -40,12 +39,13 @@ const GlProducts = () => {
         created_at: product.created_at,
         updated_at: product.updated_at,
         sync_status: product.sync_status || 'pending',
-        message_public_url: product.messages?.[0]?.public_url || null,
         cart_add_note: product.cart_add_note,
         cart_rename: product.cart_rename,
         date_timestamp_subm: product.date_timestamp_subm,
         email_email_of_user_who_added_product: product.email_email_of_user_who_added_product,
         glide_id: product.glide_id,
+        sb_accounts_id: product.sb_accounts_id,
+        sb_purchase_orders_id: product.sb_purchase_orders_id,
         messages: product.messages
       })) as GlProduct[];
 
