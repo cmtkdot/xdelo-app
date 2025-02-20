@@ -5,7 +5,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { TelegramUpdate, TelegramMessage } from "./types.ts";
 import { validateRequest, verifyTelegramWebhookSecret } from "./authUtils.ts";
 import { downloadMedia, extractMediaInfo } from "./mediaUtils.ts";
-import { handleMessage, deduplicateMessage } from "./messageHandler.ts";
+import { handleMessage, deduplicateMessage, extractChatInfo } from "./messageHandler.ts";
 
 serve(async (req) => {
   try {
@@ -46,16 +46,8 @@ serve(async (req) => {
       return new Response('Duplicate message', { status: 200, headers: corsHeaders });
     }
 
-    // Extract chat information
-    const chatInfo = {
-      chat_id: message.chat.id,
-      chat_type: message.chat.type,
-      chat_title: message.chat.title || 
-                  message.chat.username || 
-                  `${message.chat.first_name || ''} ${message.chat.last_name || ''}`.trim() || 
-                  'Unknown Chat'
-    };
-
+    // Extract chat information using our dedicated function
+    const chatInfo = extractChatInfo(message);
     console.log('Extracted chat info:', chatInfo);
 
     // Handle the message

@@ -17,6 +17,31 @@ export async function deduplicateMessage(
   return !!existingMessage;
 }
 
+export function extractChatInfo(message: TelegramMessage) {
+  let chatTitle = '';
+  
+  // Handle different chat types appropriately
+  if (message.chat.type === 'channel' || message.chat.type === 'group' || message.chat.type === 'supergroup') {
+    chatTitle = message.chat.title || 'Unnamed Group';
+  } else if (message.chat.type === 'private') {
+    // For private chats, construct name from components
+    const parts = [
+      message.chat.first_name,
+      message.chat.last_name,
+      message.chat.username ? `(@${message.chat.username})` : null
+    ].filter(Boolean);
+    chatTitle = parts.length > 0 ? parts.join(' ') : 'Unknown User';
+  } else {
+    chatTitle = 'Unknown Chat';
+  }
+
+  return {
+    chat_id: message.chat.id,
+    chat_type: message.chat.type,
+    chat_title: chatTitle
+  };
+}
+
 export async function handleMessage(
   supabase: SupabaseClient,
   message: TelegramMessage,
@@ -30,12 +55,15 @@ export async function handleMessage(
       return null;
     }
 
+    const processedChatInfo = extractChatInfo(message);
+    console.log('Processed chat info:', processedChatInfo);
+
     // Prepare base message data
     const messageData = {
       telegram_message_id: message.message_id,
-      chat_id: chatInfo.chat_id,
-      chat_type: chatInfo.chat_type,
-      chat_title: chatInfo.chat_title,
+      chat_id: processedChatInfo.chat_id,
+      chat_type: processedChatInfo.chat_type,
+      chat_title: processedChatInfo.chat_title, // Using properly processed chat title
       caption: message.caption || '',
       media_group_id: message.media_group_id || null,
       telegram_data: message,
@@ -46,6 +74,7 @@ export async function handleMessage(
       width: mediaInfo.width,
       height: mediaInfo.height,
       duration: mediaInfo.duration,
+      processing_state: message.caption ? 'pending' : 'initialized'
     };
 
     // Insert message into database
@@ -56,6 +85,7 @@ export async function handleMessage(
       .single();
 
     if (insertError) {
+      console.error('Error inserting message:', insertError);
       throw insertError;
     }
 
