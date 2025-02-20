@@ -1,47 +1,9 @@
 
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { TelegramMessage } from './types.ts';
-import { downloadMedia, extractMediaInfo } from './mediaUtils.ts';
+import { TelegramMessage, ChatInfo } from "./types.ts";
+import { extractMediaInfo, downloadMedia } from "./mediaUtils.ts";
 
-export async function findExistingMessage(
-  supabase: SupabaseClient,
-  fileUniqueId: string
-): Promise<any> {
-  const { data, error } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('file_unique_id', fileUniqueId)
-    .maybeSingle();
-
-  if (error) {
-    console.error('Error finding existing message:', error);
-    return null;
-  }
-
-  return data;
-}
-
-export async function findAnalyzedGroupMessage(
-  supabase: SupabaseClient,
-  mediaGroupId: string
-): Promise<any> {
-  const { data, error } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('media_group_id', mediaGroupId)
-    .is('analyzed_content', 'NOT NULL')
-    .eq('processing_state', 'completed')
-    .maybeSingle();
-
-  if (error) {
-    console.error('Error finding analyzed group message:', error);
-    return null;
-  }
-
-  return data;
-}
-
-export function extractChatInfo(message: TelegramMessage) {
+export function extractChatInfo(message: TelegramMessage): ChatInfo {
   let chatTitle = '';
   
   if (message.chat.type === 'channel' || message.chat.type === 'group' || message.chat.type === 'supergroup') {
@@ -64,10 +26,48 @@ export function extractChatInfo(message: TelegramMessage) {
   };
 }
 
+async function findExistingMessage(
+  supabase: SupabaseClient, 
+  fileUniqueId: string
+): Promise<any> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('file_unique_id', fileUniqueId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error finding existing message:', error);
+    return null;
+  }
+
+  return data;
+}
+
+async function findAnalyzedGroupMessage(
+  supabase: SupabaseClient,
+  mediaGroupId: string
+): Promise<any> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('media_group_id', mediaGroupId)
+    .is('analyzed_content', 'NOT NULL')
+    .eq('processing_state', 'completed')
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error finding analyzed group message:', error);
+    return null;
+  }
+
+  return data;
+}
+
 export async function handleMessage(
   supabase: SupabaseClient,
   message: TelegramMessage,
-  chatInfo: { chat_id: number; chat_type: string; chat_title: string }
+  chatInfo: ChatInfo
 ) {
   try {
     const mediaInfo = extractMediaInfo(message);
@@ -76,33 +76,26 @@ export async function handleMessage(
       return null;
     }
 
-    const processedChatInfo = extractChatInfo(message);
-    console.log('Processed chat info:', processedChatInfo);
-
     // Check for existing message by file_unique_id
     const existingMessage = await findExistingMessage(supabase, mediaInfo.file_unique_id);
     
-    // Determine initial processing state
-    let initialProcessingState = 'initialized';
-    let isOriginalCaption = false;
-
-    if (message.caption) {
-      initialProcessingState = 'pending';
-      isOriginalCaption = true;
-    } else if (message.media_group_id) {
-      // Check if there's an already analyzed message in the group
-      const analyzedGroupMessage = await findAnalyzedGroupMessage(supabase, message.media_group_id);
-      if (analyzedGroupMessage) {
-        initialProcessingState = 'completed';
-        isOriginalCaption = false;
-      }
+    // Check for analyzed content in media group
+    let analyzedGroupMessage = null;
+    if (message.media_group_id) {
+      analyzedGroupMessage = await findAnalyzedGroupMessage(supabase, message.media_group_id);
     }
+
+    // Determine initial state and flags
+    const initialState = message.caption ? 'pending' : 
+                        (analyzedGroupMessage ? 'pending' : 'initialized');
+    
+    const isOriginalCaption = Boolean(message.caption);
 
     const messageData = {
       telegram_message_id: message.message_id,
-      chat_id: processedChatInfo.chat_id,
-      chat_type: processedChatInfo.chat_type,
-      chat_title: processedChatInfo.chat_title,
+      chat_id: chatInfo.chat_id,
+      chat_type: chatInfo.chat_type,
+      chat_title: chatInfo.chat_title,
       caption: message.caption || '',
       media_group_id: message.media_group_id || null,
       telegram_data: message,
@@ -113,10 +106,10 @@ export async function handleMessage(
       width: mediaInfo.width,
       height: mediaInfo.height,
       duration: mediaInfo.duration,
-      processing_state: initialProcessingState,
+      processing_state: initialState,
       is_original_caption: isOriginalCaption,
-      group_caption_synced: false,
-      analyzed_content: null // Will be updated by parse-caption-with-ai function if needed
+      group_caption_synced: Boolean(analyzedGroupMessage),
+      analyzed_content: analyzedGroupMessage?.analyzed_content || null
     };
 
     let result;
@@ -129,10 +122,7 @@ export async function handleMessage(
         .select()
         .single();
 
-      if (error) {
-        console.error('Error updating existing message:', error);
-        throw error;
-      }
+      if (error) throw error;
       result = data;
     } else {
       // Insert new message
@@ -142,26 +132,26 @@ export async function handleMessage(
         .select()
         .single();
 
-      if (error) {
-        console.error('Error inserting new message:', error);
-        throw error;
-      }
+      if (error) throw error;
       result = data;
     }
 
-    console.log('Message processed successfully:', result.id);
-
-    // Download media if present
+    // Download and store media
     if (mediaInfo.file_id) {
-      const downloadResult = await downloadMedia(
-        supabase,
-        mediaInfo,
-        result.id
-      );
-      console.log('Media download result:', downloadResult);
+      await downloadMedia(supabase, mediaInfo, result.id);
+    }
+
+    // If this message has analyzed content from group, sync it
+    if (analyzedGroupMessage && message.media_group_id) {
+      await supabase.rpc('xdelo_process_media_group_content', {
+        p_message_id: result.id,
+        p_media_group_id: message.media_group_id,
+        p_analyzed_content: analyzedGroupMessage.analyzed_content
+      });
     }
 
     return result;
+
   } catch (error) {
     console.error('Error handling message:', error);
     throw error;

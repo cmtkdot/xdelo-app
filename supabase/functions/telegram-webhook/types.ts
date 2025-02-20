@@ -1,18 +1,11 @@
 
 export interface TelegramUpdate {
-  update_id: number;
   message?: TelegramMessage;
   edited_message?: TelegramMessage;
 }
 
 export interface TelegramMessage {
   message_id: number;
-  from?: {
-    id: number;
-    first_name?: string;
-    last_name?: string;
-    username?: string;
-  };
   chat: {
     id: number;
     type: string;
@@ -21,16 +14,14 @@ export interface TelegramMessage {
     first_name?: string;
     last_name?: string;
   };
-  date: number;
-  text?: string;
   caption?: string;
   media_group_id?: string;
-  photo?: TelegramPhotoSize[];
+  photo?: TelegramPhoto[];
   video?: TelegramVideo;
   document?: TelegramDocument;
 }
 
-export interface TelegramPhotoSize {
+interface TelegramPhoto {
   file_id: string;
   file_unique_id: string;
   width: number;
@@ -38,7 +29,7 @@ export interface TelegramPhotoSize {
   file_size?: number;
 }
 
-export interface TelegramVideo {
+interface TelegramVideo {
   file_id: string;
   file_unique_id: string;
   width: number;
@@ -48,10 +39,16 @@ export interface TelegramVideo {
   file_size?: number;
 }
 
-export interface TelegramDocument {
+interface TelegramDocument {
   file_id: string;
   file_unique_id: string;
   file_name?: string;
   mime_type?: string;
   file_size?: number;
+}
+
+export interface ChatInfo {
+  chat_id: number;
+  chat_type: string;
+  chat_title: string;
 }
