@@ -3,28 +3,50 @@ import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { TelegramMessage } from './types.ts';
 import { downloadMedia, extractMediaInfo } from './mediaUtils.ts';
 
-export async function deduplicateMessage(
+export async function findExistingMessage(
   supabase: SupabaseClient,
-  message: TelegramMessage
-): Promise<boolean> {
-  const { data: existingMessage } = await supabase
+  fileUniqueId: string
+): Promise<any> {
+  const { data, error } = await supabase
     .from('messages')
-    .select('id')
-    .eq('telegram_message_id', message.message_id)
-    .eq('chat_id', message.chat.id)
-    .single();
+    .select('*')
+    .eq('file_unique_id', fileUniqueId)
+    .maybeSingle();
 
-  return !!existingMessage;
+  if (error) {
+    console.error('Error finding existing message:', error);
+    return null;
+  }
+
+  return data;
+}
+
+export async function findAnalyzedGroupMessage(
+  supabase: SupabaseClient,
+  mediaGroupId: string
+): Promise<any> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('media_group_id', mediaGroupId)
+    .is('analyzed_content', 'NOT NULL')
+    .eq('processing_state', 'completed')
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error finding analyzed group message:', error);
+    return null;
+  }
+
+  return data;
 }
 
 export function extractChatInfo(message: TelegramMessage) {
   let chatTitle = '';
   
-  // Handle different chat types appropriately
   if (message.chat.type === 'channel' || message.chat.type === 'group' || message.chat.type === 'supergroup') {
     chatTitle = message.chat.title || 'Unnamed Group';
   } else if (message.chat.type === 'private') {
-    // For private chats, construct name from components
     const parts = [
       message.chat.first_name,
       message.chat.last_name,
@@ -48,7 +70,6 @@ export async function handleMessage(
   chatInfo: { chat_id: number; chat_type: string; chat_title: string }
 ) {
   try {
-    // Extract media info if present
     const mediaInfo = extractMediaInfo(message);
     if (!mediaInfo) {
       console.log('No media found in message');
@@ -58,12 +79,30 @@ export async function handleMessage(
     const processedChatInfo = extractChatInfo(message);
     console.log('Processed chat info:', processedChatInfo);
 
-    // Prepare base message data
+    // Check for existing message by file_unique_id
+    const existingMessage = await findExistingMessage(supabase, mediaInfo.file_unique_id);
+    
+    // Determine initial processing state
+    let initialProcessingState = 'initialized';
+    let isOriginalCaption = false;
+
+    if (message.caption) {
+      initialProcessingState = 'pending';
+      isOriginalCaption = true;
+    } else if (message.media_group_id) {
+      // Check if there's an already analyzed message in the group
+      const analyzedGroupMessage = await findAnalyzedGroupMessage(supabase, message.media_group_id);
+      if (analyzedGroupMessage) {
+        initialProcessingState = 'completed';
+        isOriginalCaption = false;
+      }
+    }
+
     const messageData = {
       telegram_message_id: message.message_id,
       chat_id: processedChatInfo.chat_id,
       chat_type: processedChatInfo.chat_type,
-      chat_title: processedChatInfo.chat_title, // Using properly processed chat title
+      chat_title: processedChatInfo.chat_title,
       caption: message.caption || '',
       media_group_id: message.media_group_id || null,
       telegram_data: message,
@@ -74,34 +113,55 @@ export async function handleMessage(
       width: mediaInfo.width,
       height: mediaInfo.height,
       duration: mediaInfo.duration,
-      processing_state: message.caption ? 'pending' : 'initialized'
+      processing_state: initialProcessingState,
+      is_original_caption: isOriginalCaption,
+      group_caption_synced: false,
+      analyzed_content: null // Will be updated by parse-caption-with-ai function if needed
     };
 
-    // Insert message into database
-    const { data: insertedMessage, error: insertError } = await supabase
-      .from('messages')
-      .insert([messageData])
-      .select()
-      .single();
+    let result;
+    if (existingMessage) {
+      // Update existing message
+      const { data, error } = await supabase
+        .from('messages')
+        .update(messageData)
+        .eq('id', existingMessage.id)
+        .select()
+        .single();
 
-    if (insertError) {
-      console.error('Error inserting message:', insertError);
-      throw insertError;
+      if (error) {
+        console.error('Error updating existing message:', error);
+        throw error;
+      }
+      result = data;
+    } else {
+      // Insert new message
+      const { data, error } = await supabase
+        .from('messages')
+        .insert([messageData])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error inserting new message:', error);
+        throw error;
+      }
+      result = data;
     }
 
-    console.log('Message inserted successfully:', insertedMessage.id);
+    console.log('Message processed successfully:', result.id);
 
     // Download media if present
     if (mediaInfo.file_id) {
       const downloadResult = await downloadMedia(
         supabase,
         mediaInfo,
-        insertedMessage.id
+        result.id
       );
       console.log('Media download result:', downloadResult);
     }
 
-    return insertedMessage;
+    return result;
   } catch (error) {
     console.error('Error handling message:', error);
     throw error;
