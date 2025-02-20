@@ -40,6 +40,7 @@ interface TelegramMessage {
   from?: {
     id: number;
   };
+  edit_date?: number;
 }
 
 serve(async (req) => {
@@ -62,8 +63,11 @@ serve(async (req) => {
     const update = await req.json();
     console.log('Received update:', JSON.stringify(update));
 
-    // Get the message from any possible source
-    const message: TelegramMessage = update.message || update.channel_post || update.edited_message || update.edited_channel_post;
+    // Get the message from any possible source, including edited messages
+    const message: TelegramMessage = update.message || 
+                                   update.channel_post || 
+                                   update.edited_message || 
+                                   update.edited_channel_post;
     
     if (!message) {
       return new Response(JSON.stringify({ ok: true }), {
@@ -83,6 +87,56 @@ serve(async (req) => {
 
     // Get file details from any media type
     const fileId = photo?.file_id || video?.file_id || document?.file_id;
+
+    // For edited messages, first check if we already have this message
+    if (message.edit_date) {
+      const { data: existingMessage } = await supabaseClient
+        .from('messages')
+        .select()
+        .eq('telegram_message_id', message.message_id)
+        .eq('chat_id', message.chat.id)
+        .single();
+
+      if (existingMessage) {
+        // Update the existing message with new caption and reset processing state
+        const updateData = {
+          caption: message.caption || '',
+          processing_state: message.caption ? 'pending' : 'completed',
+          updated_at: new Date().toISOString()
+        };
+
+        const { error: updateError } = await supabaseClient
+          .from('messages')
+          .update(updateData)
+          .eq('telegram_message_id', message.message_id)
+          .eq('chat_id', message.chat.id);
+
+        if (updateError) {
+          console.error('Error updating message:', updateError);
+          throw updateError;
+        }
+
+        // If there's a caption, trigger the AI analysis
+        if (message.caption) {
+          try {
+            await supabaseClient.functions.invoke('parse-caption-with-ai', {
+              body: { 
+                messageId: existingMessage.id,
+                caption: message.caption
+              }
+            });
+          } catch (aiError) {
+            console.error('Error triggering AI analysis:', aiError);
+          }
+        }
+
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // If it's not an edit or the message doesn't exist, process as new
     if (!fileId) {
       console.log('No media found in message');
       return new Response(JSON.stringify({ ok: true }), {
@@ -132,7 +186,6 @@ serve(async (req) => {
         });
       } catch (aiError) {
         console.error('Error triggering AI analysis:', aiError);
-        // Don't throw here, we still want to acknowledge the webhook
       }
     }
 
