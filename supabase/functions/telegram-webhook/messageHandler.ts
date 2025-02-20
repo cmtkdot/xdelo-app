@@ -1,5 +1,5 @@
 
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { TelegramMessage } from './types.ts';
 import { downloadMedia, extractMediaInfo } from './mediaUtils.ts';
 
