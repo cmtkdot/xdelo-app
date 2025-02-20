@@ -5,7 +5,6 @@ import { corsHeaders } from '../_shared/cors.ts';
 
 serve(async (req) => {
   try {
-    // Handle CORS preflight request
     if (req.method === 'OPTIONS') {
       return new Response('ok', { headers: corsHeaders });
     }
@@ -17,7 +16,6 @@ serve(async (req) => {
       throw new Error('Missing required environment variables');
     }
 
-    // Verify the request is from Telegram
     const url = new URL(req.url);
     const secret = url.searchParams.get('secret');
     if (secret !== WEBHOOK_SECRET) {
@@ -27,10 +25,11 @@ serve(async (req) => {
     const update = await req.json();
     console.log('Received update:', JSON.stringify(update));
 
-    if (update.message) {
-      await handleMessage(update.message);
-    } else if (update.chat_member) {
-      await handleChatMemberUpdate(update);
+    // Handle both regular messages and edited channel posts
+    const message = update.message || update.channel_post || update.edited_message || update.edited_channel_post;
+    
+    if (message) {
+      await handleMessage(message);
     } else {
       console.log('Unhandled update type:', update);
     }
