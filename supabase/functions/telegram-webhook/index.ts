@@ -49,17 +49,6 @@ serve(async (req) => {
       return new Response(null, { headers: corsHeaders });
     }
 
-    const WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET');
-    if (!WEBHOOK_SECRET) {
-      throw new Error('Missing webhook secret');
-    }
-
-    const url = new URL(req.url);
-    const secret = url.searchParams.get('secret');
-    if (secret !== WEBHOOK_SECRET) {
-      return new Response('Unauthorized', { status: 401 });
-    }
-
     const update = await req.json();
     console.log('Received update:', JSON.stringify(update));
 

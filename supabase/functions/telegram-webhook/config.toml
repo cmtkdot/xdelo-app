@@ -1,6 +1,2 @@
 
 project_id = "xjhhehxcxkiumnwbirel"
-
-[global.env]
-TELEGRAM_BOT_TOKEN = "env(TELEGRAM_BOT_TOKEN)"
-TELEGRAM_WEBHOOK_SECRET = "env(TELEGRAM_WEBHOOK_SECRET)"
