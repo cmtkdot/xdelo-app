@@ -1,4 +1,3 @@
-
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
@@ -90,44 +89,26 @@ export interface GlProduct {
   main_product_purchase_date?: string;
   main_total_qty_purchased?: number;
   main_cost?: number;
-  main_cost_update?: number;
   main_category?: string;
   main_product_image1?: string;
   main_purchase_notes?: string;
   product_name_display?: string;
-  main_samples_or_fronted?: boolean;
-  main_fronted?: boolean;
-  main_samples?: boolean;
-  main_miscellaneous_items?: boolean;
-  main_leave_no?: boolean;
-  main_total_units_behind_sample?: number;
-  main_terms_for_fronted_product?: string;
-  cart_add_note?: boolean;
-  cart_rename?: boolean;
-  po_converted_po?: boolean;
-  po_old_po_rowid?: boolean;
   created_at: string;
   updated_at: string;
-  last_modified_at?: string;
-  last_edited_date?: string;
-  po_po_date?: string;
-  date_timestamp_subm?: string;
   sync_status: string;
-  glide_id?: string;
+  cart_add_note?: boolean;
+  cart_rename?: boolean;
+  date_timestamp_subm?: string;
   email_email_of_user_who_added_product?: string;
-  rowid_purchase_order_row_id?: string;
-  rowid_vpay_row_id?: string;
-  po_pouid_from_add_prod?: string;
+  glide_id?: string;
   rowid_account_rowid?: string;
-  sb_accounts_id?: string;
-  sb_purchase_orders_id?: string;
+  rowid_purchase_order_row_id?: string;
   messages?: {
     public_url: string;
     media_group_id: string;
   }[];
 }
 
-// Helper functions
 export const analyzedContentToJson = (content: AnalyzedContent): Json => {
   return {
     product_name: content.product_name,
