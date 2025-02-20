@@ -1360,6 +1360,7 @@ export type Database = {
           analyzed_content: Json | null
           caption: string | null
           chat_id: number | null
+          chat_title: string | null
           chat_type: string | null
           created_at: string | null
           duration: number | null
@@ -1397,6 +1398,7 @@ export type Database = {
           analyzed_content?: Json | null
           caption?: string | null
           chat_id?: number | null
+          chat_title?: string | null
           chat_type?: string | null
           created_at?: string | null
           duration?: number | null
@@ -1434,6 +1436,7 @@ export type Database = {
           analyzed_content?: Json | null
           caption?: string | null
           chat_id?: number | null
+          chat_title?: string | null
           chat_type?: string | null
           created_at?: string | null
           duration?: number | null
@@ -1468,6 +1471,13 @@ export type Database = {
           width?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "message_flow_analysis"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "messages_message_caption_id_fkey"
             columns: ["message_caption_id"]
@@ -1734,6 +1744,54 @@ export type Database = {
           selling_price: number | null
           stock_after_sale: number | null
           user_email: string | null
+        }
+        Relationships: []
+      }
+      message_flow_analysis: {
+        Row: {
+          chat_id: number | null
+          chat_title: string | null
+          chat_type: string | null
+          created_at: string | null
+          group_caption_synced: boolean | null
+          has_analysis: boolean | null
+          has_caption: boolean | null
+          id: string | null
+          is_original_caption: boolean | null
+          media_group_id: string | null
+          processing_completed_at: string | null
+          processing_started_at: string | null
+          processing_state: string | null
+        }
+        Insert: {
+          chat_id?: number | null
+          chat_title?: string | null
+          chat_type?: string | null
+          created_at?: string | null
+          group_caption_synced?: boolean | null
+          has_analysis?: never
+          has_caption?: never
+          id?: string | null
+          is_original_caption?: boolean | null
+          media_group_id?: string | null
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          processing_state?: string | null
+        }
+        Update: {
+          chat_id?: number | null
+          chat_title?: string | null
+          chat_type?: string | null
+          created_at?: string | null
+          group_caption_synced?: boolean | null
+          has_analysis?: never
+          has_caption?: never
+          id?: string | null
+          is_original_caption?: boolean | null
+          media_group_id?: string | null
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          processing_state?: string | null
         }
         Relationships: []
       }
