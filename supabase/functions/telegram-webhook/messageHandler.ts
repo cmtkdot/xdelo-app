@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 // Helper function to create Supabase client
@@ -80,7 +79,7 @@ export const handleMessage = async (message: any) => {
         // Trigger reanalysis
         await supabase.functions.invoke('parse-caption-with-ai', {
           body: { 
-            messageId: existingMessage.id,
+            message_id: existingMessage.id,
             caption: caption
           }
         });
@@ -117,7 +116,7 @@ export const handleMessage = async (message: any) => {
     if (caption) {
       await supabase.functions.invoke('parse-caption-with-ai', {
         body: { 
-          messageId: insertedMessage.id,
+          message_id: insertedMessage.id,
           caption: caption
         }
       });

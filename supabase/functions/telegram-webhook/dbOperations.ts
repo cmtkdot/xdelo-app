@@ -25,24 +25,18 @@ export async function findExistingMessage(
 
 export async function updateExistingMessage(
   supabase: SupabaseClient,
-  messageId: string,
-  updateData: Partial<MessageData>
+  message_id: string,
+  updates: Partial<MessageData>
 ) {
   try {
     const { error } = await supabase
       .from("messages")
-      .update({
-        ...updateData,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", messageId);
+      .update(updates)
+      .eq("id", message_id);
 
-    if (error) {
-      console.error("❌ Failed to update existing message:", error);
-      throw error;
-    }
+    if (error) throw error;
   } catch (error) {
-    console.error("❌ Error in updateExistingMessage:", error);
+    console.error("Error updating message:", error);
     throw error;
   }
 }
@@ -76,22 +70,22 @@ export async function createNewMessage(
 
 export async function triggerCaptionParsing(
   supabase: SupabaseClient,
-  messageId: string,
+  message_id: string,
   mediaGroupId: string | undefined,
   caption: string
 ) {
   try {
-    console.log("🔄 Triggering caption parsing for message:", messageId);
+    console.log("🔄 Triggering caption parsing for message:", message_id);
     
     // Update message state to pending
-    await updateExistingMessage(supabase, messageId, {
+    await updateExistingMessage(supabase, message_id, {
       processing_state: 'pending'
     });
 
     // Call parse-caption-with-ai edge function
     const { error } = await supabase.functions.invoke('parse-caption-with-ai', {
       body: {
-        message_id: messageId,
+        message_id: message_id,
         media_group_id: mediaGroupId,
         caption,
         correlation_id: crypto.randomUUID()
@@ -104,7 +98,7 @@ export async function triggerCaptionParsing(
     console.error("❌ Error triggering caption parsing:", error);
     
     // Update message state to error
-    await updateExistingMessage(supabase, messageId, {
+    await updateExistingMessage(supabase, message_id, {
       processing_state: 'error',
       error_message: error.message
     });

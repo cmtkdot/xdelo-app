@@ -9,7 +9,7 @@ console.log('Product matching function started')
 interface WebhookPayload {
   type: 'MATCH_PRODUCT' | 'BULK_MATCH';
   request?: ProductMatchRequest;
-  messageIds?: string[];
+  message_ids?: string[];
 }
 
 serve(async (req) => {
@@ -35,10 +35,10 @@ serve(async (req) => {
         break
       
       case 'BULK_MATCH':
-        if (!payload.messageIds || !Array.isArray(payload.messageIds)) {
-          throw new Error('Message IDs array is required for bulk matching')
+        if (!payload.message_ids || !Array.isArray(payload.message_ids)) {
+          throw new Error('message_ids array is required for bulk matching')
         }
-        response = await processBulkMatch(payload.messageIds, supabaseClient)
+        response = await processBulkMatch(payload.message_ids, supabaseClient)
         break
 
       default:
@@ -106,14 +106,14 @@ async function processProductMatch(
 }
 
 async function processBulkMatch(
-  messageIds: string[],
+  message_ids: string[],
   supabase: SupabaseClient
 ): Promise<ProductMatchResponse> {
   try {
     const { data: messages, error: messagesError } = await supabase
       .from('messages')
       .select('*')
-      .in('id', messageIds)
+      .in('id', message_ids)
 
     if (messagesError) {
       throw new Error(`Failed to fetch messages: ${messagesError.message}`)

@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { analyzeCaption } from "./utils/aiAnalyzer.ts";
@@ -52,12 +51,12 @@ async function getMediaGroupInfo(supabase: any, mediaGroupId: string) {
 async function updateMediaGroupMessages(
   supabase: any,
   mediaGroupId: string,
-  messageId: string,
+  message_id: string,
   analyzedContent: any,
   hasCaption: boolean
 ) {
   try {
-    console.log('Starting media group sync:', { mediaGroupId, messageId, hasCaption });
+    console.log('Starting media group sync:', { mediaGroupId, message_id, hasCaption });
 
     // Get media group completion status
     const groupInfo = await getMediaGroupInfo(supabase, mediaGroupId);
@@ -66,7 +65,7 @@ async function updateMediaGroupMessages(
     // Update all messages in the group via the stored procedure
     const { error: procError } = await supabase
       .rpc('process_media_group_analysis', {
-        p_message_id: messageId,
+        p_message_id: message_id,
         p_media_group_id: mediaGroupId,
         p_analyzed_content: analyzedContent,
         p_processing_completed_at: new Date().toISOString()
