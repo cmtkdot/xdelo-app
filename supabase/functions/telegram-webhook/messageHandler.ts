@@ -52,8 +52,9 @@ async function findAnalyzedGroupMessage(
     .from('messages')
     .select('*')
     .eq('media_group_id', mediaGroupId)
-    .is('analyzed_content', 'NOT NULL')
+    .is('analyzed_content', 'not.null')
     .eq('processing_state', 'completed')
+    .order('created_at', { ascending: false })
     .maybeSingle();
 
   if (error) {
@@ -70,6 +71,13 @@ export async function handleMessage(
   chatInfo: ChatInfo
 ) {
   try {
+    console.log('Processing message:', {
+      message_id: message.message_id,
+      chat_id: chatInfo.chat_id,
+      media_group_id: message.media_group_id,
+      has_caption: !!message.caption
+    });
+
     const mediaInfo = extractMediaInfo(message);
     if (!mediaInfo) {
       console.log('No media found in message');
@@ -79,17 +87,12 @@ export async function handleMessage(
     // Check for existing message by file_unique_id
     const existingMessage = await findExistingMessage(supabase, mediaInfo.file_unique_id);
     
-    // Check for analyzed content in media group
+    // Check for analyzed content in media group if part of a group
     let analyzedGroupMessage = null;
     if (message.media_group_id) {
       analyzedGroupMessage = await findAnalyzedGroupMessage(supabase, message.media_group_id);
+      console.log('Found analyzed group message:', !!analyzedGroupMessage);
     }
-
-    // Determine initial state and flags
-    const initialState = message.caption ? 'pending' : 
-                        (analyzedGroupMessage ? 'pending' : 'initialized');
-    
-    const isOriginalCaption = Boolean(message.caption);
 
     const messageData = {
       telegram_message_id: message.message_id,
@@ -106,15 +109,18 @@ export async function handleMessage(
       width: mediaInfo.width,
       height: mediaInfo.height,
       duration: mediaInfo.duration,
-      processing_state: initialState,
-      is_original_caption: isOriginalCaption,
-      group_caption_synced: Boolean(analyzedGroupMessage),
-      analyzed_content: analyzedGroupMessage?.analyzed_content || null
+      // Processing state is determined by the trigger function
+      is_original_caption: Boolean(message.caption),
+      group_caption_synced: Boolean(analyzedGroupMessage)
     };
+
+    if (analyzedGroupMessage?.analyzed_content) {
+      messageData.analyzed_content = analyzedGroupMessage.analyzed_content;
+    }
 
     let result;
     if (existingMessage) {
-      // Update existing message
+      console.log('Updating existing message:', existingMessage.id);
       const { data, error } = await supabase
         .from('messages')
         .update(messageData)
@@ -125,7 +131,7 @@ export async function handleMessage(
       if (error) throw error;
       result = data;
     } else {
-      // Insert new message
+      console.log('Creating new message');
       const { data, error } = await supabase
         .from('messages')
         .insert([messageData])
@@ -138,16 +144,27 @@ export async function handleMessage(
 
     // Download and store media
     if (mediaInfo.file_id) {
-      await downloadMedia(supabase, mediaInfo, result.id);
+      console.log('Downloading media for message:', result.id);
+      const publicUrl = await downloadMedia(supabase, mediaInfo, result.id);
+      if (publicUrl) {
+        console.log('Media downloaded successfully:', publicUrl);
+      }
     }
 
     // If this message has analyzed content from group, sync it
     if (analyzedGroupMessage && message.media_group_id) {
-      await supabase.rpc('xdelo_process_media_group_content', {
-        p_message_id: result.id,
+      console.log('Syncing media group content');
+      const { error: syncError } = await supabase.rpc('xdelo_process_media_group_content', {
+        p_message_id: analyzedGroupMessage.id,
         p_media_group_id: message.media_group_id,
         p_analyzed_content: analyzedGroupMessage.analyzed_content
       });
+
+      if (syncError) {
+        console.error('Error syncing media group:', syncError);
+      } else {
+        console.log('Media group synced successfully');
+      }
     }
 
     return result;
