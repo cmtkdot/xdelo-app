@@ -1767,14 +1767,6 @@ export type Database = {
         }
         Returns: string
       }
-      construct_telegram_message_url: {
-        Args: {
-          chat_type: string
-          chat_id: number
-          message_id: number
-        }
-        Returns: string
-      }
       dates_within_range: {
         Args: {
           date1: string
@@ -1788,60 +1780,6 @@ export type Database = {
           p_media_group_id: string
         }
         Returns: undefined
-      }
-      extract_analyzed_at: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: string
-      }
-      extract_confidence_score: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: number
-      }
-      extract_notes: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: string
-      }
-      extract_product_code: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: string
-      }
-      extract_product_name: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: string
-      }
-      extract_product_quantity: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: number
-      }
-      extract_purchase_date: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: string
-      }
-      extract_vendor_name: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: string
-      }
-      extract_vendor_uid: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: string
       }
       filter_by_vendor: {
         Args: {
@@ -1857,10 +1795,6 @@ export type Database = {
           is_original_caption: boolean
           purchase_date: string
         }[]
-      }
-      fix_media_groups: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
       }
       generate_share_id: {
         Args: Record<PropertyKey, never>
@@ -1976,40 +1910,8 @@ export type Database = {
         }
         Returns: boolean
       }
-      manual_sync_media_group: {
-        Args: {
-          p_media_group_id: string
-        }
-        Returns: undefined
-      }
-      parse_analyzed_content: {
-        Args: {
-          content: Json
-        }
-        Returns: {
-          product_name: string
-          product_code: string
-          vendor_uid: string
-          purchase_date: string
-          quantity: number
-          notes: string
-          parsing_method: string
-          confidence: number
-          fallbacks_used: string[]
-          reanalysis_attempted: boolean
-        }[]
-      }
       process_glide_sync_queue: {
         Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      process_media_group_analysis: {
-        Args: {
-          p_message_id: string
-          p_media_group_id: string
-          p_analyzed_content: Json
-          p_processing_completed_at?: string
-        }
         Returns: undefined
       }
       process_media_group_content: {
@@ -2061,6 +1963,104 @@ export type Database = {
             }
             Returns: string
           }
+      xdelo_construct_telegram_message_url: {
+        Args: {
+          chat_type: string
+          chat_id: number
+          message_id: number
+        }
+        Returns: string
+      }
+      xdelo_extract_analyzed_at: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
+      }
+      xdelo_extract_confidence_score: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: number
+      }
+      xdelo_extract_notes: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
+      }
+      xdelo_extract_product_code: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
+      }
+      xdelo_extract_product_name: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
+      }
+      xdelo_extract_product_quantity: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: number
+      }
+      xdelo_extract_purchase_date: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
+      }
+      xdelo_extract_vendor_name: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
+      }
+      xdelo_extract_vendor_uid: {
+        Args: {
+          analyzed_content: Json
+        }
+        Returns: string
+      }
+      xdelo_fix_media_groups: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      xdelo_manual_sync_media_group: {
+        Args: {
+          p_media_group_id: string
+        }
+        Returns: undefined
+      }
+      xdelo_parse_analyzed_content: {
+        Args: {
+          content: Json
+        }
+        Returns: {
+          product_name: string
+          product_code: string
+          vendor_uid: string
+          purchase_date: string
+          quantity: number
+          notes: string
+          parsing_method: string
+          confidence: number
+          fallbacks_used: string[]
+          reanalysis_attempted: boolean
+        }[]
+      }
+      xdelo_process_media_group_analysis: {
+        Args: {
+          p_message_id: string
+          p_media_group_id: string
+          p_analyzed_content: Json
+          p_processing_completed_at?: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       message_processing_state:
