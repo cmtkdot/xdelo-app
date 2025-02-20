@@ -1549,6 +1549,36 @@ export type Database = {
         }
         Relationships: []
       }
+      raw_product_entries: {
+        Row: {
+          audio_url: string | null
+          created_at: string | null
+          extracted_data: Json | null
+          id: string
+          needs_manual_review: boolean | null
+          processing_status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          audio_url?: string | null
+          created_at?: string | null
+          extracted_data?: Json | null
+          id?: string
+          needs_manual_review?: boolean | null
+          processing_status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          audio_url?: string | null
+          created_at?: string | null
+          extracted_data?: Json | null
+          id?: string
+          needs_manual_review?: boolean | null
+          processing_status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       settings: {
         Row: {
           bot_token: string | null

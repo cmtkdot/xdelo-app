@@ -1,19 +1,51 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { corsHeaders } from "../_shared/cors.ts";
 
-const createSupabaseClient = () => {
-  return createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  );
-};
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+interface TelegramMessage {
+  message_id: number;
+  chat: {
+    id: number;
+    type: string;
+  };
+  media_group_id?: string;
+  photo?: Array<{
+    file_id: string;
+    file_unique_id: string;
+    file_size: number;
+    width: number;
+    height: number;
+  }>;
+  video?: {
+    file_id: string;
+    file_unique_id: string;
+    file_size: number;
+    width: number;
+    height: number;
+    duration: number;
+    mime_type: string;
+  };
+  document?: {
+    file_id: string;
+    file_unique_id: string;
+    file_size: number;
+    mime_type: string;
+  };
+  caption?: string;
+  from?: {
+    id: number;
+  };
+}
 
 serve(async (req) => {
   try {
     if (req.method === 'OPTIONS') {
-      return new Response('ok', { headers: corsHeaders });
+      return new Response(null, { headers: corsHeaders });
     }
 
     const WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET');
@@ -30,14 +62,19 @@ serve(async (req) => {
     const update = await req.json();
     console.log('Received update:', JSON.stringify(update));
 
-    // Get the message from any possible source (new or edited)
-    const message = update.message || update.channel_post || update.edited_message || update.edited_channel_post;
+    // Get the message from any possible source
+    const message: TelegramMessage = update.message || update.channel_post || update.edited_message || update.edited_channel_post;
     
     if (!message) {
       return new Response(JSON.stringify({ ok: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
+
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
 
     // Extract media details
     const photo = message.photo?.[message.photo.length - 1];
@@ -73,17 +110,30 @@ serve(async (req) => {
       updated_at: new Date().toISOString()
     };
 
-    const supabase = createSupabaseClient();
-    await supabase.from('messages').insert(messageData);
+    console.log('Inserting message data:', JSON.stringify(messageData));
+
+    const { error: insertError } = await supabaseClient
+      .from('messages')
+      .insert(messageData);
+
+    if (insertError) {
+      console.error('Error inserting message:', insertError);
+      throw insertError;
+    }
 
     // If there's a caption, trigger the AI analysis
     if (message.caption) {
-      await supabase.functions.invoke('parse-caption-with-ai', {
-        body: { 
-          messageId: messageData.telegram_message_id,
-          caption: message.caption
-        }
-      });
+      try {
+        await supabaseClient.functions.invoke('parse-caption-with-ai', {
+          body: { 
+            messageId: messageData.telegram_message_id,
+            caption: message.caption
+          }
+        });
+      } catch (aiError) {
+        console.error('Error triggering AI analysis:', aiError);
+        // Don't throw here, we still want to acknowledge the webhook
+      }
     }
 
     return new Response(JSON.stringify({ ok: true }), {
