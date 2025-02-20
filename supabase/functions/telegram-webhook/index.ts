@@ -76,62 +76,21 @@ serve(async (req) => {
 
     // Get file details from any media type
     const fileId = photo?.file_id || video?.file_id || document?.file_id;
+    const fileUniqueId = photo?.file_unique_id || video?.file_unique_id || document?.file_unique_id;
 
-    // For edited messages, first check if we already have this message
-    if (message.edit_date) {
-      const { data: existingMessage } = await supabaseClient
-        .from('messages')
-        .select()
-        .eq('telegram_message_id', message.message_id)
-        .eq('chat_id', message.chat.id)
-        .single();
-
-      if (existingMessage) {
-        // Update the existing message with new caption and reset processing state
-        const updateData = {
-          caption: message.caption || '',
-          processing_state: message.caption ? 'pending' : 'completed',
-          updated_at: new Date().toISOString()
-        };
-
-        const { error: updateError } = await supabaseClient
-          .from('messages')
-          .update(updateData)
-          .eq('telegram_message_id', message.message_id)
-          .eq('chat_id', message.chat.id);
-
-        if (updateError) {
-          console.error('Error updating message:', updateError);
-          throw updateError;
-        }
-
-        // If there's a caption, trigger the AI analysis
-        if (message.caption) {
-          try {
-            await supabaseClient.functions.invoke('parse-caption-with-ai', {
-              body: { 
-                messageId: existingMessage.id,
-                caption: message.caption
-              }
-            });
-          } catch (aiError) {
-            console.error('Error triggering AI analysis:', aiError);
-          }
-        }
-
-        return new Response(JSON.stringify({ ok: true }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-    }
-
-    // If it's not an edit or the message doesn't exist, process as new
-    if (!fileId) {
+    if (!fileId || !fileUniqueId) {
       console.log('No media found in message');
       return new Response(JSON.stringify({ ok: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
+
+    // First check if we have a message with this file_unique_id
+    const { data: existingMessage } = await supabaseClient
+      .from('messages')
+      .select('*')
+      .eq('file_unique_id', fileUniqueId)
+      .single();
 
     const messageData = {
       telegram_message_id: message.message_id,
@@ -140,7 +99,7 @@ serve(async (req) => {
       media_group_id: message.media_group_id,
       caption: message.caption || '',
       file_id: fileId,
-      file_unique_id: photo?.file_unique_id || video?.file_unique_id || document?.file_unique_id,
+      file_unique_id: fileUniqueId,
       mime_type: document?.mime_type || video?.mime_type || 'image/jpeg',
       file_size: photo?.file_size || video?.file_size || document?.file_size,
       width: photo?.width || video?.width,
@@ -149,27 +108,53 @@ serve(async (req) => {
       telegram_data: message,
       processing_state: message.caption ? 'pending' : 'completed',
       user_id: message.from?.id?.toString(),
-      created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
 
-    console.log('Inserting message data:', JSON.stringify(messageData));
+    let resultMessage;
 
-    const { error: insertError } = await supabaseClient
-      .from('messages')
-      .insert(messageData);
+    if (existingMessage) {
+      // Update existing message
+      console.log('Updating existing message with file_unique_id:', fileUniqueId);
+      const { data: updatedMessage, error: updateError } = await supabaseClient
+        .from('messages')
+        .update(messageData)
+        .eq('file_unique_id', fileUniqueId)
+        .select()
+        .single();
 
-    if (insertError) {
-      console.error('Error inserting message:', insertError);
-      throw insertError;
+      if (updateError) {
+        console.error('Error updating message:', updateError);
+        throw updateError;
+      }
+
+      resultMessage = updatedMessage;
+    } else {
+      // Insert new message
+      console.log('Inserting new message with file_unique_id:', fileUniqueId);
+      const { data: newMessage, error: insertError } = await supabaseClient
+        .from('messages')
+        .insert({
+          ...messageData,
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('Error inserting message:', insertError);
+        throw insertError;
+      }
+
+      resultMessage = newMessage;
     }
 
     // If there's a caption, trigger the AI analysis
-    if (message.caption) {
+    if (message.caption && resultMessage) {
       try {
         await supabaseClient.functions.invoke('parse-caption-with-ai', {
           body: { 
-            messageId: messageData.telegram_message_id,
+            messageId: resultMessage.id,
             caption: message.caption
           }
         });
