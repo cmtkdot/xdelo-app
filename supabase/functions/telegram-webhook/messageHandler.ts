@@ -1,131 +1,79 @@
-import { createClient } from '@supabase/supabase-js';
 
-// Helper function to create Supabase client
-const createSupabaseClient = () => {
-  return createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  );
-};
+import { SupabaseClient } from '@supabase/supabase-js';
+import { TelegramMessage } from './types.ts';
+import { downloadMedia, extractMediaInfo } from './mediaUtils.ts';
 
-export const handleMessage = async (message: any) => {
-  const supabase = createSupabaseClient();
+export async function deduplicateMessage(
+  supabase: SupabaseClient,
+  message: TelegramMessage
+): Promise<boolean> {
+  const { data: existingMessage } = await supabase
+    .from('messages')
+    .select('id')
+    .eq('telegram_message_id', message.message_id)
+    .eq('chat_id', message.chat.id)
+    .single();
 
-  // Extract message details
-  const messageId = message.message_id;
-  const chatId = message.chat.id;
-  const chatType = message.chat.type;
-  const mediaGroupId = message.media_group_id;
-  const caption = message.caption || '';
-  const editDate = message.edit_date;
+  return !!existingMessage;
+}
 
-  // Handle different types of media
-  const photo = message.photo?.[message.photo.length - 1];  // Get largest photo
-  const video = message.video;
-  const document = message.document;
-
-  let fileId, fileUniqueId, mimeType, fileSize, width, height, duration;
-
-  if (photo) {
-    fileId = photo.file_id;
-    fileUniqueId = photo.file_unique_id;
-    mimeType = 'image/jpeg';
-    fileSize = photo.file_size;
-    width = photo.width;
-    height = photo.height;
-  } else if (video) {
-    fileId = video.file_id;
-    fileUniqueId = video.file_unique_id;
-    mimeType = video.mime_type;
-    fileSize = video.file_size;
-    width = video.width;
-    height = video.height;
-    duration = video.duration;
-  } else if (document) {
-    fileId = document.file_id;
-    fileUniqueId = document.file_unique_id;
-    mimeType = document.mime_type;
-    fileSize = document.file_size;
-  }
-
-  if (!fileId) {
-    console.log('No media found in message:', message);
-    return;
-  }
-
+export async function handleMessage(
+  supabase: SupabaseClient,
+  message: TelegramMessage,
+  chatInfo: { chat_id: number; chat_type: string; chat_title: string }
+) {
   try {
-    const { data: existingMessage, error: checkError } = await supabase
-      .from('messages')
-      .select('id, processing_state')
-      .eq('telegram_message_id', messageId)
-      .eq('chat_id', chatId)
-      .single();
-
-    if (existingMessage) {
-      // Update existing message if edited
-      if (editDate) {
-        const { error: updateError } = await supabase
-          .from('messages')
-          .update({
-            caption,
-            telegram_data: message,
-            processing_state: 'pending', // Reset to pending to trigger reanalysis
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingMessage.id);
-
-        if (updateError) throw updateError;
-
-        // Trigger reanalysis
-        await supabase.functions.invoke('parse-caption-with-ai', {
-          body: { 
-            message_id: existingMessage.id,
-            caption: caption
-          }
-        });
-      }
-      console.log('Message handled:', existingMessage.id);
-      return;
+    // Extract media info if present
+    const mediaInfo = extractMediaInfo(message);
+    if (!mediaInfo) {
+      console.log('No media found in message');
+      return null;
     }
 
-    // Insert new message
+    // Prepare base message data
+    const messageData = {
+      telegram_message_id: message.message_id,
+      chat_id: chatInfo.chat_id,
+      chat_type: chatInfo.chat_type,
+      chat_title: chatInfo.chat_title,
+      caption: message.caption || '',
+      media_group_id: message.media_group_id || null,
+      telegram_data: message,
+      file_id: mediaInfo.file_id,
+      file_unique_id: mediaInfo.file_unique_id,
+      mime_type: mediaInfo.mime_type,
+      file_size: mediaInfo.file_size,
+      width: mediaInfo.width,
+      height: mediaInfo.height,
+      duration: mediaInfo.duration,
+    };
+
+    // Insert message into database
     const { data: insertedMessage, error: insertError } = await supabase
       .from('messages')
-      .insert({
-        telegram_message_id: messageId,
-        media_group_id: mediaGroupId,
-        caption,
-        file_id: fileId,
-        file_unique_id: fileUniqueId,
-        mime_type: mimeType,
-        file_size: fileSize,
-        width,
-        height,
-        duration,
-        chat_id: chatId,
-        chat_type: chatType,
-        telegram_data: message,
-        processing_state: caption ? 'pending' : 'completed',
-        user_id: message.from?.id?.toString()
-      })
+      .insert([messageData])
       .select()
       .single();
 
-    if (insertError) throw insertError;
-
-    if (caption) {
-      await supabase.functions.invoke('parse-caption-with-ai', {
-        body: { 
-          message_id: insertedMessage.id,
-          caption: caption
-        }
-      });
+    if (insertError) {
+      throw insertError;
     }
 
-    console.log('Message processed successfully:', insertedMessage.id);
+    console.log('Message inserted successfully:', insertedMessage.id);
 
+    // Download media if present
+    if (mediaInfo.file_id) {
+      const downloadResult = await downloadMedia(
+        supabase,
+        mediaInfo,
+        insertedMessage.id
+      );
+      console.log('Media download result:', downloadResult);
+    }
+
+    return insertedMessage;
   } catch (error) {
-    console.error('Error processing message:', error);
+    console.error('Error handling message:', error);
     throw error;
   }
-};
+}
