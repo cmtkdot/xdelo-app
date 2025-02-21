@@ -252,7 +252,7 @@ export type Database = {
       gl_customer_credits: {
         Row: {
           created_at: string | null
-          glide_id: string | null
+          glide_id: string
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -267,13 +267,14 @@ export type Database = {
           rowid_invoice_row_id: string | null
           sb_accounts_id: string | null
           sb_estimates_id: string | null
+          sb_invoices_id: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           timestamp_added: string | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
-          glide_id?: string | null
+          glide_id: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -288,13 +289,14 @@ export type Database = {
           rowid_invoice_row_id?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
+          sb_invoices_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           timestamp_added?: string | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
-          glide_id?: string | null
+          glide_id?: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -309,6 +311,7 @@ export type Database = {
           rowid_invoice_row_id?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
+          sb_invoices_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           timestamp_added?: string | null
           updated_at?: string | null
@@ -327,6 +330,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "gl_estimates"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_customer_credits_sb_invoices_id_fkey"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_customer_credits_sb_invoices_id_fkey"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_summary"
+            referencedColumns: ["invoice_id"]
           },
         ]
       }
