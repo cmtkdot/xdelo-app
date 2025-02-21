@@ -1687,6 +1687,20 @@ export type Database = {
             foreignKeyName: "message_state_logs_message_id_fkey"
             columns: ["message_id"]
             isOneToOne: false
+            referencedRelation: "message_flow_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_state_logs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "message_flow_logs_materialized"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_state_logs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
             referencedRelation: "messages"
             referencedColumns: ["id"]
           },
@@ -1850,6 +1864,20 @@ export type Database = {
           width?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "message_flow_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "message_flow_logs_materialized"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "messages_message_caption_id_fkey"
             columns: ["message_caption_id"]
@@ -2158,6 +2186,52 @@ export type Database = {
           selling_price: number | null
           stock_after_sale: number | null
           user_email: string | null
+        }
+        Relationships: []
+      }
+      message_flow_logs: {
+        Row: {
+          analyzed_content: Json | null
+          caption: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string | null
+          media_group_id: string | null
+          new_state: Database["public"]["Enums"]["processing_state_type"] | null
+          previous_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          processing_completed_at: string | null
+          processing_started_at: string | null
+          processing_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          state_changed_at: string | null
+          telegram_message_id: number | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
+      message_flow_logs_materialized: {
+        Row: {
+          analyzed_content: Json | null
+          caption: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string | null
+          media_group_id: string | null
+          new_state: Database["public"]["Enums"]["processing_state_type"] | null
+          previous_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          processing_completed_at: string | null
+          processing_started_at: string | null
+          processing_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          state_changed_at: string | null
+          telegram_message_id: number | null
+          updated_at: string | null
         }
         Relationships: []
       }
