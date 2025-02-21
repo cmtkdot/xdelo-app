@@ -101,7 +101,8 @@ export async function uploadMedia(
 
 export async function downloadMedia(
   supabase: SupabaseClient,
-  mediaInfo: MediaInfo
+  mediaInfo: MediaInfo,
+  messageId: string
 ): Promise<string | null> {
   try {
     const mediaResponse = await downloadTelegramFile(
