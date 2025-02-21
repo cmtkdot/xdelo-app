@@ -56,11 +56,17 @@ const MediaTable = () => {
           is_edited,
           edit_date,
           processing_state,
+          processing_started_at,
+          processing_completed_at,
           analyzed_content,
           error_message,
           created_at,
           updated_at,
-          message_url
+          message_url,
+          group_message_count,
+          group_caption_synced,
+          retry_count,
+          last_error_at
         `)
         .not('analyzed_content', 'is', null)
         .gt('caption', '')
@@ -68,8 +74,7 @@ const MediaTable = () => {
       
       if (error) throw error;
       
-      // Cast the response to MediaItem[] since we know the shape matches
-      return data as unknown as MediaItem[];
+      return data as MediaItem[];
     }
   });
 
