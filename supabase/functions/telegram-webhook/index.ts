@@ -30,29 +30,25 @@ async function getFileUrl(fileId: string): Promise<string> {
 async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeType: string): Promise<string> {
   console.log('📤 Uploading media to storage:', { fileUniqueId, mimeType })
   
-  // Get file extension from mime type
   const ext = mimeType.split('/')[1] || 'bin'
   const storagePath = `${fileUniqueId}.${ext}`
   
   try {
-    // Download file from Telegram
     const mediaResponse = await fetch(fileUrl)
     if (!mediaResponse.ok) throw new Error('Failed to download media from Telegram')
     
     const mediaBuffer = await mediaResponse.arrayBuffer()
 
-    // Upload to Supabase Storage
     const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')
       .upload(storagePath, mediaBuffer, {
         contentType: mimeType,
-        upsert: true // Allow overwriting if file exists
+        upsert: true
       })
 
     if (uploadError) throw uploadError
 
-    // Get public URL
     const { data: { publicUrl } } = supabase
       .storage
       .from('telegram-media')
@@ -73,7 +69,6 @@ serve(async (req) => {
   }
 
   try {
-    // Log the raw request
     const rawBody = await req.text();
     console.log('📝 Raw request body:', rawBody);
 
@@ -90,20 +85,21 @@ serve(async (req) => {
 
     console.log('📥 Parsed webhook update:', JSON.stringify(update, null, 2));
 
-    // Check if we have a message and log its structure
-    if (!update.message) {
-      console.log('❌ No message in update. Update keys:', Object.keys(update));
+    // Handle both regular messages and channel posts
+    const message = update.message || update.channel_post;
+    
+    if (!message) {
+      console.log('❌ No message or channel_post in update. Update keys:', Object.keys(update));
       return new Response(
         JSON.stringify({ 
           status: 'skipped', 
-          reason: 'no message',
+          reason: 'no message or channel_post',
           update_keys: Object.keys(update)
         }), 
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
       );
     }
 
-    const message = update.message;
     console.log('📨 Message content:', JSON.stringify(message, null, 2));
 
     const chat = message.chat
@@ -112,7 +108,6 @@ serve(async (req) => {
     const video = message.video
     const media = photo || video
 
-    // Log media details
     console.log('📸 Media details:', {
       hasPhoto: !!photo,
       hasVideo: !!video,
@@ -132,7 +127,6 @@ serve(async (req) => {
       )
     }
 
-    // Check if media already exists
     const { data: existingMedia, error: queryError } = await supabase
       .from('messages')
       .select('*')
@@ -151,16 +145,14 @@ serve(async (req) => {
     let messageData
     let storageUrl
 
-    // Handle new media or caption update
+    // Always process new media, regardless of caption
     if (!existingMedia || (existingMedia && message.caption !== existingMedia.caption)) {
       console.log('🆕 Processing new or updated media');
       
-      // Get Telegram file URL
       const telegramFileUrl = await getFileUrl(media.file_id)
       console.log('📥 Got Telegram file URL:', telegramFileUrl);
       
       if (!existingMedia) {
-        // Only upload to storage if it's new media
         console.log('📤 New media detected, uploading to storage');
         storageUrl = await uploadMediaToStorage(
           telegramFileUrl,
@@ -168,7 +160,6 @@ serve(async (req) => {
           video ? video.mime_type : 'image/jpeg'
         )
       } else {
-        // Use existing storage URL for caption updates
         storageUrl = existingMedia.public_url
         console.log('♻️ Using existing storage URL:', storageUrl);
       }
@@ -179,7 +170,7 @@ serve(async (req) => {
         chat_type: chat.type,
         chat_title: chat.title,
         media_group_id: mediaGroupId,
-        caption: message.caption || '',
+        caption: message.caption || '', // Store empty string if no caption
         file_id: media.file_id,
         file_unique_id: media.file_unique_id,
         public_url: storageUrl,
@@ -189,15 +180,14 @@ serve(async (req) => {
         width: media.width,
         height: media.height,
         duration: video?.duration,
-        processing_state: 'pending',
+        processing_state: message.caption ? 'pending' : 'initialized', // Only set pending if there's a caption
         telegram_data: update
       }
 
       console.log('📝 Prepared message data:', JSON.stringify(messageData, null, 2));
 
-      // Insert or update message
       if (existingMedia) {
-        console.log('🔄 Updating existing media with new caption');
+        console.log('🔄 Updating existing media');
         const { data: updatedMessage, error } = await supabase
           .from('messages')
           .update(messageData)
@@ -225,7 +215,7 @@ serve(async (req) => {
         messageData = newMessage
       }
 
-      // Trigger content analysis if there's a caption
+      // Only trigger analysis if there's a caption
       if (message.caption) {
         console.log('🔄 Triggering caption analysis for message:', messageData.id);
         await supabase.functions.invoke('parse-caption-with-ai', {
