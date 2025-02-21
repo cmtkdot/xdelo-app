@@ -36,6 +36,79 @@ export function extractChatInfo(message: TelegramMessage): ChatInfo {
   };
 }
 
+async function findExistingMessage(
+  supabase: SupabaseClient, 
+  fileUniqueId: string,
+  messageId: number,
+  chatId: number
+): Promise<any> {
+  // First try to find by file_unique_id
+  const { data: fileData, error: fileError } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('file_unique_id', fileUniqueId)
+    .maybeSingle();
+
+  if (fileError) {
+    console.error('Error finding message by file_unique_id:', fileError);
+    return null;
+  }
+
+  if (fileData) {
+    console.log('Found existing message by file_unique_id:', fileData.id);
+    return fileData;
+  }
+
+  // If not found by file_unique_id, try telegram_message_id and chat_id
+  const { data: messageData, error: messageError } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('telegram_message_id', messageId)
+    .eq('chat_id', chatId)
+    .maybeSingle();
+
+  if (messageError) {
+    console.error('Error finding message by telegram_message_id:', messageError);
+    return null;
+  }
+
+  if (messageData) {
+    console.log('Found existing message by telegram_message_id:', messageData.id);
+  }
+
+  return messageData;
+}
+
+async function findAnalyzedGroupMessage(
+  supabase: SupabaseClient,
+  mediaGroupId: string
+): Promise<any> {
+  // Look for the most recently analyzed message in the group
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('media_group_id', mediaGroupId)
+    .eq('processing_state', 'completed')
+    .is('analyzed_content', 'not.null')
+    .order('created_at', { ascending: false })
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error finding analyzed group message:', error);
+    return null;
+  }
+
+  if (data) {
+    console.log('Found analyzed group message:', {
+      id: data.id,
+      media_group_id: data.media_group_id,
+      has_content: !!data.analyzed_content
+    });
+  }
+
+  return data;
+}
+
 export async function handleMessage(
   supabase: SupabaseClient,
   message: TelegramMessage,
@@ -165,52 +238,39 @@ export async function handleMessage(
         .select()
         .single();
 
-      if (updateError) throw updateError;
-      result = { id: existingMessages.id };
-
+      if (error) throw error;
+      result = data;
+      console.log('Message updated successfully:', result.id);
     } else {
-      console.log('➕ Creating new message');
-      
-      const { data: insertedMessage, error: insertError } = await supabase
-        .from("messages")
-        .insert(messageData)
+      console.log('Creating new message');
+      const { data, error } = await supabase
+        .from('messages')
+        .insert([messageData])
         .select()
         .single();
 
-      if (insertError) throw insertError;
-      result = insertedMessage;
+      if (error) throw error;
+      result = data;
+      console.log('New message created:', result.id);
     }
 
-    // Download and upload media
-    const publicUrl = await downloadMedia(supabase, mediaInfo, result.id);
-    if (publicUrl) {
-      const { error: updateError } = await supabase
-        .from("messages")
-        .update({ public_url: publicUrl })
-        .eq("id", result.id);
-
-      if (updateError) throw updateError;
+    // Download and store media
+    if (mediaInfo.file_id) {
+      console.log('Downloading media for message:', result.id);
+      const publicUrl = await downloadMedia(supabase, mediaInfo, result.id);
+      if (publicUrl) {
+        console.log('Media downloaded successfully:', publicUrl);
+      }
     }
 
-    // Handle caption and group synchronization
-    if (message.caption) {
-      // If this message has a caption, trigger parsing
-      await triggerCaptionParsing(
-        supabase,
-        result.id,
-        message.media_group_id,
-        message.caption,
-        isEdit
-      );
-    } else if (analyzedGroupMessage?.analyzed_content && message.media_group_id) {
-      // If no caption but part of an analyzed group, sync the content
-      await syncMediaGroupContent(
-        supabase,
-        analyzedGroupMessage.id,
-        result.id,
-        message.media_group_id
-      );
-    }
+    // Sync media group content if we have an analyzed message
+    if (analyzedGroupMessage?.analyzed_content && message.media_group_id) {
+      console.log('Syncing media group content from message:', analyzedGroupMessage.id);
+      const { error: syncError } = await supabase.rpc('xdelo_process_media_group_content', {
+        p_message_id: analyzedGroupMessage.id,
+        p_media_group_id: message.media_group_id,
+        p_analyzed_content: analyzedGroupMessage.analyzed_content
+      });
 
     return {
       message: "Media message processed",
