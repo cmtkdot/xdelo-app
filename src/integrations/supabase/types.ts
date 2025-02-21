@@ -2161,56 +2161,6 @@ export type Database = {
         }
         Relationships: []
       }
-      message_flow_logs: {
-        Row: {
-          chat_id: number | null
-          chat_title: string | null
-          created_at: string | null
-          edit_date: string | null
-          error_message: string | null
-          file_unique_id: string | null
-          is_edited: boolean | null
-          last_error_at: string | null
-          media_group_id: string | null
-          message_category: string | null
-          message_id: string | null
-          processing_completed_at: string | null
-          processing_duration_seconds: number | null
-          processing_started_at: string | null
-          processing_state:
-            | Database["public"]["Enums"]["processing_state_type"]
-            | null
-          retry_count: number | null
-          telegram_message_id: number | null
-          updated_at: string | null
-        }
-        Relationships: []
-      }
-      message_flow_logs_materialized: {
-        Row: {
-          chat_id: number | null
-          chat_title: string | null
-          created_at: string | null
-          edit_date: string | null
-          error_message: string | null
-          file_unique_id: string | null
-          is_edited: boolean | null
-          last_error_at: string | null
-          media_group_id: string | null
-          message_category: string | null
-          message_id: string | null
-          processing_completed_at: string | null
-          processing_duration_seconds: number | null
-          processing_started_at: string | null
-          processing_state:
-            | Database["public"]["Enums"]["processing_state_type"]
-            | null
-          retry_count: number | null
-          telegram_message_id: number | null
-          updated_at: string | null
-        }
-        Relationships: []
-      }
     }
     Functions: {
       a_delete_analysis_audit_log_limit_500: {
