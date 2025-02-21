@@ -1,14 +1,43 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { SupabaseClient } from "@supabase/supabase-js";
 
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
+export type TelegramChatType = 'private' | 'group' | 'supergroup' | 'channel';
+export type ProcessingStateType = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
+export type TelegramOtherMessageType = 'text' | 'sticker' | 'poll' | 'dice' | 'location' | 
+                                     'contact' | 'venue' | 'game' | 'chat_member' | 
+                                     'edited_message' | 'edited_channel_post';
 
 export interface TelegramChat {
   id: number;
-  type: 'private' | 'group' | 'supergroup' | 'channel';
+  type: TelegramChatType;
   title?: string;
   username?: string;
   first_name?: string;
   last_name?: string;
+}
+
+export interface TelegramPhoto {
+  file_id: string;
+  file_unique_id: string;
+  file_size?: number;
+  width: number;
+  height: number;
+}
+
+export interface TelegramVideo {
+  file_id: string;
+  file_unique_id: string;
+  file_size?: number;
+  mime_type?: string;
+  width: number;
+  height: number;
+  duration: number;
+}
+
+export interface TelegramDocument {
+  file_id: string;
+  file_unique_id: string;
+  file_size?: number;
+  mime_type?: string;
 }
 
 export interface TelegramMessage {
@@ -19,28 +48,10 @@ export interface TelegramMessage {
   text?: string;
   caption?: string;
   media_group_id?: string;
-  photo?: Array<{
-    file_id: string;
-    file_unique_id: string;
-    file_size?: number;
-    width: number;
-    height: number;
-  }>;
-  video?: {
-    file_id: string;
-    file_unique_id: string;
-    file_size?: number;
-    mime_type?: string;
-    width: number;
-    height: number;
-    duration: number;
-  };
-  document?: {
-    file_id: string;
-    file_unique_id: string;
-    file_size?: number;
-    mime_type?: string;
-  };
+  sender_chat?: any;
+  photo?: TelegramPhoto[];
+  video?: TelegramVideo;
+  document?: TelegramDocument;
 }
 
 export interface TelegramUpdate {
@@ -49,11 +60,13 @@ export interface TelegramUpdate {
   edited_message?: TelegramMessage;
   channel_post?: TelegramMessage;
   edited_channel_post?: TelegramMessage;
+  my_chat_member?: any;
+  chat_join_request?: any;
 }
 
 export interface ChatInfo {
   chat_id: number;
-  chat_type: string;
+  chat_type: TelegramChatType;
   chat_title: string;
 }
 
@@ -67,66 +80,81 @@ export interface MediaInfo {
   duration?: number;
 }
 
-export interface ExistingMessage {
-  id: string;
-  telegram_message_id: number;
-  media_group_id?: string;
-  file_unique_id: string;
-  caption?: string;
-  analyzed_content?: Record<string, any>;
-  processing_state: ProcessingState;
-  is_original_caption: boolean;
-  group_caption_synced: boolean;
-  message_caption_id?: string;
-  public_url?: string;
-}
-
 export interface MessageData {
+  user_id: string;
   telegram_message_id: number;
   chat_id: number;
-  chat_type: string;
+  chat_type: TelegramChatType;
   chat_title: string;
   media_group_id?: string;
+  message_caption_id?: string;
+  is_original_caption?: boolean;
+  group_caption_synced?: boolean;
   caption?: string;
-  file_id: string;
-  file_unique_id: string;
+  file_id?: string;
+  file_unique_id?: string;
   public_url?: string;
+  storage_path?: string;
   mime_type?: string;
   file_size?: number;
   width?: number;
   height?: number;
   duration?: number;
-  user_id: string;
-  telegram_data: Record<string, any>;
-  processing_state: ProcessingState;
-  group_first_message_time?: string | null;
-  group_last_message_time?: string | null;
-  group_message_count?: number | null;
-  is_original_caption?: boolean;
   is_edited?: boolean;
   edit_date?: string | null;
-  analyzed_content?: Record<string, any> | null;
+  edit_history?: Record<string, any>;
+  processing_state: ProcessingStateType;
+  processing_started_at?: string;
+  processing_completed_at?: string;
+  processing_correlation_id?: string;
+  analyzed_content?: Record<string, any>;
   error_message?: string;
-  group_caption_synced?: boolean;
+  retry_count?: number;
+  last_error_at?: string;
+  group_first_message_time?: string;
+  group_last_message_time?: string;
+  group_message_count?: number;
+  group_completed_at?: string;
+  telegram_data: Record<string, any>;
   message_url?: string;
+  is_channel_post?: boolean;
+  sender_chat_id?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
-export interface ProcessedMedia {
-  file_unique_id: string;
-  public_url: string;
+export interface OtherMessageData {
+  user_id: string;
+  message_type: TelegramOtherMessageType;
+  telegram_message_id: number;
+  chat_id: number;
+  chat_type: TelegramChatType;
+  chat_title?: string;
+  message_text?: string;
+  is_edited: boolean;
+  edit_date?: string | null;
+  processing_state: ProcessingStateType;
+  processing_started_at?: string;
+  processing_completed_at?: string;
+  processing_correlation_id?: string;
+  error_message?: string;
+  telegram_data: Record<string, any>;
+  message_url?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface WebhookResponse {
+  success: boolean;
   message: string;
-  processed_media?: ProcessedMedia[];
+  correlation_id?: string;
+  error?: string;
+  details?: Record<string, any>;
 }
 
-export interface TelegramMedia {
-  file_id: string;
-  file_unique_id: string;
-  file_size?: number;
-  width?: number;
-  height?: number;
-  duration?: number;
-  mime_type?: string;
+export interface StateLogEntry {
+  message_id: string;
+  previous_state: ProcessingStateType;
+  new_state: ProcessingStateType;
+  changed_at?: string;
 }

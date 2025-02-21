@@ -1,18 +1,8 @@
-import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { SupabaseClient } from "@supabase/supabase-js";
+import { MediaInfo, TelegramMessage } from "./types";
 
-interface MediaInfo {
-  file_id: string;
-  file_unique_id: string;
-  mime_type: string;
-  file_size?: number;
-  width?: number;
-  height?: number;
-  duration?: number;
-}
-
-export function extractMediaInfo(message: any): MediaInfo | null {
+export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
   if (message.photo) {
-    // For photos, use the last (highest quality) version
     const photo = message.photo[message.photo.length - 1];
     return {
       file_id: photo.file_id,
@@ -22,24 +12,29 @@ export function extractMediaInfo(message: any): MediaInfo | null {
       height: photo.height,
       file_size: photo.file_size
     };
-  } else if (message.video) {
+  } 
+  
+  if (message.video) {
     return {
       file_id: message.video.file_id,
       file_unique_id: message.video.file_unique_id,
-      mime_type: message.video.mime_type,
+      mime_type: message.video.mime_type || 'video/mp4',
       width: message.video.width,
       height: message.video.height,
       duration: message.video.duration,
       file_size: message.video.file_size
     };
-  } else if (message.document) {
+  } 
+  
+  if (message.document) {
     return {
       file_id: message.document.file_id,
       file_unique_id: message.document.file_unique_id,
-      mime_type: message.document.mime_type,
+      mime_type: message.document.mime_type || 'application/octet-stream',
       file_size: message.document.file_size
     };
   }
+  
   return null;
 }
 
@@ -49,7 +44,12 @@ export async function downloadMedia(
   messageId: string
 ): Promise<string | null> {
   try {
-    // Get file info from Telegram
+    console.log('📥 Downloading media:', {
+      message_id: messageId,
+      file_id: mediaInfo.file_id
+    });
+
+    // Get file path from Telegram
     const fileResponse = await fetch(
       `https://api.telegram.org/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/getFile?file_id=${mediaInfo.file_id}`
     );
@@ -62,11 +62,17 @@ export async function downloadMedia(
     // Download file from Telegram
     const fileUrl = `https://api.telegram.org/file/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/${fileData.result.file_path}`;
     const mediaResponse = await fetch(fileUrl);
+    if (!mediaResponse.ok) {
+      throw new Error('Failed to download media from Telegram');
+    }
+    
     const mediaBuffer = await mediaResponse.arrayBuffer();
 
-    // Generate storage path
+    // Generate storage path with messageId for organization
     const fileExt = mediaInfo.mime_type.split('/')[1] || 'bin';
     const storagePath = `${messageId}/${mediaInfo.file_unique_id}.${fileExt}`;
+
+    console.log('📤 Uploading to storage:', { storagePath });
 
     // Upload to Supabase Storage
     const { error: uploadError } = await supabase
@@ -74,12 +80,11 @@ export async function downloadMedia(
       .from('telegram-media')
       .upload(storagePath, mediaBuffer, {
         contentType: mediaInfo.mime_type,
-        cacheControl: '3600'
+        cacheControl: '3600',
+        upsert: true
       });
 
-    if (uploadError) {
-      throw uploadError;
-    }
+    if (uploadError) throw uploadError;
 
     // Get public URL
     const { data: { publicUrl } } = supabase
@@ -87,22 +92,35 @@ export async function downloadMedia(
       .from('telegram-media')
       .getPublicUrl(storagePath);
 
-    // Update message with storage path and public URL
+    // Update message with storage info
     const { error: updateError } = await supabase
       .from('messages')
       .update({
         storage_path: storagePath,
-        public_url: publicUrl
+        public_url: publicUrl,
+        updated_at: new Date().toISOString()
       })
       .eq('id', messageId);
 
-    if (updateError) {
-      throw updateError;
-    }
+    if (updateError) throw updateError;
 
+    console.log('✅ Media processed successfully:', { publicUrl });
     return publicUrl;
+
   } catch (error) {
-    console.error('Error downloading media:', error);
+    console.error('❌ Error processing media:', error);
+    
+    // Update message with error
+    await supabase
+      .from('messages')
+      .update({
+        error_message: error.message,
+        processing_state: 'error',
+        last_error_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', messageId);
+    
     return null;
   }
 }
