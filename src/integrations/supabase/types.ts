@@ -2434,6 +2434,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      xdelo_monitor_stuck_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       xdelo_parse_analyzed_content: {
         Args: {
           content: Json
