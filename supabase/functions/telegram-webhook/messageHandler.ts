@@ -171,7 +171,8 @@ export async function handleEditedMessage(
       correlation_id: correlationId,
       message_id: message.message_id,
       has_media: !!media,
-      edit_date: message.edit_date
+      edit_date: message.edit_date,
+      is_channel_post: !!message.sender_chat
     });
 
     // First check if the message exists in our messages table regardless of media
@@ -209,6 +210,9 @@ export async function handleEditedMessage(
         }
       };
 
+      // Always trigger reanalysis for edited channel posts with media groups
+      const forceReanalysis = message.sender_chat && message.media_group_id;
+
       // Update the message
       const { error: updateError } = await supabase
         .from("messages")
@@ -235,7 +239,8 @@ export async function handleEditedMessage(
       if (existingMessage.media_group_id && existingMessage.is_original_caption) {
         console.log("🔄 Syncing media group caption:", {
           correlation_id: correlationId,
-          media_group_id: existingMessage.media_group_id
+          media_group_id: existingMessage.media_group_id,
+          is_channel_post: !!message.sender_chat
         });
 
         const { error: groupUpdateError } = await supabase
@@ -270,15 +275,18 @@ export async function handleEditedMessage(
             correlation_id: correlationId,
             edit_date: message.edit_date,
             previous_caption: existingMessage.caption,
-            new_caption: newCaption
+            new_caption: newCaption,
+            is_channel_post: !!message.sender_chat,
+            force_reanalysis: forceReanalysis
           }
         });
 
-      // Trigger reanalysis if caption changed
-      if (newCaption !== existingMessage.caption) {
+      // Trigger reanalysis if caption changed or force reanalysis is true
+      if (newCaption !== existingMessage.caption || forceReanalysis) {
         console.log("🔄 Starting reanalysis:", {
           correlation_id: correlationId,
-          message_id: existingMessage.id
+          message_id: existingMessage.id,
+          force_reanalysis: forceReanalysis
         });
 
         const { error: reanalysisError } = await supabase.functions.invoke(
@@ -289,7 +297,8 @@ export async function handleEditedMessage(
               media_group_id: existingMessage.media_group_id,
               caption: newCaption,
               correlation_id: correlationId,
-              is_edit: true
+              is_edit: true,
+              is_channel_post: !!message.sender_chat
             }
           }
         );
@@ -307,7 +316,8 @@ export async function handleEditedMessage(
         details: {
           message_id: existingMessage.id,
           media_group_id: existingMessage.media_group_id,
-          reanalysis_triggered: newCaption !== existingMessage.caption
+          reanalysis_triggered: newCaption !== existingMessage.caption || forceReanalysis,
+          is_channel_post: !!message.sender_chat
         }
       };
     }
@@ -317,19 +327,21 @@ export async function handleEditedMessage(
       // If it has media but we don't have it, treat it as a new message
       console.log("📥 Processing as new media message:", {
         correlation_id: correlationId,
-        message_id: message.message_id
+        message_id: message.message_id,
+        is_channel_post: !!message.sender_chat
       });
       return await handleMediaMessage(supabase, message, Deno.env.get("TELEGRAM_BOT_TOKEN")!);
     } else {
       // Only store in other_messages if it's truly a non-media message we haven't seen before
       console.log("📝 Storing new non-media message:", {
         correlation_id: correlationId,
-        message_id: message.message_id
+        message_id: message.message_id,
+        is_channel_post: !!message.sender_chat
       });
       
       const { error: insertError } = await supabase.from("other_messages").insert({
         user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
-        message_type: "edited_message",
+        message_type: message.sender_chat ? "edited_channel_post" : "edited_message",
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         chat_type: message.chat.type,
