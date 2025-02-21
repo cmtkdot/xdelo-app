@@ -413,6 +413,20 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "gl_customer_payments_account_fk"
+            columns: ["rowid_accountrowid"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["glide_id"]
+          },
+          {
+            foreignKeyName: "gl_customer_payments_invoice_fk"
+            columns: ["rowid_invoice_row_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoices"
+            referencedColumns: ["glide_id"]
+          },
+          {
             foreignKeyName: "gl_customer_payments_sb_accounts_id_fkey"
             columns: ["sb_accounts_id"]
             isOneToOne: false
@@ -1088,37 +1102,23 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_purchase_order"
-            columns: ["rowid_purchase_order_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_purchase_order_summary"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "fk_purchase_order"
-            columns: ["rowid_purchase_order_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_purchase_orders"
-            referencedColumns: ["glide_id"]
-          },
-          {
             foreignKeyName: "gl_products_sb_accounts_id_fkey"
             columns: ["sb_accounts_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "gl_accounts"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "gl_products_sb_purchase_orders_id_fkey"
             columns: ["sb_purchase_orders_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "gl_purchase_order_summary"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "gl_products_sb_purchase_orders_id_fkey"
             columns: ["sb_purchase_orders_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "gl_purchase_orders"
             referencedColumns: ["id"]
           },
