@@ -66,6 +66,10 @@ export async function handleMessage(
       return null;
     }
 
+    // Always try to download media first - it's idempotent
+    const publicUrl = await downloadMedia(supabase, mediaInfo);
+    console.log('Media public URL:', publicUrl);
+
     // For messages without caption in a media group, try to find analyzed content
     let analyzedGroupMessage = null;
     if (!message.caption && message.media_group_id) {
@@ -88,12 +92,14 @@ export async function handleMessage(
       width: mediaInfo.width,
       height: mediaInfo.height,
       duration: mediaInfo.duration,
+      public_url: publicUrl,
       analyzed_content: analyzedGroupMessage?.analyzed_content || null,
-      group_caption_synced: Boolean(analyzedGroupMessage?.analyzed_content)
+      processing_state: message.caption ? 'pending' : (analyzedGroupMessage ? 'completed' : 'initialized'),
+      group_caption_synced: Boolean(analyzedGroupMessage?.analyzed_content),
+      is_original_caption: Boolean(message.caption)
     };
 
-    // Upsert message - create or update based on file_unique_id
-    console.log('Upserting message with file_unique_id:', mediaInfo.file_unique_id);
+    // Upsert message using file_unique_id
     const { data: result, error } = await supabase
       .from('messages')
       .upsert(messageData, {
@@ -105,16 +111,7 @@ export async function handleMessage(
 
     if (error) throw error;
 
-    // Download and store media
-    if (mediaInfo.file_id) {
-      console.log('Downloading media for message:', result.id);
-      const publicUrl = await downloadMedia(supabase, mediaInfo, result.id);
-      if (publicUrl) {
-        console.log('Media downloaded successfully:', publicUrl);
-      }
-    }
-
-    // If this message has caption, analyze and sync with media group
+    // If this message has caption, it will be analyzed by the database trigger
     if (message.caption && message.media_group_id) {
       console.log('Message has caption, will be analyzed and synced with group');
     }

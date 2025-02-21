@@ -1,7 +1,7 @@
 
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
-interface MediaInfo {
+export interface MediaInfo {
   file_id: string;
   file_unique_id: string;
   mime_type: string;
@@ -13,7 +13,6 @@ interface MediaInfo {
 
 export function extractMediaInfo(message: any): MediaInfo | null {
   if (message.photo) {
-    // For photos, use the last (highest quality) version
     const photo = message.photo[message.photo.length - 1];
     return {
       file_id: photo.file_id,
@@ -46,10 +45,21 @@ export function extractMediaInfo(message: any): MediaInfo | null {
 
 export async function downloadMedia(
   supabase: SupabaseClient,
-  mediaInfo: MediaInfo,
-  messageId: string
+  mediaInfo: MediaInfo
 ): Promise<string | null> {
   try {
+    // Check if file already exists in storage
+    const storagePath = `${mediaInfo.file_unique_id}`;
+    const { data: existingFile } = await supabase
+      .storage
+      .from('telegram-media')
+      .getPublicUrl(storagePath);
+
+    if (existingFile?.publicUrl) {
+      console.log('Media already exists:', existingFile.publicUrl);
+      return existingFile.publicUrl;
+    }
+
     // Get file info from Telegram
     const fileResponse = await fetch(
       `https://api.telegram.org/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/getFile?file_id=${mediaInfo.file_id}`
@@ -65,17 +75,14 @@ export async function downloadMedia(
     const mediaResponse = await fetch(fileUrl);
     const mediaBuffer = await mediaResponse.arrayBuffer();
 
-    // Generate storage path
-    const fileExt = mediaInfo.mime_type.split('/')[1] || 'bin';
-    const storagePath = `${messageId}/${mediaInfo.file_unique_id}.${fileExt}`;
-
     // Upload to Supabase Storage
     const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')
       .upload(storagePath, mediaBuffer, {
         contentType: mediaInfo.mime_type,
-        cacheControl: '3600'
+        cacheControl: '31536000', // 1 year cache
+        upsert: true
       });
 
     if (uploadError) {
@@ -87,19 +94,6 @@ export async function downloadMedia(
       .storage
       .from('telegram-media')
       .getPublicUrl(storagePath);
-
-    // Update message with storage path and public URL
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update({
-        storage_path: storagePath,
-        public_url: publicUrl
-      })
-      .eq('id', messageId);
-
-    if (updateError) {
-      throw updateError;
-    }
 
     return publicUrl;
   } catch (error) {
