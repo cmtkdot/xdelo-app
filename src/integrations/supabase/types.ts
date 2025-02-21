@@ -1645,6 +1645,20 @@ export type Database = {
             foreignKeyName: "message_state_logs_message_id_fkey"
             columns: ["message_id"]
             isOneToOne: false
+            referencedRelation: "message_flow_logs"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "message_state_logs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "message_flow_logs_materialized"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "message_state_logs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
             referencedRelation: "messages"
             referencedColumns: ["id"]
           },
@@ -1695,6 +1709,7 @@ export type Database = {
           purchase_date: string | null
           purchase_order: string | null
           retry_count: number | null
+          storage_path: string | null
           sync_attempt: number | null
           telegram_data: Json | null
           telegram_message_id: number | null
@@ -1747,6 +1762,7 @@ export type Database = {
           purchase_date?: string | null
           purchase_order?: string | null
           retry_count?: number | null
+          storage_path?: string | null
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
@@ -1799,6 +1815,7 @@ export type Database = {
           purchase_date?: string | null
           purchase_order?: string | null
           retry_count?: number | null
+          storage_path?: string | null
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
@@ -1808,6 +1825,20 @@ export type Database = {
           width?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "message_flow_logs"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "message_flow_logs_materialized"
+            referencedColumns: ["message_id"]
+          },
           {
             foreignKeyName: "messages_message_caption_id_fkey"
             columns: ["message_caption_id"]
@@ -2128,12 +2159,58 @@ export type Database = {
         }
         Relationships: []
       }
+      message_flow_logs: {
+        Row: {
+          chat_id: number | null
+          chat_title: string | null
+          created_at: string | null
+          edit_date: string | null
+          error_message: string | null
+          file_unique_id: string | null
+          is_edited: boolean | null
+          last_error_at: string | null
+          media_group_id: string | null
+          message_category: string | null
+          message_id: string | null
+          processing_completed_at: string | null
+          processing_duration_seconds: number | null
+          processing_started_at: string | null
+          processing_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          retry_count: number | null
+          telegram_message_id: number | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
+      message_flow_logs_materialized: {
+        Row: {
+          chat_id: number | null
+          chat_title: string | null
+          created_at: string | null
+          edit_date: string | null
+          error_message: string | null
+          file_unique_id: string | null
+          is_edited: boolean | null
+          last_error_at: string | null
+          media_group_id: string | null
+          message_category: string | null
+          message_id: string | null
+          processing_completed_at: string | null
+          processing_duration_seconds: number | null
+          processing_started_at: string | null
+          processing_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          retry_count: number | null
+          telegram_message_id: number | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      a_delete_analysis_audit_log_limit_500: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
       bytea_to_text: {
         Args: {
           data: string
@@ -2498,6 +2575,14 @@ export type Database = {
         | "poll_answer"
         | "chat_join_request"
         | "my_chat_member"
+        | "sticker"
+        | "dice"
+        | "location"
+        | "contact"
+        | "venue"
+        | "game"
+        | "chat_member"
+        | "edited_channel_post"
     }
     CompositeTypes: {
       http_header: {
