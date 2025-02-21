@@ -1,133 +1,119 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
-if (!TELEGRAM_BOT_TOKEN) {
-  console.error('TELEGRAM_BOT_TOKEN is not set in environment variables');
-}
+import { corsHeaders } from "./authUtils.ts";
+import { handleTextMessage, handleMediaMessage, handleChatMemberUpdate, handleEditedMessage } from "./messageHandler.ts";
 
 serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Validate request
-    if (!TELEGRAM_BOT_TOKEN) {
-      throw new Error('Telegram bot token not configured');
-    }
-
     const update = await req.json();
-    console.log("📥 Received Telegram update:", JSON.stringify(update, null, 2));
-
-    // Create Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Extract message from update
-    const message = update.message || update.channel_post;
-    if (!message) {
-      console.log("No message found in update");
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Extract message details
-    const telegram_message_id = message.message_id;
-    const chat_id = message.chat.id;
-    const chat_type = message.chat.type;
-    const chat_title = message.chat.title || `${message.chat.first_name || ''} ${message.chat.last_name || ''}`.trim();
-    const media_group_id = message.media_group_id;
-    const caption = message.caption;
-    
-    // Handle different types of media
-    let file_info = null;
-    if (message.photo) {
-      file_info = message.photo[message.photo.length - 1]; // Get largest photo
-    } else if (message.video) {
-      file_info = message.video;
-    } else if (message.document) {
-      file_info = message.document;
-    }
-
-    if (!file_info) {
-      console.log("No media found in message");
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Construct the message URL
-    const message_url = chat_type === 'private' 
-      ? null 
-      : `https://t.me/c/${Math.abs(chat_id).toString()}/${telegram_message_id}`;
-
-    console.log("💾 Inserting message into database:", {
-      telegram_message_id,
-      chat_id,
-      chat_type,
-      media_group_id,
-      file_id: file_info.file_id
+    console.log("📥 Received update type:", {
+      has_message: !!update.message,
+      has_channel_post: !!update.channel_post,
+      has_edited_message: !!update.edited_message,
+      has_edited_channel_post: !!update.edited_channel_post,
+      has_chat_member: !!update.my_chat_member,
+      has_callback_query: !!update.callback_query,
+      has_inline_query: !!update.inline_query,
+      update_type: Object.keys(update).find(key => 
+        ['message', 'channel_post', 'edited_message', 'edited_channel_post', 
+         'callback_query', 'inline_query', 'my_chat_member'].includes(key)
+      )
     });
 
-    // Insert into database
-    const { error: insertError } = await supabase
-      .from('messages')
-      .insert({
-        telegram_message_id,
-        chat_id,
-        chat_type,
-        chat_title,
-        media_group_id,
-        caption,
-        file_id: file_info.file_id,
-        file_unique_id: file_info.file_unique_id,
-        mime_type: file_info.mime_type,
-        file_size: file_info.file_size,
-        width: file_info.width,
-        height: file_info.height,
-        duration: file_info.duration,
-        telegram_data: message,
-        message_url,
-        processing_state: caption ? 'pending' : 'initialized'
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error("Supabase credentials not configured");
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Handle edited messages (both regular and channel posts)
+    if (update.edited_message || update.edited_channel_post) {
+      const editedMessage = update.edited_message || update.edited_channel_post;
+      console.log("📝 Processing edited message:", {
+        message_id: editedMessage.message_id,
+        chat_id: editedMessage.chat.id,
+        edit_date: editedMessage.edit_date
       });
+      
+      const result = await handleEditedMessage(supabase, editedMessage);
+      return new Response(
+        JSON.stringify(result),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Handle regular messages and channel posts
+    const message = update.message || update.channel_post;
+    if (message) {
+      if (message.text && !message.photo && !message.video && !message.document) {
+        const result = await handleTextMessage(supabase, message);
+        return new Response(
+          JSON.stringify(result),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } else {
+        const result = await handleMediaMessage(supabase, message);
+        return new Response(
+          JSON.stringify(result),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // Handle chat member updates
+    if (update.my_chat_member) {
+      const result = await handleChatMemberUpdate(supabase, update);
+      return new Response(
+        JSON.stringify(result),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Handle other types of updates by storing them in other_messages
+    console.log("ℹ️ Storing unhandled update type in other_messages");
+    const { error: insertError } = await supabase.from("other_messages").insert({
+      user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
+      message_type: Object.keys(update).find(key => 
+        ['callback_query', 'inline_query', 'chosen_inline_result', 
+         'shipping_query', 'pre_checkout_query', 'poll', 'poll_answer',
+         'chat_join_request'].includes(key)
+      ) || "unknown",
+      chat_id: update.message?.chat.id || update.channel_post?.chat.id || null,
+      chat_type: update.message?.chat.type || update.channel_post?.chat.type || null,
+      chat_title: update.message?.chat.title || update.channel_post?.chat.title || null,
+      message_text: JSON.stringify(update),
+      telegram_data: update,
+      processing_state: "completed"
+    });
 
     if (insertError) {
-      console.error("Error inserting message:", insertError);
+      console.error("❌ Failed to store other message type:", insertError);
       throw insertError;
     }
 
-    console.log("✅ Message successfully processed and stored");
-
-    // If message has caption, it will be picked up by the process-unanalyzed-messages function
-    if (caption) {
-      console.log("📝 Message queued for AI analysis");
-    }
-
-    return new Response(JSON.stringify({ 
-      success: true,
-      message: "Update processed successfully"
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ success: true }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
 
   } catch (error) {
     console.error("❌ Error processing webhook:", error);
-    return new Response(JSON.stringify({ 
-      success: false,
-      error: error.message 
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
-    });
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: error.message,
+        timestamp: new Date().toISOString()
+      }),
+      { 
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500
+      }
+    );
   }
 });
