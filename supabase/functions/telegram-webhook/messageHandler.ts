@@ -1,17 +1,19 @@
 import { SupabaseClient } from "@supabase/supabase-js";
-import { extractMediaInfo, downloadMedia } from "./mediaUtils.ts";
+import { extractMediaInfo, downloadTelegramFile, uploadMedia } from "./mediaUtils";
 import { 
   TelegramMessage, 
   ChatInfo, 
   WebhookResponse,
-  MessageData
-} from "./types.ts";
+  MessageData,
+  MediaInfo
+} from "./types";
 import {
   PROCESSING_STATES,
   ProcessingState,
+  MediaGroupInfo,
   getMediaGroupInfo,
   syncMediaGroupContent
-} from "../_shared/states.ts";
+} from "../_shared/states";
 
 export function extractChatInfo(message: TelegramMessage): ChatInfo {
   let chatTitle = '';
@@ -56,7 +58,7 @@ async function processMediaMessage(
     chat_id: chatInfo.chat_id,
     chat_type: chatInfo.chat_type,
     chat_title: chatInfo.chat_title,
-    media_group_id: message.media_group_id || null,
+    media_group_id: message.media_group_id,
     caption: message.caption,
     file_id: mediaInfo.file_id,
     file_unique_id: mediaInfo.file_unique_id,
@@ -113,7 +115,7 @@ async function processMediaMessage(
   }
 
   // Download and upload media
-  const publicUrl = await downloadMedia(supabase, mediaInfo, result.id);
+  const publicUrl = await downloadTelegramFile(supabase, mediaInfo, result.id);
   if (publicUrl) {
     await supabase.rpc('xdelo_update_message_processing_state', {
       p_message_id: result.id,
@@ -129,10 +131,10 @@ export async function handleMessage(
   message: TelegramMessage,
   chatInfo: ChatInfo
 ): Promise<WebhookResponse> {
-  const correlationId = crypto.randomUUID();
-  const isEdit = Boolean(message.edit_date);
-
   try {
+    const correlationId = crypto.randomUUID();
+    const isEdit = Boolean(message.edit_date);
+
     console.log('📝 Processing message:', {
       correlation_id: correlationId,
       message_id: message.message_id,
@@ -170,20 +172,13 @@ export async function handleMessage(
     }
 
     // Get media group info if needed
-    let groupInfo;
+    let groupInfo: MediaGroupInfo | undefined;
     if (message.media_group_id) {
       groupInfo = await getMediaGroupInfo(supabase, message.media_group_id);
     }
 
-    // Process media message
-    const { id: messageId, publicUrl } = await processMediaMessage(
-      supabase,
-      message,
-      chatInfo,
-      mediaInfo,
-      groupInfo
-    );
-
+    const result = await processMediaMessage(supabase, message, chatInfo, mediaInfo, groupInfo);
+    
     // Handle caption and group synchronization
     if (message.caption) {
       // Trigger caption parsing via Edge Function
@@ -194,7 +189,7 @@ export async function handleMessage(
           'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
         },
         body: JSON.stringify({
-          message_id: messageId,
+          message_id: result.id,
           media_group_id: message.media_group_id,
           caption: message.caption,
           correlation_id: correlationId
@@ -217,7 +212,7 @@ export async function handleMessage(
       message: "Media message processed",
       processed_media: [{
         file_unique_id: mediaInfo.file_unique_id,
-        public_url: publicUrl || ''
+        public_url: result.publicUrl || ""
       }]
     };
 
@@ -232,7 +227,7 @@ export async function handleMessage(
     }
 
     console.error('❌ Error processing message:', {
-      correlation_id: correlationId,
+      correlation_id: crypto.randomUUID(),
       error
     });
     throw error;

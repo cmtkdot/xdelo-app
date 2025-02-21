@@ -1,14 +1,14 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 
-export const PROCESSING_STATES = {
+export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
+
+export const PROCESSING_STATES: Record<string, ProcessingState> = {
   INITIALIZED: 'initialized',
   PENDING: 'pending',
   PROCESSING: 'processing',
   COMPLETED: 'completed',
-  FAILED: 'failed'
-} as const;
-
-export type ProcessingState = typeof PROCESSING_STATES[keyof typeof PROCESSING_STATES];
+  ERROR: 'error'
+};
 
 export interface ProcessingMetadata {
   state: ProcessingState;
@@ -21,40 +21,33 @@ export interface ProcessingMetadata {
 
 export interface MediaGroupInfo {
   messageCount: number;
-  uploadedCount: number;
   firstMessageTime: string | null;
   lastMessageTime: string | null;
-  analyzedMessageId: string | null;
-  analyzedContent: any | null;
-  hasCaption: boolean;
-  isComplete: boolean;
+  analyzedContent?: Record<string, any>;
 }
 
 export async function getMediaGroupInfo(
   supabase: SupabaseClient,
   mediaGroupId: string
-): Promise<MediaGroupInfo> {
-  // Get all messages in the group
-  const { data: messages, error } = await supabase
+): Promise<MediaGroupInfo | undefined> {
+  const { data: messages } = await supabase
     .from('messages')
     .select('*')
     .eq('media_group_id', mediaGroupId)
     .order('created_at', { ascending: true });
 
-  if (error) throw error;
+  if (!messages?.length) {
+    return undefined;
+  }
 
-  // Get analyzed message if exists
-  const analyzedMessage = messages?.find(msg => msg.analyzed_content && msg.is_original_caption);
+  // Find any analyzed content in the group
+  const analyzedMessage = messages.find(m => m.analyzed_content);
 
   return {
-    messageCount: messages?.length || 0,
-    uploadedCount: messages?.filter(msg => msg.public_url).length || 0,
-    firstMessageTime: messages?.[0]?.created_at || null,
-    lastMessageTime: messages?.[messages.length - 1]?.created_at || null,
-    analyzedMessageId: analyzedMessage?.id || null,
-    analyzedContent: analyzedMessage?.analyzed_content || null,
-    hasCaption: messages?.some(msg => msg.caption) || false,
-    isComplete: Boolean(messages?.length && messages.every(msg => msg.public_url))
+    messageCount: messages.length,
+    firstMessageTime: messages[0]?.created_at || null,
+    lastMessageTime: messages[messages.length - 1]?.created_at || null,
+    analyzedContent: analyzedMessage?.analyzed_content
   };
 }
 
@@ -62,43 +55,11 @@ export async function syncMediaGroupContent(
   supabase: SupabaseClient,
   sourceMessageId: string,
   mediaGroupId: string,
-  correlationId: string = crypto.randomUUID()
+  correlationId?: string
 ): Promise<void> {
-  try {
-    // Get source message content
-    const { data: sourceMessage, error: sourceError } = await supabase
-      .from('messages')
-      .select('analyzed_content')
-      .eq('id', sourceMessageId)
-      .single();
-
-    if (sourceError) throw sourceError;
-    if (!sourceMessage?.analyzed_content) {
-      throw new Error('Source message has no analyzed content');
-    }
-
-    // Update all messages in the group
-    const { error: updateError } = await supabase
-      .rpc('sync_media_group_content', {
-        p_source_message_id: sourceMessageId,
-        p_media_group_id: mediaGroupId,
-        p_correlation_id: correlationId
-      });
-
-    if (updateError) throw updateError;
-
-    console.log('✅ Successfully synced media group content:', {
-      source_id: sourceMessageId,
-      media_group_id: mediaGroupId,
-      correlation_id: correlationId
-    });
-  } catch (error) {
-    console.error('❌ Failed to sync media group content:', {
-      source_id: sourceMessageId,
-      media_group_id: mediaGroupId,
-      correlation_id: correlationId,
-      error
-    });
-    throw error;
-  }
+  await supabase.rpc('xdelo_sync_media_group_content', {
+    p_source_message_id: sourceMessageId,
+    p_media_group_id: mediaGroupId,
+    p_correlation_id: correlationId
+  });
 }

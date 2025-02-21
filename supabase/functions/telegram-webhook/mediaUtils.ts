@@ -39,19 +39,46 @@ export function extractMediaInfo(message: any): MediaInfo | null {
   return null;
 }
 
-export async function downloadTelegramFile(fileId: string, botToken: string): Promise<Response> {
-  const fileInfoResponse = await fetch(
-    `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
-  );
-  const fileInfo = await fileInfoResponse.json();
+export async function downloadTelegramFile(
+  supabase: SupabaseClient,
+  mediaInfo: MediaInfo,
+  messageId: string
+): Promise<string | null> {
+  try {
+    const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+    if (!botToken) {
+      throw new Error('TELEGRAM_BOT_TOKEN not found in environment');
+    }
 
-  if (!fileInfo.ok) {
-    console.error("❌ Failed to get file info:", fileInfo);
-    throw new Error(`Failed to get file info: ${JSON.stringify(fileInfo)}`);
+    // Get file info from Telegram
+    const fileInfoResponse = await fetch(
+      `https://api.telegram.org/bot${botToken}/getFile?file_id=${mediaInfo.file_id}`
+    );
+    const fileInfo = await fileInfoResponse.json();
+
+    if (!fileInfo.ok) {
+      console.error("❌ Failed to get file info:", fileInfo);
+      throw new Error(`Failed to get file info: ${JSON.stringify(fileInfo)}`);
+    }
+
+    // Download file from Telegram
+    const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.result.file_path}`;
+    const fileResponse = await fetch(fileUrl);
+    const buffer = await fileResponse.arrayBuffer();
+
+    // Upload to Supabase Storage
+    const { publicUrl } = await uploadMedia(supabase, buffer, {
+      fileUniqueId: mediaInfo.file_unique_id,
+      mimeType: mediaInfo.mime_type,
+      fileSize: mediaInfo.file_size,
+      messageId
+    });
+
+    return publicUrl;
+  } catch (error) {
+    console.error("❌ Error downloading media:", error);
+    return null;
   }
-
-  const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.result.file_path}`;
-  return fetch(fileUrl);
 }
 
 export async function uploadMedia(
@@ -99,67 +126,16 @@ export async function uploadMedia(
   };
 }
 
-export async function downloadMedia(
-  supabase: SupabaseClient,
-  mediaInfo: MediaInfo,
-  messageId: string
-): Promise<string | null> {
-  try {
-    const mediaResponse = await downloadTelegramFile(
-      mediaInfo.file_id, 
-      Deno.env.get('TELEGRAM_BOT_TOKEN')!
-    );
-    
-    const buffer = await mediaResponse.arrayBuffer();
-    
-    const uploadResult = await uploadMedia(supabase, buffer, {
-      fileUniqueId: mediaInfo.file_unique_id,
-      mimeType: mediaInfo.mime_type,
-      fileSize: mediaInfo.file_size,
-      messageId
-    });
-
-    console.log('✅ Media downloaded and uploaded successfully:', {
-      message_id: messageId,
-      file_unique_id: mediaInfo.file_unique_id,
-      public_url: uploadResult.publicUrl
-    });
-
-    return uploadResult.publicUrl;
-
-  } catch (error) {
-    console.error('❌ Error downloading media:', {
-      message_id: messageId,
-      file_unique_id: mediaInfo.file_unique_id,
-      error
-    });
-    throw error;
-  }
-}
-
 export async function deleteMedia(
   supabase: SupabaseClient,
   fileName: string
 ): Promise<void> {
-  try {
-    const { error } = await supabase.storage
-      .from("telegram-media")
-      .remove([fileName]);
+  const { error } = await supabase.storage
+    .from("telegram-media")
+    .remove([fileName]);
 
-    if (error) {
-      console.error("❌ Failed to delete media file:", {
-        file_name: fileName,
-        error
-      });
-      throw error;
-    }
-
-    console.log("✅ Successfully deleted media file:", fileName);
-  } catch (error) {
-    console.error("❌ Error during media deletion:", {
-      file_name: fileName,
-      error
-    });
+  if (error) {
+    console.error("❌ Delete error:", error);
     throw error;
   }
 }
