@@ -6,12 +6,13 @@ import { MediaItem } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
-import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
+import { useMediaGroups } from "@/hooks/useMediaGroups";
 
 const ProductGallery = () => {
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { data: mediaGroups } = useMediaGroups();
 
   // Set up realtime subscription
   useEffect(() => {
@@ -40,9 +41,9 @@ const ProductGallery = () => {
     setEditItem(media);
   };
 
-  const handleView = (media: MediaItem) => {
-    // Implement view logic here
-    console.log('Viewing media:', media);
+  const handleView = () => {
+    // View logic implementation
+    console.log('Viewing media');
   };
 
   const handleDelete = async (media: MediaItem) => {
@@ -74,9 +75,9 @@ const ProductGallery = () => {
     <div className="container mx-auto py-6 space-y-6">
       <h1 className="text-2xl font-bold">Product Gallery</h1>
       
-      {messages && (
+      {mediaGroups && (
         <ProductGrid
-          products={Object.values(messages)}
+          products={Object.values(mediaGroups)}
           onEdit={handleEdit}
           onDelete={handleDelete}
           onView={handleView}
@@ -85,9 +86,9 @@ const ProductGallery = () => {
 
       {editItem && (
         <MediaEditDialog
-          isOpen={!!editItem}
+          media={editItem}
+          open={!!editItem}
           onClose={() => setEditItem(null)}
-          mediaItem={editItem}
         />
       )}
     </div>

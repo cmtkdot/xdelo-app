@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -8,29 +7,29 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 
 interface MediaEditDialogProps {
-  editItem: MediaItem | null;
+  media: MediaItem;
+  open: boolean;
   onClose: () => void;
-  onSave: () => void;
 }
 
-export const MediaEditDialog = ({
-  editItem,
+export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
+  media,
+  open,
   onClose,
-  onSave,
-}: MediaEditDialogProps) => {
+}) => {
   const { toast } = useToast();
   const [caption, setCaption] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   useEffect(() => {
-    if (editItem) {
+    if (media) {
       // Extract caption from telegram_data
-      const telegramData = editItem.telegram_data as { message?: { caption?: string } } || {};
+      const telegramData = media.telegram_data as { message?: { caption?: string } } || {};
       setCaption(telegramData.message?.caption || '');
     }
-  }, [editItem]);
+  }, [media]);
 
-  if (!editItem) return null;
+  if (!media) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,20 +37,20 @@ export const MediaEditDialog = ({
     try {
       setIsSubmitting(true);
       // Only update if caption has changed
-      const currentTelegramData = editItem.telegram_data as { message?: { caption?: string } } || {};
+      const currentTelegramData = media.telegram_data as { message?: { caption?: string } } || {};
       const originalCaption = currentTelegramData.message?.caption || '';
       
       if (caption !== originalCaption) {
         console.log('Updating caption:', {
           old: originalCaption,
           new: caption,
-          messageId: editItem.telegram_message_id
+          messageId: media.telegram_message_id
         });
 
         // Update caption in Telegram
         const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
           body: {
-            messageId: editItem.id,
+            messageId: media.id,
             newCaption: caption
           }
         });
@@ -81,7 +80,7 @@ export const MediaEditDialog = ({
             telegram_data: updatedTelegramData,
             updated_at: new Date().toISOString()
           })
-          .eq('id', editItem.id);
+          .eq('id', media.id);
 
         if (updateError) throw updateError;
 
@@ -89,8 +88,8 @@ export const MediaEditDialog = ({
         console.log('Triggering reanalysis for updated content');
         const { error: reanalysisError } = await supabase.functions.invoke('parse-caption-with-ai', {
           body: {
-            message_id: editItem.id,
-            media_group_id: editItem.media_group_id,
+            message_id: media.id,
+            media_group_id: media.media_group_id,
             caption: caption,
             correlation_id: crypto.randomUUID()
           }
@@ -111,7 +110,6 @@ export const MediaEditDialog = ({
           description: "Caption has been updated and content analysis triggered",
         });
 
-        onSave();
         onClose();
       } else {
         onClose();
@@ -130,7 +128,7 @@ export const MediaEditDialog = ({
 
   // Display analyzed content in read-only format
   const renderAnalyzedContent = () => {
-    const content = editItem.analyzed_content || {};
+    const content = media.analyzed_content || {};
     return (
       <div className="space-y-4 mt-4 p-4 bg-gray-50 rounded-md dark:bg-gray-900">
         <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300">Analyzed Content (Read-only)</h3>
@@ -149,7 +147,7 @@ export const MediaEditDialog = ({
   };
 
   return (
-    <Dialog open={!!editItem} onOpenChange={() => onClose()}>
+    <Dialog open={open} onOpenChange={() => onClose()}>
       <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogTitle>Edit Caption</DialogTitle>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -178,19 +176,19 @@ export const MediaEditDialog = ({
           <div className="mt-6 border-t pt-4">
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Telegram Info:
-              {editItem.chat_id && (
+              {media.chat_id && (
                 <span className="block">
-                  Channel ID: {editItem.chat_id}
+                  Channel ID: {media.chat_id}
                 </span>
               )}
-              {editItem.chat_type && (
+              {media.chat_type && (
                 <span className="block">
-                  Type: {editItem.chat_type}
+                  Type: {media.chat_type}
                 </span>
               )}
-              {editItem.message_url && (
+              {media.message_url && (
                 <a 
-                  href={editItem.message_url} 
+                  href={media.message_url} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="block text-blue-500 hover:underline"

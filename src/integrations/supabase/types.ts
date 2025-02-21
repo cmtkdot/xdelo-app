@@ -1112,6 +1112,7 @@ export type Database = {
           main_purchase_order_uid_from_product: string | null
           rowid_accntrowid: string | null
           rowid_vpayrowid: string | null
+          sb_accounts_id: string | null
           secure_share_id: string | null
           share_last_viewed_at: string | null
           share_pin_code: string | null
@@ -1135,6 +1136,7 @@ export type Database = {
           main_purchase_order_uid_from_product?: string | null
           rowid_accntrowid?: string | null
           rowid_vpayrowid?: string | null
+          sb_accounts_id?: string | null
           secure_share_id?: string | null
           share_last_viewed_at?: string | null
           share_pin_code?: string | null
@@ -1158,6 +1160,7 @@ export type Database = {
           main_purchase_order_uid_from_product?: string | null
           rowid_accntrowid?: string | null
           rowid_vpayrowid?: string | null
+          sb_accounts_id?: string | null
           secure_share_id?: string | null
           share_last_viewed_at?: string | null
           share_pin_code?: string | null
@@ -1166,7 +1169,15 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gl_purchase_orders_sb_accounts_id_fkey"
+            columns: ["sb_accounts_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gl_shipping_records: {
         Row: {
