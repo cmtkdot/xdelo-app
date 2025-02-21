@@ -5,8 +5,6 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { TelegramUpdate } from "./types.ts";
 import { handleMessage, extractChatInfo } from "./messageHandler.ts";
 
-const webhookSecret = Deno.env.get('TELEGRAM_WEBHOOK_SECRET');
-
 serve(async (req) => {
   try {
     // Handle CORS
