@@ -46,66 +46,130 @@ export async function downloadMedia(
   const correlationId = crypto.randomUUID();
   
   try {
-    console.log('📥 Downloading media:', {
+    console.log('📥 Processing media:', {
       correlation_id: correlationId,
       message_id: messageId,
       file_id: mediaInfo.file_id,
       file_unique_id: mediaInfo.file_unique_id
     });
 
-    // Get file path from Telegram
-    const fileResponse = await fetch(
-      `https://api.telegram.org/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/getFile?file_id=${mediaInfo.file_id}`
-    );
-    
-    const fileData = await fileResponse.json();
-    if (!fileData.ok || !fileData.result.file_path) {
-      throw new Error('Failed to get file path from Telegram');
-    }
-
-    // Download file from Telegram
-    const fileUrl = `https://api.telegram.org/file/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/${fileData.result.file_path}`;
-    const mediaResponse = await fetch(fileUrl);
-    if (!mediaResponse.ok) {
-      throw new Error('Failed to download media from Telegram');
-    }
-    
-    const mediaBuffer = await mediaResponse.arrayBuffer();
-
-    // Generate storage path using file_unique_id directly to prevent duplication
+    // Generate filename using file_unique_id
     const fileExt = mediaInfo.mime_type.split('/')[1] || 'bin';
     const fileName = `${mediaInfo.file_unique_id}.${fileExt}`;
 
-    console.log('📤 Uploading to storage:', {
-      correlation_id: correlationId,
-      file_name: fileName
-    });
-
-    // Upload to Supabase Storage with file_unique_id as name
-    const { error: uploadError } = await supabase
+    // Check existing URL first but don't stop if exists
+    const { data: { publicUrl: existingUrl } } = supabase
       .storage
       .from('telegram-media')
-      .upload(fileName, mediaBuffer, {
-        contentType: mediaInfo.mime_type,
-        cacheControl: '3600',
-        upsert: true // Allow overwriting existing files
+      .getPublicUrl(fileName);
+
+    // Get media from Telegram
+    let mediaBuffer: ArrayBuffer;
+    try {
+      const fileResponse = await fetch(
+        `https://api.telegram.org/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/getFile?file_id=${mediaInfo.file_id}`
+      );
+      
+      const fileData = await fileResponse.json();
+      if (!fileData.ok || !fileData.result.file_path) {
+        throw new Error('Failed to get file path from Telegram');
+      }
+
+      const fileUrl = `https://api.telegram.org/file/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/${fileData.result.file_path}`;
+      const mediaResponse = await fetch(fileUrl);
+      if (!mediaResponse.ok) {
+        throw new Error('Failed to download media from Telegram');
+      }
+      
+      mediaBuffer = await mediaResponse.arrayBuffer();
+      
+      console.log('📥 Successfully downloaded from Telegram:', {
+        correlation_id: correlationId,
+        file_size: mediaBuffer.byteLength
+      });
+    } catch (downloadError) {
+      console.error('❌ Download error:', {
+        correlation_id: correlationId,
+        error: downloadError.message
       });
 
-    if (uploadError) {
-      console.error('❌ Upload error:', {
-        correlation_id: correlationId,
-        error: uploadError
-      });
-      throw uploadError;
+      // If we have existing URL, use it despite download error
+      if (existingUrl) {
+        console.log('♻️ Using existing file despite download error:', {
+          correlation_id: correlationId,
+          public_url: existingUrl
+        });
+
+        // Update message with existing URL
+        await supabase
+          .from('messages')
+          .update({
+            public_url: existingUrl,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', messageId);
+
+        return existingUrl;
+      }
+
+      throw downloadError;
     }
 
-    // Get public URL
+    // Try to upload - this may fail if file exists
+    try {
+      console.log('📤 Attempting upload:', {
+        correlation_id: correlationId,
+        file_name: fileName
+      });
+
+      const { error: uploadError } = await supabase
+        .storage
+        .from('telegram-media')
+        .upload(fileName, mediaBuffer, {
+          contentType: mediaInfo.mime_type,
+          cacheControl: '3600'
+        });
+
+      if (uploadError) {
+        // If file exists, just use the existing URL
+        if (uploadError.message.includes('The resource already exists')) {
+          console.log('ℹ️ File exists, using existing URL:', {
+            correlation_id: correlationId,
+            public_url: existingUrl
+          });
+        } else {
+          throw uploadError;
+        }
+      } else {
+        console.log('✅ New file uploaded successfully:', {
+          correlation_id: correlationId,
+          file_name: fileName
+        });
+      }
+    } catch (uploadError) {
+      console.error('❌ Upload error:', {
+        correlation_id: correlationId,
+        error: uploadError.message
+      });
+
+      // If we have existing URL, use it despite upload error
+      if (existingUrl) {
+        console.log('♻️ Using existing file despite upload error:', {
+          correlation_id: correlationId,
+          public_url: existingUrl
+        });
+      } else {
+        throw uploadError;
+      }
+    }
+
+    // Get final public URL (whether new upload or existing)
     const { data: { publicUrl } } = supabase
       .storage
       .from('telegram-media')
       .getPublicUrl(fileName);
 
-    // Update message with only public_url
+    // Update message with public URL
     const { error: updateError } = await supabase
       .from('messages')
       .update({
@@ -115,14 +179,14 @@ export async function downloadMedia(
       .eq('id', messageId);
 
     if (updateError) {
-      console.error('❌ Update error:', {
+      console.error('❌ Error updating message:', {
         correlation_id: correlationId,
         error: updateError
       });
       throw updateError;
     }
 
-    console.log('✅ Media processed successfully:', {
+    console.log('✅ Media processing completed:', {
       correlation_id: correlationId,
       public_url: publicUrl
     });
@@ -130,7 +194,7 @@ export async function downloadMedia(
     return publicUrl;
 
   } catch (error) {
-    console.error('❌ Error processing media:', {
+    console.error('❌ Media processing failed:', {
       correlation_id: correlationId,
       message_id: messageId,
       error: error.message,
