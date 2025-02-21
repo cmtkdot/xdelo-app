@@ -2077,6 +2077,39 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_logs: {
+        Row: {
+          chat_id: number | null
+          error_message: string | null
+          event_type: string | null
+          id: string
+          media_type: string | null
+          message_id: number | null
+          raw_data: Json | null
+          timestamp: string | null
+        }
+        Insert: {
+          chat_id?: number | null
+          error_message?: string | null
+          event_type?: string | null
+          id?: string
+          media_type?: string | null
+          message_id?: number | null
+          raw_data?: Json | null
+          timestamp?: string | null
+        }
+        Update: {
+          chat_id?: number | null
+          error_message?: string | null
+          event_type?: string | null
+          id?: string
+          media_type?: string | null
+          message_id?: number | null
+          raw_data?: Json | null
+          timestamp?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       invoice_summary: {
@@ -2311,6 +2344,16 @@ export type Database = {
             }
             Returns: string
           }
+      xdelo_check_webhook_health: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          last_success_time: string
+          last_error_time: string
+          error_count: number
+          success_count: number
+          recent_errors: string[]
+        }[]
+      }
       xdelo_construct_telegram_message_url: {
         Args: {
           chat_type: Database["public"]["Enums"]["telegram_chat_type"]
@@ -2369,6 +2412,17 @@ export type Database = {
       }
       xdelo_fix_media_groups: {
         Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      xdelo_log_webhook_event: {
+        Args: {
+          p_event_type: string
+          p_chat_id: number
+          p_message_id: number
+          p_media_type: string
+          p_error_message?: string
+          p_raw_data?: Json
+        }
         Returns: undefined
       }
       xdelo_manual_sync_media_group: {

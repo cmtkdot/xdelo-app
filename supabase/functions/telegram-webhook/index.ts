@@ -1,119 +1,168 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { corsHeaders } from "./authUtils.ts";
-import { handleTextMessage, handleMediaMessage, handleChatMemberUpdate, handleEditedMessage } from "./messageHandler.ts";
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+const supabaseUrl = Deno.env.get('SUPABASE_URL')
+const supabaseServiceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+const telegramToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
+
+if (!supabaseUrl || !supabaseServiceRole || !telegramToken) {
+  throw new Error('Missing environment variables')
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceRole)
+
+async function getFileUrl(fileId: string): Promise<string> {
+  const response = await fetch(
+    `https://api.telegram.org/bot${telegramToken}/getFile?file_id=${fileId}`
+  )
+  const data = await response.json()
+  if (!data.ok) throw new Error('Failed to get file path')
+  return `https://api.telegram.org/file/bot${telegramToken}/${data.result.file_path}`
+}
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const update = await req.json();
-    console.log("📥 Received update type:", {
-      has_message: !!update.message,
-      has_channel_post: !!update.channel_post,
-      has_edited_message: !!update.edited_message,
-      has_edited_channel_post: !!update.edited_channel_post,
-      has_chat_member: !!update.my_chat_member,
-      has_callback_query: !!update.callback_query,
-      has_inline_query: !!update.inline_query,
-      update_type: Object.keys(update).find(key => 
-        ['message', 'channel_post', 'edited_message', 'edited_channel_post', 
-         'callback_query', 'inline_query', 'my_chat_member'].includes(key)
+    const update = await req.json()
+    console.log('📥 Received webhook update:', JSON.stringify(update))
+
+    // Early validation
+    if (!update.message) {
+      await supabase.rpc('xdelo_log_webhook_event', {
+        p_event_type: 'skipped',
+        p_error_message: 'No message in update',
+        p_raw_data: update
+      })
+      return new Response(
+        JSON.stringify({ status: 'skipped', reason: 'no message' }), 
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
       )
-    });
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Supabase credentials not configured");
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const message = update.message
+    const chat = message.chat
+    const mediaGroupId = message.media_group_id
+    
+    // Check for media content
+    const photo = message.photo ? message.photo[message.photo.length - 1] : null
+    const video = message.video
+    const media = photo || video
 
-    // Handle edited messages (both regular and channel posts)
-    if (update.edited_message || update.edited_channel_post) {
-      const editedMessage = update.edited_message || update.edited_channel_post;
-      console.log("📝 Processing edited message:", {
-        message_id: editedMessage.message_id,
-        chat_id: editedMessage.chat.id,
-        edit_date: editedMessage.edit_date
-      });
-      
-      const result = await handleEditedMessage(supabase, editedMessage);
+    if (!media) {
+      await supabase.rpc('xdelo_log_webhook_event', {
+        p_event_type: 'skipped',
+        p_chat_id: chat.id,
+        p_message_id: message.message_id,
+        p_error_message: 'No media in message',
+        p_raw_data: update
+      })
       return new Response(
-        JSON.stringify(result),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+        JSON.stringify({ status: 'skipped', reason: 'no media' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
+      )
     }
 
-    // Handle regular messages and channel posts
-    const message = update.message || update.channel_post;
-    if (message) {
-      if (message.text && !message.photo && !message.video && !message.document) {
-        const result = await handleTextMessage(supabase, message);
-        return new Response(
-          JSON.stringify(result),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      } else {
-        const result = await handleMediaMessage(supabase, message);
-        return new Response(
-          JSON.stringify(result),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+    // Log media reception
+    await supabase.rpc('xdelo_log_webhook_event', {
+      p_event_type: 'media_received',
+      p_chat_id: chat.id,
+      p_message_id: message.message_id,
+      p_media_type: photo ? 'photo' : 'video',
+      p_raw_data: update
+    })
+
+    try {
+      // Get the file URL first
+      const fileUrl = await getFileUrl(media.file_id)
+      console.log('📁 Got file URL:', fileUrl)
+
+      // Insert into messages table with initial state
+      const { data: insertedMessage, error: insertError } = await supabase
+        .from('messages')
+        .insert({
+          telegram_message_id: message.message_id,
+          chat_id: chat.id,
+          chat_type: chat.type,
+          chat_title: chat.title,
+          media_group_id: mediaGroupId,
+          caption: message.caption || '',
+          file_id: media.file_id,
+          file_unique_id: media.file_unique_id,
+          public_url: fileUrl,
+          mime_type: video ? video.mime_type : 'image/jpeg',
+          file_size: media.file_size,
+          width: media.width,
+          height: media.height,
+          duration: video?.duration,
+          message_url: `https://t.me/c/${chat.id.toString().slice(4)}/${message.message_id}`,
+          processing_state: 'initialized',
+          telegram_data: update
+        })
+        .select()
+        .single()
+
+      if (insertError) throw insertError
+
+      // Log successful media storage
+      await supabase.rpc('xdelo_log_webhook_event', {
+        p_event_type: 'media_stored',
+        p_chat_id: chat.id,
+        p_message_id: message.message_id,
+        p_media_type: photo ? 'photo' : 'video'
+      })
+
+      // If there's a caption, trigger AI processing
+      if (message.caption) {
+        console.log('🔄 Triggering caption processing for message:', message.message_id)
+        await supabase.functions.invoke('parse-caption-with-ai', {
+          body: { 
+            messageId: insertedMessage.id,
+            caption: message.caption
+          }
+        })
       }
-    }
 
-    // Handle chat member updates
-    if (update.my_chat_member) {
-      const result = await handleChatMemberUpdate(supabase, update);
       return new Response(
-        JSON.stringify(result),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+        JSON.stringify({ 
+          status: 'success', 
+          message: 'Media processed successfully',
+          messageId: insertedMessage.id
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
+      )
+
+    } catch (error) {
+      console.error('❌ Error processing media:', error)
+      await supabase.rpc('xdelo_log_webhook_event', {
+        p_event_type: 'error',
+        p_chat_id: chat.id,
+        p_message_id: message.message_id,
+        p_media_type: photo ? 'photo' : 'video',
+        p_error_message: error.message
+      })
+      throw error
     }
-
-    // Handle other types of updates by storing them in other_messages
-    console.log("ℹ️ Storing unhandled update type in other_messages");
-    const { error: insertError } = await supabase.from("other_messages").insert({
-      user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
-      message_type: Object.keys(update).find(key => 
-        ['callback_query', 'inline_query', 'chosen_inline_result', 
-         'shipping_query', 'pre_checkout_query', 'poll', 'poll_answer',
-         'chat_join_request'].includes(key)
-      ) || "unknown",
-      chat_id: update.message?.chat.id || update.channel_post?.chat.id || null,
-      chat_type: update.message?.chat.type || update.channel_post?.chat.type || null,
-      chat_title: update.message?.chat.title || update.channel_post?.chat.title || null,
-      message_text: JSON.stringify(update),
-      telegram_data: update,
-      processing_state: "completed"
-    });
-
-    if (insertError) {
-      console.error("❌ Failed to store other message type:", insertError);
-      throw insertError;
-    }
-
-    return new Response(
-      JSON.stringify({ success: true }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
 
   } catch (error) {
-    console.error("❌ Error processing webhook:", error);
+    console.error('❌ Webhook error:', error)
     return new Response(
       JSON.stringify({ 
-        success: false, 
-        error: error.message,
-        timestamp: new Date().toISOString()
+        status: 'error', 
+        message: error.message 
       }),
       { 
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500
       }
-    );
+    )
   }
-});
+})
