@@ -33,3 +33,4 @@ Dockerfile
 src/env.d.ts
 tsconfig.app.json
 tsconfig.app.json
+supabase/.branches/_current_branch
