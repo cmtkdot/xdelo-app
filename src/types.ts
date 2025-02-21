@@ -44,7 +44,7 @@ export interface Message {
   width?: number;
   height?: number;
   duration?: number;
-  user_id: string;
+  user_id?: string;
   processing_state?: ProcessingState;
   processing_started_at?: string;
   processing_completed_at?: string;

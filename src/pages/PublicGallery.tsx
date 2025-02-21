@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,16 +14,24 @@ const PublicGallery = () => {
 
   // Set up realtime subscription
   useEffect(() => {
-    const subscription = supabase
-      .from('messages')
-      .on('*', (payload) => {
-        // Invalidate and refetch messages
-        queryClient.invalidateQueries(['public-messages']);
-      })
+    const channel = supabase
+      .channel('public-messages')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages'
+        },
+        () => {
+          // Invalidate and refetch messages
+          queryClient.invalidateQueries({ queryKey: ['public-messages'] });
+        }
+      )
       .subscribe();
 
     return () => {
-      supabase.removeSubscription(subscription);
+      channel.unsubscribe();
     };
   }, [queryClient]);
 
@@ -60,23 +69,19 @@ const PublicGallery = () => {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-
-      // Group messages by media_group_id
-      const groups = (data as MediaItem[]).reduce((acc, message) => {
-        const key = message.media_group_id || message.id;
-        if (!acc[key]) {
-          acc[key] = [];
-        }
-        acc[key].push(message);
-        return acc;
-      }, {} as Record<string, MediaItem[]>);
-
-      return groups;
+      
+      // Cast the response to MediaItem[] since we know the shape matches
+      return data as unknown as MediaItem[];
     }
   });
 
   const handleEdit = async (media: MediaItem) => {
     setEditItem(media);
+  };
+
+  const handleView = (media: MediaItem) => {
+    // Implement view logic here
+    console.log('Viewing media:', media);
   };
 
   const handleDelete = async (media: MediaItem) => {
@@ -94,7 +99,7 @@ const PublicGallery = () => {
       });
 
       // Refetch messages
-      queryClient.invalidateQueries(['public-messages']);
+      queryClient.invalidateQueries({ queryKey: ['public-messages'] });
     } catch (error) {
       toast({
         title: "Error",
@@ -113,14 +118,15 @@ const PublicGallery = () => {
           products={Object.values(messages)}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onView={handleView}
         />
       )}
 
       {editItem && (
         <MediaEditDialog
-          media={editItem}
-          open={!!editItem}
+          isOpen={!!editItem}
           onClose={() => setEditItem(null)}
+          mediaItem={editItem}
         />
       )}
     </div>

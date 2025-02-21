@@ -20,15 +20,15 @@ const MediaTable = () => {
           schema: 'public',
           table: 'messages'
         },
-        (payload) => {
+        () => {
           // Invalidate and refetch messages
-          queryClient.invalidateQueries(['messages']);
+          queryClient.invalidateQueries({ queryKey: ['messages'] });
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      channel.unsubscribe();
     };
   }, [queryClient]);
 
@@ -67,7 +67,9 @@ const MediaTable = () => {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data as MediaItem[];
+      
+      // Cast the response to MediaItem[] since we know the shape matches
+      return data as unknown as MediaItem[];
     }
   });
 
