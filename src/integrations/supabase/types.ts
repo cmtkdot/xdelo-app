@@ -1355,15 +1355,55 @@ export type Database = {
         }
         Relationships: []
       }
+      message_state_logs: {
+        Row: {
+          changed_at: string | null
+          id: string
+          message_id: string
+          new_state: Database["public"]["Enums"]["processing_state_type"]
+          previous_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+        }
+        Insert: {
+          changed_at?: string | null
+          id?: string
+          message_id: string
+          new_state: Database["public"]["Enums"]["processing_state_type"]
+          previous_state?:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+        }
+        Update: {
+          changed_at?: string | null
+          id?: string
+          message_id?: string
+          new_state?: Database["public"]["Enums"]["processing_state_type"]
+          previous_state?:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_state_logs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
           caption: string | null
           chat_id: number | null
           chat_title: string | null
-          chat_type: string | null
+          chat_type: Database["public"]["Enums"]["telegram_chat_type"] | null
           created_at: string | null
           duration: number | null
+          edit_date: string | null
+          edit_history: Json | null
           error_message: string | null
           file_id: string | null
           file_size: number | null
@@ -1375,6 +1415,7 @@ export type Database = {
           group_message_count: number | null
           height: number | null
           id: string
+          is_edited: boolean | null
           is_original_caption: boolean | null
           last_error_at: string | null
           media_group_id: string | null
@@ -1383,7 +1424,9 @@ export type Database = {
           mime_type: string | null
           processing_completed_at: string | null
           processing_started_at: string | null
-          processing_state: string | null
+          processing_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
           public_url: string | null
           purchase_date: string | null
           purchase_order: string | null
@@ -1399,9 +1442,11 @@ export type Database = {
           caption?: string | null
           chat_id?: number | null
           chat_title?: string | null
-          chat_type?: string | null
+          chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
           created_at?: string | null
           duration?: number | null
+          edit_date?: string | null
+          edit_history?: Json | null
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
@@ -1413,6 +1458,7 @@ export type Database = {
           group_message_count?: number | null
           height?: number | null
           id?: string
+          is_edited?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
           media_group_id?: string | null
@@ -1421,7 +1467,9 @@ export type Database = {
           mime_type?: string | null
           processing_completed_at?: string | null
           processing_started_at?: string | null
-          processing_state?: string | null
+          processing_state?:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
           public_url?: string | null
           purchase_date?: string | null
           purchase_order?: string | null
@@ -1437,9 +1485,11 @@ export type Database = {
           caption?: string | null
           chat_id?: number | null
           chat_title?: string | null
-          chat_type?: string | null
+          chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
           created_at?: string | null
           duration?: number | null
+          edit_date?: string | null
+          edit_history?: Json | null
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
@@ -1451,6 +1501,7 @@ export type Database = {
           group_message_count?: number | null
           height?: number | null
           id?: string
+          is_edited?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
           media_group_id?: string | null
@@ -1459,7 +1510,9 @@ export type Database = {
           mime_type?: string | null
           processing_completed_at?: string | null
           processing_started_at?: string | null
-          processing_state?: string | null
+          processing_state?:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
           public_url?: string | null
           purchase_date?: string | null
           purchase_order?: string | null
@@ -1475,13 +1528,6 @@ export type Database = {
             foreignKeyName: "messages_message_caption_id_fkey"
             columns: ["message_caption_id"]
             isOneToOne: false
-            referencedRelation: "message_flow_analysis"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "messages_message_caption_id_fkey"
-            columns: ["message_caption_id"]
-            isOneToOne: false
             referencedRelation: "messages"
             referencedColumns: ["id"]
           },
@@ -1491,14 +1537,20 @@ export type Database = {
         Row: {
           chat_id: number | null
           chat_title: string | null
-          chat_type: string | null
+          chat_type: Database["public"]["Enums"]["telegram_chat_type"] | null
           created_at: string | null
+          edit_date: string | null
+          error_message: string | null
           id: string
+          is_edited: boolean | null
           message_text: string | null
-          message_type: string
+          message_type: Database["public"]["Enums"]["telegram_other_message_type"]
           message_url: string | null
           processing_completed_at: string | null
-          processing_state: string | null
+          processing_started_at: string | null
+          processing_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
           telegram_data: Json | null
           telegram_message_id: number | null
           updated_at: string | null
@@ -1507,14 +1559,20 @@ export type Database = {
         Insert: {
           chat_id?: number | null
           chat_title?: string | null
-          chat_type?: string | null
+          chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
           created_at?: string | null
+          edit_date?: string | null
+          error_message?: string | null
           id?: string
+          is_edited?: boolean | null
           message_text?: string | null
-          message_type: string
+          message_type: Database["public"]["Enums"]["telegram_other_message_type"]
           message_url?: string | null
           processing_completed_at?: string | null
-          processing_state?: string | null
+          processing_started_at?: string | null
+          processing_state?:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
@@ -1523,14 +1581,20 @@ export type Database = {
         Update: {
           chat_id?: number | null
           chat_title?: string | null
-          chat_type?: string | null
+          chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
           created_at?: string | null
+          edit_date?: string | null
+          error_message?: string | null
           id?: string
+          is_edited?: boolean | null
           message_text?: string | null
-          message_type?: string
+          message_type?: Database["public"]["Enums"]["telegram_other_message_type"]
           message_url?: string | null
           processing_completed_at?: string | null
-          processing_state?: string | null
+          processing_started_at?: string | null
+          processing_state?:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
@@ -1747,51 +1811,53 @@ export type Database = {
         }
         Relationships: []
       }
-      message_flow_analysis: {
+      message_flow_logs: {
         Row: {
           chat_id: number | null
           chat_title: string | null
-          chat_type: string | null
           created_at: string | null
-          group_caption_synced: boolean | null
-          has_analysis: boolean | null
-          has_caption: boolean | null
-          id: string | null
-          is_original_caption: boolean | null
+          edit_date: string | null
+          error_message: string | null
+          file_unique_id: string | null
+          is_edited: boolean | null
+          last_error_at: string | null
           media_group_id: string | null
+          message_category: string | null
+          message_id: string | null
           processing_completed_at: string | null
+          processing_duration_seconds: number | null
           processing_started_at: string | null
-          processing_state: string | null
+          processing_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          retry_count: number | null
+          telegram_message_id: number | null
+          updated_at: string | null
         }
-        Insert: {
-          chat_id?: number | null
-          chat_title?: string | null
-          chat_type?: string | null
-          created_at?: string | null
-          group_caption_synced?: boolean | null
-          has_analysis?: never
-          has_caption?: never
-          id?: string | null
-          is_original_caption?: boolean | null
-          media_group_id?: string | null
-          processing_completed_at?: string | null
-          processing_started_at?: string | null
-          processing_state?: string | null
-        }
-        Update: {
-          chat_id?: number | null
-          chat_title?: string | null
-          chat_type?: string | null
-          created_at?: string | null
-          group_caption_synced?: boolean | null
-          has_analysis?: never
-          has_caption?: never
-          id?: string | null
-          is_original_caption?: boolean | null
-          media_group_id?: string | null
-          processing_completed_at?: string | null
-          processing_started_at?: string | null
-          processing_state?: string | null
+        Relationships: []
+      }
+      message_flow_logs_materialized: {
+        Row: {
+          chat_id: number | null
+          chat_title: string | null
+          created_at: string | null
+          edit_date: string | null
+          error_message: string | null
+          file_unique_id: string | null
+          is_edited: boolean | null
+          last_error_at: string | null
+          media_group_id: string | null
+          message_category: string | null
+          message_id: string | null
+          processing_completed_at: string | null
+          processing_duration_seconds: number | null
+          processing_started_at: string | null
+          processing_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          retry_count: number | null
+          telegram_message_id: number | null
+          updated_at: string | null
         }
         Relationships: []
       }
@@ -2021,14 +2087,23 @@ export type Database = {
             }
             Returns: string
           }
-      xdelo_construct_telegram_message_url: {
-        Args: {
-          chat_type: string
-          chat_id: number
-          message_id: number
-        }
-        Returns: string
-      }
+      xdelo_construct_telegram_message_url:
+        | {
+            Args: {
+              chat_type: Database["public"]["Enums"]["telegram_chat_type"]
+              chat_id: number
+              message_id: number
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              chat_type: string
+              chat_id: number
+              message_id: number
+            }
+            Returns: string
+          }
       xdelo_extract_analyzed_at: {
         Args: {
           analyzed_content: Json
@@ -2129,6 +2204,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      xdelo_refresh_message_flow_logs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
       message_processing_state:
@@ -2137,8 +2216,26 @@ export type Database = {
         | "processing"
         | "completed"
         | "error"
+      processing_state_type:
+        | "initialized"
+        | "pending"
+        | "processing"
+        | "completed"
+        | "error"
       sync_operation: "sync" | "create" | "update" | "delete"
       sync_status: "pending" | "synced" | "error" | "locked"
+      telegram_chat_type: "private" | "group" | "supergroup" | "channel"
+      telegram_other_message_type:
+        | "text"
+        | "callback_query"
+        | "inline_query"
+        | "chosen_inline_result"
+        | "shipping_query"
+        | "pre_checkout_query"
+        | "poll"
+        | "poll_answer"
+        | "chat_join_request"
+        | "my_chat_member"
     }
     CompositeTypes: {
       http_header: {

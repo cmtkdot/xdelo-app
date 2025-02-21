@@ -1,3 +1,4 @@
+
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,18 +9,26 @@ import { MediaItem } from "@/types";
 const MediaTable = () => {
   const queryClient = useQueryClient();
 
-  // Set up realtime subscription
+  // Set up realtime subscription using channel
   useEffect(() => {
-    const subscription = supabase
-      .from('messages')
-      .on('*', (payload) => {
-        // Invalidate and refetch messages
-        queryClient.invalidateQueries(['messages']);
-      })
+    const channel = supabase
+      .channel('messages-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages'
+        },
+        (payload) => {
+          // Invalidate and refetch messages
+          queryClient.invalidateQueries(['messages']);
+        }
+      )
       .subscribe();
 
     return () => {
-      supabase.removeSubscription(subscription);
+      supabase.removeChannel(channel);
     };
   }, [queryClient]);
 
