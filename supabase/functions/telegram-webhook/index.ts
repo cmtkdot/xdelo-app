@@ -27,6 +27,46 @@ async function getFileUrl(fileId: string): Promise<string> {
   return `https://api.telegram.org/file/bot${telegramToken}/${data.result.file_path}`
 }
 
+async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeType: string): Promise<string> {
+  console.log('📤 Uploading media to storage:', { fileUniqueId, mimeType })
+  
+  // Get file extension from mime type
+  const ext = mimeType.split('/')[1] || 'bin'
+  const storagePath = `${fileUniqueId}.${ext}`
+  
+  try {
+    // Download file from Telegram
+    const mediaResponse = await fetch(fileUrl)
+    if (!mediaResponse.ok) throw new Error('Failed to download media from Telegram')
+    
+    const mediaBuffer = await mediaResponse.arrayBuffer()
+
+    // Upload to Supabase Storage
+    const { error: uploadError } = await supabase
+      .storage
+      .from('telegram-media')
+      .upload(storagePath, mediaBuffer, {
+        contentType: mimeType,
+        upsert: true // Allow overwriting if file exists
+      })
+
+    if (uploadError) throw uploadError
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase
+      .storage
+      .from('telegram-media')
+      .getPublicUrl(storagePath)
+
+    console.log('✅ Media uploaded successfully:', publicUrl)
+    return publicUrl
+
+  } catch (error) {
+    console.error('❌ Error uploading media:', error)
+    throw error
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -67,11 +107,25 @@ serve(async (req) => {
       .single()
 
     let messageData
-    
+    let storageUrl
+
     // Step 2: Handle new media or caption update
     if (!existingMedia || (existingMedia && message.caption !== existingMedia.caption)) {
-      // Only get file URL for new media
-      const fileUrl = !existingMedia ? await getFileUrl(media.file_id) : existingMedia.public_url
+      // Get Telegram file URL
+      const telegramFileUrl = await getFileUrl(media.file_id)
+      
+      if (!existingMedia) {
+        // Only upload to storage if it's new media
+        console.log('🆕 New media detected, uploading to storage')
+        storageUrl = await uploadMediaToStorage(
+          telegramFileUrl,
+          media.file_unique_id,
+          video ? video.mime_type : 'image/jpeg'
+        )
+      } else {
+        // Use existing storage URL for caption updates
+        storageUrl = existingMedia.public_url
+      }
       
       messageData = {
         telegram_message_id: message.message_id,
@@ -82,7 +136,8 @@ serve(async (req) => {
         caption: message.caption || '',
         file_id: media.file_id,
         file_unique_id: media.file_unique_id,
-        public_url: fileUrl,
+        public_url: storageUrl,
+        storage_path: `${media.file_unique_id}.${video ? video.mime_type.split('/')[1] : 'jpeg'}`,
         mime_type: video ? video.mime_type : 'image/jpeg',
         file_size: media.file_size,
         width: media.width,
@@ -135,7 +190,8 @@ serve(async (req) => {
       JSON.stringify({ 
         status: 'success', 
         message: 'Message processed',
-        messageId: messageData.id
+        messageId: messageData.id,
+        storagePath: messageData.storage_path
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
     )
