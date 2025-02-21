@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem, FilterValues, ProcessingState } from "@/types";
+import { MediaItem, FilterValues } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
@@ -19,10 +20,26 @@ const ProductGallery = () => {
     processingState: ['completed']
   });
 
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const vendors = useVendors();
 
-  const [itemsPerPage, setItemsPerPage] = useState(15); 
+  const [itemsPerPage, setItemsPerPage] = useState(15);
+
+  // Set up realtime subscription
+  useEffect(() => {
+    const subscription = supabase
+      .from('messages')
+      .on('*', (payload) => {
+        // Invalidate and refetch messages
+        queryClient.invalidateQueries(['media-groups']);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeSubscription(subscription);
+    };
+  }, [queryClient]);
 
   useEffect(() => {
     const calculateItemsPerPage = () => {
@@ -49,71 +66,72 @@ const ProductGallery = () => {
 
   const { data } = useMediaGroups(page, filters, itemsPerPage);
   const mediaGroups = data?.mediaGroups ?? {};
-  const totalPages = data?.totalPages ?? 1;
 
-  const handleEditMedia = (media: MediaItem) => {
-    const groupKey = media.media_group_id || media.id;
-    const group = mediaGroups[groupKey];
-    const mainMedia = group.find(m => m.is_original_caption) || media;
-    setEditItem(mainMedia);
+  const handleEdit = (media: MediaItem) => {
+    setEditItem(media);
   };
 
-  const handleSaveEdit = async () => {
-    if (!editItem) return;
-
+  const handleDelete = async (media: MediaItem) => {
     try {
+      const { error } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', media.id);
+
+      if (error) throw error;
+
       toast({
-        title: "Success",
-        description: "Caption updated successfully.",
+        title: "Product deleted",
+        description: "The product has been successfully deleted.",
       });
-      
-      setEditItem(null);
+
+      // Refetch messages
+      queryClient.invalidateQueries(['media-groups']);
     } catch (error) {
-      console.error('Error updating message:', error);
       toast({
         title: "Error",
-        description: "Failed to update caption.",
+        description: "Failed to delete product. Please try again.",
         variant: "destructive",
       });
     }
   };
 
-  const handleDeleteMedia = (media: MediaItem) => {
-    // Implement delete functionality if needed
+  const handleFilterChange = (newFilters: FilterValues) => {
+    setFilters(newFilters);
+    setPage(1); // Reset to first page when filters change
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Product Gallery</h2>
-      </div>
-
+    <div className="container mx-auto py-6 space-y-6">
+      <h1 className="text-2xl font-bold">Product Gallery</h1>
+      
       <ProductFilters
-        vendors={vendors}
         filters={filters}
-        onFilterChange={setFilters}
+        onFilterChange={handleFilterChange}
+        vendors={vendors}
       />
 
       <ProductGrid
         products={Object.values(mediaGroups)}
-        onEdit={handleEditMedia}
-        onDelete={handleDeleteMedia}
-        onView={() => {}}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
       />
-      
-      {Object.keys(mediaGroups).length > 0 && (
-        <ProductPagination
-          currentPage={page}
-          totalPages={totalPages}
-          onPageChange={setPage}
-        />
-      )}
+
+      <ProductPagination
+        currentPage={page}
+        totalPages={data?.totalPages ?? 1}
+        onPageChange={handlePageChange}
+      />
 
       {editItem && (
         <MediaEditDialog
-          editItem={editItem}
+          media={editItem}
+          open={!!editItem}
           onClose={() => setEditItem(null)}
-          onSave={handleSaveEdit}
         />
       )}
     </div>

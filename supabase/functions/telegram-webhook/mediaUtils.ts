@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { MediaInfo } from './types.ts';
+import { MediaInfo } from './types';
 
 export function extractMediaInfo(message: any): MediaInfo | null {
   if (message.photo) {

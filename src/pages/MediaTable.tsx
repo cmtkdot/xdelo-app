@@ -1,17 +1,58 @@
-
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MessagesTable } from "@/components/MessagesTable/MessagesTable";
 import { Card } from "@/components/ui/card";
 import { MediaItem } from "@/types";
 
 const MediaTable = () => {
+  const queryClient = useQueryClient();
+
+  // Set up realtime subscription
+  useEffect(() => {
+    const subscription = supabase
+      .from('messages')
+      .on('*', (payload) => {
+        // Invalidate and refetch messages
+        queryClient.invalidateQueries(['messages']);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeSubscription(subscription);
+    };
+  }, [queryClient]);
+
   const { data: messages, isLoading } = useQuery({
     queryKey: ['messages'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('messages')
-        .select('*')
+        .select(`
+          id,
+          telegram_message_id,
+          chat_id,
+          chat_type,
+          chat_title,
+          media_group_id,
+          caption,
+          file_id,
+          file_unique_id,
+          public_url,
+          mime_type,
+          file_size,
+          width,
+          height,
+          duration,
+          is_edited,
+          edit_date,
+          processing_state,
+          analyzed_content,
+          error_message,
+          created_at,
+          updated_at,
+          message_url
+        `)
         .not('analyzed_content', 'is', null)
         .gt('caption', '')
         .order('created_at', { ascending: false });
