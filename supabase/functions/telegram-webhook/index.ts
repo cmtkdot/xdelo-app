@@ -7,6 +7,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
+if (!TELEGRAM_BOT_TOKEN) {
+  console.error('TELEGRAM_BOT_TOKEN is not set in environment variables');
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -14,19 +19,20 @@ serve(async (req) => {
   }
 
   try {
-    const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
+    // Validate request
     if (!TELEGRAM_BOT_TOKEN) {
-      throw new Error("TELEGRAM_BOT_TOKEN is not set");
+      throw new Error('Telegram bot token not configured');
     }
 
     const update = await req.json();
-    console.log("📥 Received update:", { update });
+    console.log("📥 Received Telegram update:", JSON.stringify(update, null, 2));
 
     // Create Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Extract message from update
     const message = update.message || update.channel_post;
     if (!message) {
       console.log("No message found in update");
@@ -39,7 +45,7 @@ serve(async (req) => {
     const telegram_message_id = message.message_id;
     const chat_id = message.chat.id;
     const chat_type = message.chat.type;
-    const chat_title = message.chat.title;
+    const chat_title = message.chat.title || `${message.chat.first_name || ''} ${message.chat.last_name || ''}`.trim();
     const media_group_id = message.media_group_id;
     const caption = message.caption;
     
@@ -61,7 +67,17 @@ serve(async (req) => {
     }
 
     // Construct the message URL
-    const message_url = `https://t.me/c/${Math.abs(chat_id).toString()}/${telegram_message_id}`;
+    const message_url = chat_type === 'private' 
+      ? null 
+      : `https://t.me/c/${Math.abs(chat_id).toString()}/${telegram_message_id}`;
+
+    console.log("💾 Inserting message into database:", {
+      telegram_message_id,
+      chat_id,
+      chat_type,
+      media_group_id,
+      file_id: file_info.file_id
+    });
 
     // Insert into database
     const { error: insertError } = await supabase
@@ -79,6 +95,7 @@ serve(async (req) => {
         file_size: file_info.file_size,
         width: file_info.width,
         height: file_info.height,
+        duration: file_info.duration,
         telegram_data: message,
         message_url,
         processing_state: caption ? 'pending' : 'initialized'
@@ -89,19 +106,26 @@ serve(async (req) => {
       throw insertError;
     }
 
-    // If message has caption, trigger AI analysis
+    console.log("✅ Message successfully processed and stored");
+
+    // If message has caption, it will be picked up by the process-unanalyzed-messages function
     if (caption) {
-      // The message will be picked up by the process-unanalyzed-messages function
-      console.log("Message queued for AI analysis");
+      console.log("📝 Message queued for AI analysis");
     }
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ 
+      success: true,
+      message: "Update processed successfully"
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error("Error processing webhook:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error("❌ Error processing webhook:", error);
+    return new Response(JSON.stringify({ 
+      success: false,
+      error: error.message 
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
     });
