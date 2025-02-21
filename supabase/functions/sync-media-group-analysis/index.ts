@@ -49,15 +49,11 @@ serve(async (req) => {
 
     // Update all messages in the media group with the analyzed content
     const { error: updateError } = await supabase
-      .from('messages')
-      .update({
-        analyzed_content: sourceMessage.analyzed_content,
-        processing_completed_at: new Date().toISOString(),
-        processing_status: 'completed',
-        processing_correlation_id: correlation_id || crypto.randomUUID(),
-        last_processed_at: new Date().toISOString()
-      })
-      .eq('media_group_id', media_group_id);
+      .rpc('xdelo_sync_media_group_content', {
+        p_source_message_id: message_id,
+        p_media_group_id: media_group_id,
+        p_correlation_id: correlation_id
+      });
 
     if (updateError) {
       console.error('Error updating media group:', updateError);
