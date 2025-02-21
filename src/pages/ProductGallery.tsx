@@ -12,7 +12,7 @@ const ProductGallery = () => {
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: mediaGroups } = useMediaGroups();
+  const { data: mediaGroups = {} } = useMediaGroups(); // Provide default empty object
 
   // Set up realtime subscription
   useEffect(() => {
@@ -75,14 +75,12 @@ const ProductGallery = () => {
     <div className="container mx-auto py-6 space-y-6">
       <h1 className="text-2xl font-bold">Product Gallery</h1>
       
-      {mediaGroups && (
-        <ProductGrid
-          products={Object.values(mediaGroups)}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          onView={handleView}
-        />
-      )}
+      <ProductGrid
+        products={Object.values(mediaGroups)}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onView={handleView}
+      />
 
       {editItem && (
         <MediaEditDialog

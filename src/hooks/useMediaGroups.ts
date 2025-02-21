@@ -15,16 +15,17 @@ export const useMediaGroups = () => {
       if (error) throw error;
 
       // Group messages by media_group_id
-      const groupedMessages = (data as MediaItem[]).reduce((groups: { [key: string]: MediaItem[] }, message) => {
+      const groupedMessages = (data || []).reduce((groups: { [key: string]: MediaItem[] }, message) => {
         const groupId = message.media_group_id || message.id;
         if (!groups[groupId]) {
           groups[groupId] = [];
         }
-        groups[groupId].push(message);
+        groups[groupId].push(message as MediaItem);
         return groups;
       }, {});
 
       return groupedMessages;
-    }
+    },
+    initialData: {} // Provide empty object as initial data
   });
 };
