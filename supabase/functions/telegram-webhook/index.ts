@@ -73,50 +73,95 @@ serve(async (req) => {
   }
 
   try {
-    const update = await req.json()
-    console.log('📥 Received webhook update:', JSON.stringify(update))
+    // Log the raw request
+    const rawBody = await req.text();
+    console.log('📝 Raw request body:', rawBody);
 
-    if (!update.message) {
-      console.log('No message in update')
+    let update;
+    try {
+      update = JSON.parse(rawBody);
+    } catch (e) {
+      console.error('❌ Failed to parse JSON:', e);
       return new Response(
-        JSON.stringify({ status: 'skipped', reason: 'no message' }), 
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
-      )
+        JSON.stringify({ status: 'error', reason: 'invalid json' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
     }
 
-    const message = update.message
+    console.log('📥 Parsed webhook update:', JSON.stringify(update, null, 2));
+
+    // Check if we have a message and log its structure
+    if (!update.message) {
+      console.log('❌ No message in update. Update keys:', Object.keys(update));
+      return new Response(
+        JSON.stringify({ 
+          status: 'skipped', 
+          reason: 'no message',
+          update_keys: Object.keys(update)
+        }), 
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
+      );
+    }
+
+    const message = update.message;
+    console.log('📨 Message content:', JSON.stringify(message, null, 2));
+
     const chat = message.chat
     const mediaGroupId = message.media_group_id
     const photo = message.photo ? message.photo[message.photo.length - 1] : null
     const video = message.video
     const media = photo || video
 
+    // Log media details
+    console.log('📸 Media details:', {
+      hasPhoto: !!photo,
+      hasVideo: !!video,
+      mediaGroupId,
+      mediaObject: media
+    });
+
     if (!media) {
-      console.log('No media in message')
+      console.log('❌ No media in message. Message type:', message.type);
       return new Response(
-        JSON.stringify({ status: 'skipped', reason: 'no media' }),
+        JSON.stringify({ 
+          status: 'skipped', 
+          reason: 'no media',
+          messageType: message.type 
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
       )
     }
 
-    // Step 1: Check if media already exists
-    const { data: existingMedia } = await supabase
+    // Check if media already exists
+    const { data: existingMedia, error: queryError } = await supabase
       .from('messages')
       .select('*')
       .eq('file_unique_id', media.file_unique_id)
       .single()
 
+    if (queryError) {
+      console.error('❌ Error checking existing media:', queryError);
+    }
+
+    console.log('🔍 Existing media check:', {
+      exists: !!existingMedia,
+      fileUniqueId: media.file_unique_id
+    });
+
     let messageData
     let storageUrl
 
-    // Step 2: Handle new media or caption update
+    // Handle new media or caption update
     if (!existingMedia || (existingMedia && message.caption !== existingMedia.caption)) {
+      console.log('🆕 Processing new or updated media');
+      
       // Get Telegram file URL
       const telegramFileUrl = await getFileUrl(media.file_id)
+      console.log('📥 Got Telegram file URL:', telegramFileUrl);
       
       if (!existingMedia) {
         // Only upload to storage if it's new media
-        console.log('🆕 New media detected, uploading to storage')
+        console.log('📤 New media detected, uploading to storage');
         storageUrl = await uploadMediaToStorage(
           telegramFileUrl,
           media.file_unique_id,
@@ -125,6 +170,7 @@ serve(async (req) => {
       } else {
         // Use existing storage URL for caption updates
         storageUrl = existingMedia.public_url
+        console.log('♻️ Using existing storage URL:', storageUrl);
       }
       
       messageData = {
@@ -147,9 +193,11 @@ serve(async (req) => {
         telegram_data: update
       }
 
-      // Step 3: Insert or update message
+      console.log('📝 Prepared message data:', JSON.stringify(messageData, null, 2));
+
+      // Insert or update message
       if (existingMedia) {
-        console.log('🔄 Updating existing media with new caption')
+        console.log('🔄 Updating existing media with new caption');
         const { data: updatedMessage, error } = await supabase
           .from('messages')
           .update(messageData)
@@ -157,23 +205,29 @@ serve(async (req) => {
           .select()
           .single()
           
-        if (error) throw error
+        if (error) {
+          console.error('❌ Error updating message:', error);
+          throw error;
+        }
         messageData = updatedMessage
       } else {
-        console.log('📥 Inserting new media')
+        console.log('📥 Inserting new media');
         const { data: newMessage, error } = await supabase
           .from('messages')
           .insert(messageData)
           .select()
           .single()
           
-        if (error) throw error
+        if (error) {
+          console.error('❌ Error inserting message:', error);
+          throw error;
+        }
         messageData = newMessage
       }
 
-      // Step 4: Trigger content analysis if there's a caption
+      // Trigger content analysis if there's a caption
       if (message.caption) {
-        console.log('🔄 Triggering caption analysis')
+        console.log('🔄 Triggering caption analysis for message:', messageData.id);
         await supabase.functions.invoke('parse-caption-with-ai', {
           body: { 
             messageId: messageData.id,
@@ -182,7 +236,7 @@ serve(async (req) => {
         })
       }
     } else {
-      console.log('⏭️ Media already exists, skipping upload')
+      console.log('⏭️ Media already exists, skipping upload');
       messageData = existingMedia
     }
 
@@ -197,9 +251,13 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('❌ Error:', error)
+    console.error('❌ Error processing webhook:', error);
     return new Response(
-      JSON.stringify({ status: 'error', message: error.message }),
+      JSON.stringify({ 
+        status: 'error', 
+        message: error.message,
+        stack: error.stack 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )
   }
