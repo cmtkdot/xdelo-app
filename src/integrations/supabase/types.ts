@@ -108,7 +108,7 @@ export type Database = {
       gl_accounts: {
         Row: {
           created_at: string | null
-          glide_id: string
+          glide_id: string | null
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -124,7 +124,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
-          glide_id: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -140,7 +140,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
-          glide_id?: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -413,20 +413,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "gl_customer_payments_account_fk"
-            columns: ["rowid_accountrowid"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_customer_payments_invoice_fk"
-            columns: ["rowid_invoice_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["glide_id"]
-          },
-          {
             foreignKeyName: "gl_customer_payments_sb_accounts_id_fkey"
             columns: ["sb_accounts_id"]
             isOneToOne: false
@@ -547,7 +533,7 @@ export type Database = {
           date_invoice_created_date: string | null
           date_processed_timestamp: string | null
           date_submitted_timestamp: string | null
-          glide_id: string
+          glide_id: string | null
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -576,7 +562,7 @@ export type Database = {
           date_invoice_created_date?: string | null
           date_processed_timestamp?: string | null
           date_submitted_timestamp?: string | null
-          glide_id: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -605,7 +591,7 @@ export type Database = {
           date_invoice_created_date?: string | null
           date_processed_timestamp?: string | null
           date_submitted_timestamp?: string | null
-          glide_id?: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -722,7 +708,7 @@ export type Database = {
           created_at: string | null
           edit_price: boolean | null
           edit_quantity: boolean | null
-          glide_id: string
+          glide_id: string | null
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -751,7 +737,7 @@ export type Database = {
           created_at?: string | null
           edit_price?: boolean | null
           edit_quantity?: boolean | null
-          glide_id: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -780,7 +766,7 @@ export type Database = {
           created_at?: string | null
           edit_price?: boolean | null
           edit_quantity?: boolean | null
-          glide_id?: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -804,20 +790,6 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "fk_invoice_lines_product"
-            columns: ["rowid_productid"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["glide_id"]
-          },
-          {
-            foreignKeyName: "gl_invoice_lines_rowid_productid_fkey"
-            columns: ["rowid_productid"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["glide_id"]
-          },
           {
             foreignKeyName: "gl_invoice_lines_sb_invoices_id_fkey"
             columns: ["sb_invoices_id"]
@@ -848,7 +820,7 @@ export type Database = {
           created_at: string | null
           doc_document: string | null
           doc_glideforeverlink: string | null
-          glide_id: string
+          glide_id: string | null
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -880,7 +852,7 @@ export type Database = {
           created_at?: string | null
           doc_document?: string | null
           doc_glideforeverlink?: string | null
-          glide_id: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -912,7 +884,7 @@ export type Database = {
           created_at?: string | null
           doc_document?: string | null
           doc_glideforeverlink?: string | null
-          glide_id?: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -962,7 +934,7 @@ export type Database = {
           created_at: string | null
           date_timestamp_subm: string | null
           email_email_of_user_who_added_product: string | null
-          glide_id: string
+          glide_id: string | null
           id: string
           last_edited_date: string | null
           last_modified_at: string | null
@@ -1010,7 +982,7 @@ export type Database = {
           created_at?: string | null
           date_timestamp_subm?: string | null
           email_email_of_user_who_added_product?: string | null
-          glide_id: string
+          glide_id?: string | null
           id?: string
           last_edited_date?: string | null
           last_modified_at?: string | null
@@ -1058,7 +1030,7 @@ export type Database = {
           created_at?: string | null
           date_timestamp_subm?: string | null
           email_email_of_user_who_added_product?: string | null
-          glide_id?: string
+          glide_id?: string | null
           id?: string
           last_edited_date?: string | null
           last_modified_at?: string | null
@@ -1106,13 +1078,6 @@ export type Database = {
             columns: ["sb_accounts_id"]
             isOneToOne: true
             referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_products_sb_purchase_orders_id_fkey"
-            columns: ["sb_purchase_orders_id"]
-            isOneToOne: true
-            referencedRelation: "gl_purchase_order_summary"
             referencedColumns: ["id"]
           },
           {
@@ -1642,13 +1607,6 @@ export type Database = {
             foreignKeyName: "gl_vendor_payments_sb_purchase_orders_id_fkey"
             columns: ["sb_purchase_orders_id"]
             isOneToOne: false
-            referencedRelation: "gl_purchase_order_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_vendor_payments_sb_purchase_orders_id_fkey"
-            columns: ["sb_purchase_orders_id"]
-            isOneToOne: false
             referencedRelation: "gl_purchase_orders"
             referencedColumns: ["id"]
           },
@@ -2121,30 +2079,6 @@ export type Database = {
       }
     }
     Views: {
-      gl_purchase_order_summary: {
-        Row: {
-          balance: number | null
-          created_at: string | null
-          docs_pdf_link: string | null
-          glide_id: string | null
-          id: string | null
-          main_po_date_used_for_uid: string | null
-          main_purchase_order_uid_from_product: string | null
-          product_count: number | null
-          secure_share_id: string | null
-          share_last_viewed_at: string | null
-          share_pin_code: string | null
-          share_url: string | null
-          share_view_count: number | null
-          total_amount: number | null
-          total_payments: number | null
-          total_quantity: number | null
-          updated_at: string | null
-          vendor_name: string | null
-          vendor_uid: string | null
-        }
-        Relationships: []
-      }
       invoice_summary: {
         Row: {
           invoice_id: string | null
