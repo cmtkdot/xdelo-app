@@ -2343,23 +2343,14 @@ export type Database = {
             }
             Returns: string
           }
-      xdelo_construct_telegram_message_url:
-        | {
-            Args: {
-              chat_type: Database["public"]["Enums"]["telegram_chat_type"]
-              chat_id: number
-              message_id: number
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              chat_type: string
-              chat_id: number
-              message_id: number
-            }
-            Returns: string
-          }
+      xdelo_construct_telegram_message_url: {
+        Args: {
+          chat_type: Database["public"]["Enums"]["telegram_chat_type"]
+          chat_id: number
+          message_id: number
+        }
+        Returns: string
+      }
       xdelo_extract_analyzed_at: {
         Args: {
           analyzed_content: Json
@@ -2402,12 +2393,6 @@ export type Database = {
         }
         Returns: string
       }
-      xdelo_extract_vendor_name: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: string
-      }
       xdelo_extract_vendor_uid: {
         Args: {
           analyzed_content: Json
@@ -2444,16 +2429,6 @@ export type Database = {
           fallbacks_used: string[]
           reanalysis_attempted: boolean
         }[]
-      }
-      xdelo_process_media_group_content: {
-        Args: {
-          p_message_id: string
-          p_media_group_id: string
-          p_analyzed_content: Json
-          p_processing_completed_at?: string
-          p_correlation_id?: string
-        }
-        Returns: undefined
       }
       xdelo_refresh_message_flow_logs: {
         Args: Record<PropertyKey, never>
