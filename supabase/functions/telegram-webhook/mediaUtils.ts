@@ -136,3 +136,30 @@ export async function downloadMedia(
     throw error;
   }
 }
+
+export async function deleteMedia(
+  supabase: SupabaseClient,
+  fileName: string
+): Promise<void> {
+  try {
+    const { error } = await supabase.storage
+      .from("telegram-media")
+      .remove([fileName]);
+
+    if (error) {
+      console.error("❌ Failed to delete media file:", {
+        file_name: fileName,
+        error
+      });
+      throw error;
+    }
+
+    console.log("✅ Successfully deleted media file:", fileName);
+  } catch (error) {
+    console.error("❌ Error during media deletion:", {
+      file_name: fileName,
+      error
+    });
+    throw error;
+  }
+}

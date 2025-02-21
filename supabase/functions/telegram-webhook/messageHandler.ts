@@ -8,6 +8,16 @@ import {
   MessageData
 } from "./types.ts";
 
+// Message processing states
+export const STATES = {
+  INITIALIZED: 'initialized',
+  PENDING: 'pending',
+  COMPLETED: 'completed',
+  FAILED: 'failed'
+} as const;
+
+type ProcessingState = typeof STATES[keyof typeof STATES];
+
 export function extractChatInfo(message: TelegramMessage): ChatInfo {
   let chatTitle = '';
   const chatType = message.chat.type;
@@ -68,7 +78,7 @@ export async function handleMessage(
         chat_title: chatInfo.chat_title,
         message_text: message.text || message.caption || "",
         telegram_data: { message },
-        processing_state: "completed",
+        processing_state: STATES.COMPLETED,
         is_edited: isEdit,
         edit_date: isEdit ? new Date(message.edit_date * 1000).toISOString() : null
       });
@@ -144,14 +154,14 @@ export async function handleMessage(
       group_last_message_time: groupLastMessageTime,
       is_edited: isEdit,
       edit_date: isEdit ? new Date(message.edit_date * 1000).toISOString() : null,
-      processing_state: message.caption || analyzedGroupMessage?.analyzed_content ? 'pending' : 'initialized',
+      processing_state: message.caption || analyzedGroupMessage?.analyzed_content ? STATES.PENDING : STATES.INITIALIZED,
       group_caption_synced: Boolean(analyzedGroupMessage?.analyzed_content)
     };
 
     // If there's an analyzed message in the group, copy its content
     if (analyzedGroupMessage?.analyzed_content) {
       messageData.analyzed_content = analyzedGroupMessage.analyzed_content;
-      messageData.processing_state = 'completed';
+      messageData.processing_state = STATES.COMPLETED;
     }
 
     let result;
@@ -250,10 +260,61 @@ async function syncMediaGroupContent(
   targetMessageId: string,
   mediaGroupId: string
 ): Promise<void> {
-  // Implementation for media group content synchronization
-  console.log('🔄 Syncing media group content:', {
-    source_message_id: sourceMessageId,
-    target_message_id: targetMessageId,
-    media_group_id: mediaGroupId
-  });
+  try {
+    // Get source message content
+    const { data: sourceMessage, error: sourceError } = await supabase
+      .from("messages")
+      .select("analyzed_content")
+      .eq("id", sourceMessageId)
+      .single();
+
+    if (sourceError) throw sourceError;
+    if (!sourceMessage?.analyzed_content) {
+      throw new Error("Source message has no analyzed content");
+    }
+
+    // Update target message
+    const { error: updateError } = await supabase
+      .from("messages")
+      .update({
+        analyzed_content: sourceMessage.analyzed_content,
+        processing_state: STATES.COMPLETED,
+        group_caption_synced: true,
+        sync_attempt: 1,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", targetMessageId);
+
+    if (updateError) throw updateError;
+
+    console.log('✅ Successfully synced media group content:', {
+      source_id: sourceMessageId,
+      target_id: targetMessageId,
+      media_group_id: mediaGroupId
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to sync media group content:', {
+      source_id: sourceMessageId,
+      target_id: targetMessageId,
+      media_group_id: mediaGroupId,
+      error
+    });
+
+    // Update sync attempt count
+    const { error: retryError } = await supabase
+      .from("messages")
+      .update({
+        processing_state: STATES.FAILED,
+        sync_attempt: supabase.sql`sync_attempt + 1`,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", targetMessageId);
+
+    if (retryError) {
+      console.error('❌ Failed to update sync attempt:', retryError);
+    }
+
+    throw error;
+  }
 }
