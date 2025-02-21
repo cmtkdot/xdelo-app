@@ -1639,6 +1639,7 @@ export type Database = {
           height: number | null
           id: string
           is_edited: boolean | null
+          is_miscellaneous_item: boolean | null
           is_original_caption: boolean | null
           last_error_at: string | null
           media_group_id: string | null
@@ -1651,6 +1652,10 @@ export type Database = {
           processing_state:
             | Database["public"]["Enums"]["processing_state_type"]
             | null
+          product_name: string | null
+          product_quantity: number | null
+          product_sku: string | null
+          product_unit: string | null
           public_url: string | null
           purchase_date: string | null
           purchase_order: string | null
@@ -1660,6 +1665,7 @@ export type Database = {
           telegram_message_id: number | null
           updated_at: string | null
           user_id: string | null
+          vendor_name: string | null
           width: number | null
         }
         Insert: {
@@ -1685,6 +1691,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_edited?: boolean | null
+          is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
           media_group_id?: string | null
@@ -1697,6 +1704,10 @@ export type Database = {
           processing_state?:
             | Database["public"]["Enums"]["processing_state_type"]
             | null
+          product_name?: string | null
+          product_quantity?: number | null
+          product_sku?: string | null
+          product_unit?: string | null
           public_url?: string | null
           purchase_date?: string | null
           purchase_order?: string | null
@@ -1706,6 +1717,7 @@ export type Database = {
           telegram_message_id?: number | null
           updated_at?: string | null
           user_id?: string | null
+          vendor_name?: string | null
           width?: number | null
         }
         Update: {
@@ -1731,6 +1743,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_edited?: boolean | null
+          is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
           media_group_id?: string | null
@@ -1743,6 +1756,10 @@ export type Database = {
           processing_state?:
             | Database["public"]["Enums"]["processing_state_type"]
             | null
+          product_name?: string | null
+          product_quantity?: number | null
+          product_sku?: string | null
+          product_unit?: string | null
           public_url?: string | null
           purchase_date?: string | null
           purchase_order?: string | null
@@ -1752,6 +1769,7 @@ export type Database = {
           telegram_message_id?: number | null
           updated_at?: string | null
           user_id?: string | null
+          vendor_name?: string | null
           width?: number | null
         }
         Relationships: [
