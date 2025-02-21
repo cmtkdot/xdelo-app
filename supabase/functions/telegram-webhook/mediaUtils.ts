@@ -43,10 +43,14 @@ export async function downloadMedia(
   mediaInfo: MediaInfo,
   messageId: string
 ): Promise<string | null> {
+  const correlationId = crypto.randomUUID();
+  
   try {
     console.log('📥 Downloading media:', {
+      correlation_id: correlationId,
       message_id: messageId,
-      file_id: mediaInfo.file_id
+      file_id: mediaInfo.file_id,
+      file_unique_id: mediaInfo.file_unique_id
     });
 
     // Get file path from Telegram
@@ -68,49 +72,72 @@ export async function downloadMedia(
     
     const mediaBuffer = await mediaResponse.arrayBuffer();
 
-    // Generate storage path with messageId for organization
+    // Generate storage path using file_unique_id directly to prevent duplication
     const fileExt = mediaInfo.mime_type.split('/')[1] || 'bin';
-    const storagePath = `${messageId}/${mediaInfo.file_unique_id}.${fileExt}`;
+    const fileName = `${mediaInfo.file_unique_id}.${fileExt}`;
 
-    console.log('📤 Uploading to storage:', { storagePath });
+    console.log('📤 Uploading to storage:', {
+      correlation_id: correlationId,
+      file_name: fileName
+    });
 
-    // Upload to Supabase Storage
+    // Upload to Supabase Storage with file_unique_id as name
     const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')
-      .upload(storagePath, mediaBuffer, {
+      .upload(fileName, mediaBuffer, {
         contentType: mediaInfo.mime_type,
         cacheControl: '3600',
-        upsert: true
+        upsert: true // Allow overwriting existing files
       });
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      console.error('❌ Upload error:', {
+        correlation_id: correlationId,
+        error: uploadError
+      });
+      throw uploadError;
+    }
 
     // Get public URL
     const { data: { publicUrl } } = supabase
       .storage
       .from('telegram-media')
-      .getPublicUrl(storagePath);
+      .getPublicUrl(fileName);
 
-    // Update message with storage info
+    // Update message with only public_url
     const { error: updateError } = await supabase
       .from('messages')
       .update({
-        storage_path: storagePath,
         public_url: publicUrl,
         updated_at: new Date().toISOString()
       })
       .eq('id', messageId);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      console.error('❌ Update error:', {
+        correlation_id: correlationId,
+        error: updateError
+      });
+      throw updateError;
+    }
 
-    console.log('✅ Media processed successfully:', { publicUrl });
+    console.log('✅ Media processed successfully:', {
+      correlation_id: correlationId,
+      public_url: publicUrl
+    });
+    
     return publicUrl;
 
   } catch (error) {
-    console.error('❌ Error processing media:', error);
+    console.error('❌ Error processing media:', {
+      correlation_id: correlationId,
+      message_id: messageId,
+      error: error.message,
+      stack: error.stack
+    });
     
-    // Update message with error
+    // Update message with error status
     await supabase
       .from('messages')
       .update({
