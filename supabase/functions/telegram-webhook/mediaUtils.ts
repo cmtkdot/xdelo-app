@@ -1,37 +1,47 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { MediaInfo, TelegramMessage } from "./types";
 
+// Add Deno type declaration
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
+
 export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
   if (message.photo) {
     const photo = message.photo[message.photo.length - 1]; // Get largest photo
     return {
-      file_id: photo.file_id,
-      file_unique_id: photo.file_unique_id,
-      mime_type: 'image/jpeg',
+      fileId: photo.file_id,
+      fileUniqueId: photo.file_unique_id,
+      mimeType: 'image/jpeg',
+      mediaType: 'photo',
       width: photo.width,
       height: photo.height,
-      file_size: photo.file_size
+      fileSize: photo.file_size
     };
   } 
   
   if (message.video) {
     return {
-      file_id: message.video.file_id,
-      file_unique_id: message.video.file_unique_id,
-      mime_type: message.video.mime_type || 'video/mp4',
+      fileId: message.video.file_id,
+      fileUniqueId: message.video.file_unique_id,
+      mimeType: message.video.mime_type || 'video/mp4',
+      mediaType: 'video',
       width: message.video.width,
       height: message.video.height,
       duration: message.video.duration,
-      file_size: message.video.file_size
+      fileSize: message.video.file_size
     };
   } 
   
   if (message.document) {
     return {
-      file_id: message.document.file_id,
-      file_unique_id: message.document.file_unique_id,
-      mime_type: message.document.mime_type || 'application/octet-stream',
-      file_size: message.document.file_size
+      fileId: message.document.file_id,
+      fileUniqueId: message.document.file_unique_id,
+      mimeType: message.document.mime_type || 'application/octet-stream',
+      mediaType: 'document',
+      fileSize: message.document.file_size
     };
   }
   
@@ -46,13 +56,13 @@ export async function downloadAndStoreMedia(
   try {
     console.log('📥 Processing media:', {
       correlation_id: correlationId,
-      file_id: mediaInfo.file_id,
-      file_unique_id: mediaInfo.file_unique_id
+      fileId: mediaInfo.fileId,
+      fileUniqueId: mediaInfo.fileUniqueId
     });
 
-    // Generate filename using file_unique_id
-    const fileExt = (mediaInfo.mime_type?.split('/')[1] || 'bin').toLowerCase();
-    const fileName = `${mediaInfo.file_unique_id}.${fileExt}`;
+    // Generate filename using fileUniqueId
+    const fileExt = (mediaInfo.mimeType?.split('/')[1] || 'bin').toLowerCase();
+    const fileName = `${mediaInfo.fileUniqueId}.${fileExt}`;
 
     // Check if file already exists
     const { data: { publicUrl: existingUrl } } = supabase
@@ -72,11 +82,11 @@ export async function downloadAndStoreMedia(
     // Get file path from Telegram
     console.log('🔍 Getting file path from Telegram:', {
       correlation_id: correlationId,
-      file_id: mediaInfo.file_id
+      fileId: mediaInfo.fileId
     });
 
     const fileResponse = await fetch(
-      `https://api.telegram.org/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/getFile?file_id=${mediaInfo.file_id}`
+      `https://api.telegram.org/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/getFile?file_id=${mediaInfo.fileId}`
     );
     
     const fileData = await fileResponse.json();
@@ -108,7 +118,7 @@ export async function downloadAndStoreMedia(
       .storage
       .from('telegram-media')
       .upload(fileName, mediaBuffer, {
-        contentType: mediaInfo.mime_type,
+        contentType: mediaInfo.mimeType,
         upsert: false // Don't overwrite if exists
       });
 

@@ -23,6 +23,8 @@ export interface AnalyzedContent {
   purchase_date?: string;
   quantity?: number;
   notes?: string;
+  product_sku?: string;
+  purchase_order_uid?: string;
   parsing_metadata?: {
     method: 'manual' | 'ai' | 'hybrid';
     confidence: number;
@@ -70,6 +72,8 @@ export const analyzedContentToJson = (content: AnalyzedContent) => {
     purchase_date: content.purchase_date,
     quantity: content.quantity,
     notes: content.notes,
+    product_sku: content.product_sku,
+    purchase_order_uid: content.purchase_order_uid,
     parsing_metadata: content.parsing_metadata,
     sync_metadata: content.sync_metadata
   };

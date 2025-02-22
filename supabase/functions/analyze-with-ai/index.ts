@@ -32,6 +32,8 @@ interface AnalyzedContent {
   purchase_date?: string;
   quantity?: number;
   notes?: string;
+  product_sku?: string;
+  purchase_order_uid?: string;
   parsing_metadata?: ParsingMetadata;
   sync_metadata?: SyncMetadata;
 }
@@ -76,46 +78,47 @@ async function analyzeWithAI(caption: string, existingContent: AnalyzedContent |
   // Enhanced system prompt with detailed parsing rules
   const systemMessage = `You are a specialized product information extractor. Extract structured information following these rules:
 
-1. Required Structure:
-   - product_name: Text before '#', REQUIRED, must always be present
-   - product_code: Value after '#' (format: #[vendor_uid][purchasedate])
-   - vendor_uid: 1-4 letters after '#' before numeric date
-   - purchase_date: Convert mmDDyy/mDDyy to YYYY-MM-DD format (add leading zero for 5-digit dates)
-   - quantity: Integer after 'x'
-   - notes: Any other values (in parentheses or remaining text)
+1. Product Name Extraction Rules:
+   - Product name is the first part of the text before any line breaks, dashes, or special markers
+   - Remove strength/potency (e.g., "750MG", "450MG") from product name unless it's part of the brand name
+   - Keep brand names intact (e.g., "DEVOUR EDIBLES", "NUGZ MEDICATED")
+   - For crystalline/concentrate products, keep full name (e.g., "Pure THCA White Diamonds")
 
-2. Parsing Rules:
-   - Dates: 
-     * 6 digits: mmDDyy (120523 → 2023-12-05)
-     * 5 digits: mDDyy (31524 → 2024-03-15)
-   - Vendor IDs:
-     * First 1-4 letters followed by optional valid date digits
-     * If invalid date digits, append with hyphen (CHAD123 → CHAD-123)
-   - Flavors:
-     * If flavor list is present, format as separate lines
-     * Remove duplicate flavors
-     * Preserve emojis
+2. Notes Handling:
+   - Capture all content after the product name in notes
+   - Format flavor lists with bullet points:
+     * Keep "FLAVORS:" as a header if present
+     * Each flavor on a new line with "-" or "•"
+   - Include potency/strength information
+   - Preserve lab test results and COA information
+   - Maintain original formatting for lists
 
-3. Validation:
-   - Only product_name is required
-   - All other fields nullable if not found
-   - Flag validation errors in 'notes' field
-   - Ensure dates are valid and not in future
-   - Quantities must be positive integers
+3. Special Cases:
+   - For edibles: Include potency in notes (e.g., "750MG", "450MG")
+   - For concentrates: Include purity/lab test results in notes
+   - Preserve emojis and special characters
+   - Keep multi-line formatting in notes
 
-${existingContent ? `Previous manual parsing found these details: ${JSON.stringify(existingContent)}. Please validate and enhance this information.` : ''}`;
+4. Validation:
+   - Product name should be clear and concise
+   - Notes should be well-formatted and readable
+   - Preserve important technical details
+   - Keep original capitalization
+
+${existingContent ? `Previous parsing found these details: ${JSON.stringify(existingContent)}. Please validate and enhance this information.` : ''}`;
 
   const prompt = `Analyze this product caption and extract the following information in JSON format:
-- product_name: Full product name (REQUIRED)
-- product_code: Product code or SKU (format: #[vendor_uid][purchasedate])
-- vendor_uid: Vendor or supplier identifier (1-4 letters)
-- quantity: Numeric quantity if mentioned (positive integer)
-- purchase_date: Purchase date if mentioned (format: YYYY-MM-DD)
-- notes: Any additional important information, including flavor list if present
+- product_name: Main product name without strength/potency unless part of brand name
+- notes: All additional information including:
+  * Strength/potency
+  * Flavor lists
+  * Lab test results
+  * Technical details
+  * Keep original formatting
 
 Caption: "${caption}"
 
-Return ONLY valid JSON with these fields. Preserve all emojis in the response.`;
+Return ONLY valid JSON with these fields. Preserve all emojis and formatting in the response.`;
 
   try {
     console.log('[ai-analysis] Sending request to OpenAI');
@@ -136,10 +139,44 @@ Return ONLY valid JSON with these fields. Preserve all emojis in the response.`;
     try {
       aiResult = JSON.parse(responseText);
       
-      // Validate required fields
+      // Validate and clean product name
       if (!aiResult.product_name) {
         throw new Error('AI response missing required product_name field');
       }
+
+      // Clean up product name and notes
+      aiResult.product_name = aiResult.product_name.trim();
+      
+      if (aiResult.notes) {
+        // Format notes to preserve line breaks and structure
+        aiResult.notes = aiResult.notes
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line)
+          .join('\n');
+      }
+
+      // Handle flavor lists specially
+      if (aiResult.notes && aiResult.notes.toLowerCase().includes('flavor')) {
+        const lines = aiResult.notes.split('\n');
+        const flavorIndex = lines.findIndex(line => 
+          line.toLowerCase().includes('flavor'));
+        
+        if (flavorIndex !== -1) {
+          // Reorganize notes to keep flavors properly formatted
+          const beforeFlavors = lines.slice(0, flavorIndex).join('\n');
+          const flavors = lines
+            .slice(flavorIndex)
+            .filter(line => line.trim())
+            .map(line => line.startsWith('-') ? line : line.startsWith('•') ? line : `- ${line}`)
+            .join('\n');
+          
+          aiResult.notes = [beforeFlavors, flavors]
+            .filter(section => section.trim())
+            .join('\n\n');
+        }
+      }
+
     } catch (parseError) {
       console.error('[ai-analysis] Failed to parse AI response:', parseError);
       throw new Error(`Invalid AI response format: ${parseError.message}`);
@@ -148,23 +185,12 @@ Return ONLY valid JSON with these fields. Preserve all emojis in the response.`;
     // Calculate AI confidence based on response quality
     let confidence = 0.8; // Base confidence
     
-    // Adjust confidence based on field presence and validity
-    if (aiResult.product_code && /^[A-Z]{1,4}\d{5,6}$/.test(aiResult.product_code)) {
+    // Adjust confidence based on content quality
+    if (aiResult.product_name && aiResult.product_name.length > 3) {
       confidence += 0.1;
     }
-    if (aiResult.vendor_uid && aiResult.vendor_uid === aiResult.product_code?.substring(0, 3)) {
-      confidence += 0.05;
-    }
-    if (aiResult.quantity && aiResult.quantity > 0 && aiResult.quantity < 10000) {
-      confidence += 0.05;
-    }
-    if (aiResult.purchase_date && /^\d{4}-\d{2}-\d{2}$/.test(aiResult.purchase_date)) {
-      confidence += 0.05;
-    }
-
-    // Format flavor list if present in notes
-    if (aiResult.notes && aiResult.notes.toLowerCase().includes('flavor')) {
-      aiResult.notes = formatFlavorList(aiResult.notes);
+    if (aiResult.notes && aiResult.notes.length > 10) {
+      confidence += 0.1;
     }
 
     // Merge with existing content if available
@@ -174,7 +200,7 @@ Return ONLY valid JSON with these fields. Preserve all emojis in the response.`;
         ...aiResult,
         notes: [existingContent.notes, aiResult.notes]
           .filter(Boolean)
-          .join('\n')
+          .join('\n\n')
       };
     }
 
@@ -189,9 +215,8 @@ Return ONLY valid JSON with these fields. Preserve all emojis in the response.`;
     };
 
     console.log('[ai-analysis] Analysis completed:', {
-      has_product_code: !!result.product_code,
-      has_vendor: !!result.vendor_uid,
-      has_quantity: !!result.quantity
+      product_name_length: result.product_name?.length,
+      has_notes: !!result.notes
     });
 
     return result;

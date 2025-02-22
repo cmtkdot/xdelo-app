@@ -21,6 +21,8 @@ export interface AnalyzedContent {
   total_price?: number;
   notes?: string;
   caption?: string;
+  product_sku?: string;
+  purchase_order_uid?: string;
   parsing_metadata?: {
     method: 'manual' | 'ai' | 'hybrid';
     confidence: number;

@@ -5,6 +5,8 @@ export interface ParsedResult {
   purchase_date?: string;
   quantity?: number;
   notes?: string;
+  product_sku?: string;
+  purchase_order_uid?: string;
   parsing_metadata?: {
     method: 'manual' | 'ai' | 'hybrid';
     confidence: number;

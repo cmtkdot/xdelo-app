@@ -306,6 +306,8 @@ export interface AnalyzedContent {
   quantity?: number;
   purchase_date?: string;
   notes?: string;
+  product_sku?: string;
+  purchase_order_uid?: string;
   parsing_metadata: {
     method: 'manual' | 'ai';
     confidence: number;
