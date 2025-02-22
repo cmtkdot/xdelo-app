@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { handleWebhookUpdate } from './messageHandlers.ts'
@@ -19,51 +18,37 @@ serve(async (req) => {
   const logger = getLogger(correlationId)
 
   try {
-    // 1. Basic validation
-    if (!req.body) {
-      throw new Error('No request body')
-    }
-
-    // 2. Auth check
-    const isValid = await verifyTelegramWebhook(req)
-    if (!isValid) {
-      throw new Error('Invalid webhook signature')
-    }
-
-    // 3. Parse update
     const update = await req.json()
-    logger.info('Received webhook update', { 
-      updateType: Object.keys(update).filter(k => k !== 'update_id'),
-      correlationId 
-    })
+    
+    // Better update type detection
+    const updateType = getUpdateType(update)
+    logger.info('Received webhook update', { updateType, correlationId })
 
-    // 4. Initialize Supabase
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // 5. Process update
-    const result = await handleWebhookUpdate(supabase, update, correlationId)
-
-    return new Response(
-      JSON.stringify(result),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: result.success ? 200 : 500
-      }
-    )
-
+    switch (updateType) {
+      case 'message':
+        return await handleMessage(update.message, supabase, correlationId)
+      case 'edited_message':
+        return await handleEditedMessage(update.edited_message, supabase, correlationId)
+      case 'channel_post':
+        return await handleChannelPost(update.channel_post, supabase, correlationId)
+      case 'edited_channel_post':
+        return await handleEditedChannelPost(update.edited_channel_post, supabase, correlationId)
+      default:
+        logger.warn('Unhandled update type', { updateType })
+        return new Response(
+          JSON.stringify({ success: false, message: 'Unhandled update type' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+    }
   } catch (error) {
     logger.error('Webhook error:', { error })
-    
     return new Response(
-      JSON.stringify({
-        success: false,
-        message: 'Webhook error',
-        error: error.message,
-        correlation_id: correlationId
-      }),
+      JSON.stringify({ success: false, error: error.message }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -71,3 +56,17 @@ serve(async (req) => {
     )
   }
 })
+
+// Helper to determine update type
+function getUpdateType(update: any): string {
+  if (update.message) return 'message'
+  if (update.edited_message) return 'edited_message'
+  if (update.channel_post) return 'channel_post'
+  if (update.edited_channel_post) return 'edited_channel_post'
+  
+  // Log available keys to help debug
+  const updateKeys = Object.keys(update).filter(k => k !== 'update_id')
+  console.warn('❌ No message or channel_post in update. Update keys:', updateKeys)
+  
+  return 'unknown'
+}

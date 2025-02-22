@@ -221,9 +221,17 @@ export interface MessageData {
   width?: number;
   height?: number;
   duration?: number;
-  is_edited?: boolean;
-  edit_date?: string | null;
-  edit_history?: Record<string, any>;
+  is_edited: boolean;
+  edit_date?: string;
+  edit_history?: Array<{
+    timestamp: string;
+    previous_content: {
+      caption?: string;
+    };
+    new_content: {
+      caption?: string;
+    };
+  }>;
   processing_state: ProcessingStateType;
   processing_started_at?: string;
   processing_completed_at?: string;
@@ -305,4 +313,11 @@ export interface WebhookResponse {
   correlation_id?: string;
   error?: string;
   details?: Record<string, any>;
+}
+
+export interface MessageEvent {
+  message: TelegramMessage;
+  edited_message?: TelegramMessage;
+  channel_post?: TelegramMessage;
+  edited_channel_post?: TelegramMessage;
 }

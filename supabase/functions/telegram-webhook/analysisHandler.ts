@@ -27,17 +27,38 @@ export async function triggerAnalysis(
       correlationId 
     });
     
+    // Update message to show processing started
+    await supabase
+      .from('messages')
+      .update({
+        processing_state: 'processing',
+        processing_started_at: new Date().toISOString(),
+        processing_correlation_id: correlationId
+      })
+      .eq('telegram_message_id', messageId);
+    
+    // Invoke analysis function
     await supabase.functions.invoke('parse-caption-with-ai', {
       body: {
-        message_id: messageId,
-        correlation_id: correlationId,
-        media_group_id: mediaGroupId
+        messageId,
+        correlationId,
+        mediaGroupId
       }
     });
     
     return { success: true };
   } catch (err) {
     const errorMessage = getErrorMessage(err);
+    
+    // Update message with error state
+    await supabase
+      .from('messages')
+      .update({
+        processing_state: 'error',
+        error_message: errorMessage,
+        last_error_at: new Date().toISOString()
+      })
+      .eq('telegram_message_id', messageId);
     
     logger.error('Failed to trigger analysis', { error: errorMessage });
     return {

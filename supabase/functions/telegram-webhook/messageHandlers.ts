@@ -1,128 +1,114 @@
 import { supabase } from './dbOperations';
 import { TelegramMessage, MessageEvent } from './types';
+import { SupabaseClient } from "@supabase/supabase-js";
+import { 
+  TelegramDocument,
+  TelegramPhoto 
+} from './types';
+import { getLogger } from './logger';
+import { corsHeaders } from './corsHeaders';
 
-export const handleMessage = async (event: MessageEvent) => {
+export const handleMessage = async (
+  message: TelegramMessage, 
+  supabase: SupabaseClient,
+  correlationId: string
+) => {
+  const logger = getLogger(correlationId);
+  
   try {
-    // Store raw webhook data in other_messages as fallback
+    // Store raw webhook data with correlation ID
     await supabase.from('other_messages').insert({
-      chat_id: event.message.chat.id,
-      chat_type: event.message.chat.type,
-      chat_title: event.message.chat.title,
-      telegram_message_id: event.message.message_id,
+      chat_id: message.chat.id,
+      chat_type: message.chat.type,
+      chat_title: message.chat.title,
+      telegram_message_id: message.message_id,
       message_type: 'text',
-      telegram_data: event.message // Store complete webhook data
+      telegram_data: message,
+      processing_correlation_id: correlationId, // Add correlation ID
+      created_at: new Date().toISOString()
     });
 
-    // Continue with normal message processing
-    if (event.message.photo || event.message.document) {
-      // Process media message
-      const message = event.message as TelegramMessage;
-      const mediaGroupId = message.media_group_id;
-
-      // Determine fileId and fileUniqueId based on whether it's a photo or document
-      let fileId: string | undefined;
-      let fileUniqueId: string | undefined;
-      let publicUrl: string | undefined;
-      let mimeType: string | undefined;
-      let fileSize: number | undefined;
-      let width: number | undefined;
-      let height: number | undefined;
-      let duration: number | undefined;
-
-      if (message.photo) {
-        const largestPhoto = message.photo.reduce((prev, current) => {
-          return (prev.width * prev.height > current.width * current.height) ? prev : current;
-        });
-
-        fileId = largestPhoto.file_id;
-        fileUniqueId = largestPhoto.file_unique_id;
-        mimeType = 'image/jpeg'; // Assume JPEG for photos
-        fileSize = largestPhoto.file_size;
-        width = largestPhoto.width;
-        height = largestPhoto.height;
-
-        if (fileId) {
-          publicUrl = await getTelegramFilePublicURL(fileId);
-        }
-      } else if (message.document) {
-        fileId = message.document.file_id;
-        fileUniqueId = message.document.file_unique_id;
-        mimeType = message.document.mime_type;
-        fileSize = message.document.file_size;
-        width = message.document.width;
-        height = message.document.height;
-        duration = message.document.duration;
-
-        if (fileId) {
-          publicUrl = await getTelegramFilePublicURL(fileId);
-        }
-      }
-
-      if (!fileId || !fileUniqueId) {
-        console.warn('No file_id or file_unique_id found in message:', message);
-        return { statusCode: 400, body: 'No file_id or file_unique_id found in message' };
-      }
-
-      // Check if the message already exists
-      const { data: existingMessage, error: selectError } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('file_unique_id', fileUniqueId)
-        .single();
-
-      if (selectError && selectError.code !== 'PGRST116') { // Ignore "no data found" error
-        console.error('Error checking for existing message:', selectError);
-        throw selectError;
-      }
-
-      if (existingMessage) {
-        console.log('Message already exists, skipping storage.');
-        return { statusCode: 200, body: 'Message already exists' };
-      }
-
-      // Extract chat information
-      const chatId = message.chat.id;
-      const chatType = message.chat.type;
-      const chatTitle = message.chat.title;
-
-      // Construct the base message object
-      const baseMessageObject = {
-        id: crypto.randomUUID(),
+    if (message.photo || message.document) {
+      const mediaInfo = extractMediaInfo(message);
+      const messageData = {
         telegram_message_id: message.message_id,
-        media_group_id: mediaGroupId || null,
-        file_id: fileId,
-        file_unique_id: fileUniqueId,
-        public_url: publicUrl,
-        mime_type: mimeType,
-        file_size: fileSize,
-        width: width,
-        height: height,
-        duration: duration,
-        user_id: message.from?.id.toString(),
-        chat_id: chatId,
-        chat_type: chatType,
-        chat_title: chatTitle,
+        chat_id: message.chat.id,
+        chat_type: message.chat.type,
+        chat_title: message.chat.title,
+        caption: message.caption,
+        media_group_id: message.media_group_id,
+        processing_correlation_id: correlationId, // Add correlation ID
+        processing_state: 'pending',
         telegram_data: message,
+        ...mediaInfo && {
+          file_id: mediaInfo.fileId,
+          file_unique_id: mediaInfo.fileUniqueId,
+          mime_type: mediaInfo.mimeType,
+          file_size: mediaInfo.fileSize,
+          width: mediaInfo.width,
+          height: mediaInfo.height
+        }
       };
 
-      // Add caption details if available
-      if (message.caption) {
-        await supabase.from('messages').insert({
-          ...baseMessageObject,
-          caption: message.caption,
-        });
-      } else {
-        // If no caption, store the message without a caption
-        await supabase.from('messages').insert(baseMessageObject);
+      // Insert into messages table
+      const { data: newMessage, error: insertError } = await supabase
+        .from('messages')
+        .insert(messageData)
+        .select()
+        .single();
+
+      if (insertError) {
+        logger.error('Error inserting message', { error: insertError });
+        throw insertError;
       }
 
-      return { statusCode: 200, body: 'Media message processed successfully' };
+      // If has caption, trigger analysis
+      if (message.caption) {
+        await triggerAnalysis(
+          message.message_id,
+          correlationId,
+          supabase,
+          message.media_group_id
+        );
+      }
+
+      logger.info('Message processed successfully', {
+        messageId: newMessage.id,
+        mediaGroupId: message.media_group_id
+      });
+
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          messageId: newMessage.id,
+          correlationId 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    return { statusCode: 200, body: 'Message processed successfully' };
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        correlationId,
+        message: 'Non-media message stored' 
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
   } catch (error) {
-    console.error('Error handling message:', error);
-    throw error;
+    logger.error('Error handling message', { error });
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: error.message,
+        correlationId 
+      }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
 };
 
@@ -150,51 +136,184 @@ const getTelegramFilePublicURL = async (fileId: string): Promise<string | undefi
   }
 };
 
-export const handleEditedMessage = async (event: MessageEvent) => {
-  try {
-    const message = event.message as TelegramMessage;
-    const telegramMessageId = message.message_id;
-    const chatId = message.chat.id;
+// Helper to extract media info
+const extractMediaInfo = (message: TelegramMessage) => {
+  if (message.photo) {
+    const largestPhoto = message.photo.reduce((prev, current) => 
+      (prev.width * prev.height > current.width * current.height) ? prev : current
+    );
+    return {
+      fileId: largestPhoto.file_id,
+      fileUniqueId: largestPhoto.file_unique_id,
+      mimeType: 'image/jpeg',
+      width: largestPhoto.width,
+      height: largestPhoto.height,
+      fileSize: largestPhoto.file_size
+    };
+  }
+  
+  if (message.document) {
+    return {
+      fileId: message.document.file_id,
+      fileUniqueId: message.document.file_unique_id,
+      mimeType: message.document.mime_type,
+      fileSize: message.document.file_size
+    };
+  }
+  
+  return null;
+};
 
-    // Find the original message in the database
+// Handle edited messages (both regular and channel posts)
+export const handleEditedMessage = async (
+  message: TelegramMessage,
+  supabase: SupabaseClient,
+  correlationId: string
+) => {
+  const logger = getLogger(correlationId);
+  
+  try {
+    // Find original message
     const { data: existingMessage, error: selectError } = await supabase
       .from('messages')
       .select('*')
-      .eq('telegram_message_id', telegramMessageId)
-      .eq('chat_id', chatId)
+      .eq('telegram_message_id', message.message_id)
+      .eq('chat_id', message.chat.id)
       .single();
 
     if (selectError) {
-      console.error('Error fetching original message:', selectError);
-      return { statusCode: 500, body: 'Error fetching original message' };
+      logger.error('Error finding original message', { error: selectError });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Original message not found' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    if (!existingMessage) {
-      console.warn('Original message not found in database.');
-      return { statusCode: 404, body: 'Original message not found' };
-    }
+    // Build edit history
+    const editHistory = existingMessage.edit_history || [];
+    editHistory.push({
+      timestamp: new Date(message.edit_date! * 1000).toISOString(),
+      previous_content: {
+        caption: existingMessage.caption,
+        // Add any other fields you want to track
+      },
+      new_content: {
+        caption: message.caption,
+        // Add any other fields you want to track
+      }
+    });
 
-    // Update the message with the new caption
+    // Extract media info if present
+    const mediaInfo = extractMediaInfo(message);
+
+    // Update message with all new data
+    const updateData = {
+      caption: message.caption,
+      is_edited: true,
+      edit_date: new Date(message.edit_date! * 1000).toISOString(),
+      edit_history: editHistory,
+      telegram_data: message,
+      processing_state: 'pending', // Always set to pending to trigger reprocessing
+      processing_correlation_id: correlationId,
+      updated_at: new Date().toISOString(),
+      // Include media info if present
+      ...mediaInfo && {
+        file_id: mediaInfo.fileId,
+        file_unique_id: mediaInfo.fileUniqueId,
+        mime_type: mediaInfo.mimeType,
+        file_size: mediaInfo.fileSize,
+        width: mediaInfo.width,
+        height: mediaInfo.height
+      }
+    };
+
+    // Update the message
     const { error: updateError } = await supabase
       .from('messages')
-      .update({
-        caption: message.caption,
-        edit_date: new Date().toISOString(),
-        telegram_data: message,
-      })
-      .eq('telegram_message_id', telegramMessageId)
-      .eq('chat_id', chatId);
+      .update(updateData)
+      .eq('id', existingMessage.id);
 
     if (updateError) {
-      console.error('Error updating message caption:', updateError);
-      return { statusCode: 500, body: 'Error updating message caption' };
+      logger.error('Error updating edited message', { error: updateError });
+      throw updateError;
     }
 
-    return { statusCode: 200, body: 'Edit message processed successfully' };
+    // Always trigger analysis for edited messages
+    await triggerAnalysis(
+      message.message_id,
+      correlationId,
+      supabase,
+      message.media_group_id
+    );
+
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        messageId: existingMessage.id,
+        correlationId 
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
   } catch (error) {
-    console.error('Error handling edited message:', error);
-    return { statusCode: 500, body: 'Error handling edited message' };
+    logger.error('Error handling edited message', { error });
+    return new Response(
+      JSON.stringify({ success: false, error: error.message }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
+};
+
+// We can now use the same handler for both edited messages and edited channel posts
+export const handleEditedChannelPost = async (
+  message: TelegramMessage,
+  supabase: SupabaseClient,
+  correlationId: string
+) => {
+  // Add is_channel_post flag to the message
+  message.is_channel_post = true;
+  return handleEditedMessage(message, supabase, correlationId);
+};
+
+// Handle channel posts
+export const handleChannelPost = async (
+  supabase: SupabaseClient,
+  message: TelegramMessage
+) => {
+  const mediaInfo = extractMediaInfo(message);
+  
+  const messageData = {
+    telegram_message_id: message.message_id,
+    chat_id: message.chat.id,
+    chat_type: message.chat.type,
+    chat_title: message.chat.title,
+    caption: message.caption,
+    is_channel_post: true,
+    sender_chat_id: message.sender_chat?.id,
+    telegram_data: message,
+    ...mediaInfo && {
+      file_id: mediaInfo.fileId,
+      file_unique_id: mediaInfo.fileUniqueId,
+      mime_type: mediaInfo.mimeType,
+      file_size: mediaInfo.fileSize,
+      width: mediaInfo.width,
+      height: mediaInfo.height
+    }
+  };
+
+  const { error } = await supabase
+    .from('messages')
+    .insert(messageData);
+
+  if (error) {
+    console.error('Error storing channel post:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
 };
 
 export const handleDeleteMessage = async (event: any) => {
