@@ -1,90 +1,33 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-
-type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
-
-interface AnalyzedContent {
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  quantity?: number;
-  parsing_metadata?: {
-    method: 'manual' | 'ai';
-    timestamp: string;
-    needs_ai_analysis?: boolean;
-  };
-}
+import { parseManually } from "./utils/manualParser.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-function extractProductInfo(caption: string): AnalyzedContent {
-  if (!caption || caption.trim().length === 0) {
-    return {
-      parsing_metadata: {
-        method: 'manual',
-        timestamp: new Date().toISOString(),
-        needs_ai_analysis: true
+async function logError(supabase: any, error: any, messageId: string | null, context: string, metadata: any = {}) {
+  console.error(`Error in ${context}:`, error);
+  try {
+    await supabase.rpc('xdelo_log_webhook_event', {
+      p_event_type: 'CAPTION_ANALYSIS_ERROR',
+      p_chat_id: null,
+      p_message_id: null,
+      p_media_type: 'caption',
+      p_error_message: `${context}: ${error.message}`,
+      p_raw_data: {
+        error_stack: error.stack,
+        error_details: error.details || null,
+        message_id: messageId,
+        context,
+        ...metadata
       }
-    };
+    });
+  } catch (logError) {
+    console.error('Failed to log error:', logError);
   }
-
-  let result: AnalyzedContent = {
-    parsing_metadata: {
-      method: 'manual',
-      timestamp: new Date().toISOString()
-    }
-  };
-
-  // Extract product name and code
-  const hashtagMatch = caption.match(/([^#]+)\s*#([A-Za-z0-9-]+)/);
-  if (hashtagMatch) {
-    result.product_name = hashtagMatch[1].trim();
-    result.product_code = hashtagMatch[2].trim();
-  } else {
-    result.product_name = caption.split('#')[0].trim();
-  }
-
-  // Extract quantity (looking for "x NUMBER" pattern)
-  const quantityMatch = caption.match(/x\s*(\d+)/i);
-  if (quantityMatch) {
-    result.quantity = parseInt(quantityMatch[1], 10);
-  }
-
-  // Extract vendor UID from product code if present (first 3 letters)
-  if (result.product_code && result.product_code.length >= 3) {
-    result.vendor_uid = result.product_code.substring(0, 3);
-  }
-
-  result.parsing_metadata.needs_ai_analysis = !result.product_code || !result.quantity;
-  return result;
-}
-
-async function syncMediaGroup(
-  supabase: any,
-  sourceMessageId: string,
-  media_group_id: string,
-  analyzedContent: AnalyzedContent
-): Promise<void> {
-  // Simple direct update of all messages in the group
-  const { error: updateError } = await supabase
-    .from('messages')
-    .update({
-      analyzed_content: analyzedContent,
-      processing_state: 'completed',
-      processing_completed_at: new Date().toISOString(),
-      group_caption_synced: true,
-      message_caption_id: sourceMessageId,  // Set the source message ID as the caption reference
-      is_original_caption: false,  // These are not the original caption messages
-      updated_at: new Date().toISOString()
-    })
-    .eq('media_group_id', media_group_id)
-    .neq('id', sourceMessageId);
-
-  if (updateError) throw updateError;
 }
 
 serve(async (req) => {
@@ -92,18 +35,21 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  let sourceMessageId: string | null = null;
+  let messageId: string | null = null;
+  const startTime = Date.now();
 
   try {
-    const body = await req.json();
-    const { messageId, caption, media_group_id } = body;
-    sourceMessageId = messageId; // Store messageId in wider scope for error handling
+    const { messageId: reqMessageId, caption, correlationId } = await req.json();
+    messageId = reqMessageId;
+
+    console.log('Starting caption analysis:', {
+      messageId,
+      caption_length: caption?.length,
+      correlation_id: correlationId
+    });
 
     if (!messageId || !caption) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required parameters' }), 
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      throw new Error('Missing required parameters: messageId or caption');
     }
 
     const supabase = createClient(
@@ -111,66 +57,176 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Parse the caption
-    const parsedContent = extractProductInfo(caption);
+    // Log analysis start
+    await supabase.rpc('xdelo_log_webhook_event', {
+      p_event_type: 'CAPTION_ANALYSIS_START',
+      p_chat_id: null,
+      p_message_id: null,
+      p_media_type: 'caption',
+      p_raw_data: {
+        message_id: messageId,
+        correlation_id: correlationId,
+        caption_length: caption.length,
+        start_time: new Date().toISOString()
+      }
+    });
 
-    // Update source message first
+    // Manual parsing attempt
+    console.log('Attempting manual parsing...');
+    const manualResult = await parseManually(caption);
+    
+    let analyzedContent;
+    if (manualResult && manualResult.product_code) {
+      console.log('Manual parsing successful');
+      analyzedContent = {
+        ...manualResult,
+        parsing_metadata: {
+          method: 'manual',
+          confidence: 1.0,
+          timestamp: new Date().toISOString()
+        }
+      };
+    } else {
+      console.log('Manual parsing incomplete, attempting AI analysis...');
+      const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+      if (!openAIApiKey) {
+        throw new Error('OpenAI API key not configured');
+      }
+
+      try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openAIApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4',
+            messages: [
+              {
+                role: 'system',
+                content: `Extract product information from captions using this format:
+                  - product_name (before #)
+                  - product_code (after #)
+                  - vendor_uid (letters at start of code)
+                  - quantity (number after x)
+                  - purchase_date (if found, in YYYY-MM-DD)
+                  - notes (additional info)`
+              },
+              { role: 'user', content: caption }
+            ]
+          })
+        });
+
+        if (!response.ok) {
+          const errorBody = await response.text();
+          throw new Error(`OpenAI API error (${response.status}): ${errorBody}`);
+        }
+
+        const aiResult = await response.json();
+        if (!aiResult.choices?.[0]?.message?.content) {
+          throw new Error('Invalid AI response format');
+        }
+
+        const aiAnalysis = JSON.parse(aiResult.choices[0].message.content);
+        analyzedContent = {
+          ...aiAnalysis,
+          parsing_metadata: {
+            method: 'ai',
+            confidence: 0.7,
+            timestamp: new Date().toISOString()
+          }
+        };
+        console.log('AI analysis successful');
+      } catch (aiError) {
+        await logError(supabase, aiError, messageId, 'AI_ANALYSIS', {
+          caption_length: caption.length,
+          correlation_id: correlationId
+        });
+        throw aiError;
+      }
+    }
+
+    // Update message with analyzed content
+    console.log('Updating message with analyzed content...');
     const { error: updateError } = await supabase
       .from('messages')
       .update({
-        analyzed_content: parsedContent,
+        analyzed_content: analyzedContent,
         processing_state: 'completed',
-        processing_started_at: new Date().toISOString(),
-        processing_completed_at: new Date().toISOString(),
-        is_original_caption: true,        // This is the original caption message
-        message_caption_id: messageId,    // Reference itself as the caption source
-        updated_at: new Date().toISOString()
+        processing_completed_at: new Date().toISOString()
       })
       .eq('id', messageId);
 
-    if (updateError) throw updateError;
-
-    // If part of a media group, sync other messages
-    if (media_group_id) {
-      await syncMediaGroup(supabase, messageId, media_group_id, parsedContent);
+    if (updateError) {
+      await logError(supabase, updateError, messageId, 'DATABASE_UPDATE', {
+        analyzed_content: analyzedContent
+      });
+      throw updateError;
     }
 
+    const processingTime = Date.now() - startTime;
+    console.log(`Analysis completed in ${processingTime}ms`);
+
+    // Log successful completion
+    await supabase.rpc('xdelo_log_webhook_event', {
+      p_event_type: 'CAPTION_ANALYSIS_COMPLETE',
+      p_chat_id: null,
+      p_message_id: null,
+      p_media_type: 'caption',
+      p_raw_data: {
+        message_id: messageId,
+        processing_time_ms: processingTime,
+        parsing_method: analyzedContent.parsing_metadata.method,
+        confidence: analyzedContent.parsing_metadata.confidence
+      }
+    });
+
     return new Response(
-      JSON.stringify({
+      JSON.stringify({ 
         success: true,
-        analyzed_content: parsedContent,
-        needs_ai_analysis: parsedContent.parsing_metadata?.needs_ai_analysis
+        processing_time_ms: processingTime,
+        analyzed_content: analyzedContent
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Error processing message:', error);
+    const processingTime = Date.now() - startTime;
+    console.error('Fatal error in parse-caption-with-ai:', error);
 
-    // Only try to update error state if we have a messageId
-    if (sourceMessageId) {
-      const supabase = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-      );
-
+    // Attempt to update message to error state
+    if (messageId) {
       try {
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        );
+
         await supabase
           .from('messages')
           .update({
             processing_state: 'error',
             error_message: error.message,
             processing_completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            last_error_at: new Date().toISOString()
           })
-          .eq('id', sourceMessageId);
-      } catch (stateError) {
-        console.error('Error updating error state:', stateError);
+          .eq('id', messageId);
+
+        await logError(supabase, error, messageId, 'FATAL_ERROR', {
+          processing_time_ms: processingTime
+        });
+      } catch (updateError) {
+        console.error('Failed to update message error state:', updateError);
       }
     }
 
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: error.details || null,
+        processing_time_ms: processingTime
+      }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

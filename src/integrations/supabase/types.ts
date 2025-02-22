@@ -1615,8 +1615,10 @@ export type Database = {
       message_state_logs: {
         Row: {
           changed_at: string | null
+          correlation_id: string | null
           id: string
           message_id: string
+          metadata: Json | null
           new_state: Database["public"]["Enums"]["processing_state_type"]
           previous_state:
             | Database["public"]["Enums"]["processing_state_type"]
@@ -1624,8 +1626,10 @@ export type Database = {
         }
         Insert: {
           changed_at?: string | null
+          correlation_id?: string | null
           id?: string
           message_id: string
+          metadata?: Json | null
           new_state: Database["public"]["Enums"]["processing_state_type"]
           previous_state?:
             | Database["public"]["Enums"]["processing_state_type"]
@@ -1633,8 +1637,10 @@ export type Database = {
         }
         Update: {
           changed_at?: string | null
+          correlation_id?: string | null
           id?: string
           message_id?: string
+          metadata?: Json | null
           new_state?: Database["public"]["Enums"]["processing_state_type"]
           previous_state?:
             | Database["public"]["Enums"]["processing_state_type"]
