@@ -1,9 +1,10 @@
+
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MessagesTable } from "@/components/MessagesTable/MessagesTable";
 import { Card } from "@/components/ui/card";
-import { Message } from "@/types";
+import { MediaItem } from "@/types";
 
 const MediaTable = () => {
   const queryClient = useQueryClient();
@@ -72,7 +73,7 @@ const MediaTable = () => {
       
       if (error) throw error;
       
-      return data as Message[];
+      return data as MediaItem[];
     }
   });
 

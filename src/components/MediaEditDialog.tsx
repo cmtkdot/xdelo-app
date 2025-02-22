@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Message } from "@/types";
+import { MediaItem } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 
 interface MediaEditDialogProps {
-  media: Message;
+  media: MediaItem;
   open: boolean;
   onClose: () => void;
 }

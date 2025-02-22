@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import type { Message } from './types';
+import type { MessageData } from './types';
 import { MessageList } from './MessageList';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 
 export function MessageListContainer() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<MessageData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -29,7 +29,7 @@ export function MessageListContainer() {
       }
 
       console.log('Fetched messages:', { count, messages: data?.length });
-      setMessages((data as unknown as Message[]) || []);
+      setMessages((data as unknown as MessageData[]) || []);
     } catch (error) {
       console.error('Error fetching messages:', error);
       setError(error instanceof Error ? error.message : 'Failed to fetch messages');
@@ -151,7 +151,7 @@ export function MessageListContainer() {
         (payload) => {
           console.log('Realtime update received:', payload);
           if (payload.eventType === 'INSERT') {
-            setMessages(prev => [payload.new as Message, ...prev]);
+            setMessages(prev => [payload.new as MessageData, ...prev]);
           } else if (payload.eventType === 'UPDATE') {
             setMessages(prev => 
               prev.map(msg => 

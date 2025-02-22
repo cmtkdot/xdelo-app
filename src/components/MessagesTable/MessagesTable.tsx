@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -17,14 +18,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Message } from "@/types";
+import { MediaItem } from "@/types";
 
-interface EditableMessage extends Message {
+interface EditableMessage extends MediaItem {
   isEditing: boolean;
 }
 
 interface MessagesTableProps {
-  messages: Message[];
+  messages: MediaItem[];
 }
 
 export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialMessages }) => {
@@ -32,9 +33,9 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     initialMessages.map(message => ({ ...message, isEditing: false }))
   );
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
+  const [messageToDelete, setMessageToDelete] = useState<MediaItem | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const [selectedMedia, setSelectedMedia] = useState<Message[]>([]);
+  const [selectedMedia, setSelectedMedia] = useState<MediaItem[]>([]);
   const { handleDelete, handleSave, isProcessing } = useTelegramOperations();
   const { toast } = useToast();
 
@@ -99,7 +100,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     }
   };
 
-  const handleDeleteClick = (message: Message) => {
+  const handleDeleteClick = (message: MediaItem) => {
     setMessageToDelete(message);
     setIsDeleteDialogOpen(true);
   };
@@ -134,7 +135,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     );
   };
 
-  const handleMediaClick = (message: Message) => {
+  const handleMediaClick = (message: MediaItem) => {
     // If it's part of a media group, show all media from the group
     if (message.media_group_id) {
       const groupMedia = messages.filter(m => m.media_group_id === message.media_group_id);
@@ -145,7 +146,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     setIsViewerOpen(true);
   };
 
-  const renderMediaPreview = (message: Message) => {
+  const renderMediaPreview = (message: MediaItem) => {
     if (!message.public_url) return null;
 
     if (message.mime_type?.startsWith('video/')) {
