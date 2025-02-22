@@ -52,7 +52,7 @@ export interface AnalyzedContent {
     effects?: string[];
   };
   sync_metadata?: {
-    sync_source_message_id?: number;
+    sync_source_message_id?: string;
     media_group_id?: string;
     synced_at?: string;
   };
