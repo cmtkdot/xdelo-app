@@ -36,17 +36,23 @@ serve(async (req) => {
       );
     }
 
-    // Keep metadata but don't use for logic
-    message.update_id = update.update_id;
-    message.is_edited = !!(update.edited_message || update.edited_channel_post);
-    message.is_channel = !!(update.channel_post || update.edited_channel_post);
+    // Store metadata in telegram_data instead of message object
+    const messageWithMetadata = {
+      ...message,
+      telegram_data: {
+        ...message.telegram_data,
+        update_id: update.update_id,
+        is_edited: !!(update.edited_message || update.edited_channel_post),
+        is_channel: !!(update.channel_post || update.edited_channel_post)
+      }
+    };
 
     logger.info('Processing message:', { 
       messageId: message.message_id,
       fileUniqueId: message.photo?.[0]?.file_unique_id || message.document?.file_unique_id,
       updateId: update.update_id,
-      isEdited: message.is_edited,
-      isChannel: message.is_channel,
+      isEdited: messageWithMetadata.telegram_data.is_edited,
+      isChannel: messageWithMetadata.telegram_data.is_channel,
       correlation_id: correlationId
     });
 
@@ -55,8 +61,8 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Single handler - file_unique_id is the source of truth
-    return await handleMessage(message, supabase, correlationId);
+    // Pass the message with metadata in telegram_data
+    return await handleMessage(messageWithMetadata, supabase, correlationId);
   } catch (error) {
     logger.error('Webhook error:', { error });
     return new Response(

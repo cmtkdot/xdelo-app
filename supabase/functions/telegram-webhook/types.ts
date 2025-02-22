@@ -141,6 +141,9 @@ export interface TelegramMessage {
     type: string;
   };
   date: number;
+  update_id?: number;
+  is_edited?: boolean;
+  is_channel?: boolean;
 }
 
 export interface ChatMemberUpdate {

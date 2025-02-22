@@ -30,11 +30,13 @@ export const handleMessage = async (
         media_group_id: message.media_group_id,
         processing_correlation_id: correlationId,
         processing_state: 'pending',
-        // Keep metadata but don't use for logic
-        update_id: message.update_id,
-        is_edited: message.is_edited,
-        is_channel: message.is_channel,
-        telegram_data: message,
+        telegram_data: {
+          ...message,
+          // Include metadata in telegram_data instead of root level
+          update_id: message.update_id,
+          is_edited: message.is_edited,
+          is_channel: message.is_channel
+        },
         ...mediaInfo && {
           file_id: mediaInfo.fileId,
           file_unique_id: mediaInfo.fileUniqueId, // This is our source of truth
@@ -45,7 +47,7 @@ export const handleMessage = async (
         }
       };
 
-      // Insert - file_unique_id constraint will handle duplicates
+      // Insert using file_unique_id as constraint
       const { data: newMessage, error: insertError } = await supabase
         .from('messages')
         .insert(messageData)
