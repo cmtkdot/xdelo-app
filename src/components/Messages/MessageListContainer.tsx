@@ -2,11 +2,14 @@ import React, { useEffect, useState } from 'react';
 import type { MessageData } from './types';
 import { MessageList } from './MessageList';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/components/ui/use-toast';
 
 export function MessageListContainer() {
   const [messages, setMessages] = useState<MessageData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const { toast } = useToast();
 
   const fetchMessages = async () => {
     try {
@@ -26,12 +29,109 @@ export function MessageListContainer() {
       }
 
       console.log('Fetched messages:', { count, messages: data?.length });
-      setMessages(data || []);
+      setMessages((data as unknown as MessageData[]) || []);
     } catch (error) {
       console.error('Error fetching messages:', error);
       setError(error instanceof Error ? error.message : 'Failed to fetch messages');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const processAllMessages = async () => {
+    try {
+      setProcessing(true);
+      let processedCount = 0;
+      let errorCount = 0;
+
+      const messagesToProcess = messages.filter(msg => msg.caption);
+      if (messagesToProcess.length === 0) {
+        toast({
+          title: "No Messages to Process",
+          description: "No messages with captions found.",
+          variant: "default",
+        });
+        return;
+      }
+
+      // Show initial toast
+      toast({
+        title: "Processing Messages",
+        description: `Starting to process ${messagesToProcess.length} messages with captions...`,
+      });
+
+      // Process messages in sequence
+      for (const message of messagesToProcess) {
+        try {
+          console.log('Processing message:', { 
+            id: message.id, 
+            caption: message.caption,
+            current_state: message.processing_state 
+          });
+          
+          // Call the edge function using the latest Supabase method
+          const { data, error: functionError } = await supabase.functions.invoke(
+            'parse-caption-with-ai',
+            {
+              body: {
+                messageId: message.id,
+                media_group_id: message.media_group_id || null,
+                caption: message.caption || '',
+                correlation_id: crypto.randomUUID()
+              }
+            }
+          );
+
+          if (functionError) {
+            console.error('Edge function error:', functionError);
+            throw functionError;
+          }
+
+          console.log('Processing result:', data);
+          processedCount++;
+          
+          // Update progress every 5 messages
+          if (processedCount % 5 === 0) {
+            toast({
+              title: "Processing Progress",
+              description: `Processed ${processedCount} of ${messagesToProcess.length} messages...`,
+            });
+          }
+
+          // Small delay to prevent overwhelming the function
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+        } catch (error) {
+          console.error('Error processing message:', message.id, error);
+          errorCount++;
+          
+          // Show error toast for individual message failures
+          toast({
+            title: "Message Processing Error",
+            description: `Failed to process message ${message.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            variant: "destructive",
+          });
+        }
+      }
+
+      // Show completion toast
+      toast({
+        title: "Processing Complete",
+        description: `Successfully processed ${processedCount} messages. ${errorCount > 0 ? `Failed: ${errorCount}` : ''}`,
+        variant: errorCount > 0 ? "destructive" : "default",
+      });
+
+      // Refresh the list to show updated results
+      await fetchMessages();
+    } catch (error) {
+      console.error('Error in batch processing:', error);
+      toast({
+        title: "Processing Error",
+        description: error instanceof Error ? error.message : 'Failed to process messages',
+        variant: "destructive",
+      });
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -133,12 +233,30 @@ export function MessageListContainer() {
             A list of all messages and their processing status.
           </p>
         </div>
-        <div>
+        <div className="flex space-x-3">
           <button
             onClick={fetchMessages}
-            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            disabled={processing}
+            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Refresh List
+          </button>
+          <button
+            onClick={processAllMessages}
+            disabled={processing || messages.length === 0}
+            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {processing ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Processing...
+              </>
+            ) : (
+              'Process All with AI'
+            )}
           </button>
         </div>
       </div>
