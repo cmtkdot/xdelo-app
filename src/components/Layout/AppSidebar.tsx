@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
@@ -11,7 +12,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
-import { useSupabaseClient } from '@supabase/auth-helpers-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -24,7 +25,6 @@ const menuItems = [
 
 export function AppSidebar() {
   const location = useLocation();
-  const supabase = useSupabaseClient();
   const [isExpanded, setIsExpanded] = React.useState(false);
 
   const handleLogout = async () => {

@@ -1862,6 +1862,7 @@ export type Database = {
           message_type: Database["public"]["Enums"]["telegram_other_message_type"]
           message_url: string | null
           processing_completed_at: string | null
+          processing_correlation_id: string | null
           processing_started_at: string | null
           processing_state:
             | Database["public"]["Enums"]["processing_state_type"]
@@ -1884,6 +1885,7 @@ export type Database = {
           message_type: Database["public"]["Enums"]["telegram_other_message_type"]
           message_url?: string | null
           processing_completed_at?: string | null
+          processing_correlation_id?: string | null
           processing_started_at?: string | null
           processing_state?:
             | Database["public"]["Enums"]["processing_state_type"]
@@ -1906,6 +1908,7 @@ export type Database = {
           message_type?: Database["public"]["Enums"]["telegram_other_message_type"]
           message_url?: string | null
           processing_completed_at?: string | null
+          processing_correlation_id?: string | null
           processing_started_at?: string | null
           processing_state?:
             | Database["public"]["Enums"]["processing_state_type"]
@@ -2445,50 +2448,17 @@ export type Database = {
         }
         Returns: string
       }
-      xdelo_extract_confidence_score: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: number
-      }
-      xdelo_extract_notes: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: string
-      }
-      xdelo_extract_product_code: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: string
-      }
-      xdelo_extract_product_name: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: string
-      }
-      xdelo_extract_product_quantity: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: number
-      }
-      xdelo_extract_purchase_date: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: string
-      }
-      xdelo_extract_vendor_uid: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: string
-      }
       xdelo_fix_media_groups: {
         Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      xdelo_handle_message_state: {
+        Args: {
+          p_message_id: string
+          p_state: Database["public"]["Enums"]["processing_state_type"]
+          p_error?: string
+          p_metadata?: Json
+        }
         Returns: undefined
       }
       xdelo_log_webhook_event: {
@@ -2502,32 +2472,9 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_manual_sync_media_group: {
-        Args: {
-          p_media_group_id: string
-        }
-        Returns: undefined
-      }
       xdelo_monitor_stuck_messages: {
         Args: Record<PropertyKey, never>
         Returns: undefined
-      }
-      xdelo_parse_analyzed_content: {
-        Args: {
-          content: Json
-        }
-        Returns: {
-          product_name: string
-          product_code: string
-          vendor_uid: string
-          purchase_date: string
-          quantity: number
-          notes: string
-          parsing_method: string
-          confidence: number
-          fallbacks_used: string[]
-          reanalysis_attempted: boolean
-        }[]
       }
       xdelo_process_message_queue: {
         Args: Record<PropertyKey, never>
@@ -2535,22 +2482,6 @@ export type Database = {
       }
       xdelo_refresh_message_flow_logs: {
         Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      xdelo_sync_media_group_content: {
-        Args: {
-          p_source_message_id: string
-          p_media_group_id: string
-          p_correlation_id?: string
-        }
-        Returns: undefined
-      }
-      xdelo_update_message_processing_state: {
-        Args: {
-          p_message_id: string
-          p_state: Database["public"]["Enums"]["processing_state_type"]
-          p_error?: string
-        }
         Returns: undefined
       }
     }
