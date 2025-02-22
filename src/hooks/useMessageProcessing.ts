@@ -1,15 +1,40 @@
 
 import { useState, useCallback } from 'react';
-import type { Message } from '@/types';
+import type { MessageData, AnalyzedContent as MessageAnalyzedContent } from '../components/Messages/types';
 import { supabase } from '@/integrations/supabase/client';
+import { analyzedContentToJson, AnalyzedContent as JsonAnalyzedContent } from '@/types';
 
 interface ProcessingState {
-  isProcessing: boolean;
-  error?: string;
+  [key: string]: {
+    isProcessing: boolean;
+    error?: string;
+  };
 }
 
+const convertAnalyzedContent = (content: MessageAnalyzedContent | undefined): JsonAnalyzedContent => {
+  if (!content) return {};
+  
+  return {
+    product_name: content.product_name,
+    product_code: content.product_code,
+    vendor_uid: content.vendor_uid,
+    purchase_date: content.purchase_date,
+    quantity: content.quantity,
+    notes: content.notes,
+    parsing_metadata: content.parsing_metadata ? {
+      method: content.parsing_metadata.method === 'hybrid' ? 'ai' : content.parsing_metadata.method,
+      confidence: content.parsing_metadata.confidence,
+      timestamp: content.parsing_metadata.timestamp
+    } : undefined,
+    sync_metadata: {
+      sync_source_message_id: content.sync_metadata?.sync_source_message_id,
+      media_group_id: content.sync_metadata?.media_group_id
+    }
+  };
+};
+
 export function useMessageProcessing() {
-  const [processingState, setProcessingState] = useState<Record<string, ProcessingState>>({});
+  const [processingState, setProcessingState] = useState<ProcessingState>({});
 
   const updateProcessingState = useCallback((messageId: string, isProcessing: boolean, error?: string) => {
     setProcessingState(prev => ({
@@ -18,7 +43,7 @@ export function useMessageProcessing() {
     }));
   }, []);
 
-  const handleReanalyze = useCallback(async (message: Message) => {
+  const retryAnalysis = useCallback(async (message: MessageData) => {
     if (processingState[message.id]?.isProcessing) return;
     
     updateProcessingState(message.id, true);
@@ -59,7 +84,7 @@ export function useMessageProcessing() {
       await supabase
         .from('messages')
         .update({
-          processing_state: 'error' as const,
+          processing_state: 'error',
           error_message: error.message,
           processing_completed_at: new Date().toISOString(),
           last_error_at: new Date().toISOString()
@@ -70,39 +95,65 @@ export function useMessageProcessing() {
     }
   }, [processingState, updateProcessingState]);
 
-  const handleSave = useCallback(async (message: Message, caption: string) => {
-    if (processingState[message.id]?.isProcessing) return;
+  const syncMediaGroup = useCallback(async (message: MessageData) => {
+    if (!message.media_group_id || processingState[message.id]?.isProcessing) return;
     
     updateProcessingState(message.id, true);
     
     try {
-      const { error } = await supabase
-        .from('messages')
-        .update({
-          caption,
-          processing_state: 'pending' as const
-        })
-        .eq('id', message.id);
+      // Add sync metadata to the analyzed content
+      const analyzedContentWithSync = {
+        ...message.analyzed_content,
+        sync_metadata: {
+          sync_source_message_id: message.id,
+          media_group_id: message.media_group_id
+        }
+      };
 
-      if (error) throw error;
-      
-      await handleReanalyze(message);
-      
+      // Update all messages in the group with the source message's content
+      const { error: updateError } = await supabase.from('messages')
+        .update({
+          analyzed_content: analyzedContentToJson(convertAnalyzedContent(analyzedContentWithSync)),
+          processing_state: 'completed',
+          processing_completed_at: new Date().toISOString(),
+          is_original_caption: false,
+          group_caption_synced: true,
+          message_caption_id: message.id,
+          updated_at: new Date().toISOString()
+        })
+        .eq('media_group_id', message.media_group_id)
+        .neq('id', message.id);
+
+      if (updateError) throw updateError;
+
       updateProcessingState(message.id, false);
     } catch (error) {
-      console.error('Error saving caption:', error);
+      console.error('Error syncing media group:', error);
       updateProcessingState(message.id, false, error.message);
+      
+      // Log the error with metadata
+      await supabase.from('message_state_logs').insert({
+        message_id: message.id,
+        previous_state: 'completed',
+        new_state: 'error',
+        changed_at: new Date().toISOString(),
+        error_message: error.message,
+        metadata: {
+          sync_source_message_id: message.id,
+          media_group_id: message.media_group_id
+        }
+      });
     }
-  }, [processingState, updateProcessingState, handleReanalyze]);
+  }, [processingState, updateProcessingState]);
 
   return {
-    handleReanalyze,
-    handleSave,
-    isProcessing: Object.fromEntries(
+    processing: Object.fromEntries(
       Object.entries(processingState).map(([id, state]) => [id, state.isProcessing])
     ),
     errors: Object.fromEntries(
       Object.entries(processingState).map(([id, state]) => [id, state.error])
-    )
+    ),
+    retryAnalysis,
+    syncMediaGroup
   };
 }

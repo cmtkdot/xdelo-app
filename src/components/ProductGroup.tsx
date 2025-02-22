@@ -1,4 +1,5 @@
-import { Message } from "@/types";
+
+import { MediaItem } from "@/types";
 import { AlertCircle, Pencil, Trash2, Eye, RefreshCw, Check } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageSwiper } from "@/components/ui/image-swiper";
@@ -21,9 +22,9 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface ProductGroupProps {
-  group: Message[];
-  onEdit: (media: Message) => void;
-  onDelete: (media: Message) => void;
+  group: MediaItem[];
+  onEdit: (media: MediaItem) => void;
+  onDelete: (media: MediaItem) => void;
   onView: () => void;
 }
 

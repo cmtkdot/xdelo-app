@@ -1,4 +1,3 @@
-
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
@@ -23,7 +22,7 @@ export interface AnalyzedContent {
   notes?: string;
   caption?: string;
   parsing_metadata?: {
-    method: 'manual' | 'ai' | 'hybrid';
+    method: 'manual' | 'ai';
     confidence: number;
     timestamp: string;
   };
@@ -62,7 +61,6 @@ export interface Message {
   group_last_message_time?: string;
   chat_id?: number;
   chat_type?: string;
-  chat_title?: string;
   message_url?: string;
   purchase_order?: string;
   glide_row_id?: string;
@@ -70,23 +68,39 @@ export interface Message {
   updated_at?: string;
 }
 
-// Add GlProduct interface
+export interface MediaItem extends Message {
+  glide_row_id?: string;
+}
+
+export interface MatchResult {
+  id: string;
+  message_id: string;
+  product_id: string;
+  confidence: number;
+  matchType: string;
+  details: {
+    matchedFields: string[];
+    confidence: number;
+  };
+  glide_id?: string;
+}
+
 export interface GlProduct {
   id: string;
-  main_new_product_name: string;
-  main_vendor_product_name: string;
-  main_product_purchase_date: string;
-  main_total_qty_purchased: number;
-  main_cost: number;
-  main_category: string;
-  main_product_image1: string;
-  main_purchase_notes: string;
-  product_name_display: string;
+  main_new_product_name?: string;
+  main_vendor_product_name?: string;
+  main_product_purchase_date?: string;
+  main_total_qty_purchased?: number;
+  main_cost?: number;
+  main_category?: string;
+  main_product_image1?: string;
+  main_purchase_notes?: string;
+  product_name_display?: string;
   created_at: string;
   updated_at: string;
-  sync_status: SyncStatus;
-  cart_add_note?: string;
-  cart_rename?: string;
+  sync_status: string;
+  cart_add_note?: boolean;
+  cart_rename?: boolean;
   date_timestamp_subm?: string;
   email_email_of_user_who_added_product?: string;
   glide_id?: string;
@@ -98,42 +112,18 @@ export interface GlProduct {
   }[];
 }
 
-// Add MediaItem interface
-export interface MediaItem {
-  id: string;
-  public_url: string;
-  mime_type?: string;
-  created_at: string;
-  analyzed_content?: AnalyzedContent;
-}
-
-// Add MatchResult interface
-export interface MatchResult {
-  id: string;
-  message_id: string;
-  product_id: string;
-  confidence: number;
-  matchType: string;
-  details: {
-    matchedFields: string[];
-    confidence: number;
+export const analyzedContentToJson = (content: AnalyzedContent): Json => {
+  return {
+    product_name: content.product_name,
+    product_code: content.product_code,
+    vendor_uid: content.vendor_uid,
+    purchase_date: content.purchase_date,
+    quantity: content.quantity,
+    unit_price: content.unit_price,
+    total_price: content.total_price,
+    notes: content.notes,
+    parsing_metadata: content.parsing_metadata
   };
-}
+};
 
-// Add Database type from supabase
-export interface Database {
-  public: {
-    Tables: {
-      messages: {
-        Row: Message;
-        Insert: Partial<Message>;
-        Update: Partial<Message>;
-      };
-      gl_products: {
-        Row: GlProduct;
-        Insert: Partial<GlProduct>;
-        Update: Partial<GlProduct>;
-      };
-    };
-  };
-}
+export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];

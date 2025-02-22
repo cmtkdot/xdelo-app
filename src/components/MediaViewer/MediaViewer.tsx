@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { Message } from '@/types';
+import { MediaItem } from '@/types';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ImageSwiper } from "@/components/ui/image-swiper";
@@ -10,7 +11,7 @@ import { cn } from '@/lib/utils';
 interface MediaViewerProps {
   isOpen: boolean;
   onClose: () => void;
-  currentGroup: Message[];
+  currentGroup: MediaItem[];
   onPrevious?: () => void;
   onNext?: () => void;
   hasPrevious?: boolean;

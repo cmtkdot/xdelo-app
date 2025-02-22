@@ -351,7 +351,7 @@ export type Database = {
         Row: {
           created_at: string | null
           email_of_user: string | null
-          glide_id: string | null
+          glide_id: string
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -372,7 +372,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           email_of_user?: string | null
-          glide_id?: string | null
+          glide_id: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -393,7 +393,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           email_of_user?: string | null
-          glide_id?: string | null
+          glide_id?: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -438,7 +438,7 @@ export type Database = {
       gl_estimate_lines: {
         Row: {
           created_at: string | null
-          glide_id: string | null
+          glide_id: string
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -462,7 +462,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
-          glide_id?: string | null
+          glide_id: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -486,7 +486,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
-          glide_id?: string | null
+          glide_id?: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -638,7 +638,7 @@ export type Database = {
           expense_tax: string | null
           expense_text_to_json: string | null
           expense_total: string | null
-          glide_id: string | null
+          glide_id: string
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -663,7 +663,7 @@ export type Database = {
           expense_tax?: string | null
           expense_text_to_json?: string | null
           expense_total?: string | null
-          glide_id?: string | null
+          glide_id: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -688,7 +688,7 @@ export type Database = {
           expense_tax?: string | null
           expense_text_to_json?: string | null
           expense_total?: string | null
-          glide_id?: string | null
+          glide_id?: string
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -1096,7 +1096,7 @@ export type Database = {
           docs_pdf_created_on: string | null
           docs_pdf_link: string | null
           docs_shortlink: string | null
-          glide_id: string | null
+          glide_id: string
           id: string
           last_edited_date: string | null
           last_modified_at: string | null
@@ -1120,7 +1120,7 @@ export type Database = {
           docs_pdf_created_on?: string | null
           docs_pdf_link?: string | null
           docs_shortlink?: string | null
-          glide_id?: string | null
+          glide_id: string
           id?: string
           last_edited_date?: string | null
           last_modified_at?: string | null
@@ -1144,7 +1144,7 @@ export type Database = {
           docs_pdf_created_on?: string | null
           docs_pdf_link?: string | null
           docs_shortlink?: string | null
-          glide_id?: string | null
+          glide_id?: string
           id?: string
           last_edited_date?: string | null
           last_modified_at?: string | null
@@ -1222,7 +1222,7 @@ export type Database = {
           ai_tracking_ai_extracted_text: string | null
           ai_tracking_json_extracted: Json | null
           created_at: string | null
-          glide_id: string | null
+          glide_id: string
           ical_calendar_google_updated: boolean | null
           ical_end_date: string | null
           ical_last_tracked: string | null
@@ -1282,7 +1282,7 @@ export type Database = {
           ai_tracking_ai_extracted_text?: string | null
           ai_tracking_json_extracted?: Json | null
           created_at?: string | null
-          glide_id?: string | null
+          glide_id: string
           ical_calendar_google_updated?: boolean | null
           ical_end_date?: string | null
           ical_last_tracked?: string | null
@@ -1342,7 +1342,7 @@ export type Database = {
           ai_tracking_ai_extracted_text?: string | null
           ai_tracking_json_extracted?: Json | null
           created_at?: string | null
-          glide_id?: string | null
+          glide_id?: string
           ical_calendar_google_updated?: boolean | null
           ical_end_date?: string | null
           ical_last_tracked?: string | null
@@ -1612,6 +1612,64 @@ export type Database = {
           },
         ]
       }
+      message_state_logs: {
+        Row: {
+          changed_at: string | null
+          correlation_id: string | null
+          id: string
+          message_id: string
+          metadata: Json | null
+          new_state: Database["public"]["Enums"]["processing_state_type"]
+          previous_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+        }
+        Insert: {
+          changed_at?: string | null
+          correlation_id?: string | null
+          id?: string
+          message_id: string
+          metadata?: Json | null
+          new_state: Database["public"]["Enums"]["processing_state_type"]
+          previous_state?:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+        }
+        Update: {
+          changed_at?: string | null
+          correlation_id?: string | null
+          id?: string
+          message_id?: string
+          metadata?: Json | null
+          new_state?: Database["public"]["Enums"]["processing_state_type"]
+          previous_state?:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_state_logs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "message_flow_logs"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "message_state_logs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "message_flow_logs_materialized"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "message_state_logs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
@@ -1631,7 +1689,6 @@ export type Database = {
           group_caption_synced: boolean | null
           group_first_message_time: string | null
           group_last_message_time: string | null
-          group_message_count: string | null
           height: number | null
           id: string
           is_edited: boolean | null
@@ -1683,7 +1740,6 @@ export type Database = {
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
-          group_message_count?: string | null
           height?: number | null
           id?: string
           is_edited?: boolean | null
@@ -1735,7 +1791,6 @@ export type Database = {
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
-          group_message_count?: string | null
           height?: number | null
           id?: string
           is_edited?: boolean | null
@@ -1770,6 +1825,20 @@ export type Database = {
           width?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "message_flow_logs"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "message_flow_logs_materialized"
+            referencedColumns: ["message_id"]
+          },
           {
             foreignKeyName: "messages_message_caption_id_fkey"
             columns: ["message_caption_id"]
@@ -1899,6 +1968,30 @@ export type Database = {
           needs_manual_review?: boolean | null
           processing_status?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      settings: {
+        Row: {
+          bot_token: string | null
+          created_at: string | null
+          id: string
+          updated_at: string | null
+          webhook_url: string | null
+        }
+        Insert: {
+          bot_token?: string | null
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Update: {
+          bot_token?: string | null
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          webhook_url?: string | null
         }
         Relationships: []
       }
@@ -2066,6 +2159,56 @@ export type Database = {
           selling_price: number | null
           stock_after_sale: number | null
           user_email: string | null
+        }
+        Relationships: []
+      }
+      message_flow_logs: {
+        Row: {
+          chat_id: number | null
+          chat_title: string | null
+          created_at: string | null
+          edit_date: string | null
+          error_message: string | null
+          file_unique_id: string | null
+          is_edited: boolean | null
+          last_error_at: string | null
+          media_group_id: string | null
+          message_category: string | null
+          message_id: string | null
+          processing_completed_at: string | null
+          processing_duration_seconds: number | null
+          processing_started_at: string | null
+          processing_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          retry_count: number | null
+          telegram_message_id: number | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
+      message_flow_logs_materialized: {
+        Row: {
+          chat_id: number | null
+          chat_title: string | null
+          created_at: string | null
+          edit_date: string | null
+          error_message: string | null
+          file_unique_id: string | null
+          is_edited: boolean | null
+          last_error_at: string | null
+          media_group_id: string | null
+          message_category: string | null
+          message_id: string | null
+          processing_completed_at: string | null
+          processing_duration_seconds: number | null
+          processing_started_at: string | null
+          processing_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          retry_count: number | null
+          telegram_message_id: number | null
+          updated_at: string | null
         }
         Relationships: []
       }
@@ -2309,6 +2452,15 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      xdelo_handle_message_state: {
+        Args: {
+          p_message_id: string
+          p_state: Database["public"]["Enums"]["processing_state_type"]
+          p_error?: string
+          p_metadata?: Json
+        }
+        Returns: undefined
+      }
       xdelo_log_webhook_event: {
         Args: {
           p_event_type: string
@@ -2320,8 +2472,24 @@ export type Database = {
         }
         Returns: undefined
       }
+      xdelo_monitor_stuck_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      xdelo_process_message_queue: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       xdelo_refresh_message_flow_logs: {
         Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      xdelo_sync_media_group_content: {
+        Args: {
+          p_source_message_id: string
+          p_media_group_id: string
+          p_analyzed_content: Json
+        }
         Returns: undefined
       }
       xdelo_update_message_processing_state: {
