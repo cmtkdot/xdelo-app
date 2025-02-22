@@ -1,10 +1,16 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 
 export type TelegramChatType = 'private' | 'group' | 'supergroup' | 'channel';
-export type ProcessingStateType = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
-export type TelegramOtherMessageType = 'text' | 'sticker' | 'poll' | 'dice' | 'location' | 
-                                     'contact' | 'venue' | 'game' | 'chat_member' | 
-                                     'edited_message' | 'edited_channel_post';
+export type ProcessingStateType = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
+export type TelegramOtherMessageType = 
+  | 'text'
+  | 'command'
+  | 'contact'
+  | 'location'
+  | 'voice'
+  | 'document'
+  | 'sticker'
+  | 'chat_member';
 
 export interface TelegramChat {
   id: number;
@@ -38,20 +44,73 @@ export interface TelegramDocument {
   file_unique_id: string;
   file_size?: number;
   mime_type?: string;
+  file_name?: string;
+}
+
+export interface TelegramVoice {
+  file_id: string;
+  file_unique_id: string;
+  duration: number;
+  mime_type?: string;
+  file_size?: number;
 }
 
 export interface TelegramMessage {
   message_id: number;
+  from?: {
+    id: number;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+  };
   chat: TelegramChat;
-  date: number;
-  edit_date?: number;
-  text?: string;
-  caption?: string;
   media_group_id?: string;
-  sender_chat?: any;
+  caption?: string;
+  edit_date?: number;
   photo?: TelegramPhoto[];
   video?: TelegramVideo;
   document?: TelegramDocument;
+  voice?: TelegramVoice;
+  text?: string;
+  sticker?: any;
+  dice?: any;
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
+  contact?: {
+    phone_number: string;
+    first_name: string;
+    last_name?: string;
+  };
+  venue?: {
+    location: {
+      latitude: number;
+      longitude: number;
+    };
+    title: string;
+    address: string;
+  };
+  game?: any;
+  poll?: {
+    id: string;
+    question: string;
+    options: Array<{
+      text: string;
+      voter_count: number;
+    }>;
+  };
+  callback_query?: {
+    id: string;
+    from: {
+      id: number;
+    };
+    data?: string;
+  };
+  inline_query?: {
+    id: string;
+    query: string;
+  };
 }
 
 export interface TelegramUpdate {
@@ -60,7 +119,10 @@ export interface TelegramUpdate {
   edited_message?: TelegramMessage;
   channel_post?: TelegramMessage;
   edited_channel_post?: TelegramMessage;
+  callback_query?: TelegramMessage['callback_query'];
+  inline_query?: TelegramMessage['inline_query'];
   my_chat_member?: any;
+  chat_member?: any;
   chat_join_request?: any;
 }
 
@@ -73,7 +135,7 @@ export interface ChatInfo {
 export interface MediaInfo {
   file_id: string;
   file_unique_id: string;
-  mime_type: string;
+  mime_type?: string;
   file_size?: number;
   width?: number;
   height?: number;

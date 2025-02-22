@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { analyzeCaption } from "./utils/aiAnalyzer.ts";
@@ -191,23 +190,21 @@ serve(async (req) => {
       has_caption: hasCaption
     });
 
-    if (media_group_id) {
-      await updateMediaGroupMessages(supabase, media_group_id, messageId, analyzedContent, hasCaption);
-    } else {
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: analyzedContent,
-          processing_state: 'completed',
-          processing_completed_at: new Date().toISOString(),
-          is_original_caption: hasCaption
-        })
-        .eq('id', messageId);
+    // Update the message - trigger will handle group sync
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        analyzed_content: analyzedContent,
+        processing_state: 'completed',
+        processing_completed_at: new Date().toISOString(),
+        is_original_caption: hasCaption, // Important for trigger
+        processing_correlation_id: correlation_id
+      })
+      .eq('id', messageId);
 
-      if (updateError) {
-        console.error('Error updating single message:', updateError);
-        throw updateError;
-      }
+    if (updateError) {
+      console.error('Error updating message:', updateError);
+      throw updateError;
     }
 
     return new Response(
@@ -224,18 +221,12 @@ serve(async (req) => {
     console.error('Error in parse-caption-with-ai:', error);
     
     try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-      const supabase = createClient(supabaseUrl, supabaseKey);
-
-      // Update message state to error
-      if (messageId) {
-        await supabase.rpc('xdelo_update_message_processing_state', {
-          p_message_id: messageId,
-          p_state: 'error',
-          p_error: error.message
-        });
-      }
+      // Use the safe update function for error states
+      await supabase.rpc('xdelo_update_message_processing_state', {
+        p_message_id: messageId,
+        p_state: 'error',
+        p_error: error.message
+      });
     } catch (updateError) {
       console.error('Error updating message state:', updateError);
     }
