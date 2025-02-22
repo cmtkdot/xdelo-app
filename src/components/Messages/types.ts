@@ -1,5 +1,10 @@
+import type { Message } from '@/types';
 
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
+// Export the Message type for components
+export type { Message };
+
+// Re-export the database message type with a different name for components
+export type MessageComponentData = Message;
 
 export interface AnalyzedContent {
   product_name?: string;

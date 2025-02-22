@@ -1,15 +1,14 @@
-
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem } from "@/types";
+import { Message } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
 
 const ProductGallery = () => {
-  const [editItem, setEditItem] = useState<MediaItem | null>(null);
+  const [editItem, setEditItem] = useState<Message | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: mediaGroups = {} } = useMediaGroups(); // Provide default empty object
@@ -37,7 +36,7 @@ const ProductGallery = () => {
     };
   }, [queryClient]);
 
-  const handleEdit = (media: MediaItem) => {
+  const handleEdit = (media: Message) => {
     setEditItem(media);
   };
 
@@ -46,7 +45,7 @@ const ProductGallery = () => {
     console.log('Viewing media');
   };
 
-  const handleDelete = async (media: MediaItem) => {
+  const handleDelete = async (media: Message) => {
     try {
       const { error } = await supabase
         .from('messages')

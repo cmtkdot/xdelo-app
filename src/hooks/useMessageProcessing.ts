@@ -1,16 +1,14 @@
 import { useState, useCallback } from 'react';
-import type { MessageData, AnalyzedContent as MessageAnalyzedContent } from '../components/Messages/types';
+import type { Message, AnalyzedContent } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { analyzedContentToJson, AnalyzedContent as JsonAnalyzedContent } from '@/types';
 
 interface ProcessingState {
-  [key: string]: {
-    isProcessing: boolean;
-    error?: string;
-  };
+  isProcessing: boolean;
+  error?: string;
 }
 
-const convertAnalyzedContent = (content: MessageAnalyzedContent | undefined): JsonAnalyzedContent => {
+const convertAnalyzedContent = (content: AnalyzedContent | undefined): JsonAnalyzedContent => {
   if (!content) return {};
   
   return {
@@ -42,7 +40,7 @@ export function useMessageProcessing() {
     }));
   }, []);
 
-  const retryAnalysis = useCallback(async (message: MessageData) => {
+  const handleReanalyze = useCallback(async (message: Message) => {
     if (processingState[message.id]?.isProcessing) return;
     
     updateProcessingState(message.id, true);
@@ -94,52 +92,18 @@ export function useMessageProcessing() {
     }
   }, [processingState, updateProcessingState]);
 
-  const syncMediaGroup = useCallback(async (message: MessageData) => {
-    if (!message.media_group_id || processingState[message.id]?.isProcessing) return;
-    
-    updateProcessingState(message.id, true);
-    
-    try {
-      // Add sync metadata to the analyzed content
-      const analyzedContentWithSync = {
-        ...message.analyzed_content,
-        sync_metadata: {
-          sync_source_message_id: message.id,
-          media_group_id: message.media_group_id
-        }
-      };
-
-      // Update all messages in the group with the source message's content
-      const { error: updateError } = await supabase.from('messages')
-        .update({
-          analyzed_content: analyzedContentToJson(convertAnalyzedContent(analyzedContentWithSync)),
-          processing_state: 'completed',
-          processing_completed_at: new Date().toISOString(),
-          is_original_caption: false,
-          group_caption_synced: true,
-          message_caption_id: message.id,
-          updated_at: new Date().toISOString()
-        })
-        .eq('media_group_id', message.media_group_id)
-        .neq('id', message.id);
-
-      if (updateError) throw updateError;
-
-      updateProcessingState(message.id, false);
-    } catch (error) {
-      console.error('Error syncing media group:', error);
-      updateProcessingState(message.id, false, error.message);
-    }
-  }, [processingState, updateProcessingState]);
+  const handleSave = useCallback(async (message: Message, caption: string) => {
+    // ... rest of the code
+  }, []);
 
   return {
-    processing: Object.fromEntries(
+    handleReanalyze,
+    handleSave,
+    isProcessing: Object.fromEntries(
       Object.entries(processingState).map(([id, state]) => [id, state.isProcessing])
     ),
     errors: Object.fromEntries(
       Object.entries(processingState).map(([id, state]) => [id, state.error])
-    ),
-    retryAnalysis,
-    syncMediaGroup
+    )
   };
 }

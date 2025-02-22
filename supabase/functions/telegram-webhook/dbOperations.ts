@@ -2,7 +2,8 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { 
   MessageData, 
   OtherMessageData, 
-  ProcessingStateType
+  ProcessingStateType,
+  TelegramMessage
 } from "./types";
 
 // Retrieve an existing message by telegram_message_id and chat_id
@@ -13,7 +14,7 @@ export async function findExistingMessage(
 ): Promise<MessageData | null> {
   const { data, error } = await supabase
     .from("messages")
-    .select("*") // Select all fields
+    .select("*")
     .eq("telegram_message_id", telegram_message_id)
     .eq("chat_id", chat_id)
     .maybeSingle();
@@ -25,7 +26,7 @@ export async function findExistingMessage(
   return data;
 }
 
-// Retrieve an existing channel message by telegram_message_id, chat_id, and the channel flag
+// Retrieve an existing channel message
 export async function findExistingChannelMessage(
   supabase: SupabaseClient,
   telegram_message_id: number,
@@ -130,6 +131,7 @@ export async function updateOtherMessage(
   }
 }
 
+// Sync media group content and trigger analysis
 export async function syncMediaGroupContent(
   supabase: SupabaseClient,
   messageId: string,
@@ -182,8 +184,8 @@ export async function syncMediaGroupContent(
 
     if (error) throw error;
 
-    // Trigger analysis
-    await triggerAnalysis(supabase, messageId, caption, correlationId);
+    // Trigger analysis with AI
+    await triggerAnalysis(supabase, messageId, caption, correlationId, mediaGroupId);
 
   } catch (error) {
     console.error("❌ Error syncing media group:", {
@@ -194,12 +196,13 @@ export async function syncMediaGroupContent(
   }
 }
 
-// Helper to update message handler to call the analysis endpoint correctly
+// Helper to trigger AI analysis
 export async function triggerAnalysis(
   supabase: SupabaseClient,
   messageId: string,
   caption: string,
-  correlationId: string
+  correlationId: string,
+  mediaGroupId?: string
 ): Promise<void> {
   try {
     // First update state to processing
@@ -209,12 +212,13 @@ export async function triggerAnalysis(
     });
 
     const { error } = await supabase.functions.invoke(
-      'parse-caption-with-ai',
+      'analyze-with-ai',
       {
         body: {
-          message_id: messageId,
+          messageId,
           caption,
-          correlation_id: correlationId
+          correlationId,
+          media_group_id: mediaGroupId
         }
       }
     );
@@ -236,11 +240,12 @@ export async function triggerAnalysis(
     throw error;
   }
 }
-// Update message edits when a message is edited
+
+// Update message edits
 export async function updateMessageEdits(
   supabase: SupabaseClient,
   messageId: string,
-  message: any,
+  message: TelegramMessage & { edit_date: number, telegram_data?: { message?: unknown } },
   correlationId: string
 ): Promise<void> {
   const now = new Date().toISOString();
@@ -262,6 +267,11 @@ export async function updateMessageEdits(
       .eq("id", messageId);
 
     if (error) throw error;
+
+    // If message has caption, trigger AI analysis
+    if (message.caption) {
+      await triggerAnalysis(supabase, messageId, message.caption, correlationId);
+    }
   } catch (error) {
     console.error("❌ Error updating message edits:", error);
     throw error;

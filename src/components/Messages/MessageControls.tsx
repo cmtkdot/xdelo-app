@@ -1,9 +1,9 @@
 import React from 'react';
-import type { MessageData } from './types';
+import type { Message } from './types';
 import { useMessageProcessing } from '../../hooks/useMessageProcessing';
 
 interface MessageControlsProps {
-  message: MessageData;
+  message: Message;
   onSuccess?: () => void;
 }
 

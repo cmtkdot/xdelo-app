@@ -1,7 +1,21 @@
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
+import type { Database } from '../integrations/supabase/types';
 
-export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
+// Database types
+export type DbMessage = Database['public']['Tables']['messages']['Row'];
+export type DbMessageInsert = Database['public']['Tables']['messages']['Insert'];
+export type DbMessageUpdate = Database['public']['Tables']['messages']['Update'];
+export type DbGlProduct = Database['public']['Tables']['gl_products']['Row'];
 
+// Enums from database
+export type ProcessingState = Database['public']['Enums']['processing_state_type'];
+
+// Sync types
+export interface SyncMetadata {
+  sync_source_message_id: string;  // UUID
+  media_group_id: string;
+}
+
+// Application-specific types that extend database types
 export interface AnalyzedContent {
   product_name?: string;
   product_code?: string;
@@ -15,43 +29,16 @@ export interface AnalyzedContent {
     timestamp: string;
     needs_ai_analysis?: boolean;
   };
+  sync_metadata?: SyncMetadata;
 }
 
-export interface Message {
-  id: string;
-  telegram_message_id?: number;
-  media_group_id?: string;
-  message_caption_id?: string;
-  is_original_caption?: boolean;
-  group_caption_synced?: boolean;
-  caption?: string;
-  file_id?: string;
-  file_unique_id?: string;
-  public_url?: string;
-  mime_type?: string;
-  file_size?: number;
-  width?: number;
-  height?: number;
-  duration?: number;
-  user_id: string;
-  processing_state?: ProcessingState;
-  processing_started_at?: string;
-  processing_completed_at?: string;
-  analyzed_content?: AnalyzedContent;
-  telegram_data?: Record<string, unknown>;
-  error_message?: string;
-  retry_count?: number;
-  last_error_at?: string;
-  group_first_message_time?: string;
-  group_last_message_time?: string;
-  group_message_count?: number;
-  chat_id?: number;
-  chat_type?: string;
-  message_url?: string;
-  purchase_order?: string;
-  glide_row_id?: string;
-  created_at?: string;
-  updated_at?: string;
+// Message type that includes all required fields
+export interface Message extends DbMessage {
+  user_id: string; // Make this required
+  _computed?: {
+    isProcessing?: boolean;
+    displayName?: string;
+  };
 }
 
 export interface MatchResult {
@@ -66,23 +53,7 @@ export interface MatchResult {
   };
 }
 
-export type MediaItem = Message;
-
-export interface GlProduct {
-  id: string;
-  main_product_name: string;
-  main_vendor_uid: string;
-  main_vendor_product_name: string;
-  main_product_purchase_date: string;
-  main_total_qty_purchased: number;
-  main_cost: number;
-  main_category: string;
-  main_product_image1: string;
-  main_purchase_notes: string;
-  product_name_display: string;
-  created_at: string;
-  updated_at: string;
-  sync_status: string;
+export interface GlProduct extends DbGlProduct {
   message_public_url?: string | null;
   messages?: {
     public_url: string;
@@ -90,51 +61,8 @@ export interface GlProduct {
   }[];
 }
 
-export interface MessageData {
-  id: string;
-  user_id: string;
-  telegram_message_id?: number;
-  chat_id?: number;
-  chat_type?: string;
-  chat_title?: string;
-  media_group_id?: string;
-  message_caption_id?: string;
-  is_original_caption?: boolean;
-  group_caption_synced?: boolean;
-  caption?: string;
-  file_id?: string;
-  file_unique_id?: string;
-  public_url?: string;
-  storage_path?: string;
-  mime_type?: string;
-  file_size?: number;
-  width?: number;
-  height?: number;
-  duration?: number;
-  processing_state: ProcessingState;
-  processing_started_at?: string;
-  processing_completed_at?: string;
-  processing_correlation_id?: string;
-  analyzed_content?: AnalyzedContent;
-  error_message?: string;
-  retry_count?: number;
-  last_error_at?: string;
-  group_first_message_time?: string;
-  group_last_message_time?: string;
-  group_message_count?: number;
-  group_completed_at?: string;
-  telegram_data?: Record<string, Json>;
-  message_url?: string;
-  is_channel_post?: boolean;
-  sender_chat_id?: number;
-  purchase_order?: string;
-  glide_row_id?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
 // Helper functions
-export const analyzedContentToJson = (content: AnalyzedContent): Json => {
+export const analyzedContentToJson = (content: AnalyzedContent) => {
   return {
     product_name: content.product_name,
     product_code: content.product_code,
@@ -142,6 +70,7 @@ export const analyzedContentToJson = (content: AnalyzedContent): Json => {
     purchase_date: content.purchase_date,
     quantity: content.quantity,
     notes: content.notes,
-    parsing_metadata: content.parsing_metadata
+    parsing_metadata: content.parsing_metadata,
+    sync_metadata: content.sync_metadata
   };
 };
