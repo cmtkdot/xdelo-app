@@ -73,10 +73,11 @@ export interface MessageUpdate {
 }
 
 export interface AnalysisRequest {
-  messageId: string;
+  messageId: number;
   caption: string;
   media_group_id?: string;
   correlation_id?: string;
+  chat_id?: number;
 }
 
 export interface WebhookLogEntry {

@@ -48,26 +48,27 @@ serve(async (req) => {
 
   // Initialize variables
   let correlationId = crypto.randomUUID();
-  let messageId: string | undefined;
+  let messageId: number | undefined;
   let chatId: number | undefined;
-  let analyzedContent: AnalyzedContent = {}; // Initialize empty object
+  let analyzedContent: AnalyzedContent = {};
+  let reqBody: any; // Store request body
   
   const startTime = performance.now();
   
   try {
-    // Parse request body once at the start
-    const payload = await req.json();
-    messageId = payload.messageId;
-    chatId = payload.chat_id;
-    const { caption, media_group_id, correlation_id } = payload;
+    // Parse request body once and store it
+    reqBody = await req.json();
+    messageId = parseInt(reqBody.messageId); // Convert to number
+    chatId = reqBody.chat_id;
+    const { caption, media_group_id, correlation_id } = reqBody;
     
     if (correlation_id) {
       correlationId = correlation_id;
     }
 
-    // Ensure messageId exists and is a number
-    if (!messageId) {
-      throw new Error('Message ID is required');
+    // Validate messageId
+    if (!messageId || isNaN(messageId)) {
+      throw new Error('Valid numeric Message ID is required');
     }
 
     const supabase = createClient(
@@ -162,27 +163,27 @@ serve(async (req) => {
             last_error_at: new Date().toISOString(),
             processing_correlation_id: correlationId
           })
-          .eq('id', messageId.toString()); // Ensure ID is string
+          .eq('id', messageId); // No toString() needed since messageId is now number
       }
 
-      // Create new Supabase client for logging
+      // Log error using stored reqBody instead of parsing request again
       const logSupabase = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       );
 
-      // Log error
       await logParserEvent(logSupabase, {
         event_type: 'analysis_error',
         chat_id: chatId || 0,
-        message_id: typeof messageId === 'string' ? parseInt(messageId) : 0,
+        message_id: messageId || 0,
         correlation_id: correlationId,
         error_message: errorMessage,
         duration_ms: Math.round(performance.now() - startTime),
         processing_state: 'error',
         metadata: {
           error_type: 'AnalysisError',
-          error_details: errorMessage
+          error_details: errorMessage,
+          original_payload: reqBody // Include original request payload for debugging
         }
       });
 
