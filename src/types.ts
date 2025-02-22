@@ -43,7 +43,7 @@ export interface Message {
   caption?: string;
   file_id?: string;
   file_unique_id: string;
-  public_url?: string;
+  public_url: string; // Changed to required
   mime_type?: string;
   file_size?: number;
   width?: number;
@@ -70,7 +70,7 @@ export interface Message {
   updated_at?: string;
 }
 
-// Add GlProduct interface
+// Updated GlProduct interface
 export interface GlProduct {
   id: string;
   main_new_product_name: string;
@@ -85,20 +85,16 @@ export interface GlProduct {
   created_at: string;
   updated_at: string;
   sync_status: SyncStatus;
-  cart_add_note?: string;
+  cart_add_note?: boolean; // Changed to boolean
   cart_rename?: string;
   date_timestamp_subm?: string;
   email_email_of_user_who_added_product?: string;
   glide_id?: string;
   rowid_account_rowid?: string;
   rowid_purchase_order_row_id?: string;
-  messages?: {
-    public_url: string;
-    media_group_id: string;
-  }[];
+  messages?: Message[];
 }
 
-// Add MediaItem interface
 export interface MediaItem {
   id: string;
   public_url: string;
@@ -107,7 +103,6 @@ export interface MediaItem {
   analyzed_content?: AnalyzedContent;
 }
 
-// Add MatchResult interface
 export interface MatchResult {
   id: string;
   message_id: string;
@@ -120,7 +115,11 @@ export interface MatchResult {
   };
 }
 
-// Add Database type from supabase
+export interface TelegramSettings {
+  bot_token: string;
+  webhook_url: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -133,6 +132,11 @@ export interface Database {
         Row: GlProduct;
         Insert: Partial<GlProduct>;
         Update: Partial<GlProduct>;
+      };
+      settings: {
+        Row: TelegramSettings;
+        Insert: Partial<TelegramSettings>;
+        Update: Partial<TelegramSettings>;
       };
     };
   };

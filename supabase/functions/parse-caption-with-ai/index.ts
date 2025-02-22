@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { parseManually } from "./utils/manualParser.ts";
@@ -15,12 +14,12 @@ serve(async (req) => {
 
   let requestData;
   try {
-    // Clone the request before consuming the body
     requestData = await req.clone().json();
-    const { messageId, caption, media_group_id, correlationId } = requestData;
+    const { messageId, caption, media_group_id, correlationId, telegram_message_id } = requestData;
     
     console.log('Starting caption analysis:', {
-      messageId, 
+      messageId,
+      telegram_message_id,
       media_group_id,
       caption_length: caption?.length,
       correlation_id: correlationId
@@ -31,8 +30,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Manual parsing attempt
-    let analyzedContent;
+    let analyzedContent = null;
     const manualResult = await parseManually(caption);
     
     if (manualResult && manualResult.product_code) {
@@ -97,22 +95,22 @@ serve(async (req) => {
         ...analyzedContent,
         sync_metadata: {
           sync_source_message_id: messageId,
-          media_group_id: media_group_id
+          media_group_id
         }
       };
     }
 
-    // Insert webhook log for successful analysis
+    // Log successful analysis
     const { error: logError } = await supabase
       .from('webhook_logs')
       .insert({
         event_type: 'analysis_complete',
-        correlation_id: requestData.correlationId,
-        message_id: requestData.telegram_message_id, // Use telegram_message_id instead of UUID
-        metadata: JSON.stringify({
-          analysis_method: analyzedContent.parsing_metadata.method,
-          confidence: analyzedContent.parsing_metadata.confidence
-        })
+        correlation_id: correlationId,
+        message_id: Number(telegram_message_id), // Convert to number for bigint column
+        metadata: {
+          analysis_method: analyzedContent?.parsing_metadata?.method,
+          confidence: analyzedContent?.parsing_metadata?.confidence
+        }
       });
 
     if (logError) {
@@ -132,29 +130,26 @@ serve(async (req) => {
     if (updateError) throw updateError;
 
     return new Response(
-      JSON.stringify({ 
-        success: true,
-        analyzed_content: analyzedContent
-      }),
+      JSON.stringify({ success: true, analyzed_content: analyzedContent }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('Error in parse-caption-with-ai:', error);
     
-    try {
-      if (requestData?.messageId) {
-        const supabase = createClient(
-          Deno.env.get('SUPABASE_URL')!,
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-        );
+    if (requestData?.messageId && requestData?.telegram_message_id) {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
 
-        // Log error to webhook_logs using telegram_message_id
+      try {
+        // Log error to webhook_logs
         await supabase
           .from('webhook_logs')
           .insert({
             event_type: 'analysis_error',
-            message_id: requestData.telegram_message_id, // Use telegram_message_id instead of UUID
+            message_id: Number(requestData.telegram_message_id), // Convert to number
             error_message: error.message,
             correlation_id: requestData.correlationId
           });
@@ -169,17 +164,14 @@ serve(async (req) => {
             last_error_at: new Date().toISOString()
           })
           .eq('id', requestData.messageId);
+      } catch (updateError) {
+        console.error('Failed to update error state:', updateError);
       }
-    } catch (updateError) {
-      console.error('Failed to update message error state:', updateError);
     }
     
     return new Response(
       JSON.stringify({ error: error.message }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
