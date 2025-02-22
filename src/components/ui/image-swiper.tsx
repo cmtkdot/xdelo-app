@@ -12,6 +12,7 @@ interface ImageSwiperProps {
 
 export const ImageSwiper = ({ media, className }: ImageSwiperProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
 
   if (!media || media.length === 0) {
     return null;
@@ -19,6 +20,7 @@ export const ImageSwiper = ({ media, className }: ImageSwiperProps) => {
 
   const currentMedia = media[currentIndex];
   const isVideo = currentMedia.mime_type?.startsWith('video/');
+  const hasVideoThumbnail = isVideo && currentMedia.public_url;
 
   const handlePrevious = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -34,25 +36,41 @@ export const ImageSwiper = ({ media, className }: ImageSwiperProps) => {
     }
   };
 
-  console.log('Current media:', currentMedia); // Debug log
-  console.log('Is video:', isVideo); // Debug log
-
   return (
-    <div className={cn("relative w-full h-full", className)}>
+    <div 
+      className={cn("relative w-full h-full", className)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       {isVideo ? (
-        <video
-          key={currentMedia.public_url} // Add key to force video reload
-          src={currentMedia.public_url || undefined}
-          controls
-          className="absolute inset-0 w-full h-full object-contain bg-black"
-          playsInline // Add playsinline for mobile
-        />
+        <>
+          {(!isHovered || !hasVideoThumbnail) && (
+            <img
+              key={`thumb-${currentMedia.public_url}`}
+              src={currentMedia.public_url || "/placeholder.svg"}
+              alt={currentMedia.caption || "Video thumbnail"}
+              className="absolute inset-0 w-full h-full object-contain bg-black"
+            />
+          )}
+          {isHovered && hasVideoThumbnail && (
+            <video
+              key={currentMedia.public_url}
+              src={currentMedia.public_url}
+              autoPlay
+              muted
+              loop
+              playsInline
+              controls={false}
+              className="absolute inset-0 w-full h-full object-contain bg-black"
+            />
+          )}
+        </>
       ) : (
         <img
-          key={currentMedia.public_url} // Add key to force image reload
+          key={currentMedia.public_url}
           src={currentMedia.public_url || "/placeholder.svg"}
           alt={currentMedia.caption || "Media content"}
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-contain bg-black"
         />
       )}
       

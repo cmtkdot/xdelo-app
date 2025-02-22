@@ -53,7 +53,13 @@ export const useMediaGroups = () => {
       Object.values(groupedMessages).forEach(groupArray => {
         groupArray.forEach(group => {
           group.sort((a, b) => {
-            // Prioritize messages with captions
+            // First prioritize images over videos
+            const aIsImage = !a.mime_type?.startsWith('video/');
+            const bIsImage = !b.mime_type?.startsWith('video/');
+            if (aIsImage && !bIsImage) return -1;
+            if (!aIsImage && bIsImage) return 1;
+
+            // Then prioritize messages with captions
             if (a.caption && !b.caption) return -1;
             if (!a.caption && b.caption) return 1;
             
