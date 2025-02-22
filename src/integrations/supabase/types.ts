@@ -1619,6 +1619,7 @@ export type Database = {
           chat_id: number | null
           chat_title: string | null
           chat_type: Database["public"]["Enums"]["telegram_chat_type"] | null
+          correlation_id: string | null
           created_at: string | null
           duration: number | null
           edit_date: string | null
@@ -1671,6 +1672,7 @@ export type Database = {
           chat_id?: number | null
           chat_title?: string | null
           chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
+          correlation_id?: string | null
           created_at?: string | null
           duration?: number | null
           edit_date?: string | null
@@ -1723,6 +1725,7 @@ export type Database = {
           chat_id?: number | null
           chat_title?: string | null
           chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
+          correlation_id?: string | null
           created_at?: string | null
           duration?: number | null
           edit_date?: string | null
@@ -1781,14 +1784,16 @@ export type Database = {
       }
       other_messages: {
         Row: {
-          chat_id: number | null
+          chat_id: number
           chat_title: string | null
-          chat_type: Database["public"]["Enums"]["telegram_chat_type"] | null
+          chat_type: Database["public"]["Enums"]["telegram_chat_type"]
           created_at: string | null
           edit_date: string | null
           error_message: string | null
           id: string
+          is_channel_post: boolean | null
           is_edited: boolean | null
+          message_caption_id: string | null
           message_text: string | null
           message_type: Database["public"]["Enums"]["telegram_other_message_type"]
           message_url: string | null
@@ -1798,20 +1803,23 @@ export type Database = {
           processing_state:
             | Database["public"]["Enums"]["processing_state_type"]
             | null
+          sender_chat_id: number | null
           telegram_data: Json | null
-          telegram_message_id: number | null
+          telegram_message_id: number
           updated_at: string | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
-          chat_id?: number | null
+          chat_id: number
           chat_title?: string | null
-          chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
+          chat_type: Database["public"]["Enums"]["telegram_chat_type"]
           created_at?: string | null
           edit_date?: string | null
           error_message?: string | null
           id?: string
+          is_channel_post?: boolean | null
           is_edited?: boolean | null
+          message_caption_id?: string | null
           message_text?: string | null
           message_type: Database["public"]["Enums"]["telegram_other_message_type"]
           message_url?: string | null
@@ -1821,20 +1829,23 @@ export type Database = {
           processing_state?:
             | Database["public"]["Enums"]["processing_state_type"]
             | null
+          sender_chat_id?: number | null
           telegram_data?: Json | null
-          telegram_message_id?: number | null
+          telegram_message_id: number
           updated_at?: string | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
-          chat_id?: number | null
+          chat_id?: number
           chat_title?: string | null
-          chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
+          chat_type?: Database["public"]["Enums"]["telegram_chat_type"]
           created_at?: string | null
           edit_date?: string | null
           error_message?: string | null
           id?: string
+          is_channel_post?: boolean | null
           is_edited?: boolean | null
+          message_caption_id?: string | null
           message_text?: string | null
           message_type?: Database["public"]["Enums"]["telegram_other_message_type"]
           message_url?: string | null
@@ -1844,12 +1855,21 @@ export type Database = {
           processing_state?:
             | Database["public"]["Enums"]["processing_state_type"]
             | null
+          sender_chat_id?: number | null
           telegram_data?: Json | null
-          telegram_message_id?: number | null
+          telegram_message_id?: number
           updated_at?: string | null
-          user_id?: string
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_message_caption"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -2021,31 +2041,37 @@ export type Database = {
       webhook_logs: {
         Row: {
           chat_id: number | null
+          correlation_id: string | null
           error_message: string | null
           event_type: string | null
           id: string
           media_type: string | null
           message_id: number | null
+          metadata: string | null
           raw_data: Json | null
           timestamp: string | null
         }
         Insert: {
           chat_id?: number | null
+          correlation_id?: string | null
           error_message?: string | null
           event_type?: string | null
           id?: string
           media_type?: string | null
           message_id?: number | null
+          metadata?: string | null
           raw_data?: Json | null
           timestamp?: string | null
         }
         Update: {
           chat_id?: number | null
+          correlation_id?: string | null
           error_message?: string | null
           event_type?: string | null
           id?: string
           media_type?: string | null
           message_id?: number | null
+          metadata?: string | null
           raw_data?: Json | null
           timestamp?: string | null
         }
@@ -2071,12 +2097,6 @@ export type Database = {
       }
     }
     Functions: {
-      bytea_to_text: {
-        Args: {
-          data: string
-        }
-        Returns: string
-      }
       cleanup_orphaned_records: {
         Args: {
           table_name: string
@@ -2132,127 +2152,11 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
-      http: {
-        Args: {
-          request: Database["public"]["CompositeTypes"]["http_request"]
-        }
-        Returns: unknown
-      }
-      http_delete:
-        | {
-            Args: {
-              uri: string
-            }
-            Returns: unknown
-          }
-        | {
-            Args: {
-              uri: string
-              content: string
-              content_type: string
-            }
-            Returns: unknown
-          }
-      http_get:
-        | {
-            Args: {
-              uri: string
-            }
-            Returns: unknown
-          }
-        | {
-            Args: {
-              uri: string
-              data: Json
-            }
-            Returns: unknown
-          }
-      http_head: {
-        Args: {
-          uri: string
-        }
-        Returns: unknown
-      }
-      http_header: {
-        Args: {
-          field: string
-          value: string
-        }
-        Returns: Database["public"]["CompositeTypes"]["http_header"]
-      }
-      http_list_curlopt: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          curlopt: string
-          value: string
-        }[]
-      }
-      http_patch: {
-        Args: {
-          uri: string
-          content: string
-          content_type: string
-        }
-        Returns: unknown
-      }
-      http_post:
-        | {
-            Args: {
-              uri: string
-              content: string
-              content_type: string
-            }
-            Returns: unknown
-          }
-        | {
-            Args: {
-              uri: string
-              data: Json
-            }
-            Returns: unknown
-          }
-        | {
-            Args: {
-              url: string
-              headers: Json
-              body: Json
-            }
-            Returns: unknown
-          }
-      http_put: {
-        Args: {
-          uri: string
-          content: string
-          content_type: string
-        }
-        Returns: unknown
-      }
-      http_reset_curlopt: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      http_set_curlopt: {
-        Args: {
-          curlopt: string
-          value: string
-        }
-        Returns: boolean
-      }
       process_glide_sync_queue: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
       schedule_sync_check: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      text_to_bytea: {
-        Args: {
-          data: string
-        }
-        Returns: string
-      }
-      update_product_sku: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
@@ -2262,25 +2166,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      urlencode:
-        | {
-            Args: {
-              data: Json
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              string: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              string: string
-            }
-            Returns: string
-          }
       xdelo_check_webhook_health: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -2305,10 +2190,6 @@ export type Database = {
         }
         Returns: string
       }
-      xdelo_fix_media_groups: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
       xdelo_log_webhook_event: {
         Args: {
           p_event_type: string
@@ -2320,8 +2201,12 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_refresh_message_flow_logs: {
-        Args: Record<PropertyKey, never>
+      xdelo_sync_media_group_content: {
+        Args: {
+          p_source_message_id: string
+          p_media_group_id: string
+          p_analyzed_content: Json
+        }
         Returns: undefined
       }
       xdelo_update_message_processing_state: {
@@ -2364,23 +2249,7 @@ export type Database = {
         | "edited_channel_post"
     }
     CompositeTypes: {
-      http_header: {
-        field: string | null
-        value: string | null
-      }
-      http_request: {
-        method: unknown | null
-        uri: string | null
-        headers: Database["public"]["CompositeTypes"]["http_header"][] | null
-        content_type: string | null
-        content: string | null
-      }
-      http_response: {
-        status: number | null
-        content_type: string | null
-        headers: Database["public"]["CompositeTypes"]["http_header"][] | null
-        content: string | null
-      }
+      [_ in never]: never
     }
   }
 }
