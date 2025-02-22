@@ -137,22 +137,22 @@ async function handleMediaGroupSync(
   });
 
   try {
-    // Update all messages in the group with the source message's content
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update({
-        analyzed_content: analyzedContent,
-        processing_state: 'completed',
-        processing_completed_at: new Date().toISOString(),
-        is_original_caption: false,
-        group_caption_synced: true,
-        message_caption_id: messageId,
-        updated_at: new Date().toISOString()
-      })
-      .eq('media_group_id', media_group_id)
-      .neq('id', messageId);
+    // Use the xdelo_sync_media_group_content function
+    const { error: syncError } = await supabase
+      .rpc('xdelo_sync_media_group_content', {
+        p_source_message_id: messageId,
+        p_media_group_id: media_group_id,
+        p_analyzed_content: analyzedContent
+      });
 
-    if (updateError) throw updateError;
+    if (syncError) {
+      logEvent('sync', 'sync_error', {
+        messageId,
+        media_group_id,
+        error: syncError.message
+      });
+      throw syncError;
+    }
 
     logEvent('sync', 'success', { messageId, media_group_id });
   } catch (error) {
@@ -185,12 +185,14 @@ serve(async (req) => {
   }
 
   const { messageId, caption, media_group_id } = requestData;
+  const correlationId = crypto.randomUUID();
 
   logEvent('request', 'received', {
     requestId,
     messageId,
     caption_length: caption?.length,
-    media_group_id
+    media_group_id,
+    correlationId
   });
 
   if (!messageId || !caption) {
@@ -207,14 +209,16 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Set initial processing state
+    // Use xdelo_handle_message_state for state management
     const { error: stateError } = await supabase
-      .from('messages')
-      .update({ 
-        processing_state: 'processing',
-        processing_started_at: new Date().toISOString()
-      })
-      .eq('id', messageId);
+      .rpc('xdelo_handle_message_state', {
+        p_message_id: messageId,
+        p_state: 'processing',
+        p_metadata: {
+          correlation_id: correlationId,
+          operation: 'parse-caption'
+        }
+      });
 
     if (stateError) {
       throw new Error(`Failed to update state: ${stateError.message}`);
@@ -223,7 +227,7 @@ serve(async (req) => {
     // Parse the caption
     const parsedContent = extractProductInfo(caption);
 
-    // Update message with results
+    // Update message with results using RPC
     const { error: updateError } = await supabase
       .from('messages')
       .update({
@@ -231,6 +235,7 @@ serve(async (req) => {
         processing_state: 'completed',
         processing_completed_at: new Date().toISOString(),
         is_original_caption: true,
+        processing_correlation_id: correlationId,
         updated_at: new Date().toISOString()
       })
       .eq('id', messageId);
@@ -265,7 +270,7 @@ serve(async (req) => {
       processingTime: Date.now() - startTime
     });
 
-    // Update message to error state
+    // Update error state using xdelo_handle_message_state
     try {
       const supabase = createClient(
         Deno.env.get('SUPABASE_URL')!,
@@ -273,14 +278,16 @@ serve(async (req) => {
       );
 
       await supabase
-        .from('messages')
-        .update({
-          processing_state: 'error',
-          error_message: error.message,
-          processing_completed_at: new Date().toISOString(),
-          last_error_at: new Date().toISOString()
-        })
-        .eq('id', messageId);
+        .rpc('xdelo_handle_message_state', {
+          p_message_id: messageId,
+          p_state: 'error',
+          p_error: error.message,
+          p_metadata: {
+            correlation_id: correlationId,
+            operation: 'parse-caption'
+          }
+        });
+
     } catch (updateError) {
       logEvent('error_state_update', 'failed', {
         requestId,
