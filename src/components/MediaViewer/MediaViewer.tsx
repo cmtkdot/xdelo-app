@@ -6,6 +6,7 @@ import { ImageSwiper } from "@/components/ui/image-swiper";
 import { ChevronLeft, ChevronRight, Tag, Package, Calendar } from "lucide-react";
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { MediaItem } from '@/types';
 
 interface MediaViewerProps {
   isOpen: boolean;
@@ -28,6 +29,20 @@ export const MediaViewer = ({
   hasNext = false,
   editMode = false
 }: MediaViewerProps) => {
+  // Convert Message[] to MediaItem[]
+  const mediaItems: MediaItem[] = currentGroup.map(message => ({
+    id: message.id,
+    public_url: message.public_url,
+    mime_type: message.mime_type,
+    created_at: message.created_at || new Date().toISOString(),
+    analyzed_content: message.analyzed_content,
+    file_id: message.file_id,
+    file_unique_id: message.file_unique_id,
+    width: message.width,
+    height: message.height,
+    caption: message.caption
+  }));
+
   const mainMedia = currentGroup?.find(media => media?.is_original_caption) || currentGroup?.[0];
   const analyzedContent = mainMedia?.analyzed_content;
 
@@ -66,7 +81,7 @@ export const MediaViewer = ({
           {/* Image Container */}
           <div className="relative flex-1 min-h-0 bg-black/90">
             <div className="aspect-video w-full relative">
-              <ImageSwiper media={currentGroup} />
+              <ImageSwiper media={mediaItems} />
               
               {/* Navigation Buttons Overlay */}
               <div className="absolute inset-0 flex items-center justify-between px-4 pointer-events-none">
