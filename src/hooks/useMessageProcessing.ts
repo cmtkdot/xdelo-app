@@ -1,6 +1,7 @@
+
 import { useState, useCallback } from 'react';
-import { useSupabaseClient } from '@supabase/auth-helpers-react';
 import type { MessageData } from '../components/Messages/types';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ProcessingState {
   [key: string]: {
@@ -11,7 +12,6 @@ interface ProcessingState {
 
 export function useMessageProcessing() {
   const [processingState, setProcessingState] = useState<ProcessingState>({});
-  const supabase = useSupabaseClient();
 
   const updateProcessingState = useCallback((messageId: string, isProcessing: boolean, error?: string) => {
     setProcessingState(prev => ({
@@ -68,7 +68,7 @@ export function useMessageProcessing() {
 
       updateProcessingState(message.id, false, error.message);
     }
-  }, [supabase, processingState, updateProcessingState]);
+  }, [processingState, updateProcessingState]);
 
   const syncMediaGroup = useCallback(async (message: MessageData) => {
     if (!message.media_group_id || processingState[message.id]?.isProcessing) return;
@@ -107,7 +107,7 @@ export function useMessageProcessing() {
         error_message: error.message
       });
     }
-  }, [supabase, processingState, updateProcessingState]);
+  }, [processingState, updateProcessingState]);
 
   return {
     processing: Object.fromEntries(
