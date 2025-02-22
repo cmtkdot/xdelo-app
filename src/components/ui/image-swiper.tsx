@@ -44,15 +44,16 @@ export const ImageSwiper = ({ media, className }: ImageSwiperProps) => {
     >
       {isVideo ? (
         <>
-          {(!isHovered || !hasVideoThumbnail) && (
-            <img
-              key={`thumb-${currentMedia.public_url}`}
-              src={currentMedia.public_url || "/placeholder.svg"}
-              alt={currentMedia.caption || "Video thumbnail"}
-              className="absolute inset-0 w-full h-full object-contain bg-black"
-            />
-          )}
-          {isHovered && hasVideoThumbnail && (
+          <img
+            key={`thumb-${currentMedia.public_url}`}
+            src={currentMedia.public_url || "/placeholder.svg"}
+            alt={currentMedia.caption || "Video thumbnail"}
+            className={cn(
+              "absolute inset-0 w-full h-full object-contain bg-black transition-opacity duration-300",
+              isHovered && hasVideoThumbnail ? "opacity-0" : "opacity-100"
+            )}
+          />
+          {hasVideoThumbnail && (
             <video
               key={currentMedia.public_url}
               src={currentMedia.public_url}
@@ -61,7 +62,11 @@ export const ImageSwiper = ({ media, className }: ImageSwiperProps) => {
               loop
               playsInline
               controls={false}
-              className="absolute inset-0 w-full h-full object-contain bg-black"
+              className={cn(
+                "absolute inset-0 w-full h-full object-contain bg-black transition-opacity duration-300",
+                isHovered ? "opacity-100" : "opacity-0"
+              )}
+              style={{ pointerEvents: 'none' }}
             />
           )}
         </>
