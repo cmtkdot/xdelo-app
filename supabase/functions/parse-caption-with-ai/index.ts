@@ -321,7 +321,8 @@ serve(async (req) => {
           processing_state: 'completed',
           processing_completed_at: new Date().toISOString(),
           is_original_caption: hasCaption,
-          processing_correlation_id: correlation_id
+          processing_correlation_id: correlation_id,
+          error_message: null // Clear any previous error
         })
         .eq('id', messageId);
 
@@ -356,7 +357,7 @@ serve(async (req) => {
           Deno.env.get('SUPABASE_URL') || '',
           Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
         )
-          .rpc('xdelo_update_message_processing_state', {
+          .rpc('xdelo_handle_message_state', {
             p_message_id: messageId,
             p_state: 'error',
             p_error: error.message
