@@ -142,92 +142,121 @@ serve(async (req) => {
       fileUniqueId: media.file_unique_id
     });
 
-    let messageData
-    let storageUrl
+    let messageData = existingMedia;
+    let storageUrl = existingMedia?.public_url;
 
-    // Always process new media, regardless of caption
-    if (!existingMedia || (existingMedia && message.caption !== existingMedia.caption)) {
-      console.log('🆕 Processing new or updated media');
-      
-      const telegramFileUrl = await getFileUrl(media.file_id)
-      console.log('📥 Got Telegram file URL:', telegramFileUrl);
-      
-      if (!existingMedia) {
-        console.log('📤 New media detected, uploading to storage');
-        storageUrl = await uploadMediaToStorage(
-          telegramFileUrl,
-          media.file_unique_id,
-          video ? video.mime_type : 'image/jpeg'
-        )
-      } else {
-        storageUrl = existingMedia.public_url
-        console.log('♻️ Using existing storage URL:', storageUrl);
-      }
-      
-      messageData = {
-        telegram_message_id: message.message_id,
-        chat_id: chat.id,
-        chat_type: chat.type,
-        chat_title: chat.title,
-        media_group_id: mediaGroupId,
-        caption: message.caption || '', // Store empty string if no caption
-        file_id: media.file_id,
-        file_unique_id: media.file_unique_id,
-        public_url: storageUrl,
-        storage_path: `${media.file_unique_id}.${video ? video.mime_type.split('/')[1] : 'jpeg'}`,
-        mime_type: video ? video.mime_type : 'image/jpeg',
-        file_size: media.file_size,
-        width: media.width,
-        height: media.height,
-        duration: video?.duration,
-        processing_state: message.caption ? 'pending' : 'initialized', // Only set pending if there's a caption
-        telegram_data: update
-      }
-
-      console.log('📝 Prepared message data:', JSON.stringify(messageData, null, 2));
-
-      if (existingMedia) {
-        console.log('🔄 Updating existing media');
-        const { data: updatedMessage, error } = await supabase
-          .from('messages')
-          .update(messageData)
-          .eq('id', existingMedia.id)
-          .select()
-          .single()
-          
-        if (error) {
-          console.error('❌ Error updating message:', error);
-          throw error;
-        }
-        messageData = updatedMessage
-      } else {
-        console.log('📥 Inserting new media');
-        const { data: newMessage, error } = await supabase
-          .from('messages')
-          .insert(messageData)
-          .select()
-          .single()
-          
-        if (error) {
-          console.error('❌ Error inserting message:', error);
-          throw error;
-        }
-        messageData = newMessage
-      }
-
-      // Only trigger analysis if there's a caption
-      if (message.caption) {
-        console.log('🔄 Triggering caption analysis for message:', messageData.id);
-        await supabase.functions.invoke('parse-caption-with-ai', {
-          body: { 
-            messageId: messageData.id,
-            caption: message.caption
-          }
-        })
-      }
+    // Always process media updates
+    console.log('🔄 Processing media update');
+    
+    const telegramFileUrl = await getFileUrl(media.file_id)
+    console.log('📥 Got Telegram file URL:', telegramFileUrl);
+    
+    if (!existingMedia) {
+      console.log('📤 New media detected, uploading to storage');
+      storageUrl = await uploadMediaToStorage(
+        telegramFileUrl,
+        media.file_unique_id,
+        video ? video.mime_type : 'image/jpeg'
+      )
     } else {
-      console.log('⏭️ Media already exists, skipping upload');
-      messageData = existingMedia
+      console.log('♻️ Using existing storage URL:', storageUrl);
+    }
+      
+    const newMessageData: {
+      telegram_message_id: number;
+      chat_id: number;
+      chat_type: string;
+      chat_title: string;
+      media_group_id?: string;
+      caption: string;
+      file_id: string;
+      file_unique_id: string;
+      public_url?: string;
+      storage_path: string;
+      mime_type: string;
+      file_size?: number;
+      width: number;
+      height: number;
+      duration?: number;
+      processing_state: string;
+      telegram_data: Record<string, unknown>;
+      is_edited?: boolean;
+      edit_date?: string;
+      analyzed_content?: Record<string, unknown> | null;
+    } = {
+      telegram_message_id: message.message_id,
+      chat_id: chat.id,
+      chat_type: chat.type,
+      chat_title: chat.title,
+      media_group_id: mediaGroupId,
+      caption: message.caption || '', // Store empty string if no caption
+      file_id: media.file_id,
+      file_unique_id: media.file_unique_id,
+      public_url: storageUrl,
+      storage_path: `${media.file_unique_id}.${video ? video.mime_type.split('/')[1] : 'jpeg'}`,
+      mime_type: video ? video.mime_type : 'image/jpeg',
+      file_size: media.file_size,
+      width: media.width,
+      height: media.height,
+      duration: video?.duration,
+      processing_state: message.caption ? 'pending' : 'initialized',
+      telegram_data: update
+    }
+
+    // Handle edited messages
+    if (message.edit_date) {
+      newMessageData.is_edited = true;
+      newMessageData.edit_date = new Date(message.edit_date * 1000).toISOString();
+      newMessageData.analyzed_content = null; // Clear for re-analysis
+      newMessageData.processing_state = message.caption ? 'pending' : 'initialized';
+      if (existingMedia?.telegram_data) {
+        newMessageData.telegram_data = {
+          original_message: existingMedia.telegram_data.message,
+          edited_message: message
+        };
+      }
+    }
+
+    console.log('📝 Prepared message data:', JSON.stringify(newMessageData, null, 2));
+
+    if (existingMedia) {
+      console.log('🔄 Updating existing media');
+      const { data: updatedMessage, error } = await supabase
+        .from('messages')
+        .update(newMessageData)
+        .eq('id', existingMedia.id)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('❌ Error updating message:', error);
+        throw error;
+      }
+      messageData = updatedMessage;
+    } else {
+      console.log('📥 Inserting new media');
+      const { data: newMessage, error } = await supabase
+        .from('messages')
+        .insert(newMessageData)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('❌ Error inserting message:', error);
+        throw error;
+      }
+      messageData = newMessage;
+    }
+
+    // Only trigger analysis if there's a caption
+    if (message.caption) {
+      console.log('🔄 Triggering caption analysis for message:', messageData.id);
+      await supabase.functions.invoke('parse-caption-with-ai', {
+        body: { 
+          messageId: messageData.id,
+          caption: message.caption
+        }
+      });
     }
 
     return new Response(

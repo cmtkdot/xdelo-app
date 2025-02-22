@@ -1,5 +1,4 @@
-
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
+export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
 
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
@@ -9,14 +8,12 @@ export interface AnalyzedContent {
   vendor_uid?: string;
   purchase_date?: string;
   quantity?: number;
-  unit_price?: number;
-  total_price?: number;
   notes?: string;
-  caption?: string;
   parsing_metadata?: {
-    method: 'manual' | 'ai';
+    method: 'manual' | 'ai' | 'hybrid';
     confidence: number;
     timestamp: string;
+    needs_ai_analysis?: boolean;
   };
 }
 
@@ -93,6 +90,49 @@ export interface GlProduct {
   }[];
 }
 
+export interface MessageData {
+  id: string;
+  user_id: string;
+  telegram_message_id?: number;
+  chat_id?: number;
+  chat_type?: string;
+  chat_title?: string;
+  media_group_id?: string;
+  message_caption_id?: string;
+  is_original_caption?: boolean;
+  group_caption_synced?: boolean;
+  caption?: string;
+  file_id?: string;
+  file_unique_id?: string;
+  public_url?: string;
+  storage_path?: string;
+  mime_type?: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  processing_state: ProcessingState;
+  processing_started_at?: string;
+  processing_completed_at?: string;
+  processing_correlation_id?: string;
+  analyzed_content?: AnalyzedContent;
+  error_message?: string;
+  retry_count?: number;
+  last_error_at?: string;
+  group_first_message_time?: string;
+  group_last_message_time?: string;
+  group_message_count?: number;
+  group_completed_at?: string;
+  telegram_data?: Record<string, Json>;
+  message_url?: string;
+  is_channel_post?: boolean;
+  sender_chat_id?: number;
+  purchase_order?: string;
+  glide_row_id?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 // Helper functions
 export const analyzedContentToJson = (content: AnalyzedContent): Json => {
   return {
@@ -101,8 +141,6 @@ export const analyzedContentToJson = (content: AnalyzedContent): Json => {
     vendor_uid: content.vendor_uid,
     purchase_date: content.purchase_date,
     quantity: content.quantity,
-    unit_price: content.unit_price,
-    total_price: content.total_price,
     notes: content.notes,
     parsing_metadata: content.parsing_metadata
   };

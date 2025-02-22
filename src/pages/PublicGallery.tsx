@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,11 +5,13 @@ import { MediaItem } from "@/types";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 const PublicGallery = () => {
   const [editItem, setEditItem] = useState<MediaItem | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const { data: mediaGroups } = useQuery({
     queryKey: ['public-messages'],
@@ -61,6 +62,14 @@ const PublicGallery = () => {
   }, [queryClient]);
 
   const handleEdit = (media: MediaItem) => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "You must be logged in to edit media.",
+        variant: "destructive",
+      });
+      return;
+    }
     setEditItem(media);
   };
 
@@ -70,6 +79,15 @@ const PublicGallery = () => {
   };
 
   const handleDelete = async (media: MediaItem) => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "You must be logged in to delete media.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('messages')
@@ -101,8 +119,8 @@ const PublicGallery = () => {
       {mediaGroups && (
         <ProductGrid
           products={Object.values(mediaGroups)}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
+          onEdit={user ? handleEdit : undefined}
+          onDelete={user ? handleDelete : undefined}
           onView={handleView}
         />
       )}

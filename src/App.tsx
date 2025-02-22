@@ -15,24 +15,30 @@ import NotFound from "./pages/NotFound";
 import AIChat from "./pages/AIChat";
 import GlProducts from "./pages/GlProducts";
 import AudioUpload from "./pages/AudioUpload";
+import MessagesPage from "./pages/Messages";
 import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client";
 import { ThemeProvider } from "./components/Theme/ThemeProvider";
 import { Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
-import { Sidebar } from "@/components/Sidebar/Sidebar";
+import { AppSidebar } from "./components/Layout/AppSidebar";
+
+interface ApiError {
+  status?: number;
+  message?: string;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: (failureCount, error: any) => {
+      retry: (failureCount, error: ApiError) => {
         if (error?.status === 401 || error?.message?.includes('Invalid Refresh Token')) {
           return false;
         }
         return failureCount < 3;
       },
       meta: {
-        errorHandler: (error: any) => {
+        errorHandler: (error: ApiError) => {
           if (error?.status === 401 || error?.message?.includes('Invalid Refresh Token')) {
             window.location.href = '/auth';
           }
@@ -96,26 +102,28 @@ const ProtectedRoute = ({
   return children;
 };
 
-const App = () => <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
+const App = () => (
+  <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Router>
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/p/:id" element={<PublicGallery />} />
-            <Route element={<ProtectedRoute>
-                  <div className="h-full relative">
-                    <div className="hidden h-full md:flex md:w-72 md:flex-col md:fixed md:inset-y-0 z-[80] bg-gray-900">
-                      <Sidebar />
+            <Route element={
+              <ProtectedRoute>
+                <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+                  <AppSidebar />
+                  <main className="transition-all duration-300 ease-in-out pl-16 min-h-screen">
+                    <div className="container py-6 px-4 mx-auto">
+                      <Outlet />
                     </div>
-                    <main className="md:pl-72 min-h-screen bg-background">
-                      <div className="container py-[20px] px-[50px] mx-0 bg-slate-50">
-                        <Outlet />
-                      </div>
-                    </main>
-                  </div>
-                </ProtectedRoute>}>
+                  </main>
+                </div>
+              </ProtectedRoute>
+            }>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/messages" element={<MessagesPage />} />
               <Route path="/gallery" element={<ProductGallery />} />
               <Route path="/media-table" element={<MediaTable />} />
               <Route path="/ai-chat" element={<AIChat />} />
@@ -129,6 +137,7 @@ const App = () => <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
         </Router>
       </TooltipProvider>
     </QueryClientProvider>
-  </ThemeProvider>;
+  </ThemeProvider>
+);
 
 export default App;

@@ -1,4 +1,3 @@
-
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
@@ -10,6 +9,7 @@ import {
   Settings,
   Globe,
   Mic,
+  MessageCircle,
 } from "lucide-react";
 
 const routes = [
@@ -18,6 +18,12 @@ const routes = [
     icon: LayoutDashboard,
     href: "/",
     color: "text-sky-500",
+  },
+  {
+    label: "Messages",
+    icon: MessageCircle,
+    href: "/messages",
+    color: "text-violet-700",
   },
   {
     label: "Media Table",

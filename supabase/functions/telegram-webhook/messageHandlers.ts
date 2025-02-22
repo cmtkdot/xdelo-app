@@ -701,31 +701,16 @@ export async function handleMediaMessage(
 
     // Handle media group syncing and analysis
     if (message.media_group_id) {
-      if (message.caption) {
-        // This message has caption - trigger analysis
-        // The SQL trigger will handle group syncing after analysis is complete
-        logger.info('Triggering analysis for media group message with caption', {
-          messageId,
-          mediaGroupId: message.media_group_id
-        });
-
-        await supabase.functions.invoke('parse-caption-with-ai', {
-          body: { 
-            messageId,
-            media_group_id: message.media_group_id,
-            caption: message.caption
-          }
-        });
-      } else {
+      if (!message.caption) {
         // For messages without caption, check if any message in the group has analyzed content
         const { data: analyzedGroupMessages, error: groupQueryError } = await supabase
           .from("messages")
           .select("id, analyzed_content")
           .eq("media_group_id", message.media_group_id)
-          .neq("id", messageId)  // Don't check our own message
           .not("analyzed_content", "is", null)
           .eq("processing_state", "completed")
-          .order("created_at", { ascending: true });
+          .order("created_at", { ascending: true })
+          .limit(1);
 
         if (groupQueryError) {
           logger.error('Error checking group messages for analysis', {
@@ -735,14 +720,13 @@ export async function handleMediaMessage(
           throw groupQueryError;
         }
 
-        if (analyzedGroupMessages && analyzedGroupMessages.length > 0) {
-          // Use the first analyzed content we find
+        if (analyzedGroupMessages?.[0]) {
+          // Use existing analyzed content from group
           const sourceMessage = analyzedGroupMessages[0];
           logger.info('Found existing analyzed content in group', {
             messageId,
             sourceMessageId: sourceMessage.id,
-            mediaGroupId: message.media_group_id,
-            totalAnalyzedMessages: analyzedGroupMessages.length
+            mediaGroupId: message.media_group_id
           });
 
           await supabase
@@ -755,14 +739,9 @@ export async function handleMediaMessage(
               group_caption_synced: true
             })
             .eq("id", messageId);
-        } else {
-          logger.info('No analyzed content found in group yet', {
-            messageId,
-            mediaGroupId: message.media_group_id
-          });
-          // The SQL trigger will handle syncing when a captioned message in the group is analyzed
         }
       }
+      // If message has caption, let database trigger handle group syncing
     } else if (message.caption) {
       // Single message with caption - trigger analysis
       logger.info('Triggering analysis for single message', { messageId });
@@ -798,4 +777,4 @@ export async function handleMediaMessage(
       correlation_id: correlationId
     };
   }
-} 
+}
