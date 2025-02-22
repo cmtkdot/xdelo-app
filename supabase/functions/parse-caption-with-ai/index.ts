@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -56,10 +55,9 @@ function logEvent(category: string, action: string, details: Record<string, any>
 }
 
 function extractProductInfo(caption: string): AnalyzedContent {
-  logEvent('parsing', 'start_extraction', { caption_length: caption?.length });
+  logEvent('parsing', 'start_extraction', { caption });
   
   try {
-    // Basic validation
     if (!caption || caption.trim().length === 0) {
       logEvent('parsing', 'empty_caption');
       return {
@@ -71,9 +69,6 @@ function extractProductInfo(caption: string): AnalyzedContent {
       };
     }
 
-    const lines = caption.split('\n').map(line => line.trim());
-    logEvent('parsing', 'split_lines', { line_count: lines.length });
-
     let result: AnalyzedContent = {
       parsing_metadata: {
         method: 'manual',
@@ -81,44 +76,40 @@ function extractProductInfo(caption: string): AnalyzedContent {
       }
     };
 
-    // Attempt to extract product name from first non-empty line
-    for (const line of lines) {
-      if (line.length > 0) {
-        result.product_name = line;
-        break;
-      }
+    // Extract product name and code
+    const hashtagMatch = caption.match(/([^#]+)\s*#([A-Za-z0-9-]+)/);
+    if (hashtagMatch) {
+      result.product_name = hashtagMatch[1].trim();
+      result.product_code = hashtagMatch[2].trim();
+      logEvent('parsing', 'found_product_info', { 
+        product_name: result.product_name,
+        product_code: result.product_code 
+      });
+    } else {
+      result.product_name = caption.split('#')[0].trim();
+      logEvent('parsing', 'found_product_name_only', { 
+        product_name: result.product_name 
+      });
     }
 
-    // Look for product code (usually formats like #123, SKU123, etc)
-    const codeMatch = caption.match(/#([A-Za-z0-9-]+)|SKU[:\s]*([A-Za-z0-9-]+)/i);
-    if (codeMatch) {
-      result.product_code = (codeMatch[1] || codeMatch[2]).trim();
-      logEvent('parsing', 'found_product_code', { code: result.product_code });
-    }
-
-    // Look for quantity (number followed by units or standalone)
-    const qtyMatch = caption.match(/(\d+)\s*(pcs?|pieces?|units?|qty|quantity)?/i);
-    if (qtyMatch) {
-      result.quantity = parseInt(qtyMatch[1], 10);
+    // Extract quantity (looking for "x NUMBER" pattern)
+    const quantityMatch = caption.match(/x\s*(\d+)/i);
+    if (quantityMatch) {
+      result.quantity = parseInt(quantityMatch[1], 10);
       logEvent('parsing', 'found_quantity', { quantity: result.quantity });
     }
 
-    // Look for vendor information
-    const vendorMatch = caption.match(/vendor[:\s]+([^\n]+)/i);
-    if (vendorMatch) {
-      result.vendor_uid = vendorMatch[1].trim();
-      logEvent('parsing', 'found_vendor', { vendor: result.vendor_uid });
+    // Extract vendor UID from product code if present (first 3 letters)
+    if (result.product_code && result.product_code.length >= 3) {
+      result.vendor_uid = result.product_code.substring(0, 3);
+      logEvent('parsing', 'extracted_vendor_uid', { vendor_uid: result.vendor_uid });
     }
 
-    // Check if AI analysis might be needed
-    const needsAiAnalysis = !result.product_code || !result.quantity || !result.vendor_uid;
+    const needsAiAnalysis = !result.product_code || !result.quantity;
     result.parsing_metadata.needs_ai_analysis = needsAiAnalysis;
 
     logEvent('parsing', 'completed_extraction', {
-      has_product_name: !!result.product_name,
-      has_product_code: !!result.product_code,
-      has_quantity: !!result.quantity,
-      has_vendor: !!result.vendor_uid,
+      result,
       needs_ai_analysis: needsAiAnalysis
     });
 
@@ -126,7 +117,7 @@ function extractProductInfo(caption: string): AnalyzedContent {
   } catch (error) {
     logEvent('parsing', 'extraction_error', { 
       error: error.message,
-      error_stack: error.stack
+      caption 
     });
     throw error;
   }
@@ -142,13 +133,12 @@ async function handleMediaGroupSync(
   logEvent('sync', 'start_media_group_sync', { 
     messageId, 
     media_group_id,
-    correlationId,
-    has_analyzed_content: !!analyzedContent
+    analyzedContent,
+    correlationId 
   });
 
   try {
-    // Call xdelo_sync_media_group_content function
-    const { data: syncResult, error: syncError } = await supabase.rpc(
+    const { error: syncError } = await supabase.rpc(
       'xdelo_sync_media_group_content',
       {
         p_source_message_id: messageId,
@@ -157,96 +147,64 @@ async function handleMediaGroupSync(
       }
     );
 
-    if (syncError) {
-      logEvent('sync', 'sync_error', {
-        messageId,
-        media_group_id,
-        error: syncError.message,
-        error_code: syncError.code,
-        details: syncError.details
-      });
-      throw new Error(`Failed to sync media group content: ${syncError.message}`);
-    }
+    if (syncError) throw syncError;
 
-    logEvent('sync', 'sync_success', {
-      messageId,
-      media_group_id,
-      correlationId
-    });
-
+    logEvent('sync', 'success', { messageId, media_group_id });
   } catch (error) {
-    logEvent('sync', 'sync_critical_error', {
+    logEvent('sync', 'error', {
       messageId,
       media_group_id,
-      error: error.message,
-      error_stack: error.stack
+      error: error.message
     });
     throw error;
   }
 }
 
 serve(async (req) => {
-  const requestStart = Date.now();
   const requestId = crypto.randomUUID();
-  
-  logEvent('request', 'start', { 
-    requestId,
-    method: req.method,
-    url: req.url
-  });
+  const startTime = Date.now();
 
   if (req.method === 'OPTIONS') {
-    logEvent('request', 'cors_preflight', { requestId });
     return new Response(null, { headers: corsHeaders });
   }
 
+  let requestData;
   try {
-    const { messageId, caption, media_group_id, correlationId } = await req.json();
-    
-    logEvent('request', 'payload_received', {
-      requestId,
-      messageId,
-      has_caption: !!caption,
-      caption_length: caption?.length,
-      media_group_id,
-      correlationId
-    });
+    requestData = await req.json();
+  } catch (error) {
+    logEvent('request', 'invalid_json', { error: error.message });
+    return new Response(
+      JSON.stringify({ error: 'Invalid JSON payload' }), 
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
 
-    if (!messageId || !caption) {
-      logEvent('request', 'validation_error', {
-        requestId,
-        missing_fields: {
-          messageId: !messageId,
-          caption: !caption
-        }
-      });
-      throw new Error('Missing required parameters: messageId and caption');
-    }
+  const { messageId, caption, media_group_id, correlationId } = requestData;
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  logEvent('request', 'received', {
+    requestId,
+    messageId,
+    caption,
+    media_group_id,
+    correlationId
+  });
 
-    if (!supabaseUrl || !supabaseKey) {
-      logEvent('config', 'missing_env_vars', {
-        requestId,
-        missing_vars: {
-          SUPABASE_URL: !supabaseUrl,
-          SUPABASE_SERVICE_ROLE_KEY: !supabaseKey
-        }
-      });
-      throw new Error('Missing required environment variables');
-    }
+  if (!messageId || !caption) {
+    logEvent('request', 'validation_error', { messageId, caption });
+    return new Response(
+      JSON.stringify({ error: 'Missing required parameters' }), 
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
 
-    // Set state to processing
-    logEvent('state', 'updating_to_processing', {
-      requestId,
-      messageId,
-      correlationId
-    });
-
-    const { error: stateError } = await supabase
+    // Set initial processing state
+    await supabase
       .from('messages')
       .update({ 
         processing_state: 'processing',
@@ -255,140 +213,84 @@ serve(async (req) => {
       })
       .eq('id', messageId);
 
-    if (stateError) {
-      logEvent('state', 'update_error', {
-        requestId,
-        messageId,
-        error: stateError.message,
-        error_code: stateError.code,
-        details: stateError.details
-      });
-      throw new Error(`Failed to update processing state: ${stateError.message}`);
-    }
-
-    // Perform manual parsing
-    logEvent('processing', 'start_parsing', {
-      requestId,
-      messageId,
-      correlationId
-    });
-
+    // Parse the caption
     const parsedContent = extractProductInfo(caption);
 
-    // Base message update
-    const baseUpdate: MessageUpdate = {
-      analyzed_content: parsedContent,
-      processing_state: 'completed',
-      processing_completed_at: new Date().toISOString(),
-      processing_correlation_id: correlationId,
-      is_original_caption: true
-    };
-
-    // Update the message
-    logEvent('state', 'updating_with_results', {
-      requestId,
-      messageId,
-      update_fields: Object.keys(baseUpdate),
-      needs_ai_analysis: parsedContent.parsing_metadata?.needs_ai_analysis
-    });
-
+    // Update message with results
     const { error: updateError } = await supabase
       .from('messages')
-      .update(baseUpdate)
+      .update({
+        analyzed_content: parsedContent,
+        processing_state: 'completed',
+        processing_completed_at: new Date().toISOString(),
+        is_original_caption: true,
+        processing_correlation_id: correlationId
+      })
       .eq('id', messageId);
 
-    if (updateError) {
-      logEvent('state', 'update_error', {
-        requestId,
-        messageId,
-        error: updateError.message,
-        error_code: updateError.code,
-        details: updateError.details
-      });
-      throw new Error(`Failed to update message: ${updateError.message}`);
-    }
+    if (updateError) throw updateError;
 
-    // Handle media group synchronization if needed
+    // Handle media group sync if needed
     if (media_group_id) {
-      logEvent('sync', 'initiating_group_sync', {
-        requestId,
-        messageId,
-        media_group_id
-      });
       await handleMediaGroupSync(supabase, messageId, media_group_id, parsedContent, correlationId);
     }
 
-    const processingTime = Date.now() - requestStart;
-    logEvent('request', 'completed', {
+    logEvent('request', 'success', {
       requestId,
-      messageId,
-      processing_time_ms: processingTime,
+      processingTime: Date.now() - startTime,
       needs_ai_analysis: parsedContent.parsing_metadata?.needs_ai_analysis
     });
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
+        analyzed_content: parsedContent,
         needs_ai_analysis: parsedContent.parsing_metadata?.needs_ai_analysis,
-        processing_time_ms: processingTime
-      }), 
+        processing_time: Date.now() - startTime
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    logEvent('error', 'request_failed', {
+    logEvent('request', 'error', {
       requestId,
       error: error.message,
-      error_stack: error.stack,
-      processing_time_ms: Date.now() - requestStart
+      processingTime: Date.now() - startTime
     });
-    
-    // Try to update message to error state
+
+    // Update message to error state
     try {
-      const { messageId, correlationId } = await req.json();
-      if (messageId) {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL') as string;
-        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string;
-        const supabase = createClient(supabaseUrl, supabaseKey);
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
 
-        logEvent('error', 'updating_error_state', {
-          requestId,
-          messageId,
-          correlationId,
-          error: error.message
-        });
-
-        const errorUpdate: MessageUpdate = {
-          analyzed_content: null,
+      await supabase
+        .from('messages')
+        .update({
           processing_state: 'error',
           error_message: error.message,
           processing_completed_at: new Date().toISOString(),
-          last_error_at: new Date().toISOString(),
-          processing_correlation_id: correlationId
-        };
-
-        await supabase
-          .from('messages')
-          .update(errorUpdate)
-          .eq('id', messageId);
-
-      }
+          last_error_at: new Date().toISOString()
+        })
+        .eq('id', messageId);
     } catch (updateError) {
-      logEvent('error', 'error_state_update_failed', {
+      logEvent('error_state_update', 'failed', {
         requestId,
-        error: updateError.message,
-        original_error: error.message,
-        error_stack: updateError.stack
+        error: updateError.message
       });
     }
-    
+
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: error.message,
-        request_id: requestId,
-        processing_time_ms: Date.now() - requestStart
-      }), 
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        requestId,
+        processingTime: Date.now() - startTime
+      }),
+      { 
+        status: error.status || 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
     );
   }
 });
