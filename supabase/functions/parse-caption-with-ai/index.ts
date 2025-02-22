@@ -52,12 +52,16 @@ async function getMediaGroupInfo(supabase: any, mediaGroupId: string) {
 async function updateMediaGroupMessages(
   supabase: any,
   mediaGroupId: string,
-  message_id: string,
+  messageId: string,
   analyzedContent: any,
   hasCaption: boolean
 ) {
   try {
-    console.log('Starting media group sync:', { mediaGroupId, message_id, hasCaption });
+    if (!messageId) {
+      throw new Error('Message ID is required for media group sync');
+    }
+
+    console.log('Starting media group sync:', { mediaGroupId, messageId, hasCaption });
 
     // Get media group completion status
     const groupInfo = await getMediaGroupInfo(supabase, mediaGroupId);
@@ -66,7 +70,7 @@ async function updateMediaGroupMessages(
     // Update all messages in the group via the stored procedure
     const { error: procError } = await supabase
       .rpc('xdelo_sync_media_group_content', {
-        p_source_message_id: message_id,
+        p_source_message_id: messageId,
         p_media_group_id: mediaGroupId,
         p_correlation_id: crypto.randomUUID()
       });
@@ -93,16 +97,46 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let requestData;
   try {
-    const { messageId, media_group_id, caption, correlation_id } = await req.json();
-    
-    console.log('Starting caption analysis:', {
-      messageId,
-      media_group_id,
-      caption_length: caption?.length || 0,
-      correlation_id
-    });
+    requestData = await req.json();
+  } catch (error) {
+    console.error('Error parsing request JSON:', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Invalid JSON in request body'
+      }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      }
+    );
+  }
 
+  const { messageId, media_group_id, caption, correlation_id } = requestData;
+
+  if (!messageId) {
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Message ID is required'
+      }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      }
+    );
+  }
+
+  console.log('Starting caption analysis:', {
+    messageId,
+    media_group_id,
+    caption_length: caption?.length || 0,
+    correlation_id
+  });
+
+  try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
@@ -150,6 +184,7 @@ serve(async (req) => {
     }
 
     console.log('Analysis completed:', {
+      messageId,
       correlation_id,
       product_name: analyzedContent.product_name,
       confidence: analyzedContent.parsing_metadata?.confidence,
@@ -179,7 +214,8 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         analyzed_content: analyzedContent,
-        correlation_id
+        correlation_id,
+        messageId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -193,7 +229,6 @@ serve(async (req) => {
       const supabase = createClient(supabaseUrl, supabaseKey);
 
       // Update message state to error
-      const { messageId } = await req.json();
       if (messageId) {
         await supabase.rpc('xdelo_update_message_processing_state', {
           p_message_id: messageId,
@@ -209,7 +244,8 @@ serve(async (req) => {
       JSON.stringify({
         success: false,
         error: error.message,
-        correlation_id: crypto.randomUUID(),
+        messageId,
+        correlation_id: correlation_id || crypto.randomUUID(),
         timestamp: new Date().toISOString()
       }),
       { 
