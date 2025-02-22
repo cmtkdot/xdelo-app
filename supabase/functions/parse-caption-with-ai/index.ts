@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { analyzeCaption } from "./utils/aiAnalyzer.ts";
@@ -64,15 +65,14 @@ async function updateMediaGroupMessages(
 
     // Update all messages in the group via the stored procedure
     const { error: procError } = await supabase
-      .rpc('process_media_group_analysis', {
-        p_message_id: message_id,
+      .rpc('xdelo_sync_media_group_content', {
+        p_source_message_id: message_id,
         p_media_group_id: mediaGroupId,
-        p_analyzed_content: analyzedContent,
-        p_processing_completed_at: new Date().toISOString()
+        p_correlation_id: crypto.randomUUID()
       });
 
     if (procError) {
-      console.error('Error in process_media_group_analysis:', procError);
+      console.error('Error in xdelo_sync_media_group_content:', procError);
       throw procError;
     }
 
@@ -94,10 +94,10 @@ serve(async (req) => {
   }
 
   try {
-    const { message_id, media_group_id, caption, correlation_id } = await req.json();
+    const { messageId, media_group_id, caption, correlation_id } = await req.json();
     
     console.log('Starting caption analysis:', {
-      message_id,
+      messageId,
       media_group_id,
       caption_length: caption?.length || 0,
       correlation_id
@@ -157,7 +157,7 @@ serve(async (req) => {
     });
 
     if (media_group_id) {
-      await updateMediaGroupMessages(supabase, media_group_id, message_id, analyzedContent, hasCaption);
+      await updateMediaGroupMessages(supabase, media_group_id, messageId, analyzedContent, hasCaption);
     } else {
       const { error: updateError } = await supabase
         .from('messages')
@@ -167,7 +167,7 @@ serve(async (req) => {
           processing_completed_at: new Date().toISOString(),
           is_original_caption: hasCaption
         })
-        .eq('id', message_id);
+        .eq('id', messageId);
 
       if (updateError) {
         console.error('Error updating single message:', updateError);
@@ -186,6 +186,24 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in parse-caption-with-ai:', error);
+    
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      // Update message state to error
+      const { messageId } = await req.json();
+      if (messageId) {
+        await supabase.rpc('xdelo_update_message_processing_state', {
+          p_message_id: messageId,
+          p_state: 'error',
+          p_error: error.message
+        });
+      }
+    } catch (updateError) {
+      console.error('Error updating message state:', updateError);
+    }
     
     return new Response(
       JSON.stringify({
