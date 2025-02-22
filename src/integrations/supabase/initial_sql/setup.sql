@@ -86,18 +86,6 @@ CREATE TABLE IF NOT EXISTS public.other_messages (
     PRIMARY KEY (id)
 );
 
-CREATE TABLE IF NOT EXISTS public.message_state_logs (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    message_id uuid REFERENCES public.messages(id),
-    previous_state text,
-    new_state text,
-    changed_at timestamp with time zone DEFAULT now(),
-    metadata jsonb,
-    error_message text,
-    correlation_id uuid,
-    PRIMARY KEY (id)
-);
-
 -- Create indexes
 CREATE INDEX IF NOT EXISTS messages_media_group_id_idx ON public.messages(media_group_id);
 CREATE INDEX IF NOT EXISTS messages_file_unique_id_idx ON public.messages(file_unique_id);
@@ -105,15 +93,12 @@ CREATE INDEX IF NOT EXISTS messages_user_id_idx ON public.messages(user_id);
 CREATE INDEX IF NOT EXISTS messages_processing_state_idx ON public.messages(processing_state);
 CREATE INDEX IF NOT EXISTS audit_log_message_id_idx ON public.analysis_audit_log(message_id);
 CREATE INDEX IF NOT EXISTS audit_log_media_group_id_idx ON public.analysis_audit_log(media_group_id);
-CREATE INDEX IF NOT EXISTS message_state_logs_message_id_idx ON public.message_state_logs(message_id);
-CREATE INDEX IF NOT EXISTS message_state_logs_correlation_id_idx ON public.message_state_logs(correlation_id);
 
 -- Create RLS policies
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.analysis_audit_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.other_messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.message_state_logs ENABLE ROW LEVEL SECURITY;
 
 -- Profiles policies
 CREATE POLICY "Users can view own profile" 
@@ -428,7 +413,6 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.analysis_audit_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.other_messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.message_state_logs ENABLE ROW LEVEL SECURITY;
 
 -- Add comment about required secrets
 COMMENT ON DATABASE postgres IS 'Required secrets for edge functions:

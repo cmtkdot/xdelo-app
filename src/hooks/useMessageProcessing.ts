@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import type { MessageData, AnalyzedContent as MessageAnalyzedContent } from '../components/Messages/types';
 import { supabase } from '@/integrations/supabase/client';
@@ -130,19 +129,6 @@ export function useMessageProcessing() {
     } catch (error) {
       console.error('Error syncing media group:', error);
       updateProcessingState(message.id, false, error.message);
-      
-      // Log the error with metadata
-      await supabase.from('message_state_logs').insert({
-        message_id: message.id,
-        previous_state: 'completed',
-        new_state: 'error',
-        changed_at: new Date().toISOString(),
-        error_message: error.message,
-        metadata: {
-          sync_source_message_id: message.id,
-          media_group_id: message.media_group_id
-        }
-      });
     }
   }, [processingState, updateProcessingState]);
 

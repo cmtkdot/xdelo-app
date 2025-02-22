@@ -2,8 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { 
   MessageData, 
   OtherMessageData, 
-  ProcessingStateType,
-  StateLogEntry
+  ProcessingStateType
 } from "./types";
 
 // Retrieve an existing message by telegram_message_id and chat_id
@@ -127,24 +126,6 @@ export async function updateOtherMessage(
 
   if (error) {
     console.error("❌ Error updating other message:", error);
-    throw error;
-  }
-}
-
-// Create a state log entry for message state changes
-export async function createStateLog(
-  supabase: SupabaseClient,
-  logEntry: StateLogEntry
-): Promise<void> {
-  const { error } = await supabase
-    .from("message_state_logs")
-    .insert({
-      ...logEntry,
-      changed_at: new Date().toISOString()
-    });
-
-  if (error) {
-    console.error("❌ Error creating state log:", error);
     throw error;
   }
 }

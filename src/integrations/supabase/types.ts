@@ -1612,64 +1612,6 @@ export type Database = {
           },
         ]
       }
-      message_state_logs: {
-        Row: {
-          changed_at: string | null
-          correlation_id: string | null
-          id: string
-          message_id: string
-          metadata: Json | null
-          new_state: Database["public"]["Enums"]["processing_state_type"]
-          previous_state:
-            | Database["public"]["Enums"]["processing_state_type"]
-            | null
-        }
-        Insert: {
-          changed_at?: string | null
-          correlation_id?: string | null
-          id?: string
-          message_id: string
-          metadata?: Json | null
-          new_state: Database["public"]["Enums"]["processing_state_type"]
-          previous_state?:
-            | Database["public"]["Enums"]["processing_state_type"]
-            | null
-        }
-        Update: {
-          changed_at?: string | null
-          correlation_id?: string | null
-          id?: string
-          message_id?: string
-          metadata?: Json | null
-          new_state?: Database["public"]["Enums"]["processing_state_type"]
-          previous_state?:
-            | Database["public"]["Enums"]["processing_state_type"]
-            | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "message_state_logs_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "message_flow_logs"
-            referencedColumns: ["message_id"]
-          },
-          {
-            foreignKeyName: "message_state_logs_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "message_flow_logs_materialized"
-            referencedColumns: ["message_id"]
-          },
-          {
-            foreignKeyName: "message_state_logs_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       messages: {
         Row: {
           analyzed_content: Json | null

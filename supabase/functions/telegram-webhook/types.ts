@@ -228,10 +228,3 @@ export interface WebhookResponse {
   error?: string;
   details?: Record<string, any>;
 }
-
-export interface StateLogEntry {
-  message_id: string;
-  previous_state: ProcessingStateType;
-  new_state: ProcessingStateType;
-  changed_at?: string;
-}
