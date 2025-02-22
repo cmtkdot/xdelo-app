@@ -1,7 +1,6 @@
-import { ParsedContent } from "../types.ts";
-import { parseQuantity } from "./quantityParser.ts";
+import { ParsedResult, QuantityParseResult } from '../types';
 
-function calculateConfidence(result: ParsedContent, fallbacks: string[], caption: string): number {
+function calculateConfidence(result: ParsedResult, fallbacks: string[], caption: string): number {
   let score = 1.0;
   
   // Structure Analysis (40% weight)
@@ -27,6 +26,16 @@ function calculateConfidence(result: ParsedContent, fallbacks: string[], caption
     score -= 0.4;
   }
   
+  // Product Name Quality (increased importance)
+  if (result.product_name) {
+    const isReasonableLength = result.product_name.length <= 23;
+    if (!isReasonableLength) {
+      score -= 0.5; // Significant penalty for long product names
+      fallbacks.push('product_name_too_long');
+    }
+  }
+  
+  // Quantity check
   if (result.quantity && result.quantity > 0) {
     const isReasonable = result.quantity > 0 && result.quantity < 10000;
     score += isReasonable ? 0.2 : -0.1;
@@ -34,14 +43,8 @@ function calculateConfidence(result: ParsedContent, fallbacks: string[], caption
     score -= 0.3;
   }
   
-  // Product Name Quality
-  if (result.product_name && result.product_name !== caption) {
-    const isReasonableLength = result.product_name.length > 3 && result.product_name.length < 100;
-    score += isReasonableLength ? 0.1 : -0.1;
-  }
-  
   // Fallbacks Impact (20% weight)
-  const criticalFallbacks = ['no_product_code', 'no_quantity'];
+  const criticalFallbacks = ['no_product_code', 'no_quantity', 'product_name_too_long'];
   const hasCriticalFallbacks = fallbacks.some(f => criticalFallbacks.includes(f));
   
   if (hasCriticalFallbacks) {
@@ -54,9 +57,40 @@ function calculateConfidence(result: ParsedContent, fallbacks: string[], caption
   return Math.max(0.1, Math.min(1, score));
 }
 
-export async function manualParse(caption: string): Promise<ParsedContent> {
+function parseQuantity(caption: string): QuantityParseResult | null {
+  // Look for patterns like "x2", "x 2", "qty: 2", "quantity: 2"
+  const patterns = [
+    /x\s*(\d+)/i,                    // x2 or x 2
+    /qty:\s*(\d+)/i,                 // qty: 2
+    /quantity:\s*(\d+)/i,            // quantity: 2
+    /(\d+)\s*(?:pcs|pieces)/i,       // 2 pcs or 2 pieces
+    /(\d+)\s*(?:units?)/i,           // 2 unit or 2 units
+    /(\d+)\s*(?=\s|$)/               // standalone number
+  ];
+
+  for (const pattern of patterns) {
+    const match = caption.match(pattern);
+    if (match) {
+      const value = parseInt(match[1], 10);
+      if (value > 0 && value < 10000) { // Reasonable quantity range
+        return {
+          value,
+          confidence: 0.9 // High confidence for explicit patterns
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Attempts to parse structured data from caption using regex patterns.
+ * Returns null if product name is too long or critical fields are missing.
+ */
+export async function parseManually(caption: string): Promise<ParsedResult | null> {
   console.log("Starting manual parsing for:", caption);
-  const result: ParsedContent = {};
+  const result: ParsedResult = {};
   const fallbacks_used: string[] = [];
 
   // Extract product name (text before line break, dash, # or x)
@@ -74,9 +108,16 @@ export async function manualParse(caption: string): Promise<ParsedContent> {
   const productNameMatch = caption.substring(0, endIndex).trim();
   if (productNameMatch) {
     result.product_name = productNameMatch;
+    // Check product name length immediately
+    if (productNameMatch.length > 23) {
+      console.log("Product name too long, triggering AI analysis:", productNameMatch.length);
+      return null;
+    }
   } else {
     result.product_name = caption.trim();
     fallbacks_used.push('no_product_name_marker');
+    // If we're using full caption as product name, trigger AI
+    return null;
   }
 
   // Extract product code and vendor UID
@@ -140,24 +181,28 @@ export async function manualParse(caption: string): Promise<ParsedContent> {
 
   const confidence = calculateConfidence(result, fallbacks_used, caption);
   
-  // Calculate if we have critical fallbacks
-  const criticalFallbacks = ['no_product_code', 'no_quantity'];
-  const hasCriticalFallbacks = fallbacks_used.some(f => criticalFallbacks.includes(f));
+  // Modified return condition to include product name length check
+  const hasCriticalIssues = 
+    fallbacks_used.includes('product_name_too_long') || 
+    fallbacks_used.includes('no_product_code') ||
+    confidence < 0.4;
+
+  if (hasCriticalIssues) {
+    console.log("Manual parsing failed due to:", {
+      fallbacks: fallbacks_used,
+      confidence,
+      productNameLength: result.product_name?.length
+    });
+    return null;
+  }
 
   result.parsing_metadata = {
     method: 'manual',
     confidence,
     fallbacks_used: fallbacks_used.length ? fallbacks_used : undefined,
     timestamp: new Date().toISOString(),
-    needs_ai_analysis: confidence < 0.4 || hasCriticalFallbacks
+    needs_ai_analysis: false // We're now handling this through the return null
   };
-
-  console.log("Manual parsing result:", {
-    ...result,
-    confidence,
-    needs_ai_analysis: result.parsing_metadata.needs_ai_analysis,
-    fallbacks: fallbacks_used
-  });
 
   return result;
 }

@@ -126,6 +126,49 @@ export interface TelegramMessage {
     id: string;
     query: string;
   };
+  entities?: any[];
+  sender_chat?: {
+    id: number;
+    title?: string;
+    type: string;
+  };
+  date: number;
+}
+
+export interface ChatMemberUpdate {
+  chat: {
+    id: number;
+    type: TelegramChatType;
+    title?: string;
+  };
+  from?: {
+    id: number;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+  };
+  my_chat_member?: boolean;
+  old_chat_member?: {
+    status: string;
+    user: {
+      id: number;
+      first_name?: string;
+      last_name?: string;
+      username?: string;
+    };
+  };
+  new_chat_member?: {
+    status: string;
+    user: {
+      id: number;
+      first_name?: string;
+      last_name?: string;
+      username?: string;
+    };
+  };
+  date: number;
+  edited_message?: TelegramMessage;
+  edited_channel_post?: TelegramMessage;
 }
 
 export interface TelegramUpdate {
@@ -158,6 +201,7 @@ export interface MediaInfo {
 }
 
 export interface MessageData {
+  id: string;
   user_id: string;
   telegram_message_id: number;
   chat_id: number;
@@ -200,22 +244,56 @@ export interface MessageData {
   updated_at?: string;
 }
 
+export interface TelegramError {
+  message: string;
+  name?: string;
+  stack?: string;
+  code?: string;
+}
+
+export interface TelegramData {
+  message: TelegramMessage;
+  message_type: TelegramOtherMessageType;
+  content: {
+    text?: string;
+    entities?: any[];
+    sticker?: any;
+    voice?: any;
+    document?: any;
+    location?: any;
+    contact?: any;
+  };
+  edit_history?: Array<{
+    timestamp: string;
+    previous_content: Record<string, any>;
+    new_content: Record<string, any>;
+  }>;
+  update_type?: string;
+  member_update?: Record<string, any>;
+  old_status?: string;
+  new_status?: string;
+}
+
 export interface OtherMessageData {
+  id?: string;
+  telegram_message_id: number;
+  message_caption_id?: string;
   user_id: string;
   message_type: TelegramOtherMessageType;
-  telegram_message_id: number;
   chat_id: number;
   chat_type: TelegramChatType;
   chat_title?: string;
   message_text?: string;
   is_edited: boolean;
   edit_date?: string | null;
+  is_channel_post: boolean;
+  sender_chat_id?: number;
   processing_state: ProcessingStateType;
   processing_started_at?: string;
   processing_completed_at?: string;
-  processing_correlation_id?: string;
+  processing_correlation_id: string;
   error_message?: string;
-  telegram_data: Record<string, any>;
+  telegram_data: TelegramData;
   message_url?: string;
   created_at?: string;
   updated_at?: string;
@@ -227,11 +305,4 @@ export interface WebhookResponse {
   correlation_id?: string;
   error?: string;
   details?: Record<string, any>;
-}
-
-export interface StateLogEntry {
-  message_id: string;
-  previous_state: ProcessingStateType;
-  new_state: ProcessingStateType;
-  changed_at?: string;
 }

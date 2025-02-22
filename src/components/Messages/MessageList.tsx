@@ -1,10 +1,10 @@
 import React from 'react';
-import type { MessageData } from './types';
+import type { Message } from './types';
 import { MessageControls } from './MessageControls';
 import { format } from 'date-fns';
 
 interface MessageListProps {
-  messages: MessageData[];
+  messages: Message[];
   onRefresh?: () => void;
 }
 

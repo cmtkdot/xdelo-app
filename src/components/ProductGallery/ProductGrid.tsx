@@ -1,12 +1,11 @@
-
-import { MediaItem } from "@/types";
+import { Message } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
 import { cn } from "@/lib/utils";
 
 interface ProductGridProps {
-  products: MediaItem[][];
-  onEdit: (media: MediaItem) => void;
-  onDelete: (media: MediaItem) => void;
+  products: Message[][];
+  onEdit: (media: Message) => void;
+  onDelete: (media: Message) => void;
   onView: () => void;
   className?: string;
 }

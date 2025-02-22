@@ -1,7 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/supabase";
-import type { Message, MatchResult, AnalyzedContent } from "@/types";
+import type { Database, Message, MatchResult, AnalyzedContent } from "@/types";
 
 const similarityThreshold = 0.7;
 
@@ -80,11 +79,10 @@ const findMatches = async (
       if (confidence > 0) {
         matches.push({
           id: product.id,
-          glide_id: product.glide_id,
-          confidence,
-          matchType: 'automatic',
           message_id: messageId,
           product_id: product.id,
+          confidence,
+          matchType: 'automatic',
           details: {
             matchedFields,
             confidence,

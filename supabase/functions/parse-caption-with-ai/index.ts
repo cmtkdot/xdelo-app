@@ -1,95 +1,42 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { parseManually } from "./utils/manualParser.ts";
-import { logParserEvent } from "./utils/webhookLogs.ts";
-import { AnalyzedContent, AnalysisRequest } from './types.ts';
-
-// Add type declaration for Deno namespace
-declare const Deno: {
-  env: {
-    get(key: string): string | undefined;
-  };
-};
-
-// Add error helper at the top
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (typeof err === 'string') return err;
-  return 'Unknown error occurred';
-}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Enhanced system prompt for better AI analysis
-const SYSTEM_PROMPT = `Extract product information from captions using this detailed format:
-{
-  "product_name": "Full name before #",
-  "product_code": "Code after #",
-  "vendor_uid": "Letters at start of code",
-  "purchase_date": "YYYY-MM-DD if found",
-  "quantity": "Number after x",
-  "notes": "Additional info",
-  "analysis": {
-    "strain_type": "indica/sativa/hybrid/unknown",
-    "thc_percentage": "number or null",
-    "cbd_percentage": "number or null",
-    "flavor_profile": ["array of flavors"],
-    "effects": ["array of effects"]
-  }
-}
-
-Rules:
-- Preserve all emojis in product name
-- Convert dates: mmDDyy → YYYY-MM-DD (e.g. 120523 → 2023-12-05)
-- Extract THC/CBD percentages if present
-- Identify strain type from context
-- Collect flavor descriptors and effects`;
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Initialize variables
-  let correlationId = crypto.randomUUID();
-  let messageId: number | undefined;
-  let chatId: number | undefined;
-  let analyzedContent: AnalyzedContent = {};
-  let reqBody: any; // Store request body
-  
-  const startTime = performance.now();
-  
+  let requestData;
   try {
-    // Parse request body once and store it
-    reqBody = await req.json();
-    messageId = typeof reqBody.messageId === 'string' 
-      ? parseInt(reqBody.messageId, 10) 
-      : reqBody.messageId; // Handle both string and number inputs
+    // Clone the request before consuming the body
+    requestData = await req.clone().json();
+    const { messageId, caption, media_group_id, correlationId } = requestData;
     
-    chatId = reqBody.chat_id;
-    const { caption, media_group_id, correlation_id } = reqBody;
-    
-    if (correlation_id) {
-      correlationId = correlation_id;
-    }
-
-    // Validate messageId
-    if (!messageId || isNaN(messageId)) {
-      throw new Error('Valid numeric Message ID is required');
-    }
+    console.log('Starting caption analysis:', {
+      messageId, 
+      media_group_id,
+      caption_length: caption?.length,
+      correlation_id: correlationId
+    });
 
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
     // Manual parsing attempt
+    let analyzedContent;
     const manualResult = await parseManually(caption);
     
     if (manualResult && manualResult.product_code) {
+      console.log('Manual parsing successful');
       analyzedContent = {
         ...manualResult,
         parsing_metadata: {
@@ -99,33 +46,77 @@ serve(async (req) => {
         }
       };
     } else {
-      // AI Analysis
-      const aiResult = await performAIAnalysis(caption);
+      console.log('Manual parsing incomplete, attempting AI analysis...');
+      const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+      if (!openAIApiKey) {
+        throw new Error('OpenAI API key not configured');
+      }
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openAIApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4',
+          messages: [
+            {
+              role: 'system',
+              content: `Extract product information from captions using this format:
+                - product_name (before #)
+                - product_code (after #)
+                - vendor_uid (letters at start of code)
+                - quantity (number after x)
+                - purchase_date (if found, in YYYY-MM-DD)
+                - notes (additional info)`
+            },
+            { role: 'user', content: caption }
+          ]
+        })
+      });
+
+      if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
       
-      // Merge manual and AI results
+      const aiResult = await response.json();
+      const aiAnalysis = JSON.parse(aiResult.choices[0].message.content);
       analyzedContent = {
-        ...aiResult,
-        product_code: manualResult?.product_code || aiResult.product_code,
-        vendor_uid: manualResult?.vendor_uid || aiResult.vendor_uid,
+        ...aiAnalysis,
         parsing_metadata: {
-          method: 'hybrid',
-          confidence: 0.9,
-          timestamp: new Date().toISOString(),
-          manual_success: Boolean(manualResult?.product_code)
+          method: 'ai',
+          confidence: 0.7,
+          timestamp: new Date().toISOString()
+        }
+      };
+      console.log('AI analysis successful');
+    }
+
+    if (media_group_id) {
+      console.log('Syncing media group:', media_group_id);
+      analyzedContent = {
+        ...analyzedContent,
+        sync_metadata: {
+          sync_source_message_id: messageId,
+          media_group_id: media_group_id
         }
       };
     }
 
-    // Add sync metadata if part of media group
-    if (media_group_id) {
-      analyzedContent = {
-        ...analyzedContent,
-        sync_metadata: {
-          sync_source_message_id: messageId.toString(),
-          media_group_id,
-          synced_at: new Date().toISOString()
-        }
-      };
+    // Insert webhook log for successful analysis
+    const { error: logError } = await supabase
+      .from('webhook_logs')
+      .insert({
+        event_type: 'analysis_complete',
+        correlation_id: requestData.correlationId,
+        message_id: requestData.telegram_message_id, // Use telegram_message_id instead of UUID
+        metadata: JSON.stringify({
+          analysis_method: analyzedContent.parsing_metadata.method,
+          confidence: analyzedContent.parsing_metadata.confidence
+        })
+      });
+
+    if (logError) {
+      console.error('Error logging webhook event:', logError);
     }
 
     // Update message with analyzed content
@@ -143,74 +134,48 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true,
-        correlation_id: correlationId,
         analyzed_content: analyzedContent
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (err) {
-    const errorMessage = getErrorMessage(err);
-    console.error('Error in parse-caption-with-ai:', {
-      error: errorMessage,
-      correlation_id: correlationId,
-      message_id: messageId
-    });
+  } catch (error) {
+    console.error('Error in parse-caption-with-ai:', error);
     
     try {
-      if (messageId) {
-        const errorSupabase = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      if (requestData?.messageId) {
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
         );
 
-        await errorSupabase
+        // Log error to webhook_logs using telegram_message_id
+        await supabase
+          .from('webhook_logs')
+          .insert({
+            event_type: 'analysis_error',
+            message_id: requestData.telegram_message_id, // Use telegram_message_id instead of UUID
+            error_message: error.message,
+            correlation_id: requestData.correlationId
+          });
+
+        // Update message error state
+        await supabase
           .from('messages')
           .update({
             processing_state: 'error',
-            error_message: errorMessage,
+            error_message: error.message,
             processing_completed_at: new Date().toISOString(),
-            last_error_at: new Date().toISOString(),
-            processing_correlation_id: correlationId
+            last_error_at: new Date().toISOString()
           })
-          .eq('id', messageId); // No toString() needed since messageId is now number
+          .eq('id', requestData.messageId);
       }
-
-      // Log error using stored reqBody instead of parsing request again
-      const logSupabase = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      );
-
-      await logParserEvent(logSupabase, {
-        event_type: 'analysis_error',
-        chat_id: chatId || 0,
-        message_id: messageId || 0,
-        correlation_id: correlationId,
-        error_message: errorMessage,
-        duration_ms: Math.round(performance.now() - startTime),
-        processing_state: 'error',
-        metadata: {
-          error_type: 'AnalysisError',
-          error_details: errorMessage,
-          original_payload: reqBody // Include original request payload for debugging
-        }
-      });
-
-    } catch (updateErr) {
-      const updateErrorMsg = getErrorMessage(updateErr);
-      console.error('Failed to update message error state:', {
-        error: updateErrorMsg,
-        correlation_id: correlationId,
-        message_id: messageId
-      });
+    } catch (updateError) {
+      console.error('Failed to update message error state:', updateError);
     }
-
+    
     return new Response(
-      JSON.stringify({ 
-        error: errorMessage,
-        correlation_id: correlationId 
-      }),
+      JSON.stringify({ error: error.message }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -218,32 +183,3 @@ serve(async (req) => {
     );
   }
 });
-// Helper function for AI analysis
-async function performAIAnalysis(caption: string): Promise<AnalyzedContent> {
-  const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-  if (!openAIApiKey) {
-    throw new Error('OpenAI API key not configured');
-  }
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${openAIApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: caption }
-      ],
-      temperature: 0.3,
-    })
-  });
-
-  if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
-  
-  const result = await response.json();
-  return JSON.parse(result.choices[0].message.content);
-}
-

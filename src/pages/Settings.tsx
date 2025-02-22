@@ -5,11 +5,6 @@ import { AccountCard } from "@/components/Settings/AccountCard";
 import { TelegramCard } from "@/components/Settings/TelegramCard";
 import { SyncCard } from "@/components/Settings/SyncCard";
 
-interface SettingsData {
-  bot_token: string | null;
-  webhook_url: string | null;
-}
-
 const Settings = () => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [botToken, setBotToken] = useState<string | null>(null);
@@ -20,14 +15,14 @@ const Settings = () => {
     setUserEmail(user?.email || null);
 
     // Load Telegram settings
-    const { data: settingsData } = await supabase
+    const { data: settings, error } = await supabase
       .from('settings')
       .select('bot_token, webhook_url')
       .single();
 
-    if (settingsData) {
-      setBotToken(settingsData.bot_token);
-      setWebhookUrl(settingsData.webhook_url);
+    if (!error && settings) {
+      setBotToken(settings.bot_token);
+      setWebhookUrl(settings.webhook_url);
     }
   };
 

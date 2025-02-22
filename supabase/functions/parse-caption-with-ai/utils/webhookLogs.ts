@@ -1,21 +1,20 @@
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+import { WebhookLogEntry } from '../types';
 
-import { SupabaseClient } from '@supabase/supabase-js';
-
-export const logWebhookEvent = async (
+export async function logParserEvent(
   supabase: SupabaseClient,
-  event_type: string,
-  metadata: any = {},
-  error_message?: string
-) => {
+  event: WebhookLogEntry
+): Promise<void> {
   try {
     await supabase.from('webhook_logs').insert({
-      event_type,
-      metadata,
-      error_message,
-      correlation_id: crypto.randomUUID(),
-      timestamp: new Date().toISOString()
+      ...event,
+      created_at: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error logging webhook event:', error);
+    console.error('Failed to log parser event:', {
+      error,
+      correlation_id: event.correlation_id,
+      event_type: event.event_type
+    });
   }
-};
+} 

@@ -1,9 +1,9 @@
-import { MediaItem } from "@/types";
+import { Message } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
 
 interface MediaGridProps {
-  mediaGroups: { [key: string]: MediaItem[] };
-  onEdit: (media: MediaItem) => void;
+  mediaGroups: { [key: string]: Message[] };
+  onEdit: (media: Message) => void;
   onPrevious?: () => void;
   onNext?: () => void;
   hasPrevious?: boolean;

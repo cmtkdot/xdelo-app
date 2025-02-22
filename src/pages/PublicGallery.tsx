@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MediaItem } from "@/types";
+import { Message } from "@/types";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
 import { MediaEditDialog } from "@/components/MediaEditDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
 const PublicGallery = () => {
-  const [editItem, setEditItem] = useState<MediaItem | null>(null);
+  const [editItem, setEditItem] = useState<Message | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -25,7 +25,7 @@ const PublicGallery = () => {
       if (error) throw error;
       
       // Group messages by media_group_id
-      const groupedMessages = (data as MediaItem[]).reduce((groups: { [key: string]: MediaItem[] }, message) => {
+      const groupedMessages = (data as Message[]).reduce((groups: { [key: string]: Message[] }, message) => {
         const groupId = message.media_group_id || message.id;
         if (!groups[groupId]) {
           groups[groupId] = [];
@@ -61,7 +61,7 @@ const PublicGallery = () => {
     };
   }, [queryClient]);
 
-  const handleEdit = (media: MediaItem) => {
+  const handleEdit = (media: Message) => {
     if (!user) {
       toast({
         title: "Authentication required",
@@ -78,7 +78,7 @@ const PublicGallery = () => {
     console.log('Viewing media');
   };
 
-  const handleDelete = async (media: MediaItem) => {
+  const handleDelete = async (media: Message) => {
     if (!user) {
       toast({
         title: "Authentication required",

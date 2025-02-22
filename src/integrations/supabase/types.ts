@@ -1612,44 +1612,6 @@ export type Database = {
           },
         ]
       }
-      message_state_logs: {
-        Row: {
-          changed_at: string | null
-          error_message: string | null
-          id: string
-          message_id: string | null
-          metadata: Json | null
-          new_state: string | null
-          previous_state: string | null
-        }
-        Insert: {
-          changed_at?: string | null
-          error_message?: string | null
-          id?: string
-          message_id?: string | null
-          metadata?: Json | null
-          new_state?: string | null
-          previous_state?: string | null
-        }
-        Update: {
-          changed_at?: string | null
-          error_message?: string | null
-          id?: string
-          message_id?: string | null
-          metadata?: Json | null
-          new_state?: string | null
-          previous_state?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "message_state_logs_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       messages: {
         Row: {
           analyzed_content: Json | null
@@ -1960,30 +1922,6 @@ export type Database = {
         }
         Relationships: []
       }
-      settings: {
-        Row: {
-          bot_token: string | null
-          created_at: string | null
-          id: string
-          updated_at: string | null
-          webhook_url: string | null
-        }
-        Insert: {
-          bot_token?: string | null
-          created_at?: string | null
-          id?: string
-          updated_at?: string | null
-          webhook_url?: string | null
-        }
-        Update: {
-          bot_token?: string | null
-          created_at?: string | null
-          id?: string
-          updated_at?: string | null
-          webhook_url?: string | null
-        }
-        Relationships: []
-      }
       sync_logs: {
         Row: {
           created_at: string | null
@@ -2108,7 +2046,7 @@ export type Database = {
           event_type: string | null
           id: string
           media_type: string | null
-          message_id: string | null
+          message_id: number | null
           metadata: string | null
           raw_data: Json | null
           timestamp: string | null
@@ -2120,7 +2058,7 @@ export type Database = {
           event_type?: string | null
           id?: string
           media_type?: string | null
-          message_id?: string | null
+          message_id?: number | null
           metadata?: string | null
           raw_data?: Json | null
           timestamp?: string | null
@@ -2132,20 +2070,12 @@ export type Database = {
           event_type?: string | null
           id?: string
           media_type?: string | null
-          message_id?: string | null
+          message_id?: number | null
           metadata?: string | null
           raw_data?: Json | null
           timestamp?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_webhook_logs_message_id"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
@@ -2260,29 +2190,17 @@ export type Database = {
         }
         Returns: string
       }
-      xdelo_log_webhook_event:
-        | {
-            Args: {
-              p_event_type: string
-              p_chat_id: number
-              p_message_id: number
-              p_media_type: string
-              p_error_message?: string
-              p_raw_data?: Json
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_event_type: string
-              p_chat_id: number
-              p_message_id: string
-              p_media_type?: string
-              p_error_message?: string
-              p_raw_data?: Json
-            }
-            Returns: undefined
-          }
+      xdelo_log_webhook_event: {
+        Args: {
+          p_event_type: string
+          p_chat_id: number
+          p_message_id: number
+          p_media_type: string
+          p_error_message?: string
+          p_raw_data?: Json
+        }
+        Returns: undefined
+      }
       xdelo_sync_media_group_content: {
         Args: {
           p_source_message_id: string
