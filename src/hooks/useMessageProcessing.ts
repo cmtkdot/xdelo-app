@@ -65,6 +65,17 @@ export function useMessageProcessing() {
 
       if (updateError) throw updateError;
 
+      // Log state change in webhook_logs
+      await supabase.from('webhook_logs').insert({
+        event_type: 'message_state_change',
+        message_id: message.id,
+        metadata: {
+          previous_state: message.processing_state,
+          new_state: 'pending',
+          retry_count: (message.retry_count || 0) + 1
+        }
+      });
+
       // Trigger reanalysis
       const { error: invokeError } = await supabase.functions.invoke('parse-caption-with-ai', {
         body: { 
@@ -90,6 +101,13 @@ export function useMessageProcessing() {
           last_error_at: new Date().toISOString()
         })
         .eq('id', message.id);
+
+      // Log error in webhook_logs
+      await supabase.from('webhook_logs').insert({
+        event_type: 'message_processing_error',
+        message_id: message.id,
+        error_message: error.message
+      });
 
       updateProcessingState(message.id, false, error.message);
     }
