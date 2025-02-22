@@ -65,7 +65,7 @@ function extractProductInfo(caption: string): AnalyzedContent {
 
 async function syncMediaGroup(
   supabase: any,
-  messageId: string,
+  sourceMessageId: string,
   media_group_id: string,
   analyzedContent: AnalyzedContent
 ): Promise<void> {
@@ -77,11 +77,12 @@ async function syncMediaGroup(
       processing_state: 'completed',
       processing_completed_at: new Date().toISOString(),
       group_caption_synced: true,
-      message_caption_id: messageId,
+      message_caption_id: sourceMessageId,  // Set the source message ID as the caption reference
+      is_original_caption: false,  // These are not the original caption messages
       updated_at: new Date().toISOString()
     })
     .eq('media_group_id', media_group_id)
-    .neq('id', messageId);
+    .neq('id', sourceMessageId);
 
   if (updateError) throw updateError;
 }
@@ -91,8 +92,12 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let sourceMessageId: string | null = null;
+
   try {
-    const { messageId, caption, media_group_id } = await req.json();
+    const body = await req.json();
+    const { messageId, caption, media_group_id } = body;
+    sourceMessageId = messageId; // Store messageId in wider scope for error handling
 
     if (!messageId || !caption) {
       return new Response(
@@ -117,7 +122,8 @@ serve(async (req) => {
         processing_state: 'completed',
         processing_started_at: new Date().toISOString(),
         processing_completed_at: new Date().toISOString(),
-        is_original_caption: true,
+        is_original_caption: true,        // This is the original caption message
+        message_caption_id: messageId,    // Reference itself as the caption source
         updated_at: new Date().toISOString()
       })
       .eq('id', messageId);
@@ -141,24 +147,26 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error processing message:', error);
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+    // Only try to update error state if we have a messageId
+    if (sourceMessageId) {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
 
-    // Simple error state update
-    try {
-      await supabase
-        .from('messages')
-        .update({
-          processing_state: 'error',
-          error_message: error.message,
-          processing_completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', messageId);
-    } catch (stateError) {
-      console.error('Error updating error state:', stateError);
+      try {
+        await supabase
+          .from('messages')
+          .update({
+            processing_state: 'error',
+            error_message: error.message,
+            processing_completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', sourceMessageId);
+      } catch (stateError) {
+        console.error('Error updating error state:', stateError);
+      }
     }
 
     return new Response(
