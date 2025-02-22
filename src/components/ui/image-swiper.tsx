@@ -18,6 +18,7 @@ export const ImageSwiper = ({ media, className }: ImageSwiperProps) => {
   }
 
   const currentMedia = media[currentIndex];
+  const isVideo = currentMedia.mime_type?.startsWith('video/');
 
   const handlePrevious = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -35,11 +36,19 @@ export const ImageSwiper = ({ media, className }: ImageSwiperProps) => {
 
   return (
     <div className={cn("relative w-full h-full", className)}>
-      <img
-        src={currentMedia.public_url || "/placeholder.svg"}
-        alt={currentMedia.caption || "Media content"}
-        className="absolute inset-0 w-full h-full object-cover"
-      />
+      {isVideo ? (
+        <video
+          src={currentMedia.public_url}
+          controls
+          className="absolute inset-0 w-full h-full object-contain bg-black"
+        />
+      ) : (
+        <img
+          src={currentMedia.public_url || "/placeholder.svg"}
+          alt={currentMedia.caption || "Media content"}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      )}
       
       {media.length > 1 && (
         <div className="absolute inset-0 flex items-center justify-between px-4">

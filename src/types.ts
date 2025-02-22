@@ -98,7 +98,7 @@ export interface GlProduct {
 
 export interface MediaItem {
   id: string;
-  public_url: string;
+  public_url: string | null;
   mime_type: string | null;
   created_at: string;
   analyzed_content: AnalyzedContent | null;
@@ -106,6 +106,7 @@ export interface MediaItem {
   file_unique_id: string | null;
   width?: number;
   height?: number;
+  duration?: number;
   caption?: string;
 }
 
