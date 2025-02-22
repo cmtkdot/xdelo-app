@@ -1,6 +1,18 @@
-import { SupabaseClient } from '@supabase/supabase-js';
-import { TelegramMessage, WebhookResponse, OtherMessageData, TelegramChatType, TelegramOtherMessageType, MessageData, ChatInfo, MediaInfo, TelegramUpdate } from './types';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { TelegramMessage, WebhookResponse, OtherMessageData, TelegramChatType, TelegramOtherMessageType, MessageData, ChatInfo, MediaInfo, TelegramUpdate, ChatMemberUpdate, TelegramError } from './types';
 import { getLogger } from './logger';
+import { triggerAnalysis } from './analysisHandler';
+
+// Add type guard for error handling
+function isError(error: unknown): error is TelegramError {
+  return (
+    error instanceof Error || 
+    (typeof error === 'object' && 
+     error !== null && 
+     'message' in error && 
+     typeof (error as any).message === 'string')
+  );
+}
 
 function determineMessageType(message: TelegramMessage): TelegramOtherMessageType {
   if (message.text?.startsWith('/')) return 'command';
@@ -64,92 +76,193 @@ export function extractChatInfo(message: TelegramMessage): ChatInfo {
   };
 }
 
+function determineUpdateType(update: TelegramUpdate): string {
+  if (update.message?.photo || update.message?.video || update.message?.document) return 'media';
+  if (update.message) return 'message';
+  if (update.edited_message) return 'edited_message';
+  if (update.channel_post) return 'channel_post';
+  if (update.edited_channel_post) return 'edited_channel_post';
+  if (update.my_chat_member) return 'my_chat_member';
+  if (update.chat_member) return 'chat_member';
+  if (update.callback_query) return 'callback_query';
+  if (update.inline_query) return 'inline_query';
+  return 'unknown';
+}
+
+// Simplified error handling helper
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  return 'Unknown error occurred';
+}
+
+async function handleMessage(
+  supabase: SupabaseClient,
+  message: TelegramMessage,
+  correlationId: string
+): Promise<WebhookResponse> {
+  const logger = getLogger(correlationId);
+  const startTime = performance.now();
+  const telegram_message_id = message.message_id || Math.floor(Date.now() / 1000);
+  
+  try {
+    // Log start
+    await logWebhookEvent(
+      supabase,
+      'message_processing_start',
+      message.chat.id,
+      telegram_message_id,
+      correlationId,
+      {
+        metadata: {
+          message_type: determineMessageType(message),
+          is_channel_post: Boolean(message.sender_chat)
+        }
+      }
+    );
+
+    // Check for media first
+    const mediaInfo = extractMediaInfo(message);
+    if (mediaInfo) {
+      return handleMediaMessage(supabase, message, correlationId);
+    }
+
+    // Prepare message data
+    const messageData: OtherMessageData = {
+      user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
+      message_type: determineMessageType(message),
+      telegram_message_id,
+      chat_id: message.chat.id,
+      chat_type: message.chat.type as TelegramChatType,
+      chat_title: message.chat.title || '',
+      message_text: message.text || '',
+      is_edited: false,
+      is_channel_post: Boolean(message.sender_chat),
+      sender_chat_id: message.sender_chat?.id,
+      processing_state: 'completed',
+      processing_started_at: new Date().toISOString(),
+      processing_completed_at: new Date().toISOString(),
+      processing_correlation_id: correlationId,
+      telegram_data: {
+        message: {
+          ...message,
+          message_id: telegram_message_id
+        },
+        message_type: determineMessageType(message),
+        content: {
+          text: message.text,
+          entities: message.entities,
+          sticker: message.sticker,
+          voice: message.voice,
+          document: message.document,
+          location: message.location,
+          contact: message.contact
+        }
+      }
+    };
+
+    // Insert/Update message
+    const { data: resultMessage, error } = await supabase
+      .from('other_messages')
+      .upsert(messageData, {
+        onConflict: 'telegram_message_id,chat_id',
+        returning: true
+      })
+      .single();
+
+    if (error) throw error;
+
+    // Log completion
+    await logWebhookEvent(
+      supabase,
+      'message_processing_complete',
+      message.chat.id,
+      telegram_message_id,
+      correlationId,
+      {
+        processing_state: 'completed',
+        duration_ms: Math.round(performance.now() - startTime),
+        metadata: {
+          message_id: resultMessage.id,
+          message_type: messageData.message_type
+        }
+      }
+    );
+
+    return {
+      success: true,
+      message: 'Message processed successfully',
+      correlation_id: correlationId,
+      details: {
+        message_id: resultMessage.id,
+        message_type: messageData.message_type,
+        is_channel_post: messageData.is_channel_post
+      }
+    };
+
+  } catch (err: unknown) {
+    const errorMessage = getErrorMessage(err);
+    
+    await logWebhookEvent(
+      supabase,
+      'message_processing_error',
+      message.chat.id,
+      telegram_message_id,
+      correlationId,
+      {
+        error_message: errorMessage
+      }
+    );
+
+    return {
+      success: false,
+      message: 'Failed to handle message',
+      error: errorMessage,
+      correlation_id: correlationId
+    };
+  }
+}
+
 export async function handleWebhookUpdate(
   supabase: SupabaseClient,
   update: TelegramUpdate,
   correlationId: string
 ): Promise<WebhookResponse> {
   const logger = getLogger(correlationId);
+  const updateType = determineUpdateType(update);
 
   try {
-    logger.info('Processing webhook update', {
-      update_type: Object.keys(update).join(', ')
-    });
-
-    // Handle all possible update types
-    const message = update.message || 
-                   update.channel_post || 
-                   update.edited_message ||
-                   update.edited_channel_post;
-
-    // First check for media in any message type
-    if (message) {
-      const mediaInfo = extractMediaInfo(message);
-      if (mediaInfo) {
-        logger.info('Processing message with media', {
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          file_unique_id: mediaInfo.file_unique_id,
-          is_channel: Boolean(update.channel_post),
-          is_edited: Boolean(update.edited_message || update.edited_channel_post)
-        });
-        return await handleMediaMessage(supabase, message, correlationId);
-      } else {
-        return await handleOtherMessage(supabase, message, correlationId);
-      }
+    switch (updateType) {
+      case 'media':
+        return handleMediaMessage(supabase, update.message!, correlationId);
+      
+      case 'message':
+      case 'channel_post':
+        return handleMessage(supabase, update.message || update.channel_post!, correlationId);
+      
+      case 'edited_message':
+      case 'edited_channel_post':
+        return handleMessage(supabase, update.edited_message || update.edited_channel_post!, correlationId);
+      
+      case 'my_chat_member':
+      case 'chat_member':
+        return handleChatMemberUpdate(supabase, update.my_chat_member || update.chat_member!, correlationId);
+      
+      default:
+        logger.info('Unhandled update type', { updateType });
+        return {
+          success: true,
+          message: 'Update acknowledged',
+          correlation_id: correlationId
+        };
     }
-
-    // Handle member updates
-    if (update.my_chat_member || update.chat_member) {
-      const memberUpdate = update.my_chat_member || update.chat_member;
-      return await handleChatMemberUpdate(supabase, memberUpdate, correlationId);
-    }
-
-    // Handle callback queries
-    if (update.callback_query) {
-      return await handleOtherMessage(supabase, {
-        message_id: Date.now(),
-        chat: update.callback_query.from ? {
-          id: update.callback_query.from.id,
-          type: 'private'
-        } : { id: 0, type: 'private' },
-        callback_query: update.callback_query
-      } as TelegramMessage, correlationId);
-    }
-
-    // Handle inline queries
-    if (update.inline_query) {
-      return await handleOtherMessage(supabase, {
-        message_id: Date.now(),
-        chat: {
-          id: 0, // Default chat ID for inline queries
-          type: 'private'
-        },
-        inline_query: update.inline_query
-      } as TelegramMessage, correlationId);
-    }
-
-    logger.warn('Unhandled update type', {
-      update_keys: Object.keys(update)
-    });
-
+  } catch (err: unknown) {
+    const errorMessage = getErrorMessage(err);
+    logger.error('Update handling error', { error: errorMessage });
     return {
       success: false,
-      message: "Unhandled update type",
-      correlation_id: correlationId,
-      details: { update_keys: Object.keys(update) }
-    };
-
-  } catch (error) {
-    logger.error('Error in webhook handler', {
-      error: error.message,
-      stack: error.stack
-    });
-
-    return {
-      success: false,
-      message: "Error processing webhook",
-      error: error.message,
+      message: 'Error processing update',
+      error: errorMessage,
       correlation_id: correlationId
     };
   }
@@ -215,6 +328,8 @@ export async function handleEditedMessage(
       message_text: message.text || '',
       is_edited: true,
       edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : null,
+      is_channel_post: Boolean(message.sender_chat),
+      sender_chat_id: message.sender_chat?.id,
       processing_state: 'completed',
       processing_started_at: new Date().toISOString(),
       processing_completed_at: new Date().toISOString(),
@@ -283,12 +398,13 @@ export async function handleEditedMessage(
       }
     };
 
-  } catch (error) {
-    logger.error('Failed to handle edited message', { error });
+  } catch (err: unknown) {
+    const errorMessage = getErrorMessage(err);
+    
     return {
       success: false,
       message: 'Failed to handle edited message',
-      error: error.message,
+      error: errorMessage,
       correlation_id: correlationId
     };
   }
@@ -300,33 +416,54 @@ export async function handleOtherMessage(
   correlationId: string
 ): Promise<WebhookResponse> {
   const logger = getLogger(correlationId);
+  const startTime = performance.now();
+  const telegram_message_id = message.message_id || Math.floor(Date.now() / 1000);
   
   try {
-    // Check if this is a media message first
-    const mediaInfo = extractMediaInfo(message);
-    if (mediaInfo) {
-      return await handleMediaMessage(supabase, message, correlationId);
-    }
+    // Log start of message processing
+    await logWebhookEvent(
+      supabase,
+      'message_processing_start',
+      message.chat.id,
+      telegram_message_id,
+      correlationId,
+      {
+        media_type: 'text',
+        metadata: {
+          chat_type: message.chat.type,
+          message_type: determineMessageType(message),
+          is_channel_post: Boolean(message.sender_chat),
+          has_entities: Boolean(message.entities?.length)
+        }
+      }
+    );
 
     const messageType = determineMessageType(message);
     const messageData: OtherMessageData = {
       user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
       message_type: messageType,
-      telegram_message_id: message.message_id,
+      telegram_message_id,  // Use our guaranteed ID
       chat_id: message.chat.id,
       chat_type: message.chat.type as TelegramChatType,
       chat_title: message.chat.title || '',
       message_text: message.text || '',
       is_edited: Boolean(message.edit_date),
       edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : null,
+      is_channel_post: Boolean(message.sender_chat),
+      sender_chat_id: message.sender_chat?.id,
       processing_state: 'completed',
       processing_started_at: new Date().toISOString(),
       processing_completed_at: new Date().toISOString(),
+      processing_correlation_id: correlationId,
       telegram_data: {
-        message,
+        message: {
+          ...message,
+          message_id: telegram_message_id  // Ensure message_id is set in telegram_data
+        },
         message_type: messageType,
         content: {
           text: message.text,
+          entities: message.entities,
           sticker: message.sticker,
           voice: message.voice,
           document: message.document,
@@ -338,112 +475,114 @@ export async function handleOtherMessage(
       updated_at: new Date().toISOString()
     };
 
-    // Special handling for commands
-    if (messageType === 'command') {
-      const command = message.text?.split(' ')[0].substring(1);
-      messageData.telegram_data.command = {
-        name: command,
-        args: message.text?.split(' ').slice(1) || []
-      };
-    }
-
-    // Special handling for voice messages
-    if (message.voice) {
-      messageData.telegram_data.voice = {
-        file_id: message.voice.file_id,
-        duration: message.voice.duration,
-        mime_type: message.voice.mime_type
-      };
-    }
-
-    // Special handling for documents
-    if (message.document) {
-      messageData.telegram_data.document = {
-        file_id: message.document.file_id,
-        file_name: message.document.file_name,
-        mime_type: message.document.mime_type
-      };
-    }
-
     // Check for existing message
     const { data: existingMessage } = await supabase
       .from('other_messages')
       .select('*')
-      .eq('telegram_message_id', message.message_id)
+      .eq('telegram_message_id', telegram_message_id)
       .eq('chat_id', message.chat.id)
       .maybeSingle();
 
+    let resultMessage;
+
     if (existingMessage) {
-      const { error: updateError } = await supabase
+      // Update existing message
+      const { data: updatedMessage, error: updateError } = await supabase
         .from('other_messages')
         .update(messageData)
-        .eq('id', existingMessage.id);
+        .eq('id', existingMessage.id)
+        .select()
+        .single();
 
       if (updateError) throw updateError;
+      resultMessage = updatedMessage;
 
-      logger.info('Updated existing other message', { 
+      logger.info('Updated existing message', {
         messageId: existingMessage.id,
         messageType
       });
-      
-      return {
-        success: true,
-        message: 'Updated existing other message',
-        correlation_id: correlationId,
-        details: { 
-          message_id: existingMessage.id,
-          message_type: messageType
-        }
-      };
+    } else {
+      // Insert new message
+      const { data: newMessage, error: insertError } = await supabase
+        .from('other_messages')
+        .insert(messageData)
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+      resultMessage = newMessage;
+
+      logger.info('Created new message', {
+        messageId: newMessage.id,
+        messageType
+      });
     }
 
-    const { data: newMessage, error: insertError } = await supabase
-      .from('other_messages')
-      .insert(messageData)
-      .select()
-      .single();
+    // Special handling for channel posts
+    if (message.sender_chat) {
+      await logWebhookEvent(
+        supabase,
+        'channel_post_processed',
+        message.chat.id,
+        telegram_message_id,
+        correlationId,
+        {
+          processing_state: 'completed',
+          duration_ms: Math.round(performance.now() - startTime),
+          metadata: {
+            channel_id: message.sender_chat.id,
+            channel_title: message.sender_chat.title
+          }
+        }
+      );
+    }
 
-    if (insertError) throw insertError;
+    // Log completion
+    await logWebhookEvent(
+      supabase,
+      'message_processing_complete',
+      message.chat.id,
+      telegram_message_id,
+      correlationId,
+      {
+        processing_state: 'completed',
+        duration_ms: Math.round(performance.now() - startTime),
+        metadata: {
+          message_type: messageType,
+          message_id: resultMessage.id
+        }
+      }
+    );
 
-    // Log webhook event
-    await supabase.from('webhook_logs').insert({
-      event_type: messageType,
-      chat_id: message.chat.id,
-      message_id: message.message_id,
-      correlation_id: correlationId
-    });
-
-    logger.info('Created new other message', { 
-      messageId: newMessage.id,
-      messageType
-    });
-    
     return {
       success: true,
-      message: 'Created new other message',
+      message: 'Message processed successfully',
       correlation_id: correlationId,
-      details: { 
-        message_id: newMessage.id,
-        message_type: messageType
+      details: {
+        message_id: resultMessage.id,
+        message_type: messageType,
+        is_channel_post: Boolean(message.sender_chat)
       }
     };
 
-  } catch (error) {
-    logger.error('Failed to handle other message', { error });
-
-    // Log error in webhook_logs
-    await supabase.from('webhook_logs').insert({
-      event_type: 'error',
-      chat_id: message.chat.id,
-      message_id: message.message_id,
-      error_message: error.message,
-      correlation_id: correlationId
-    });
+  } catch (err: unknown) {
+    const errorMessage = getErrorMessage(err);
+    
+    await logWebhookEvent(
+      supabase,
+      'message_processing_error',
+      message.chat.id,
+      telegram_message_id,
+      correlationId,
+      {
+        error_message: errorMessage
+      }
+    );
 
     return {
       success: false,
-      message: 'Failed to handle other message',
-      error: error.message,
+      message: 'Failed to handle message',
+      error: errorMessage,
       correlation_id: correlationId
     };
   }
@@ -451,40 +590,7 @@ export async function handleOtherMessage(
 
 export async function handleChatMemberUpdate(
   supabase: SupabaseClient,
-  memberUpdate: {
-    chat: {
-      id: number;
-      type: TelegramChatType;
-      title?: string;
-    };
-    from?: {
-      id: number;
-      first_name?: string;
-      last_name?: string;
-      username?: string;
-    };
-    my_chat_member?: boolean;
-    old_chat_member?: {
-      status: string;
-      user: {
-        id: number;
-        first_name?: string;
-        last_name?: string;
-        username?: string;
-      };
-    };
-    new_chat_member?: {
-      status: string;
-      user: {
-        id: number;
-        first_name?: string;
-        last_name?: string;
-        username?: string;
-      };
-    };
-    edited_message?: TelegramMessage;
-    edited_channel_post?: TelegramMessage;
-  },
+  memberUpdate: ChatMemberUpdate,
   correlationId: string
 ): Promise<WebhookResponse> {
   const logger = getLogger(correlationId);
@@ -506,14 +612,21 @@ export async function handleChatMemberUpdate(
       chat_type: memberUpdate.chat.type as TelegramChatType,
       chat_title: memberUpdate.chat.title || '',
       is_edited: false,
+      is_channel_post: false,
       processing_state: 'completed',
       processing_correlation_id: correlationId,
       telegram_data: {
-        memberUpdate,
+        message: {
+          message_id: Date.now(),
+          chat: memberUpdate.chat,
+          date: memberUpdate.date || Math.floor(Date.now() / 1000)
+        },
+        message_type: 'chat_member',
+        content: {},
+        member_update: memberUpdate,
         update_type: memberUpdate.my_chat_member ? 'my_chat_member' : 'chat_member',
         old_status: memberUpdate.old_chat_member?.status,
-        new_status: memberUpdate.new_chat_member?.status,
-        user: memberUpdate.from
+        new_status: memberUpdate.new_chat_member?.status
       },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -542,25 +655,97 @@ export async function handleChatMemberUpdate(
       }
     };
 
-  } catch (error) {
-    logger.error('Failed to handle chat member update', { error });
+  } catch (err: unknown) {
+    const errorMessage = getErrorMessage(err);
+    
     return {
       success: false,
       message: 'Failed to handle chat member update',
-      error: error.message,
+      error: errorMessage,
       correlation_id: correlationId
     };
   }
 }
 
+// Add webhook logging helper
+async function logWebhookEvent(
+  supabase: SupabaseClient,
+  event_type: string,
+  chat_id: number,
+  message_id: number,
+  correlationId: string,
+  options?: {
+    media_type?: string;
+    processing_state?: string;
+    duration_ms?: number;
+    error_message?: string;
+    metadata?: Record<string, any>;
+    raw_data?: Record<string, any>;
+  }
+) {
+  try {
+    const startTime = performance.now();
+    
+    await supabase.from('webhook_logs').insert({
+      event_type,
+      chat_id,
+      message_id,
+      correlation_id: correlationId,
+      created_at: new Date().toISOString(),
+      media_type: options?.media_type,
+      processing_state: options?.processing_state,
+      duration_ms: options?.duration_ms,
+      error_message: options?.error_message,
+      metadata: options?.metadata,
+      raw_data: options?.raw_data
+    });
+
+    console.log('Webhook event logged:', {
+      event_type,
+      chat_id,
+      message_id,
+      correlation_id: correlationId,
+      duration_ms: Math.round(performance.now() - startTime)
+    });
+  } catch (logError) {
+    console.error('Failed to log webhook event:', {
+      error: logError,
+      correlation_id: correlationId,
+      event_type,
+      chat_id,
+      message_id
+    });
+  }
+}
+
+// Update handleMediaMessage to use webhook logging
 export async function handleMediaMessage(
   supabase: SupabaseClient,
   message: TelegramMessage,
   correlationId: string
 ): Promise<WebhookResponse> {
+  const startTime = performance.now();
   const logger = getLogger(correlationId);
+  const telegram_message_id = message.message_id || Math.floor(Date.now() / 1000);
   
   try {
+    // Log start with media type
+    await logWebhookEvent(
+      supabase,
+      'media_processing_start',
+      message.chat.id,
+      telegram_message_id,
+      correlationId,
+      {
+        media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
+        metadata: {
+          chat_type: message.chat.type,
+          has_caption: Boolean(message.caption),
+          media_group_id: message.media_group_id
+        }
+      }
+    );
+
     const chatInfo = extractChatInfo(message);
     const mediaInfo = extractMediaInfo(message);
     
@@ -583,11 +768,12 @@ export async function handleMediaMessage(
     // Check for existing message
     const { data: existingMessage } = await supabase
       .from("messages")
-      .select("*")
+      .select("id, telegram_message_id")
       .eq("file_unique_id", mediaInfo.file_unique_id)
       .maybeSingle();
 
     const messageData: MessageData = {
+      id: crypto.randomUUID(),
       user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
       telegram_message_id: message.message_id,
       chat_id: chatInfo.chat_id,
@@ -613,20 +799,19 @@ export async function handleMediaMessage(
     let messageId: string;
 
     if (existingMessage) {
-      // For existing messages, preserve important fields
-      const { error: updateError } = await supabase
+      // Use the UUID when updating related records
+      await supabase
         .from("messages")
         .update({
+          message_caption_id: existingMessage.id,
           ...messageData,
           retry_count: existingMessage.retry_count,
           analyzed_content: existingMessage.analyzed_content,
-          // Preserve group sync status if already synced
-          group_caption_synced: existingMessage.group_caption_synced,
-          message_caption_id: existingMessage.message_caption_id
+          group_caption_synced: true,
         })
-        .eq("id", existingMessage.id);
+        .eq("media_group_id", message.media_group_id)
+        .neq("telegram_message_id", message.message_id);
 
-      if (updateError) throw updateError;
       messageId = existingMessage.id;
       
       logger.info('Updated existing message', { 
@@ -652,14 +837,21 @@ export async function handleMediaMessage(
     }
 
     // Download and store media
+    const botToken = Deno?.env?.get?.('TELEGRAM_BOT_TOKEN') ?? '';
+    if (!botToken) {
+      throw new Error('TELEGRAM_BOT_TOKEN not configured');
+    }
+
+    const response = await fetch(
+      `https://api.telegram.org/bot${botToken}/getFile?file_id=${mediaInfo.file_id}`
+    );
+
     const { data: storageData } = await supabase
       .storage
       .from('telegram-media')
       .upload(
         storagePath,
-        await (await fetch(
-          `https://api.telegram.org/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/getFile?file_id=${mediaInfo.file_id}`
-        )).arrayBuffer(),
+        await response.arrayBuffer(),
         {
           contentType: mimeType,
           upsert: true
@@ -673,15 +865,6 @@ export async function handleMediaMessage(
       .getPublicUrl(storagePath);
 
     const publicUrl = urlData.publicUrl;
-
-    // Update media URL
-    await supabase
-      .from("messages")
-      .update({
-        public_url: publicUrl,
-        storage_path: storagePath
-      })
-      .eq("id", messageId);
 
     // Handle media group syncing and analysis
     if (message.media_group_id) {
@@ -727,16 +910,47 @@ export async function handleMediaMessage(
       }
       // If message has caption, let database trigger handle group syncing
     } else if (message.caption) {
-      // Single message with caption - trigger analysis
-      logger.info('Triggering analysis for single message', { messageId });
-
-      await supabase.functions.invoke('parse-caption-with-ai', {
-        body: { 
-          messageId,
-          caption: message.caption
-        }
+      logger.info('Triggering analysis for single message', { 
+        messageId,
+        correlationId,
+        mediaGroupId: message.media_group_id 
       });
+
+      await triggerAnalysis(
+        parseInt(messageId),
+        correlationId,
+        supabase,
+        message.media_group_id
+      );
+
+      // Log analysis trigger
+      await logWebhookEvent(
+        supabase,
+        'analysis_triggered',
+        message.chat.id,
+        message.message_id,
+        correlationId
+      );
     }
+
+    // Log completion with duration
+    await logWebhookEvent(
+      supabase,
+      'media_processing_complete',
+      message.chat.id,
+      message.message_id,
+      correlationId,
+      {
+        media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
+        processing_state: 'completed',
+        duration_ms: Math.round(performance.now() - startTime),
+        metadata: {
+          file_size: mediaInfo.file_size,
+          mime_type: mimeType,
+          processing_state: messageData.processing_state
+        }
+      }
+    );
 
     return {
       success: true,
@@ -752,13 +966,58 @@ export async function handleMediaMessage(
       }
     };
 
-  } catch (error) {
-    logger.error("Error handling media message", { error });
+  } catch (err: unknown) {
+    const errorMessage = getErrorMessage(err);
+    
+    await logWebhookEvent(
+      supabase,
+      'media_processing_error',
+      message.chat.id,
+      telegram_message_id,
+      correlationId,
+      {
+        error_message: errorMessage
+      }
+    );
+
     return {
       success: false,
-      message: "Error handling media message",
-      error: error.message,
+      message: 'Error handling media message',
+      error: errorMessage,
       correlation_id: correlationId
     };
+  }
+}
+
+async function syncMediaGroupContent(
+  supabase: SupabaseClient,
+  messageId: string,  // This is the UUID from messages table
+  mediaGroupId: string,
+  caption: string,
+  correlationId: string
+): Promise<void> {
+  try {
+    // Update other messages in group
+    const { error } = await supabase
+      .from("messages")
+      .update({
+        caption,
+        message_caption_id: messageId,  // Using the UUID as foreign key
+        is_original_caption: false,
+        group_caption_synced: true,
+        // ... other fields
+      })
+      .eq("media_group_id", mediaGroupId)
+      .neq("id", messageId);
+
+    if (error) throw error;
+  } catch (err: unknown) {
+    const errorMessage = getErrorMessage(err);
+    console.error("Error syncing media group:", {
+      correlation_id: correlationId,
+      message_id: messageId,
+      error: errorMessage
+    });
+    throw new Error(errorMessage);
   }
 }

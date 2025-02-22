@@ -5,6 +5,7 @@ import {
   ProcessingStateType,
   TelegramMessage
 } from "./types";
+import { triggerAnalysis } from './analysisHandler';
 
 // Retrieve an existing message by telegram_message_id and chat_id
 export async function findExistingMessage(
@@ -184,59 +185,19 @@ export async function syncMediaGroupContent(
 
     if (error) throw error;
 
-    // Trigger analysis with AI
-    await triggerAnalysis(supabase, messageId, caption, correlationId, mediaGroupId);
+    // Update trigger analysis call
+    await triggerAnalysis(
+      parseInt(messageId), // Convert string ID to number
+      correlationId,
+      supabase,
+      mediaGroupId
+    );
 
   } catch (error) {
     console.error("❌ Error syncing media group:", {
       correlation_id: correlationId,
       error: error.message
     });
-    throw error;
-  }
-}
-
-// Helper to trigger AI analysis
-export async function triggerAnalysis(
-  supabase: SupabaseClient,
-  messageId: string,
-  caption: string,
-  correlationId: string,
-  mediaGroupId?: string
-): Promise<void> {
-  try {
-    // First update state to processing
-    await updateMessage(supabase, messageId, {
-      processing_state: 'processing',
-      processing_started_at: new Date().toISOString()
-    });
-
-    const { error } = await supabase.functions.invoke(
-      'analyze-with-ai',
-      {
-        body: {
-          messageId,
-          caption,
-          correlationId,
-          media_group_id: mediaGroupId
-        }
-      }
-    );
-
-    if (error) throw error;
-
-  } catch (error) {
-    console.error("❌ Error triggering analysis:", {
-      correlation_id: correlationId,
-      error: error.message
-    });
-    
-    await updateMessage(supabase, messageId, {
-      processing_state: 'error',
-      error_message: error.message,
-      last_error_at: new Date().toISOString()
-    });
-    
     throw error;
   }
 }
@@ -270,7 +231,12 @@ export async function updateMessageEdits(
 
     // If message has caption, trigger AI analysis
     if (message.caption) {
-      await triggerAnalysis(supabase, messageId, message.caption, correlationId);
+      await triggerAnalysis(
+        parseInt(messageId), // Convert string ID to number
+        correlationId,
+        supabase,
+        message.media_group_id // Pass mediaGroupId
+      );
     }
   } catch (error) {
     console.error("❌ Error updating message edits:", error);
