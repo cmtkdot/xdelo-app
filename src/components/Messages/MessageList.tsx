@@ -9,10 +9,16 @@ interface MessageListProps {
 }
 
 export function MessageList({ messages, onRefresh }: MessageListProps) {
-  if (!messages || messages.length === 0) {
+  // Filter messages to show only those with captions but no analysis
+  const unanalyzedMessages = messages.filter(message => 
+    message.caption && 
+    !message.analyzed_content
+  );
+
+  if (!unanalyzedMessages || unanalyzedMessages.length === 0) {
     return (
       <div className="text-center py-12 bg-white rounded-lg shadow">
-        <div className="text-gray-500 text-lg">No messages found</div>
+        <div className="text-gray-500 text-lg">No unanalyzed messages found</div>
         <button
           onClick={onRefresh}
           className="mt-4 px-4 py-2 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors"
@@ -38,7 +44,7 @@ export function MessageList({ messages, onRefresh }: MessageListProps) {
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 bg-white">
-          {messages.map((message) => (
+          {unanalyzedMessages.map((message) => (
             <tr key={message.id} className="hover:bg-gray-50">
               <td className="py-4 pl-4 pr-3 sm:pl-6 max-w-[200px]">
                 {message.public_url ? (
@@ -62,7 +68,7 @@ export function MessageList({ messages, onRefresh }: MessageListProps) {
               <td className="px-3 py-4 text-sm text-gray-500">
                 <div className="space-y-1">
                   <div className="font-medium text-gray-900">
-                    {message.caption || 'No caption'}
+                    {message.caption}
                   </div>
                   <div>ID: {message.id}</div>
                   {message.chat_title && (
