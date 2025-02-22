@@ -19,47 +19,44 @@ serve(async (req) => {
   try {
     const update = await req.json()
     
-    // Simplified update handling - just check for message or edit
-    const message = update.message || update.channel_post
-    const editedMessage = update.edited_message || update.edited_channel_post
+    // Get any type of message
+    const message = update.message || 
+                   update.channel_post || 
+                   update.edited_message || 
+                   update.edited_channel_post;
+
+    if (!message) {
+      logger.warn('No message found in update:', { 
+        updateKeys: Object.keys(update).filter(k => k !== 'update_id'),
+        correlation_id: correlationId
+      });
+      return new Response(
+        JSON.stringify({ success: false, message: 'No message to process' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    logger.info('Processing message:', { 
+      messageId: message.message_id,
+      fileUniqueId: message.photo?.[0]?.file_unique_id || message.document?.file_unique_id,
+      correlation_id: correlationId
+    });
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
+    );
 
-    if (message) {
-      logger.info('Processing new message', { 
-        messageId: message.message_id,
-        isChannel: !!update.channel_post 
-      })
-      return await handleMessage(message, supabase, correlationId)
-    }
-
-    if (editedMessage) {
-      logger.info('Processing edited message', { 
-        messageId: editedMessage.message_id,
-        isChannel: !!update.edited_channel_post 
-      })
-      return await handleEditedMessage(editedMessage, supabase, correlationId)
-    }
-
-    logger.warn('Unhandled update type', { 
-      updateKeys: Object.keys(update).filter(k => k !== 'update_id')
-    })
-    return new Response(
-      JSON.stringify({ success: false, message: 'No message to process' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-
+    // Single handler - file_unique_id will handle duplicates
+    return await handleMessage(message, supabase, correlationId);
   } catch (error) {
-    logger.error('Webhook error:', { error })
+    logger.error('Webhook error:', { error });
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
-    )
+    );
   }
 })

@@ -17,86 +17,10 @@ export const handleMessage = async (
   const logger = getLogger(correlationId);
   
   try {
-    // Store raw webhook data with correlation ID
-    await supabase.from('other_messages').insert({
-      chat_id: message.chat.id,
-      chat_type: message.chat.type,
-      chat_title: message.chat.title,
-      telegram_message_id: message.message_id,
-      message_type: 'text',
-      telegram_data: message,
-      processing_correlation_id: correlationId, // Add correlation ID
-      created_at: new Date().toISOString()
-    });
-
     if (message.photo || message.document) {
       const mediaInfo = extractMediaInfo(message);
       
-      // If no caption but part of media group, check for existing analyzed content
-      if (!message.caption && message.media_group_id) {
-        const { data: groupMessages } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('media_group_id', message.media_group_id)
-          .order('created_at', { ascending: true });
-
-        // Find first message with analyzed content
-        const analyzedMessage = groupMessages?.find(m => m.analyzed_content);
-        
-        if (analyzedMessage) {
-          logger.info('Found existing analyzed content in media group', {
-            mediaGroupId: message.media_group_id,
-            sourceMessageId: analyzedMessage.id
-          });
-
-          const messageData = {
-            telegram_message_id: message.message_id,
-            chat_id: message.chat.id,
-            chat_type: message.chat.type,
-            chat_title: message.chat.title,
-            media_group_id: message.media_group_id,
-            caption: analyzedMessage.caption,
-            message_caption_id: analyzedMessage.id,
-            is_original_caption: false,
-            group_caption_synced: true,
-            analyzed_content: analyzedMessage.analyzed_content,
-            processing_state: 'completed',
-            processing_correlation_id: correlationId,
-            telegram_data: message,
-            ...mediaInfo && {
-              file_id: mediaInfo.fileId,
-              file_unique_id: mediaInfo.fileUniqueId,
-              mime_type: mediaInfo.mimeType,
-              file_size: mediaInfo.fileSize,
-              width: mediaInfo.width,
-              height: mediaInfo.height
-            }
-          };
-
-          const { data: newMessage, error: insertError } = await supabase
-            .from('messages')
-            .insert(messageData)
-            .select()
-            .single();
-
-          if (insertError) {
-            logger.error('Error inserting message with group analysis', { error: insertError });
-            throw insertError;
-          }
-
-          return new Response(
-            JSON.stringify({ 
-              success: true,
-              messageId: newMessage.id,
-              correlationId,
-              synced: true
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-      }
-
-      // Continue with normal message processing if no group analysis found
+      // Use file_unique_id as the key identifier
       const messageData = {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
@@ -104,7 +28,7 @@ export const handleMessage = async (
         chat_title: message.chat.title,
         caption: message.caption,
         media_group_id: message.media_group_id,
-        processing_correlation_id: correlationId, // Add correlation ID
+        processing_correlation_id: correlationId,
         processing_state: 'pending',
         telegram_data: message,
         ...mediaInfo && {
@@ -117,7 +41,7 @@ export const handleMessage = async (
         }
       };
 
-      // Insert into messages table
+      // Insert - if file_unique_id exists, it will be handled by storage
       const { data: newMessage, error: insertError } = await supabase
         .from('messages')
         .insert(messageData)
@@ -129,7 +53,7 @@ export const handleMessage = async (
         throw insertError;
       }
 
-      // If has caption, trigger analysis
+      // Always trigger analysis
       await triggerAnalysis(
         message.message_id,
         correlationId,
@@ -137,38 +61,21 @@ export const handleMessage = async (
         message.media_group_id
       );
 
-      logger.info('Message processed successfully', {
-        messageId: newMessage.id,
-        mediaGroupId: message.media_group_id
-      });
-
       return new Response(
-        JSON.stringify({ 
-          success: true,
-          messageId: newMessage.id,
-          correlationId 
-        }),
+        JSON.stringify({ success: true }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true,
-        correlationId,
-        message: 'Non-media message stored' 
-      }),
+      JSON.stringify({ success: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     logger.error('Error handling message', { error });
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message,
-        correlationId 
-      }),
+      JSON.stringify({ success: false, error: error.message }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
