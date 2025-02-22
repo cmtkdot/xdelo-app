@@ -20,7 +20,7 @@ export const handleMessage = async (
     if (message.photo || message.document) {
       const mediaInfo = extractMediaInfo(message);
       
-      // Use file_unique_id as the key identifier
+      // Use file_unique_id as primary key
       const messageData = {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
@@ -30,10 +30,14 @@ export const handleMessage = async (
         media_group_id: message.media_group_id,
         processing_correlation_id: correlationId,
         processing_state: 'pending',
+        // Keep metadata but don't use for logic
+        update_id: message.update_id,
+        is_edited: message.is_edited,
+        is_channel: message.is_channel,
         telegram_data: message,
         ...mediaInfo && {
           file_id: mediaInfo.fileId,
-          file_unique_id: mediaInfo.fileUniqueId,
+          file_unique_id: mediaInfo.fileUniqueId, // This is our source of truth
           mime_type: mediaInfo.mimeType,
           file_size: mediaInfo.fileSize,
           width: mediaInfo.width,
@@ -41,7 +45,7 @@ export const handleMessage = async (
         }
       };
 
-      // Insert - if file_unique_id exists, it will be handled by storage
+      // Insert - file_unique_id constraint will handle duplicates
       const { data: newMessage, error: insertError } = await supabase
         .from('messages')
         .insert(messageData)

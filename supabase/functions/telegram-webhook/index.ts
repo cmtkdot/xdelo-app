@@ -19,7 +19,7 @@ serve(async (req) => {
   try {
     const update = await req.json()
     
-    // Get any type of message
+    // Keep original message type for reference
     const message = update.message || 
                    update.channel_post || 
                    update.edited_message || 
@@ -36,9 +36,17 @@ serve(async (req) => {
       );
     }
 
+    // Keep metadata but don't use for logic
+    message.update_id = update.update_id;
+    message.is_edited = !!(update.edited_message || update.edited_channel_post);
+    message.is_channel = !!(update.channel_post || update.edited_channel_post);
+
     logger.info('Processing message:', { 
       messageId: message.message_id,
       fileUniqueId: message.photo?.[0]?.file_unique_id || message.document?.file_unique_id,
+      updateId: update.update_id,
+      isEdited: message.is_edited,
+      isChannel: message.is_channel,
       correlation_id: correlationId
     });
 
@@ -47,7 +55,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Single handler - file_unique_id will handle duplicates
+    // Single handler - file_unique_id is the source of truth
     return await handleMessage(message, supabase, correlationId);
   } catch (error) {
     logger.error('Webhook error:', { error });
