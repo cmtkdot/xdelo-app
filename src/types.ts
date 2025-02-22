@@ -26,10 +26,6 @@ export interface AnalyzedContent {
     confidence: number;
     timestamp: string;
   };
-  sync_metadata?: {
-    sync_source_message_id?: string;
-    media_group_id?: string;
-  };
 }
 
 export interface Message {
@@ -59,6 +55,7 @@ export interface Message {
   last_error_at?: string;
   group_first_message_time?: string;
   group_last_message_time?: string;
+  group_message_count?: number;
   chat_id?: number;
   chat_type?: string;
   message_url?: string;

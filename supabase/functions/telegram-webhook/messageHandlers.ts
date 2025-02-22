@@ -381,6 +381,14 @@ export async function handleOtherMessage(
 
       if (updateError) throw updateError;
 
+      // Log state change
+      await supabase.from('message_state_logs').insert({
+        message_id: existingMessage.id,
+        previous_state: existingMessage.processing_state,
+        new_state: 'completed',
+        changed_at: new Date().toISOString()
+      });
+
       logger.info('Updated existing other message', { 
         messageId: existingMessage.id,
         messageType
@@ -404,6 +412,14 @@ export async function handleOtherMessage(
       .single();
 
     if (insertError) throw insertError;
+
+    // Log initial state
+    await supabase.from('message_state_logs').insert({
+      message_id: newMessage.id,
+      previous_state: null,
+      new_state: 'completed',
+      changed_at: new Date().toISOString()
+    });
 
     // Log webhook event
     await supabase.from('webhook_logs').insert({

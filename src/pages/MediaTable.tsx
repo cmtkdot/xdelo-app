@@ -63,6 +63,7 @@ const MediaTable = () => {
           created_at,
           updated_at,
           message_url,
+          group_message_count,
           group_caption_synced,
           retry_count,
           last_error_at
