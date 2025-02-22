@@ -1,13 +1,15 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { corsHeaders } from './authUtils.ts';
 
-const logWebhookEvent = async (supabase: any, event: any) => {
+const logWebhookEvent = async (supabase: any, event: any, messageId?: string) => {
   try {
     await supabase.from('webhook_logs').insert({
       event_type: 'webhook_received',
       raw_data: event,
-      correlation_id: crypto.randomUUID()
+      correlation_id: crypto.randomUUID(),
+      message_id: messageId // Now expects a UUID
     });
   } catch (error) {
     console.error('Error logging webhook event:', error);
@@ -28,13 +30,12 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Log the incoming webhook
     const correlationId = crypto.randomUUID();
-    await logWebhookEvent(supabase, update);
-
+    
     const message = update.message || update.channel_post || update.edited_message;
     if (!message) {
       console.log('❌ No message in update. Update keys:', Object.keys(update));
+      await logWebhookEvent(supabase, update);
       return new Response(
         JSON.stringify({ status: 'skipped', reason: 'no message found' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
@@ -89,12 +90,15 @@ serve(async (req) => {
         throw insertError;
       }
 
+      // Log the webhook event with the new message UUID
+      await logWebhookEvent(supabase, update, insertedMessage.id);
+
       return new Response(
         JSON.stringify({ 
           status: 'success', 
           message: 'Non-media message processed',
           type: messageType,
-          message_id: insertedMessage.id
+          id: insertedMessage.id
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
       );
