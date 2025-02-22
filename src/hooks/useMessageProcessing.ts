@@ -1,37 +1,15 @@
+
 import { useState, useCallback } from 'react';
-import type { Message, AnalyzedContent } from '@/types';
+import type { Message } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
-import { analyzedContentToJson, AnalyzedContent as JsonAnalyzedContent } from '@/types';
 
 interface ProcessingState {
   isProcessing: boolean;
   error?: string;
 }
 
-const convertAnalyzedContent = (content: AnalyzedContent | undefined): JsonAnalyzedContent => {
-  if (!content) return {};
-  
-  return {
-    product_name: content.product_name,
-    product_code: content.product_code,
-    vendor_uid: content.vendor_uid,
-    purchase_date: content.purchase_date,
-    quantity: content.quantity,
-    notes: content.notes,
-    parsing_metadata: content.parsing_metadata ? {
-      method: content.parsing_metadata.method === 'hybrid' ? 'ai' : content.parsing_metadata.method,
-      confidence: content.parsing_metadata.confidence,
-      timestamp: content.parsing_metadata.timestamp
-    } : undefined,
-    sync_metadata: {
-      sync_source_message_id: content.sync_metadata?.sync_source_message_id,
-      media_group_id: content.sync_metadata?.media_group_id
-    }
-  };
-};
-
 export function useMessageProcessing() {
-  const [processingState, setProcessingState] = useState<ProcessingState>({});
+  const [processingState, setProcessingState] = useState<Record<string, ProcessingState>>({});
 
   const updateProcessingState = useCallback((messageId: string, isProcessing: boolean, error?: string) => {
     setProcessingState(prev => ({
@@ -81,7 +59,7 @@ export function useMessageProcessing() {
       await supabase
         .from('messages')
         .update({
-          processing_state: 'error',
+          processing_state: 'error' as const,
           error_message: error.message,
           processing_completed_at: new Date().toISOString(),
           last_error_at: new Date().toISOString()
@@ -93,8 +71,29 @@ export function useMessageProcessing() {
   }, [processingState, updateProcessingState]);
 
   const handleSave = useCallback(async (message: Message, caption: string) => {
-    // ... rest of the code
-  }, []);
+    if (processingState[message.id]?.isProcessing) return;
+    
+    updateProcessingState(message.id, true);
+    
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({
+          caption,
+          processing_state: 'pending' as const
+        })
+        .eq('id', message.id);
+
+      if (error) throw error;
+      
+      await handleReanalyze(message);
+      
+      updateProcessingState(message.id, false);
+    } catch (error) {
+      console.error('Error saving caption:', error);
+      updateProcessingState(message.id, false, error.message);
+    }
+  }, [processingState, updateProcessingState, handleReanalyze]);
 
   return {
     handleReanalyze,
