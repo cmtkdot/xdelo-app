@@ -1,9 +1,9 @@
 
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { analyzeCaptionWithAI } from "./utils/aiAnalyzer.ts";
 import { parseManually } from "./utils/manualParser.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { ProcessingState, AnalyzedContent, MessageUpdate } from "./types.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +11,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -18,24 +19,33 @@ serve(async (req) => {
   try {
     const { messageId, caption, media_group_id, correlationId } = await req.json();
     
-    console.log('Starting caption analysis:', {
-      messageId, 
-      media_group_id,
-      caption_length: caption?.length,
-      correlation_id: correlationId
-    });
+    if (!messageId || !caption) {
+      throw new Error('Missing required parameters: messageId and caption');
+    }
+
+    console.log('[parse-caption] Starting analysis:', { messageId, media_group_id, correlation_id: correlationId });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') as string;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Update to processing state
+    await supabase
+      .from('messages')
+      .update({ 
+        processing_state: 'processing' as ProcessingState,
+        processing_started_at: new Date().toISOString()
+      })
+      .eq('id', messageId);
+
     // First try manual parsing
     let parsedContent = await parseManually(caption);
-    let method = 'manual';
+    let method: 'manual' | 'ai' | 'hybrid' = 'manual';
     let confidence = 1.0;
 
     // If manual parsing doesn't find enough info, use AI
     if (!parsedContent.product_code || !parsedContent.vendor_uid) {
+      console.log('[parse-caption] Manual parsing insufficient, trying AI');
       const aiResult = await analyzeCaptionWithAI(caption);
       parsedContent = aiResult.content;
       method = 'ai';
@@ -43,7 +53,7 @@ serve(async (req) => {
     }
 
     // Add metadata
-    const analyzedContent = {
+    const analyzedContent: AnalyzedContent = {
       ...parsedContent,
       parsing_metadata: {
         method,
@@ -52,31 +62,25 @@ serve(async (req) => {
       }
     };
 
-    console.log('Updating message with analyzed content:', {
-      messageId,
-      method,
-      confidence,
-      has_product_code: Boolean(parsedContent.product_code),
-      has_vendor_uid: Boolean(parsedContent.vendor_uid)
-    });
+    // Base message update
+    const baseUpdate: MessageUpdate = {
+      analyzed_content: analyzedContent,
+      processing_state: 'completed',
+      processing_completed_at: new Date().toISOString(),
+      is_original_caption: true
+    };
 
-    // Update the message with analyzed content
+    // Update the message
     const { error: updateError } = await supabase
       .from('messages')
-      .update({
-        analyzed_content: analyzedContent,
-        processing_state: 'completed',
-        processing_completed_at: new Date().toISOString(),
-        is_original_caption: true
-      })
+      .update(baseUpdate)
       .eq('id', messageId);
 
     if (updateError) {
-      console.error('Error updating message:', updateError);
       throw updateError;
     }
 
-    // If this is part of a media group, check if we need to sync with existing analyzed content
+    // Handle media group synchronization if needed
     if (media_group_id) {
       const { data: existingAnalyzed } = await supabase
         .from('messages')
@@ -87,57 +91,42 @@ serve(async (req) => {
         .limit(1)
         .maybeSingle();
 
-      if (existingAnalyzed?.analyzed_content) {
-        console.log('Syncing with existing analyzed content:', {
-          source_message_id: existingAnalyzed.id,
-          target_message_id: messageId
-        });
+      const groupUpdate: MessageUpdate = {
+        processing_state: 'completed',
+        processing_completed_at: new Date().toISOString(),
+        is_original_caption: false,
+        group_caption_synced: true
+      };
 
-        // Sync this message with existing analyzed content
-        const syncedContent = {
+      if (existingAnalyzed?.analyzed_content) {
+        // Sync with existing analyzed content
+        groupUpdate.analyzed_content = {
           ...existingAnalyzed.analyzed_content,
           sync_metadata: {
             sync_source_message_id: existingAnalyzed.id,
             media_group_id
           }
         };
+        groupUpdate.message_caption_id = existingAnalyzed.id;
 
         await supabase
           .from('messages')
-          .update({
-            analyzed_content: syncedContent,
-            processing_state: 'completed',
-            processing_completed_at: new Date().toISOString(),
-            is_original_caption: false,
-            group_caption_synced: true,
-            message_caption_id: existingAnalyzed.id
-          })
+          .update(groupUpdate)
           .eq('id', messageId);
       } else {
-        console.log('First analyzed content in group, syncing others:', {
-          source_message_id: messageId,
-          media_group_id
-        });
-
-        // This is the first analyzed content in the group, sync others to this one
-        const syncedContent = {
+        // First analyzed content, sync others to this one
+        groupUpdate.analyzed_content = {
           ...analyzedContent,
           sync_metadata: {
             sync_source_message_id: messageId,
             media_group_id
           }
         };
+        groupUpdate.message_caption_id = messageId;
 
         await supabase
           .from('messages')
-          .update({
-            analyzed_content: syncedContent,
-            processing_state: 'completed',
-            processing_completed_at: new Date().toISOString(),
-            is_original_caption: false,
-            group_caption_synced: true,
-            message_caption_id: messageId
-          })
+          .update(groupUpdate)
           .eq('media_group_id', media_group_id)
           .neq('id', messageId);
       }
@@ -149,9 +138,9 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error processing caption:', error);
+    console.error('[parse-caption] Error:', error);
     
-    // Update message to error state if we have the messageId
+    // Try to update message to error state
     try {
       const { messageId } = await req.json();
       if (messageId) {
@@ -159,26 +148,26 @@ serve(async (req) => {
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string;
         const supabase = createClient(supabaseUrl, supabaseKey);
 
+        const errorUpdate: MessageUpdate = {
+          analyzed_content: null,
+          processing_state: 'error',
+          error_message: error.message,
+          processing_completed_at: new Date().toISOString(),
+          last_error_at: new Date().toISOString()
+        };
+
         await supabase
           .from('messages')
-          .update({
-            processing_state: 'error',
-            error_message: error.message,
-            processing_completed_at: new Date().toISOString(),
-            last_error_at: new Date().toISOString()
-          })
+          .update(errorUpdate)
           .eq('id', messageId);
       }
     } catch (updateError) {
-      console.error('Error updating message to error state:', updateError);
+      console.error('[parse-caption] Error updating error state:', updateError);
     }
     
     return new Response(
       JSON.stringify({ error: error.message }), 
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
