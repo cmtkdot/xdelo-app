@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { MessageList } from './MessageList';
 import { Loader2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Message, AnalyzedContent } from '@/types';
+import { Message, AnalyzedContent, ProcessingState } from '@/types';
 
 export const MessageListContainer: React.FC = () => {
   const { data: messages, isLoading, error } = useQuery({
@@ -20,23 +20,24 @@ export const MessageListContainer: React.FC = () => {
 
       // Transform raw messages to ensure type safety
       const transformedMessages: Message[] = (rawMessages || []).map(msg => ({
-        ...msg,
-        // Ensure analyzed_content is properly typed or null
-        analyzed_content: msg.analyzed_content ? msg.analyzed_content as AnalyzedContent : undefined,
-        // Ensure other required fields have default values
         id: msg.id,
-        file_unique_id: msg.file_unique_id || '',
-        telegram_data: msg.telegram_data || {},
-        processing_state: msg.processing_state || 'initialized',
-        chat_type: msg.chat_type || 'private',
-        // Handle optional fields
+        // Ensure telegram_data is always an object
+        telegram_data: typeof msg.telegram_data === 'object' && msg.telegram_data !== null 
+          ? msg.telegram_data as Record<string, unknown>
+          : {},
+        // Type the processing state
+        processing_state: (msg.processing_state || 'initialized') as ProcessingState,
+        // Handle optional fields with proper types
         telegram_message_id: msg.telegram_message_id,
         media_group_id: msg.media_group_id,
         message_caption_id: msg.message_caption_id,
-        is_original_caption: msg.is_original_caption || false,
-        group_caption_synced: msg.group_caption_synced || false,
+        is_original_caption: Boolean(msg.is_original_caption),
+        group_caption_synced: Boolean(msg.group_caption_synced),
         caption: msg.caption,
         file_id: msg.file_id,
+        file_unique_id: msg.file_unique_id || '',
+        public_url: msg.public_url,
+        mime_type: msg.mime_type,
         file_size: msg.file_size,
         width: msg.width,
         height: msg.height,
@@ -47,12 +48,13 @@ export const MessageListContainer: React.FC = () => {
         created_at: msg.created_at,
         updated_at: msg.updated_at,
         chat_id: msg.chat_id,
+        chat_type: msg.chat_type || 'private',
         chat_title: msg.chat_title,
         message_url: msg.message_url,
-        public_url: msg.public_url,
-        mime_type: msg.mime_type,
         purchase_order: msg.purchase_order,
-        glide_row_id: msg.glide_row_id
+        glide_row_id: msg.glide_row_id,
+        // Ensure analyzed_content is properly typed
+        analyzed_content: msg.analyzed_content ? msg.analyzed_content as AnalyzedContent : undefined
       }));
 
       return transformedMessages;
