@@ -220,8 +220,10 @@ serve(async (req) => {
         console.log('🔄 Triggering caption analysis for message:', messageData.id);
         await supabase.functions.invoke('parse-caption-with-ai', {
           body: { 
-            messageId: messageData.id,
-            caption: message.caption
+            message_id: messageData.id,
+            media_group_id: message.media_group_id,
+            caption: message.caption,
+            correlation_id: crypto.randomUUID()
           }
         })
       }

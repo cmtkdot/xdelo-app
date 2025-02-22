@@ -94,38 +94,52 @@ serve(async (req) => {
   }
 
   try {
-    const { message_id, media_group_id, caption, correlation_id } = await req.json();
-    
-    console.log('Starting caption analysis:', {
-      message_id,
-      media_group_id,
-      caption_length: caption?.length || 0,
-      correlation_id
-    });
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing Supabase credentials');
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Initialize empty caption handling
-    const textToAnalyze = caption?.trim() || '';
-    let analyzedContent: ParsedContent;
-    const hasCaption = Boolean(textToAnalyze);
-
-    if (!hasCaption && media_group_id) {
-      console.log('Empty caption received, checking media group for analysis');
-      const existingAnalysis = await findMediaGroupAnalysis(supabase, media_group_id);
+    let requestBody;
+    try {
+      const { message_id, media_group_id, caption, correlation_id } = await req.json();
+      requestBody = { message_id, media_group_id, caption, correlation_id };
       
-      if (existingAnalysis) {
-        console.log('Found existing media group analysis, using it');
-        analyzedContent = existingAnalysis;
-      } else {
-        console.log('No existing analysis found, using default values');
+      console.log('Starting caption analysis:', {
+        message_id,
+        media_group_id,
+        caption_length: caption?.length || 0,
+        correlation_id
+      });
+
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Missing Supabase credentials');
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      // Use requestBody instead of parsing req.json() again
+      const textToAnalyze = requestBody.caption?.trim() || '';
+      let analyzedContent: ParsedContent;
+      const hasCaption = Boolean(textToAnalyze);
+
+      if (!hasCaption && requestBody.media_group_id) {
+        console.log('Empty caption received, checking media group for analysis');
+        const existingAnalysis = await findMediaGroupAnalysis(supabase, requestBody.media_group_id);
+        
+        if (existingAnalysis) {
+          console.log('Found existing media group analysis, using it');
+          analyzedContent = existingAnalysis;
+        } else {
+          console.log('No existing analysis found, using default values');
+          analyzedContent = {
+            product_name: 'Untitled Product',
+            parsing_metadata: {
+              method: 'manual',
+              confidence: 0.1,
+              timestamp: new Date().toISOString()
+            }
+          };
+        }
+      } else if (!hasCaption) {
+        console.log('No caption or media group ID, using default values');
         analyzedContent = {
           product_name: 'Untitled Product',
           parsing_metadata: {
@@ -134,56 +148,60 @@ serve(async (req) => {
             timestamp: new Date().toISOString()
           }
         };
+      } else {
+        analyzedContent = await analyzeCaption(textToAnalyze);
       }
-    } else if (!hasCaption) {
-      console.log('No caption or media group ID, using default values');
-      analyzedContent = {
-        product_name: 'Untitled Product',
-        parsing_metadata: {
-          method: 'manual',
-          confidence: 0.1,
-          timestamp: new Date().toISOString()
+
+      console.log('Analysis completed:', {
+        correlation_id: requestBody.correlation_id,
+        product_name: analyzedContent.product_name,
+        confidence: analyzedContent.parsing_metadata?.confidence,
+        has_caption: hasCaption
+      });
+
+      if (requestBody.media_group_id) {
+        await updateMediaGroupMessages(supabase, requestBody.media_group_id, requestBody.message_id, analyzedContent, hasCaption);
+      } else {
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({
+            analyzed_content: analyzedContent,
+            processing_state: 'completed',
+            processing_completed_at: new Date().toISOString(),
+            is_original_caption: hasCaption
+          })
+          .eq('id', requestBody.message_id);
+
+        if (updateError) {
+          console.error('Error updating single message:', updateError);
+          throw updateError;
         }
-      };
-    } else {
-      analyzedContent = await analyzeCaption(textToAnalyze);
-    }
-
-    console.log('Analysis completed:', {
-      correlation_id,
-      product_name: analyzedContent.product_name,
-      confidence: analyzedContent.parsing_metadata?.confidence,
-      has_caption: hasCaption
-    });
-
-    if (media_group_id) {
-      await updateMediaGroupMessages(supabase, media_group_id, message_id, analyzedContent, hasCaption);
-    } else {
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: analyzedContent,
-          processing_state: 'completed',
-          processing_completed_at: new Date().toISOString(),
-          is_original_caption: hasCaption
-        })
-        .eq('id', message_id);
-
-      if (updateError) {
-        console.error('Error updating single message:', updateError);
-        throw updateError;
       }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          analyzed_content: analyzedContent,
+          correlation_id: requestBody.correlation_id
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } catch (error) {
+      console.error('Error in parse-caption-with-ai:', error);
+      
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: error.message,
+          correlation_id: requestBody?.correlation_id || crypto.randomUUID(),
+          timestamp: new Date().toISOString()
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500
+        }
+      );
     }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        analyzed_content: analyzedContent,
-        correlation_id
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
   } catch (error) {
     console.error('Error in parse-caption-with-ai:', error);
     
@@ -191,7 +209,7 @@ serve(async (req) => {
       JSON.stringify({
         success: false,
         error: error.message,
-        correlation_id: crypto.randomUUID(),
+        correlation_id: requestBody?.correlation_id || crypto.randomUUID(),
         timestamp: new Date().toISOString()
       }),
       { 

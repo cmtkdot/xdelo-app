@@ -202,7 +202,7 @@ export async function syncMediaGroupContent(
     if (error) throw error;
 
     // Trigger analysis
-    await triggerAnalysis(supabase, messageId, caption, correlationId);
+    await triggerAnalysis(supabase, messageId, caption, correlationId, mediaGroupId);
 
   } catch (error) {
     console.error("❌ Error syncing media group:", {
@@ -218,13 +218,15 @@ export async function triggerAnalysis(
   supabase: SupabaseClient,
   messageId: string,
   caption: string,
-  correlationId: string
+  correlationId: string,
+  mediaGroupId?: string
 ): Promise<void> {
   try {
     // First update state to processing
     await updateMessage(supabase, messageId, {
       processing_state: 'processing',
-      processing_started_at: new Date().toISOString()
+      processing_started_at: new Date().toISOString(),
+      processing_correlation_id: correlationId
     });
 
     const { error } = await supabase.functions.invoke(
@@ -232,6 +234,7 @@ export async function triggerAnalysis(
       {
         body: {
           message_id: messageId,
+          media_group_id: mediaGroupId,
           caption,
           correlation_id: correlationId
         }

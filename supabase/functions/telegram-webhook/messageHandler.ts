@@ -240,7 +240,13 @@ export async function handleMediaMessage(
       }
     } else if (message.caption) {
       // Single message with caption - trigger analysis
-      await triggerAnalysis(supabase, messageId, message.caption, correlationId);
+      await triggerAnalysis(
+        supabase, 
+        messageId, 
+        message.caption, 
+        correlationId,
+        message.media_group_id
+      );
     }
 
     return {
