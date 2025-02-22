@@ -13,6 +13,11 @@ export interface AnalyzedContent {
     timestamp: string;
     needs_ai_analysis?: boolean;
   };
+  sync_metadata?: {
+    sync_source_message_id?: string;
+    media_group_id?: string;
+    group_message_count?: number;
+  };
 }
 
 export interface MessageData {
@@ -56,4 +61,4 @@ export interface MessageData {
   glide_row_id?: string;
   created_at?: string;
   updated_at?: string;
-} 
+}

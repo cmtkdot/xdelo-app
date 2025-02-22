@@ -1,3 +1,4 @@
+
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
@@ -25,6 +26,11 @@ export interface AnalyzedContent {
     method: 'manual' | 'ai';
     confidence: number;
     timestamp: string;
+  };
+  sync_metadata?: {
+    sync_source_message_id?: string;
+    media_group_id?: string;
+    group_message_count?: number;
   };
 }
 

@@ -25,7 +25,8 @@ const convertAnalyzedContent = (content: MessageAnalyzedContent | undefined): Js
       method: content.parsing_metadata.method === 'hybrid' ? 'ai' : content.parsing_metadata.method,
       confidence: content.parsing_metadata.confidence,
       timestamp: content.parsing_metadata.timestamp
-    } : undefined
+    } : undefined,
+    sync_metadata: content.sync_metadata
   };
 };
 
@@ -45,6 +46,8 @@ export function useMessageProcessing() {
     updateProcessingState(message.id, true);
     
     try {
+      const correlationId = crypto.randomUUID();
+      
       // First update message state to pending
       const { error: updateError } = await supabase
         .from('messages')
@@ -53,7 +56,7 @@ export function useMessageProcessing() {
           error_message: null,
           retry_count: (message.retry_count || 0) + 1,
           processing_started_at: new Date().toISOString(),
-          processing_correlation_id: crypto.randomUUID()
+          processing_correlation_id: correlationId
         })
         .eq('id', message.id);
 
@@ -64,7 +67,8 @@ export function useMessageProcessing() {
         body: { 
           messageId: message.id,
           media_group_id: message.media_group_id,
-          caption: message.caption
+          caption: message.caption,
+          correlationId
         }
       });
 
@@ -74,7 +78,6 @@ export function useMessageProcessing() {
     } catch (error) {
       console.error('Error retrying analysis:', error);
       
-      // Update error state in database
       await supabase
         .from('messages')
         .update({
@@ -95,21 +98,20 @@ export function useMessageProcessing() {
     updateProcessingState(message.id, true);
     
     try {
-      // Using direct SQL function call instead of RPC
-      const { error: syncError } = await supabase.from('messages')
-        .update({
-          group_caption_synced: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('media_group_id', message.media_group_id)
-        .neq('id', message.id);
-
-      if (syncError) throw syncError;
+      // Add sync metadata to the analyzed content
+      const analyzedContentWithSync = {
+        ...message.analyzed_content,
+        sync_metadata: {
+          sync_source_message_id: message.id,
+          media_group_id: message.media_group_id,
+          group_message_count: message.group_message_count
+        }
+      };
 
       // Update all messages in the group with the source message's content
       const { error: updateError } = await supabase.from('messages')
         .update({
-          analyzed_content: analyzedContentToJson(convertAnalyzedContent(message.analyzed_content)),
+          analyzed_content: analyzedContentToJson(convertAnalyzedContent(analyzedContentWithSync)),
           processing_state: 'completed',
           processing_completed_at: new Date().toISOString(),
           is_original_caption: false,
@@ -127,13 +129,18 @@ export function useMessageProcessing() {
       console.error('Error syncing media group:', error);
       updateProcessingState(message.id, false, error.message);
       
-      // Log the error
+      // Log the error with metadata
       await supabase.from('message_state_logs').insert({
         message_id: message.id,
         previous_state: 'completed',
         new_state: 'error',
         changed_at: new Date().toISOString(),
-        error_message: error.message
+        error_message: error.message,
+        metadata: {
+          sync_source_message_id: message.id,
+          media_group_id: message.media_group_id,
+          group_message_count: message.group_message_count
+        }
       });
     }
   }, [processingState, updateProcessingState]);
@@ -148,4 +155,4 @@ export function useMessageProcessing() {
     retryAnalysis,
     syncMediaGroup
   };
-} 
+}
