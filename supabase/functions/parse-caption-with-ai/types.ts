@@ -1,3 +1,5 @@
+import { SupabaseClient } from '@supabase/supabase-js';
+
 export interface ParsedResult {
   product_name?: string;
   product_code?: string;
@@ -50,7 +52,7 @@ export interface AnalyzedContent {
     effects?: string[];
   };
   sync_metadata?: {
-    sync_source_message_id?: string;
+    sync_source_message_id?: number;
     media_group_id?: string;
     synced_at?: string;
   };
@@ -100,21 +102,4 @@ export interface WebhookLogEntry {
   raw_data?: Record<string, any>;
 }
 
-// Add logging helper
-export async function logParserEvent(
-  supabase: SupabaseClient,
-  event: WebhookLogEntry
-): Promise<void> {
-  try {
-    await supabase.from('webhook_logs').insert({
-      ...event,
-      created_at: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Failed to log parser event:', {
-      error,
-      correlation_id: event.correlation_id,
-      event_type: event.event_type
-    });
-  }
-}
+// Move logParserEvent to webhookLogs.ts since it's already imported there

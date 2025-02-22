@@ -1,8 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
-import { parseManually } from "./utils/manualParser";
-import { logParserEvent } from "./utils/webhookLogs";
-import { AnalyzedContent } from './types';
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+import { parseManually } from "./utils/manualParser.ts";
+import { logParserEvent } from "./utils/webhookLogs.ts";
+import { AnalyzedContent, AnalysisRequest } from './types.ts';
+
+// Add type declaration for Deno namespace
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
 
 // Add error helper at the top
 function getErrorMessage(err: unknown): string {
@@ -111,7 +118,7 @@ serve(async (req) => {
       analyzedContent = {
         ...analyzedContent,
         sync_metadata: {
-          sync_source_message_id: messageId,
+          sync_source_message_id: messageId.toString(),
           media_group_id,
           synced_at: new Date().toISOString()
         }

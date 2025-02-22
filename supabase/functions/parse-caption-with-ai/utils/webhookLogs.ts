@@ -1,4 +1,4 @@
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 import { WebhookLogEntry } from '../types';
 
 export async function logParserEvent(
