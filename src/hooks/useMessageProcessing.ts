@@ -2,6 +2,7 @@
 import { useState, useCallback } from 'react';
 import type { MessageData } from '../components/Messages/types';
 import { supabase } from '@/integrations/supabase/client';
+import { analyzedContentToJson } from '@/types';
 
 interface ProcessingState {
   [key: string]: {
@@ -90,20 +91,12 @@ export function useMessageProcessing() {
       // Update all messages in the group with the source message's content
       const { error: updateError } = await supabase.from('messages')
         .update({
-          analyzed_content: message.analyzed_content,
+          analyzed_content: analyzedContentToJson(message.analyzed_content || {}),
           processing_state: 'completed',
           processing_completed_at: new Date().toISOString(),
           is_original_caption: false,
           group_caption_synced: true,
           message_caption_id: message.id,
-          product_name: message.product_name,
-          product_quantity: message.product_quantity,
-          product_unit: message.product_unit,
-          vendor_name: message.vendor_name,
-          product_sku: message.product_sku,
-          is_miscellaneous_item: message.is_miscellaneous_item,
-          purchase_order: message.purchase_order,
-          purchase_date: message.purchase_date,
           updated_at: new Date().toISOString()
         })
         .eq('media_group_id', message.media_group_id)
