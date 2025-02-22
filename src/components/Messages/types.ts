@@ -1,3 +1,4 @@
+
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
 
 export interface AnalyzedContent {
@@ -16,7 +17,6 @@ export interface AnalyzedContent {
   sync_metadata?: {
     sync_source_message_id?: string;
     media_group_id?: string;
-    group_message_count?: number;
   };
 }
 
@@ -51,8 +51,6 @@ export interface MessageData {
   last_error_at?: string;
   group_first_message_time?: string;
   group_last_message_time?: string;
-  group_message_count?: number;
-  group_completed_at?: string;
   telegram_data?: Record<string, any>;
   message_url?: string;
   is_channel_post?: boolean;
