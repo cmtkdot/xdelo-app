@@ -1,4 +1,3 @@
-
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
@@ -70,7 +69,6 @@ export interface Message {
   updated_at?: string;
 }
 
-// Add GlProduct interface
 export interface GlProduct {
   id: string;
   main_new_product_name: string;
@@ -85,8 +83,8 @@ export interface GlProduct {
   created_at: string;
   updated_at: string;
   sync_status: SyncStatus;
-  cart_add_note?: string;
-  cart_rename?: string;
+  cart_add_note?: boolean;
+  cart_rename?: boolean;
   date_timestamp_subm?: string;
   email_email_of_user_who_added_product?: string;
   glide_id?: string;
@@ -98,7 +96,6 @@ export interface GlProduct {
   }[];
 }
 
-// Add MediaItem interface
 export interface MediaItem {
   id: string;
   public_url: string;
@@ -107,7 +104,6 @@ export interface MediaItem {
   analyzed_content?: AnalyzedContent;
 }
 
-// Add MatchResult interface
 export interface MatchResult {
   id: string;
   message_id: string;
@@ -120,7 +116,6 @@ export interface MatchResult {
   };
 }
 
-// Add Database type from supabase
 export interface Database {
   public: {
     Tables: {
