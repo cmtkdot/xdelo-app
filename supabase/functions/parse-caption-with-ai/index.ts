@@ -55,6 +55,7 @@ serve(async (req) => {
   const startTime = performance.now();
   
   try {
+    // Parse request body once at the start
     const payload = await req.json();
     messageId = payload.messageId;
     chatId = payload.chat_id;
@@ -64,7 +65,7 @@ serve(async (req) => {
       correlationId = correlation_id;
     }
 
-    // Ensure messageId exists
+    // Ensure messageId exists and is a number
     if (!messageId) {
       throw new Error('Message ID is required');
     }
@@ -147,12 +148,12 @@ serve(async (req) => {
     
     try {
       if (messageId) {
-        const supabase = createClient(
-          Deno.env.get('SUPABASE_URL')!,
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        const errorSupabase = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         );
 
-        await supabase
+        await errorSupabase
           .from('messages')
           .update({
             processing_state: 'error',
@@ -161,8 +162,30 @@ serve(async (req) => {
             last_error_at: new Date().toISOString(),
             processing_correlation_id: correlationId
           })
-          .eq('id', messageId);
+          .eq('id', messageId.toString()); // Ensure ID is string
       }
+
+      // Create new Supabase client for logging
+      const logSupabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+
+      // Log error
+      await logParserEvent(logSupabase, {
+        event_type: 'analysis_error',
+        chat_id: chatId || 0,
+        message_id: typeof messageId === 'string' ? parseInt(messageId) : 0,
+        correlation_id: correlationId,
+        error_message: errorMessage,
+        duration_ms: Math.round(performance.now() - startTime),
+        processing_state: 'error',
+        metadata: {
+          error_type: 'AnalysisError',
+          error_details: errorMessage
+        }
+      });
+
     } catch (updateErr) {
       const updateErrorMsg = getErrorMessage(updateErr);
       console.error('Failed to update message error state:', {
@@ -171,21 +194,6 @@ serve(async (req) => {
         message_id: messageId
       });
     }
-    
-    // Log error
-    await logParserEvent(supabase, {
-      event_type: 'analysis_error',
-      chat_id: chatId,
-      message_id: parseInt(messageId || '0'),
-      correlation_id: correlationId,
-      error_message: errorMessage,
-      duration_ms: Math.round(performance.now() - startTime),
-      processing_state: 'error',
-      metadata: {
-        error_type: 'AnalysisError',
-        error_details: errorMessage
-      }
-    });
 
     return new Response(
       JSON.stringify({ 
