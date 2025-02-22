@@ -60,12 +60,12 @@ serve(async (req) => {
       has_vendor_uid: Boolean(parsedContent.vendor_uid)
     });
 
-    // Update the message with analyzed content - using explicit processing_state type cast
+    // Update the message with analyzed content
     const { error: updateError } = await supabase
       .from('messages')
       .update({
         analyzed_content: analyzedContent,
-        processing_state: 'completed'::processing_state_type,
+        processing_state: 'completed',
         processing_completed_at: new Date().toISOString(),
         is_original_caption: true
       })
@@ -106,7 +106,7 @@ serve(async (req) => {
           .from('messages')
           .update({
             analyzed_content: syncedContent,
-            processing_state: 'completed'::processing_state_type,
+            processing_state: 'completed',
             processing_completed_at: new Date().toISOString(),
             is_original_caption: false,
             group_caption_synced: true,
@@ -132,7 +132,7 @@ serve(async (req) => {
           .from('messages')
           .update({
             analyzed_content: syncedContent,
-            processing_state: 'completed'::processing_state_type,
+            processing_state: 'completed',
             processing_completed_at: new Date().toISOString(),
             is_original_caption: false,
             group_caption_synced: true,
@@ -162,7 +162,7 @@ serve(async (req) => {
         await supabase
           .from('messages')
           .update({
-            processing_state: 'error'::processing_state_type,
+            processing_state: 'error',
             error_message: error.message,
             processing_completed_at: new Date().toISOString(),
             last_error_at: new Date().toISOString()
