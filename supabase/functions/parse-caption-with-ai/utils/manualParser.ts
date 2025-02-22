@@ -1,6 +1,59 @@
 import { ParsedContent } from "../types.ts";
 import { parseQuantity } from "./quantityParser.ts";
 
+function calculateConfidence(result: ParsedContent, fallbacks: string[], caption: string): number {
+  let score = 1.0;
+  
+  // Structure Analysis (40% weight)
+  const hasExpectedFormat = caption.match(/^[^#\n]+#[A-Z]{1,4}\d{5,6}/);
+  const hasQuantityPattern = /\d+\s*(?:x|pcs|pieces|kg|g|meters|m|boxes)/i.test(caption);
+  const hasLineBreaks = caption.includes('\n');
+  const hasParentheses = /\(.*\)/.test(caption);
+  
+  if (hasExpectedFormat) score += 0.2;
+  if (!hasQuantityPattern) score -= 0.3;
+  if (hasLineBreaks && hasParentheses) score += 0.1;
+  
+  // Data Quality (40% weight)
+  if (result.product_code) {
+    const isValidFormat = /^[A-Z]{1,4}\d{5,6}$/.test(result.product_code);
+    score += isValidFormat ? 0.2 : -0.2;
+    
+    // Check vendor and date parts
+    if (result.vendor_uid && result.purchase_date) {
+      score += 0.2;
+    }
+  } else {
+    score -= 0.4;
+  }
+  
+  if (result.quantity && result.quantity > 0) {
+    const isReasonable = result.quantity > 0 && result.quantity < 10000;
+    score += isReasonable ? 0.2 : -0.1;
+  } else {
+    score -= 0.3;
+  }
+  
+  // Product Name Quality
+  if (result.product_name && result.product_name !== caption) {
+    const isReasonableLength = result.product_name.length > 3 && result.product_name.length < 100;
+    score += isReasonableLength ? 0.1 : -0.1;
+  }
+  
+  // Fallbacks Impact (20% weight)
+  const criticalFallbacks = ['no_product_code', 'no_quantity'];
+  const hasCriticalFallbacks = fallbacks.some(f => criticalFallbacks.includes(f));
+  
+  if (hasCriticalFallbacks) {
+    score -= 0.3;
+  } else {
+    score -= fallbacks.length * 0.1;
+  }
+  
+  // Normalize score
+  return Math.max(0.1, Math.min(1, score));
+}
+
 export async function manualParse(caption: string): Promise<ParsedContent> {
   console.log("Starting manual parsing for:", caption);
   const result: ParsedContent = {};
@@ -13,18 +66,10 @@ export async function manualParse(caption: string): Promise<ParsedContent> {
   const dashIndex = caption.indexOf('-');
   let endIndex = caption.length;
   
-  if (xIndex > 0) {
-    endIndex = Math.min(endIndex, xIndex);
-  }
-  if (hashIndex > 0) {
-    endIndex = Math.min(endIndex, hashIndex);
-  }
-  if (lineBreakIndex > 0) {
-    endIndex = Math.min(endIndex, lineBreakIndex);
-  }
-  if (dashIndex > 0) {
-    endIndex = Math.min(endIndex, dashIndex);
-  }
+  if (xIndex > 0) endIndex = Math.min(endIndex, xIndex);
+  if (hashIndex > 0) endIndex = Math.min(endIndex, hashIndex);
+  if (lineBreakIndex > 0) endIndex = Math.min(endIndex, lineBreakIndex);
+  if (dashIndex > 0) endIndex = Math.min(endIndex, dashIndex);
   
   const productNameMatch = caption.substring(0, endIndex).trim();
   if (productNameMatch) {
@@ -95,30 +140,24 @@ export async function manualParse(caption: string): Promise<ParsedContent> {
 
   const confidence = calculateConfidence(result, fallbacks_used, caption);
   
+  // Calculate if we have critical fallbacks
+  const criticalFallbacks = ['no_product_code', 'no_quantity'];
+  const hasCriticalFallbacks = fallbacks_used.some(f => criticalFallbacks.includes(f));
+
   result.parsing_metadata = {
     method: 'manual',
     confidence,
     fallbacks_used: fallbacks_used.length ? fallbacks_used : undefined,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    needs_ai_analysis: confidence < 0.4 || hasCriticalFallbacks
   };
 
-  console.log("Manual parsing result:", result);
-  return result;
-}
+  console.log("Manual parsing result:", {
+    ...result,
+    confidence,
+    needs_ai_analysis: result.parsing_metadata.needs_ai_analysis,
+    fallbacks: fallbacks_used
+  });
 
-function calculateConfidence(result: ParsedContent, fallbacks: string[], caption: string): number {
-  let confidence = 1.0;
-  
-  // Reduce confidence for missing required fields
-  if (!result.product_name || result.product_name === caption) confidence -= 0.3;
-  if (!result.product_code) confidence -= 0.2;
-  if (!result.vendor_uid) confidence -= 0.15;
-  if (!result.quantity) confidence -= 0.15;
-  if (!result.purchase_date) confidence -= 0.1;
-  
-  // Additional confidence reduction for each fallback used
-  confidence -= fallbacks.length * 0.05;
-  
-  // Ensure confidence stays between 0 and 1
-  return Math.max(0, Math.min(1, confidence));
+  return result;
 }

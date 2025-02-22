@@ -1,4 +1,3 @@
-
 export interface ParsedContent {
   product_name?: string;
   product_code?: string;
@@ -7,10 +6,13 @@ export interface ParsedContent {
   quantity?: number;
   notes?: string;
   parsing_metadata?: {
-    method: 'manual' | 'ai';
+    method: 'manual' | 'ai' | 'hybrid';
     confidence: number;
     fallbacks_used?: string[];
     timestamp: string;
+    needs_ai_analysis?: boolean;
+    manual_confidence?: number;
+    ai_confidence?: number;
   };
 }
 

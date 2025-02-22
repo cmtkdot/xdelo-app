@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { TelegramMessage, WebhookResponse, OtherMessageData, TelegramChatType, TelegramOtherMessageType, MessageData, ChatInfo, MediaInfo } from './types';
+import { TelegramMessage, WebhookResponse, OtherMessageData, TelegramChatType, TelegramOtherMessageType, MessageData, ChatInfo, MediaInfo, TelegramUpdate } from './types';
 import { getLogger } from './logger';
 
 function determineMessageType(message: TelegramMessage): TelegramOtherMessageType {
@@ -10,6 +10,12 @@ function determineMessageType(message: TelegramMessage): TelegramOtherMessageTyp
   if (message.document) return 'document';
   if (message.location) return 'location';
   if (message.contact) return 'contact';
+  if (message.venue) return 'venue';
+  if (message.poll) return 'poll';
+  if (message.dice) return 'dice';
+  if (message.game) return 'game';
+  if (message.callback_query) return 'callback_query';
+  if (message.inline_query) return 'inline_query';
   return 'text';
 }
 
@@ -60,7 +66,7 @@ export function extractChatInfo(message: TelegramMessage): ChatInfo {
 
 export async function handleWebhookUpdate(
   supabase: SupabaseClient,
-  update: any,
+  update: TelegramUpdate,
   correlationId: string
 ): Promise<WebhookResponse> {
   const logger = getLogger(correlationId);
@@ -70,53 +76,69 @@ export async function handleWebhookUpdate(
       update_type: Object.keys(update).join(', ')
     });
 
-    // Handle edited channel posts first
-    if (update.edited_channel_post) {
-      const message = update.edited_channel_post;
-      const mediaInfo = extractMediaInfo(message);
+    // Handle all possible update types
+    const message = update.message || 
+                   update.channel_post || 
+                   update.edited_message ||
+                   update.edited_channel_post;
 
+    // First check for media in any message type
+    if (message) {
+      const mediaInfo = extractMediaInfo(message);
       if (mediaInfo) {
-        logger.info('Processing edited channel post with media', {
+        logger.info('Processing message with media', {
           message_id: message.message_id,
           chat_id: message.chat.id,
-          file_unique_id: mediaInfo.file_unique_id
+          file_unique_id: mediaInfo.file_unique_id,
+          is_channel: Boolean(update.channel_post),
+          is_edited: Boolean(update.edited_message || update.edited_channel_post)
         });
-
         return await handleMediaMessage(supabase, message, correlationId);
       } else {
         return await handleOtherMessage(supabase, message, correlationId);
       }
     }
 
-    // Handle regular messages and other updates
-    const message = update.message || 
-                   update.channel_post || 
-                   update.edited_message;
-
-    if (!message) {
-      if (update.my_chat_member || update.chat_member) {
-        const memberUpdate = update.my_chat_member || update.chat_member;
-        return await handleChatMemberUpdate(supabase, memberUpdate, correlationId);
-      }
-
-      logger.warn('Unhandled update type', {
-        update_keys: Object.keys(update)
-      });
-
-      return {
-        success: false,
-        message: "Unhandled update type",
-        correlation_id: correlationId,
-        details: { update_keys: Object.keys(update) }
-      };
+    // Handle member updates
+    if (update.my_chat_member || update.chat_member) {
+      const memberUpdate = update.my_chat_member || update.chat_member;
+      return await handleChatMemberUpdate(supabase, memberUpdate, correlationId);
     }
 
-    const mediaInfo = extractMediaInfo(message);
-    if (mediaInfo) {
-      return await handleMediaMessage(supabase, message, correlationId);
+    // Handle callback queries
+    if (update.callback_query) {
+      return await handleOtherMessage(supabase, {
+        message_id: Date.now(),
+        chat: update.callback_query.from ? {
+          id: update.callback_query.from.id,
+          type: 'private'
+        } : { id: 0, type: 'private' },
+        callback_query: update.callback_query
+      } as TelegramMessage, correlationId);
     }
 
-    return await handleOtherMessage(supabase, message, correlationId);
+    // Handle inline queries
+    if (update.inline_query) {
+      return await handleOtherMessage(supabase, {
+        message_id: Date.now(),
+        chat: {
+          id: 0, // Default chat ID for inline queries
+          type: 'private'
+        },
+        inline_query: update.inline_query
+      } as TelegramMessage, correlationId);
+    }
+
+    logger.warn('Unhandled update type', {
+      update_keys: Object.keys(update)
+    });
+
+    return {
+      success: false,
+      message: "Unhandled update type",
+      correlation_id: correlationId,
+      details: { update_keys: Object.keys(update) }
+    };
 
   } catch (error) {
     logger.error('Error in webhook handler', {
@@ -143,18 +165,124 @@ export async function handleEditedMessage(
 
   try {
     if (mediaInfo) {
-      // If it's a media message, handle it in the messages table
-      logger.info('Processing edited media message', {
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        has_caption: Boolean(message.caption)
+      // For media messages, find by file_unique_id and update
+      const { data: existingMessage } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('file_unique_id', mediaInfo.file_unique_id)
+        .maybeSingle();
+
+      // Store edit history before processing
+      const editHistory = existingMessage?.edit_history || [];
+      editHistory.push({
+        timestamp: new Date().toISOString(),
+        previous_content: existingMessage?.telegram_data || {},
+        new_content: { message }
       });
 
-      return await handleMediaMessage(supabase, message, correlationId);
+      // Process through media flow with edit history
+      const editedMessage = {
+        ...message,
+        edit_history: editHistory,
+        edit_date: message.edit_date
+      };
+      return await handleMediaMessage(supabase, editedMessage, correlationId);
     }
 
     // For non-media edits, handle in other_messages
-    return await handleOtherMessage(supabase, message, correlationId);
+    const messageType = determineMessageType(message);
+    const { data: existingMessage } = await supabase
+      .from('other_messages')
+      .select('*')
+      .eq('telegram_message_id', message.message_id)
+      .eq('chat_id', message.chat.id)
+      .maybeSingle();
+
+    const editHistory = existingMessage?.edit_history || [];
+    editHistory.push({
+      timestamp: new Date().toISOString(),
+      previous_content: existingMessage?.telegram_data || {},
+      new_content: { message }
+    });
+
+    const messageData: OtherMessageData = {
+      user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
+      message_type: messageType,
+      telegram_message_id: message.message_id,
+      chat_id: message.chat.id,
+      chat_type: message.chat.type as TelegramChatType,
+      chat_title: message.chat.title || '',
+      message_text: message.text || '',
+      is_edited: true,
+      edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : null,
+      processing_state: 'completed',
+      processing_started_at: new Date().toISOString(),
+      processing_completed_at: new Date().toISOString(),
+      processing_correlation_id: correlationId,
+      telegram_data: {
+        message,
+        message_type: messageType,
+        edit_history: editHistory,
+        content: {
+          text: message.text,
+          sticker: message.sticker,
+          voice: message.voice,
+          document: message.document,
+          location: message.location,
+          contact: message.contact
+        }
+      },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    if (existingMessage) {
+      const { error: updateError } = await supabase
+        .from('other_messages')
+        .update(messageData)
+        .eq('id', existingMessage.id);
+
+      if (updateError) throw updateError;
+
+      logger.info('Updated existing other message with edit', { 
+        messageId: existingMessage.id,
+        messageType
+      });
+      
+      return {
+        success: true,
+        message: 'Updated existing other message with edit',
+        correlation_id: correlationId,
+        details: { 
+          message_id: existingMessage.id,
+          message_type: messageType
+        }
+      };
+    }
+
+    const { data: newMessage, error: insertError } = await supabase
+      .from('other_messages')
+      .insert(messageData)
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+
+    logger.info('Created new edited other message', { 
+      messageId: newMessage.id,
+      messageType
+    });
+    
+    return {
+      success: true,
+      message: 'Created new edited other message',
+      correlation_id: correlationId,
+      details: { 
+        message_id: newMessage.id,
+        message_type: messageType
+      }
+    };
+
   } catch (error) {
     logger.error('Failed to handle edited message', { error });
     return {
@@ -339,7 +467,40 @@ export async function handleOtherMessage(
 
 export async function handleChatMemberUpdate(
   supabase: SupabaseClient,
-  memberUpdate: any,
+  memberUpdate: {
+    chat: {
+      id: number;
+      type: TelegramChatType;
+      title?: string;
+    };
+    from?: {
+      id: number;
+      first_name?: string;
+      last_name?: string;
+      username?: string;
+    };
+    my_chat_member?: boolean;
+    old_chat_member?: {
+      status: string;
+      user: {
+        id: number;
+        first_name?: string;
+        last_name?: string;
+        username?: string;
+      };
+    };
+    new_chat_member?: {
+      status: string;
+      user: {
+        id: number;
+        first_name?: string;
+        last_name?: string;
+        username?: string;
+      };
+    };
+    edited_message?: TelegramMessage;
+    edited_channel_post?: TelegramMessage;
+  },
   correlationId: string
 ): Promise<WebhookResponse> {
   const logger = getLogger(correlationId);
@@ -348,7 +509,9 @@ export async function handleChatMemberUpdate(
     // First check if this is an edit to a media message
     if (memberUpdate.edited_message || memberUpdate.edited_channel_post) {
       const editedMessage = memberUpdate.edited_message || memberUpdate.edited_channel_post;
-      return await handleEditedMessage(supabase, editedMessage, correlationId);
+      if (editedMessage) {
+        return await handleEditedMessage(supabase, editedMessage, correlationId);
+      }
     }
 
     const messageData: OtherMessageData = {
@@ -505,7 +668,7 @@ export async function handleMediaMessage(
     }
 
     // Download and store media
-    const { data: { publicUrl } } = await supabase
+    const { data: storageData } = await supabase
       .storage
       .from('telegram-media')
       .upload(
@@ -518,6 +681,14 @@ export async function handleMediaMessage(
           upsert: true
         }
       );
+
+    // Get public URL
+    const { data: urlData } = supabase
+      .storage
+      .from('telegram-media')
+      .getPublicUrl(storagePath);
+
+    const publicUrl = urlData.publicUrl;
 
     // Update media URL
     await supabase

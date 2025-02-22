@@ -10,7 +10,17 @@ export type TelegramOtherMessageType =
   | 'voice'
   | 'document'
   | 'sticker'
-  | 'chat_member';
+  | 'chat_member'
+  | 'my_chat_member'
+  | 'channel_post'
+  | 'edited_message'
+  | 'edited_channel_post'
+  | 'venue'
+  | 'poll'
+  | 'dice'
+  | 'game'
+  | 'callback_query'
+  | 'inline_query';
 
 export interface TelegramChat {
   id: number;
@@ -67,6 +77,11 @@ export interface TelegramMessage {
   media_group_id?: string;
   caption?: string;
   edit_date?: number;
+  edit_history?: Array<{
+    timestamp: string;
+    previous_content: Record<string, any>;
+    new_content: Record<string, any>;
+  }>;
   photo?: TelegramPhoto[];
   video?: TelegramVideo;
   document?: TelegramDocument;
