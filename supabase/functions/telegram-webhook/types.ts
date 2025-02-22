@@ -143,8 +143,8 @@ export interface TelegramMessage {
   edit_date?: number;
   edit_history?: Array<{
     timestamp: string;
-    previous_content: Record<string, any>;
-    new_content: Record<string, any>;
+    previous_content: MessageContent;
+    new_content: MessageContent;
   }>;
   photo?: TelegramPhoto[];
   video?: TelegramVideo;
