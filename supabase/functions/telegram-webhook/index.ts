@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { handleWebhookUpdate } from './messageHandlers.ts'
-import { verifyTelegramWebhook } from './authUtils.ts'
+import { handleMessage, handleEditedMessage } from './messageHandlers.ts'
 import { getLogger } from './logger.ts'
 
 const corsHeaders = {
@@ -20,31 +19,39 @@ serve(async (req) => {
   try {
     const update = await req.json()
     
-    // Better update type detection
-    const updateType = getUpdateType(update)
-    logger.info('Received webhook update', { updateType, correlationId })
+    // Simplified update handling - just check for message or edit
+    const message = update.message || update.channel_post
+    const editedMessage = update.edited_message || update.edited_channel_post
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    switch (updateType) {
-      case 'message':
-        return await handleMessage(update.message, supabase, correlationId)
-      case 'edited_message':
-        return await handleEditedMessage(update.edited_message, supabase, correlationId)
-      case 'channel_post':
-        return await handleChannelPost(update.channel_post, supabase, correlationId)
-      case 'edited_channel_post':
-        return await handleEditedChannelPost(update.edited_channel_post, supabase, correlationId)
-      default:
-        logger.warn('Unhandled update type', { updateType })
-        return new Response(
-          JSON.stringify({ success: false, message: 'Unhandled update type' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+    if (message) {
+      logger.info('Processing new message', { 
+        messageId: message.message_id,
+        isChannel: !!update.channel_post 
+      })
+      return await handleMessage(message, supabase, correlationId)
     }
+
+    if (editedMessage) {
+      logger.info('Processing edited message', { 
+        messageId: editedMessage.message_id,
+        isChannel: !!update.edited_channel_post 
+      })
+      return await handleEditedMessage(editedMessage, supabase, correlationId)
+    }
+
+    logger.warn('Unhandled update type', { 
+      updateKeys: Object.keys(update).filter(k => k !== 'update_id')
+    })
+    return new Response(
+      JSON.stringify({ success: false, message: 'No message to process' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+
   } catch (error) {
     logger.error('Webhook error:', { error })
     return new Response(
@@ -56,17 +63,3 @@ serve(async (req) => {
     )
   }
 })
-
-// Helper to determine update type
-function getUpdateType(update: any): string {
-  if (update.message) return 'message'
-  if (update.edited_message) return 'edited_message'
-  if (update.channel_post) return 'channel_post'
-  if (update.edited_channel_post) return 'edited_channel_post'
-  
-  // Log available keys to help debug
-  const updateKeys = Object.keys(update).filter(k => k !== 'update_id')
-  console.warn('❌ No message or channel_post in update. Update keys:', updateKeys)
-  
-  return 'unknown'
-}

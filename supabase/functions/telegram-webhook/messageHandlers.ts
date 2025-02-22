@@ -7,6 +7,7 @@ import {
 } from './types';
 import { getLogger } from './logger';
 import { corsHeaders } from './corsHeaders';
+import { triggerAnalysis } from './analysisHandler';
 
 export const handleMessage = async (
   message: TelegramMessage, 
@@ -30,6 +31,72 @@ export const handleMessage = async (
 
     if (message.photo || message.document) {
       const mediaInfo = extractMediaInfo(message);
+      
+      // If no caption but part of media group, check for existing analyzed content
+      if (!message.caption && message.media_group_id) {
+        const { data: groupMessages } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('media_group_id', message.media_group_id)
+          .order('created_at', { ascending: true });
+
+        // Find first message with analyzed content
+        const analyzedMessage = groupMessages?.find(m => m.analyzed_content);
+        
+        if (analyzedMessage) {
+          logger.info('Found existing analyzed content in media group', {
+            mediaGroupId: message.media_group_id,
+            sourceMessageId: analyzedMessage.id
+          });
+
+          const messageData = {
+            telegram_message_id: message.message_id,
+            chat_id: message.chat.id,
+            chat_type: message.chat.type,
+            chat_title: message.chat.title,
+            media_group_id: message.media_group_id,
+            caption: analyzedMessage.caption,
+            message_caption_id: analyzedMessage.id,
+            is_original_caption: false,
+            group_caption_synced: true,
+            analyzed_content: analyzedMessage.analyzed_content,
+            processing_state: 'completed',
+            processing_correlation_id: correlationId,
+            telegram_data: message,
+            ...mediaInfo && {
+              file_id: mediaInfo.fileId,
+              file_unique_id: mediaInfo.fileUniqueId,
+              mime_type: mediaInfo.mimeType,
+              file_size: mediaInfo.fileSize,
+              width: mediaInfo.width,
+              height: mediaInfo.height
+            }
+          };
+
+          const { data: newMessage, error: insertError } = await supabase
+            .from('messages')
+            .insert(messageData)
+            .select()
+            .single();
+
+          if (insertError) {
+            logger.error('Error inserting message with group analysis', { error: insertError });
+            throw insertError;
+          }
+
+          return new Response(
+            JSON.stringify({ 
+              success: true,
+              messageId: newMessage.id,
+              correlationId,
+              synced: true
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
+      // Continue with normal message processing if no group analysis found
       const messageData = {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
@@ -63,14 +130,12 @@ export const handleMessage = async (
       }
 
       // If has caption, trigger analysis
-      if (message.caption) {
-        await triggerAnalysis(
-          message.message_id,
-          correlationId,
-          supabase,
-          message.media_group_id
-        );
-      }
+      await triggerAnalysis(
+        message.message_id,
+        correlationId,
+        supabase,
+        message.media_group_id
+      );
 
       logger.info('Message processed successfully', {
         messageId: newMessage.id,
@@ -164,7 +229,6 @@ const extractMediaInfo = (message: TelegramMessage) => {
   return null;
 };
 
-// Handle edited messages (both regular and channel posts)
 export const handleEditedMessage = async (
   message: TelegramMessage,
   supabase: SupabaseClient,
@@ -189,22 +253,17 @@ export const handleEditedMessage = async (
       );
     }
 
-    // Build edit history
+    // Update edit history
     const editHistory = existingMessage.edit_history || [];
     editHistory.push({
       timestamp: new Date(message.edit_date! * 1000).toISOString(),
       previous_content: {
-        caption: existingMessage.caption,
-        // Add any other fields you want to track
+        caption: existingMessage.caption
       },
       new_content: {
-        caption: message.caption,
-        // Add any other fields you want to track
+        caption: message.caption
       }
     });
-
-    // Extract media info if present
-    const mediaInfo = extractMediaInfo(message);
 
     // Update message with all new data
     const updateData = {
@@ -213,32 +272,22 @@ export const handleEditedMessage = async (
       edit_date: new Date(message.edit_date! * 1000).toISOString(),
       edit_history: editHistory,
       telegram_data: message,
-      processing_state: 'pending', // Always set to pending to trigger reprocessing
+      processing_state: 'pending', // Always reprocess
       processing_correlation_id: correlationId,
-      updated_at: new Date().toISOString(),
-      // Include media info if present
-      ...mediaInfo && {
-        file_id: mediaInfo.fileId,
-        file_unique_id: mediaInfo.fileUniqueId,
-        mime_type: mediaInfo.mimeType,
-        file_size: mediaInfo.fileSize,
-        width: mediaInfo.width,
-        height: mediaInfo.height
-      }
+      updated_at: new Date().toISOString()
     };
 
-    // Update the message
     const { error: updateError } = await supabase
       .from('messages')
       .update(updateData)
       .eq('id', existingMessage.id);
 
     if (updateError) {
-      logger.error('Error updating edited message', { error: updateError });
+      logger.error('Error updating message', { error: updateError });
       throw updateError;
     }
 
-    // Always trigger analysis for edited messages
+    // Always trigger analysis for edits
     await triggerAnalysis(
       message.message_id,
       correlationId,
@@ -247,16 +296,12 @@ export const handleEditedMessage = async (
     );
 
     return new Response(
-      JSON.stringify({ 
-        success: true,
-        messageId: existingMessage.id,
-        correlationId 
-      }),
+      JSON.stringify({ success: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    logger.error('Error handling edited message', { error });
+    logger.error('Error handling edit', { error });
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { 
@@ -267,107 +312,63 @@ export const handleEditedMessage = async (
   }
 };
 
-// We can now use the same handler for both edited messages and edited channel posts
-export const handleEditedChannelPost = async (
+export const handleDeleteMessage = async (
   message: TelegramMessage,
   supabase: SupabaseClient,
   correlationId: string
 ) => {
-  // Add is_channel_post flag to the message
-  message.is_channel_post = true;
-  return handleEditedMessage(message, supabase, correlationId);
-};
-
-// Handle channel posts
-export const handleChannelPost = async (
-  supabase: SupabaseClient,
-  message: TelegramMessage
-) => {
-  const mediaInfo = extractMediaInfo(message);
-  
-  const messageData = {
-    telegram_message_id: message.message_id,
-    chat_id: message.chat.id,
-    chat_type: message.chat.type,
-    chat_title: message.chat.title,
-    caption: message.caption,
-    is_channel_post: true,
-    sender_chat_id: message.sender_chat?.id,
-    telegram_data: message,
-    ...mediaInfo && {
-      file_id: mediaInfo.fileId,
-      file_unique_id: mediaInfo.fileUniqueId,
-      mime_type: mediaInfo.mimeType,
-      file_size: mediaInfo.fileSize,
-      width: mediaInfo.width,
-      height: mediaInfo.height
-    }
-  };
-
   const { error } = await supabase
     .from('messages')
-    .insert(messageData);
+    .update({ 
+      processing_state: 'deleted',
+      updated_at: new Date().toISOString()
+    })
+    .eq('telegram_message_id', message.message_id)
+    .eq('chat_id', message.chat.id);
 
-  if (error) {
-    console.error('Error storing channel post:', error);
-    return { success: false, error: error.message };
-  }
-
-  return { success: true };
+  if (error) throw error;
 };
 
-export const handleDeleteMessage = async (event: any) => {
-  try {
-    const messageId = event.message_id;
-    const chatId = event.chat.id;
+const withRetry = async <T>(
+  operation: () => Promise<T>,
+  retries = 3,
+  delay = 1000
+): Promise<T> => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (i === retries - 1) throw error;
+      await new Promise(r => setTimeout(r, delay * Math.pow(2, i)));
+    }
+  }
+  throw new Error('All retries failed');
+};
 
-    // Find the original message in the database
-    const { data: existingMessage, error: selectError } = await supabase
+const validateMessage = (message: TelegramMessage) => {
+  if (!message.chat?.id) throw new Error('Missing chat ID');
+  if (!message.message_id) throw new Error('Missing message ID');
+  if (message.media_group_id && !message.photo && !message.document) {
+    throw new Error('Invalid media group message');
+  }
+};
+
+// 3. Add media group completion check
+const checkMediaGroupCompletion = async (
+  mediaGroupId: string,
+  supabase: SupabaseClient
+) => {
+  const { data: messages } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('media_group_id', mediaGroupId);
+
+  if (messages?.every(m => m.processing_state === 'completed')) {
+    await supabase
       .from('messages')
-      .select('*')
-      .eq('telegram_message_id', messageId)
-      .eq('chat_id', chatId)
-      .single();
-
-    if (selectError) {
-      console.error('Error fetching original message:', selectError);
-      return { statusCode: 500, body: 'Error fetching original message' };
-    }
-
-    if (!existingMessage) {
-      console.warn('Original message not found in database.');
-      return { statusCode: 404, body: 'Original message not found' };
-    }
-
-    // Move the message to the deleted_messages table
-    const { error: insertError } = await supabase
-      .from('deleted_messages')
-      .insert([{
-        ...existingMessage,
-        deleted_at: new Date().toISOString(),
-        original_message_id: existingMessage.id,
-      }]);
-
-    if (insertError) {
-      console.error('Error moving message to deleted_messages table:', insertError);
-      return { statusCode: 500, body: 'Error moving message to deleted_messages table' };
-    }
-
-    // Delete the original message from the messages table
-    const { error: deleteError } = await supabase
-      .from('messages')
-      .delete()
-      .eq('telegram_message_id', messageId)
-      .eq('chat_id', chatId);
-
-    if (deleteError) {
-      console.error('Error deleting message from messages table:', deleteError);
-      return { statusCode: 500, body: 'Error deleting message from messages table' };
-    }
-
-    return { statusCode: 200, body: 'Delete message processed successfully' };
-  } catch (error) {
-    console.error('Error handling delete message:', error);
-    return { statusCode: 500, body: 'Error handling delete message' };
+      .update({
+        group_completed_at: new Date().toISOString()
+      })
+      .eq('media_group_id', mediaGroupId);
   }
 };

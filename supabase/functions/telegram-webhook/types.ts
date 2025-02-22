@@ -1,7 +1,15 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 
 export type TelegramChatType = 'private' | 'group' | 'supergroup' | 'channel';
-export type ProcessingStateType = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
+export type ProcessingStateType = 
+  | 'initialized'    // Initial state
+  | 'pending'        // Waiting for processing
+  | 'processing'     // Currently being processed
+  | 'completed'      // Successfully processed
+  | 'error'          // Failed processing
+  | 'no_caption'     // No caption to process
+  | 'group_pending'  // Waiting for group completion
+  | 'deleted';       // Message was deleted
 export type TelegramOtherMessageType = 
   | 'text'
   | 'command'
