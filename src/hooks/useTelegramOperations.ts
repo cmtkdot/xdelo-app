@@ -3,7 +3,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Message } from "@/types";
+import type { Message, AnalyzedContent } from "@/types";
 
 export const useTelegramOperations = () => {
   const [isProcessing, setIsProcessing] = useState<Record<string, boolean>>({});
@@ -20,7 +20,8 @@ export const useTelegramOperations = () => {
         const { data: groupMessages } = await supabase
           .from('messages')
           .select('*')
-          .eq('media_group_id', message.media_group_id);
+          .eq('media_group_id', message.media_group_id)
+          .returns<Message[]>();
           
         if (groupMessages) {
           messagesToDelete = groupMessages;
