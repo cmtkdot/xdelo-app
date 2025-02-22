@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { parseManually } from "./utils/manualParser.ts";
 import { AnalysisRequest, AnalyzedContent } from "./types";
 import { logParserEvent } from "./utils/webhookLogs.ts";
+import { ProcessingState } from "../telegram-webhook/types";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

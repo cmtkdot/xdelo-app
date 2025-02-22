@@ -98,12 +98,12 @@ export interface GlProduct {
 
 export interface MediaItem {
   id: string;
-  public_url?: string;
-  mime_type?: string;
+  public_url: string;
+  mime_type: string | null;
   created_at: string;
-  analyzed_content?: AnalyzedContent;
-  file_id?: string;
-  file_unique_id?: string;
+  analyzed_content: AnalyzedContent | null;
+  file_id: string | null;
+  file_unique_id: string | null;
   width?: number;
   height?: number;
   caption?: string;

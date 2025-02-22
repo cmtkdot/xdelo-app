@@ -38,7 +38,9 @@ export const handleMessage = async (
           mime_type: mediaInfo.mimeType,
           file_size: mediaInfo.fileSize,
           width: mediaInfo.width,
-          height: mediaInfo.height
+          height: mediaInfo.height,
+          duration: mediaInfo.duration,
+          media_type: mediaInfo.mediaType
         }
       };
 
@@ -121,16 +123,34 @@ const extractMediaInfo = (message: TelegramMessage) => {
       mimeType: 'image/jpeg',
       width: largestPhoto.width,
       height: largestPhoto.height,
-      fileSize: largestPhoto.file_size
+      fileSize: largestPhoto.file_size,
+      mediaType: 'photo'
+    };
+  }
+  
+  if (message.video) {
+    return {
+      fileId: message.video.file_id,
+      fileUniqueId: message.video.file_unique_id,
+      mimeType: message.video.mime_type || 'video/mp4',
+      width: message.video.width,
+      height: message.video.height,
+      duration: message.video.duration,
+      fileSize: message.video.file_size,
+      mediaType: 'video'
     };
   }
   
   if (message.document) {
+    const isVideo = message.document.mime_type?.startsWith('video/');
+    const isImage = message.document.mime_type?.startsWith('image/');
+    
     return {
       fileId: message.document.file_id,
       fileUniqueId: message.document.file_unique_id,
       mimeType: message.document.mime_type,
-      fileSize: message.document.file_size
+      fileSize: message.document.file_size,
+      mediaType: isVideo ? 'video' : isImage ? 'photo' : 'document'
     };
   }
   

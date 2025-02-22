@@ -272,13 +272,14 @@ export interface ChatInfo {
 }
 
 export interface MediaInfo {
-  file_id: string;
-  file_unique_id: string;
-  mime_type?: string;
-  file_size?: number;
+  fileId: string;
+  fileUniqueId: string;
+  mimeType?: string;
+  fileSize?: number;
   width?: number;
   height?: number;
   duration?: number;
+  mediaType: 'photo' | 'video' | 'document';
 }
 
 export interface EditHistoryEntry {
@@ -367,6 +368,7 @@ export interface MessageData {
   sender_chat_id?: number;
   created_at?: string;
   updated_at?: string;
+  media_type?: 'photo' | 'video' | 'document';
 }
 
 export interface TelegramError {
