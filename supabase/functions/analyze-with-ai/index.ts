@@ -1,10 +1,20 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Configuration, OpenAIApi } from "https://esm.sh/openai@3.2.1";
 
 // Types
 type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
+
+interface SyncMetadata {
+  sync_source_message_id: string;
+  media_group_id: string;
+}
+
+interface ParsingMetadata {
+  method: 'ai';
+  timestamp: string;
+  confidence: number;
+}
 
 interface AnalyzedContent {
   product_name?: string;
@@ -13,15 +23,8 @@ interface AnalyzedContent {
   purchase_date?: string;
   quantity?: number;
   notes?: string;
-  parsing_metadata?: {
-    method: 'ai';
-    timestamp: string;
-    confidence: number;
-  };
-  sync_metadata?: {
-    sync_source_message_id?: string;
-    media_group_id?: string;
-  };
+  parsing_metadata?: ParsingMetadata;
+  sync_metadata?: SyncMetadata;
 }
 
 const corsHeaders = {
@@ -29,7 +32,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function analyzeWithAI(caption: string, existingContent: any = null): Promise<AnalyzedContent> {
+async function analyzeWithAI(caption: string, existingContent: AnalyzedContent | null = null): Promise<AnalyzedContent> {
   console.log('[ai-analysis] Starting AI analysis of caption:', { 
     caption_length: caption.length,
     has_existing_content: !!existingContent 
@@ -120,7 +123,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messageId, caption, existingContent } = await req.json();
+    const { messageId, caption, existingContent, correlationId, media_group_id } = await req.json();
     
     if (!messageId || !caption) {
       throw new Error('Missing required parameters: messageId and caption');
@@ -129,7 +132,9 @@ serve(async (req) => {
     console.log('[ai-analysis] Starting analysis:', { 
       messageId, 
       caption_length: caption?.length,
-      has_existing_content: !!existingContent
+      has_existing_content: !!existingContent,
+      correlationId,
+      media_group_id
     });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') as string;
@@ -141,7 +146,8 @@ serve(async (req) => {
       .from('messages')
       .update({ 
         processing_state: 'processing',
-        processing_started_at: new Date().toISOString()
+        processing_started_at: new Date().toISOString(),
+        processing_correlation_id: correlationId
       })
       .eq('id', messageId);
 
@@ -152,13 +158,32 @@ serve(async (req) => {
     // Perform AI analysis
     const analyzedContent = await analyzeWithAI(caption, existingContent);
 
+    if (media_group_id) {
+      // Call xdelo_sync_media_group_content function
+      const { error: syncError } = await supabase.rpc(
+        'xdelo_sync_media_group_content',
+        {
+          p_source_message_id: messageId,
+          p_media_group_id: media_group_id,
+          p_analyzed_content: analyzedContent
+        }
+      );
+
+      if (syncError) {
+        throw new Error(`Failed to sync media group content: ${syncError.message}`);
+      }
+
+      console.log('[ai-analysis] Successfully synced media group content');
+    }
+
     // Update the message with AI results
     const { error: updateError } = await supabase
       .from('messages')
       .update({
         analyzed_content: analyzedContent,
         processing_state: 'completed',
-        processing_completed_at: new Date().toISOString()
+        processing_completed_at: new Date().toISOString(),
+        processing_correlation_id: correlationId
       })
       .eq('id', messageId);
 
@@ -181,7 +206,7 @@ serve(async (req) => {
     
     // Update message to error state
     try {
-      const { messageId } = await req.json();
+      const { messageId, correlationId } = await req.json();
       if (messageId) {
         const supabaseUrl = Deno.env.get('SUPABASE_URL') as string;
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string;
@@ -193,13 +218,15 @@ serve(async (req) => {
             processing_state: 'error',
             error_message: error.message,
             processing_completed_at: new Date().toISOString(),
-            last_error_at: new Date().toISOString()
+            last_error_at: new Date().toISOString(),
+            processing_correlation_id: correlationId
           })
           .eq('id', messageId);
 
         console.log('[ai-analysis] Updated message to error state:', { 
           messageId, 
-          error: error.message 
+          error: error.message,
+          correlationId 
         });
       }
     } catch (updateError) {

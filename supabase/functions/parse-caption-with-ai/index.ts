@@ -1,9 +1,19 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
 // Types
 type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
+
+interface SyncMetadata {
+  sync_source_message_id: string;
+  media_group_id: string;
+}
+
+interface ParsingMetadata {
+  method: 'manual' | 'ai';
+  timestamp: string;
+  needs_ai_analysis?: boolean;
+}
 
 interface AnalyzedContent {
   product_name?: string;
@@ -12,21 +22,15 @@ interface AnalyzedContent {
   purchase_date?: string;
   quantity?: number;
   notes?: string;
-  parsing_metadata?: {
-    method: 'manual';
-    timestamp: string;
-    needs_ai_analysis?: boolean;
-  };
-  sync_metadata?: {
-    sync_source_message_id?: string;
-    media_group_id?: string;
-  };
+  parsing_metadata?: ParsingMetadata;
+  sync_metadata?: SyncMetadata;
 }
 
 interface MessageUpdate {
   analyzed_content: AnalyzedContent | null;
   processing_state: ProcessingState;
   processing_completed_at?: string;
+  processing_correlation_id?: string;
   is_original_caption?: boolean;
   group_caption_synced?: boolean;
   message_caption_id?: string;
@@ -124,115 +128,36 @@ async function handleMediaGroupSync(
   supabase: any,
   messageId: string,
   media_group_id: string,
-  analyzedContent: AnalyzedContent
+  analyzedContent: AnalyzedContent,
+  correlationId?: string
 ): Promise<void> {
-  console.log('[media-group-sync] Starting sync process:', { messageId, media_group_id });
+  console.log('[media-group-sync] Starting sync process:', { 
+    messageId, 
+    media_group_id,
+    correlationId 
+  });
 
   try {
-    // Get group statistics
-    const { data: groupStats, error: statsError } = await supabase
-      .from('messages')
-      .select('id, created_at')
-      .eq('media_group_id', media_group_id);
+    // Call xdelo_sync_media_group_content function
+    const { data: syncResult, error: syncError } = await supabase.rpc(
+      'xdelo_sync_media_group_content',
+      {
+        p_source_message_id: messageId,
+        p_media_group_id: media_group_id,
+        p_analyzed_content: analyzedContent
+      }
+    );
 
-    if (statsError) {
-      throw new Error(`Failed to get group statistics: ${statsError.message}`);
+    if (syncError) {
+      throw new Error(`Failed to sync media group content: ${syncError.message}`);
     }
 
-    const groupFirstTime = groupStats.length > 0 
-      ? new Date(Math.min(...groupStats.map(m => new Date(m.created_at).getTime())))
-      : new Date();
-    const groupLastTime = groupStats.length > 0
-      ? new Date(Math.max(...groupStats.map(m => new Date(m.created_at).getTime())))
-      : new Date();
-
-    console.log('[media-group-sync] Group statistics:', {
-      total_messages: groupStats.length,
-      first_message: groupFirstTime,
-      last_message: groupLastTime
+    console.log('[media-group-sync] Successfully synced media group content:', {
+      messageId,
+      media_group_id,
+      correlationId
     });
 
-    // Check for existing analyzed content
-    const { data: existingAnalyzed, error: existingError } = await supabase
-      .from('messages')
-      .select('analyzed_content, id')
-      .eq('media_group_id', media_group_id)
-      .neq('id', messageId)
-      .not('analyzed_content', 'is', null)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (existingError) {
-      throw new Error(`Failed to check existing analyzed content: ${existingError.message}`);
-    }
-
-    if (existingAnalyzed?.analyzed_content) {
-      console.log('[media-group-sync] Found existing analyzed content:', { 
-        source_message_id: existingAnalyzed.id 
-      });
-
-      // Sync this message with existing analyzed content
-      const syncedContent: AnalyzedContent = {
-        ...existingAnalyzed.analyzed_content,
-        sync_metadata: {
-          sync_source_message_id: existingAnalyzed.id,
-          media_group_id
-        }
-      };
-
-      const { error: syncError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: syncedContent,
-          processing_state: 'completed',
-          processing_completed_at: new Date().toISOString(),
-          is_original_caption: false,
-          group_caption_synced: true,
-          message_caption_id: existingAnalyzed.id,
-          group_first_message_time: groupFirstTime.toISOString(),
-          group_last_message_time: groupLastTime.toISOString()
-        })
-        .eq('id', messageId);
-
-      if (syncError) {
-        throw new Error(`Failed to sync with existing content: ${syncError.message}`);
-      }
-
-      console.log('[media-group-sync] Successfully synced with existing content');
-    } else {
-      console.log('[media-group-sync] No existing content found, syncing group to this message');
-
-      // This is the first analyzed content, sync others to this one
-      const syncedContent: AnalyzedContent = {
-        ...analyzedContent,
-        sync_metadata: {
-          sync_source_message_id: messageId,
-          media_group_id
-        }
-      };
-
-      const { error: groupSyncError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: syncedContent,
-          processing_state: 'completed',
-          processing_completed_at: new Date().toISOString(),
-          is_original_caption: false,
-          group_caption_synced: true,
-          message_caption_id: messageId,
-          group_first_message_time: groupFirstTime.toISOString(),
-          group_last_message_time: groupLastTime.toISOString()
-        })
-        .eq('media_group_id', media_group_id)
-        .neq('id', messageId);
-
-      if (groupSyncError) {
-        throw new Error(`Failed to sync group to this message: ${groupSyncError.message}`);
-      }
-
-      console.log('[media-group-sync] Successfully synced group to this message');
-    }
   } catch (error) {
     console.error('[media-group-sync] Error during sync:', error);
     throw error;
@@ -267,7 +192,8 @@ serve(async (req) => {
       .from('messages')
       .update({ 
         processing_state: 'processing',
-        processing_started_at: new Date().toISOString()
+        processing_started_at: new Date().toISOString(),
+        processing_correlation_id: correlationId
       })
       .eq('id', messageId);
 
@@ -283,6 +209,7 @@ serve(async (req) => {
       analyzed_content: parsedContent,
       processing_state: 'completed',
       processing_completed_at: new Date().toISOString(),
+      processing_correlation_id: correlationId,
       is_original_caption: true
     };
 
@@ -298,7 +225,7 @@ serve(async (req) => {
 
     // Handle media group synchronization if needed
     if (media_group_id) {
-      await handleMediaGroupSync(supabase, messageId, media_group_id, parsedContent);
+      await handleMediaGroupSync(supabase, messageId, media_group_id, parsedContent, correlationId);
     }
 
     return new Response(
@@ -314,7 +241,7 @@ serve(async (req) => {
     
     // Try to update message to error state
     try {
-      const { messageId } = await req.json();
+      const { messageId, correlationId } = await req.json();
       if (messageId) {
         const supabaseUrl = Deno.env.get('SUPABASE_URL') as string;
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string;
@@ -325,7 +252,8 @@ serve(async (req) => {
           processing_state: 'error',
           error_message: error.message,
           processing_completed_at: new Date().toISOString(),
-          last_error_at: new Date().toISOString()
+          last_error_at: new Date().toISOString(),
+          processing_correlation_id: correlationId
         };
 
         await supabase
@@ -333,7 +261,11 @@ serve(async (req) => {
           .update(errorUpdate)
           .eq('id', messageId);
 
-        console.log('[parse-caption] Updated message to error state:', { messageId, error: error.message });
+        console.log('[parse-caption] Updated message to error state:', { 
+          messageId, 
+          error: error.message,
+          correlationId 
+        });
       }
     } catch (updateError) {
       console.error('[parse-caption] Error updating error state:', updateError);
