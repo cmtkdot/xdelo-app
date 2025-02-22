@@ -1,18 +1,8 @@
-/// <reference lib="deno.ns" />
-/// <reference lib="dom" />
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { analyzeCaption } from "./utils/aiAnalyzer.ts";
 import { manualParse } from "./utils/manualParser.ts";
-import { ParsedContent, syncMediaGroup } from "./types.ts";
-
-// For TypeScript type checking
-declare const Deno: {
-  env: {
-    get(key: string): string | undefined;
-  };
-};
+import { ParsedContent } from "../_shared/types.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -81,13 +71,18 @@ async function updateMediaGroupMessages(
     const groupInfo = await getMediaGroupInfo(supabase, mediaGroupId);
     console.log('📊 Media group status:', groupInfo);
 
-    // Sync media group using direct database operations
-    await syncMediaGroup(
-      supabase,
-      messageId,
-      mediaGroupId,
-      analyzedContent
-    );
+    // Update all messages in the group via the stored procedure
+    const { error: procError } = await supabase
+      .rpc('xdelo_sync_media_group_content', {
+        p_source_message_id: messageId,
+        p_media_group_id: mediaGroupId,
+        p_correlation_id: crypto.randomUUID()
+      });
+
+    if (procError) {
+      console.error('❌ Error in xdelo_sync_media_group_content:', procError);
+      throw procError;
+    }
 
     console.log('✅ Successfully processed media group analysis:', groupInfo);
   } catch (error) {
@@ -96,12 +91,7 @@ async function updateMediaGroupMessages(
   }
 }
 
-async function analyzeWithFallback(
-  caption: string,
-  messageId: string,
-  mediaGroupId: string | null,
-  supabaseClient: SupabaseClient
-): Promise<ParsedContent> {
+async function analyzeWithFallback(caption: string): Promise<ParsedContent> {
   // Try manual parsing first
   const manualResult = await manualParse(caption);
   
@@ -114,12 +104,7 @@ async function analyzeWithFallback(
   // Try AI analysis if manual parsing needs help
   try {
     console.log('Manual parsing needs help, trying AI analysis');
-    const aiResult = await analyzeCaption(
-      caption,
-      messageId,
-      mediaGroupId,
-      supabaseClient
-    );
+    const aiResult = await analyzeCaption(caption);
     
     // Merge results, preferring AI for uncertain fields
     return {
@@ -261,14 +246,65 @@ serve(async (req) => {
       } else {
         // Try manual parsing first
         console.log('🤖 Attempting manual parsing');
-        const result = await analyzeWithFallback(
-          caption,
-          messageId,
-          media_group_id,
-          supabase
-        );
+        const manualResult = await manualParse(caption);
+        
+        console.log('📊 Manual parsing results:', {
+          confidence: manualResult.parsing_metadata?.confidence,
+          needs_ai: manualResult.parsing_metadata?.needs_ai_analysis,
+          product_name: manualResult.product_name?.substring(0, 30) + '...',
+          has_product_code: !!manualResult.product_code,
+          has_quantity: !!manualResult.quantity,
+          fallbacks: manualResult.parsing_metadata?.fallbacks_used
+        });
+        
+        // If manual parsing needs help, try AI
+        if (manualResult.parsing_metadata?.needs_ai_analysis) {
+          console.log('🤖 Manual parsing needs help, trying AI');
+          try {
+            const aiResult = await analyzeCaption(caption);
+            
+            console.log('📊 AI analysis results:', {
+              confidence: aiResult.parsing_metadata?.confidence,
+              product_name: aiResult.product_name?.substring(0, 30) + '...',
+              has_product_code: !!aiResult.product_code,
+              has_quantity: !!aiResult.quantity
+            });
+            
+            // Merge results
+            analyzedContent = {
+              product_name: aiResult.product_name || manualResult.product_name,
+              product_code: manualResult.product_code || aiResult.product_code,
+              vendor_uid: manualResult.vendor_uid || aiResult.vendor_uid,
+              purchase_date: manualResult.purchase_date || aiResult.purchase_date,
+              quantity: manualResult.quantity || aiResult.quantity,
+              notes: aiResult.notes || manualResult.notes,
+              parsing_metadata: {
+                method: 'hybrid',
+                confidence: Math.max(
+                  manualResult.parsing_metadata?.confidence || 0,
+                  aiResult.parsing_metadata?.confidence || 0
+                ),
+                manual_confidence: manualResult.parsing_metadata?.confidence,
+                ai_confidence: aiResult.parsing_metadata?.confidence,
+                timestamp: new Date().toISOString()
+              }
+            };
 
-        analyzedContent = result;
+            console.log('✨ Merged analysis results:', {
+              method: analyzedContent.parsing_metadata?.method || 'unknown',
+              final_confidence: analyzedContent.parsing_metadata?.confidence || 0,
+              manual_confidence: analyzedContent.parsing_metadata?.manual_confidence || 0,
+              ai_confidence: analyzedContent.parsing_metadata?.ai_confidence || 0
+            });
+          } catch (aiError) {
+            console.error('❌ AI analysis failed:', aiError);
+            console.log('⚠️ Falling back to manual results');
+            analyzedContent = manualResult;
+          }
+        } else {
+          console.log('✅ Manual parsing sufficient');
+          analyzedContent = manualResult;
+        }
       }
 
       console.log('💾 Updating message:', {
@@ -277,6 +313,22 @@ serve(async (req) => {
         confidence: analyzedContent.parsing_metadata?.confidence,
         has_caption: hasCaption
       });
+
+      const { error: updateError } = await supabase
+        .from('messages')
+        .update({
+          analyzed_content: analyzedContent,
+          processing_state: 'completed',
+          processing_completed_at: new Date().toISOString(),
+          is_original_caption: hasCaption,
+          processing_correlation_id: correlation_id
+        })
+        .eq('id', messageId);
+
+      if (updateError) {
+        console.error('❌ Error updating message:', updateError);
+        throw updateError;
+      }
 
       console.log('✅ Successfully updated message');
 
@@ -297,6 +349,25 @@ serve(async (req) => {
         messageId,
         correlation_id
       });
+      
+      try {
+        console.log('🔄 Updating message state to error');
+        const { error: stateError } = await createClient(
+          Deno.env.get('SUPABASE_URL') || '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+        )
+          .rpc('xdelo_update_message_processing_state', {
+            p_message_id: messageId,
+            p_state: 'error',
+            p_error: error.message
+          });
+        
+        if (stateError) {
+          console.error('❌ Error updating message state:', stateError);
+        }
+      } catch (updateError) {
+        console.error('❌ Error updating message state:', updateError);
+      }
       
       return new Response(
         JSON.stringify({
