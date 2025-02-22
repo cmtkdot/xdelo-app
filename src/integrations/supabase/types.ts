@@ -351,7 +351,7 @@ export type Database = {
         Row: {
           created_at: string | null
           email_of_user: string | null
-          glide_id: string
+          glide_id: string | null
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -372,7 +372,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           email_of_user?: string | null
-          glide_id: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -393,7 +393,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           email_of_user?: string | null
-          glide_id?: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -438,7 +438,7 @@ export type Database = {
       gl_estimate_lines: {
         Row: {
           created_at: string | null
-          glide_id: string
+          glide_id: string | null
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -462,7 +462,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
-          glide_id: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -486,7 +486,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
-          glide_id?: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -638,7 +638,7 @@ export type Database = {
           expense_tax: string | null
           expense_text_to_json: string | null
           expense_total: string | null
-          glide_id: string
+          glide_id: string | null
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
@@ -663,7 +663,7 @@ export type Database = {
           expense_tax?: string | null
           expense_text_to_json?: string | null
           expense_total?: string | null
-          glide_id: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -688,7 +688,7 @@ export type Database = {
           expense_tax?: string | null
           expense_text_to_json?: string | null
           expense_total?: string | null
-          glide_id?: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -1222,7 +1222,7 @@ export type Database = {
           ai_tracking_ai_extracted_text: string | null
           ai_tracking_json_extracted: Json | null
           created_at: string | null
-          glide_id: string
+          glide_id: string | null
           ical_calendar_google_updated: boolean | null
           ical_end_date: string | null
           ical_last_tracked: string | null
@@ -1282,7 +1282,7 @@ export type Database = {
           ai_tracking_ai_extracted_text?: string | null
           ai_tracking_json_extracted?: Json | null
           created_at?: string | null
-          glide_id: string
+          glide_id?: string | null
           ical_calendar_google_updated?: boolean | null
           ical_end_date?: string | null
           ical_last_tracked?: string | null
@@ -1342,7 +1342,7 @@ export type Database = {
           ai_tracking_ai_extracted_text?: string | null
           ai_tracking_json_extracted?: Json | null
           created_at?: string | null
-          glide_id?: string
+          glide_id?: string | null
           ical_calendar_google_updated?: boolean | null
           ical_end_date?: string | null
           ical_last_tracked?: string | null
@@ -1899,30 +1899,6 @@ export type Database = {
           needs_manual_review?: boolean | null
           processing_status?: string | null
           updated_at?: string | null
-        }
-        Relationships: []
-      }
-      settings: {
-        Row: {
-          bot_token: string | null
-          created_at: string | null
-          id: string
-          updated_at: string | null
-          webhook_url: string | null
-        }
-        Insert: {
-          bot_token?: string | null
-          created_at?: string | null
-          id?: string
-          updated_at?: string | null
-          webhook_url?: string | null
-        }
-        Update: {
-          bot_token?: string | null
-          created_at?: string | null
-          id?: string
-          updated_at?: string | null
-          webhook_url?: string | null
         }
         Relationships: []
       }

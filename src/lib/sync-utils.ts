@@ -1,6 +1,6 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { Database } from '../types/supabase';
+import { Database } from '../types';
 
 export async function logSyncOperation(
   supabase: SupabaseClient<Database>,
