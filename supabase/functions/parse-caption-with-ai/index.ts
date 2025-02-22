@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { parseManually } from "./utils/manualParser.ts";
+import { AnalysisRequest, AnalyzedContent } from "./types";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,8 +10,8 @@ const corsHeaders = {
 
 // 1. Add request validation
 const validateRequest = (data: any): AnalysisRequest => {
-  if (!data?.messageId || !data?.caption) {
-    throw new Error('Missing required fields: messageId and caption');
+  if (!data?.messageId || !data?.caption || !data?.correlationId) {
+    throw new Error('Missing required fields: messageId, caption, and correlationId');
   }
   return data as AnalysisRequest;
 };
@@ -115,12 +116,11 @@ serve(async (req) => {
 
   let requestData;
   try {
-    // Clone the request before consuming the body
     requestData = await req.clone().json();
     const { messageId, caption, media_group_id, correlationId } = requestData;
     
-    console.log('Starting caption analysis:', {
-      messageId, 
+    console.log('🎯 Starting caption analysis:', {
+      message_id: messageId, 
       media_group_id,
       caption_length: caption?.length,
       correlation_id: correlationId
@@ -132,25 +132,41 @@ serve(async (req) => {
     );
 
     // Manual parsing attempt
+    console.log('🔍 Attempting manual parsing...');
     let analyzedContent;
     const manualResult = await parseManually(caption);
     
     if (manualResult && manualResult.product_code) {
-      console.log('Manual parsing successful');
+      console.log('✅ Manual parsing successful:', {
+        correlation_id: correlationId,
+        product_code: manualResult.product_code,
+        confidence: manualResult.parsing_metadata?.confidence
+      });
+      
       analyzedContent = {
         ...manualResult,
         parsing_metadata: {
           method: 'manual',
           confidence: 1.0,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          correlation_id: correlationId
         }
       };
     } else {
-      console.log('Manual parsing incomplete, attempting AI analysis...');
+      console.log('⚠️ Manual parsing incomplete, attempting AI analysis...', {
+        correlation_id: correlationId,
+        manual_result: manualResult
+      });
+
       const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
       if (!openAIApiKey) {
         throw new Error('OpenAI API key not configured');
       }
+
+      console.log('🤖 Calling OpenAI API...', {
+        correlation_id: correlationId,
+        caption_length: caption?.length
+      });
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -176,23 +192,51 @@ serve(async (req) => {
         })
       });
 
-      if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
+      if (!response.ok) {
+        console.error('❌ OpenAI API error:', {
+          correlation_id: correlationId,
+          status: response.status,
+          statusText: response.statusText
+        });
+        throw new Error(`OpenAI API error: ${response.statusText}`);
+      }
       
       const aiResult = await response.json();
-      const aiAnalysis = JSON.parse(aiResult.choices[0].message.content);
-      analyzedContent = {
-        ...aiAnalysis,
-        parsing_metadata: {
-          method: 'ai',
-          confidence: 0.7,
-          timestamp: new Date().toISOString()
-        }
-      };
-      console.log('AI analysis successful');
+      console.log('✨ Received AI response:', {
+        correlation_id: correlationId,
+        response_length: JSON.stringify(aiResult).length
+      });
+
+      try {
+        const aiAnalysis = JSON.parse(aiResult.choices[0].message.content);
+        analyzedContent = {
+          ...aiAnalysis,
+          parsing_metadata: {
+            method: 'ai',
+            confidence: 0.7,
+            timestamp: new Date().toISOString(),
+            correlation_id: correlationId
+          }
+        };
+        console.log('✅ AI analysis successful:', {
+          correlation_id: correlationId,
+          product_code: aiAnalysis.product_code
+        });
+      } catch (parseError) {
+        console.error('❌ Failed to parse AI response:', {
+          correlation_id: correlationId,
+          error: parseError.message,
+          ai_response: aiResult.choices[0].message.content
+        });
+        throw new Error('Failed to parse AI response');
+      }
     }
 
     if (media_group_id) {
-      console.log('Syncing media group:', media_group_id);
+      console.log('🔄 Syncing media group:', {
+        correlation_id: correlationId,
+        media_group_id
+      });
       analyzedContent = {
         ...analyzedContent,
         sync_metadata: {
@@ -202,24 +246,13 @@ serve(async (req) => {
       };
     }
 
-    // Insert webhook log for successful analysis
-    const { error: logError } = await supabase
-      .from('webhook_logs')
-      .insert({
-        event_type: 'analysis_complete',
-        correlation_id: requestData.correlationId,
-        message_id: requestData.telegram_message_id, // Use telegram_message_id instead of UUID
-        metadata: JSON.stringify({
-          analysis_method: analyzedContent.parsing_metadata.method,
-          confidence: analyzedContent.parsing_metadata.confidence
-        })
-      });
-
-    if (logError) {
-      console.error('Error logging webhook event:', logError);
-    }
-
     // Update message with analyzed content
+    console.log('💾 Updating message with analysis:', {
+      correlation_id: correlationId,
+      message_id: messageId,
+      analysis_method: analyzedContent.parsing_metadata.method
+    });
+
     const { error: updateError } = await supabase
       .from('messages')
       .update({
@@ -229,11 +262,19 @@ serve(async (req) => {
       })
       .eq('id', messageId);
 
-    if (updateError) throw updateError;
-
-    if (!validateAnalyzedContent(analyzedContent)) {
-      throw new Error('Invalid analysis result');
+    if (updateError) {
+      console.error('❌ Error updating message:', {
+        correlation_id: correlationId,
+        error: updateError.message
+      });
+      throw updateError;
     }
+
+    console.log('✅ Analysis completed successfully:', {
+      correlation_id: correlationId,
+      message_id: messageId,
+      product_code: analyzedContent.product_code
+    });
 
     return new Response(
       JSON.stringify({ 
@@ -244,7 +285,11 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in parse-caption-with-ai:', error);
+    console.error('❌ Analysis failed:', {
+      correlation_id: requestData?.correlationId,
+      error: error.message,
+      stack: error.stack
+    });
     
     try {
       if (requestData?.messageId) {
@@ -253,17 +298,6 @@ serve(async (req) => {
           Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
         );
 
-        // Log error to webhook_logs using telegram_message_id
-        await supabase
-          .from('webhook_logs')
-          .insert({
-            event_type: 'analysis_error',
-            message_id: requestData.telegram_message_id, // Use telegram_message_id instead of UUID
-            error_message: error.message,
-            correlation_id: requestData.correlationId
-          });
-
-        // Update message error state
         await supabase
           .from('messages')
           .update({
@@ -273,12 +307,29 @@ serve(async (req) => {
             last_error_at: new Date().toISOString()
           })
           .eq('id', requestData.messageId);
+
+        console.log('⚠️ Updated message with error state:', {
+          correlation_id: requestData.correlationId,
+          message_id: requestData.messageId
+        });
       }
     } catch (updateError) {
-      console.error('Failed to update message error state:', updateError);
+      console.error('❌ Failed to update error state:', {
+        correlation_id: requestData?.correlationId,
+        error: updateError.message
+      });
     }
     
-    await handleError(supabase, error, messageId);
-    throw error;
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: error.message,
+        correlation_id: requestData?.correlationId 
+      }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
 });
