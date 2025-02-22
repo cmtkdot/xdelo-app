@@ -34,16 +34,22 @@ export const ImageSwiper = ({ media, className }: ImageSwiperProps) => {
     }
   };
 
+  console.log('Current media:', currentMedia); // Debug log
+  console.log('Is video:', isVideo); // Debug log
+
   return (
     <div className={cn("relative w-full h-full", className)}>
       {isVideo ? (
         <video
-          src={currentMedia.public_url}
+          key={currentMedia.public_url} // Add key to force video reload
+          src={currentMedia.public_url || undefined}
           controls
           className="absolute inset-0 w-full h-full object-contain bg-black"
+          playsInline // Add playsinline for mobile
         />
       ) : (
         <img
+          key={currentMedia.public_url} // Add key to force image reload
           src={currentMedia.public_url || "/placeholder.svg"}
           alt={currentMedia.caption || "Media content"}
           className="absolute inset-0 w-full h-full object-cover"
