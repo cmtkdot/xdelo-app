@@ -1,4 +1,3 @@
-
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
 
 export interface AnalyzedContent {
@@ -34,4 +33,12 @@ export interface MessageUpdate {
   message_caption_id?: string;
   error_message?: string;
   last_error_at?: string;
+}
+
+export interface AnalysisRequest {
+  messageId: number;
+  chat_id?: number;
+  caption: string;
+  media_group_id?: string;
+  correlation_id?: string;
 }
