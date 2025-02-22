@@ -1,103 +1,157 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { corsHeaders } from './authUtils.ts';
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-const supabaseUrl = Deno.env.get('SUPABASE_URL')
-const supabaseServiceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-const telegramToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
-
-if (!supabaseUrl || !supabaseServiceRole || !telegramToken) {
-  throw new Error('Missing environment variables')
-}
-
-const supabase = createClient(supabaseUrl, supabaseServiceRole)
-
-async function getFileUrl(fileId: string): Promise<string> {
-  console.log('🔍 Getting file URL for fileId:', fileId)
-  const response = await fetch(
-    `https://api.telegram.org/bot${telegramToken}/getFile?file_id=${fileId}`
-  )
-  const data = await response.json()
-  if (!data.ok) throw new Error('Failed to get file path')
-  return `https://api.telegram.org/file/bot${telegramToken}/${data.result.file_path}`
-}
-
-async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeType: string): Promise<string> {
-  console.log('📤 Uploading media to storage:', { fileUniqueId, mimeType })
-  
-  const ext = mimeType.split('/')[1] || 'bin'
-  const storagePath = `${fileUniqueId}.${ext}`
-  
+const logWebhookEvent = async (supabase: any, event: any) => {
   try {
-    const mediaResponse = await fetch(fileUrl)
-    if (!mediaResponse.ok) throw new Error('Failed to download media from Telegram')
-    
-    const mediaBuffer = await mediaResponse.arrayBuffer()
-
-    const { error: uploadError } = await supabase
-      .storage
-      .from('telegram-media')
-      .upload(storagePath, mediaBuffer, {
-        contentType: mimeType,
-        upsert: true
-      })
-
-    if (uploadError) throw uploadError
-
-    const { data: { publicUrl } } = supabase
-      .storage
-      .from('telegram-media')
-      .getPublicUrl(storagePath)
-
-    console.log('✅ Media uploaded successfully:', publicUrl)
-    return publicUrl
-
+    await supabase.from('webhook_logs').insert({
+      event_type: 'webhook_received',
+      raw_data: event,
+      correlation_id: crypto.randomUUID()
+    });
   } catch (error) {
-    console.error('❌ Error uploading media:', error)
-    throw error
+    console.error('Error logging webhook event:', error);
   }
-}
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const rawBody = await req.text();
-    console.log('📝 Raw request body:', rawBody);
+    const update = await req.json();
+    console.log('📥 Received webhook update:', JSON.stringify(update, null, 2));
 
-    let update;
-    try {
-      update = JSON.parse(rawBody);
-    } catch (e) {
-      console.error('❌ Failed to parse JSON:', e);
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // Log the incoming webhook
+    const correlationId = crypto.randomUUID();
+    await logWebhookEvent(supabase, update);
+
+    const message = update.message || update.channel_post || update.edited_message;
+    if (!message) {
+      console.log('❌ No message in update. Update keys:', Object.keys(update));
       return new Response(
-        JSON.stringify({ status: 'error', reason: 'invalid json' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        JSON.stringify({ status: 'skipped', reason: 'no message found' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
       );
     }
 
-    console.log('📥 Parsed webhook update:', JSON.stringify(update, null, 2));
+    // Check for media content
+    const photo = message.photo ? message.photo[message.photo.length - 1] : null;
+    const video = message.video;
+    const media = photo || video;
 
-    // Handle both regular messages and channel posts
-    const message = update.message || update.channel_post;
-    
-    if (!message) {
-      console.log('❌ No message or channel_post in update. Update keys:', Object.keys(update));
+    if (!media) {
+      console.log('📝 Processing non-media message:', message.message_id);
+      
+      // Determine message type
+      let messageType = 'text';
+      if (message.text?.startsWith('/')) messageType = 'command';
+      else if (message.sticker) messageType = 'sticker';
+      else if (message.voice) messageType = 'voice';
+      else if (message.document) messageType = 'document';
+      else if (message.location) messageType = 'location';
+      else if (message.contact) messageType = 'contact';
+      else if (message.poll) messageType = 'poll';
+      else if (message.venue) messageType = 'venue';
+      else if (message.game) messageType = 'game';
+      else if (message.invoice) messageType = 'invoice';
+
+      // Insert into other_messages
+      const { data: insertedMessage, error: insertError } = await supabase
+        .from('other_messages')
+        .insert({
+          telegram_message_id: message.message_id,
+          chat_id: message.chat.id,
+          chat_type: message.chat.type,
+          chat_title: message.chat.title,
+          message_type: messageType,
+          message_text: message.text || '',
+          is_channel_post: !!update.channel_post,
+          sender_chat_id: message.sender_chat?.id,
+          is_edited: !!update.edited_message,
+          edit_date: update.edited_message ? new Date(update.edited_message.edit_date * 1000).toISOString() : null,
+          telegram_data: update,
+          processing_state: 'completed',
+          processing_correlation_id: correlationId,
+          processing_completed_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('❌ Error inserting other_message:', insertError);
+        throw insertError;
+      }
+
       return new Response(
         JSON.stringify({ 
-          status: 'skipped', 
-          reason: 'no message or channel_post',
-          update_keys: Object.keys(update)
-        }), 
+          status: 'success', 
+          message: 'Non-media message processed',
+          type: messageType,
+          message_id: insertedMessage.id
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
       );
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    const telegramToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
+
+    if (!supabaseUrl || !supabaseServiceRole || !telegramToken) {
+      throw new Error('Missing environment variables')
+    }
+
+    async function getFileUrl(fileId: string): Promise<string> {
+      console.log('🔍 Getting file URL for fileId:', fileId)
+      const response = await fetch(
+        `https://api.telegram.org/bot${telegramToken}/getFile?file_id=${fileId}`
+      )
+      const data = await response.json()
+      if (!data.ok) throw new Error('Failed to get file path')
+      return `https://api.telegram.org/file/bot${telegramToken}/${data.result.file_path}`
+    }
+
+    async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeType: string): Promise<string> {
+      console.log('📤 Uploading media to storage:', { fileUniqueId, mimeType })
+      
+      const ext = mimeType.split('/')[1] || 'bin'
+      const storagePath = `${fileUniqueId}.${ext}`
+      
+      try {
+        const mediaResponse = await fetch(fileUrl)
+        if (!mediaResponse.ok) throw new Error('Failed to download media from Telegram')
+        
+        const mediaBuffer = await mediaResponse.arrayBuffer()
+
+        const { error: uploadError } = await supabase
+          .storage
+          .from('telegram-media')
+          .upload(storagePath, mediaBuffer, {
+            contentType: mimeType,
+            upsert: true
+          })
+
+        if (uploadError) throw uploadError
+
+        const { data: { publicUrl } } = supabase
+          .storage
+          .from('telegram-media')
+          .getPublicUrl(storagePath)
+
+        console.log('✅ Media uploaded successfully:', publicUrl)
+        return publicUrl
+
+      } catch (error) {
+        console.error('❌ Error uploading media:', error)
+        throw error
+      }
     }
 
     console.log('📨 Message content:', JSON.stringify(message, null, 2));
@@ -114,18 +168,6 @@ serve(async (req) => {
       mediaGroupId,
       mediaObject: media
     });
-
-    if (!media) {
-      console.log('❌ No media in message. Message type:', message.type);
-      return new Response(
-        JSON.stringify({ 
-          status: 'skipped', 
-          reason: 'no media',
-          messageType: message.type 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
-      )
-    }
 
     const { data: existingMedia, error: queryError } = await supabase
       .from('messages')
@@ -274,10 +316,12 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         status: 'error', 
-        message: error.message,
-        stack: error.stack 
+        message: error.message 
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    )
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
-})
+});
