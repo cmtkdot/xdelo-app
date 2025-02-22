@@ -69,11 +69,11 @@ export function useMessageProcessing() {
       await supabase.from('webhook_logs').insert({
         event_type: 'message_state_change',
         message_id: message.id,
-        metadata: {
+        metadata: JSON.stringify({
           previous_state: message.processing_state,
           new_state: 'pending',
           retry_count: (message.retry_count || 0) + 1
-        }
+        })
       });
 
       // Trigger reanalysis
@@ -106,7 +106,8 @@ export function useMessageProcessing() {
       await supabase.from('webhook_logs').insert({
         event_type: 'message_processing_error',
         message_id: message.id,
-        error_message: error.message
+        error_message: error.message,
+        metadata: JSON.stringify({ error: error.message })
       });
 
       updateProcessingState(message.id, false, error.message);

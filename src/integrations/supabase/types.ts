@@ -1612,6 +1612,44 @@ export type Database = {
           },
         ]
       }
+      message_state_logs: {
+        Row: {
+          changed_at: string | null
+          error_message: string | null
+          id: string
+          message_id: string | null
+          metadata: Json | null
+          new_state: string | null
+          previous_state: string | null
+        }
+        Insert: {
+          changed_at?: string | null
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          new_state?: string | null
+          previous_state?: string | null
+        }
+        Update: {
+          changed_at?: string | null
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          new_state?: string | null
+          previous_state?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_state_logs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
@@ -1919,6 +1957,30 @@ export type Database = {
           needs_manual_review?: boolean | null
           processing_status?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      settings: {
+        Row: {
+          bot_token: string | null
+          created_at: string | null
+          id: string
+          updated_at: string | null
+          webhook_url: string | null
+        }
+        Insert: {
+          bot_token?: string | null
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Update: {
+          bot_token?: string | null
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          webhook_url?: string | null
         }
         Relationships: []
       }
