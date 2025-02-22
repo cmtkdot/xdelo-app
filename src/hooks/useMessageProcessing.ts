@@ -26,7 +26,10 @@ const convertAnalyzedContent = (content: MessageAnalyzedContent | undefined): Js
       confidence: content.parsing_metadata.confidence,
       timestamp: content.parsing_metadata.timestamp
     } : undefined,
-    sync_metadata: content.sync_metadata
+    sync_metadata: {
+      sync_source_message_id: content.sync_metadata?.sync_source_message_id,
+      media_group_id: content.sync_metadata?.media_group_id
+    }
   };
 };
 
@@ -103,8 +106,7 @@ export function useMessageProcessing() {
         ...message.analyzed_content,
         sync_metadata: {
           sync_source_message_id: message.id,
-          media_group_id: message.media_group_id,
-          group_message_count: message.group_message_count
+          media_group_id: message.media_group_id
         }
       };
 
@@ -138,8 +140,7 @@ export function useMessageProcessing() {
         error_message: error.message,
         metadata: {
           sync_source_message_id: message.id,
-          media_group_id: message.media_group_id,
-          group_message_count: message.group_message_count
+          media_group_id: message.media_group_id
         }
       });
     }
