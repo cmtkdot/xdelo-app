@@ -1,4 +1,3 @@
-
 export interface ParsedResult {
   product_name?: string;
   product_code?: string;
@@ -20,25 +19,32 @@ export interface QuantityParseResult {
   confidence: number;
 }
 
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
+export type ProcessingState = 
+  | 'initialized'    // Initial state
+  | 'pending'        // Waiting for processing
+  | 'processing'     // Currently being processed
+  | 'completed'      // Successfully processed
+  | 'error'          // Failed processing
+  | 'no_caption'     // No caption to process
+  | 'group_pending'  // Waiting for group completion
+  | 'deleted';       // Message was deleted
 
 export interface AnalyzedContent {
   product_name?: string;
   product_code?: string;
   vendor_uid?: string;
-  purchase_date?: string;
   quantity?: number;
+  purchase_date?: string;
   notes?: string;
-  parsing_metadata?: {
-    method: 'manual' | 'ai' | 'hybrid';
+  parsing_metadata: {
+    method: 'manual' | 'ai';
     confidence: number;
     timestamp: string;
-    manual_success?: boolean;
-    fallbacks_used?: string[];
+    correlation_id: string;
   };
   sync_metadata?: {
-    sync_source_message_id?: string;
-    media_group_id?: string;
+    sync_source_message_id: string;
+    media_group_id: string;
   };
 }
 
@@ -64,4 +70,18 @@ export interface AnalysisRequest {
   media_group_id?: string;
   correlation_id?: string;
   chat_id?: number;
+}
+
+export interface ParserEvent {
+  event_type: 'analysis_start' | 'analysis_complete' | 'analysis_error';
+  message_id: string;
+  error_message?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface RequestData {
+  messageId: string;
+  caption: string;
+  correlationId: string;
+  media_group_id?: string;
 }

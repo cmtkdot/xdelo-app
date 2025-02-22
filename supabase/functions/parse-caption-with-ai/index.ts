@@ -2,18 +2,38 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { parseManually } from "./utils/manualParser.ts";
 import { AnalysisRequest, AnalyzedContent } from "./types";
+import { logParserEvent } from "./utils/webhookLogs.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface RequestData {
+  messageId: string;
+  caption: string;
+  correlationId: string;
+  media_group_id?: string;
+}
+
 // 1. Add request validation
-const validateRequest = (data: any): AnalysisRequest => {
-  if (!data?.messageId || !data?.caption || !data?.correlationId) {
+const validateRequest = (data: unknown): RequestData => {
+  if (!data || typeof data !== 'object') {
+    throw new Error('Invalid request data');
+  }
+
+  const request = data as Partial<RequestData>;
+  
+  if (!request.messageId || !request.caption || !request.correlationId) {
     throw new Error('Missing required fields: messageId, caption, and correlationId');
   }
-  return data as AnalysisRequest;
+
+  return {
+    messageId: request.messageId,
+    caption: request.caption,
+    correlationId: request.correlationId,
+    media_group_id: request.media_group_id
+  };
 };
 
 // 2. Add retry handling for OpenAI calls
@@ -92,7 +112,7 @@ const validateAnalyzedContent = (content: AnalyzedContent): boolean => {
 };
 
 // 4. Add structured error handling
-const handleError = async (supabase: SupabaseClient, error: Error, messageId: string) => {
+const handleError = async (supabase: any, error: Error, messageId: string) => {
   const errorData = {
     processing_state: 'error' as ProcessingState,
     error_message: error.message,
@@ -104,7 +124,10 @@ const handleError = async (supabase: SupabaseClient, error: Error, messageId: st
     logParserEvent(supabase, {
       event_type: 'analysis_error',
       message_id: messageId,
-      error_message: error.message
+      error_message: error.message,
+      metadata: {
+        stack: error.stack
+      }
     })
   ]);
 };

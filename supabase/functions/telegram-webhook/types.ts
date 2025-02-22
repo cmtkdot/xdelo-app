@@ -73,6 +73,62 @@ export interface TelegramVoice {
   file_size?: number;
 }
 
+export interface TelegramEntity {
+  type: string;
+  offset: number;
+  length: number;
+}
+
+export interface TelegramSticker {
+  file_id: string;
+  file_unique_id: string;
+  width: number;
+  height: number;
+  is_animated: boolean;
+  thumb?: TelegramPhoto;
+  emoji?: string;
+  set_name?: string;
+}
+
+export interface TelegramDice {
+  value: number;
+  emoji: string;
+}
+
+export interface TelegramGame {
+  title: string;
+  description: string;
+  photo: TelegramPhoto[];
+}
+
+export interface TelegramMemberUpdate {
+  status: string;
+  user: {
+    id: number;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+  };
+}
+
+export interface MessageContent {
+  text?: string;
+  caption?: string;
+  entities?: TelegramEntity[];
+  sticker?: TelegramSticker;
+  voice?: TelegramVoice;
+  document?: TelegramDocument;
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
+  contact?: {
+    phone_number: string;
+    first_name: string;
+    last_name?: string;
+  };
+}
+
 export interface TelegramMessage {
   message_id: number;
   from?: {
@@ -95,8 +151,8 @@ export interface TelegramMessage {
   document?: TelegramDocument;
   voice?: TelegramVoice;
   text?: string;
-  sticker?: any;
-  dice?: any;
+  sticker?: TelegramSticker;
+  dice?: TelegramDice;
   location?: {
     latitude: number;
     longitude: number;
@@ -114,7 +170,7 @@ export interface TelegramMessage {
     title: string;
     address: string;
   };
-  game?: any;
+  game?: TelegramGame;
   poll?: {
     id: string;
     question: string;
@@ -134,7 +190,7 @@ export interface TelegramMessage {
     id: string;
     query: string;
   };
-  entities?: any[];
+  entities?: TelegramEntity[];
   sender_chat?: {
     id: number;
     title?: string;
@@ -144,6 +200,16 @@ export interface TelegramMessage {
   update_id?: number;
   is_edited?: boolean;
   is_channel?: boolean;
+  telegram_data: {
+    message: TelegramMessage;
+    content: MessageContent;
+    edit_history?: Array<{
+      timestamp: string;
+      previous_content: MessageContent;
+      new_content: MessageContent;
+    }>;
+    member_update?: TelegramMemberUpdate;
+  };
 }
 
 export interface ChatMemberUpdate {
@@ -190,9 +256,13 @@ export interface TelegramUpdate {
   edited_channel_post?: TelegramMessage;
   callback_query?: TelegramMessage['callback_query'];
   inline_query?: TelegramMessage['inline_query'];
-  my_chat_member?: any;
-  chat_member?: any;
-  chat_join_request?: any;
+  my_chat_member?: TelegramMemberUpdate;
+  chat_member?: TelegramMemberUpdate;
+  chat_join_request?: {
+    chat: TelegramChat;
+    from: TelegramMessage['from'];
+    date: number;
+  };
 }
 
 export interface ChatInfo {
@@ -209,6 +279,42 @@ export interface MediaInfo {
   width?: number;
   height?: number;
   duration?: number;
+}
+
+export interface EditHistoryEntry {
+  timestamp: string;
+  previous_content: MessageContent;
+  new_content: MessageContent;
+}
+
+export interface TelegramData {
+  message: TelegramMessage;
+  message_type: TelegramOtherMessageType;
+  content: MessageContent;
+  edit_history?: EditHistoryEntry[];
+  update_type?: string;
+  member_update?: TelegramMemberUpdate;
+  old_status?: string;
+  new_status?: string;
+}
+
+export interface AnalyzedContent {
+  product_name?: string;
+  product_code?: string;
+  vendor_uid?: string;
+  quantity?: number;
+  purchase_date?: string;
+  notes?: string;
+  parsing_metadata: {
+    method: 'manual' | 'ai';
+    confidence: number;
+    timestamp: string;
+    correlation_id: string;
+  };
+  sync_metadata?: {
+    sync_source_message_id: string;
+    media_group_id: string;
+  };
 }
 
 export interface MessageData {
@@ -247,7 +353,7 @@ export interface MessageData {
   processing_started_at?: string;
   processing_completed_at?: string;
   processing_correlation_id?: string;
-  analyzed_content?: Record<string, any>;
+  analyzed_content?: AnalyzedContent;
   error_message?: string;
   retry_count?: number;
   last_error_at?: string;
@@ -255,7 +361,7 @@ export interface MessageData {
   group_last_message_time?: string;
   group_message_count?: number;
   group_completed_at?: string;
-  telegram_data: Record<string, any>;
+  telegram_data: TelegramData;
   message_url?: string;
   is_channel_post?: boolean;
   sender_chat_id?: number;
@@ -268,29 +374,6 @@ export interface TelegramError {
   name?: string;
   stack?: string;
   code?: string;
-}
-
-export interface TelegramData {
-  message: TelegramMessage;
-  message_type: TelegramOtherMessageType;
-  content: {
-    text?: string;
-    entities?: any[];
-    sticker?: any;
-    voice?: any;
-    document?: any;
-    location?: any;
-    contact?: any;
-  };
-  edit_history?: Array<{
-    timestamp: string;
-    previous_content: Record<string, any>;
-    new_content: Record<string, any>;
-  }>;
-  update_type?: string;
-  member_update?: Record<string, any>;
-  old_status?: string;
-  new_status?: string;
 }
 
 export interface OtherMessageData {
@@ -318,12 +401,19 @@ export interface OtherMessageData {
   updated_at?: string;
 }
 
+export interface WebhookResponseDetails {
+  messageId?: string;
+  chatId?: number;
+  mediaGroupId?: string;
+  processingState?: string;
+}
+
 export interface WebhookResponse {
   success: boolean;
   message: string;
   correlation_id?: string;
   error?: string;
-  details?: Record<string, any>;
+  details?: WebhookResponseDetails;
 }
 
 export interface MessageEvent {

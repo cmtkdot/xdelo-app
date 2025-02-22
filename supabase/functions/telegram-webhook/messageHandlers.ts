@@ -1,12 +1,7 @@
-import { supabase } from './dbOperations';
-import { TelegramMessage, MessageEvent } from './types';
+import { TelegramMessage, MessageEvent, MessageContent, AnalyzedContent } from './types';
 import { SupabaseClient } from "@supabase/supabase-js";
-import { 
-  TelegramDocument,
-  TelegramPhoto 
-} from './types';
+import { corsHeaders } from './authUtils';
 import { getLogger } from './logger';
-import { corsHeaders } from './corsHeaders';
 import { triggerAnalysis } from './analysisHandler';
 
 export const handleMessage = async (
