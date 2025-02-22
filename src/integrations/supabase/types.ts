@@ -2484,6 +2484,22 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      xdelo_sync_media_group_content: {
+        Args: {
+          p_source_message_id: string
+          p_media_group_id: string
+          p_correlation_id: string
+        }
+        Returns: undefined
+      }
+      xdelo_update_message_processing_state: {
+        Args: {
+          p_message_id: string
+          p_state: string
+          p_error?: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       processing_state_type:

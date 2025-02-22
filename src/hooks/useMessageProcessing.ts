@@ -76,22 +76,40 @@ export function useMessageProcessing() {
     updateProcessingState(message.id, true);
     
     try {
-      const { error: syncError } = await supabase.rpc('xdelo_sync_media_group_content', {
-        p_source_message_id: message.id,
-        p_media_group_id: message.media_group_id,
-        p_correlation_id: crypto.randomUUID()
-      });
-
-      if (syncError) throw syncError;
-
-      // Update local state to show sync is complete
-      await supabase
-        .from('messages')
+      // Using direct SQL function call instead of RPC
+      const { error: syncError } = await supabase.from('messages')
         .update({
           group_caption_synced: true,
           updated_at: new Date().toISOString()
         })
-        .eq('id', message.id);
+        .eq('media_group_id', message.media_group_id)
+        .neq('id', message.id);
+
+      if (syncError) throw syncError;
+
+      // Update all messages in the group with the source message's content
+      const { error: updateError } = await supabase.from('messages')
+        .update({
+          analyzed_content: message.analyzed_content,
+          processing_state: 'completed',
+          processing_completed_at: new Date().toISOString(),
+          is_original_caption: false,
+          group_caption_synced: true,
+          message_caption_id: message.id,
+          product_name: message.product_name,
+          product_quantity: message.product_quantity,
+          product_unit: message.product_unit,
+          vendor_name: message.vendor_name,
+          product_sku: message.product_sku,
+          is_miscellaneous_item: message.is_miscellaneous_item,
+          purchase_order: message.purchase_order,
+          purchase_date: message.purchase_date,
+          updated_at: new Date().toISOString()
+        })
+        .eq('media_group_id', message.media_group_id)
+        .neq('id', message.id);
+
+      if (updateError) throw updateError;
 
       updateProcessingState(message.id, false);
     } catch (error) {
