@@ -1,7 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { Configuration, OpenAIApi } from "https://esm.sh/openai@3.2.1";
 
 // Types
 type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
@@ -14,8 +13,7 @@ interface AnalyzedContent {
   quantity?: number;
   notes?: string;
   parsing_metadata?: {
-    method: 'manual' | 'ai' | 'hybrid';
-    confidence: number;
+    method: 'manual';
     timestamp: string;
     needs_ai_analysis?: boolean;
   };
@@ -43,10 +41,13 @@ const corsHeaders = {
 
 // Manual parsing function
 function extractProductInfo(caption: string): AnalyzedContent {
+  console.log('[parse-caption] Starting manual parsing of caption:', { caption_length: caption.length });
+  
   const result: AnalyzedContent = {};
   
   // Split caption into lines
   const lines = caption.split('\n').map(line => line.trim());
+  console.log('[parse-caption] Extracted lines:', { line_count: lines.length });
 
   // Regular expressions for matching
   const vendorRegex = /^(?:vendor|supplier|from|by|uid):\s*(.+)/i;
@@ -63,6 +64,7 @@ function extractProductInfo(caption: string): AnalyzedContent {
       if (match) {
         result.vendor_uid = match[1].trim();
         hasFoundVendor = true;
+        console.log('[parse-caption] Found vendor:', { vendor_uid: result.vendor_uid });
       }
     }
     
@@ -71,17 +73,20 @@ function extractProductInfo(caption: string): AnalyzedContent {
       if (match) {
         result.product_code = match[1].trim();
         hasFoundCode = true;
+        console.log('[parse-caption] Found product code:', { product_code: result.product_code });
       }
     }
 
     const qtyMatch = line.match(quantityRegex);
     if (qtyMatch) {
       result.quantity = parseInt(qtyMatch[1], 10);
+      console.log('[parse-caption] Found quantity:', { quantity: result.quantity });
     }
 
     const dateMatch = line.match(dateRegex);
     if (dateMatch) {
       result.purchase_date = dateMatch[1].trim();
+      console.log('[parse-caption] Found purchase date:', { purchase_date: result.purchase_date });
     }
   }
 
@@ -96,52 +101,141 @@ function extractProductInfo(caption: string): AnalyzedContent {
 
   if (notes) {
     result.notes = notes;
+    console.log('[parse-caption] Extracted notes:', { notes_length: notes.length });
   }
+
+  // Add parsing metadata
+  result.parsing_metadata = {
+    method: 'manual',
+    timestamp: new Date().toISOString(),
+    needs_ai_analysis: !hasFoundVendor || !hasFoundCode
+  };
+
+  console.log('[parse-caption] Parsing completed:', { 
+    has_vendor: hasFoundVendor,
+    has_code: hasFoundCode,
+    needs_ai: result.parsing_metadata.needs_ai_analysis
+  });
 
   return result;
 }
 
-// AI analysis function
-async function analyzeWithAI(caption: string): Promise<AnalyzedContent> {
-  const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-  if (!openAIApiKey) {
-    throw new Error('OpenAI API key not configured');
-  }
-
-  const configuration = new Configuration({ apiKey: openAIApiKey });
-  const openai = new OpenAIApi(configuration);
-
-  const prompt = `Please analyze this product caption and extract the following information in a JSON format:
-- vendor_uid: Vendor or supplier identifier
-- product_code: Product code or SKU
-- quantity: Numeric quantity if mentioned
-- purchase_date: Purchase date if mentioned
-- notes: Any additional important information
-
-Caption: "${caption}"
-
-Respond only with valid JSON.`;
+async function handleMediaGroupSync(
+  supabase: any,
+  messageId: string,
+  media_group_id: string,
+  analyzedContent: AnalyzedContent
+): Promise<void> {
+  console.log('[media-group-sync] Starting sync process:', { messageId, media_group_id });
 
   try {
-    const completion = await openai.createChatCompletion({
-      model: "gpt-4o-mini",
-      messages: [
-        { 
-          role: "system", 
-          content: "You are a precise JSON extractor that analyzes product captions and returns structured data."
-        },
-        { 
-          role: "user", 
-          content: prompt 
-        }
-      ]
+    // Get group statistics
+    const { data: groupStats, error: statsError } = await supabase
+      .from('messages')
+      .select('id, created_at')
+      .eq('media_group_id', media_group_id);
+
+    if (statsError) {
+      throw new Error(`Failed to get group statistics: ${statsError.message}`);
+    }
+
+    const groupFirstTime = groupStats.length > 0 
+      ? new Date(Math.min(...groupStats.map(m => new Date(m.created_at).getTime())))
+      : new Date();
+    const groupLastTime = groupStats.length > 0
+      ? new Date(Math.max(...groupStats.map(m => new Date(m.created_at).getTime())))
+      : new Date();
+
+    console.log('[media-group-sync] Group statistics:', {
+      total_messages: groupStats.length,
+      first_message: groupFirstTime,
+      last_message: groupLastTime
     });
 
-    const responseText = completion.data.choices[0].message?.content || '{}';
-    return JSON.parse(responseText);
+    // Check for existing analyzed content
+    const { data: existingAnalyzed, error: existingError } = await supabase
+      .from('messages')
+      .select('analyzed_content, id')
+      .eq('media_group_id', media_group_id)
+      .neq('id', messageId)
+      .not('analyzed_content', 'is', null)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingError) {
+      throw new Error(`Failed to check existing analyzed content: ${existingError.message}`);
+    }
+
+    if (existingAnalyzed?.analyzed_content) {
+      console.log('[media-group-sync] Found existing analyzed content:', { 
+        source_message_id: existingAnalyzed.id 
+      });
+
+      // Sync this message with existing analyzed content
+      const syncedContent: AnalyzedContent = {
+        ...existingAnalyzed.analyzed_content,
+        sync_metadata: {
+          sync_source_message_id: existingAnalyzed.id,
+          media_group_id
+        }
+      };
+
+      const { error: syncError } = await supabase
+        .from('messages')
+        .update({
+          analyzed_content: syncedContent,
+          processing_state: 'completed',
+          processing_completed_at: new Date().toISOString(),
+          is_original_caption: false,
+          group_caption_synced: true,
+          message_caption_id: existingAnalyzed.id,
+          group_first_message_time: groupFirstTime.toISOString(),
+          group_last_message_time: groupLastTime.toISOString()
+        })
+        .eq('id', messageId);
+
+      if (syncError) {
+        throw new Error(`Failed to sync with existing content: ${syncError.message}`);
+      }
+
+      console.log('[media-group-sync] Successfully synced with existing content');
+    } else {
+      console.log('[media-group-sync] No existing content found, syncing group to this message');
+
+      // This is the first analyzed content, sync others to this one
+      const syncedContent: AnalyzedContent = {
+        ...analyzedContent,
+        sync_metadata: {
+          sync_source_message_id: messageId,
+          media_group_id
+        }
+      };
+
+      const { error: groupSyncError } = await supabase
+        .from('messages')
+        .update({
+          analyzed_content: syncedContent,
+          processing_state: 'completed',
+          processing_completed_at: new Date().toISOString(),
+          is_original_caption: false,
+          group_caption_synced: true,
+          message_caption_id: messageId,
+          group_first_message_time: groupFirstTime.toISOString(),
+          group_last_message_time: groupLastTime.toISOString()
+        })
+        .eq('media_group_id', media_group_id)
+        .neq('id', messageId);
+
+      if (groupSyncError) {
+        throw new Error(`Failed to sync group to this message: ${groupSyncError.message}`);
+      }
+
+      console.log('[media-group-sync] Successfully synced group to this message');
+    }
   } catch (error) {
-    console.error('AI Analysis error:', error);
-    return {};
+    console.error('[media-group-sync] Error during sync:', error);
+    throw error;
   }
 }
 
@@ -169,7 +263,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Set state to processing
-    await supabase
+    const { error: stateError } = await supabase
       .from('messages')
       .update({ 
         processing_state: 'processing',
@@ -177,40 +271,16 @@ serve(async (req) => {
       })
       .eq('id', messageId);
 
-    // First try manual parsing
-    let parsedContent = extractProductInfo(caption);
-    let method: 'manual' | 'ai' | 'hybrid' = 'manual';
-    let confidence = 1.0;
-
-    // If manual parsing doesn't find critical info, use AI
-    if (!parsedContent.product_code || !parsedContent.vendor_uid) {
-      console.log('[parse-caption] Manual parsing insufficient, trying AI');
-      const aiContent = await analyzeWithAI(caption);
-      
-      // Merge AI results with manual parsing, preferring AI results for missing fields
-      parsedContent = {
-        ...parsedContent,
-        ...aiContent,
-        notes: [parsedContent.notes, aiContent.notes].filter(Boolean).join('\n')
-      };
-      
-      method = parsedContent.product_code && parsedContent.vendor_uid ? 'hybrid' : 'ai';
-      confidence = 0.8; // Adjusted based on AI usage
+    if (stateError) {
+      throw new Error(`Failed to update processing state: ${stateError.message}`);
     }
 
-    // Add metadata
-    const analyzedContent: AnalyzedContent = {
-      ...parsedContent,
-      parsing_metadata: {
-        method,
-        confidence,
-        timestamp: new Date().toISOString()
-      }
-    };
+    // Perform manual parsing
+    const parsedContent = extractProductInfo(caption);
 
     // Base message update
     const baseUpdate: MessageUpdate = {
-      analyzed_content: analyzedContent,
+      analyzed_content: parsedContent,
       processing_state: 'completed',
       processing_completed_at: new Date().toISOString(),
       is_original_caption: true
@@ -223,68 +293,19 @@ serve(async (req) => {
       .eq('id', messageId);
 
     if (updateError) {
-      throw updateError;
+      throw new Error(`Failed to update message: ${updateError.message}`);
     }
 
     // Handle media group synchronization if needed
     if (media_group_id) {
-      const { data: existingAnalyzed } = await supabase
-        .from('messages')
-        .select('analyzed_content, id')
-        .eq('media_group_id', media_group_id)
-        .neq('id', messageId)
-        .not('analyzed_content', 'is', null)
-        .limit(1)
-        .maybeSingle();
-
-      if (existingAnalyzed?.analyzed_content) {
-        // Sync this message with existing analyzed content
-        const syncedContent: AnalyzedContent = {
-          ...existingAnalyzed.analyzed_content,
-          sync_metadata: {
-            sync_source_message_id: existingAnalyzed.id,
-            media_group_id
-          }
-        };
-
-        await supabase
-          .from('messages')
-          .update({
-            analyzed_content: syncedContent,
-            processing_state: 'completed',
-            processing_completed_at: new Date().toISOString(),
-            is_original_caption: false,
-            group_caption_synced: true,
-            message_caption_id: existingAnalyzed.id
-          })
-          .eq('id', messageId);
-      } else {
-        // This is the first analyzed content, sync others to this one
-        const syncedContent: AnalyzedContent = {
-          ...analyzedContent,
-          sync_metadata: {
-            sync_source_message_id: messageId,
-            media_group_id
-          }
-        };
-
-        await supabase
-          .from('messages')
-          .update({
-            analyzed_content: syncedContent,
-            processing_state: 'completed',
-            processing_completed_at: new Date().toISOString(),
-            is_original_caption: false,
-            group_caption_synced: true,
-            message_caption_id: messageId
-          })
-          .eq('media_group_id', media_group_id)
-          .neq('id', messageId);
-      }
+      await handleMediaGroupSync(supabase, messageId, media_group_id, parsedContent);
     }
 
     return new Response(
-      JSON.stringify({ success: true }), 
+      JSON.stringify({ 
+        success: true, 
+        needs_ai_analysis: parsedContent.parsing_metadata?.needs_ai_analysis 
+      }), 
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
@@ -311,6 +332,8 @@ serve(async (req) => {
           .from('messages')
           .update(errorUpdate)
           .eq('id', messageId);
+
+        console.log('[parse-caption] Updated message to error state:', { messageId, error: error.message });
       }
     } catch (updateError) {
       console.error('[parse-caption] Error updating error state:', updateError);
