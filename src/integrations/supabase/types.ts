@@ -2488,7 +2488,7 @@ export type Database = {
         Args: {
           p_source_message_id: string
           p_media_group_id: string
-          p_correlation_id: string
+          p_analyzed_content: Json
         }
         Returns: undefined
       }
