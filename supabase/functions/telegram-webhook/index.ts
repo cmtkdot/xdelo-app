@@ -1,8 +1,9 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from '@supabase/supabase-js'
-import { handleWebhookUpdate } from './messageHandlers'
-import { verifyTelegramWebhook } from './authUtils'
-import { getLogger } from './logger'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { handleWebhookUpdate } from './messageHandlers.ts'
+import { verifyTelegramWebhook } from './authUtils.ts'
+import { getLogger } from './logger.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
