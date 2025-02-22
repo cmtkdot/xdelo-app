@@ -1,4 +1,5 @@
 
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { analyzeCaptionWithAI } from "./utils/aiAnalyzer.ts";
 import { parseManually } from "./utils/manualParser.ts";
@@ -51,18 +52,29 @@ serve(async (req) => {
       }
     };
 
-    // Update the message with analyzed content
+    console.log('Updating message with analyzed content:', {
+      messageId,
+      method,
+      confidence,
+      has_product_code: Boolean(parsedContent.product_code),
+      has_vendor_uid: Boolean(parsedContent.vendor_uid)
+    });
+
+    // Update the message with analyzed content - using explicit processing_state type cast
     const { error: updateError } = await supabase
       .from('messages')
       .update({
         analyzed_content: analyzedContent,
-        processing_state: 'completed',
+        processing_state: 'completed'::processing_state_type,
         processing_completed_at: new Date().toISOString(),
         is_original_caption: true
       })
       .eq('id', messageId);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      console.error('Error updating message:', updateError);
+      throw updateError;
+    }
 
     // If this is part of a media group, check if we need to sync with existing analyzed content
     if (media_group_id) {
@@ -76,6 +88,11 @@ serve(async (req) => {
         .maybeSingle();
 
       if (existingAnalyzed?.analyzed_content) {
+        console.log('Syncing with existing analyzed content:', {
+          source_message_id: existingAnalyzed.id,
+          target_message_id: messageId
+        });
+
         // Sync this message with existing analyzed content
         const syncedContent = {
           ...existingAnalyzed.analyzed_content,
@@ -89,7 +106,7 @@ serve(async (req) => {
           .from('messages')
           .update({
             analyzed_content: syncedContent,
-            processing_state: 'completed',
+            processing_state: 'completed'::processing_state_type,
             processing_completed_at: new Date().toISOString(),
             is_original_caption: false,
             group_caption_synced: true,
@@ -97,6 +114,11 @@ serve(async (req) => {
           })
           .eq('id', messageId);
       } else {
+        console.log('First analyzed content in group, syncing others:', {
+          source_message_id: messageId,
+          media_group_id
+        });
+
         // This is the first analyzed content in the group, sync others to this one
         const syncedContent = {
           ...analyzedContent,
@@ -110,7 +132,7 @@ serve(async (req) => {
           .from('messages')
           .update({
             analyzed_content: syncedContent,
-            processing_state: 'completed',
+            processing_state: 'completed'::processing_state_type,
             processing_completed_at: new Date().toISOString(),
             is_original_caption: false,
             group_caption_synced: true,
@@ -128,6 +150,28 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error processing caption:', error);
+    
+    // Update message to error state if we have the messageId
+    try {
+      const { messageId } = await req.json();
+      if (messageId) {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL') as string;
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string;
+        const supabase = createClient(supabaseUrl, supabaseKey);
+
+        await supabase
+          .from('messages')
+          .update({
+            processing_state: 'error'::processing_state_type,
+            error_message: error.message,
+            processing_completed_at: new Date().toISOString(),
+            last_error_at: new Date().toISOString()
+          })
+          .eq('id', messageId);
+      }
+    } catch (updateError) {
+      console.error('Error updating message to error state:', updateError);
+    }
     
     return new Response(
       JSON.stringify({ error: error.message }), 
