@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -127,27 +128,31 @@ async function handleMediaGroupSync(
   supabase: any,
   messageId: string,
   media_group_id: string,
-  analyzedContent: AnalyzedContent,
-  correlationId?: string
+  analyzedContent: AnalyzedContent
 ): Promise<void> {
   logEvent('sync', 'start_media_group_sync', { 
     messageId, 
     media_group_id,
-    analyzedContent,
-    correlationId 
+    has_analyzed_content: !!analyzedContent
   });
 
   try {
-    const { error: syncError } = await supabase.rpc(
-      'xdelo_sync_media_group_content',
-      {
-        p_source_message_id: messageId,
-        p_media_group_id: media_group_id,
-        p_analyzed_content: analyzedContent
-      }
-    );
+    // Update all messages in the group with the source message's content
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        analyzed_content: analyzedContent,
+        processing_state: 'completed',
+        processing_completed_at: new Date().toISOString(),
+        is_original_caption: false,
+        group_caption_synced: true,
+        message_caption_id: messageId,
+        updated_at: new Date().toISOString()
+      })
+      .eq('media_group_id', media_group_id)
+      .neq('id', messageId);
 
-    if (syncError) throw syncError;
+    if (updateError) throw updateError;
 
     logEvent('sync', 'success', { messageId, media_group_id });
   } catch (error) {
@@ -179,14 +184,13 @@ serve(async (req) => {
     );
   }
 
-  const { messageId, caption, media_group_id, correlationId } = requestData;
+  const { messageId, caption, media_group_id } = requestData;
 
   logEvent('request', 'received', {
     requestId,
     messageId,
-    caption,
-    media_group_id,
-    correlationId
+    caption_length: caption?.length,
+    media_group_id
   });
 
   if (!messageId || !caption) {
@@ -204,14 +208,17 @@ serve(async (req) => {
     );
 
     // Set initial processing state
-    await supabase
+    const { error: stateError } = await supabase
       .from('messages')
       .update({ 
         processing_state: 'processing',
-        processing_started_at: new Date().toISOString(),
-        processing_correlation_id: correlationId
+        processing_started_at: new Date().toISOString()
       })
       .eq('id', messageId);
+
+    if (stateError) {
+      throw new Error(`Failed to update state: ${stateError.message}`);
+    }
 
     // Parse the caption
     const parsedContent = extractProductInfo(caption);
@@ -224,7 +231,7 @@ serve(async (req) => {
         processing_state: 'completed',
         processing_completed_at: new Date().toISOString(),
         is_original_caption: true,
-        processing_correlation_id: correlationId
+        updated_at: new Date().toISOString()
       })
       .eq('id', messageId);
 
@@ -232,7 +239,7 @@ serve(async (req) => {
 
     // Handle media group sync if needed
     if (media_group_id) {
-      await handleMediaGroupSync(supabase, messageId, media_group_id, parsedContent, correlationId);
+      await handleMediaGroupSync(supabase, messageId, media_group_id, parsedContent);
     }
 
     logEvent('request', 'success', {
@@ -288,7 +295,7 @@ serve(async (req) => {
         processingTime: Date.now() - startTime
       }),
       { 
-        status: error.status || 500,
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
