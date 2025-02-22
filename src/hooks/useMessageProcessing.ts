@@ -1,8 +1,8 @@
 
 import { useState, useCallback } from 'react';
-import type { MessageData } from '../components/Messages/types';
+import type { MessageData, AnalyzedContent as MessageAnalyzedContent } from '../components/Messages/types';
 import { supabase } from '@/integrations/supabase/client';
-import { analyzedContentToJson } from '@/types';
+import { analyzedContentToJson, AnalyzedContent as JsonAnalyzedContent } from '@/types';
 
 interface ProcessingState {
   [key: string]: {
@@ -10,6 +10,24 @@ interface ProcessingState {
     error?: string;
   };
 }
+
+const convertAnalyzedContent = (content: MessageAnalyzedContent | undefined): JsonAnalyzedContent => {
+  if (!content) return {};
+  
+  return {
+    product_name: content.product_name,
+    product_code: content.product_code,
+    vendor_uid: content.vendor_uid,
+    purchase_date: content.purchase_date,
+    quantity: content.quantity,
+    notes: content.notes,
+    parsing_metadata: content.parsing_metadata ? {
+      method: content.parsing_metadata.method === 'hybrid' ? 'ai' : content.parsing_metadata.method,
+      confidence: content.parsing_metadata.confidence,
+      timestamp: content.parsing_metadata.timestamp
+    } : undefined
+  };
+};
 
 export function useMessageProcessing() {
   const [processingState, setProcessingState] = useState<ProcessingState>({});
@@ -91,7 +109,7 @@ export function useMessageProcessing() {
       // Update all messages in the group with the source message's content
       const { error: updateError } = await supabase.from('messages')
         .update({
-          analyzed_content: analyzedContentToJson(message.analyzed_content || {}),
+          analyzed_content: analyzedContentToJson(convertAnalyzedContent(message.analyzed_content)),
           processing_state: 'completed',
           processing_completed_at: new Date().toISOString(),
           is_original_caption: false,
