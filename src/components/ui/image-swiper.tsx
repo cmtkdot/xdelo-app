@@ -50,7 +50,7 @@ export const ImageSwiper = ({ media, className }: ImageSwiperProps) => {
             alt={currentMedia.caption || "Video thumbnail"}
             className={cn(
               "absolute inset-0 w-full h-full object-contain bg-black transition-opacity duration-300",
-              isHovered && hasVideoThumbnail ? "opacity-0" : "opacity-100"
+              isHovered ? "opacity-0" : "opacity-100"
             )}
           />
           {hasVideoThumbnail && (
