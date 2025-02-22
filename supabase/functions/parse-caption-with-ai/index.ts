@@ -63,52 +63,27 @@ function extractProductInfo(caption: string): AnalyzedContent {
   return result;
 }
 
-async function handleMediaGroupSync(
+async function syncMediaGroup(
   supabase: any,
   messageId: string,
   media_group_id: string,
   analyzedContent: AnalyzedContent
 ): Promise<void> {
-  try {
-    // Get all messages in the group first
-    const { data: groupMessages } = await supabase
-      .from('messages')
-      .select('id, created_at')
-      .eq('media_group_id', media_group_id);
+  // Simple direct update of all messages in the group
+  const { error: updateError } = await supabase
+    .from('messages')
+    .update({
+      analyzed_content: analyzedContent,
+      processing_state: 'completed',
+      processing_completed_at: new Date().toISOString(),
+      group_caption_synced: true,
+      message_caption_id: messageId,
+      updated_at: new Date().toISOString()
+    })
+    .eq('media_group_id', media_group_id)
+    .neq('id', messageId);
 
-    if (!groupMessages) return;
-
-    // Calculate group metadata
-    const groupFirst = groupMessages.reduce((min, msg) => 
-      !min || new Date(msg.created_at) < new Date(min.created_at) ? msg : min
-    , null);
-    const groupLast = groupMessages.reduce((max, msg) => 
-      !max || new Date(msg.created_at) > new Date(max.created_at) ? msg : max
-    , null);
-
-    // Update all messages in the group
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update({
-        analyzed_content: analyzedContent,
-        processing_state: 'completed',
-        processing_completed_at: new Date().toISOString(),
-        is_original_caption: false,
-        group_caption_synced: true,
-        message_caption_id: messageId,
-        group_first_message_time: groupFirst?.created_at,
-        group_last_message_time: groupLast?.created_at,
-        group_message_count: groupMessages.length,
-        updated_at: new Date().toISOString()
-      })
-      .eq('media_group_id', media_group_id)
-      .neq('id', messageId);
-
-    if (updateError) throw updateError;
-  } catch (error) {
-    console.error('Error in media group sync:', error);
-    throw error;
-  }
+  if (updateError) throw updateError;
 }
 
 serve(async (req) => {
@@ -131,24 +106,16 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Set processing state
-    await supabase
-      .from('messages')
-      .update({ 
-        processing_state: 'processing',
-        processing_started_at: new Date().toISOString()
-      })
-      .eq('id', messageId);
-
     // Parse the caption
     const parsedContent = extractProductInfo(caption);
 
-    // Update source message
+    // Update source message first
     const { error: updateError } = await supabase
       .from('messages')
       .update({
         analyzed_content: parsedContent,
         processing_state: 'completed',
+        processing_started_at: new Date().toISOString(),
         processing_completed_at: new Date().toISOString(),
         is_original_caption: true,
         updated_at: new Date().toISOString()
@@ -157,9 +124,9 @@ serve(async (req) => {
 
     if (updateError) throw updateError;
 
-    // Handle media group sync if needed
+    // If part of a media group, sync other messages
     if (media_group_id) {
-      await handleMediaGroupSync(supabase, messageId, media_group_id, parsedContent);
+      await syncMediaGroup(supabase, messageId, media_group_id, parsedContent);
     }
 
     return new Response(
@@ -179,7 +146,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Update error state directly
+    // Simple error state update
     try {
       await supabase
         .from('messages')
