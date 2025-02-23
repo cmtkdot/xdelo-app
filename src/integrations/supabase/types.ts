@@ -195,6 +195,7 @@ export type Database = {
           api_key: string
           app_id: string
           created_at: string | null
+          glide_json: Json | null
           glide_table_name: string
           id: string
           is_active: boolean
@@ -213,6 +214,7 @@ export type Database = {
           api_key: string
           app_id: string
           created_at?: string | null
+          glide_json?: Json | null
           glide_table_name: string
           id?: string
           is_active?: boolean
@@ -231,6 +233,7 @@ export type Database = {
           api_key?: string
           app_id?: string
           created_at?: string | null
+          glide_json?: Json | null
           glide_table_name?: string
           id?: string
           is_active?: boolean
@@ -1085,6 +1088,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      gl_purchase_order_summary: {
+        Row: {
+          created_at: string | null
+          id: number
+          order_data: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: never
+          order_data?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: never
+          order_data?: Json | null
+        }
+        Relationships: []
       }
       gl_purchase_orders: {
         Row: {
@@ -2232,6 +2253,10 @@ export type Database = {
         Args: {
           po_id: string
         }
+        Returns: undefined
+      }
+      xan_fetch_glide_products: {
+        Args: Record<PropertyKey, never>
         Returns: undefined
       }
       xdelo_check_webhook_health: {
