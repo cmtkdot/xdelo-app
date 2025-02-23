@@ -1,5 +1,5 @@
 
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import type { ProcessingState } from '../_shared/states.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 
