@@ -198,7 +198,6 @@ export type Database = {
           glide_table_name: string
           id: string
           is_active: boolean
-          is_valid: boolean | null
           last_validation_time: string | null
           max_retries: number | null
           retry_interval: unknown | null
@@ -217,7 +216,6 @@ export type Database = {
           glide_table_name: string
           id?: string
           is_active?: boolean
-          is_valid?: boolean | null
           last_validation_time?: string | null
           max_retries?: number | null
           retry_interval?: unknown | null
@@ -236,7 +234,6 @@ export type Database = {
           glide_table_name?: string
           id?: string
           is_active?: boolean
-          is_valid?: boolean | null
           last_validation_time?: string | null
           max_retries?: number | null
           retry_interval?: unknown | null

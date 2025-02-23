@@ -28,35 +28,42 @@ export const useTelegramOperations = () => {
         }
       }
 
-      // Delete from Telegram if requested
+      // Delete from Telegram if requested - do this first
       if (deleteTelegram) {
-        for (const msg of messagesToDelete) {
+        const deletePromises = messagesToDelete.map(async (msg) => {
           if (msg.telegram_message_id && msg.chat_id) {
             const response = await supabase.functions.invoke('delete-telegram-message', {
               body: {
                 message_id: msg.telegram_message_id,
-                chat_id: msg.chat_id,
-                media_group_id: msg.media_group_id
+                chat_id: msg.chat_id
               }
             });
 
             if (response.error) {
               console.error('Telegram deletion error:', response.error);
-              throw new Error('Failed to delete from Telegram');
+              throw new Error(`Failed to delete message ${msg.telegram_message_id} from Telegram: ${response.error.message}`);
             }
           }
-        }
+        });
+
+        await Promise.all(deletePromises);
       }
 
-      // Delete from database
-      for (const msg of messagesToDelete) {
+      // After successful Telegram deletion (or if not deleting from Telegram),
+      // delete from database
+      const deletePromises = messagesToDelete.map(async (msg) => {
         const { error: deleteError } = await supabase
           .from('messages')
           .delete()
-          .eq('id', msg.id);
+          .match({ id: msg.id });
 
-        if (deleteError) throw deleteError;
-      }
+        if (deleteError) {
+          console.error('Database deletion error:', deleteError);
+          throw deleteError;
+        }
+      });
+
+      await Promise.all(deletePromises);
 
       // Show success message
       toast({
@@ -77,7 +84,6 @@ export const useTelegramOperations = () => {
         description: `Failed to delete message: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive",
       });
-      throw error;
     } finally {
       setIsProcessing(prev => ({ ...prev, [message.id]: false }));
     }
@@ -122,7 +128,11 @@ export const useTelegramOperations = () => {
 
     } catch (error) {
       console.error('Error updating caption:', error);
-      throw error;
+      toast({
+        title: "Error",
+        description: `Failed to update caption: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      });
     } finally {
       setIsProcessing(prev => ({ ...prev, [message.id]: false }));
     }
