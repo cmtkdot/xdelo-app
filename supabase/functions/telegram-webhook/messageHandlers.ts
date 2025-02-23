@@ -63,13 +63,14 @@ export const handleMessage = async (
       ...mediaInfo
     };
 
-    // Log the webhook event
+    // Log the webhook event - Using the correct parameter types
     await supabase.rpc('xdelo_log_webhook_event', {
       p_event_type: 'new_message',
       p_chat_id: message.chat.id,
-      p_message_id: message.message_id,
+      p_message_id: correlationId, // Using correlationId as UUID instead of message_id number
       p_media_type: mediaInfo.mime_type,
-      p_raw_data: message
+      p_raw_data: message,
+      p_error_message: null
     });
 
     // Insert message into database
@@ -134,12 +135,14 @@ export const handleEditedMessage = async (
       throw updateError;
     }
 
-    // Log the webhook event
+    // Log the webhook event - Using the correct parameter types
     await supabase.rpc('xdelo_log_webhook_event', {
       p_event_type: 'edit_message',
       p_chat_id: message.chat.id,
-      p_message_id: message.message_id,
-      p_raw_data: message
+      p_message_id: correlationId, // Using correlationId as UUID instead of message_id number
+      p_media_type: null,
+      p_raw_data: message,
+      p_error_message: null
     });
 
     return new Response(
