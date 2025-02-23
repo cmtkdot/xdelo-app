@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { handleMessage, handleEditedMessage } from './messageHandlers.ts'
@@ -18,8 +17,7 @@ serve(async (req) => {
   const logger = getLogger(correlationId)
 
   try {
-    const reqBody = await req.text();
-    const update = JSON.parse(reqBody);
+    const update = await req.json()
     
     // Keep original message type for reference
     const message = update.message || 
@@ -60,40 +58,19 @@ serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-      {
-        auth: {
-          persistSession: false
-        }
-      }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Handle the message based on whether it's edited or not
-    const result = messageWithMetadata.telegram_data.is_edited 
-      ? await handleEditedMessage(messageWithMetadata, supabase, correlationId)
-      : await handleMessage(messageWithMetadata, supabase, correlationId);
-
-    return new Response(
-      JSON.stringify(result),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
+    // Pass the message with metadata in telegram_data
+    return await handleMessage(messageWithMetadata, supabase, correlationId);
   } catch (error) {
-    logger.error('Webhook error:', { 
-      error,
-      correlation_id: correlationId 
-    });
-
+    logger.error('Webhook error:', { error });
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        correlation_id: correlationId
-      }),
+      JSON.stringify({ success: false, error: error.message }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
   }
-});
+})
