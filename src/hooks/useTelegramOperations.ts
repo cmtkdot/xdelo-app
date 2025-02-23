@@ -3,7 +3,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Message, AnalyzedContent } from "@/types";
+import type { Message } from "@/types";
 
 export const useTelegramOperations = () => {
   const [isProcessing, setIsProcessing] = useState<Record<string, boolean>>({});
@@ -104,7 +104,7 @@ export const useTelegramOperations = () => {
         .update({ 
           caption: newCaption,
           updated_at: new Date().toISOString(),
-          processing_state: 'pending'
+          processing_state: 'pending' as const
         })
         .eq('id', message.id);
 

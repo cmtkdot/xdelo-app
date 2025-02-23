@@ -1,3 +1,4 @@
+
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
@@ -9,6 +10,14 @@ export interface FilterValues {
   productCodes?: string[];
   quantity?: { min: number; max: number };
   sortOrder?: 'asc' | 'desc';
+}
+
+export interface ParsingMetadata {
+  method: 'manual' | 'ai' | 'hybrid';
+  confidence: number;
+  timestamp: string;
+  correlation_id?: string;
+  needs_review?: boolean;
 }
 
 export interface AnalyzedContent {
@@ -23,11 +32,7 @@ export interface AnalyzedContent {
   caption?: string;
   product_sku?: string;
   purchase_order_uid?: string;
-  parsing_metadata?: {
-    method: 'manual' | 'ai' | 'hybrid';
-    confidence: number;
-    timestamp: string;
-  };
+  parsing_metadata?: ParsingMetadata;
   sync_metadata?: {
     sync_source_message_id?: string;
     media_group_id?: string;
@@ -71,59 +76,6 @@ export interface Message {
   updated_at?: string;
 }
 
-export interface GlProduct {
-  id: string;
-  main_new_product_name: string;
-  main_vendor_product_name: string;
-  main_product_purchase_date: string;
-  main_total_qty_purchased: number;
-  main_cost: number;
-  main_category: string;
-  main_product_image1: string;
-  main_purchase_notes: string;
-  product_name_display: string;
-  created_at: string;
-  updated_at: string;
-  sync_status: SyncStatus;
-  cart_add_note?: boolean;
-  cart_rename?: boolean;
-  date_timestamp_subm?: string;
-  email_email_of_user_who_added_product?: string;
-  glide_id?: string;
-  rowid_account_rowid?: string;
-  rowid_purchase_order_row_id?: string;
-  messages?: {
-    public_url: string;
-    media_group_id: string;
-  }[];
-}
-
-export interface MediaItem {
-  id: string;
-  public_url: string | null;
-  mime_type: string | null;
-  created_at: string;
-  analyzed_content: AnalyzedContent | null;
-  file_id: string | null;
-  file_unique_id: string | null;
-  width?: number;
-  height?: number;
-  duration?: number;
-  caption?: string;
-}
-
-export interface MatchResult {
-  id: string;
-  message_id: string;
-  product_id: string;
-  confidence: number;
-  matchType: string;
-  details: {
-    matchedFields: string[];
-    confidence: number;
-  };
-}
-
 export interface Database {
   public: {
     Tables: {
@@ -131,11 +83,6 @@ export interface Database {
         Row: Message;
         Insert: Partial<Message>;
         Update: Partial<Message>;
-      };
-      gl_products: {
-        Row: GlProduct;
-        Insert: Partial<GlProduct>;
-        Update: Partial<GlProduct>;
       };
     };
   };

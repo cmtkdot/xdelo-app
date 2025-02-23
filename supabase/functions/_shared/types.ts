@@ -1,52 +1,49 @@
 
-export interface ParsedResult {
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  quantity?: number;
-  notes?: string;
-  product_sku?: string;
-  purchase_order_uid?: string;
-  parsing_metadata?: {
-    method: 'manual' | 'ai' | 'hybrid';
-    confidence: number;
-    timestamp: string;
-    fallbacks_used?: string[];
-    needs_ai_analysis?: boolean;
-  };
+export interface DatabaseMessage {
+  id: string;
+  telegram_message_id?: number;
+  media_group_id?: string;
+  caption?: string;
+  analyzed_content?: AnalyzedContent;
+  processing_state?: ProcessingState;
+  chat_id?: number;
+  chat_type?: string;
+  telegram_data?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export type ProcessingState = 
-  | 'initialized'    // Initial state
-  | 'pending'        // Waiting for processing
-  | 'processing'     // Currently being processed
-  | 'completed'      // Successfully processed
-  | 'error';         // Failed processing
+  | 'initialized'
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'error';
 
 export interface AnalyzedContent {
   product_name?: string;
   product_code?: string;
   vendor_uid?: string;
-  quantity?: number;
   purchase_date?: string;
+  quantity?: number;
   notes?: string;
   parsing_metadata: {
-    method: 'manual' | 'ai';
+    method: 'manual' | 'ai' | 'hybrid';
     confidence: number;
     timestamp: string;
-    correlation_id: string;
+    correlation_id?: string;
   };
 }
 
-export interface AIAnalysisResult {
-  content: AnalyzedContent;
-  confidence: number;
+export interface WebhookPayload {
+  message_id: string;
+  chat_id: number;
+  caption?: string;
+  media_group_id?: string;
 }
 
-export interface AnalysisRequest {
-  messageId: string;
-  caption: string;
-  media_group_id?: string;
-  correlation_id?: string;
+export interface ParseResult {
+  success: boolean;
+  analyzed_content?: AnalyzedContent;
+  error?: string;
 }
