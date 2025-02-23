@@ -76,6 +76,53 @@ export interface Message {
   updated_at?: string;
 }
 
+export interface MediaItem {
+  id: string;
+  public_url: string | null;
+  mime_type: string | null;
+  created_at: string;
+  analyzed_content: AnalyzedContent | null;
+  file_id?: string;
+  file_unique_id: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  caption?: string;
+}
+
+export interface GlProduct {
+  id: string;
+  main_new_product_name: string;
+  main_vendor_product_name: string;
+  main_product_purchase_date: string;
+  main_total_qty_purchased: number;
+  main_cost: number;
+  main_category: string;
+  main_product_image1: string;
+  main_purchase_notes: string;
+  product_name_display: string;
+  created_at: string;
+  updated_at: string;
+  sync_status: SyncStatus;
+  cart_add_note?: string;
+  cart_rename?: string;
+  date_timestamp_subm?: string;
+  email_email_of_user_who_added_product?: string;
+  glide_id?: string;
+  rowid_account_rowid?: string;
+  rowid_purchase_order_row_id?: string;
+  messages?: Message[];
+}
+
+export interface MatchResult {
+  id: string;
+  similarity: number;
+  product: GlProduct;
+  match_type: 'exact' | 'partial' | 'fuzzy';
+  match_confidence: number;
+  matched_fields: string[];
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -83,6 +130,11 @@ export interface Database {
         Row: Message;
         Insert: Partial<Message>;
         Update: Partial<Message>;
+      };
+      gl_products: {
+        Row: GlProduct;
+        Insert: Partial<GlProduct>;
+        Update: Partial<GlProduct>;
       };
     };
   };
