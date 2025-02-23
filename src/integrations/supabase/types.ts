@@ -2221,6 +2221,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      sync_glide_configuration: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       update_share_view_stats: {
         Args: {
           po_id: string
@@ -2229,6 +2233,16 @@ export type Database = {
       }
       xan_fetch_glide_products: {
         Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      xan_fetch_glide_tables: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      xan_sync_glide_configuration: {
+        Args: {
+          table_name: string
+        }
         Returns: undefined
       }
       xdelo_check_webhook_health: {

@@ -33,11 +33,11 @@ export const useTelegramOperations = () => {
         const deletePromises = messagesToDelete.map(async (msg) => {
           if (msg.telegram_message_id && msg.chat_id) {
             const response = await supabase.functions.invoke('delete-telegram-message', {
-              body: {
+              body: JSON.stringify({
                 message_id: msg.telegram_message_id,
                 chat_id: msg.chat_id,
-                media_group_id: msg.media_group_id
-              }
+                media_group_id: msg.media_group_id || null
+              })
             });
 
             if (response.error) {
@@ -113,11 +113,11 @@ export const useTelegramOperations = () => {
       // Update in Telegram
       const { data: telegramResponse, error: telegramError } = await supabase
         .functions.invoke('update-telegram-caption', {
-          body: {
+          body: JSON.stringify({
             messageId: message.telegram_message_id,
             chatId: message.chat_id,
             caption: newCaption,
-          },
+          }),
         });
 
       if (telegramError) throw telegramError;
@@ -136,10 +136,10 @@ export const useTelegramOperations = () => {
 
       // Trigger reanalysis
       await supabase.functions.invoke('parse-caption-with-ai', {
-        body: { 
+        body: JSON.stringify({ 
           messageId: message.id,
           caption: newCaption
-        }
+        })
       });
 
       queryClient.invalidateQueries({ queryKey: ['messages'] });
