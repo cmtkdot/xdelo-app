@@ -516,13 +516,6 @@ export type Database = {
             referencedRelation: "gl_estimates"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "gl_estimate_lines_sb_products_id_fkey"
-            columns: ["sb_products_id"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["id"]
-          },
         ]
       }
       gl_estimates: {
@@ -803,13 +796,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "invoice_summary"
             referencedColumns: ["invoice_id"]
-          },
-          {
-            foreignKeyName: "gl_invoice_lines_sb_products_id_fkey"
-            columns: ["sb_products_id"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["id"]
           },
         ]
       }
@@ -1534,7 +1520,15 @@ export type Database = {
           supabase_table?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gl_table_mappings_glide_table_id_fkey"
+            columns: ["glide_table_id"]
+            isOneToOne: true
+            referencedRelation: "gl_configuration"
+            referencedColumns: ["table_id"]
+          },
+        ]
       }
       gl_vendor_payments: {
         Row: {
@@ -1612,13 +1606,6 @@ export type Database = {
             columns: ["sb_accounts_id"]
             isOneToOne: false
             referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_vendor_payments_sb_products_id_fkey"
-            columns: ["sb_products_id"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
             referencedColumns: ["id"]
           },
           {
@@ -1823,13 +1810,6 @@ export type Database = {
           width?: number | null
         }
         Relationships: [
-          {
-            foreignKeyName: "fk_glide_row_id"
-            columns: ["glide_row_id"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["glide_id"]
-          },
           {
             foreignKeyName: "messages_message_caption_id_fkey"
             columns: ["message_caption_id"]
@@ -2070,15 +2050,7 @@ export type Database = {
           status?: string | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "sync_matches_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       sync_records: {
         Row: {

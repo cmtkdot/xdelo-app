@@ -35,7 +35,8 @@ export const useTelegramOperations = () => {
             const response = await supabase.functions.invoke('delete-telegram-message', {
               body: {
                 message_id: msg.telegram_message_id,
-                chat_id: msg.chat_id
+                chat_id: msg.chat_id,
+                media_group_id: msg.media_group_id
               }
             });
 
@@ -50,20 +51,37 @@ export const useTelegramOperations = () => {
       }
 
       // After successful Telegram deletion (or if not deleting from Telegram),
-      // delete from database
-      const deletePromises = messagesToDelete.map(async (msg) => {
+      // delete from database with cascade
+      for (const msg of messagesToDelete) {
+        // First, remove any analysis audit log entries
+        await supabase
+          .from('analysis_audit_log')
+          .delete()
+          .eq('message_id', msg.id);
+
+        // Then remove any message state logs
+        await supabase
+          .from('message_state_logs')
+          .delete()
+          .eq('message_id', msg.id);
+
+        // Then remove any sync matches
+        await supabase
+          .from('sync_matches')
+          .delete()
+          .eq('message_id', msg.id);
+
+        // Finally delete the message itself
         const { error: deleteError } = await supabase
           .from('messages')
           .delete()
-          .match({ id: msg.id });
+          .eq('id', msg.id);
 
         if (deleteError) {
           console.error('Database deletion error:', deleteError);
           throw deleteError;
         }
-      });
-
-      await Promise.all(deletePromises);
+      }
 
       // Show success message
       toast({
