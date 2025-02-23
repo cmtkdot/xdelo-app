@@ -1,4 +1,3 @@
-
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
@@ -116,11 +115,17 @@ export interface GlProduct {
 
 export interface MatchResult {
   id: string;
+  message_id: string;
+  product_id: string;
   similarity: number;
   product: GlProduct;
   match_type: 'exact' | 'partial' | 'fuzzy';
   match_confidence: number;
   matched_fields: string[];
+  details?: {
+    matchedFields: string[];
+    confidence: number;
+  };
 }
 
 export interface Database {
