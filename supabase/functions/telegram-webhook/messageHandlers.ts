@@ -1,8 +1,7 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { corsHeaders } from '../_shared/cors.ts'
-import type { ProcessingState, AnalyzedContent } from '../_shared/types.ts'
+import { SupabaseClient } from '@supabase/supabase-js';
+import type { ProcessingState } from '../_shared/states.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 
 interface TelegramMessage {
   message_id: number;
@@ -29,22 +28,25 @@ interface TelegramMessage {
   media_group_id?: string;
   date: number;
   edit_date?: number;
+  telegram_data?: Record<string, any>;
 }
 
-export const handleMessage = async (message: TelegramMessage, correlationId: string) => {
+export const handleMessage = async (
+  message: TelegramMessage,
+  supabase: SupabaseClient,
+  correlationId: string
+) => {
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+    console.log('Processing message:', { messageId: message.message_id, correlationId });
 
-    // Extract media info from message
+    // Extract media info if present
     const mediaInfo = extractMediaInfo(message);
     if (!mediaInfo) {
-      return new Response(JSON.stringify({ success: false, error: 'No media found in message' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
-      });
+      console.log('No media found in message');
+      return new Response(
+        JSON.stringify({ success: false, error: 'No media found in message' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Prepare message data
@@ -57,8 +59,18 @@ export const handleMessage = async (message: TelegramMessage, correlationId: str
       media_group_id: message.media_group_id,
       processing_state: 'pending' as ProcessingState,
       processing_correlation_id: correlationId,
+      telegram_data: message.telegram_data || {},
       ...mediaInfo
     };
+
+    // Log the webhook event
+    await supabase.rpc('xdelo_log_webhook_event', {
+      p_event_type: 'new_message',
+      p_chat_id: message.chat.id,
+      p_message_id: message.message_id,
+      p_media_type: mediaInfo.mime_type,
+      p_raw_data: message
+    });
 
     // Insert message into database
     const { data: newMessage, error: insertError } = await supabase
@@ -68,27 +80,96 @@ export const handleMessage = async (message: TelegramMessage, correlationId: str
       .single();
 
     if (insertError) {
+      console.error('Error inserting message:', insertError);
       throw insertError;
     }
 
-    return new Response(JSON.stringify({ success: true, message: newMessage }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return new Response(
+      JSON.stringify({ success: true, message: newMessage }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
 
   } catch (error) {
     console.error('Error handling message:', error);
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        correlationId 
+      }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
+  }
+};
+
+export const handleEditedMessage = async (
+  message: TelegramMessage,
+  supabase: SupabaseClient,
+  correlationId: string
+) => {
+  try {
+    console.log('Processing edited message:', { messageId: message.message_id, correlationId });
+
+    // Update the existing message
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        caption: message.caption,
+        updated_at: new Date().toISOString(),
+        processing_state: 'pending' as ProcessingState,
+        processing_correlation_id: correlationId,
+        telegram_data: {
+          ...message.telegram_data,
+          edit_date: message.edit_date
+        }
+      })
+      .eq('telegram_message_id', message.message_id)
+      .eq('chat_id', message.chat.id);
+
+    if (updateError) {
+      console.error('Error updating message:', updateError);
+      throw updateError;
+    }
+
+    // Log the webhook event
+    await supabase.rpc('xdelo_log_webhook_event', {
+      p_event_type: 'edit_message',
+      p_chat_id: message.chat.id,
+      p_message_id: message.message_id,
+      p_raw_data: message
     });
+
+    return new Response(
+      JSON.stringify({ success: true }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('Error handling edited message:', error);
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        correlationId 
+      }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
 };
 
 const extractMediaInfo = (message: TelegramMessage) => {
   if (message.photo) {
+    // Get the largest photo version
     const largestPhoto = message.photo.reduce((prev, current) => 
       (prev.width * prev.height > current.width * current.height) ? prev : current
     );
+    
     return {
       file_id: largestPhoto.file_id,
       file_unique_id: largestPhoto.file_unique_id,
@@ -109,41 +190,4 @@ const extractMediaInfo = (message: TelegramMessage) => {
   }
   
   return null;
-};
-
-// Handle edited messages
-export const handleEditedMessage = async (message: TelegramMessage, correlationId: string) => {
-  try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
-    // Find and update the existing message
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update({
-        caption: message.caption,
-        updated_at: new Date().toISOString(),
-        processing_state: 'pending' as ProcessingState,
-        processing_correlation_id: correlationId
-      })
-      .eq('telegram_message_id', message.message_id)
-      .eq('chat_id', message.chat.id);
-
-    if (updateError) {
-      throw updateError;
-    }
-
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-
-  } catch (error) {
-    console.error('Error handling edited message:', error);
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500
-    });
-  }
 };
