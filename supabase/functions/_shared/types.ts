@@ -1,4 +1,5 @@
-export interface ParsedContent {
+
+export interface ParsedResult {
   product_name?: string;
   product_code?: string;
   vendor_uid?: string;
@@ -10,15 +11,42 @@ export interface ParsedContent {
   parsing_metadata?: {
     method: 'manual' | 'ai' | 'hybrid';
     confidence: number;
-    fallbacks_used?: string[];
     timestamp: string;
+    fallbacks_used?: string[];
     needs_ai_analysis?: boolean;
-    manual_confidence?: number;
-    ai_confidence?: number;
   };
 }
 
-export interface QuantityParseResult {
-  value: number;
+export type ProcessingState = 
+  | 'initialized'    // Initial state
+  | 'pending'        // Waiting for processing
+  | 'processing'     // Currently being processed
+  | 'completed'      // Successfully processed
+  | 'error';         // Failed processing
+
+export interface AnalyzedContent {
+  product_name?: string;
+  product_code?: string;
+  vendor_uid?: string;
+  quantity?: number;
+  purchase_date?: string;
+  notes?: string;
+  parsing_metadata: {
+    method: 'manual' | 'ai';
+    confidence: number;
+    timestamp: string;
+    correlation_id: string;
+  };
+}
+
+export interface AIAnalysisResult {
+  content: AnalyzedContent;
   confidence: number;
+}
+
+export interface AnalysisRequest {
+  messageId: string;
+  caption: string;
+  media_group_id?: string;
+  correlation_id?: string;
 }
