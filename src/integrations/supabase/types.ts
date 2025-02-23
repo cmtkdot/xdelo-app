@@ -1655,14 +1655,14 @@ export type Database = {
           chat_title: string | null
           chat_type: Database["public"]["Enums"]["telegram_chat_type"] | null
           correlation_id: string | null
-          created_at: string | null
+          created_at: string
           duration: number | null
           edit_date: string | null
           edit_history: Json | null
           error_message: string | null
           file_id: string | null
           file_size: number | null
-          file_unique_id: string | null
+          file_unique_id: string
           glide_row_id: string | null
           group_caption_synced: boolean | null
           group_first_message_time: string | null
@@ -1681,9 +1681,7 @@ export type Database = {
           processing_completed_at: string | null
           processing_correlation_id: string | null
           processing_started_at: string | null
-          processing_state:
-            | Database["public"]["Enums"]["processing_state_type"]
-            | null
+          processing_state: Database["public"]["Enums"]["processing_state_type"]
           product_name: string | null
           product_quantity: number | null
           product_sku: string | null
@@ -1696,7 +1694,7 @@ export type Database = {
           sync_attempt: number | null
           telegram_data: Json | null
           telegram_message_id: number | null
-          updated_at: string | null
+          updated_at: string
           user_id: string | null
           vendor_name: string | null
           width: number | null
@@ -1708,14 +1706,14 @@ export type Database = {
           chat_title?: string | null
           chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
           correlation_id?: string | null
-          created_at?: string | null
+          created_at?: string
           duration?: number | null
           edit_date?: string | null
           edit_history?: Json | null
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
-          file_unique_id?: string | null
+          file_unique_id: string
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
@@ -1734,9 +1732,7 @@ export type Database = {
           processing_completed_at?: string | null
           processing_correlation_id?: string | null
           processing_started_at?: string | null
-          processing_state?:
-            | Database["public"]["Enums"]["processing_state_type"]
-            | null
+          processing_state?: Database["public"]["Enums"]["processing_state_type"]
           product_name?: string | null
           product_quantity?: number | null
           product_sku?: string | null
@@ -1749,7 +1745,7 @@ export type Database = {
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
-          updated_at?: string | null
+          updated_at?: string
           user_id?: string | null
           vendor_name?: string | null
           width?: number | null
@@ -1761,14 +1757,14 @@ export type Database = {
           chat_title?: string | null
           chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
           correlation_id?: string | null
-          created_at?: string | null
+          created_at?: string
           duration?: number | null
           edit_date?: string | null
           edit_history?: Json | null
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
-          file_unique_id?: string | null
+          file_unique_id?: string
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
@@ -1787,9 +1783,7 @@ export type Database = {
           processing_completed_at?: string | null
           processing_correlation_id?: string | null
           processing_started_at?: string | null
-          processing_state?:
-            | Database["public"]["Enums"]["processing_state_type"]
-            | null
+          processing_state?: Database["public"]["Enums"]["processing_state_type"]
           product_name?: string | null
           product_quantity?: number | null
           product_sku?: string | null
@@ -1802,12 +1796,19 @@ export type Database = {
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
-          updated_at?: string | null
+          updated_at?: string
           user_id?: string | null
           vendor_name?: string | null
           width?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_glide_row_id"
+            columns: ["glide_row_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["glide_id"]
+          },
           {
             foreignKeyName: "messages_message_caption_id_fkey"
             columns: ["message_caption_id"]
