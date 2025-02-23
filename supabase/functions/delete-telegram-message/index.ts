@@ -1,7 +1,13 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { corsHeaders } from "../_shared/cors.ts"
-import { getSupabaseClient, handleError } from "../_shared/supabase.ts"
+import { getSupabaseClient } from "../_shared/supabase.ts"
+
+interface DeleteMessageRequest {
+  message_id: number;
+  chat_id: number;
+  media_group_id?: string | null;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -14,7 +20,9 @@ serve(async (req) => {
       throw new Error("TELEGRAM_BOT_TOKEN is not configured");
     }
 
-    const { message_id, chat_id, media_group_id } = await req.json();
+    const reqBody = await req.text();
+    const { message_id, chat_id, media_group_id } = JSON.parse(reqBody) as DeleteMessageRequest;
+    
     console.log("Deleting message:", { message_id, chat_id, media_group_id });
 
     const supabase = getSupabaseClient();
@@ -58,6 +66,13 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    return handleError(error);
+    console.error("Error deleting message:", error);
+    return new Response(
+      JSON.stringify({ success: false, error: error.message }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
 });

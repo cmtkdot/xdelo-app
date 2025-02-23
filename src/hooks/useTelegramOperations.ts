@@ -32,17 +32,17 @@ export const useTelegramOperations = () => {
       if (deleteTelegram) {
         const deletePromises = messagesToDelete.map(async (msg) => {
           if (msg.telegram_message_id && msg.chat_id) {
-            const response = await supabase.functions.invoke('delete-telegram-message', {
+            const { error: telegramError } = await supabase.functions.invoke('delete-telegram-message', {
               body: JSON.stringify({
-                message_id: msg.telegram_message_id,
-                chat_id: msg.chat_id,
+                message_id: Number(msg.telegram_message_id),
+                chat_id: Number(msg.chat_id),
                 media_group_id: msg.media_group_id || null
               })
             });
 
-            if (response.error) {
-              console.error('Telegram deletion error:', response.error);
-              throw new Error(`Failed to delete message ${msg.telegram_message_id} from Telegram: ${response.error.message}`);
+            if (telegramError) {
+              console.error('Telegram deletion error:', telegramError);
+              throw new Error(`Failed to delete message ${msg.telegram_message_id} from Telegram: ${telegramError.message}`);
             }
           }
         });
