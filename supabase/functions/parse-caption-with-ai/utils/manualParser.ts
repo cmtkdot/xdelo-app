@@ -1,4 +1,10 @@
-import { ParsedResult, QuantityParseResult } from '../types';
+import { ParsedResult as BaseParseResult, QuantityParseResult } from '../types';
+
+// Extend the base ParsedResult type to include new fields
+interface ParsedResult extends BaseParseResult {
+  product_sku?: string;
+  purchase_order_uid?: string;
+}
 
 function calculateConfidence(result: ParsedResult, fallbacks: string[], caption: string): number {
   let score = 1.0;
@@ -141,6 +147,12 @@ export async function parseManually(caption: string): Promise<ParsedResult | nul
           const date = new Date(`${year}-${month}-${day}`);
           if (!isNaN(date.getTime()) && date <= new Date()) {
             result.purchase_date = `${year}-${month}-${day}`;
+            
+            // Generate purchase_order_uid
+            if (result.vendor_uid && result.purchase_date) {
+              const datePart = result.purchase_date.replace(/-/g, '').substring(2); // Get YYMMDD format
+              result.purchase_order_uid = `${result.vendor_uid}#${datePart}`;
+            }
           } else {
             fallbacks_used.push('invalid_date');
           }
@@ -152,6 +164,11 @@ export async function parseManually(caption: string): Promise<ParsedResult | nul
     }
   } else {
     fallbacks_used.push('no_product_code');
+  }
+
+  // Generate product_sku if we have both product_name and product_code
+  if (result.product_name && result.product_code) {
+    result.product_sku = `${result.product_name} #${result.product_code}`;
   }
 
   // Parse quantity using the enhanced quantityParser

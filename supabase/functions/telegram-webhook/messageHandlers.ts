@@ -1,8 +1,20 @@
+
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import type { ProcessingState } from '../_shared/states.ts';
+import { corsHeaders } from '../_shared/cors.ts';
+
 import { TelegramMessage, MessageEvent, MessageContent, AnalyzedContent } from './types';
 import { SupabaseClient } from "@supabase/supabase-js";
 import { corsHeaders } from './authUtils';
 import { getLogger } from './logger';
 import { triggerAnalysis } from './analysisHandler';
+
+// Add Deno type declaration
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
 
 export const handleMessage = async (
   message: TelegramMessage, 
@@ -87,7 +99,10 @@ export const handleMessage = async (
   }
 };
 
-const getTelegramFilePublicURL = async (fileId: string): Promise<string | undefined> => {
+const getTelegramFilePublicURL = async (
+  fileId: string,
+  supabase: SupabaseClient
+): Promise<string | undefined> => {
   try {
     const { data, error } = await supabase.functions.invoke('get-telegram-file', {
       body: { file_id: fileId },
@@ -100,7 +115,7 @@ const getTelegramFilePublicURL = async (fileId: string): Promise<string | undefi
 
     if (data && data.file_path) {
       const filePath = data.file_path;
-      return `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${filePath}`;
+      return `https://api.telegram.org/file/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/${filePath}`;
     } else {
       console.warn('No file_path received from get-telegram-file function.');
       return undefined;

@@ -107,10 +107,14 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
   const handleDeleteConfirm = async (deleteTelegram: boolean) => {
     if (!messageToDelete) return;
 
-    await handleDelete(messageToDelete, deleteTelegram);
-    setMessages(prev => prev.filter(m => m.id !== messageToDelete.id));
-    setIsDeleteDialogOpen(false);
-    setMessageToDelete(null);
+    try {
+      await handleDelete(messageToDelete, deleteTelegram);
+      setMessages(prev => prev.filter(m => m.id !== messageToDelete.id));
+      setIsDeleteDialogOpen(false);
+      setMessageToDelete(null);
+    } catch (error) {
+      console.error('Delete error:', error);
+    }
   };
 
   const handleAnalyzedContentChange = (id: string, field: keyof typeof messages[0]['analyzed_content'], value: string | number) => {
@@ -135,7 +139,6 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
   };
 
   const handleMediaClick = (message: Message) => {
-    // If it's part of a media group, show all media from the group
     if (message.media_group_id) {
       const groupMedia = messages.filter(m => m.media_group_id === message.media_group_id);
       setSelectedMedia(groupMedia);
@@ -247,7 +250,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
                           variant="ghost"
                           size="icon"
                           onClick={() => handleSaveClick(message.id)}
-                          disabled={isProcessing}
+                          disabled={isProcessing[message.id]}
                         >
                           <Save className="h-4 w-4" />
                         </Button>
@@ -255,7 +258,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
                           variant="ghost"
                           size="icon"
                           onClick={() => handleCancel(message.id)}
-                          disabled={isProcessing}
+                          disabled={isProcessing[message.id]}
                         >
                           <X className="h-4 w-4" />
                         </Button>
@@ -266,7 +269,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
                           variant="ghost"
                           size="icon"
                           onClick={() => handleEdit(message.id)}
-                          disabled={isProcessing}
+                          disabled={isProcessing[message.id]}
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
@@ -274,7 +277,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
                           variant="ghost"
                           size="icon"
                           onClick={() => handleDeleteClick(message)}
-                          disabled={isProcessing}
+                          disabled={isProcessing[message.id]}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -306,14 +309,14 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
             <AlertDialogAction
               className="bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={() => handleDeleteConfirm(false)}
-              disabled={isProcessing}
+              disabled={isProcessing[messageToDelete?.id]}
             >
               Delete from Database Only
             </AlertDialogAction>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => handleDeleteConfirm(true)}
-              disabled={isProcessing}
+              disabled={isProcessing[messageToDelete?.id]}
             >
               Delete from Both
             </AlertDialogAction>

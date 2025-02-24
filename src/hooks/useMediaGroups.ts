@@ -2,9 +2,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Message, MediaItem } from "@/types";
+import { useEffect } from "react";
 
 export const useMediaGroups = () => {
-  return useQuery({
+  const { data, refetch } = useQuery({
     queryKey: ['media-groups'],
     queryFn: async () => {
       const { data: messages, error } = await supabase
@@ -69,8 +70,33 @@ export const useMediaGroups = () => {
         });
       });
 
-      // Convert the grouped messages into arrays
       return Object.values(groupedMessages).flatMap(group => group);
     },
   });
+
+  // Set up realtime subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel('xdelo_media_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'messages'
+        },
+        () => {
+          // Refetch data when any change occurs
+          refetch();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetch]);
+
+  return { data };
 };

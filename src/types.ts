@@ -11,6 +11,14 @@ export interface FilterValues {
   sortOrder?: 'asc' | 'desc';
 }
 
+export interface ParsingMetadata {
+  method: 'manual' | 'ai' | 'hybrid';
+  confidence: number;
+  timestamp: string;
+  correlation_id?: string;
+  needs_review?: boolean;
+}
+
 export interface AnalyzedContent {
   product_name?: string;
   product_code?: string;
@@ -21,11 +29,9 @@ export interface AnalyzedContent {
   total_price?: number;
   notes?: string;
   caption?: string;
-  parsing_metadata?: {
-    method: 'manual' | 'ai' | 'hybrid';
-    confidence: number;
-    timestamp: string;
-  };
+  product_sku?: string;
+  purchase_order_uid?: string;
+  parsing_metadata?: ParsingMetadata;
   sync_metadata?: {
     sync_source_message_id?: string;
     media_group_id?: string;
@@ -69,6 +75,20 @@ export interface Message {
   updated_at?: string;
 }
 
+export interface MediaItem {
+  id: string;
+  public_url: string | null;
+  mime_type: string | null;
+  created_at: string;
+  analyzed_content: AnalyzedContent | null;
+  file_id?: string;
+  file_unique_id: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  caption?: string;
+}
+
 export interface GlProduct {
   id: string;
   main_new_product_name: string;
@@ -83,40 +103,26 @@ export interface GlProduct {
   created_at: string;
   updated_at: string;
   sync_status: SyncStatus;
-  cart_add_note?: boolean;
-  cart_rename?: boolean;
+  cart_add_note?: string;
+  cart_rename?: string;
   date_timestamp_subm?: string;
   email_email_of_user_who_added_product?: string;
   glide_id?: string;
   rowid_account_rowid?: string;
   rowid_purchase_order_row_id?: string;
-  messages?: {
-    public_url: string;
-    media_group_id: string;
-  }[];
-}
-
-export interface MediaItem {
-  id: string;
-  public_url: string | null;
-  mime_type: string | null;
-  created_at: string;
-  analyzed_content: AnalyzedContent | null;
-  file_id: string | null;
-  file_unique_id: string | null;
-  width?: number;
-  height?: number;
-  duration?: number;
-  caption?: string;
+  messages?: Message[];
 }
 
 export interface MatchResult {
   id: string;
   message_id: string;
   product_id: string;
-  confidence: number;
-  matchType: string;
-  details: {
+  similarity: number;
+  product: GlProduct;
+  match_type: 'exact' | 'partial' | 'fuzzy';
+  match_confidence: number;
+  matched_fields: string[];
+  details?: {
     matchedFields: string[];
     confidence: number;
   };

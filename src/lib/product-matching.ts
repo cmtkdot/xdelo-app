@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Message, MatchResult, AnalyzedContent } from "@/types";
@@ -51,47 +52,51 @@ const findMatches = async (
     const matches: MatchResult[] = [];
 
     for (const product of products) {
-      let confidence = 0;
+      let similarity = 0;
       const matchedFields: string[] = [];
 
       if (product_name && product.main_product_name) {
-        const similarity = stringSimilarity(product_name, product.main_product_name);
-        if (similarity > similarityThreshold) {
-          confidence += similarity * 0.4;
+        const nameSimilarity = stringSimilarity(product_name, product.main_product_name);
+        if (nameSimilarity > similarityThreshold) {
+          similarity += nameSimilarity * 0.4;
           matchedFields.push('product_name');
         }
       }
 
       if (vendor_uid && product.main_vendor_uid) {
         if (vendor_uid === product.main_vendor_uid) {
-          confidence += 0.3;
+          similarity += 0.3;
           matchedFields.push('vendor_uid');
         }
       }
 
       if (purchase_date && product.main_product_purchase_date) {
         if (purchase_date === product.main_product_purchase_date) {
-          confidence += 0.3;
+          similarity += 0.3;
           matchedFields.push('purchase_date');
         }
       }
 
-      if (confidence > 0) {
+      if (similarity > 0) {
         matches.push({
-          id: product.id,
+          id: crypto.randomUUID(),
           message_id: messageId,
           product_id: product.id,
-          confidence,
-          matchType: 'automatic',
+          similarity,
+          product,
+          match_type: similarity > 0.8 ? 'exact' : similarity > 0.6 ? 'partial' : 'fuzzy',
+          match_confidence: similarity,
+          matched_fields: matchedFields,
           details: {
             matchedFields,
-            confidence,
-          },
+            confidence: similarity
+          }
         });
       }
     }
 
-    matches.sort((a, b) => b.confidence - a.confidence);
+    // Sort matches by match_confidence instead of confidence
+    matches.sort((a, b) => b.match_confidence - a.match_confidence);
 
     const bestMatch = matches.length > 0 ? matches[0] : null;
 
@@ -160,22 +165,4 @@ const stringSimilarity = (str1: string, str2: string): number => {
   return jaro;
 };
 
-const logSyncOperation = async (
-  client: SupabaseClient<Database>,
-  operation: string,
-  details: Record<string, any>
-) => {
-  try {
-    await client
-      .from('sync_logs')
-      .insert({
-        operation_type: operation,
-        status: 'completed',
-        details
-      });
-  } catch (error) {
-    console.error('Error logging sync operation:', error);
-  }
-};
-
-export { findMatches, logSyncOperation };
+export { findMatches };
