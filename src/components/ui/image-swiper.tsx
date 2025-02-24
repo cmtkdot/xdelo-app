@@ -1,13 +1,13 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
-import { MediaItem } from "@/types";
+import { type Message } from "@/types";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "./button";
 import { format } from "date-fns";
 
 interface ImageSwiperProps {
-  media: MediaItem[];
+  media: Message[];
   className?: string;
 }
 
@@ -91,11 +91,13 @@ export const ImageSwiper = ({ media, className }: ImageSwiperProps) => {
       {/* Product info overlay */}
       <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 via-black/50 to-transparent p-4 z-10">
         <h3 className="text-xl font-semibold text-white">
-          {currentMedia.analyzed_content?.product_name || 'Untitled Product'}
+          {currentMedia.caption || 'Untitled Product'}
         </h3>
-        <p className="text-sm text-gray-300">
-          {format(new Date(currentMedia.created_at), 'MMM d, yyyy')}
-        </p>
+        {currentMedia.created_at && (
+          <p className="text-sm text-gray-300">
+            {format(new Date(currentMedia.created_at), 'MMM d, yyyy')}
+          </p>
+        )}
       </div>
 
       {/* Media counter */}
@@ -145,7 +147,7 @@ export const ImageSwiper = ({ media, className }: ImageSwiperProps) => {
       ) : (
         <img 
           src={currentMedia.public_url || "/placeholder.svg"}
-          alt={currentMedia.analyzed_content?.product_name || 'Product image'}
+          alt={currentMedia.caption || 'Product image'}
           className="h-full w-full object-cover"
         />
       )}
