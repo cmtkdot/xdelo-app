@@ -94,7 +94,6 @@ const findMatches = async (
       }
     }
 
-    // Sort matches by match_confidence instead of confidence
     matches.sort((a, b) => b.match_confidence - a.match_confidence);
 
     const bestMatch = matches.length > 0 ? matches[0] : null;
@@ -165,21 +164,27 @@ const stringSimilarity = (str1: string, str2: string): number => {
 };
 
 export function calculateMatchConfidence(message: any, product: any): MatchResult {
-  const overallConfidence = stringSimilarity(message.product_name, product.main_product_name);
-  const matchedFields = [];
+  const matchedFields: string[] = [];
+  let overallConfidence = 0;
 
   if (message.product_name && product.main_product_name) {
-    matchedFields.push('product_name');
+    const nameSimilarity = stringSimilarity(message.product_name, product.main_product_name);
+    if (nameSimilarity > similarityThreshold) {
+      overallConfidence += nameSimilarity * 0.4;
+      matchedFields.push('product_name');
+    }
   }
 
   if (message.vendor_uid && product.main_vendor_uid) {
     if (message.vendor_uid === product.main_vendor_uid) {
+      overallConfidence += 0.3;
       matchedFields.push('vendor_uid');
     }
   }
 
   if (message.purchase_date && product.main_product_purchase_date) {
     if (message.purchase_date === product.main_product_purchase_date) {
+      overallConfidence += 0.3;
       matchedFields.push('purchase_date');
     }
   }

@@ -1,7 +1,7 @@
 
 import type { Database } from './integrations/supabase/types';
 export type { Database } from './integrations/supabase/types';
-export type { Message, MessageWithPurchaseOrder, AnalyzedContent, ProcessingState } from './types/Message';
+export type { Message, AnalyzedContent, ProcessingState } from './types/Message';
 
 export interface MatchResult {
   id: string;
@@ -19,7 +19,7 @@ export interface MatchResult {
 export interface FilterValues {
   search?: string;
   dateRange?: { from: Date; to: Date } | null;
-  processingState?: ProcessingState[];
+  processingState?: string[];
   vendors?: string[];
   productCodes?: string[];
   quantity?: { min: number; max: number };

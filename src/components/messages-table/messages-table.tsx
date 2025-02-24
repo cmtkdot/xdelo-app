@@ -1,4 +1,5 @@
-import { type Message } from "@/types/Message";
+
+import { type Message } from "@/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MediaViewer } from "@/components/media-viewer/media-viewer";
@@ -18,15 +19,12 @@ export const MessagesTable = ({
   onDelete,
 }: MessagesTableProps) => {
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
-  const [isViewerOpen, setIsViewerOpen] = useState(false);
 
   const handleView = (message: Message) => {
     setSelectedMessage(message);
-    setIsViewerOpen(true);
   };
 
   const handleCloseViewer = () => {
-    setIsViewerOpen(false);
     setSelectedMessage(null);
   };
 
@@ -113,11 +111,12 @@ export const MessagesTable = ({
         </div>
       </Card>
 
-      <MediaViewer
-        isOpen={isViewerOpen}
-        onClose={handleCloseViewer}
-        media={selectedMessage}
-      />
+      {selectedMessage && (
+        <MediaViewer
+          media={selectedMessage}
+          onClose={handleCloseViewer}
+        />
+      )}
     </>
   );
 };

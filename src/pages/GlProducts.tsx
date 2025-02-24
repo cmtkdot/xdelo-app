@@ -6,6 +6,11 @@ import { GlProductFilters } from "@/components/gl-products/gl-product-filters";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Message } from "@/types";
+import { Database } from "@/integrations/supabase/types";
+
+type MessageWithPurchaseOrder = Database['public']['Tables']['messages']['Row'] & {
+  gl_purchase_order: Database['public']['Tables']['gl_purchase_orders']['Row'] | null;
+};
 
 export default function GlProducts() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -26,12 +31,21 @@ export default function GlProducts() {
       if (error) throw error;
       
       // Group messages by media_group_id
-      const groupedMessages = messages.reduce((groups: { [key: string]: Message[] }, message) => {
+      const groupedMessages = (messages as MessageWithPurchaseOrder[]).reduce((groups: { [key: string]: Message[] }, message) => {
         const groupId = message.media_group_id || message.id;
         if (!groups[groupId]) {
           groups[groupId] = [];
         }
-        groups[groupId].push(message as Message);
+        const typedMessage: Message = {
+          ...message,
+          gl_purchase_order: message.gl_purchase_order ? {
+            id: message.gl_purchase_order.id,
+            code: message.gl_purchase_order.code,
+            created_at: message.gl_purchase_order.created_at,
+            updated_at: message.gl_purchase_order.updated_at
+          } : null
+        };
+        groups[groupId].push(typedMessage);
         return groups;
       }, {});
 
