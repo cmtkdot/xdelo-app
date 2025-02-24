@@ -48,7 +48,7 @@ export interface Message {
   duration?: number | null;
   public_url?: string | null;
   file_name?: string | null;
-  analyzed_content?: Json | null;
+  analyzed_content?: AnalyzedContent | null;
   processing_state: ProcessingState;
   telegram_message_id?: number | null;
   chat_id?: number | null;

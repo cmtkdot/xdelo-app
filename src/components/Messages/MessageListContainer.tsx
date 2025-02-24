@@ -10,7 +10,7 @@ export function MessageListContainer() {
   const { data: messages, isLoading } = useQuery<Message[]>({
     queryKey: ['messages'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: rawData, error } = await supabase
         .from('messages')
         .select(`
           *,
@@ -23,7 +23,12 @@ export function MessageListContainer() {
 
       if (error) throw error;
       
-      return data as Message[];
+      const messages = rawData?.map(message => ({
+        ...message,
+        purchase_order: message.purchase_order || null
+      })) as Message[];
+      
+      return messages;
     }
   });
 

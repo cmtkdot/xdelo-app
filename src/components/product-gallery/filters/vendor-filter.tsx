@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AnalyzedContent } from "@/types";
 
 interface VendorFilterProps {
   onVendorChange: (vendor: string | null) => void;
@@ -22,12 +23,12 @@ export function VendorFilter({ onVendorChange, selectedVendor }: VendorFilterPro
       const { data: messages } = await supabase
         .from('messages')
         .select('analyzed_content')
-        .filter('analyzed_content->vendor_uid', 'not.is', null);
+        .not('analyzed_content->vendor_uid', 'is', null);
 
       if (messages) {
         const uniqueVendors = Array.from(new Set(
           messages
-            .map(m => m.analyzed_content?.vendor_uid)
+            .map(m => (m.analyzed_content as AnalyzedContent | null)?.vendor_uid)
             .filter((v): v is string => !!v)
         )).map(vendorId => ({
           id: vendorId,

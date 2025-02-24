@@ -8,12 +8,12 @@ export interface MatchResult {
   message_id: string;
   product_id: string;
   confidence: number;
+  match_confidence?: number;
   matchType: string;
   details: {
     matchedFields: string[];
     confidence: number;
   };
-  match_confidence?: number;
 }
 
 export interface FilterValues {
