@@ -21,17 +21,18 @@ export function VendorFilter({ onVendorChange, selectedVendor }: VendorFilterPro
     const fetchVendors = async () => {
       const { data: messages } = await supabase
         .from('messages')
-        .select('analyzed_content->vendor_uid')
-        .not('analyzed_content->vendor_uid', 'is', null)
-        .distinct();
+        .select('analyzed_content')
+        .filter('analyzed_content->vendor_uid', 'not.is', null);
 
       if (messages) {
-        const uniqueVendors = messages
-          .map(m => ({
-            id: m.analyzed_content?.vendor_uid || '',
-            name: m.analyzed_content?.vendor_uid || ''
-          }))
-          .filter(v => v.id);
+        const uniqueVendors = Array.from(new Set(
+          messages
+            .map(m => m.analyzed_content?.vendor_uid)
+            .filter((v): v is string => !!v)
+        )).map(vendorId => ({
+          id: vendorId,
+          name: vendorId
+        }));
         
         setVendors(uniqueVendors);
       }

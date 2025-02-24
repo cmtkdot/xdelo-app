@@ -12,18 +12,22 @@ export async function getSyncLogs() {
 }
 
 export async function createSyncLog(
-  event_type: string,
-  details: any,
-  status: 'success' | 'error'
+  operation: string,
+  recordId: string,
+  tableName: string,
+  status: string,
+  errorMessage?: string
 ) {
   const { data, error } = await supabase
     .from('gl_sync_logs')
     .insert([
       {
-        event_type,
-        details,
+        operation,
+        record_id: recordId,
+        table_name: tableName,
         status,
-      },
+        error_message: errorMessage
+      }
     ])
     .select()
     .single();

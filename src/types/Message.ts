@@ -1,7 +1,8 @@
+
 import { Database } from "@/integrations/supabase/types";
 import { Json } from "@/integrations/supabase/types";
 
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
+export type ProcessingState = Database['public']['Enums']['processing_state_type'];
 export type TelegramChatType = Database['public']['Enums']['telegram_chat_type'];
 
 export interface AnalyzedContent {
@@ -35,7 +36,7 @@ export interface AnalyzedContent {
 export interface Message {
   id: string;
   created_at: string;
-  updated_at?: string;
+  updated_at: string;
   caption?: string | null;
   file_id?: string | null;
   file_unique_id: string;
@@ -48,7 +49,7 @@ export interface Message {
   public_url?: string | null;
   file_name?: string | null;
   analyzed_content?: Json | null;
-  processing_state?: ProcessingState;
+  processing_state: ProcessingState;
   telegram_message_id?: number | null;
   chat_id?: number | null;
   chat_type?: TelegramChatType | null;

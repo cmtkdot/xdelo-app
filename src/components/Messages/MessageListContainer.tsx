@@ -12,12 +12,17 @@ export function MessageListContainer() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('messages')
-        .select('*')
+        .select(`
+          *,
+          purchase_order:gl_purchase_orders!messages_purchase_order_uid_fkey (
+            id,
+            code
+          )
+        `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       
-      // Cast the data to Message[] type
       return data as Message[];
     }
   });
