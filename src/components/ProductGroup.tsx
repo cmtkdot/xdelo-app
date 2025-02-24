@@ -9,6 +9,7 @@ import { MediaViewer } from "./MediaViewer/MediaViewer";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/useToast";
+import { messageToMediaItem } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -72,15 +73,14 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
       if (response.error) throw response.error;
 
       toast({
-        title: "Reanalysis Started",
         description: "Content reanalysis and media group sync initiated",
+        variant: "success"
       });
     } catch (error) {
       console.error('Reanalysis error:', error);
       toast({
-        title: "Error",
         description: "Failed to start reanalysis. Please try again.",
-        variant: "destructive",
+        variant: "destructive"
       });
     } finally {
       setIsReanalyzing(false);

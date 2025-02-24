@@ -87,14 +87,13 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
       );
 
       toast({
-        title: "Success",
         description: "Changes saved successfully",
+        variant: "success"
       });
     } catch (error) {
       toast({
-        title: "Error",
         description: "Failed to save changes",
-        variant: "destructive",
+        variant: "destructive"
       });
     }
   };
@@ -135,7 +134,6 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
   };
 
   const handleMediaClick = (message: Message) => {
-    // If it's part of a media group, show all media from the group
     if (message.media_group_id) {
       const groupMedia = messages.filter(m => m.media_group_id === message.media_group_id);
       setSelectedMedia(groupMedia);

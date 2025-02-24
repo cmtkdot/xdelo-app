@@ -97,16 +97,15 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
 
         if (reanalysisError) {
           console.error('Reanalysis error:', reanalysisError);
-          // Don't throw here, we still want to show success for the caption update
           toast({
-            title: "Warning",
             description: "Caption updated but content reanalysis failed. It will be retried automatically.",
-            variant: "default",
+            variant: "destructive"
           });
         }
 
         toast({
-          description: "Caption has been updated and content analysis triggered"
+          description: "Caption has been updated and content analysis triggered",
+          variant: "success"
         });
 
         onClose();
@@ -117,6 +116,7 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
       console.error('Error updating caption:', error);
       toast({
         description: "Failed to update caption. Please try again.",
+        variant: "destructive"
       });
     } finally {
       setIsSubmitting(false);
