@@ -3,11 +3,11 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { GlProduct } from "@/types";
 import { formatDate } from "@/lib/utils";
 
-interface GlappProductCardProps {
+interface GLProductCardProps {
   product: GlProduct;
 }
 
-export function GlappProductCard({ product }: GlappProductCardProps) {
+export function GLProductCard({ product }: GLProductCardProps) {
   return (
     <Card className="hover:shadow-lg transition-shadow">
       <CardHeader>
