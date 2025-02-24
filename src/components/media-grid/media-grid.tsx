@@ -1,12 +1,12 @@
 
 import { Message } from "@/types";
-import { ProductGroup } from "@/components/product-group/product-group";
+import { ProductGroup } from "../product-group/product-group";
 
 interface MediaGridProps {
-  mediaGroups: { [key: string]: Message[] };
-  onEdit: (media: Message) => void;
-  onDelete: (media: Message) => void;
-  onView: () => void;
+  mediaGroups: Message[][];
+  onEdit?: (media: Message) => void;
+  onDelete?: (media: Message) => void;
+  onView?: () => void;
 }
 
 export const MediaGrid = ({ 
@@ -17,11 +17,10 @@ export const MediaGrid = ({
 }: MediaGridProps) => {
   return (
     <div className="space-y-8">
-      {Object.entries(mediaGroups).map(([groupId, messages]) => (
+      {Array.isArray(mediaGroups) && mediaGroups.map((group, index) => (
         <ProductGroup
-          key={groupId}
-          groupId={groupId}
-          messages={messages}
+          key={index}
+          group={group}
           onEdit={onEdit}
           onDelete={onDelete}
           onView={onView}
