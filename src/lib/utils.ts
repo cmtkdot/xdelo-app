@@ -1,4 +1,6 @@
 
+import { Message } from "@/types";
+
 // Common formatters
 export function formatDate(date: Date): string {
   return new Date(date).toLocaleDateString('en-US', {
@@ -23,11 +25,7 @@ export const messageToMediaItem = (message: Message) => {
 
 // Re-export other utilities
 export * from './generalUtils';
-// Explicitly re-export specific functions from productMatching to avoid conflicts
-import { 
-  matchProduct,
-  updateProduct,
-  // exclude logSyncOperation to avoid duplicate export
-} from './productMatching';
-export { matchProduct, updateProduct };
 export * from './syncUtils';
+
+// Export everything from productMatching except logSyncOperation
+export * from './productMatching';

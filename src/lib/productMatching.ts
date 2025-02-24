@@ -54,16 +54,16 @@ const findMatches = async (
       let confidence = 0;
       const matchedFields: string[] = [];
 
-      if (product_name && product.main_product_name) {
-        const similarity = stringSimilarity(product_name, product.main_product_name);
+      if (product_name && product.main_new_product_name) {
+        const similarity = stringSimilarity(product_name, product.main_new_product_name);
         if (similarity > similarityThreshold) {
           confidence += similarity * 0.4;
           matchedFields.push('product_name');
         }
       }
 
-      if (vendor_uid && product.main_vendor_uid) {
-        if (vendor_uid === product.main_vendor_uid) {
+      if (vendor_uid && product.main_vendor_product_name) {
+        if (vendor_uid === product.main_vendor_product_name) {
           confidence += 0.3;
           matchedFields.push('vendor_uid');
         }
@@ -175,6 +175,48 @@ const logSyncOperation = async (
       });
   } catch (error) {
     console.error('Error logging sync operation:', error);
+  }
+};
+
+export const matchProduct = async (messageId: string, supabaseClient: SupabaseClient<Database>) => {
+  try {
+    // Call findMatches to get the matches
+    const { success, data } = await findMatches(messageId, supabaseClient);
+
+    if (!success) {
+      console.error('Error finding matches');
+      return { success: false };
+    }
+
+    // Return the matches and bestMatch
+    return {
+      success: true,
+      matches: data?.matches || [],
+      bestMatch: data?.bestMatch || null,
+    };
+  } catch (error) {
+    console.error('Error in matchProduct:', error);
+    return { success: false };
+  }
+};
+
+export const updateProduct = async (product: any) => {
+  try {
+    const { data, error } = await supabase
+      .from('gl_products')
+      .update(product)
+      .eq('id', product.id)
+      .select();
+
+    if (error) {
+      console.error('Error updating product:', error);
+      return { success: false, error };
+    }
+
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error updating product:', error);
+    return { success: false, error };
   }
 };
 
