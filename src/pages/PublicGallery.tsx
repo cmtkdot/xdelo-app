@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,7 +14,7 @@ export const PublicGallery = () => {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const { data: mediaGroups } = useQuery({
+  const { data: mediaGroups, isLoading } = useQuery({
     queryKey: ['public-messages'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -25,7 +26,7 @@ export const PublicGallery = () => {
       if (error) throw error;
       
       // Group messages by media_group_id
-      const groupedMessages = (data as Message[]).reduce((groups: { [key: string]: Message[] }, message) => {
+      const groupedMessages = (data || []).reduce((groups: { [key: string]: Message[] }, message) => {
         const groupId = message.media_group_id || message.id;
         if (!groups[groupId]) {
           groups[groupId] = [];
@@ -34,7 +35,7 @@ export const PublicGallery = () => {
         return groups;
       }, {});
 
-      return groupedMessages;
+      return Object.values(groupedMessages);
     }
   });
 
@@ -112,13 +113,21 @@ export const PublicGallery = () => {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-6 flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <h1 className="text-2xl font-bold">Public Gallery</h1>
       
       {mediaGroups && (
         <ProductGrid
-          products={Object.values(mediaGroups)}
+          products={mediaGroups}
           onEdit={user ? handleEdit : undefined}
           onDelete={user ? handleDelete : undefined}
           onView={handleView}
