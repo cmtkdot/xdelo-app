@@ -23,6 +23,9 @@ export const ProductGroup = ({
   const [selectedMedia, setSelectedMedia] = useState<Message | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
 
+  // Ensure messages is always an array
+  const safeMessages = Array.isArray(messages) ? messages : [];
+
   const handleMediaClick = (media: Message) => {
     setSelectedMedia(media);
     setIsViewerOpen(true);
@@ -32,9 +35,6 @@ export const ProductGroup = ({
     setIsViewerOpen(false);
     setSelectedMedia(null);
   };
-
-  // Ensure messages is an array before mapping
-  const messagesList = Array.isArray(messages) ? messages : [];
 
   return (
     <Card className="p-4">
@@ -51,18 +51,20 @@ export const ProductGroup = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {messagesList.map((message) => (
+          {safeMessages.map((message) => (
             <Card
               key={message.id}
               className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
               onClick={() => handleMediaClick(message)}
             >
               <div className="aspect-video relative">
-                <img
-                  src={message.public_url}
-                  alt={message.caption || "Media"}
-                  className="object-cover w-full h-full"
-                />
+                {message.public_url && (
+                  <img
+                    src={message.public_url}
+                    alt={message.caption || "Media"}
+                    className="object-cover w-full h-full"
+                  />
+                )}
               </div>
               <div className="p-3">
                 <p className="text-sm text-muted-foreground truncate">
