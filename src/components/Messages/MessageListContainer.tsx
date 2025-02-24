@@ -12,23 +12,17 @@ export function MessageListContainer() {
     queryFn: async () => {
       const { data: rawData, error } = await supabase
         .from('messages')
-        .select(`
-          *,
-          purchase_order:gl_purchase_orders!messages_purchase_order_uid_fkey (
-            id,
-            code
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       
-      const messages = rawData?.map(message => ({
+      const typedMessages = (rawData || []).map(message => ({
         ...message,
-        purchase_order: message.purchase_order || null
+        analyzed_content: message.analyzed_content as Message['analyzed_content'],
       })) as Message[];
       
-      return messages;
+      return typedMessages;
     }
   });
 

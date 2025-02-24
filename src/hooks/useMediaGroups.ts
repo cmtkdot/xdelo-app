@@ -7,15 +7,20 @@ export const useMediaGroups = () => {
   const { data, error, isLoading } = useQuery({
     queryKey: ['media-groups'],
     queryFn: async () => {
-      const { data: messages, error } = await supabase
+      const { data: rawData, error } = await supabase
         .from('messages')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
+      const messages = (rawData || []).map(message => ({
+        ...message,
+        analyzed_content: message.analyzed_content as Message['analyzed_content'],
+      })) as Message[];
+
       // Group messages by media_group_id
-      const groupedMessages = (messages as Message[]).reduce((acc: { [key: string]: Message[] }, message) => {
+      const groupedMessages = messages.reduce((acc: { [key: string]: Message[] }, message) => {
         const groupId = message.media_group_id || message.id;
         if (!acc[groupId]) {
           acc[groupId] = [];
@@ -27,8 +32,7 @@ export const useMediaGroups = () => {
       // Convert to array and sort
       return Object.values(groupedMessages).map(group => 
         [...group].sort((a, b) => {
-          // Sort by timestamp, newest first
-          return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         })
       );
     }

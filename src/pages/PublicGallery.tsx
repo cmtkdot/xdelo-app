@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { type Message } from "@/types/Message";
+import { type Message } from "@/types";
 import { GlProductGrid } from "@/components/gl-products/gl-product-grid";
 import { MediaEditDialog } from "@/components/media-edit/media-edit-dialog";
 import { useToast } from "@/hooks/useToast";
@@ -17,7 +17,7 @@ export const PublicGallery = () => {
   const { data: mediaGroups, isLoading } = useQuery<Message[][]>({
     queryKey: ['public-messages'],
     queryFn: async () => {
-      const { data: messages, error } = await supabase
+      const { data: rawData, error } = await supabase
         .from('messages')
         .select('*')
         .eq('processing_state', 'completed')
@@ -25,9 +25,12 @@ export const PublicGallery = () => {
       
       if (error) throw error;
       
-      const typedMessages = (messages || []) as Message[];
+      const messages = (rawData || []).map(message => ({
+        ...message,
+        analyzed_content: message.analyzed_content as Message['analyzed_content'],
+      })) as Message[];
       
-      const groupedMessages = typedMessages.reduce((groups: { [key: string]: Message[] }, message) => {
+      const groupedMessages = messages.reduce((groups: { [key: string]: Message[] }, message) => {
         const groupId = message.media_group_id || message.id;
         if (!groups[groupId]) {
           groups[groupId] = [];
@@ -93,6 +96,6 @@ export const PublicGallery = () => {
       )}
     </div>
   );
-};
+}
 
 export default PublicGallery;

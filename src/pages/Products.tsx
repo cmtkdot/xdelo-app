@@ -1,52 +1,47 @@
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Card } from "@/components/ui/card";
-import type { Message } from "@/types";
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { Message } from '@/types';
 
 export default function Products() {
-  const [messages, setMessages] = useState<Message[][]>([]);
+  const [mediaGroups, setMediaGroups] = useState<Message[][]>([]);
 
-  useEffect(() => {
-    const fetchMessages = async () => {
-      const { data } = await supabase
+  const { data: messages } = useQuery({
+    queryKey: ['messages'],
+    queryFn: async () => {
+      const { data: rawData, error } = await supabase
         .from('messages')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (data) {
-        // Group messages by some criteria (e.g., date)
-        const grouped = data.reduce((acc: Message[][], message: Message) => {
-          const lastGroup = acc[acc.length - 1];
-          if (!lastGroup || lastGroup.length >= 10) {
-            acc.push([message]);
-          } else {
-            lastGroup.push(message);
-          }
-          return acc;
-        }, []);
+      if (error) throw error;
 
-        setMessages(grouped);
-      }
-    };
+      const messages = (rawData || []).map(message => ({
+        ...message,
+        analyzed_content: message.analyzed_content as Message['analyzed_content'],
+      })) as Message[];
 
-    fetchMessages();
-  }, []);
+      // Group messages by media_group_id
+      const groups = messages.reduce((acc: { [key: string]: Message[] }, message) => {
+        const groupId = message.media_group_id || message.id;
+        if (!acc[groupId]) {
+          acc[groupId] = [];
+        }
+        acc[groupId].push(message);
+        return acc;
+      }, {});
+
+      const groupedMessages = Object.values(groups);
+      setMediaGroups(groupedMessages);
+      return messages;
+    }
+  });
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Products</h1>
-      <div className="grid gap-4">
-        {messages.map((group, i) => (
-          <Card key={i} className="p-4">
-            {group.map(message => (
-              <div key={message.id} className="mb-2">
-                {message.caption || 'No caption'}
-              </div>
-            ))}
-          </Card>
-        ))}
-      </div>
+    <div className="container mx-auto py-6">
+      <h1 className="text-2xl font-bold mb-6">Products</h1>
+      {/* Add your product display logic here */}
     </div>
   );
 }
