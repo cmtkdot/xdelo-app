@@ -1,9 +1,10 @@
+
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Message } from "@/types";
-import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
-import { MediaEditDialog } from "@/components/MediaEdit/MediaEditDialog";
+import { ProductGrid } from "@/components/ProductGallery/product-grid";
+import { MediaEditDialog } from "@/components/MediaEdit/media-edit-dialog";
 import { useToast } from "@/hooks/useToast";
 import { useAuth } from "@/hooks/useAuth";
 

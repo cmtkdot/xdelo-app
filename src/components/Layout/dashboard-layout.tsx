@@ -1,21 +1,15 @@
-import React from "react";
-import { Header } from "./Header";
-import { AppSidebar } from "./AppSidebar";
 
-interface DashboardLayoutProps {
-  children: React.ReactNode;
-}
+import { AppSidebar } from "./app-sidebar";
 
-export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
+export const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <div className="flex min-h-[calc(100vh-4rem)] relative">
-        <AppSidebar />
-        <main className="flex-1 p-4 md:p-6 w-full overflow-auto">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <AppSidebar />
+      <main className="transition-all duration-300 ease-in-out pl-16 min-h-screen">
+        <div className="container py-6 px-4 mx-auto">
           {children}
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 };

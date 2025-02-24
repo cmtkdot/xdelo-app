@@ -48,7 +48,7 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
         });
 
         // Update caption in Telegram
-        const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
+        const { error: captionError } = await supabase.functions.invoke('xdelo_update-telegram-caption', {
           body: {
             messageId: media.id,
             newCaption: caption
@@ -86,7 +86,7 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
 
         // Trigger reanalysis
         console.log('Triggering reanalysis for updated content');
-        const { error: reanalysisError } = await supabase.functions.invoke('parse-caption-with-ai', {
+        const { error: reanalysisError } = await supabase.functions.invoke('xdelo_parse-caption-with-ai', {
           body: {
             message_id: media.id,
             media_group_id: media.media_group_id,
@@ -202,4 +202,4 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
       </DialogContent>
     </Dialog>
   );
-}; 
+};

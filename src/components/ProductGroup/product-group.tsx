@@ -73,7 +73,7 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
     try {
       const messageToReanalyze = group.find(m => m.caption) || mainMedia;
       
-      const response = await supabase.functions.invoke('reanalyze-low-confidence', {
+      const response = await supabase.functions.invoke('xdelo_reanalyze-low-confidence', {
         body: {
           message_id: messageToReanalyze.id,
           media_group_id: messageToReanalyze.media_group_id,
@@ -298,4 +298,4 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
       </AlertDialog>
     </>
   );
-}; 
+};
