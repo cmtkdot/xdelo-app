@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/useToast";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function AIChat() {
   const [iframeUrl, setIframeUrl] = useState<string | null>(null);

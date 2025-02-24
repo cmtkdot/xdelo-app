@@ -1,9 +1,8 @@
-
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { PageContainer } from "@/components/layout/PageContainer";
-import { type AnalyzedContent } from "@/types";
+import { AnalyzedContent } from "@/types";
+import { PageContainer } from "@/components/Layout/PageContainer";
 
 const Dashboard = () => {
   const [stats, setStats] = useState({

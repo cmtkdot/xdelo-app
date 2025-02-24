@@ -1,10 +1,11 @@
+
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { AccountCard } from "@/components/settings/account-card";
-import { TelegramCard } from "@/components/settings/telegram-card";
-import { SyncCard } from "@/components/settings/sync-card";
+import { AccountCard } from "@/components/Settings/AccountCard";
+import { TelegramCard } from "@/components/Settings/TelegramCard";
+import { SyncCard } from "@/components/Settings/SyncCard";
 
-const settings = () => {
+const Settings = () => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [botToken, setBotToken] = useState<string | null>(null);
   const [webhookUrl, setWebhookUrl] = useState<string | null>(null);
@@ -46,4 +47,4 @@ const settings = () => {
   );
 };
 
-export default settings;
+export default Settings;

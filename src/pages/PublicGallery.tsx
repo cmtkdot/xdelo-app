@@ -1,23 +1,22 @@
-
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { type Message } from "@/types";
-import { GlProductGrid } from "@/components/gl-products/gl-product-grid";
-import { MediaEditDialog } from "@/components/media-edit/media-edit-dialog";
-import { useToast } from "@/hooks/useToast";
+import { Message } from "@/types";
+import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
+import { MediaEditDialog } from "@/components/MediaEditDialog";
+import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
-export const PublicGallery = () => {
+const PublicGallery = () => {
   const [editItem, setEditItem] = useState<Message | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const { data: mediaGroups, isLoading } = useQuery<Message[][]>({
+  const { data: mediaGroups } = useQuery({
     queryKey: ['public-messages'],
     queryFn: async () => {
-      const { data: rawData, error } = await supabase
+      const { data, error } = await supabase
         .from('messages')
         .select('*')
         .eq('processing_state', 'completed')
@@ -25,9 +24,8 @@ export const PublicGallery = () => {
       
       if (error) throw error;
       
-      const messages = rawData as Message[];
-      
-      const groupedMessages = messages.reduce((groups: { [key: string]: Message[] }, message) => {
+      // Group messages by media_group_id
+      const groupedMessages = (data as Message[]).reduce((groups: { [key: string]: Message[] }, message) => {
         const groupId = message.media_group_id || message.id;
         if (!groups[groupId]) {
           groups[groupId] = [];
@@ -36,10 +34,11 @@ export const PublicGallery = () => {
         return groups;
       }, {});
 
-      return Object.values(groupedMessages);
+      return groupedMessages;
     }
   });
 
+  // Set up realtime subscription
   useEffect(() => {
     const channel = supabase
       .channel('public-messages')
@@ -51,6 +50,7 @@ export const PublicGallery = () => {
           table: 'messages'
         },
         () => {
+          // Invalidate and refetch messages
           queryClient.invalidateQueries({ queryKey: ['public-messages'] });
         }
       )
@@ -61,26 +61,67 @@ export const PublicGallery = () => {
     };
   }, [queryClient]);
 
-  const handleView = (group: Message[]) => {
-    console.log('Viewing media group:', group);
+  const handleEdit = (media: Message) => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "You must be logged in to edit media.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setEditItem(media);
   };
 
-  if (isLoading) {
-    return (
-      <div className="container mx-auto py-6 flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-      </div>
-    );
-  }
+  const handleView = () => {
+    // View logic implementation
+    console.log('Viewing media');
+  };
+
+  const handleDelete = async (media: Message) => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "You must be logged in to delete media.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', media.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Media deleted",
+        description: "The media has been successfully deleted.",
+      });
+
+      // Refetch messages
+      queryClient.invalidateQueries({ queryKey: ['public-messages'] });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete media. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="container mx-auto py-6 space-y-6">
       <h1 className="text-2xl font-bold">Public Gallery</h1>
       
       {mediaGroups && (
-        <GlProductGrid
-          products={mediaGroups}
-          onViewProduct={handleView}
+        <ProductGrid
+          products={Object.values(mediaGroups)}
+          onEdit={user ? handleEdit : undefined}
+          onDelete={user ? handleDelete : undefined}
+          onView={handleView}
         />
       )}
 
@@ -93,6 +134,6 @@ export const PublicGallery = () => {
       )}
     </div>
   );
-}
+};
 
 export default PublicGallery;

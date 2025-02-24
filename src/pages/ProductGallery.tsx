@@ -1,25 +1,48 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { type Message } from "@/types/Message";
-import { MediaEditDialog } from "@/components/media-edit/media-edit-dialog";
-import { useToast } from "@/hooks/useToast";
-import { GlProductGrid } from "@/components/gl-products/gl-product-grid";
+import { Message } from "@/types";
+import { MediaEditDialog } from "@/components/MediaEditDialog";
+import { useToast } from "@/components/ui/use-toast";
+import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
 
-export const ProductGallery = () => {
+const ProductGallery = () => {
   const [editItem, setEditItem] = useState<Message | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: mediaGroups = [] } = useMediaGroups();
+  const { data: mediaGroups = {} } = useMediaGroups(); // Provide default empty object
+
+  // Set up realtime subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel('media-groups')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages'
+        },
+        () => {
+          // Invalidate and refetch messages
+          queryClient.invalidateQueries({ queryKey: ['media-groups'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [queryClient]);
 
   const handleEdit = (media: Message) => {
     setEditItem(media);
   };
 
-  const handleView = (group: Message[]) => {
-    console.log('Viewing media group:', group);
+  const handleView = () => {
+    // View logic implementation
+    console.log('Viewing media');
   };
 
   const handleDelete = async (media: Message) => {
@@ -36,6 +59,7 @@ export const ProductGallery = () => {
         description: "The media has been successfully deleted.",
       });
 
+      // Refetch messages
       queryClient.invalidateQueries({ queryKey: ['media-groups'] });
     } catch (error) {
       toast({
@@ -46,15 +70,15 @@ export const ProductGallery = () => {
     }
   };
 
-  const products = Array.isArray(mediaGroups) ? mediaGroups : [];
-
   return (
     <div className="container mx-auto py-6 space-y-6">
       <h1 className="text-2xl font-bold">Product Gallery</h1>
       
-      <GlProductGrid
-        products={products}
-        onViewProduct={handleView}
+      <ProductGrid
+        products={Object.values(mediaGroups)}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onView={handleView}
       />
 
       {editItem && (
