@@ -1,26 +1,25 @@
-import { Suspense, lazy, useEffect, useState } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
+import { Suspense, lazy } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { type Session } from "@supabase/supabase-js";
-import { useNavigate } from "react-router-dom";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 
 // Lazy load routes with preload function
-const Auth = lazy(() => import("./pages/auth"));
-const Dashboard = lazy(() => import("./pages/dashboard"));
+const Auth = lazy(() => import("./pages/Auth"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
 const ProductGallery = lazy(() => import("./pages/product-gallery"));
 const MediaTable = lazy(() => import("./pages/media-table"));
 const PublicGallery = lazy(() => import("./pages/public-gallery"));
-const Settings = lazy(() => import("./pages/settings"));
+const Settings = lazy(() => import("./pages/Settings"));
 const NotFound = lazy(() => import("./pages/not-found"));
 const AIChat = lazy(() => import("./pages/ai-chat"));
-const GlProducts = lazy(() => import("./pages/gl-products"));
+const GlProducts = lazy(() => import("./pages/GlProducts"));
 const AudioUpload = lazy(() => import("./pages/audio-upload"));
-const MessagesPage = lazy(() => import("./pages/messages"));
+const MessagesPage = lazy(() => import("./pages/Messages"));
 
 interface ApiError {
   status?: number;

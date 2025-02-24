@@ -4,13 +4,14 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/Dialog";
-import { Button } from "@/components/ui/Button";
-import { ImageSwiper } from "@/components/ui/ImageSwiper";
-import { AlertDialog, AlertDialogContent, AlertDialogTitle } from "@/components/ui/AlertDialog";
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { ImageSwiper } from "@/components/ui/image-swiper";
+import { AlertDialog, AlertDialogContent, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { ChevronLeft, ChevronRight, Hash, Package, Calendar } from "lucide-react";
 
 interface MediaViewerProps {
   isOpen: boolean;
@@ -189,7 +190,7 @@ export const MediaViewer = ({
             <AlertDialogContent>
               <AlertDialogTitle>Error</AlertDialogTitle>
               <div className="mt-2 text-sm">{error.message}</div>
-              {error.code && <div className="mt-2 text-sm">Code: {error.code}</div>
+              {error.code && <div className="mt-2 text-sm">Code: {error.code}</div>}
             </AlertDialogContent>
           </AlertDialog>
         )}

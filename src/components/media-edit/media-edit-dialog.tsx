@@ -10,13 +10,19 @@ import { supabase } from "@/integrations/supabase/client";
 interface MediaEditDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  media: Message;
+  message: Message;
   onSave: (updatedMedia: Partial<Message>) => Promise<void>;
 }
 
-export function MediaEditDialog({ isOpen, onClose, media, onSave }: MediaEditDialogProps) {
-  const [caption, setCaption] = useState(media.caption || "");
-  const [purchaseOrder, setPurchaseOrder] = useState(media.purchase_order || "");
+interface ErrorState {
+  code?: string;
+  message?: string;
+}
+
+export function MediaEditDialog({ isOpen, onClose, message, onSave }: MediaEditDialogProps) {
+  const [caption, setCaption] = useState(message.caption || "");
+  const [purchaseOrder, setPurchaseOrder] = useState(message.purchase_order || "");
+  const [error, setError] = useState<ErrorState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -50,10 +56,10 @@ export function MediaEditDialog({ isOpen, onClose, media, onSave }: MediaEditDia
           <DialogTitle>Edit Media</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
-          {media.public_url && (
+          {message.public_url && (
             <div className="aspect-video relative rounded-lg overflow-hidden bg-muted">
               <img
-                src={media.public_url}
+                src={message.public_url}
                 alt={caption || "Media preview"}
                 className="object-contain w-full h-full"
               />

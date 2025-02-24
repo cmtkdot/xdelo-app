@@ -1,8 +1,7 @@
-
 import { Suspense } from "react";
 import { Card } from "@/components/ui/card";
-import { GlappProductGrid } from "@/components/GlProducts/GlappProductGrid";
-import { GlappProductFilters } from "@/components/GlProducts/GlappProductFilters";
+import { GlappProductGrid } from "@/components/gl-products/glapp-product-grid";
+import { GlappProductFilters } from "@/components/gl-products/glapp-product-filters";
 
 export default function GlProducts() {
   return (
