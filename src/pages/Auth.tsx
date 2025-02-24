@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/useToast";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { motion } from "framer-motion";
-import { useTheme } from "@/components/Theme/ThemeProvider";
+import { useTheme } from "@/components/theme/theme-provider";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
