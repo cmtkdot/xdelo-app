@@ -1,4 +1,3 @@
-
 import { Suspense, lazy, useEffect, useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -8,7 +7,7 @@ import { Toaster } from "sonner";
 import { supabase } from "./integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
-import { AppSidebar } from "./components/Layout/AppSidebar";
+import { AppSidebar } from "@/components/Layout/app-sidebar";
 
 // Lazy load routes
 const Auth = lazy(() => import("./pages/Auth"));

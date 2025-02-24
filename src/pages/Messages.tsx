@@ -1,7 +1,8 @@
+
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { MessageListContainer } from '../components/Messages/message-list-container';
+import { MessageListContainer } from '@/components/Messages/MessageListContainer';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function MessagesPage() {
@@ -11,7 +12,7 @@ export default function MessagesPage() {
       const { data, error } = await supabase
         .from('messages')
         .select()
-        .maybeSingle();  // Using maybeSingle() instead of single()
+        .maybeSingle();
 
       if (error) throw error;
       return data;
