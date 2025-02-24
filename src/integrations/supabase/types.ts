@@ -1773,6 +1773,7 @@ export type Database = {
           is_original_caption: boolean | null
           last_error_at: string | null
           media_group_id: string | null
+          media_type: string | null
           message_caption_id: string | null
           message_url: string | null
           mime_type: string | null
@@ -1824,6 +1825,7 @@ export type Database = {
           is_original_caption?: boolean | null
           last_error_at?: string | null
           media_group_id?: string | null
+          media_type?: string | null
           message_caption_id?: string | null
           message_url?: string | null
           mime_type?: string | null
@@ -1875,6 +1877,7 @@ export type Database = {
           is_original_caption?: boolean | null
           last_error_at?: string | null
           media_group_id?: string | null
+          media_type?: string | null
           message_caption_id?: string | null
           message_url?: string | null
           mime_type?: string | null

@@ -1,3 +1,4 @@
+
 import { Suspense, lazy, useEffect, useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -35,8 +36,8 @@ const LoadingSpinner = () => (
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60, // Data stays fresh for 1 minute
-      gcTime: 1000 * 60 * 5, // Keep unused data in cache for 5 minutes
+      staleTime: 1000 * 60,
+      gcTime: 1000 * 60 * 5,
       retry: (failureCount, error: ApiError) => {
         if (error?.status === 401 || error?.message?.includes('Invalid Refresh Token')) {
           return false;
