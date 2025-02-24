@@ -2,13 +2,13 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ThemeProvider } from "@/components/Theme/theme-provider";
+import { ThemeProvider } from "@/components/Theme/ThemeProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
 import { supabase } from "./integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
-import { AppSidebar } from "@/components/Layout/app-sidebar";
+import { AppSidebar } from "@/components/Layout/AppSidebar";
 
 // Lazy load routes with preload function
 const Auth = lazy(() => import("./pages/Auth"));
@@ -22,64 +22,6 @@ const AIChat = lazy(() => import("./pages/AIChat"));
 const GlProducts = lazy(() => import("./pages/GlProducts"));
 const AudioUpload = lazy(() => import("./pages/AudioUpload"));
 const MessagesPage = lazy(() => import("./pages/Messages"));
-
-// Preload function for commonly accessed routes
-const preloadRoutes = () => {
-  // Start preloading main routes after initial render
-  const preloadQueue = [
-    () => import("./pages/Dashboard"),
-    () => import("./pages/ProductGallery"),
-    () => import("./pages/MediaTable")
-  ];
-
-  let currentIndex = 0;
-
-  const preloadNext = () => {
-    if (currentIndex < preloadQueue.length) {
-      const nextPreload = preloadQueue[currentIndex];
-      currentIndex++;
-      nextPreload().then(() => {
-        // Wait a bit before loading the next route to avoid overwhelming the browser
-        setTimeout(preloadNext, 1000);
-      });
-    }
-  };
-
-  // Start preloading
-  preloadNext();
-};
-
-// Route preloader component
-const RoutePreloader = () => {
-  const location = useLocation();
-
-  useEffect(() => {
-    // Preload next likely routes based on current route
-    const preloadMap: { [key: string]: (() => Promise<any>)[] } = {
-      '/': [
-        () => import("./pages/ProductGallery"),
-        () => import("./pages/MediaTable")
-      ],
-      '/gallery': [
-        () => import("./pages/MediaTable"),
-        () => import("./pages/Dashboard")
-      ],
-      '/media-table': [
-        () => import("./pages/ProductGallery"),
-        () => import("./pages/Dashboard")
-      ]
-    };
-
-    const routesToPreload = preloadMap[location.pathname];
-    if (routesToPreload) {
-      routesToPreload.forEach(preloadRoute => {
-        preloadRoute();
-      });
-    }
-  }, [location]);
-
-  return null;
-};
 
 interface ApiError {
   status?: number;
@@ -95,6 +37,8 @@ const LoadingSpinner = () => (
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      staleTime: 1000 * 60, // Data stays fresh for 1 minute
+      gcTime: 1000 * 60 * 5, // Keep unused data in cache for 5 minutes
       retry: (failureCount, error: ApiError) => {
         if (error?.status === 401 || error?.message?.includes('Invalid Refresh Token')) {
           return false;
@@ -111,6 +55,77 @@ const queryClient = new QueryClient({
     }
   }
 });
+
+// Data prefetching component
+const DataPrefetcher = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    // Define which queries to prefetch based on the current route
+    const prefetchMap: { [key: string]: () => void } = {
+      '/': async () => {
+        // Prefetch data for the dashboard and common routes
+        await Promise.all([
+          queryClient.prefetchQuery({
+            queryKey: ['media-groups'],
+            queryFn: async () => {
+              const { data } = await supabase
+                .from('messages')
+                .select('*')
+                .order('created_at', { ascending: false });
+              return data;
+            }
+          }),
+          queryClient.prefetchQuery({
+            queryKey: ['messages'],
+            queryFn: async () => {
+              const { data } = await supabase
+                .from('messages')
+                .select('*')
+                .not('analyzed_content', 'is', null)
+                .gt('caption', '')
+                .order('created_at', { ascending: false });
+              return data;
+            }
+          })
+        ]);
+      },
+      '/gallery': async () => {
+        await queryClient.prefetchQuery({
+          queryKey: ['media-groups'],
+          queryFn: async () => {
+            const { data } = await supabase
+              .from('messages')
+              .select('*')
+              .order('created_at', { ascending: false });
+            return data;
+          }
+        });
+      },
+      '/media-table': async () => {
+        await queryClient.prefetchQuery({
+          queryKey: ['messages'],
+          queryFn: async () => {
+            const { data } = await supabase
+              .from('messages')
+              .select('*')
+              .not('analyzed_content', 'is', null)
+              .gt('caption', '')
+              .order('created_at', { ascending: false });
+            return data;
+          }
+        });
+      }
+    };
+
+    const prefetchData = prefetchMap[location.pathname];
+    if (prefetchData) {
+      prefetchData();
+    }
+  }, [location]);
+
+  return null;
+};
 
 const ProtectedRoute = ({
   children
@@ -131,9 +146,6 @@ const ProtectedRoute = ({
       setLoading(false);
       if (!session) {
         navigate('/auth');
-      } else {
-        // Start preloading routes after successful auth
-        preloadRoutes();
       }
     });
 
@@ -172,7 +184,7 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Router>
-          <RoutePreloader />
+          <DataPrefetcher />
           <Suspense fallback={<LoadingSpinner />}>
             <Routes>
               <Route path="/auth" element={<Auth />} />
