@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Message, MatchResult, AnalyzedContent } from "@/types";
@@ -164,5 +163,39 @@ const stringSimilarity = (str1: string, str2: string): number => {
 
   return jaro;
 };
+
+export function calculateMatchConfidence(message: any, product: any): MatchResult {
+  const overallConfidence = stringSimilarity(message.product_name, product.main_product_name);
+  const matchedFields = [];
+
+  if (message.product_name && product.main_product_name) {
+    matchedFields.push('product_name');
+  }
+
+  if (message.vendor_uid && product.main_vendor_uid) {
+    if (message.vendor_uid === product.main_vendor_uid) {
+      matchedFields.push('vendor_uid');
+    }
+  }
+
+  if (message.purchase_date && product.main_product_purchase_date) {
+    if (message.purchase_date === product.main_product_purchase_date) {
+      matchedFields.push('purchase_date');
+    }
+  }
+
+  return {
+    id: Math.random().toString(),
+    message_id: message.id,
+    product_id: product.id,
+    confidence: overallConfidence,
+    matchType: 'automatic',
+    match_confidence: overallConfidence,
+    details: {
+      matchedFields,
+      confidence: overallConfidence
+    }
+  };
+}
 
 export { findMatches };

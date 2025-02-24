@@ -33,6 +33,13 @@ export interface AnalyzedContent {
   };
 }
 
+export interface GlPurchaseOrder {
+  id: string;
+  code: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Message {
   id: string;
   created_at: string;
@@ -75,11 +82,18 @@ export interface Message {
   processing_started_at?: string | null;
   processing_completed_at?: string | null;
   correlation_id?: string | null;
+  gl_purchase_order?: GlPurchaseOrder | null;
 }
 
-export interface MessageWithPurchaseOrder extends Message {
-  purchase_order?: {
-    id: string;
-    code: string;
-  } | null;
+export interface MatchResult {
+  id: string;
+  message_id: string;
+  product_id: string;
+  confidence: number;
+  match_confidence?: number;
+  matchType: string;
+  details: {
+    matchedFields: string[];
+    confidence: number;
+  };
 }
