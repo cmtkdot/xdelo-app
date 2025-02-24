@@ -1,4 +1,3 @@
-
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
@@ -43,7 +42,7 @@ export interface Message {
   caption?: string;
   file_id?: string;
   file_unique_id: string;
-  public_url: string; // Changed to required
+  public_url: string;
   mime_type?: string;
   file_size?: number;
   width?: number;
@@ -70,7 +69,6 @@ export interface Message {
   updated_at?: string;
 }
 
-// Updated GlProduct interface
 export interface GlProduct {
   id: string;
   main_new_product_name: string;
@@ -85,7 +83,7 @@ export interface GlProduct {
   created_at: string;
   updated_at: string;
   sync_status: SyncStatus;
-  cart_add_note?: boolean; // Changed to boolean
+  cart_add_note?: boolean;
   cart_rename?: string;
   date_timestamp_subm?: string;
   email_email_of_user_who_added_product?: string;

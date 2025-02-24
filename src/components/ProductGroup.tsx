@@ -140,7 +140,7 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
     <>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden transition-all hover:shadow-md">
         <div className="relative h-64" onClick={() => setIsViewerOpen(true)}>
-          <ImageSwiper media={sortedMedia} />
+          <ImageSwiper media={sortedMedia.map(message => messageToMediaItem(message))} />
           
           {isSynced && (
             <div className="absolute top-2 right-2">

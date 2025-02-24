@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Message } from '@/types';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -6,6 +7,7 @@ import { ImageSwiper } from "@/components/ui/image-swiper";
 import { ChevronLeft, ChevronRight, Tag, Package, Calendar } from "lucide-react";
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { messageToMediaItem } from './types';
 
 interface MediaViewerProps {
   isOpen: boolean;
@@ -57,18 +59,18 @@ export const MediaViewer = ({
     return null;
   }
 
+  const mediaItems = currentGroup.map(message => messageToMediaItem(message));
+
   return (
     <Dialog open={isOpen} onOpenChange={() => onClose()}>
       <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] h-auto p-0 overflow-y-auto">
         <DialogTitle className="sr-only">Media Viewer</DialogTitle>
         
         <div className="relative flex flex-col bg-background dark:bg-background">
-          {/* Image Container */}
           <div className="relative flex-1 min-h-0 bg-black/90">
             <div className="aspect-video w-full relative">
-              <ImageSwiper media={currentGroup} />
+              <ImageSwiper media={mediaItems} />
               
-              {/* Navigation Buttons Overlay */}
               <div className="absolute inset-0 flex items-center justify-between px-4 pointer-events-none">
                 <Button
                   variant="outline"
@@ -98,9 +100,7 @@ export const MediaViewer = ({
             </div>
           </div>
 
-          {/* Details Section */}
           <div className="p-6 space-y-4">
-            {/* Product Details Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {mainMedia?.purchase_order && (
                 <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
@@ -135,7 +135,6 @@ export const MediaViewer = ({
               )}
             </div>
 
-            {/* Caption or Additional Info */}
             {mainMedia?.caption && (
               <div className="mt-4 p-4 bg-secondary/5 rounded-lg">
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap">{mainMedia.caption}</p>
