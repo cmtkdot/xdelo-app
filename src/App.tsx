@@ -8,9 +8,9 @@ import { Toaster } from "sonner";
 import { supabase } from "./integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
-import { AppSidebar } from "@/components/Layout/AppSidebar";
+import { AppSidebar } from "./components/Layout/AppSidebar";
 
-// Lazy load routes with preload function
+// Lazy load routes
 const Auth = lazy(() => import("./pages/Auth"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const ProductGallery = lazy(() => import("./pages/ProductGallery"));
@@ -69,49 +69,101 @@ const DataPrefetcher = () => {
           queryClient.prefetchQuery({
             queryKey: ['media-groups'],
             queryFn: async () => {
-              const { data } = await supabase
+              const { data: messages, error } = await supabase
                 .from('messages')
                 .select('*')
                 .order('created_at', { ascending: false });
-              return data;
+              if (error) throw error;
+              return messages;
             }
           }),
           queryClient.prefetchQuery({
             queryKey: ['messages'],
             queryFn: async () => {
-              const { data } = await supabase
+              const { data, error } = await supabase
                 .from('messages')
                 .select('*')
                 .not('analyzed_content', 'is', null)
                 .gt('caption', '')
                 .order('created_at', { ascending: false });
+              if (error) throw error;
+              return data;
+            }
+          }),
+          // Prefetch GL products data
+          queryClient.prefetchQuery({
+            queryKey: ["glapp_products"],
+            queryFn: async () => {
+              const { data, error } = await supabase
+                .from("gl_products")
+                .select(`
+                  *,
+                  messages:messages!gl_products_messages_fkey(
+                    public_url,
+                    media_group_id
+                  )
+                `)
+                .eq('messages.is_deleted', false)
+                .order("created_at", { ascending: false });
+              if (error) throw error;
               return data;
             }
           })
         ]);
       },
       '/gallery': async () => {
-        await queryClient.prefetchQuery({
-          queryKey: ['media-groups'],
-          queryFn: async () => {
-            const { data } = await supabase
-              .from('messages')
-              .select('*')
-              .order('created_at', { ascending: false });
-            return data;
-          }
-        });
+        await Promise.all([
+          queryClient.prefetchQuery({
+            queryKey: ['media-groups'],
+            queryFn: async () => {
+              const { data, error } = await supabase
+                .from('messages')
+                .select('*')
+                .order('created_at', { ascending: false });
+              if (error) throw error;
+              return data;
+            }
+          }),
+          // Also prefetch products for potential product linking
+          queryClient.prefetchQuery({
+            queryKey: ["glapp_products"],
+            queryFn: async () => {
+              const { data, error } = await supabase
+                .from("gl_products")
+                .select('*')
+                .order("created_at", { ascending: false });
+              if (error) throw error;
+              return data;
+            }
+          })
+        ]);
       },
       '/media-table': async () => {
         await queryClient.prefetchQuery({
           queryKey: ['messages'],
           queryFn: async () => {
-            const { data } = await supabase
+            const { data, error } = await supabase
               .from('messages')
               .select('*')
               .not('analyzed_content', 'is', null)
               .gt('caption', '')
               .order('created_at', { ascending: false });
+            if (error) throw error;
+            return data;
+          }
+        });
+      },
+      '/p/:id': async () => {
+        // For public gallery route, prefetch public messages
+        await queryClient.prefetchQuery({
+          queryKey: ['public-messages'],
+          queryFn: async () => {
+            const { data, error } = await supabase
+              .from('messages')
+              .select('*')
+              .eq('processing_state', 'completed')
+              .order('created_at', { ascending: false });
+            if (error) throw error;
             return data;
           }
         });
