@@ -26,4 +26,4 @@ export function getLogger(correlationId: string): Logger {
       });
     }
   };
-} 
+}

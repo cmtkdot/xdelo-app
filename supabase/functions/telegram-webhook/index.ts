@@ -1,6 +1,7 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { handleMessage, handleEditedMessage } from "./messageHandlers.ts";
+import { handleMessage } from "./messageHandlers.ts";
 import { getLogger } from "./logger.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
@@ -9,11 +10,11 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
-  const correlationId = crypto.randomUUID()
-  const logger = getLogger(correlationId)
+  const correlationId = crypto.randomUUID();
+  const logger = getLogger(correlationId);
 
   try {
-    const update = await req.json()
+    const update = await req.json();
     
     // Keep original message type for reference
     const message = update.message || 
