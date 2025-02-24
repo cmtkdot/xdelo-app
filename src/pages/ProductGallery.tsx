@@ -1,40 +1,18 @@
-import { useState, useEffect } from "react";
+
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Message } from "@/types";
-import { MediaEditDialog } from "@/components/MediaEdit/media-edit-dialog";
+import { MediaEditDialog } from "@/components/media-edit/media-edit-dialog";
 import { useToast } from "@/hooks/useToast";
-import { ProductGrid } from "@/components/ProductGallery/product-grid";
+import { GlProductGrid } from "@/components/gl-products/gl-product-grid";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
 
 export const ProductGallery = () => {
   const [editItem, setEditItem] = useState<Message | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: mediaGroups = {} } = useMediaGroups(); // Provide default empty object
-
-  // Set up realtime subscription
-  useEffect(() => {
-    const channel = supabase
-      .channel('media-groups')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messages'
-        },
-        () => {
-          // Invalidate and refetch messages
-          queryClient.invalidateQueries({ queryKey: ['media-groups'] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      channel.unsubscribe();
-    };
-  }, [queryClient]);
+  const { data: mediaGroups = [] } = useMediaGroups();
 
   const handleEdit = (media: Message) => {
     setEditItem(media);
@@ -59,7 +37,6 @@ export const ProductGallery = () => {
         description: "The media has been successfully deleted.",
       });
 
-      // Refetch messages
       queryClient.invalidateQueries({ queryKey: ['media-groups'] });
     } catch (error) {
       toast({
@@ -70,15 +47,16 @@ export const ProductGallery = () => {
     }
   };
 
+  // Convert mediaGroups data to format expected by GlProductGrid
+  const products = Array.isArray(mediaGroups) ? mediaGroups : [];
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <h1 className="text-2xl font-bold">Product Gallery</h1>
       
-      <ProductGrid
-        products={Object.values(mediaGroups)}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        onView={handleView}
+      <GlProductGrid
+        products={products}
+        onViewProduct={handleView}
       />
 
       {editItem && (

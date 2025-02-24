@@ -16,8 +16,8 @@ export const useMediaGroups = () => {
       if (error) throw error;
 
       // Group messages by media_group_id or message id if no group
-      const groupedMessages = (messages as Message[]).reduce((groups: { [key: string]: MediaItem[][] }, message) => {
-        if (!message.public_url) return groups; // Skip messages without media
+      const groupedMessages = (messages as Message[]).reduce((groups: { [key: string]: MediaItem[] }, message) => {
+        if (!message.public_url) return groups;
         
         const groupId = message.media_group_id || message.id;
         if (!groups[groupId]) {
@@ -39,38 +39,27 @@ export const useMediaGroups = () => {
           caption: message.caption
         };
 
-        // Find the right group or create a new one
-        const groupArray = groups[groupId];
-        if (!groupArray.length) {
-          groupArray.push([mediaItem]);
-        } else {
-          groupArray[0].push(mediaItem);
-        }
-
+        groups[groupId].push(mediaItem);
         return groups;
       }, {});
 
-      // Sort messages within each group
-      Object.values(groupedMessages).forEach(groupArray => {
-        groupArray.forEach(group => {
-          group.sort((a, b) => {
-            // First prioritize images over videos
-            const aIsImage = !a.mime_type?.startsWith('video/');
-            const bIsImage = !b.mime_type?.startsWith('video/');
-            if (aIsImage && !bIsImage) return -1;
-            if (!aIsImage && bIsImage) return 1;
+      // Convert to array and sort each group
+      return Object.values(groupedMessages).map(group => {
+        return group.sort((a, b) => {
+          // First prioritize images over videos
+          const aIsImage = !a.mime_type?.startsWith('video/');
+          const bIsImage = !b.mime_type?.startsWith('video/');
+          if (aIsImage && !bIsImage) return -1;
+          if (!aIsImage && bIsImage) return 1;
 
-            // Then prioritize messages with captions
-            if (a.caption && !b.caption) return -1;
-            if (!a.caption && b.caption) return 1;
-            
-            // Then by creation date
-            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-          });
+          // Then prioritize messages with captions
+          if (a.caption && !b.caption) return -1;
+          if (!a.caption && b.caption) return 1;
+          
+          // Then by creation date
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
       });
-
-      return Object.values(groupedMessages).flatMap(group => group);
     },
     staleTime: 1000 * 60, // Data stays fresh for 1 minute
     gcTime: 1000 * 60 * 5, // Keep unused data in cache for 5 minutes
@@ -83,22 +72,20 @@ export const useMediaGroups = () => {
       .on(
         'postgres_changes',
         {
-          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          event: '*',
           schema: 'public',
           table: 'messages'
         },
         () => {
-          // Refetch data when any change occurs
           refetch();
         }
       )
       .subscribe();
 
-    // Cleanup subscription on unmount
     return () => {
       supabase.removeChannel(channel);
     };
   }, [refetch]);
 
-  return { data };
+  return { data: data || [] }; // Ensure we always return an array
 };
