@@ -5,13 +5,13 @@ import { GlProductGrid } from "@/components/gl-products/gl-product-grid";
 import { GlProductFilters } from "@/components/gl-products/gl-product-filters";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Message } from "@/types";
+import { Message, AnalyzedContent } from "@/types";
 
 export default function GlProducts() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-  const { data: products = [] } = useQuery({
+  const { data: products = [] } = useQuery<Message[][]>({
     queryKey: ["glapp_products", searchTerm, sortOrder],
     queryFn: async () => {
       const { data: messages, error } = await supabase
@@ -31,7 +31,7 @@ export default function GlProducts() {
       if (error) throw error;
       
       // Group messages by media_group_id
-      const groupedMessages = (messages as any[]).reduce((groups: { [key: string]: Message[] }, message) => {
+      const groupedMessages = (messages as any[]).reduce<{ [key: string]: Message[] }>((groups, message) => {
         const groupId = message.media_group_id || message.id;
         if (!groups[groupId]) {
           groups[groupId] = [];
