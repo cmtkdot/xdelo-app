@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Message } from "@/types";
-import { ProductGrid } from "@/components/product-gallery/product-grid";
+import { GlProductGrid } from "@/components/gl-products/gl-product-grid";
 import { MediaEditDialog } from "@/components/media-edit/media-edit-dialog";
 import { useToast } from "@/hooks/useToast";
 import { useAuth } from "@/hooks/useAuth";
@@ -78,9 +78,9 @@ export const PublicGallery = () => {
     setEditItem(media);
   };
 
-  const handleView = () => {
+  const handleView = (group: Message[]) => {
     // View logic implementation
-    console.log('Viewing media');
+    console.log('Viewing media group:', group);
   };
 
   const handleDelete = async (media: Message) => {
@@ -130,11 +130,9 @@ export const PublicGallery = () => {
       <h1 className="text-2xl font-bold">Public Gallery</h1>
       
       {mediaGroups && (
-        <ProductGrid
+        <GlProductGrid
           products={mediaGroups}
-          onEdit={user ? handleEdit : undefined}
-          onDelete={user ? handleDelete : undefined}
-          onView={handleView}
+          onViewProduct={handleView}
         />
       )}
 
