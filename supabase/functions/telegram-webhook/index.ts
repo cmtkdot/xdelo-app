@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { handleMessage } from "./messageHandlers.ts";
@@ -16,7 +15,6 @@ serve(async (req) => {
   try {
     const update = await req.json();
     
-    // Keep original message type for reference
     const message = update.message || 
                    update.channel_post || 
                    update.edited_message || 
@@ -33,7 +31,6 @@ serve(async (req) => {
       );
     }
 
-    // Store metadata in telegram_data instead of message object
     const messageWithMetadata = {
       ...message,
       telegram_data: {
@@ -58,7 +55,6 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Pass the message with metadata in telegram_data
     return await handleMessage(messageWithMetadata, supabase, correlationId);
   } catch (error) {
     logger.error('Webhook error:', { error });
