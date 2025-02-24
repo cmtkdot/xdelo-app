@@ -1,6 +1,6 @@
 
 import { type Message } from "@/types/Message";
-import { ProductGroup } from "../product-group/product-group";
+import { ProductGroup } from "@/components/product-group/product-group";
 
 interface MediaGridProps {
   mediaGroups: Message[][];

@@ -1,5 +1,5 @@
 
-import { type Message } from "@/types";
+import { type Message } from "@/types/Message";
 import { GlProductCard } from "./gl-product-card";
 
 interface GlProductGridProps {
