@@ -4,6 +4,11 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { componentTagger } from "lovable-tagger";
 
+// Adding proper type for dev dependencies
+declare module "lovable-tagger" {
+  export function componentTagger(): any;
+}
+
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",

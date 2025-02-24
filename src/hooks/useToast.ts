@@ -1,8 +1,11 @@
 
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 
-export const useToast = () => {
-  return {
-    toast,
-  };
+type ToastFunction = typeof toast & {
+  success: (message: string, data?: any) => void;
+  error: (message: string, data?: any) => void;
 };
+
+export const useToast = () => ({
+  toast: toast as ToastFunction,
+});
