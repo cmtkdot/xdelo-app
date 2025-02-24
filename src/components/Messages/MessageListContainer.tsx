@@ -16,7 +16,9 @@ export function MessageListContainer() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data;
+      
+      // Cast the data to Message[] type
+      return data as Message[];
     }
   });
 

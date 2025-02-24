@@ -1,8 +1,7 @@
-
 import { Database } from "@/integrations/supabase/types";
 import { Json } from "@/integrations/supabase/types";
 
-export type ProcessingState = 'pending' | 'processing' | 'completed' | 'failed';
+export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 export type TelegramChatType = Database['public']['Enums']['telegram_chat_type'];
 
 export interface AnalyzedContent {
@@ -78,6 +77,5 @@ export interface Message {
   purchase_order?: {
     id: string;
     code: string;
-    [key: string]: any;
   } | null;
 }

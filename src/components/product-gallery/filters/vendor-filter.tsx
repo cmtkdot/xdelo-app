@@ -19,13 +19,21 @@ export function VendorFilter({ onVendorChange, selectedVendor }: VendorFilterPro
 
   useEffect(() => {
     const fetchVendors = async () => {
-      const { data: vendorsData } = await supabase
-        .from('xdelo_vendors')
-        .select('id,name')
-        .order('name');
+      const { data: messages } = await supabase
+        .from('messages')
+        .select('analyzed_content->vendor_uid')
+        .not('analyzed_content->vendor_uid', 'is', null)
+        .distinct();
 
-      if (vendorsData) {
-        setVendors(vendorsData);
+      if (messages) {
+        const uniqueVendors = messages
+          .map(m => ({
+            id: m.analyzed_content?.vendor_uid || '',
+            name: m.analyzed_content?.vendor_uid || ''
+          }))
+          .filter(v => v.id);
+        
+        setVendors(uniqueVendors);
       }
     };
 

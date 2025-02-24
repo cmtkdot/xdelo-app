@@ -4,7 +4,7 @@ import type { Database } from "@/types";
 
 export async function getSyncLogs() {
   const { data: logs } = await supabase
-    .from('xdelo_sync_logs')
+    .from('gl_sync_logs')
     .select('*')
     .order('created_at', { ascending: false });
 
@@ -17,7 +17,7 @@ export async function createSyncLog(
   status: 'success' | 'error'
 ) {
   const { data, error } = await supabase
-    .from('xdelo_sync_logs')
+    .from('gl_sync_logs')
     .insert([
       {
         event_type,
