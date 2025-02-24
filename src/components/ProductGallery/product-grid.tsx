@@ -5,9 +5,9 @@ import { cn } from "@/lib/utils";
 
 interface ProductGridProps {
   products: Message[][];
-  onEdit: (media: Message) => void;
-  onDelete: (media: Message) => void;
-  onView: () => void;
+  onEdit?: (media: Message) => void;
+  onDelete?: (media: Message) => void;
+  onView?: () => void;
   className?: string;
 }
 

@@ -1,5 +1,5 @@
 
-import { AppSidebar } from "./app-sidebar";
+import { AppSidebar } from "@/components/Layout/app-sidebar";
 
 export const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   return (

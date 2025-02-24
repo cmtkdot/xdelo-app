@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +7,7 @@ import { useToast } from "@/hooks/useToast";
 import { ProductGrid } from "@/components/ProductGallery/product-grid";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
 
-const ProductGallery = () => {
+export const ProductGallery = () => {
   const [editItem, setEditItem] = useState<Message | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
