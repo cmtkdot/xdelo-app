@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Message } from "@/types";
+import { type Message } from "@/types/Message";
 import { MediaEditDialog } from "@/components/media-edit/media-edit-dialog";
 import { useToast } from "@/hooks/useToast";
 import { GlProductGrid } from "@/components/gl-products/gl-product-grid";
@@ -46,7 +46,6 @@ export const ProductGallery = () => {
     }
   };
 
-  // Ensure mediaGroups is an array
   const products = Array.isArray(mediaGroups) ? mediaGroups : [];
 
   return (

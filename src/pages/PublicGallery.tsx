@@ -25,10 +25,8 @@ export const PublicGallery = () => {
       
       if (error) throw error;
       
-      // Ensure messages is an array and properly typed
       const typedMessages = (messages || []) as Message[];
       
-      // Group messages by media_group_id
       const groupedMessages = typedMessages.reduce((groups: { [key: string]: Message[] }, message) => {
         const groupId = message.media_group_id || message.id;
         if (!groups[groupId]) {
@@ -38,12 +36,10 @@ export const PublicGallery = () => {
         return groups;
       }, {});
 
-      // Convert groups object to array of arrays
       return Object.values(groupedMessages);
     }
   });
 
-  // Set up realtime subscription
   useEffect(() => {
     const channel = supabase
       .channel('public-messages')
@@ -55,7 +51,6 @@ export const PublicGallery = () => {
           table: 'messages'
         },
         () => {
-          // Invalidate and refetch messages
           queryClient.invalidateQueries({ queryKey: ['public-messages'] });
         }
       )
@@ -67,7 +62,6 @@ export const PublicGallery = () => {
   }, [queryClient]);
 
   const handleView = (group: Message[]) => {
-    // View logic implementation
     console.log('Viewing media group:', group);
   };
 

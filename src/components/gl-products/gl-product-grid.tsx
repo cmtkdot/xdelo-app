@@ -8,7 +8,6 @@ interface GlProductGridProps {
 }
 
 export function GlProductGrid({ products, onViewProduct }: GlProductGridProps) {
-  // Ensure products is an array
   const safeProducts = Array.isArray(products) ? products : [];
   
   return (

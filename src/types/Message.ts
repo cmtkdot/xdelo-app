@@ -1,4 +1,6 @@
 
+export type ProcessingState = 'pending' | 'processing' | 'completed' | 'failed';
+
 export interface Message {
   id: string;
   created_at: string;
@@ -37,6 +39,7 @@ export interface Message {
   is_channel?: boolean;
   update_id?: number;
   media_type?: 'photo' | 'video' | 'document';
+  is_deleted?: boolean;
 }
 
 export interface AnalyzedContent {
@@ -66,7 +69,3 @@ export interface AnalyzedContent {
     needs_review?: boolean;
   };
 }
-
-export type ProcessingState = 'pending' | 'processing' | 'completed' | 'failed';
-
-export type MessageComponentData = Message;
