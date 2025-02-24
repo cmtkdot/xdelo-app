@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { Message } from './types';
 import { MessageList } from './MessageList';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/useToast';
 
 export function MessageListContainer() {
   const [messages, setMessages] = useState<Message[]>([]);
