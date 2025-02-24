@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { type Message } from "@/types/Message";
+import { type Message } from "@/types";
 import { Card } from "@/components/ui/card";
 import {
   Table,

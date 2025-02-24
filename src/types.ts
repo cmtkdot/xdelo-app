@@ -1,6 +1,8 @@
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
+export type { Message, AnalyzedContent } from './types/Message';
+
 export interface FilterValues {
   search?: string;
   dateRange?: { from: Date; to: Date } | null;
