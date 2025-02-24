@@ -1,42 +1,34 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { type Product } from "@/types/Product";
 
-interface GlProductCardProps {
-  product: Product;
-  onView: (product: Product) => void;
+import { type Message } from "@/types";
+
+interface ProductCardProps {
+  product: Message[];
+  onView: (product: Message[]) => void;
 }
 
-export function GlProductCard({ product, onView }: GlProductCardProps) {
+export function GlProductCard({ product, onView }: ProductCardProps) {
+  // Use the first item in the array for the main display
+  const mainProduct = product[0];
+
   return (
-    <Card className="overflow-hidden">
-      <div className="aspect-square relative">
-        {product.image && (
+    <div 
+      className="group relative overflow-hidden rounded-lg border bg-card hover:shadow-lg transition-all"
+      onClick={() => onView(product)}
+    >
+      <div className="aspect-video relative">
+        {mainProduct?.public_url && (
           <img
-            src={product.image}
-            alt={product.name}
+            src={mainProduct.public_url}
+            alt={mainProduct.caption || "Product"}
             className="object-cover w-full h-full"
           />
         )}
       </div>
-      <div className="p-4">
-        <h3 className="font-medium mb-1">{product.name}</h3>
-        <p className="text-sm text-muted-foreground mb-3">
-          {product.description}
+      <div className="p-3">
+        <p className="text-sm text-muted-foreground truncate">
+          {mainProduct?.caption || "No caption"}
         </p>
-        <div className="flex items-center justify-between">
-          <span className="text-lg font-semibold">
-            {product.price ? `$${product.price.toFixed(2)}` : "N/A"}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onView(product)}
-          >
-            View Details
-          </Button>
-        </div>
       </div>
-    </Card>
+    </div>
   );
-};
+}

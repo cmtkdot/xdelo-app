@@ -1,17 +1,21 @@
-import { type Product } from "@/types/Product";
+
+import { type Message } from "@/types";
 import { GlProductCard } from "./gl-product-card";
 
 interface GlProductGridProps {
-  products: Product[];
-  onViewProduct: (product: Product) => void;
+  products: Message[][];
+  onViewProduct: (product: Message[]) => void;
 }
 
 export function GlProductGrid({ products, onViewProduct }: GlProductGridProps) {
+  // Ensure products is an array
+  const safeProducts = Array.isArray(products) ? products : [];
+  
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {products.map((product) => (
+      {safeProducts.map((product, index) => (
         <GlProductCard
-          key={product.id}
+          key={product[0]?.id || index}
           product={product}
           onView={onViewProduct}
         />

@@ -18,9 +18,8 @@ export const ProductGallery = () => {
     setEditItem(media);
   };
 
-  const handleView = () => {
-    // View logic implementation
-    console.log('Viewing media');
+  const handleView = (group: Message[]) => {
+    console.log('Viewing media group:', group);
   };
 
   const handleDelete = async (media: Message) => {
@@ -47,7 +46,7 @@ export const ProductGallery = () => {
     }
   };
 
-  // Convert mediaGroups data to format expected by GlProductGrid
+  // Ensure mediaGroups is an array
   const products = Array.isArray(mediaGroups) ? mediaGroups : [];
 
   return (
