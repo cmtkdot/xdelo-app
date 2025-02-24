@@ -106,8 +106,7 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
         }
 
         toast({
-          title: "Success",
-          description: "Caption has been updated and content analysis triggered",
+          description: "Caption has been updated and content analysis triggered"
         });
 
         onClose();
@@ -117,9 +116,7 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
     } catch (error) {
       console.error('Error updating caption:', error);
       toast({
-        title: "Error",
         description: "Failed to update caption. Please try again.",
-        variant: "destructive",
       });
     } finally {
       setIsSubmitting(false);
