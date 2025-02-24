@@ -1,4 +1,4 @@
-import { Message } from "@/types";
+import { type Message } from "@/types/Message";
 import { ProductGroup } from "@/components/product-group/product-group";
 
 interface MediaGridProps {

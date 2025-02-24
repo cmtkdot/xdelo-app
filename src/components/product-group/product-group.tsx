@@ -1,5 +1,4 @@
-
-import { Message } from "@/types";
+import { type Message } from "@/types/Message";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MediaViewer } from "@/components/media-viewer/media-viewer";
