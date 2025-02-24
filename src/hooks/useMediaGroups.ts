@@ -72,6 +72,8 @@ export const useMediaGroups = () => {
 
       return Object.values(groupedMessages).flatMap(group => group);
     },
+    staleTime: 1000 * 60, // Data stays fresh for 1 minute
+    gcTime: 1000 * 60 * 5, // Keep unused data in cache for 5 minutes
   });
 
   // Set up realtime subscription
