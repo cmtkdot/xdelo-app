@@ -231,7 +231,7 @@ const ProtectedRoute = ({
 };
 
 const App = () => (
-  <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
+  <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Router>
