@@ -1,4 +1,4 @@
-import { getLogger } from './logger';
+import { getLogger } from './logger.ts';
 
 interface AnalysisResult {
   success: boolean;

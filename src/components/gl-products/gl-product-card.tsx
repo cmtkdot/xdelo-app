@@ -2,12 +2,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { type Product } from "@/types/Product";
 
-interface GlappProductCardProps {
+interface GlProductCardProps {
   product: Product;
   onView: (product: Product) => void;
 }
 
-export const GlappProductCard = ({ product, onView }: GlappProductCardProps) => {
+export function GlProductCard({ product, onView }: GlProductCardProps) {
   return (
     <Card className="overflow-hidden">
       <div className="aspect-square relative">

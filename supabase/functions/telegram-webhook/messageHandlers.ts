@@ -1,4 +1,6 @@
-import { getLogger } from './logger';
+import { getLogger } from "./logger.ts";
+import { type TelegramMessage } from "./types.ts";
+import { type SupabaseClient } from "@supabase/supabase-js";
 
 export const handleMessage = async (
   message: TelegramMessage, 
