@@ -82,6 +82,8 @@ export const ImageSwiper = ({ media, className }: ImageSwiperProps) => {
     );
   }
 
+  const displayTitle = currentMedia.analyzed_content?.product_name || currentMedia.caption || 'Untitled Product';
+
   return (
     <div 
       className={cn("group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-black/90", className)}
@@ -91,7 +93,7 @@ export const ImageSwiper = ({ media, className }: ImageSwiperProps) => {
       {/* Product info overlay */}
       <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 via-black/50 to-transparent p-4 z-10">
         <h3 className="text-xl font-semibold text-white">
-          {currentMedia.caption || 'Untitled Product'}
+          {displayTitle}
         </h3>
         {currentMedia.created_at && (
           <p className="text-sm text-gray-300">
@@ -147,7 +149,7 @@ export const ImageSwiper = ({ media, className }: ImageSwiperProps) => {
       ) : (
         <img 
           src={currentMedia.public_url || "/placeholder.svg"}
-          alt={currentMedia.caption || 'Product image'}
+          alt={displayTitle}
           className="h-full w-full object-cover"
         />
       )}
