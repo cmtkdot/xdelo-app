@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Message } from "@/types";
+import { type Message } from "@/types/Message";
 import { GlProductGrid } from "@/components/gl-products/gl-product-grid";
 import { MediaEditDialog } from "@/components/media-edit/media-edit-dialog";
 import { useToast } from "@/hooks/useToast";
@@ -66,55 +66,9 @@ export const PublicGallery = () => {
     };
   }, [queryClient]);
 
-  const handleEdit = (media: Message) => {
-    if (!user) {
-      toast({
-        title: "Authentication required",
-        description: "You must be logged in to edit media.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setEditItem(media);
-  };
-
   const handleView = (group: Message[]) => {
     // View logic implementation
     console.log('Viewing media group:', group);
-  };
-
-  const handleDelete = async (media: Message) => {
-    if (!user) {
-      toast({
-        title: "Authentication required",
-        description: "You must be logged in to delete media.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('messages')
-        .delete()
-        .eq('id', media.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Media deleted",
-        description: "The media has been successfully deleted.",
-      });
-
-      // Refetch messages
-      queryClient.invalidateQueries({ queryKey: ['public-messages'] });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete media. Please try again.",
-        variant: "destructive",
-      });
-    }
   };
 
   if (isLoading) {
