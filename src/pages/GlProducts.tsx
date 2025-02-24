@@ -25,7 +25,7 @@ const GlProducts = () => {
       if (error) throw error;
       
       // Transform and type-cast the data using our converter
-      const productsWithImages = data.map(product => convertToGlProduct(product));
+      const productsWithImages: GlProduct[] = data.map(product => convertToGlProduct(product));
 
       return productsWithImages;
     },

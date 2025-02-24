@@ -25,7 +25,14 @@ export const messageToMediaItem = (message: Message) => {
 
 // Re-export other utilities
 export * from './generalUtils';
-export * from './syncUtils';
 
-// Export everything from productMatching except logSyncOperation
-export * from './productMatching';
+// Explicitly import and re-export from productMatching to avoid conflicts
+import { findMatches, matchProduct, updateProduct } from './productMatching';
+export { findMatches, matchProduct, updateProduct };
+
+// Re-export everything except logSyncOperation from syncUtils
+import { logSyncOperationBatch, logSyncWarning } from './syncUtils';
+export { logSyncOperationBatch, logSyncWarning };
+
+// We'll use logSyncOperation from productMatching
+export { logSyncOperation } from './productMatching';

@@ -15,7 +15,7 @@ export interface GlProduct {
   created_at: string;
   updated_at: string;
   sync_status: SyncStatus;
-  cart_rename: string | boolean;
+  cart_rename: string; // Changed to only allow string type
   date_timestamp_subm?: string;
   email_email_of_user_who_added_product?: string;
   glide_id?: string;
@@ -28,7 +28,7 @@ export interface GlProduct {
 export const convertToGlProduct = (data: any): GlProduct => {
   return {
     ...data,
-    cart_rename: String(data.cart_rename), // Convert boolean to string if needed
+    cart_rename: String(data.cart_rename), // Always convert cart_rename to string
     main_product_image1: data.main_product_image1 || '',
     main_purchase_notes: data.main_purchase_notes || '',
     product_name_display: data.product_name_display || '',
