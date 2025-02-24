@@ -1,84 +1,164 @@
 
 import { getLogger } from "./logger.ts";
-import { type TelegramMessage } from "./types.ts";
-import { type SupabaseClient } from "@supabase/supabase-js";
 import { corsHeaders } from "../_shared/cors.ts";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
-export const handleMessage = async (
-  message: TelegramMessage, 
+interface TelegramMessage {
+  message_id: number;
+  chat: {
+    id: number;
+    type: string;
+    title?: string;
+  };
+  photo?: Array<{
+    file_id: string;
+    file_unique_id: string;
+    width: number;
+    height: number;
+    file_size?: number;
+  }>;
+  video?: {
+    file_id: string;
+    file_unique_id: string;
+    width: number;
+    height: number;
+    duration: number;
+    mime_type?: string;
+    file_size?: number;
+  };
+  document?: {
+    file_id: string;
+    file_unique_id: string;
+    file_name?: string;
+    mime_type?: string;
+    file_size?: number;
+  };
+  caption?: string;
+  media_group_id?: string;
+  telegram_data?: any;
+  is_edited?: boolean;
+  is_channel?: boolean;
+  update_id?: number;
+}
+
+interface MediaInfo {
+  fileId: string;
+  fileUniqueId: string;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  fileSize?: number;
+  mediaType: 'photo' | 'video' | 'document';
+}
+
+export async function handleMessage(
+  message: TelegramMessage,
   supabase: SupabaseClient,
   correlationId: string
-) => {
+): Promise<Response> {
   const logger = getLogger(correlationId);
-  
+
   try {
-    if (message.photo || message.document) {
-      const mediaInfo = extractMediaInfo(message);
-      
-      // Use file_unique_id as primary key
-      const messageData = {
-        telegram_message_id: message.message_id,
-        chat_id: message.chat.id,
-        chat_type: message.chat.type,
-        chat_title: message.chat.title,
-        caption: message.caption,
-        media_group_id: message.media_group_id,
-        processing_correlation_id: correlationId,
-        processing_state: 'pending',
-        telegram_data: message,
-        ...mediaInfo && {
-          file_id: mediaInfo.fileId,
-          file_unique_id: mediaInfo.fileUniqueId,
-          mime_type: mediaInfo.mimeType,
-          file_size: mediaInfo.fileSize,
-          width: mediaInfo.width,
-          height: mediaInfo.height,
-          duration: mediaInfo.duration,
-          media_type: mediaInfo.mediaType
-        }
-      };
+    logger.info('Processing message', {
+      messageId: message.message_id,
+      chatId: message.chat.id,
+      correlationId
+    });
 
-      // Insert using file_unique_id as constraint
-      const { error: insertError } = await supabase
-        .from('messages')
-        .insert(messageData)
-        .select()
-        .single();
-
-      if (insertError) {
-        logger.error('Error inserting message', { error: insertError });
-        throw insertError;
-      }
-
+    if (!message.photo && !message.video && !message.document) {
+      logger.info('No media content found in message', { correlationId });
       return new Response(
-        JSON.stringify({ success: true }),
+        JSON.stringify({ success: true, message: 'No media to process' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    const mediaInfo = extractMediaInfo(message);
+    if (!mediaInfo) {
+      logger.warn('Could not extract media info', { correlationId });
+      return new Response(
+        JSON.stringify({ success: false, message: 'Could not extract media info' }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    const messageData = {
+      telegram_message_id: message.message_id,
+      chat_id: message.chat.id,
+      chat_type: message.chat.type,
+      chat_title: message.chat.title,
+      caption: message.caption,
+      media_group_id: message.media_group_id,
+      processing_correlation_id: correlationId,
+      processing_state: 'pending',
+      telegram_data: message,
+      file_id: mediaInfo.fileId,
+      file_unique_id: mediaInfo.fileUniqueId,
+      mime_type: mediaInfo.mimeType,
+      file_size: mediaInfo.fileSize,
+      width: mediaInfo.width,
+      height: mediaInfo.height,
+      duration: mediaInfo.duration,
+      media_type: mediaInfo.mediaType,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    logger.info('Inserting message into database', { 
+      fileUniqueId: mediaInfo.fileUniqueId,
+      correlationId 
+    });
+
+    const { error: insertError } = await supabase
+      .from('messages')
+      .insert(messageData);
+
+    if (insertError) {
+      logger.error('Database insert failed', { 
+        error: insertError,
+        correlationId 
+      });
+      throw insertError;
+    }
+
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({ 
+        success: true,
+        message: 'Message processed successfully' 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    logger.error('Error handling message', { error });
+    logger.error('Message handling failed', { 
+      error: error.message,
+      correlationId 
+    });
+    
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ 
+        success: false,
+        error: 'Failed to process message',
+        details: error.message 
+      }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
   }
-};
+}
 
-// Helper to extract media info
-const extractMediaInfo = (message: TelegramMessage) => {
-  if (message.photo) {
+function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
+  if (message.photo && message.photo.length > 0) {
     const largestPhoto = message.photo.reduce((prev, current) => 
       (prev.width * prev.height > current.width * current.height) ? prev : current
     );
+    
     return {
       fileId: largestPhoto.file_id,
       fileUniqueId: largestPhoto.file_unique_id,
@@ -117,4 +197,4 @@ const extractMediaInfo = (message: TelegramMessage) => {
   }
   
   return null;
-};
+}
