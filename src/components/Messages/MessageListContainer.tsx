@@ -1,15 +1,15 @@
+
 import React, { useEffect, useState } from 'react';
 import type { Message } from './types';
 import { MessageList } from './MessageList';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/useToast';
+import { toast } from '@/hooks/useToast';
 
 export function MessageListContainer() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
-  const { toast } = useToast();
 
   const fetchMessages = async () => {
     try {
@@ -46,18 +46,15 @@ export function MessageListContainer() {
 
       const messagesToProcess = messages.filter(msg => msg.caption);
       if (messagesToProcess.length === 0) {
-        toast({
-          title: "No Messages to Process",
-          description: "No messages with captions found.",
-          variant: "default",
+        toast("No Messages to Process", {
+          description: "No messages with captions found."
         });
         return;
       }
 
       // Show initial toast
-      toast({
-        title: "Processing Messages",
-        description: `Starting to process ${messagesToProcess.length} messages with captions...`,
+      toast("Processing Messages", {
+        description: `Starting to process ${messagesToProcess.length} messages with captions...`
       });
 
       // Process messages in sequence
@@ -69,7 +66,6 @@ export function MessageListContainer() {
             current_state: message.processing_state 
           });
           
-          // Call the edge function using the latest Supabase method
           const { data, error: functionError } = await supabase.functions.invoke(
             'parse-caption-with-ai',
             {
@@ -92,9 +88,8 @@ export function MessageListContainer() {
           
           // Update progress every 5 messages
           if (processedCount % 5 === 0) {
-            toast({
-              title: "Processing Progress",
-              description: `Processed ${processedCount} of ${messagesToProcess.length} messages...`,
+            toast("Processing Progress", {
+              description: `Processed ${processedCount} of ${messagesToProcess.length} messages...`
             });
           }
 
@@ -105,30 +100,29 @@ export function MessageListContainer() {
           console.error('Error processing message:', message.id, error);
           errorCount++;
           
-          // Show error toast for individual message failures
-          toast({
-            title: "Message Processing Error",
+          toast("Message Processing Error", {
             description: `Failed to process message ${message.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            variant: "destructive",
+            duration: 5000
           });
         }
       }
 
       // Show completion toast
-      toast({
-        title: "Processing Complete",
-        description: `Successfully processed ${processedCount} messages. ${errorCount > 0 ? `Failed: ${errorCount}` : ''}`,
-        variant: errorCount > 0 ? "destructive" : "default",
-      });
+      toast(
+        errorCount > 0 ? "Processing Complete with Errors" : "Processing Complete",
+        {
+          description: `Successfully processed ${processedCount} messages. ${errorCount > 0 ? `Failed: ${errorCount}` : ''}`,
+          duration: 5000
+        }
+      );
 
       // Refresh the list to show updated results
       await fetchMessages();
     } catch (error) {
       console.error('Error in batch processing:', error);
-      toast({
-        title: "Processing Error",
+      toast("Processing Error", {
         description: error instanceof Error ? error.message : 'Failed to process messages',
-        variant: "destructive",
+        duration: 5000
       });
     } finally {
       setProcessing(false);
