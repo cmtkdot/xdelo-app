@@ -1,177 +1,180 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { parseManually } from "./utils/manualParser.ts";
+
+type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
+
+interface AnalyzedContent {
+  product_name?: string;
+  product_code?: string;
+  vendor_uid?: string;
+  quantity?: number;
+  parsing_metadata?: {
+    method: 'manual' | 'ai';
+    timestamp: string;
+    needs_ai_analysis?: boolean;
+  };
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function extractProductInfo(caption: string): AnalyzedContent {
+  if (!caption || caption.trim().length === 0) {
+    return {
+      parsing_metadata: {
+        method: 'manual',
+        timestamp: new Date().toISOString(),
+        needs_ai_analysis: true
+      }
+    };
+  }
+
+  let result: AnalyzedContent = {
+    parsing_metadata: {
+      method: 'manual',
+      timestamp: new Date().toISOString()
+    }
+  };
+
+  // Extract product name and code
+  const hashtagMatch = caption.match(/([^#]+)\s*#([A-Za-z0-9-]+)/);
+  if (hashtagMatch) {
+    result.product_name = hashtagMatch[1].trim();
+    result.product_code = hashtagMatch[2].trim();
+  } else {
+    result.product_name = caption.split('#')[0].trim();
+  }
+
+  // Extract quantity (looking for "x NUMBER" pattern)
+  const quantityMatch = caption.match(/x\s*(\d+)/i);
+  if (quantityMatch) {
+    result.quantity = parseInt(quantityMatch[1], 10);
+  }
+
+  // Extract vendor UID from product code if present (first 3 letters)
+  if (result.product_code && result.product_code.length >= 3) {
+    result.vendor_uid = result.product_code.substring(0, 3);
+  }
+
+  result.parsing_metadata.needs_ai_analysis = !result.product_code || !result.quantity;
+  return result;
+}
+
+async function syncMediaGroup(
+  supabase: any,
+  sourceMessageId: string,
+  media_group_id: string,
+  analyzedContent: AnalyzedContent
+): Promise<void> {
+  // Simple direct update of all messages in the group
+  const { error: updateError } = await supabase
+    .from('messages')
+    .update({
+      analyzed_content: analyzedContent,
+      processing_state: 'completed',
+      processing_completed_at: new Date().toISOString(),
+      group_caption_synced: true,
+      message_caption_id: sourceMessageId,  // Set the source message ID as the caption reference
+      is_original_caption: false,  // These are not the original caption messages
+      updated_at: new Date().toISOString()
+    })
+    .eq('media_group_id', media_group_id)
+    .neq('id', sourceMessageId);
+
+  if (updateError) throw updateError;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  let requestData;
+  let sourceMessageId: string | null = null;
+
   try {
-    requestData = await req.clone().json();
-    const { messageId, caption, media_group_id, correlationId, telegram_message_id } = requestData;
-    
-    console.log('Starting caption analysis:', {
-      messageId,
-      telegram_message_id,
-      media_group_id,
-      caption_length: caption?.length,
-      correlation_id: correlationId
-    });
+    const body = await req.json();
+    const { messageId, caption, media_group_id } = body;
+    sourceMessageId = messageId; // Store messageId in wider scope for error handling
+
+    if (!messageId || !caption) {
+      return new Response(
+        JSON.stringify({ error: 'Missing required parameters' }), 
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    let analyzedContent = null;
-    const manualResult = await parseManually(caption);
-    
-    if (manualResult && manualResult.product_code) {
-      console.log('Manual parsing successful');
-      analyzedContent = {
-        ...manualResult,
-        parsing_metadata: {
-          method: 'manual',
-          confidence: 1.0,
-          timestamp: new Date().toISOString()
-        }
-      };
-    } else {
-      console.log('Manual parsing incomplete, attempting AI analysis...');
-      const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-      if (!openAIApiKey) {
-        throw new Error('OpenAI API key not configured');
-      }
+    // Parse the caption
+    const parsedContent = extractProductInfo(caption);
 
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openAIApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4',
-          messages: [
-            {
-              role: 'system',
-              content: `Extract product information from captions using this format:
-                - product_name (before #)
-                - product_code (after #)
-                - vendor_uid (letters at start of code)
-                - quantity (number after x)
-                - purchase_date (if found, in YYYY-MM-DD)
-                - notes (additional info)`
-            },
-            { role: 'user', content: caption }
-          ]
-        })
-      });
-
-      if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
-      
-      const aiResult = await response.json();
-      const aiAnalysis = JSON.parse(aiResult.choices[0].message.content);
-      analyzedContent = {
-        ...aiAnalysis,
-        parsing_metadata: {
-          method: 'ai',
-          confidence: 0.7,
-          timestamp: new Date().toISOString()
-        }
-      };
-      console.log('AI analysis successful');
-    }
-
-    if (media_group_id) {
-      console.log('Syncing media group:', media_group_id);
-      analyzedContent = {
-        ...analyzedContent,
-        sync_metadata: {
-          sync_source_message_id: messageId,
-          media_group_id
-        }
-      };
-    }
-
-    // Log successful analysis
-    const { error: logError } = await supabase
-      .from('webhook_logs')
-      .insert({
-        event_type: 'analysis_complete',
-        correlation_id: correlationId,
-        message_id: Number(telegram_message_id), // Convert to number for bigint column
-        metadata: {
-          analysis_method: analyzedContent?.parsing_metadata?.method,
-          confidence: analyzedContent?.parsing_metadata?.confidence
-        }
-      });
-
-    if (logError) {
-      console.error('Error logging webhook event:', logError);
-    }
-
-    // Update message with analyzed content
+    // Update source message first
     const { error: updateError } = await supabase
       .from('messages')
       .update({
-        analyzed_content: analyzedContent,
+        analyzed_content: parsedContent,
         processing_state: 'completed',
-        processing_completed_at: new Date().toISOString()
+        processing_started_at: new Date().toISOString(),
+        processing_completed_at: new Date().toISOString(),
+        is_original_caption: true,        // This is the original caption message
+        message_caption_id: messageId,    // Reference itself as the caption source
+        updated_at: new Date().toISOString()
       })
       .eq('id', messageId);
 
     if (updateError) throw updateError;
 
+    // If part of a media group, sync other messages
+    if (media_group_id) {
+      await syncMediaGroup(supabase, messageId, media_group_id, parsedContent);
+    }
+
     return new Response(
-      JSON.stringify({ success: true, analyzed_content: analyzedContent }),
+      JSON.stringify({
+        success: true,
+        analyzed_content: parsedContent,
+        needs_ai_analysis: parsedContent.parsing_metadata?.needs_ai_analysis
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Error in parse-caption-with-ai:', error);
-    
-    if (requestData?.messageId && requestData?.telegram_message_id) {
+    console.error('Error processing message:', error);
+
+    // Only try to update error state if we have a messageId
+    if (sourceMessageId) {
       const supabase = createClient(
         Deno.env.get('SUPABASE_URL')!,
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
 
       try {
-        // Log error to webhook_logs
-        await supabase
-          .from('webhook_logs')
-          .insert({
-            event_type: 'analysis_error',
-            message_id: Number(requestData.telegram_message_id), // Convert to number
-            error_message: error.message,
-            correlation_id: requestData.correlationId
-          });
-
-        // Update message error state
         await supabase
           .from('messages')
           .update({
             processing_state: 'error',
             error_message: error.message,
             processing_completed_at: new Date().toISOString(),
-            last_error_at: new Date().toISOString()
+            updated_at: new Date().toISOString()
           })
-          .eq('id', requestData.messageId);
-      } catch (updateError) {
-        console.error('Failed to update error state:', updateError);
+          .eq('id', sourceMessageId);
+      } catch (stateError) {
+        console.error('Error updating error state:', stateError);
       }
     }
-    
+
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
     );
   }
 });
