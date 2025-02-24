@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/useToast";
@@ -13,79 +14,39 @@ export const useTelegramOperations = () => {
     try {
       setIsProcessing(prev => ({ ...prev, [message.id]: true }));
       
-      // If part of a media group, get all related messages
-      let messagesToDelete = [message];
-      if (message.media_group_id) {
-        const { data: groupMessages } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('media_group_id', message.media_group_id)
-          .returns<Message[]>();
-          
-        if (groupMessages) {
-          messagesToDelete = groupMessages;
-        }
-      }
-
-      // Delete from Telegram if requested - do this first
+      // If deleting from Telegram is requested, do this first
       if (deleteTelegram) {
-        const deletePromises = messagesToDelete.map(async (msg) => {
-          if (msg.telegram_message_id && msg.chat_id) {
-            const { error: telegramError } = await supabase.functions.invoke('delete-telegram-message', {
-              body: JSON.stringify({
-                message_id: Number(msg.telegram_message_id),
-                chat_id: Number(msg.chat_id),
-                media_group_id: msg.media_group_id || null
-              })
-            });
+        if (message.telegram_message_id && message.chat_id) {
+          const { error: telegramError } = await supabase.functions.invoke('delete-telegram-message', {
+            body: JSON.stringify({
+              message_id: Number(message.telegram_message_id),
+              chat_id: Number(message.chat_id),
+              media_group_id: message.media_group_id || null
+            })
+          });
 
-            if (telegramError) {
-              console.error('Telegram deletion error:', telegramError);
-              throw new Error(`Failed to delete message ${msg.telegram_message_id} from Telegram: ${telegramError.message}`);
-            }
+          if (telegramError) {
+            console.error('Telegram deletion error:', telegramError);
+            throw new Error(`Failed to delete message from Telegram: ${telegramError.message}`);
           }
-        });
-
-        await Promise.all(deletePromises);
+        }
       }
 
-      // After successful Telegram deletion (or if not deleting from Telegram),
-      // delete from database with cascade
-      for (const msg of messagesToDelete) {
-        // First, remove any analysis audit log entries
-        await supabase
-          .from('analysis_audit_log')
-          .delete()
-          .eq('message_id', msg.id);
+      // Delete from database - the trigger will handle logging
+      const { error: deleteError } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', message.id);
 
-        // Then remove any message state logs
-        await supabase
-          .from('message_state_logs')
-          .delete()
-          .eq('message_id', msg.id);
-
-        // Then remove any sync matches
-        await supabase
-          .from('sync_matches')
-          .delete()
-          .eq('message_id', msg.id);
-
-        // Finally delete the message itself
-        const { error: deleteError } = await supabase
-          .from('messages')
-          .delete()
-          .eq('id', msg.id);
-
-        if (deleteError) {
-          console.error('Database deletion error:', deleteError);
-          throw deleteError;
-        }
+      if (deleteError) {
+        console.error('Database deletion error:', deleteError);
+        throw deleteError;
       }
 
       // Show success message
       toast({
         title: "Success",
-        description: `${messagesToDelete.length > 1 ? 'Messages' : 'Message'} deleted successfully${
+        description: `Message deleted successfully${
           deleteTelegram ? ' from both Telegram and database' : ' from database'
         }`,
       });

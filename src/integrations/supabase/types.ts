@@ -1745,44 +1745,6 @@ export type Database = {
           },
         ]
       }
-      message_state_logs: {
-        Row: {
-          changed_at: string | null
-          error_message: string | null
-          id: string
-          message_id: string | null
-          metadata: Json | null
-          new_state: string | null
-          previous_state: string | null
-        }
-        Insert: {
-          changed_at?: string | null
-          error_message?: string | null
-          id?: string
-          message_id?: string | null
-          metadata?: Json | null
-          new_state?: string | null
-          previous_state?: string | null
-        }
-        Update: {
-          changed_at?: string | null
-          error_message?: string | null
-          id?: string
-          message_id?: string | null
-          metadata?: Json | null
-          new_state?: string | null
-          previous_state?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "message_state_logs_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       messages: {
         Row: {
           analyzed_content: Json | null
@@ -2324,12 +2286,6 @@ export type Database = {
           days?: number
         }
         Returns: boolean
-      }
-      delete_media_group: {
-        Args: {
-          p_media_group_id: string
-        }
-        Returns: undefined
       }
       filter_by_vendor: {
         Args: {
