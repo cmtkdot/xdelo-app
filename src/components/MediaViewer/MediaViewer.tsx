@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { Message } from '@/types';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -6,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ImageSwiper } from "@/components/ui/image-swiper";
 import { ChevronLeft, ChevronRight, Tag, Package, Calendar } from "lucide-react";
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/generalUtils';
 import { messageToMediaItem } from './types';
 
 interface MediaViewerProps {

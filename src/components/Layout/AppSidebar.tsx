@@ -10,7 +10,7 @@ import {
   Settings,
   LogOut
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/generalUtils';
 import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 

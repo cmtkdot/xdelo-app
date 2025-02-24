@@ -1,8 +1,15 @@
-type Toast = {
+import { useState, useEffect } from 'react';
+
+export type Toast = {
+  id: string;
   title: string;
   description?: string;
   variant?: "default" | "destructive";
   duration?: number;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
 };
 
 let toasts: Toast[] = [];
