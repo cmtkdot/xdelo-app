@@ -1,16 +1,10 @@
 
 import React from "react";
 import { ImageSwiper } from "@/components/ui/image-swiper";
+import type { Message } from "@/types";
 
-interface MediaViewerProps {
-  message: {
-    id: string;
-    public_url?: string;
-    purchase_order?: {
-      id: string;
-      code: string;
-    };
-  };
+export interface MediaViewerProps {
+  message: Message;
 }
 
 export function MediaViewer({ message }: MediaViewerProps) {

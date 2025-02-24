@@ -1,38 +1,49 @@
-import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
-import { useQuery } from "@tanstack/react-query";
+
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface VendorFilterProps {
-  value: string;
-  onChange: (value: string) => void;
+  onVendorChange: (vendor: string | null) => void;
+  selectedVendor: string | null;
 }
 
-export const VendorFilter = ({ value, onChange }: VendorFilterProps) => {
-  const { data: vendors = [] } = useQuery({
-    queryKey: ["vendors"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("vendors")
-        .select("id, name")
-        .order("name");
+export function VendorFilter({ onVendorChange, selectedVendor }: VendorFilterProps) {
+  const [vendors, setVendors] = useState<Array<{ id: string; name: string }>>([]);
 
-      if (error) throw error;
-      return data;
-    },
-  });
+  useEffect(() => {
+    const fetchVendors = async () => {
+      const { data: vendorsData } = await supabase
+        .from('xdelo_vendors')
+        .select('id,name')
+        .order('name');
+
+      if (vendorsData) {
+        setVendors(vendorsData);
+      }
+    };
+
+    fetchVendors();
+  }, []);
 
   return (
-    <div className="space-y-2">
-      <Label>Vendor</Label>
-      <Select value={value} onValueChange={onChange}>
-        <option value="">All Vendors</option>
+    <Select value={selectedVendor || undefined} onValueChange={onVendorChange}>
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder="Select Vendor" />
+      </SelectTrigger>
+      <SelectContent>
         {vendors.map((vendor) => (
-          <option key={vendor.id} value={vendor.id}>
+          <SelectItem key={vendor.id} value={vendor.id}>
             {vendor.name}
-          </option>
+          </SelectItem>
         ))}
-      </Select>
-    </div>
+      </SelectContent>
+    </Select>
   );
-};
+}

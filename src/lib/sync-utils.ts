@@ -1,60 +1,37 @@
 
-import { SupabaseClient } from '@supabase/supabase-js';
-import { Database } from '../types';
+import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/types";
 
-export async function logSyncOperation(
-  supabase: SupabaseClient<Database>,
-  operation: string,
-  details: Record<string, any>,
-  success: boolean,
-  error?: string
-) {
-  try {
-    await supabase.from('sync_logs').insert({
-      operation_type: operation,
-      status: success ? 'success' : 'error',
-      details,
-      error_message: error || null,
-      created_at: new Date().toISOString()
-    });
-  } catch (err) {
-    console.error('Failed to log sync operation:', err);
-  }
+export async function getSyncLogs() {
+  const { data: logs } = await supabase
+    .from('xdelo_sync_logs')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  return logs;
 }
 
-export async function logSyncOperationBatch(
-  supabase: SupabaseClient<Database>,
-  operations: Array<{
-    operation: string;
-    details: Record<string, any>;
-    success: boolean;
-    error?: string;
-  }>
+export async function createSyncLog(
+  event_type: string,
+  details: any,
+  status: 'success' | 'error'
 ) {
-  try {
-    const logs = operations.map(op => ({
-      operation_type: op.operation,
-      status: op.success ? 'success' : 'error',
-      details: op.details,
-      error_message: op.error || null,
-      created_at: new Date().toISOString()
-    }));
-    
-    await supabase.from('sync_logs').insert(logs);
-  } catch (err) {
-    console.error('Failed to log sync operations batch:', err);
-  }
-}
+  const { data, error } = await supabase
+    .from('xdelo_sync_logs')
+    .insert([
+      {
+        event_type,
+        details,
+        status,
+      },
+    ])
+    .select()
+    .single();
 
-export async function logSyncWarning(
-  supabase: SupabaseClient<Database>,
-  message: string,
-  details: Record<string, any>
-) {
-  await logSyncOperation(
-    supabase,
-    'warning',
-    { message, ...details },
-    true
-  );
+  if (error) {
+    console.error('Error creating sync log:', error);
+    throw error;
+  }
+
+  return data;
 }

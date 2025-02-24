@@ -1,7 +1,6 @@
 
-import type { Database as SupabaseDatabase } from './integrations/supabase/types';
-
-export type Database = SupabaseDatabase;
+import type { Database } from './integrations/supabase/types';
+export type { Database } from './integrations/supabase/types';
 export type { Message, AnalyzedContent, ProcessingState } from './types/Message';
 
 export interface MatchResult {
@@ -14,6 +13,7 @@ export interface MatchResult {
     matchedFields: string[];
     confidence: number;
   };
+  match_confidence?: number;
 }
 
 export interface FilterValues {
