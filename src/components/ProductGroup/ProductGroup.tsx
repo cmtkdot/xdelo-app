@@ -1,4 +1,3 @@
-
 import { Message, MediaItem } from "@/types";
 import { AlertCircle, Pencil, Trash2, Eye, RefreshCw, Check } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -6,10 +5,10 @@ import { ImageSwiper } from "@/components/ui/image-swiper";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { MediaViewer } from "./MediaViewer/MediaViewer";
+import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/useToast";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -299,4 +298,4 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
       </AlertDialog>
     </>
   );
-};
+}; 

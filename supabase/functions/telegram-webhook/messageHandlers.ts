@@ -1,21 +1,3 @@
-
-import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import type { ProcessingState } from '../_shared/states.ts';
-import { corsHeaders } from '../_shared/cors.ts';
-
-import { TelegramMessage, MessageEvent, MessageContent, AnalyzedContent } from './types';
-import { SupabaseClient } from "@supabase/supabase-js";
-import { corsHeaders } from './authUtils';
-import { getLogger } from './logger';
-import { triggerAnalysis } from './analysisHandler';
-
-// Add Deno type declaration
-declare const Deno: {
-  env: {
-    get(key: string): string | undefined;
-  };
-};
-
 export const handleMessage = async (
   message: TelegramMessage, 
   supabase: SupabaseClient,

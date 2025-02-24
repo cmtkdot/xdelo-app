@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Message } from "@/types";
-import { MediaEditDialog } from "@/components/MediaEditDialog";
-import { useToast } from "@/components/ui/use-toast";
+import { MediaEditDialog } from "@/components/MediaEdit/MediaEditDialog";
+import { useToast } from "@/hooks/useToast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
 

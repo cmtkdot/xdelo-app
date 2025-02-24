@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Edit2, Save, X, Trash2 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/useToast";
 import { format } from "date-fns";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
 import { MediaViewer } from "@/components/MediaViewer/MediaViewer";

@@ -1,5 +1,5 @@
 import { Message } from "@/types";
-import { ProductGroup } from "@/components/ProductGroup";
+import { ProductGroup } from "@/components/ProductGroup/ProductGroup";
 import { cn } from "@/lib/utils";
 
 interface ProductGridProps {

@@ -1,4 +1,3 @@
-import { SupabaseClient } from '@supabase/supabase-js';
 import { getLogger } from './logger';
 
 interface AnalysisResult {

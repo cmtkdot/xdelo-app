@@ -1,4 +1,3 @@
-import { SupabaseClient } from "@supabase/supabase-js";
 import { MediaInfo, TelegramMessage } from "./types";
 
 // Add Deno type declaration
@@ -51,7 +50,8 @@ export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
 export async function downloadAndStoreMedia(
   mediaInfo: MediaInfo,
   supabase: SupabaseClient,
-  correlationId: string
+  correlationId: string,
+  messageId: string
 ): Promise<string | null> {
   try {
     console.log('📥 Processing media:', {
@@ -119,6 +119,7 @@ export async function downloadAndStoreMedia(
       .from('telegram-media')
       .upload(fileName, mediaBuffer, {
         contentType: mediaInfo.mimeType,
+        cacheControl: '3600',
         upsert: false // Don't overwrite if exists
       });
 
@@ -154,6 +155,26 @@ export async function downloadAndStoreMedia(
       public_url: publicUrl
     });
     
+    // New code adds message updates
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        public_url: publicUrl,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', messageId);
+
+    // On error, updates message status
+    await supabase
+      .from('messages')
+      .update({
+        error_message: uploadError?.message,
+        processing_state: uploadError ? 'error' : 'completed',
+        last_error_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', messageId);
+
     return publicUrl;
 
   } catch (error) {
