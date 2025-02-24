@@ -1,10 +1,6 @@
+import { type ReactNode } from "react";
 import { type Message } from "@/types/Message";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ImageSwiper } from "@/components/ui/image-swiper";
 import { AlertDialog, AlertDialogContent, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -16,9 +12,14 @@ import { ChevronLeft, ChevronRight, Hash, Package, Calendar } from "lucide-react
 interface MediaViewerProps {
   isOpen: boolean;
   onClose: () => void;
-  media: Message | null;
+  media?: Message;
   onNext?: () => void;
   onPrevious?: () => void;
+  error?: {
+    id: string;
+    code: string;
+    [key: string]: any;
+  };
 }
 
 interface MediaItem {
@@ -45,8 +46,9 @@ export const MediaViewer = ({
   media,
   onNext,
   onPrevious,
+  error,
 }: MediaViewerProps) => {
-  const [error, setError] = useState<ErrorDisplay | null>(null);
+  const [errorState, setError] = useState<ErrorDisplay | null>(null);
 
   // Convert Message to MediaItem with null checks
   const mediaItems: MediaItem[] = media ? [{
@@ -185,12 +187,12 @@ export const MediaViewer = ({
             )}
           </div>
         </div>
-        {error && (
+        {errorState && (
           <AlertDialog>
             <AlertDialogContent>
               <AlertDialogTitle>Error</AlertDialogTitle>
-              <div className="mt-2 text-sm">{error.message}</div>
-              {error.code && <div className="mt-2 text-sm">Code: {error.code}</div>}
+              <div className="mt-2 text-sm">{errorState.message}</div>
+              {errorState.code && <div className="mt-2 text-sm">Code: {errorState.code}</div>}
             </AlertDialogContent>
           </AlertDialog>
         )}
