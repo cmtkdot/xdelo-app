@@ -1,14 +1,13 @@
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/toast";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from "react-router-dom";
-import { DashboardLayout } from "./components/Layout/DashboardLayout";
+import { DashboardLayout } from "./components/Layout/dashboard-layout";
 import Dashboard from "./pages/Dashboard";
 import ProductGallery from "./pages/ProductGallery";
 import MediaTable from "./pages/MediaTable";
 import PublicGallery from "./pages/PublicGallery";
-import Vendors from "./pages/Vendors";
 import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -18,10 +17,10 @@ import AudioUpload from "./pages/AudioUpload";
 import MessagesPage from "./pages/Messages";
 import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client";
-import { ThemeProvider } from "./components/Theme/ThemeProvider";
+import { ThemeProvider } from "./components/Theme/theme-provider";
 import { Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
-import { AppSidebar } from "./components/Layout/AppSidebar";
+import { AppSidebar } from "./components/Layout/app-sidebar";
 
 interface ApiError {
   status?: number;
