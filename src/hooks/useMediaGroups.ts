@@ -14,10 +14,7 @@ export const useMediaGroups = () => {
 
       if (error) throw error;
 
-      const messages = (rawData || []).map(message => ({
-        ...message,
-        analyzed_content: message.analyzed_content as Message['analyzed_content'],
-      })) as Message[];
+      const messages = rawData as Message[];
 
       // Group messages by media_group_id
       const groupedMessages = messages.reduce((acc: { [key: string]: Message[] }, message) => {

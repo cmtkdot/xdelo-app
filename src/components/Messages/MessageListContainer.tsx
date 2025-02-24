@@ -1,28 +1,29 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { type Message } from "@/types";
+import { type Message, type MessageWithPurchaseOrder } from "@/types";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 
 export function MessageListContainer() {
-  const { data: messages, isLoading } = useQuery<Message[]>({
+  const { data: messages, isLoading } = useQuery<MessageWithPurchaseOrder[]>({
     queryKey: ['messages'],
     queryFn: async () => {
       const { data: rawData, error } = await supabase
         .from('messages')
-        .select('*')
+        .select(`
+          *,
+          purchase_order:gl_purchase_orders!messages_purchase_order_uid_fkey (
+            id,
+            code
+          )
+        `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       
-      const typedMessages = (rawData || []).map(message => ({
-        ...message,
-        analyzed_content: message.analyzed_content as Message['analyzed_content'],
-      })) as Message[];
-      
-      return typedMessages;
+      return rawData as MessageWithPurchaseOrder[];
     }
   });
 

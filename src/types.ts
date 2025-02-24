@@ -1,7 +1,7 @@
 
 import type { Database } from './integrations/supabase/types';
 export type { Database } from './integrations/supabase/types';
-export type { Message, AnalyzedContent, ProcessingState } from './types/Message';
+export type { Message, MessageWithPurchaseOrder, AnalyzedContent, ProcessingState } from './types/Message';
 
 export interface MatchResult {
   id: string;

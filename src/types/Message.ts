@@ -75,6 +75,9 @@ export interface Message {
   processing_started_at?: string | null;
   processing_completed_at?: string | null;
   correlation_id?: string | null;
+}
+
+export interface MessageWithPurchaseOrder extends Message {
   purchase_order?: {
     id: string;
     code: string;

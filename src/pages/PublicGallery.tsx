@@ -25,10 +25,7 @@ export const PublicGallery = () => {
       
       if (error) throw error;
       
-      const messages = (rawData || []).map(message => ({
-        ...message,
-        analyzed_content: message.analyzed_content as Message['analyzed_content'],
-      })) as Message[];
+      const messages = rawData as Message[];
       
       const groupedMessages = messages.reduce((groups: { [key: string]: Message[] }, message) => {
         const groupId = message.media_group_id || message.id;
