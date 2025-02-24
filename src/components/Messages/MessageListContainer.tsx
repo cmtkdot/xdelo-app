@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Message } from './types';
 import { MessageList } from './MessageList';
 import { supabase } from '@/integrations/supabase/client';
@@ -257,4 +256,4 @@ export function MessageListContainer() {
       <MessageList messages={messages} onRefresh={fetchMessages} />
     </div>
   );
-} 
+}

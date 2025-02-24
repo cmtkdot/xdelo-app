@@ -1,10 +1,9 @@
-
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { GLProductGrid } from "@/components/GlProducts/GLProductGrid";
 import { GLProductFilters } from "@/components/GlProducts/GLProductFilters";
 import { supabase } from "@/integrations/supabase/client";
-import { GlProduct } from "@/types";
+import { GlProduct, convertToGlProduct } from '@/types/GlProducts';
 
 const GlProducts = () => {
   const { data: products, isLoading, error } = useQuery({

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Message } from "@/types";
 import { AlertCircle, Pencil, Trash2, Eye, RefreshCw, Check } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -6,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MediaViewer } from "./MediaViewer/MediaViewer";
-import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/useToast";
 import { messageToMediaItem } from "@/lib/utils";
@@ -20,6 +20,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+interface MediaItem {
+  id: string;
+  url: string;
+  type: string;
+  caption: string;
+  width: number;
+  height: number;
+  public_url: string;
+  created_at: string;
+}
 
 interface ProductGroupProps {
   group: Message[];
