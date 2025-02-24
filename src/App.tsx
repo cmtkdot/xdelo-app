@@ -1,32 +1,38 @@
 
-import { Toaster } from "@/components/ui/toast";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from "react-router-dom";
-import { DashboardLayout } from "./components/Layout/dashboard-layout";
-import Dashboard from "./pages/Dashboard";
-import ProductGallery from "./pages/ProductGallery";
-import MediaTable from "./pages/MediaTable";
-import PublicGallery from "./pages/PublicGallery";
-import Settings from "./pages/Settings";
-import Auth from "./pages/Auth";
-import NotFound from "./pages/NotFound";
-import AIChat from "./pages/AIChat";
-import GlProducts from "./pages/GlProducts";
-import AudioUpload from "./pages/AudioUpload";
-import MessagesPage from "./pages/Messages";
-import { useEffect, useState } from "react";
-import { supabase } from "./integrations/supabase/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "./components/Theme/theme-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "sonner";
+import { supabase } from "./integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { AppSidebar } from "./components/Layout/app-sidebar";
+
+// Lazy load routes
+const Auth = lazy(() => import("./pages/Auth"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const ProductGallery = lazy(() => import("./pages/ProductGallery"));
+const MediaTable = lazy(() => import("./pages/MediaTable"));
+const PublicGallery = lazy(() => import("./pages/PublicGallery"));
+const Settings = lazy(() => import("./pages/Settings"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const AIChat = lazy(() => import("./pages/AIChat"));
+const GlProducts = lazy(() => import("./pages/GlProducts"));
+const AudioUpload = lazy(() => import("./pages/AudioUpload"));
+const MessagesPage = lazy(() => import("./pages/Messages"));
 
 interface ApiError {
   status?: number;
   message?: string;
 }
+
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+  </div>
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -90,9 +96,7 @@ const ProtectedRoute = ({
   }, [navigate]);
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-      </div>;
+    return <LoadingSpinner />;
   }
 
   if (!session) {
@@ -107,33 +111,34 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Router>
-          <Routes>
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/p/:id" element={<PublicGallery />} />
-            <Route element={
-              <ProtectedRoute>
-                <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-                  <AppSidebar />
-                  <main className="transition-all duration-300 ease-in-out pl-16 min-h-screen">
-                    <div className="container py-6 px-4 mx-auto">
-                      <Outlet />
-                    </div>
-                  </main>
-                </div>
-              </ProtectedRoute>
-            }>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/messages" element={<MessagesPage />} />
-              <Route path="/gallery" element={<ProductGallery />} />
-              <Route path="/media-table" element={<MediaTable />} />
-              <Route path="/ai-chat" element={<AIChat />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/audio-upload" element={<AudioUpload />} />
-              <Route path="*" element={<NotFound />} />
-            </Route>
-          </Routes>
+          <Suspense fallback={<LoadingSpinner />}>
+            <Routes>
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/p/:id" element={<PublicGallery />} />
+              <Route element={
+                <ProtectedRoute>
+                  <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+                    <AppSidebar />
+                    <main className="transition-all duration-300 ease-in-out pl-16 min-h-screen">
+                      <div className="container py-6 px-4 mx-auto">
+                        <Outlet />
+                      </div>
+                    </main>
+                  </div>
+                </ProtectedRoute>
+              }>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/messages" element={<MessagesPage />} />
+                <Route path="/gallery" element={<ProductGallery />} />
+                <Route path="/media-table" element={<MediaTable />} />
+                <Route path="/ai-chat" element={<AIChat />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/audio-upload" element={<AudioUpload />} />
+                <Route path="*" element={<NotFound />} />
+              </Route>
+            </Routes>
+          </Suspense>
           <Toaster />
-          <Sonner />
         </Router>
       </TooltipProvider>
     </QueryClientProvider>
