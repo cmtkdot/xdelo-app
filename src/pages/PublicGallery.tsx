@@ -14,10 +14,10 @@ export const PublicGallery = () => {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const { data: mediaGroups, isLoading } = useQuery({
+  const { data: mediaGroups, isLoading } = useQuery<Message[][]>({
     queryKey: ['public-messages'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: messages, error } = await supabase
         .from('messages')
         .select('*')
         .eq('processing_state', 'completed')
@@ -25,8 +25,11 @@ export const PublicGallery = () => {
       
       if (error) throw error;
       
+      // Ensure messages is an array and properly typed
+      const typedMessages = (messages || []) as Message[];
+      
       // Group messages by media_group_id
-      const groupedMessages = (data || []).reduce((groups: { [key: string]: Message[] }, message) => {
+      const groupedMessages = typedMessages.reduce((groups: { [key: string]: Message[] }, message) => {
         const groupId = message.media_group_id || message.id;
         if (!groups[groupId]) {
           groups[groupId] = [];
@@ -35,6 +38,7 @@ export const PublicGallery = () => {
         return groups;
       }, {});
 
+      // Convert groups object to array of arrays
       return Object.values(groupedMessages);
     }
   });
