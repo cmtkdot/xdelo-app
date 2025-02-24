@@ -1,6 +1,34 @@
 
 export type ProcessingState = 'pending' | 'processing' | 'completed' | 'failed';
 
+export interface AnalyzedContent {
+  text?: string;
+  tags?: string[];
+  categories?: string[];
+  sentiment?: string;
+  entities?: string[];
+  summary?: string;
+  created_at?: string;
+  quantity?: number;
+  purchase_date?: string;
+  product_name?: string;
+  product_code?: string;
+  vendor_uid?: string;
+  unit_price?: number;
+  total_price?: number;
+  notes?: string;
+  caption?: string;
+  product_sku?: string;
+  purchase_order_uid?: string;
+  parsing_metadata?: {
+    method: 'manual' | 'ai' | 'hybrid';
+    confidence: number;
+    timestamp: string;
+    correlation_id?: string;
+    needs_review?: boolean;
+  };
+}
+
 export interface Message {
   id: string;
   created_at: string;
@@ -40,32 +68,18 @@ export interface Message {
   update_id?: number;
   media_type?: 'photo' | 'video' | 'document';
   is_deleted?: boolean;
-}
-
-export interface AnalyzedContent {
-  text?: string;
-  tags?: string[];
-  categories?: string[];
-  sentiment?: string;
-  entities?: string[];
-  summary?: string;
-  created_at?: string;
-  quantity?: number;
-  purchase_date?: string;
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  unit_price?: number;
-  total_price?: number;
-  notes?: string;
-  caption?: string;
-  product_sku?: string;
+  message_caption_id?: string;
+  is_original_caption?: boolean;
+  group_caption_synced?: boolean;
+  error_message?: string;
+  retry_count?: number;
+  last_error_at?: string;
+  group_first_message_time?: string;
+  group_last_message_time?: string;
+  message_url?: string;
   purchase_order_uid?: string;
-  parsing_metadata?: {
-    method: 'manual' | 'ai' | 'hybrid';
-    confidence: number;
-    timestamp: string;
-    correlation_id?: string;
-    needs_review?: boolean;
-  };
+  glide_row_id?: string;
+  user_id?: string;
+  processing_started_at?: string;
+  processing_completed_at?: string;
 }

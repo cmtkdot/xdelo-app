@@ -1912,95 +1912,6 @@ export type Database = {
           },
         ]
       }
-      other_messages: {
-        Row: {
-          chat_id: number
-          chat_title: string | null
-          chat_type: Database["public"]["Enums"]["telegram_chat_type"]
-          created_at: string | null
-          edit_date: string | null
-          error_message: string | null
-          id: string
-          is_channel_post: boolean | null
-          is_edited: boolean | null
-          message_caption_id: string | null
-          message_text: string | null
-          message_type: Database["public"]["Enums"]["telegram_other_message_type"]
-          message_url: string | null
-          processing_completed_at: string | null
-          processing_correlation_id: string | null
-          processing_started_at: string | null
-          processing_state:
-            | Database["public"]["Enums"]["processing_state_type"]
-            | null
-          sender_chat_id: number | null
-          telegram_data: Json | null
-          telegram_message_id: number
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          chat_id: number
-          chat_title?: string | null
-          chat_type: Database["public"]["Enums"]["telegram_chat_type"]
-          created_at?: string | null
-          edit_date?: string | null
-          error_message?: string | null
-          id?: string
-          is_channel_post?: boolean | null
-          is_edited?: boolean | null
-          message_caption_id?: string | null
-          message_text?: string | null
-          message_type: Database["public"]["Enums"]["telegram_other_message_type"]
-          message_url?: string | null
-          processing_completed_at?: string | null
-          processing_correlation_id?: string | null
-          processing_started_at?: string | null
-          processing_state?:
-            | Database["public"]["Enums"]["processing_state_type"]
-            | null
-          sender_chat_id?: number | null
-          telegram_data?: Json | null
-          telegram_message_id: number
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          chat_id?: number
-          chat_title?: string | null
-          chat_type?: Database["public"]["Enums"]["telegram_chat_type"]
-          created_at?: string | null
-          edit_date?: string | null
-          error_message?: string | null
-          id?: string
-          is_channel_post?: boolean | null
-          is_edited?: boolean | null
-          message_caption_id?: string | null
-          message_text?: string | null
-          message_type?: Database["public"]["Enums"]["telegram_other_message_type"]
-          message_url?: string | null
-          processing_completed_at?: string | null
-          processing_correlation_id?: string | null
-          processing_started_at?: string | null
-          processing_state?:
-            | Database["public"]["Enums"]["processing_state_type"]
-            | null
-          sender_chat_id?: number | null
-          telegram_data?: Json | null
-          telegram_message_id?: number
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fk_message_caption"
-            columns: ["message_caption_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       profiles: {
         Row: {
           created_at: string | null
@@ -2076,36 +1987,6 @@ export type Database = {
         }
         Relationships: []
       }
-      sync_logs: {
-        Row: {
-          created_at: string | null
-          details: Json | null
-          entity_id: string | null
-          error_message: string | null
-          id: string
-          operation_type: string
-          status: string
-        }
-        Insert: {
-          created_at?: string | null
-          details?: Json | null
-          entity_id?: string | null
-          error_message?: string | null
-          id?: string
-          operation_type: string
-          status: string
-        }
-        Update: {
-          created_at?: string | null
-          details?: Json | null
-          entity_id?: string | null
-          error_message?: string | null
-          id?: string
-          operation_type?: string
-          status?: string
-        }
-        Relationships: []
-      }
       sync_matches: {
         Row: {
           applied: boolean | null
@@ -2142,30 +2023,6 @@ export type Database = {
           product_id?: string | null
           status?: string | null
           updated_at?: string | null
-        }
-        Relationships: []
-      }
-      sync_records: {
-        Row: {
-          error_message: string | null
-          id: number
-          last_synced: string | null
-          supabase_table: string
-          sync_status: string
-        }
-        Insert: {
-          error_message?: string | null
-          id?: never
-          last_synced?: string | null
-          supabase_table: string
-          sync_status: string
-        }
-        Update: {
-          error_message?: string | null
-          id?: never
-          last_synced?: string | null
-          supabase_table?: string
-          sync_status?: string
         }
         Relationships: []
       }
