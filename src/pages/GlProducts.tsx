@@ -1,8 +1,7 @@
-
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
-import { GlappProductGrid } from "@/components/GlProducts/GlappProductGrid";
-import { GlappProductFilters } from "@/components/GlProducts/GlappProductFilters";
+import { ProductGrid } from "@/components/GlProducts/product-grid";
+import { ProductFilters } from "@/components/GlProducts/product-filters";
 import { supabase } from "@/integrations/supabase/client";
 import { GlProduct } from "@/types";
 
@@ -64,7 +63,7 @@ const GlProducts = () => {
         <h2 className="text-2xl font-bold">Products</h2>
       </div>
       
-      <GlappProductFilters />
+      <ProductFilters />
       
       <Card className="p-6">
         {isLoading ? (
@@ -76,7 +75,7 @@ const GlProducts = () => {
         ) : !products?.length ? (
           <p className="text-muted-foreground">No products found</p>
         ) : (
-          <GlappProductGrid products={products} />
+          <ProductGrid products={products} />
         )}
       </Card>
     </div>

@@ -8,7 +8,7 @@ interface MessageListProps {
   onRefresh?: () => void;
 }
 
-export function MessageList({ messages, onRefresh }: MessageListProps) {
+export const MessageList = ({ messages, onRefresh }: MessageListProps) => {
   // Filter messages to show only those with captions but no analysis
   const unanalyzedMessages = messages.filter(message => 
     message.caption && 

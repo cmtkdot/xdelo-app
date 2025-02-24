@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { MessageListContainer } from '../components/Messages/MessageListContainer';
+import { MessageListContainer } from '../components/Messages/message-list-container';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function MessagesPage() {

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MessagesTable } from "@/components/MessagesTable/MessagesTable";
+import { MessagesTable } from "@/components/messages-table/messages-table";
 import { Card } from "@/components/ui/card";
 import { Message } from "@/types";
 

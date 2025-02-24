@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
@@ -23,7 +22,7 @@ const menuItems = [
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
-export function AppSidebar() {
+export const AppSidebar = () => {
   const location = useLocation();
   const [isExpanded, setIsExpanded] = React.useState(false);
 

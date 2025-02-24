@@ -1,7 +1,10 @@
-
 import { AppSidebar } from "@/components/Layout/app-sidebar";
 
-export const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
+export interface DashboardLayoutProps {
+  children: React.ReactNode;
+}
+
+export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <AppSidebar />
