@@ -1790,6 +1790,8 @@ export type Database = {
           deleted_from_telegram: boolean | null
           duration: number | null
           edit_date: string | null
+          edit_history: Json | null
+          edited_channel_post: boolean | null
           error_message: string | null
           file_id: string | null
           file_size: number | null
@@ -1836,6 +1838,7 @@ export type Database = {
           sync_attempt: number | null
           telegram_data: Json | null
           telegram_message_id: number | null
+          update_id: string | null
           updated_at: string
           user_id: string | null
           vendor_name: string | null
@@ -1853,6 +1856,8 @@ export type Database = {
           deleted_from_telegram?: boolean | null
           duration?: number | null
           edit_date?: string | null
+          edit_history?: Json | null
+          edited_channel_post?: boolean | null
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
@@ -1899,6 +1904,7 @@ export type Database = {
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
+          update_id?: string | null
           updated_at?: string
           user_id?: string | null
           vendor_name?: string | null
@@ -1916,6 +1922,8 @@ export type Database = {
           deleted_from_telegram?: boolean | null
           duration?: number | null
           edit_date?: string | null
+          edit_history?: Json | null
+          edited_channel_post?: boolean | null
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
@@ -1962,6 +1970,7 @@ export type Database = {
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
+          update_id?: string | null
           updated_at?: string
           user_id?: string | null
           vendor_name?: string | null
