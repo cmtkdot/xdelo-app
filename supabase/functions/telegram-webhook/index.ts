@@ -61,7 +61,7 @@ async function getFileUrl(fileId: string, logger: any): Promise<string> {
   try {
     logger.info('Getting file URL from Telegram', { fileId });
     const response = await fetch(
-      `https://api.telegram.org/bot${telegramToken}/getFile?file_id=${fileId}`
+      `https://api.telegram.org/bot${telegramToken}/getFile?file_unique_id=${fileId}`
     );
 
     if (!response.ok) {
@@ -274,8 +274,8 @@ serve(async (req) => {
       .single();
 
     // Get media URL and upload to storage
-    logger.info('Processing media', { fileId: media.file_id });
-    const telegramFileUrl = await getFileUrl(media.file_id, logger);
+    logger.info('Processing media', { fileId: media.file_unique_id });
+    const telegramFileUrl = await getFileUrl(media.file_unique_id, logger);
     const storageUrl = await uploadMediaToStorage(
       telegramFileUrl,
       media.file_unique_id,

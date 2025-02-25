@@ -23,7 +23,7 @@ export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
   if (message.photo) {
     const photo = message.photo[message.photo.length - 1];
     return {
-      file_id: photo.file_id,
+      file_unique_id: photo.file_unique_id,
       file_unique_id: photo.file_unique_id,
       mime_type: 'image/jpeg',
       width: photo.width,
@@ -34,7 +34,7 @@ export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
   
   if (message.video) {
     return {
-      file_id: message.video.file_id,
+      file_unique_id: message.video.file_unique_id,
       file_unique_id: message.video.file_unique_id,
       mime_type: message.video.mime_type || 'video/mp4',
       width: message.video.width,
@@ -46,7 +46,7 @@ export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
   
   if (message.document) {
     return {
-      file_id: message.document.file_id,
+      file_unique_id: message.document.file_unique_id,
       file_unique_id: message.document.file_unique_id,
       mime_type: message.document.mime_type || 'application/octet-stream',
       file_size: message.document.file_size
@@ -350,7 +350,7 @@ export async function handleOtherMessage(
     // Special handling for voice messages
     if (message.voice) {
       messageData.telegram_data.voice = {
-        file_id: message.voice.file_id,
+        file_unique_id: message.voice.file_unique_id,
         duration: message.voice.duration,
         mime_type: message.voice.mime_type
       };
@@ -359,7 +359,7 @@ export async function handleOtherMessage(
     // Special handling for documents
     if (message.document) {
       messageData.telegram_data.document = {
-        file_id: message.document.file_id,
+        file_unique_id: message.document.file_unique_id,
         file_name: message.document.file_name,
         mime_type: message.document.mime_type
       };
@@ -611,7 +611,7 @@ export async function handleMediaMessage(
       chat_title: chatInfo.chat_title,
       media_group_id: message.media_group_id,
       caption: message.caption || "",
-      file_id: mediaInfo.file_id,
+      file_unique_id: mediaInfo.file_unique_id,
       file_unique_id: mediaInfo.file_unique_id,
       mime_type: mimeType,
       file_size: mediaInfo.file_size,
@@ -674,7 +674,7 @@ export async function handleMediaMessage(
       .upload(
         storagePath,
         await (await fetch(
-          `https://api.telegram.org/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/getFile?file_id=${mediaInfo.file_id}`
+          `https://api.telegram.org/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/getFile?file_unique_id=${mediaInfo.file_unique_id}`
         )).arrayBuffer(),
         {
           contentType: mimeType,
