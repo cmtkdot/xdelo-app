@@ -180,11 +180,66 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
             </div>
           )}
           
+          {/* Display all available analyzed content fields */}
+          {mainMedia.analyzed_content?.product_name && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Product</span>
+              <span className="text-sm font-medium truncate max-w-[60%] text-right">
+                {mainMedia.analyzed_content.product_name}
+              </span>
+            </div>
+          )}
+          
           {mainMedia.analyzed_content?.quantity && (
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Quantity</span>
               <span className="text-sm font-medium">
                 {mainMedia.analyzed_content.quantity}
+              </span>
+            </div>
+          )}
+          
+          {mainMedia.analyzed_content?.vendor_uid && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Vendor</span>
+              <span className="text-sm font-medium truncate max-w-[60%] text-right">
+                {mainMedia.analyzed_content.vendor_uid}
+              </span>
+            </div>
+          )}
+          
+          {mainMedia.analyzed_content?.product_code && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Product Code</span>
+              <span className="text-sm font-medium truncate max-w-[60%] text-right">
+                {mainMedia.analyzed_content.product_code}
+              </span>
+            </div>
+          )}
+          
+          {mainMedia.analyzed_content?.purchase_date && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Purchase Date</span>
+              <span className="text-sm font-medium">
+                {new Date(mainMedia.analyzed_content.purchase_date).toLocaleDateString()}
+              </span>
+            </div>
+          )}
+          
+          {mainMedia.analyzed_content?.unit_price && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Unit Price</span>
+              <span className="text-sm font-medium">
+                ${mainMedia.analyzed_content.unit_price.toFixed(2)}
+              </span>
+            </div>
+          )}
+          
+          {mainMedia.analyzed_content?.total_price && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Total Price</span>
+              <span className="text-sm font-medium">
+                ${mainMedia.analyzed_content.total_price.toFixed(2)}
               </span>
             </div>
           )}

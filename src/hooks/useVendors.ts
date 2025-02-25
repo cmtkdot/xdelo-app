@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { AnalyzedContent } from "@/types";
 
 export const useVendors = () => {
-  const [vendors, setVendors] = useState<string[]>([]);
-
-  useEffect(() => {
-    const fetchVendors = async () => {
+  return useQuery({
+    queryKey: ['vendors'],
+    queryFn: async () => {
       try {
         const { data, error } = await supabase
           .from("messages")
@@ -24,14 +24,12 @@ export const useVendors = () => {
           }
         });
 
-        setVendors(Array.from(uniqueVendors).sort());
+        return Array.from(uniqueVendors).sort();
       } catch (error) {
         console.error("Error fetching vendors:", error);
+        return [];
       }
-    };
-
-    fetchVendors();
-  }, []);
-
-  return vendors;
+    },
+    initialData: []
+  });
 };

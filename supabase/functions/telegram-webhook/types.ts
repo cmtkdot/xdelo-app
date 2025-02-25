@@ -155,6 +155,7 @@ export interface MediaInfo {
   width?: number;
   height?: number;
   duration?: number;
+  media_type?: 'photo' | 'video' | 'document' | 'voice';
 }
 
 export interface MessageData {

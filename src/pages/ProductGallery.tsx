@@ -1,17 +1,31 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Message } from "@/types";
+import { FilterValues, Message } from "@/types";
 import { MediaEditDialog } from "@/components/MediaEditDialog/MediaEditDialog";
 import { useToast } from "@/hooks/useToast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
+import { ProductPagination } from "@/components/ProductGallery/ProductPagination";
+import ProductFilters from "@/components/ProductGallery/ProductFilters";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
+import { useVendors } from "@/hooks/useVendors";
+
+const ITEMS_PER_PAGE = 12;
 
 const ProductGallery = () => {
   const [editItem, setEditItem] = useState<Message | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [filters, setFilters] = useState<FilterValues>({
+    search: "",
+    vendors: [],
+    sortOrder: "desc",
+    processingState: ['completed']
+  });
+  
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: mediaGroups = {} } = useMediaGroups(); // Provide default empty object
+  const { data: vendors = [] } = useVendors();
 
   // Set up realtime subscription
   useEffect(() => {
@@ -70,16 +84,87 @@ const ProductGallery = () => {
     }
   };
 
+  // Filter and sort products based on current filters
+  const filteredProducts = useMemo(() => {
+    let filtered = Object.values(mediaGroups);
+    
+    // Filter by search term
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      filtered = filtered.filter(group => {
+        const mainMedia = group.find(m => m.is_original_caption) || group[0];
+        
+        // Search in product name, vendor, product code, or caption
+        return (
+          mainMedia.analyzed_content?.product_name?.toLowerCase().includes(searchLower) ||
+          mainMedia.analyzed_content?.vendor_uid?.toLowerCase().includes(searchLower) ||
+          mainMedia.analyzed_content?.product_code?.toLowerCase().includes(searchLower) ||
+          mainMedia.caption?.toLowerCase().includes(searchLower) ||
+          mainMedia.purchase_order?.toLowerCase().includes(searchLower)
+        );
+      });
+    }
+    
+    // Filter by vendors
+    if (filters.vendors && filters.vendors.length > 0) {
+      filtered = filtered.filter(group => {
+        const mainMedia = group.find(m => m.is_original_caption) || group[0];
+        return filters.vendors?.includes(mainMedia.analyzed_content?.vendor_uid || '');
+      });
+    }
+    
+    // Sort by date
+    filtered.sort((a, b) => {
+      const dateA = new Date(a[0]?.created_at || 0).getTime();
+      const dateB = new Date(b[0]?.created_at || 0).getTime();
+      return filters.sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+    });
+    
+    return filtered;
+  }, [mediaGroups, filters]);
+  
+  // Pagination
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredProducts, currentPage]);
+  
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Scroll to top of the page
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <h1 className="text-2xl font-bold">Product Gallery</h1>
       
+      <ProductFilters 
+        vendors={vendors}
+        filters={filters}
+        onFilterChange={setFilters}
+      />
+      
       <ProductGrid
-        products={Object.values(mediaGroups)}
+        products={paginatedProducts}
         onEdit={handleEdit}
         onDelete={handleDelete}
         onView={handleView}
       />
+      
+      {totalPages > 1 && (
+        <ProductPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
+      )}
 
       {editItem && (
         <MediaEditDialog

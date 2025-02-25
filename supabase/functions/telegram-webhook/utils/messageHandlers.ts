@@ -580,6 +580,7 @@ export async function handleMediaMessage(
       width: mediaInfo.width,
       height: mediaInfo.height,
       duration: mediaInfo.duration,
+      media_type: mediaInfo.media_type || (message.photo ? 'photo' : message.video ? 'video' : message.document ? 'document' : message.voice ? 'voice' : undefined),
       telegram_data: { message },
       processing_state: message.caption ? "pending" : "initialized",
       processing_correlation_id: correlationId,

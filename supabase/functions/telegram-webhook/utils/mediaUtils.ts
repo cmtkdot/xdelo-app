@@ -11,7 +11,8 @@ export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
       mime_type: 'image/jpeg',
       width: photo.width,
       height: photo.height,
-      file_size: photo.file_size
+      file_size: photo.file_size,
+      media_type: 'photo'
     };
   } 
   
@@ -23,7 +24,8 @@ export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
       width: message.video.width,
       height: message.video.height,
       duration: message.video.duration,
-      file_size: message.video.file_size
+      file_size: message.video.file_size,
+      media_type: 'video'
     };
   } 
   
@@ -32,7 +34,19 @@ export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
       file_id: message.document.file_id,
       file_unique_id: message.document.file_unique_id,
       mime_type: message.document.mime_type || 'application/octet-stream',
-      file_size: message.document.file_size
+      file_size: message.document.file_size,
+      media_type: 'document'
+    };
+  }
+  
+  if (message.voice) {
+    return {
+      file_id: message.voice.file_id,
+      file_unique_id: message.voice.file_unique_id,
+      mime_type: message.voice.mime_type || 'audio/ogg',
+      duration: message.voice.duration,
+      file_size: message.voice.file_size,
+      media_type: 'voice'
     };
   }
   
@@ -86,7 +100,9 @@ export async function downloadAndStoreMedia(
     });
     
     // Generate filename using file_unique_id
-    const fileExt = mediaInfo.mime_type?.split('/')[1] || 'bin';
+    // Safely handle mime_type which might be undefined
+    const mimeType = mediaInfo.mime_type || '';
+    const fileExt = mimeType ? mimeType.split('/')[1] || 'bin' : 'bin';
     const fileName = `${mediaInfo.file_unique_id}.${fileExt}`;
     
     // Check if file already exists in storage
