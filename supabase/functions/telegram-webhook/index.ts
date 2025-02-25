@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { handleEditedMessage } from "./messageHandlers.ts";
-import { getLogger } from "./logger.ts";
+import { downloadAndStoreMedia } from './mediaUtils.ts';
+import { getLogger } from './logger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,86 +18,134 @@ if (!supabaseUrl || !supabaseServiceRole || !telegramToken) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceRole)
 
-async function getFileUrl(fileId: string): Promise<string> {
-  const response = await fetch(
-    `https://api.telegram.org/bot${telegramToken}/getFile?file_id=${fileId}`
-  )
-  const data = await response.json()
-  if (!data.ok) throw new Error('Failed to get file path')
-  return `https://api.telegram.org/file/bot${telegramToken}/${data.result.file_path}`
-}
-
-async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeType: string, correlationId: string): Promise<string> {
-  const logger = (message: string, data?: any) => {
-    console.log(`[${correlationId}] ${message}`, data || '');
-  };
-
-  logger('Uploading media to storage', { fileUniqueId, mimeType });
-  
-  const ext = mimeType.split('/')[1] || 'bin'
-  const storagePath = `${fileUniqueId}.${ext}`
+async function handleEditedMessage(
+  message: any,
+  isChannelPost: boolean,
+  correlationId: string
+) {
+  const logger = getLogger(correlationId);
   
   try {
-    const mediaResponse = await fetch(fileUrl)
-    if (!mediaResponse.ok) throw new Error('Failed to download media from Telegram')
-    
-    const mediaBuffer = await mediaResponse.arrayBuffer()
+    logger.info('Processing edited message', {
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      is_channel_post: isChannelPost
+    });
 
-    const { data: existingFile } = await supabase
-      .storage
-      .from('telegram-media')
-      .list('', { 
-        search: storagePath,
-        limit: 1
-      })
+    // Find existing message
+    const { data: existingMessage, error: findError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('telegram_message_id', message.message_id)
+      .eq('chat_id', message.chat.id)
+      .single();
 
-    // If file exists, get its public URL
-    if (existingFile && existingFile.length > 0) {
-      const { data: { publicUrl } } = supabase
-        .storage
-        .from('telegram-media')
-        .getPublicUrl(storagePath)
-      
-      logger('File already exists, returning existing URL');
-      return publicUrl;
+    if (findError || !existingMessage) {
+      logger.error('Could not find original message', { error: findError });
+      throw new Error('Original message not found');
     }
 
-    // Upload new file
-    const { error: uploadError } = await supabase
-      .storage
-      .from('telegram-media')
-      .upload(storagePath, mediaBuffer, {
-        contentType: mimeType,
-        upsert: true,
-        cacheControl: '3600'
-      })
+    // Check if caption actually changed
+    const currentCaption = message.caption || '';
+    const previousCaption = existingMessage.caption || '';
+    const captionChanged = currentCaption !== previousCaption;
 
-    if (uploadError) throw uploadError
+    logger.info('Caption comparison', {
+      current: currentCaption,
+      previous: previousCaption,
+      changed: captionChanged
+    });
 
-    const { data: { publicUrl } } = supabase
-      .storage
-      .from('telegram-media')
-      .getPublicUrl(storagePath)
+    // Build edit history entry
+    const editHistoryEntry = {
+      edit_date: new Date(message.edit_date * 1000).toISOString(),
+      previous_caption: previousCaption,
+      new_caption: currentCaption,
+      is_channel_post: isChannelPost
+    };
 
-    logger('Media uploaded successfully');
-    return publicUrl
+    // Prepare base updates
+    const updates: any = {
+      is_edited: true,
+      edit_date: new Date(message.edit_date * 1000).toISOString(),
+      edit_history: existingMessage.edit_history 
+        ? [...existingMessage.edit_history, editHistoryEntry]
+        : [editHistoryEntry],
+      caption: currentCaption,
+      telegram_data: {
+        original_message: existingMessage.telegram_data,
+        edited_message: message
+      },
+      updated_at: new Date().toISOString()
+    };
 
+    // If caption changed, reset analysis state and trigger reanalysis
+    if (captionChanged) {
+      logger.info('Caption changed, resetting analysis state', {
+        message_id: existingMessage.id,
+        media_group_id: existingMessage.media_group_id
+      });
+
+      updates.analyzed_content = null;
+      updates.processing_state = 'pending';
+      updates.group_caption_synced = false;
+
+      // Update the edited message first
+      const { error: updateError } = await supabase
+        .from('messages')
+        .update(updates)
+        .eq('id', existingMessage.id);
+
+      if (updateError) throw updateError;
+
+      // If part of media group, update all related messages
+      if (existingMessage.media_group_id) {
+        logger.info('Updating media group messages', {
+          media_group_id: existingMessage.media_group_id
+        });
+
+        const { error: groupUpdateError } = await supabase
+          .from('messages')
+          .update({
+            analyzed_content: null,
+            processing_state: 'pending',
+            group_caption_synced: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('media_group_id', existingMessage.media_group_id)
+          .neq('id', existingMessage.id);
+
+        if (groupUpdateError) {
+          logger.error('Failed to update media group', { error: groupUpdateError });
+        }
+      }
+
+      // Trigger reanalysis
+      logger.info('Triggering reanalysis');
+      await supabase.functions.invoke('parse-caption-with-ai', {
+        body: {
+          message_id: existingMessage.id,
+          caption: currentCaption,
+          correlation_id: correlationId,
+          is_edit: true,
+          media_group_id: existingMessage.media_group_id
+        }
+      });
+    } else {
+      // If caption didn't change, just update the metadata
+      const { error: updateError } = await supabase
+        .from('messages')
+        .update(updates)
+        .eq('id', existingMessage.id);
+
+      if (updateError) throw updateError;
+    }
+
+    return { success: true };
   } catch (error) {
-    logger('Error uploading media:', error);
-    throw error;
+    logger.error('Error handling edited message', { error });
+    return { success: false, error: error.message };
   }
-}
-
-async function findAnalyzedMessageInGroup(mediaGroupId: string): Promise<any> {
-  const { data } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('media_group_id', mediaGroupId)
-    .not('analyzed_content', 'is', null)
-    .order('created_at', { ascending: true })
-    .limit(1);
-
-  return data?.[0] || null;
 }
 
 serve(async (req) => {
@@ -111,15 +159,17 @@ serve(async (req) => {
   try {
     const update = await req.json();
     
-    // Handle edited messages
+    // Handle edited messages and channel posts
     if (update.edited_message || update.edited_channel_post) {
       const editedMessage = update.edited_message || update.edited_channel_post;
+      const isChannelPost = !!update.edited_channel_post;
       
-      const result = await handleEditedMessage(
-        editedMessage,
-        supabase,
-        correlationId
-      );
+      logger.info('Received edited content', {
+        is_channel_post: isChannelPost,
+        has_media_group: !!editedMessage.media_group_id
+      });
+
+      const result = await handleEditedMessage(editedMessage, isChannelPost, correlationId);
 
       return new Response(
         JSON.stringify({
@@ -183,13 +233,8 @@ serve(async (req) => {
       .single();
 
     // Get media URL and upload to storage
-    const telegramFileUrl = await getFileUrl(media.file_id);
-    const storageUrl = await uploadMediaToStorage(
-      telegramFileUrl,
-      media.file_unique_id,
-      video ? video.mime_type : 'image/jpeg',
-      correlationId
-    );
+    const telegramFileUrl = await downloadAndStoreMedia(media.file_id, media.file_unique_id, video ? video.mime_type : 'image/jpeg', correlationId);
+    const storageUrl = telegramFileUrl;
 
     const messageData = {
       telegram_message_id: message.message_id,
