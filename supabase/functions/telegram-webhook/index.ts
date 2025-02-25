@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+// Import utilities
+import { downloadAndStoreMedia, getFileUrl, extractMediaInfo, downloadMedia } from "./utils/mediaUtils.ts";
+import { ensureStorageBucketExists, checkFileExistsInStorage } from "./utils/storageUtils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -54,99 +57,6 @@ interface MessageData {
   is_original_caption?: boolean;
   group_caption_synced?: boolean;
   processing_completed_at?: string;
-}
-
-async function getFileUrl(fileId: string, correlationId: string): Promise<string> {
-  console.log(`🔍 [${correlationId}] Getting file URL for fileId:`, fileId);
-  const response = await fetch(
-    `https://api.telegram.org/bot${telegramToken}/getFile?file_id=${fileId}`
-  );
-  const data = await response.json();
-  if (!data.ok) throw new Error('Failed to get file path');
-  return `https://api.telegram.org/file/bot${telegramToken}/${data.result.file_path}`;
-}
-
-async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeType: string, correlationId: string): Promise<string> {
-  console.log(`📤 [${correlationId}] Uploading media to storage:`, { fileUniqueId, mimeType, fileUrl });
-  
-  const ext = mimeType.split('/')[1] || 'bin';
-  const storagePath = `${fileUniqueId}.${ext}`;
-  
-  try {
-    console.log(`📥 [${correlationId}] Fetching media from Telegram URL`);
-    const mediaResponse = await fetch(fileUrl);
-    
-    if (!mediaResponse.ok) {
-      const errorText = await mediaResponse.text().catch(() => 'No response text');
-      throw new Error(`Failed to download media from Telegram: ${mediaResponse.status} ${mediaResponse.statusText} - ${errorText}`);
-    }
-    
-    console.log(`✅ [${correlationId}] Media fetched successfully, converting to buffer`);
-    const mediaBuffer = await mediaResponse.arrayBuffer();
-    console.log(`📊 [${correlationId}] Media size: ${mediaBuffer.byteLength} bytes`);
-    
-    if (mediaBuffer.byteLength === 0) {
-      throw new Error('Downloaded media has zero bytes');
-    }
-
-    console.log(`📤 [${correlationId}] Uploading to telegram-media bucket at path: ${storagePath}`);
-    const { data: uploadData, error: uploadError } = await supabase
-      .storage
-      .from('telegram-media')
-      .upload(storagePath, mediaBuffer, {
-        contentType: mimeType,
-        upsert: true
-      });
-
-    if (uploadError) {
-      console.error(`❌ [${correlationId}] Storage upload error:`, uploadError);
-      throw uploadError;
-    }
-
-    console.log(`✅ [${correlationId}] Upload successful:`, uploadData);
-
-    const { data: { publicUrl } } = supabase
-      .storage
-      .from('telegram-media')
-      .getPublicUrl(storagePath);
-
-    console.log(`✅ [${correlationId}] Media uploaded successfully, public URL:`, publicUrl);
-    return publicUrl;
-
-  } catch (error) {
-    console.error(`❌ [${correlationId}] Error uploading media:`, error);
-    throw error;
-  }
-}
-
-async function checkFileExistsInStorage(storagePath: string, correlationId: string): Promise<boolean> {
-  console.log(`🔍 [${correlationId}] Checking if file exists in storage:`, storagePath);
-  
-  try {
-    const { data: fileExists, error } = await supabase
-      .storage
-      .from('telegram-media')
-      .list('', {
-        limit: 1,
-        search: storagePath
-      });
-    
-    if (error) {
-      console.error(`❌ [${correlationId}] Error checking storage:`, error);
-      return false;
-    }
-    
-    const fileExistsInStorage = fileExists && fileExists.length > 0;
-    console.log(`🔍 [${correlationId}] Storage check result:`, {
-      path: storagePath,
-      exists: fileExistsInStorage
-    });
-    
-    return fileExistsInStorage;
-  } catch (error) {
-    console.error(`❌ [${correlationId}] Error checking storage:`, error);
-    return false;
-  }
 }
 
 async function findAnalyzedMessageInGroup(mediaGroupId: string, correlationId: string): Promise<MessageData | null> {
@@ -350,7 +260,22 @@ serve(async (req) => {
       console.log(`ℹ️ [${correlationId}] No media in message, handling as text message`);
       
       // Handle non-media messages
-      const nonMediaMessage = {
+      interface OtherMessageData {
+        chat_id: number;
+        chat_type: string;
+        chat_title?: string;
+        telegram_message_id: number;
+        message_type: string;
+        message_text?: string;
+        is_edited: boolean;
+        edit_date?: string | null;
+        telegram_data: Record<string, unknown>;
+        processing_state: string;
+        correlation_id: string;
+        edit_history?: EditHistoryEntry[];
+      }
+      
+      const nonMediaMessage: OtherMessageData = {
         chat_id: message.chat.id,
         chat_type: message.chat.type,
         chat_title: message.chat.title,
@@ -431,33 +356,40 @@ serve(async (req) => {
       existingId: existingMedia?.id
     });
 
-    // Always get the Telegram file URL
-    const telegramFileUrl = await getFileUrl(media.file_id, correlationId);
-    console.log(`📥 [${correlationId}] Got Telegram file URL:`, telegramFileUrl);
+    // Extract media info
+    const mediaInfo = extractMediaInfo(message);
+    if (!mediaInfo) {
+      console.error(`❌ [${correlationId}] Failed to extract media info from message`);
+      throw new Error('Failed to extract media info');
+    }
     
-    // Check if the file exists in the storage bucket
+    // Generate filename
     const storagePath = `${media.file_unique_id}.${video ? video.mime_type.split('/')[1] : 'jpeg'}`;
-    const fileExistsInStorage = await checkFileExistsInStorage(storagePath, correlationId);
     
-    // Always try to upload the media to storage, regardless of whether it exists in the database
+    // Process media - this will handle checking if it exists, downloading, and uploading
     let storageUrl = existingMedia?.public_url;
     
-    if (!fileExistsInStorage) {
-      console.log(`📤 [${correlationId}] Media not found in storage, uploading to storage bucket`);
+    if (!existingMedia || !storageUrl) {
+      console.log(`📤 [${correlationId}] Processing media for storage`);
       try {
-        storageUrl = await uploadMediaToStorage(
-          telegramFileUrl,
-          media.file_unique_id,
-          video ? video.mime_type : 'image/jpeg',
-          correlationId
+        // Use the new downloadMedia function which handles everything
+        const newStorageUrl = await downloadMedia(
+          supabase,
+          mediaInfo,
+          existingMedia?.id || 'new'
         );
-      } catch (uploadError) {
-        console.error(`❌ [${correlationId}] Error uploading media to storage:`, uploadError);
-        // Continue with the process even if upload fails
-        console.log(`⚠️ [${correlationId}] Continuing despite upload error`);
+        
+        if (newStorageUrl) {
+          storageUrl = newStorageUrl;
+          console.log(`✅ [${correlationId}] Media processed successfully, public URL:`, storageUrl);
+        }
+      } catch (mediaError) {
+        console.error(`❌ [${correlationId}] Error processing media:`, mediaError);
+        // Continue with the process even if media processing fails
+        console.log(`⚠️ [${correlationId}] Continuing despite media processing error`);
       }
     } else {
-      console.log(`♻️ [${correlationId}] File exists in storage, using existing URL:`, storageUrl);
+      console.log(`♻️ [${correlationId}] Using existing storage URL:`, storageUrl);
     }
 
     // Prepare message data
