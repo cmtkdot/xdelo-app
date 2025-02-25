@@ -17,39 +17,13 @@ if (!supabaseUrl || !supabaseServiceRole || !telegramToken) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceRole)
 
-async function getFileUrl(fileId: string, correlationId: string): Promise<string> {
-  const logger = (message: string, data?: any) => {
-    console.log(`[${correlationId}] ${message}`, data || '');
-  };
-
-  try {
-    logger('Getting file URL from Telegram', { fileId });
-
-    const response = await fetch(
-      `https://api.telegram.org/bot${telegramToken}/getFile?file_id=${fileId}`
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      logger('Telegram API error', errorData);
-      throw new Error(`Telegram API error: ${errorData.description || 'Unknown error'}`);
-    }
-
-    const data = await response.json();
-    
-    if (!data.ok || !data.result?.file_path) {
-      logger('Invalid response from Telegram', data);
-      throw new Error('Invalid response from Telegram API');
-    }
-
-    const fileUrl = `https://api.telegram.org/file/bot${telegramToken}/${data.result.file_path}`;
-    logger('Successfully got file URL');
-    return fileUrl;
-
-  } catch (error) {
-    logger('Error in getFileUrl:', error);
-    throw new Error(`Failed to get file path: ${error.message}`);
-  }
+async function getFileUrl(fileId: string): Promise<string> {
+  const response = await fetch(
+    `https://api.telegram.org/bot${telegramToken}/getFile?file_id=${fileId}`
+  )
+  const data = await response.json()
+  if (!data.ok) throw new Error('Failed to get file path')
+  return `https://api.telegram.org/file/bot${telegramToken}/${data.result.file_path}`
 }
 
 async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeType: string, correlationId: string): Promise<string> {
@@ -64,10 +38,7 @@ async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeT
   
   try {
     const mediaResponse = await fetch(fileUrl)
-    if (!mediaResponse.ok) {
-      logger('Failed to download media:', { status: mediaResponse.status });
-      throw new Error('Failed to download media from Telegram')
-    }
+    if (!mediaResponse.ok) throw new Error('Failed to download media from Telegram')
     
     const mediaBuffer = await mediaResponse.arrayBuffer()
 
@@ -114,6 +85,18 @@ async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeT
     logger('Error uploading media:', error);
     throw error;
   }
+}
+
+async function findAnalyzedMessageInGroup(mediaGroupId: string): Promise<any> {
+  const { data } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('media_group_id', mediaGroupId)
+    .not('analyzed_content', 'is', null)
+    .order('created_at', { ascending: true })
+    .limit(1);
+
+  return data?.[0] || null;
 }
 
 serve(async (req) => {
@@ -193,9 +176,7 @@ serve(async (req) => {
       .single();
 
     // Get media URL and upload to storage
-    logger('Getting file URL for media', { fileId: media.file_id });
-    const telegramFileUrl = await getFileUrl(media.file_id, correlationId);
-    logger('Uploading media to storage', { fileUrl: telegramFileUrl });
+    const telegramFileUrl = await getFileUrl(media.file_id);
     const storageUrl = await uploadMediaToStorage(
       telegramFileUrl,
       media.file_unique_id,
@@ -265,15 +246,7 @@ serve(async (req) => {
 
       // For new messages in a media group, check for existing analyzed content
       if (mediaGroupId) {
-        const { data: analyzedMessage } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('media_group_id', mediaGroupId)
-          .not('analyzed_content', 'is', null)
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .single();
-
+        const analyzedMessage = await findAnalyzedMessageInGroup(mediaGroupId);
         if (analyzedMessage?.analyzed_content) {
           await supabase
             .from('messages')
