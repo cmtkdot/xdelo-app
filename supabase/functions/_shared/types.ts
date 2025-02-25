@@ -1,29 +1,43 @@
-export interface AnalyzedContent {
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  quantity?: number;
-  notes?: string;
-  parsing_metadata?: {
-    method: 'manual' | 'ai' | 'hybrid';
-    confidence: number;
-    fallbacks_used?: string[];
-    timestamp: string;
-    needs_ai_analysis?: boolean;
-    manual_confidence?: number;
-    ai_confidence?: number;
+
+export interface TelegramMessage {
+  message_id: number;
+  chat: {
+    id: number;
+    type: string;
+    title?: string;
   };
-  sync_metadata?: {
-    sync_source_message_id?: string;
-    media_group_id?: string;
+  photo?: Array<{
+    file_id: string;
+    file_unique_id: string;
+    width: number;
+    height: number;
+    file_size?: number;
+  }>;
+  video?: {
+    file_id: string;
+    file_unique_id: string;
+    width: number;
+    height: number;
+    duration: number;
+    mime_type?: string;
+    file_size?: number;
   };
+  caption?: string;
+  media_group_id?: string;
 }
 
-// Keeping ParsedContent for backward compatibility
-export interface ParsedContent extends AnalyzedContent {}
+export interface MediaInfo {
+  file_id: string;
+  file_unique_id: string;
+  mime_type?: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+}
 
-export interface QuantityParseResult {
-  value: number;
-  confidence: number;
+export interface ChatInfo {
+  chat_id: number;
+  chat_type: string;
+  chat_title?: string;
 }
