@@ -29,3 +29,20 @@ export function getLogger(correlationId: string): Logger {
     }
   };
 }
+
+export const logEditOperation = async (supabase: any, messageId: string, chatId: number, previousState: string, newState: string) => {
+  try {
+    await supabase.from('webhook_logs').insert({
+      event_type: 'message_edit',
+      message_id: messageId,
+      chat_id: chatId,
+      metadata: {
+        previous_state: previousState,
+        new_state: newState,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Failed to log edit operation:', error);
+  }
+};
