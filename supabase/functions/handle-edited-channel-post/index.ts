@@ -11,21 +11,28 @@ serve(async (req) => {
   const correlationId = crypto.randomUUID();
 
   try {
-    const { message_id, chat_id, caption, media_group_id } = await req.json();
+    const {
+      message_id,
+      chat_id,
+      chat_type,
+      caption,
+      media_group_id,
+      is_channel_post
+    } = await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // First, update the edited message
+    // Find and update the message
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .update({
         caption,
-        analyzed_content: null,
-        processing_state: 'pending',
-        group_caption_synced: false,
+        is_edited: true,
+        edit_date: new Date().toISOString(),
+        chat_type,
         updated_at: new Date().toISOString()
       })
       .eq('telegram_message_id', message_id)
@@ -35,51 +42,41 @@ serve(async (req) => {
 
     if (messageError) throw messageError;
 
-    // If part of a media group, update all related messages
-    if (media_group_id) {
-      const { error: groupUpdateError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: null,
-          processing_state: 'pending',
-          group_caption_synced: false,
-          updated_at: new Date().toISOString()
-        })
-        .eq('media_group_id', media_group_id)
-        .neq('telegram_message_id', message_id);
-
-      if (groupUpdateError) throw groupUpdateError;
-    }
+    // The database trigger will handle:
+    // 1. Resetting analyzed_content
+    // 2. Updating processing state
+    // 3. Updating media group messages
+    // 4. Maintaining edit history
 
     // Trigger reanalysis
-    const { error: analysisError } = await supabase.functions.invoke(
-      'parse-caption-with-ai',
-      {
-        body: {
-          message_id: message.id,
-          caption,
-          correlation_id: correlationId,
-          is_edit: true,
-          media_group_id
-        }
+    await supabase.functions.invoke('parse-caption-with-ai', {
+      body: {
+        message_id: message.id,
+        caption,
+        correlation_id,
+        is_edit: true,
+        media_group_id,
+        is_channel_post
       }
-    );
-
-    if (analysisError) throw analysisError;
+    });
 
     return new Response(
-      JSON.stringify({ success: true, correlation_id: correlationId }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        success: true,
+        message_id: message.id,
+        correlation_id
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
     );
 
   } catch (error) {
     return new Response(
-      JSON.stringify({ 
-        success: false, 
+      JSON.stringify({
+        success: false,
         error: error.message,
-        correlation_id: correlationId 
+        correlation_id
       }),
-      { 
+      {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500
       }

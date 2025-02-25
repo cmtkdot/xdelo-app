@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { corsHeaders } from '../_shared/cors.ts';
 import { downloadAndStoreMedia } from './mediaUtils.ts';
 import { getLogger } from './logger.ts';
+import { handleEditedMessage } from './messageHandlers.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -19,66 +20,37 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Handle edited channel posts
-    if (update.edited_channel_post) {
-      const editedMessage = update.edited_channel_post;
-      
-      logger.info('Processing edited channel post', {
-        message_id: editedMessage.message_id,
-        chat_id: editedMessage.chat.id,
-        media_group_id: editedMessage.media_group_id
-      });
-
-      // Log the edit in unified_audit_logs
-      await supabase.from('unified_audit_logs').insert({
-        event_type: 'channel_post_edited',
-        telegram_message_id: editedMessage.message_id,
-        chat_id: editedMessage.chat.id,
-        metadata: {
-          media_group_id: editedMessage.media_group_id,
-          new_caption: editedMessage.caption
-        },
-        correlation_id
-      });
-
-      // Call the specialized handler
-      const response = await supabase.functions.invoke('handle-edited-channel-post', {
-        body: {
-          message_id: editedMessage.message_id,
-          chat_id: editedMessage.chat.id,
-          caption: editedMessage.caption || '',
-          media_group_id: editedMessage.media_group_id,
-          correlation_id
-        }
-      });
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          is_edited_channel_post: true,
-          correlation_id
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
-      );
-    }
-
     // Handle edited messages and channel posts
     if (update.edited_message || update.edited_channel_post) {
       const editedMessage = update.edited_message || update.edited_channel_post;
       const isChannelPost = !!update.edited_channel_post;
       
-      logger.info('Received edited content', {
+      logger.info('Processing edited content', {
         is_channel_post: isChannelPost,
         has_media_group: !!editedMessage.media_group_id
       });
 
-      const result = await handleEditedMessage(editedMessage, isChannelPost, correlationId);
+      // Use the dedicated edge function for handling edits
+      const { error: editError } = await supabase.functions.invoke('handle-edited-channel-post', {
+        body: {
+          message_id: editedMessage.message_id,
+          chat_id: editedMessage.chat.id,
+          chat_type: isChannelPost ? 'channel' : editedMessage.chat.type,
+          caption: editedMessage.caption || '',
+          media_group_id: editedMessage.media_group_id,
+          correlation_id,
+          is_channel_post: isChannelPost
+        }
+      });
+
+      if (editError) throw editError;
 
       return new Response(
         JSON.stringify({
-          success: result.success,
-          correlation_id: correlationId,
-          error: result.error
+          success: true,
+          is_edited: true,
+          is_channel_post: isChannelPost,
+          correlation_id
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
       );
