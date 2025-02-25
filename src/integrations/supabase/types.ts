@@ -99,7 +99,7 @@ export type Database = {
           last_sync_time: string | null
           main_account_name: string | null
           main_accounts_uid: string | null
-          main_client_type: string | null
+          main_client_type: Database["public"]["Enums"]["client_type"] | null
           main_date_added_client: string | null
           main_email_of_who_added: string | null
           main_photo: string | null
@@ -115,7 +115,7 @@ export type Database = {
           last_sync_time?: string | null
           main_account_name?: string | null
           main_accounts_uid?: string | null
-          main_client_type?: string | null
+          main_client_type?: Database["public"]["Enums"]["client_type"] | null
           main_date_added_client?: string | null
           main_email_of_who_added?: string | null
           main_photo?: string | null
@@ -131,7 +131,7 @@ export type Database = {
           last_sync_time?: string | null
           main_account_name?: string | null
           main_accounts_uid?: string | null
-          main_client_type?: string | null
+          main_client_type?: Database["public"]["Enums"]["client_type"] | null
           main_date_added_client?: string | null
           main_email_of_who_added?: string | null
           main_photo?: string | null
@@ -143,34 +143,28 @@ export type Database = {
       }
       gl_column_mappings: {
         Row: {
-          created_at: string | null
           data_type: string
           glide_column_id: string
           glide_column_name: string
-          id: string
+          id: number
           supabase_column_name: string
           table_name: string
-          updated_at: string | null
         }
         Insert: {
-          created_at?: string | null
           data_type: string
           glide_column_id: string
           glide_column_name: string
-          id?: string
+          id?: never
           supabase_column_name: string
           table_name: string
-          updated_at?: string | null
         }
         Update: {
-          created_at?: string | null
           data_type?: string
           glide_column_id?: string
           glide_column_name?: string
-          id?: string
+          id?: never
           supabase_column_name?: string
           table_name?: string
-          updated_at?: string | null
         }
         Relationships: []
       }
@@ -240,98 +234,82 @@ export type Database = {
       gl_customer_credits: {
         Row: {
           created_at: string | null
-          glide_id: string
+          glide_id: string | null
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
-          main_customeruid: string | null
           main_date_of_payment: string | null
-          main_email_of_user: string | null
           main_payment_amount: number | null
           main_payment_note: string | null
           main_payment_typ: string | null
-          rowid_accountrowid: string | null
-          rowid_estimatorowid: string | null
+          rowid_account_row_id: string | null
+          rowid_estimate_row_id: string | null
           rowid_invoice_row_id: string | null
           sb_accounts_id: string | null
           sb_estimates_id: string | null
           sb_invoices_id: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_added: string | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
-          glide_id: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
-          main_customeruid?: string | null
           main_date_of_payment?: string | null
-          main_email_of_user?: string | null
           main_payment_amount?: number | null
           main_payment_note?: string | null
           main_payment_typ?: string | null
-          rowid_accountrowid?: string | null
-          rowid_estimatorowid?: string | null
+          rowid_account_row_id?: string | null
+          rowid_estimate_row_id?: string | null
           rowid_invoice_row_id?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
           sb_invoices_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_added?: string | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
-          glide_id?: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
-          main_customeruid?: string | null
           main_date_of_payment?: string | null
-          main_email_of_user?: string | null
           main_payment_amount?: number | null
           main_payment_note?: string | null
           main_payment_typ?: string | null
-          rowid_accountrowid?: string | null
-          rowid_estimatorowid?: string | null
+          rowid_account_row_id?: string | null
+          rowid_estimate_row_id?: string | null
           rowid_invoice_row_id?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
           sb_invoices_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_added?: string | null
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "gl_customer_credits_sb_accounts_id_fkey"
+            foreignKeyName: "fk_customer_credits_account"
             columns: ["sb_accounts_id"]
             isOneToOne: false
             referencedRelation: "gl_accounts"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "gl_customer_credits_sb_estimates_id_fkey"
+            foreignKeyName: "fk_customer_credits_estimate"
             columns: ["sb_estimates_id"]
             isOneToOne: false
             referencedRelation: "gl_estimates"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "gl_customer_credits_sb_invoices_id_fkey"
+            foreignKeyName: "fk_customer_credits_invoice"
             columns: ["sb_invoices_id"]
             isOneToOne: false
             referencedRelation: "gl_invoices"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_customer_credits_sb_invoices_id_fkey"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_summary"
-            referencedColumns: ["invoice_id"]
           },
         ]
       }
@@ -343,18 +321,15 @@ export type Database = {
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
-          main_customeruid: string | null
           main_date_of_payment: string | null
           main_payment_amount: number | null
           main_payment_note: string | null
           main_type_of_payment: string | null
-          rowid_accountrowid: string | null
+          rowid_account_row_id: string | null
           rowid_invoice_row_id: string | null
-          rowid_invoiceline_row_id: string | null
           sb_accounts_id: string | null
           sb_invoices_id: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_added: string | null
           updated_at: string | null
         }
         Insert: {
@@ -364,18 +339,15 @@ export type Database = {
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
-          main_customeruid?: string | null
           main_date_of_payment?: string | null
           main_payment_amount?: number | null
           main_payment_note?: string | null
           main_type_of_payment?: string | null
-          rowid_accountrowid?: string | null
+          rowid_account_row_id?: string | null
           rowid_invoice_row_id?: string | null
-          rowid_invoiceline_row_id?: string | null
           sb_accounts_id?: string | null
           sb_invoices_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_added?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -385,41 +357,31 @@ export type Database = {
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
-          main_customeruid?: string | null
           main_date_of_payment?: string | null
           main_payment_amount?: number | null
           main_payment_note?: string | null
           main_type_of_payment?: string | null
-          rowid_accountrowid?: string | null
+          rowid_account_row_id?: string | null
           rowid_invoice_row_id?: string | null
-          rowid_invoiceline_row_id?: string | null
           sb_accounts_id?: string | null
           sb_invoices_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_added?: string | null
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "gl_customer_payments_sb_accounts_id_fkey"
+            foreignKeyName: "fk_customer_payments_account"
             columns: ["sb_accounts_id"]
             isOneToOne: false
             referencedRelation: "gl_accounts"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "gl_customer_payments_sb_invoices_id_fkey"
+            foreignKeyName: "fk_customer_payments_invoice"
             columns: ["sb_invoices_id"]
             isOneToOne: false
             referencedRelation: "gl_invoices"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_customer_payments_sb_invoices_id_fkey"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_summary"
-            referencedColumns: ["invoice_id"]
           },
         ]
       }
@@ -431,19 +393,17 @@ export type Database = {
           last_modified_at: string | null
           last_sync_time: string | null
           main_date_of_sale: string | null
-          main_original_product_name: string | null
+          main_line_total: number | null
           main_product_sale_note: string | null
           main_qty_sold: number | null
           main_sale_product_name: string | null
           main_selling_price: number | null
           main_total_stock_after_sell: number | null
-          main_user_email_of_added: string | null
-          product_sold: boolean | null
-          rowid_estimate_row_id: string | null
-          rowid_invline_row_id: string | null
-          rowid_productid_estline_items: string | null
-          rowid_userid_est_lineitems: string | null
+          product_sale_name_display: string | null
+          rowid_estimate_row_id_fromline: string | null
+          rowid_product_id_estline_items: string | null
           sb_estimates_id: string | null
+          sb_invoice_lines_id: string | null
           sb_products_id: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
@@ -455,19 +415,17 @@ export type Database = {
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_sale?: string | null
-          main_original_product_name?: string | null
+          main_line_total?: number | null
           main_product_sale_note?: string | null
           main_qty_sold?: number | null
           main_sale_product_name?: string | null
           main_selling_price?: number | null
           main_total_stock_after_sell?: number | null
-          main_user_email_of_added?: string | null
-          product_sold?: boolean | null
-          rowid_estimate_row_id?: string | null
-          rowid_invline_row_id?: string | null
-          rowid_productid_estline_items?: string | null
-          rowid_userid_est_lineitems?: string | null
+          product_sale_name_display?: string | null
+          rowid_estimate_row_id_fromline?: string | null
+          rowid_product_id_estline_items?: string | null
           sb_estimates_id?: string | null
+          sb_invoice_lines_id?: string | null
           sb_products_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
@@ -479,134 +437,125 @@ export type Database = {
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_sale?: string | null
-          main_original_product_name?: string | null
+          main_line_total?: number | null
           main_product_sale_note?: string | null
           main_qty_sold?: number | null
           main_sale_product_name?: string | null
           main_selling_price?: number | null
           main_total_stock_after_sell?: number | null
-          main_user_email_of_added?: string | null
-          product_sold?: boolean | null
-          rowid_estimate_row_id?: string | null
-          rowid_invline_row_id?: string | null
-          rowid_productid_estline_items?: string | null
-          rowid_userid_est_lineitems?: string | null
+          product_sale_name_display?: string | null
+          rowid_estimate_row_id_fromline?: string | null
+          rowid_product_id_estline_items?: string | null
           sb_estimates_id?: string | null
+          sb_invoice_lines_id?: string | null
           sb_products_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "gl_estimate_lines_sb_estimates_id_fkey"
+            foreignKeyName: "fk_estimate_lines_estimate"
             columns: ["sb_estimates_id"]
             isOneToOne: false
             referencedRelation: "gl_estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_estimate_lines_invoice_line"
+            columns: ["sb_invoice_lines_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoice_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_estimate_lines_product"
+            columns: ["sb_products_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
             referencedColumns: ["id"]
           },
         ]
       }
       gl_estimates: {
         Row: {
-          add_note: string | null
+          add_note: boolean | null
           created_at: string | null
-          date_created_timestamp: string | null
           date_invoice_created_date: string | null
-          date_processed_timestamp: string | null
-          date_submitted_timestamp: string | null
           glide_id: string | null
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
+          main_estimate_balance: number | null
           main_estimate_date: string | null
-          main_estimate_notes: string | null
+          main_estimate_total: number | null
           main_is_a_sample: boolean | null
-          main_payment_type: string | null
-          order_items_est: Json | null
-          paymentpdf: string | null
-          pdf_docs: string | null
-          rowids_accountrowid_estimates: string | null
+          rowids_account_row_id_estimates: string | null
           rowids_invoice_created: string | null
           sb_accounts_id: string | null
+          sb_invoices_id: string | null
           short_link_pdf: string | null
-          short_link_pdf_copy: Json | null
           shortlink_pdf2: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
-          user_user_email: string | null
           valid_final_create_invoice_clicked: boolean | null
         }
         Insert: {
-          add_note?: string | null
+          add_note?: boolean | null
           created_at?: string | null
-          date_created_timestamp?: string | null
           date_invoice_created_date?: string | null
-          date_processed_timestamp?: string | null
-          date_submitted_timestamp?: string | null
           glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
+          main_estimate_balance?: number | null
           main_estimate_date?: string | null
-          main_estimate_notes?: string | null
+          main_estimate_total?: number | null
           main_is_a_sample?: boolean | null
-          main_payment_type?: string | null
-          order_items_est?: Json | null
-          paymentpdf?: string | null
-          pdf_docs?: string | null
-          rowids_accountrowid_estimates?: string | null
+          rowids_account_row_id_estimates?: string | null
           rowids_invoice_created?: string | null
           sb_accounts_id?: string | null
+          sb_invoices_id?: string | null
           short_link_pdf?: string | null
-          short_link_pdf_copy?: Json | null
           shortlink_pdf2?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
-          user_user_email?: string | null
           valid_final_create_invoice_clicked?: boolean | null
         }
         Update: {
-          add_note?: string | null
+          add_note?: boolean | null
           created_at?: string | null
-          date_created_timestamp?: string | null
           date_invoice_created_date?: string | null
-          date_processed_timestamp?: string | null
-          date_submitted_timestamp?: string | null
           glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
+          main_estimate_balance?: number | null
           main_estimate_date?: string | null
-          main_estimate_notes?: string | null
+          main_estimate_total?: number | null
           main_is_a_sample?: boolean | null
-          main_payment_type?: string | null
-          order_items_est?: Json | null
-          paymentpdf?: string | null
-          pdf_docs?: string | null
-          rowids_accountrowid_estimates?: string | null
+          rowids_account_row_id_estimates?: string | null
           rowids_invoice_created?: string | null
           sb_accounts_id?: string | null
+          sb_invoices_id?: string | null
           short_link_pdf?: string | null
-          short_link_pdf_copy?: Json | null
           shortlink_pdf2?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
-          user_user_email?: string | null
           valid_final_create_invoice_clicked?: boolean | null
         }
         Relationships: [
           {
-            foreignKeyName: "fk_estimates_accounts"
+            foreignKeyName: "fk_estimates_account"
             columns: ["sb_accounts_id"]
             isOneToOne: false
             referencedRelation: "gl_accounts"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "gl_estimates_sb_accounts_id_fkey"
-            columns: ["sb_accounts_id"]
+            foreignKeyName: "fk_estimates_invoice"
+            columns: ["sb_invoices_id"]
             isOneToOne: false
-            referencedRelation: "gl_accounts"
+            referencedRelation: "gl_invoices"
             referencedColumns: ["id"]
           },
         ]
@@ -617,7 +566,6 @@ export type Database = {
           created_at: string | null
           date: string | null
           expense_address: string | null
-          expense_ai_text: string | null
           expense_cash: string | null
           expense_change: string | null
           expense_list_of_items: string | null
@@ -642,7 +590,6 @@ export type Database = {
           created_at?: string | null
           date?: string | null
           expense_address?: string | null
-          expense_ai_text?: string | null
           expense_cash?: string | null
           expense_change?: string | null
           expense_list_of_items?: string | null
@@ -667,7 +614,6 @@ export type Database = {
           created_at?: string | null
           date?: string | null
           expense_address?: string | null
-          expense_ai_text?: string | null
           expense_cash?: string | null
           expense_change?: string | null
           expense_list_of_items?: string | null
@@ -691,90 +637,66 @@ export type Database = {
       }
       gl_invoice_lines: {
         Row: {
-          cart_id: string | null
-          confirm_submit_newprod_line: boolean | null
           created_at: string | null
-          edit_price: boolean | null
-          edit_quantity: boolean | null
           glide_id: string | null
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
           main_date_of_sale: string | null
+          main_line_total: number | null
           main_product_sale_note: string | null
           main_qty_sold: number | null
-          main_rename_product: boolean | null
           main_renamed_product_name: string | null
           main_selling_price: number | null
-          main_total_stock_after_sell: number | null
           main_user_email_of_added: string | null
           product_sale_name_display: string | null
-          rowid_estimate_rowid: string | null
           rowid_invoice_rowid: string | null
-          rowid_logrowid: string | null
           rowid_productid: string | null
-          rowid_productid_question: string | null
-          sb_estimates_id: string | null
+          sb_estimate_lines_id: string | null
           sb_invoices_id: string | null
           sb_products_id: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
         Insert: {
-          cart_id?: string | null
-          confirm_submit_newprod_line?: boolean | null
           created_at?: string | null
-          edit_price?: boolean | null
-          edit_quantity?: boolean | null
           glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_sale?: string | null
+          main_line_total?: number | null
           main_product_sale_note?: string | null
           main_qty_sold?: number | null
-          main_rename_product?: boolean | null
           main_renamed_product_name?: string | null
           main_selling_price?: number | null
-          main_total_stock_after_sell?: number | null
           main_user_email_of_added?: string | null
           product_sale_name_display?: string | null
-          rowid_estimate_rowid?: string | null
           rowid_invoice_rowid?: string | null
-          rowid_logrowid?: string | null
           rowid_productid?: string | null
-          rowid_productid_question?: string | null
-          sb_estimates_id?: string | null
+          sb_estimate_lines_id?: string | null
           sb_invoices_id?: string | null
           sb_products_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
         Update: {
-          cart_id?: string | null
-          confirm_submit_newprod_line?: boolean | null
           created_at?: string | null
-          edit_price?: boolean | null
-          edit_quantity?: boolean | null
           glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_sale?: string | null
+          main_line_total?: number | null
           main_product_sale_note?: string | null
           main_qty_sold?: number | null
-          main_rename_product?: boolean | null
           main_renamed_product_name?: string | null
           main_selling_price?: number | null
-          main_total_stock_after_sell?: number | null
           main_user_email_of_added?: string | null
           product_sale_name_display?: string | null
-          rowid_estimate_rowid?: string | null
           rowid_invoice_rowid?: string | null
-          rowid_logrowid?: string | null
           rowid_productid?: string | null
-          rowid_productid_question?: string | null
-          sb_estimates_id?: string | null
+          sb_estimate_lines_id?: string | null
           sb_invoices_id?: string | null
           sb_products_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
@@ -782,174 +704,108 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_gl_invoice_lines_invoices"
+            foreignKeyName: "fk_invoice_lines_estimate_line"
+            columns: ["sb_estimate_lines_id"]
+            isOneToOne: false
+            referencedRelation: "gl_estimate_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_invoice_lines_invoice"
             columns: ["sb_invoices_id"]
             isOneToOne: false
             referencedRelation: "gl_invoices"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fk_gl_invoice_lines_invoices"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_summary"
-            referencedColumns: ["invoice_id"]
-          },
-          {
-            foreignKeyName: "fk_gl_invoice_lines_products"
+            foreignKeyName: "fk_invoice_lines_product"
             columns: ["sb_products_id"]
             isOneToOne: false
             referencedRelation: "gl_products"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_invoice_lines_invoices"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_invoice_lines_invoices"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_summary"
-            referencedColumns: ["invoice_id"]
-          },
-          {
-            foreignKeyName: "fk_invoice_lines_products"
-            columns: ["sb_products_id"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_invoice_lines_sb_invoices_id_fkey"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_invoice_lines_sb_invoices_id_fkey"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_summary"
-            referencedColumns: ["invoice_id"]
           },
         ]
       }
       gl_invoices: {
         Row: {
-          account_name: string | null
-          account_uid: string | null
           created_at: string | null
-          doc_document: string | null
           doc_glideforeverlink: string | null
           glide_id: string | null
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
+          main_balance_due: number | null
           main_created_timestamp: string | null
-          main_edit_date: string | null
           main_invoice_order_date: string | null
+          main_invoice_total: number | null
           main_invoice_uid: string | null
           main_notes: string | null
           main_processed: boolean | null
           main_submitted_timestamp: string | null
           main_user_email: string | null
           rowids_accountsid_new: string | null
-          rowids_credit_row_id: string | null
-          rowids_estimatorowid: string | null
-          rowids_userid_sales_invoices: string | null
           sb_accounts_id: string | null
           sb_estimates_id: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_estimate_converted: string | null
-          tre_order_items_invoice: Json | null
-          tre_total: number | null
           updated_at: string | null
         }
         Insert: {
-          account_name?: string | null
-          account_uid?: string | null
           created_at?: string | null
-          doc_document?: string | null
           doc_glideforeverlink?: string | null
           glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
+          main_balance_due?: number | null
           main_created_timestamp?: string | null
-          main_edit_date?: string | null
           main_invoice_order_date?: string | null
+          main_invoice_total?: number | null
           main_invoice_uid?: string | null
           main_notes?: string | null
           main_processed?: boolean | null
           main_submitted_timestamp?: string | null
           main_user_email?: string | null
           rowids_accountsid_new?: string | null
-          rowids_credit_row_id?: string | null
-          rowids_estimatorowid?: string | null
-          rowids_userid_sales_invoices?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_estimate_converted?: string | null
-          tre_order_items_invoice?: Json | null
-          tre_total?: number | null
           updated_at?: string | null
         }
         Update: {
-          account_name?: string | null
-          account_uid?: string | null
           created_at?: string | null
-          doc_document?: string | null
           doc_glideforeverlink?: string | null
           glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
+          main_balance_due?: number | null
           main_created_timestamp?: string | null
-          main_edit_date?: string | null
           main_invoice_order_date?: string | null
+          main_invoice_total?: number | null
           main_invoice_uid?: string | null
           main_notes?: string | null
           main_processed?: boolean | null
           main_submitted_timestamp?: string | null
           main_user_email?: string | null
           rowids_accountsid_new?: string | null
-          rowids_credit_row_id?: string | null
-          rowids_estimatorowid?: string | null
-          rowids_userid_sales_invoices?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          timestamp_estimate_converted?: string | null
-          tre_order_items_invoice?: Json | null
-          tre_total?: number | null
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "fk_gl_invoices_accounts"
+            foreignKeyName: "fk_invoices_account"
             columns: ["sb_accounts_id"]
             isOneToOne: false
             referencedRelation: "gl_accounts"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fk_invoices_accounts"
-            columns: ["sb_accounts_id"]
+            foreignKeyName: "fk_invoices_estimate"
+            columns: ["sb_estimates_id"]
             isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_invoices_sb_accounts_id_fkey"
-            columns: ["sb_accounts_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
+            referencedRelation: "gl_estimates"
             referencedColumns: ["id"]
           },
         ]
@@ -1055,172 +911,117 @@ export type Database = {
       }
       gl_products: {
         Row: {
-          cart_add_note: boolean | null
-          cart_rename: boolean | null
           created_at: string | null
           date_timestamp_subm: string | null
           email_email_of_user_who_added_product: string | null
           glide_id: string | null
           id: string
-          last_edited_date: string | null
           last_modified_at: string | null
           last_sync_time: string | null
           main_category: string | null
           main_cost: number | null
-          main_cost_update: number | null
           main_fronted: boolean | null
-          main_has_purchase_note: boolean | null
-          main_leave_no: boolean | null
           main_miscellaneous_items: boolean | null
-          main_more_units_behind: boolean | null
           main_new_product_name: string | null
           main_product_image1: string | null
-          main_product_name: string | null
           main_product_purchase_date: string | null
           main_purchase_notes: string | null
-          main_rename_product: boolean | null
           main_samples: boolean | null
           main_samples_or_fronted: boolean | null
           main_terms_for_fronted_product: string | null
           main_total_qty_purchased: number | null
           main_total_units_behind_sample: number | null
           main_vendor_product_name: string | null
-          main_vendor_uid: string | null
-          new_rel_new: string | null
-          po_added_to_old_po: boolean | null
-          po_converted_po: boolean | null
-          po_old_po_row_id: boolean | null
           po_po_date: string | null
           po_poui_dfrom_add_prod: string | null
-          po_pouid_from_add_prod: string | null
           product_name_display: string | null
-          rowid_product_row_id_for_choice_add_item: string | null
+          rowid_accountrow_id: string | null
           rowid_purchase_order_row_id: string | null
-          rowid_sheet21_pics: string | null
           rowid_vpay_row_id: string | null
           sb_accounts_id: string | null
           sb_purchase_orders_id: string | null
-          sync_status: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
         Insert: {
-          cart_add_note?: boolean | null
-          cart_rename?: boolean | null
           created_at?: string | null
           date_timestamp_subm?: string | null
           email_email_of_user_who_added_product?: string | null
           glide_id?: string | null
           id?: string
-          last_edited_date?: string | null
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_category?: string | null
           main_cost?: number | null
-          main_cost_update?: number | null
           main_fronted?: boolean | null
-          main_has_purchase_note?: boolean | null
-          main_leave_no?: boolean | null
           main_miscellaneous_items?: boolean | null
-          main_more_units_behind?: boolean | null
           main_new_product_name?: string | null
           main_product_image1?: string | null
-          main_product_name?: string | null
           main_product_purchase_date?: string | null
           main_purchase_notes?: string | null
-          main_rename_product?: boolean | null
           main_samples?: boolean | null
           main_samples_or_fronted?: boolean | null
           main_terms_for_fronted_product?: string | null
           main_total_qty_purchased?: number | null
           main_total_units_behind_sample?: number | null
           main_vendor_product_name?: string | null
-          main_vendor_uid?: string | null
-          new_rel_new?: string | null
-          po_added_to_old_po?: boolean | null
-          po_converted_po?: boolean | null
-          po_old_po_row_id?: boolean | null
           po_po_date?: string | null
           po_poui_dfrom_add_prod?: string | null
-          po_pouid_from_add_prod?: string | null
           product_name_display?: string | null
-          rowid_product_row_id_for_choice_add_item?: string | null
+          rowid_accountrow_id?: string | null
           rowid_purchase_order_row_id?: string | null
-          rowid_sheet21_pics?: string | null
           rowid_vpay_row_id?: string | null
           sb_accounts_id?: string | null
           sb_purchase_orders_id?: string | null
-          sync_status?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
         Update: {
-          cart_add_note?: boolean | null
-          cart_rename?: boolean | null
           created_at?: string | null
           date_timestamp_subm?: string | null
           email_email_of_user_who_added_product?: string | null
           glide_id?: string | null
           id?: string
-          last_edited_date?: string | null
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_category?: string | null
           main_cost?: number | null
-          main_cost_update?: number | null
           main_fronted?: boolean | null
-          main_has_purchase_note?: boolean | null
-          main_leave_no?: boolean | null
           main_miscellaneous_items?: boolean | null
-          main_more_units_behind?: boolean | null
           main_new_product_name?: string | null
           main_product_image1?: string | null
-          main_product_name?: string | null
           main_product_purchase_date?: string | null
           main_purchase_notes?: string | null
-          main_rename_product?: boolean | null
           main_samples?: boolean | null
           main_samples_or_fronted?: boolean | null
           main_terms_for_fronted_product?: string | null
           main_total_qty_purchased?: number | null
           main_total_units_behind_sample?: number | null
           main_vendor_product_name?: string | null
-          main_vendor_uid?: string | null
-          new_rel_new?: string | null
-          po_added_to_old_po?: boolean | null
-          po_converted_po?: boolean | null
-          po_old_po_row_id?: boolean | null
           po_po_date?: string | null
           po_poui_dfrom_add_prod?: string | null
-          po_pouid_from_add_prod?: string | null
           product_name_display?: string | null
-          rowid_product_row_id_for_choice_add_item?: string | null
+          rowid_accountrow_id?: string | null
           rowid_purchase_order_row_id?: string | null
-          rowid_sheet21_pics?: string | null
           rowid_vpay_row_id?: string | null
           sb_accounts_id?: string | null
           sb_purchase_orders_id?: string | null
-          sync_status?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "fk_gl_products_accounts"
+            foreignKeyName: "fk_products_account"
             columns: ["sb_accounts_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "gl_accounts"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fk_products_accounts"
-            columns: ["sb_accounts_id"]
-            isOneToOne: true
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_products_sb_accounts_id_fkey"
-            columns: ["sb_accounts_id"]
-            isOneToOne: true
-            referencedRelation: "gl_accounts"
+            foreignKeyName: "fk_products_purchase_order"
+            columns: ["sb_purchase_orders_id"]
+            isOneToOne: false
+            referencedRelation: "gl_purchase_orders"
             referencedColumns: ["id"]
           },
         ]
@@ -1394,78 +1195,57 @@ export type Database = {
         Row: {
           created_at: string | null
           date_payment_date_mddyyyy: string | null
-          docs_pdf_created_on: string | null
-          docs_pdf_link: string | null
           docs_shortlink: string | null
           glide_id: string | null
           id: string
-          last_edited_date: string | null
           last_modified_at: string | null
           last_sync_time: string | null
-          main_po_date_used_for_uid: string | null
-          main_purchase_order_uid_from_product: string | null
+          main_balance_due: number | null
+          main_po_date: string | null
+          main_po_total: number | null
+          main_purchase_order_uid: string | null
           rowid_accntrowid: string | null
-          rowid_vpayrowid: string | null
           sb_accounts_id: string | null
-          secure_share_id: string | null
-          share_last_viewed_at: string | null
-          share_pin_code: string | null
-          share_url: string | null
-          share_view_count: number | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
           date_payment_date_mddyyyy?: string | null
-          docs_pdf_created_on?: string | null
-          docs_pdf_link?: string | null
           docs_shortlink?: string | null
           glide_id?: string | null
           id?: string
-          last_edited_date?: string | null
           last_modified_at?: string | null
           last_sync_time?: string | null
-          main_po_date_used_for_uid?: string | null
-          main_purchase_order_uid_from_product?: string | null
+          main_balance_due?: number | null
+          main_po_date?: string | null
+          main_po_total?: number | null
+          main_purchase_order_uid?: string | null
           rowid_accntrowid?: string | null
-          rowid_vpayrowid?: string | null
           sb_accounts_id?: string | null
-          secure_share_id?: string | null
-          share_last_viewed_at?: string | null
-          share_pin_code?: string | null
-          share_url?: string | null
-          share_view_count?: number | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
           date_payment_date_mddyyyy?: string | null
-          docs_pdf_created_on?: string | null
-          docs_pdf_link?: string | null
           docs_shortlink?: string | null
           glide_id?: string | null
           id?: string
-          last_edited_date?: string | null
           last_modified_at?: string | null
           last_sync_time?: string | null
-          main_po_date_used_for_uid?: string | null
-          main_purchase_order_uid_from_product?: string | null
+          main_balance_due?: number | null
+          main_po_date?: string | null
+          main_po_total?: number | null
+          main_purchase_order_uid?: string | null
           rowid_accntrowid?: string | null
-          rowid_vpayrowid?: string | null
           sb_accounts_id?: string | null
-          secure_share_id?: string | null
-          share_last_viewed_at?: string | null
-          share_pin_code?: string | null
-          share_url?: string | null
-          share_view_count?: number | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "gl_purchase_orders_sb_accounts_id_fkey"
+            foreignKeyName: "fk_purchase_orders_account"
             columns: ["sb_accounts_id"]
             isOneToOne: false
             referencedRelation: "gl_accounts"
@@ -1518,27 +1298,23 @@ export type Database = {
       gl_shipping_records: {
         Row: {
           ai_ai_extracted_text: string | null
-          ai_ai_json: Json | null
-          ai_label_upload: Json | null
-          ai_tracking_ai_extracted_text: string | null
-          ai_tracking_json_extracted: Json | null
+          ai_tracking_json_extracted: string | null
           created_at: string | null
           glide_id: string | null
-          ical_calendar_google_updated: boolean | null
-          ical_end_date: string | null
-          ical_last_tracked: string | null
-          ical_last_updated: string | null
-          ical_state_abbrievation: string | null
-          ical_status: string | null
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
+          main_account_row_id: string | null
+          main_account_row_id1: string | null
+          main_account_uid: string | null
+          main_account_uid2: string | null
+          main_account_uid3: string | null
           main_accounuid_list: string | null
           main_box_sizes: string | null
           main_box_weight: number | null
           main_delivery_time_end: string | null
-          main_delivery_time_range: string | null
-          main_delivery_time_start: string | null
+          main_delveriy_time_start: string | null
+          main_delviery_time_range: string | null
           main_drop_off_address: string | null
           main_drop_off_city: string | null
           main_drop_off_location_uid: string | null
@@ -1549,12 +1325,11 @@ export type Database = {
           main_ship_date: string | null
           main_ship_date_ical: string | null
           main_timestamp_submit: string | null
-          main_total_units_1st_account: number | null
-          main_total_units_2nd_account: number | null
-          main_total_units_3rd_account_copy: number | null
-          main_total_units_inside: number | null
+          main_total_of_units_for_1st_account: number | null
+          main_total_of_units_for_2nd_account: number | null
+          main_total_of_units_for_3rd_account_copy: number | null
+          main_total_of_units_inside: number | null
           main_tp_id: string | null
-          main_tp_id_ical: string | null
           main_tracking_link: string | null
           main_tracking_number: string | null
           multiple_accounts: boolean | null
@@ -1562,38 +1337,35 @@ export type Database = {
           receiver_receiver_name: string | null
           receiver_state: string | null
           rowid_invoicerelated: string | null
-          sb_accounts_id: string | null
+          sb_account1_id: string | null
+          sb_account2_id: string | null
+          sb_account3_id: string | null
           sb_invoices_id: string | null
           sender_sender_address: string | null
           sender_sender_name_company: string | null
           sender_sender_phone: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
-          tp_history_rowid: string | null
           updated_at: string | null
         }
         Insert: {
           ai_ai_extracted_text?: string | null
-          ai_ai_json?: Json | null
-          ai_label_upload?: Json | null
-          ai_tracking_ai_extracted_text?: string | null
-          ai_tracking_json_extracted?: Json | null
+          ai_tracking_json_extracted?: string | null
           created_at?: string | null
           glide_id?: string | null
-          ical_calendar_google_updated?: boolean | null
-          ical_end_date?: string | null
-          ical_last_tracked?: string | null
-          ical_last_updated?: string | null
-          ical_state_abbrievation?: string | null
-          ical_status?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
+          main_account_row_id?: string | null
+          main_account_row_id1?: string | null
+          main_account_uid?: string | null
+          main_account_uid2?: string | null
+          main_account_uid3?: string | null
           main_accounuid_list?: string | null
           main_box_sizes?: string | null
           main_box_weight?: number | null
           main_delivery_time_end?: string | null
-          main_delivery_time_range?: string | null
-          main_delivery_time_start?: string | null
+          main_delveriy_time_start?: string | null
+          main_delviery_time_range?: string | null
           main_drop_off_address?: string | null
           main_drop_off_city?: string | null
           main_drop_off_location_uid?: string | null
@@ -1604,12 +1376,11 @@ export type Database = {
           main_ship_date?: string | null
           main_ship_date_ical?: string | null
           main_timestamp_submit?: string | null
-          main_total_units_1st_account?: number | null
-          main_total_units_2nd_account?: number | null
-          main_total_units_3rd_account_copy?: number | null
-          main_total_units_inside?: number | null
+          main_total_of_units_for_1st_account?: number | null
+          main_total_of_units_for_2nd_account?: number | null
+          main_total_of_units_for_3rd_account_copy?: number | null
+          main_total_of_units_inside?: number | null
           main_tp_id?: string | null
-          main_tp_id_ical?: string | null
           main_tracking_link?: string | null
           main_tracking_number?: string | null
           multiple_accounts?: boolean | null
@@ -1617,38 +1388,35 @@ export type Database = {
           receiver_receiver_name?: string | null
           receiver_state?: string | null
           rowid_invoicerelated?: string | null
-          sb_accounts_id?: string | null
+          sb_account1_id?: string | null
+          sb_account2_id?: string | null
+          sb_account3_id?: string | null
           sb_invoices_id?: string | null
           sender_sender_address?: string | null
           sender_sender_name_company?: string | null
           sender_sender_phone?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          tp_history_rowid?: string | null
           updated_at?: string | null
         }
         Update: {
           ai_ai_extracted_text?: string | null
-          ai_ai_json?: Json | null
-          ai_label_upload?: Json | null
-          ai_tracking_ai_extracted_text?: string | null
-          ai_tracking_json_extracted?: Json | null
+          ai_tracking_json_extracted?: string | null
           created_at?: string | null
           glide_id?: string | null
-          ical_calendar_google_updated?: boolean | null
-          ical_end_date?: string | null
-          ical_last_tracked?: string | null
-          ical_last_updated?: string | null
-          ical_state_abbrievation?: string | null
-          ical_status?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
+          main_account_row_id?: string | null
+          main_account_row_id1?: string | null
+          main_account_uid?: string | null
+          main_account_uid2?: string | null
+          main_account_uid3?: string | null
           main_accounuid_list?: string | null
           main_box_sizes?: string | null
           main_box_weight?: number | null
           main_delivery_time_end?: string | null
-          main_delivery_time_range?: string | null
-          main_delivery_time_start?: string | null
+          main_delveriy_time_start?: string | null
+          main_delviery_time_range?: string | null
           main_drop_off_address?: string | null
           main_drop_off_city?: string | null
           main_drop_off_location_uid?: string | null
@@ -1659,12 +1427,11 @@ export type Database = {
           main_ship_date?: string | null
           main_ship_date_ical?: string | null
           main_timestamp_submit?: string | null
-          main_total_units_1st_account?: number | null
-          main_total_units_2nd_account?: number | null
-          main_total_units_3rd_account_copy?: number | null
-          main_total_units_inside?: number | null
+          main_total_of_units_for_1st_account?: number | null
+          main_total_of_units_for_2nd_account?: number | null
+          main_total_of_units_for_3rd_account_copy?: number | null
+          main_total_of_units_inside?: number | null
           main_tp_id?: string | null
-          main_tp_id_ical?: string | null
           main_tracking_link?: string | null
           main_tracking_number?: string | null
           multiple_accounts?: boolean | null
@@ -1672,43 +1439,44 @@ export type Database = {
           receiver_receiver_name?: string | null
           receiver_state?: string | null
           rowid_invoicerelated?: string | null
-          sb_accounts_id?: string | null
+          sb_account1_id?: string | null
+          sb_account2_id?: string | null
+          sb_account3_id?: string | null
           sb_invoices_id?: string | null
           sender_sender_address?: string | null
           sender_sender_name_company?: string | null
           sender_sender_phone?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          tp_history_rowid?: string | null
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "fk_gl_shipping_records_accounts"
-            columns: ["sb_accounts_id"]
+            foreignKeyName: "fk_shipping_records_account1"
+            columns: ["sb_account1_id"]
             isOneToOne: false
             referencedRelation: "gl_accounts"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "gl_shipping_records_sb_accounts_id_fkey"
-            columns: ["sb_accounts_id"]
+            foreignKeyName: "fk_shipping_records_account2"
+            columns: ["sb_account2_id"]
             isOneToOne: false
             referencedRelation: "gl_accounts"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "gl_shipping_records_sb_invoices_id_fkey"
+            foreignKeyName: "fk_shipping_records_account3"
+            columns: ["sb_account3_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_shipping_records_invoice"
             columns: ["sb_invoices_id"]
             isOneToOne: false
             referencedRelation: "gl_invoices"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_shipping_records_sb_invoices_id_fkey"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_summary"
-            referencedColumns: ["invoice_id"]
           },
         ]
       }
@@ -1969,118 +1737,100 @@ export type Database = {
       }
       gl_table_mappings: {
         Row: {
-          created_at: string | null
-          description: string | null
+          description: string
           glide_table_id: string
-          id: string
+          id: number
           supabase_table: string
-          updated_at: string | null
         }
         Insert: {
-          created_at?: string | null
-          description?: string | null
+          description: string
           glide_table_id: string
-          id?: string
+          id?: never
           supabase_table: string
-          updated_at?: string | null
         }
         Update: {
-          created_at?: string | null
-          description?: string | null
+          description?: string
           glide_table_id?: string
-          id?: string
+          id?: never
           supabase_table?: string
-          updated_at?: string | null
         }
         Relationships: []
       }
       gl_vendor_payments: {
         Row: {
-          automatically_recorded: boolean | null
           created_at: string | null
-          date_timestamp_date: string | null
-          glide_id: string
+          glide_id: string | null
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
           main_date_of_payment: string | null
-          main_dateofpurchaseorder: string | null
+          main_date_of_purchase_order: string | null
           main_payment_amount: number | null
-          main_productnotestoo: string | null
+          main_vendor_purchase_note: string | null
           rowid_account_row_id: string | null
-          rowid_po_uid_from_addprod: string | null
-          rowid_productrowid: string | null
-          rowid_purchaseorderrowid: string | null
+          rowid_product_row_id: string | null
+          rowid_purchase_order_row_id: string | null
           sb_accounts_id: string | null
           sb_products_id: string | null
           sb_purchase_orders_id: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
-          user_emailuseradded: string | null
         }
         Insert: {
-          automatically_recorded?: boolean | null
           created_at?: string | null
-          date_timestamp_date?: string | null
-          glide_id: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_payment?: string | null
-          main_dateofpurchaseorder?: string | null
+          main_date_of_purchase_order?: string | null
           main_payment_amount?: number | null
-          main_productnotestoo?: string | null
+          main_vendor_purchase_note?: string | null
           rowid_account_row_id?: string | null
-          rowid_po_uid_from_addprod?: string | null
-          rowid_productrowid?: string | null
-          rowid_purchaseorderrowid?: string | null
+          rowid_product_row_id?: string | null
+          rowid_purchase_order_row_id?: string | null
           sb_accounts_id?: string | null
           sb_products_id?: string | null
           sb_purchase_orders_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
-          user_emailuseradded?: string | null
         }
         Update: {
-          automatically_recorded?: boolean | null
           created_at?: string | null
-          date_timestamp_date?: string | null
-          glide_id?: string
+          glide_id?: string | null
           id?: string
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_payment?: string | null
-          main_dateofpurchaseorder?: string | null
+          main_date_of_purchase_order?: string | null
           main_payment_amount?: number | null
-          main_productnotestoo?: string | null
+          main_vendor_purchase_note?: string | null
           rowid_account_row_id?: string | null
-          rowid_po_uid_from_addprod?: string | null
-          rowid_productrowid?: string | null
-          rowid_purchaseorderrowid?: string | null
+          rowid_product_row_id?: string | null
+          rowid_purchase_order_row_id?: string | null
           sb_accounts_id?: string | null
           sb_products_id?: string | null
           sb_purchase_orders_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
-          user_emailuseradded?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "fk_vendor_payments_accounts"
+            foreignKeyName: "fk_vendor_payments_account"
             columns: ["sb_accounts_id"]
             isOneToOne: false
             referencedRelation: "gl_accounts"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fk_vendor_payments_products"
+            foreignKeyName: "fk_vendor_payments_product"
             columns: ["sb_products_id"]
             isOneToOne: false
             referencedRelation: "gl_products"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fk_vendor_payments_purchase_orders"
+            foreignKeyName: "fk_vendor_payments_purchase_order"
             columns: ["sb_purchase_orders_id"]
             isOneToOne: false
             referencedRelation: "gl_purchase_orders"
@@ -2152,15 +1902,7 @@ export type Database = {
           table_name?: string
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_table_mapping"
-            columns: ["table_name", "table_id"]
-            isOneToOne: false
-            referencedRelation: "gl_table_mappings"
-            referencedColumns: ["supabase_table", "glide_table_id"]
-          },
-        ]
+        Relationships: []
       }
       messages: {
         Row: {
@@ -2628,22 +2370,6 @@ export type Database = {
       }
     }
     Views: {
-      invoice_summary: {
-        Row: {
-          invoice_id: string | null
-          invoice_line_id: string | null
-          invoice_number: string | null
-          invoice_sync_status: Database["public"]["Enums"]["sync_status"] | null
-          line_sync_status: Database["public"]["Enums"]["sync_status"] | null
-          order_date: string | null
-          product_name: string | null
-          quantity_sold: number | null
-          selling_price: number | null
-          stock_after_sale: number | null
-          user_email: string | null
-        }
-        Relationships: []
-      }
       v_message_audit_trail: {
         Row: {
           chat_id: number | null
@@ -3036,6 +2762,7 @@ export type Database = {
         | "message_analyzed"
         | "webhook_received"
         | "media_group_synced"
+      client_type: "Vendor" | "Customer" | "Both"
       processing_state_type:
         | "initialized"
         | "pending"
