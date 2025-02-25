@@ -1,48 +1,48 @@
-// Define a type for log data that covers common values
-type LogData = Record<string, string | number | boolean | null | undefined | string[] | number[] | Record<string, unknown>>;
+/**
+ * Logger utility for consistent logging with correlation IDs
+ */
 
-interface Logger {
-  info: (message: string, data?: LogData) => void;
-  error: (message: string, data?: LogData) => void;
-  warn: (message: string, data?: LogData) => void;
+export interface Logger {
+  info(message: string, metadata?: Record<string, unknown>): void;
+  warn(message: string, metadata?: Record<string, unknown>): void;
+  error(message: string, metadata?: Record<string, unknown>): void;
 }
 
+/**
+ * Creates a logger with a correlation ID for consistent logging
+ * @param correlationId - The correlation ID to include in all log messages
+ * @returns A logger object with info, warn, and error methods
+ */
 export function getLogger(correlationId: string): Logger {
   return {
-    info: (message: string, data?: LogData) => {
-      console.log(`ℹ️ ${message}`, {
+    info(message: string, metadata: Record<string, unknown> = {}) {
+      console.log(JSON.stringify({
+        level: 'info',
+        message,
         correlation_id: correlationId,
-        ...data
-      });
+        timestamp: new Date().toISOString(),
+        ...metadata
+      }));
     },
-    error: (message: string, data?: LogData) => {
-      console.error(`❌ ${message}`, {
+    
+    warn(message: string, metadata: Record<string, unknown> = {}) {
+      console.warn(JSON.stringify({
+        level: 'warn',
+        message,
         correlation_id: correlationId,
-        ...data
-      });
+        timestamp: new Date().toISOString(),
+        ...metadata
+      }));
     },
-    warn: (message: string, data?: LogData) => {
-      console.warn(`⚠️ ${message}`, {
+    
+    error(message: string, metadata: Record<string, unknown> = {}) {
+      console.error(JSON.stringify({
+        level: 'error',
+        message,
         correlation_id: correlationId,
-        ...data
-      });
+        timestamp: new Date().toISOString(),
+        ...metadata
+      }));
     }
   };
 }
-
-export const logEditOperation = async (supabase: any, messageId: string, chatId: number, previousState: string, newState: string) => {
-  try {
-    await supabase.from('webhook_logs').insert({
-      event_type: 'message_edit',
-      message_id: messageId,
-      chat_id: chatId,
-      metadata: {
-        previous_state: previousState,
-        new_state: newState,
-        timestamp: new Date().toISOString()
-      }
-    });
-  } catch (error) {
-    console.error('Failed to log edit operation:', error);
-  }
-};

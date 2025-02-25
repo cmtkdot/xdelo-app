@@ -243,13 +243,93 @@ export async function syncMediaGroupContent(
   }
 }
 
+// Update message edit history
+export async function updateMessageEditHistory(
+  supabase: SupabaseClient,
+  messageId: string,
+  previousCaption: string,
+  newCaption: string,
+  editDate: string,
+  isChannelPost: boolean,
+  correlationId: string
+): Promise<void> {
+  const logger = getLogger(correlationId);
+  
+  try {
+    logger.info('Updating message edit history', {
+      message_id: messageId,
+      is_channel_post: isChannelPost
+    });
+    
+    // First get the current edit_history
+    const { data: currentMessage, error: fetchError } = await supabase
+      .from("messages")
+      .select("edit_history")
+      .eq("id", messageId)
+      .single();
+      
+    if (fetchError) {
+      logger.error('Error fetching current edit history', {
+        error: fetchError.message,
+        message_id: messageId
+      });
+      throw fetchError;
+    }
+    
+    // Create new edit history entry
+    const newEntry = {
+      edit_date: editDate,
+      previous_caption: previousCaption,
+      new_caption: newCaption,
+      is_channel_post: isChannelPost
+    };
+    
+    // Update the edit_history array
+    const updatedHistory = currentMessage.edit_history 
+      ? [...currentMessage.edit_history, newEntry] 
+      : [newEntry];
+    
+    // Update the message
+    const { error: updateError } = await supabase
+      .from("messages")
+      .update({
+        edit_history: updatedHistory,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", messageId);
+      
+    if (updateError) {
+      logger.error('Error updating edit history', {
+        error: updateError.message,
+        message_id: messageId
+      });
+      throw updateError;
+    }
+    
+    logger.info('Successfully updated edit history', {
+      message_id: messageId,
+      history_entries: updatedHistory.length
+    });
+    
+  } catch (error) {
+    logger.error('Error in updateMessageEditHistory', {
+      error: error.message,
+      message_id: messageId
+    });
+    throw error;
+  }
+}
+
 // Handle edited message captions, including channel posts
 export async function handleEditedCaption(
   supabase: SupabaseClient,
   messageId: string,
-  caption: string,
+  previousCaption: string,
+  newCaption: string,
   correlationId: string,
   analyzedContent: AnalyzedContent,
+  editDate: string,
+  isChannelPost: boolean,
   mediaGroupId?: string
 ): Promise<void> {
   const logger = getLogger(correlationId);
@@ -257,17 +337,30 @@ export async function handleEditedCaption(
   try {
     logger.info('Processing edited caption', {
       message_id: messageId,
-      caption_length: caption.length,
-      has_media_group: !!mediaGroupId
+      caption_length: newCaption.length,
+      has_media_group: !!mediaGroupId,
+      is_channel_post: isChannelPost
     });
+    
+    // Update edit history
+    await updateMessageEditHistory(
+      supabase,
+      messageId,
+      previousCaption,
+      newCaption,
+      editDate,
+      isChannelPost,
+      correlationId
+    );
     
     // Update the message with the new caption and analyzed content
     await updateMessage(supabase, messageId, {
-      caption,
+      caption: newCaption,
       analyzed_content: analyzedContent,
       processing_state: 'completed',
       processing_completed_at: new Date().toISOString(),
       is_edited: true,
+      edit_date: editDate,
       updated_at: new Date().toISOString()
     });
     
@@ -278,7 +371,8 @@ export async function handleEditedCaption(
     
     logger.info('Successfully processed edited caption', {
       message_id: messageId,
-      has_media_group: !!mediaGroupId
+      has_media_group: !!mediaGroupId,
+      is_channel_post: isChannelPost
     });
     
   } catch (error) {

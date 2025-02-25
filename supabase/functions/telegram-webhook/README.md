@@ -1,95 +1,68 @@
-# Telegram Webhook Consolidated
+# Telegram Webhook Function
 
-This is a consolidated implementation of the Telegram webhook and caption analysis functionality. It combines the functionality of the `telegram-webhook` and `parse-caption-with-ai` functions into a single, more efficient implementation.
+This Edge Function handles incoming webhook events from the Telegram Bot API. It processes messages, media, and edits, storing them in the database for further processing.
 
 ## Features
 
-- Handles Telegram webhook updates (messages, edited messages, channel posts, etc.)
-- Processes and stores media (photos, videos, documents)
-- Analyzes captions to extract product information
-- Handles media groups and syncs analyzed content across group messages
-- Provides comprehensive logging and error handling
+- Processes text messages, photos, and videos
+- Handles edited messages and channel posts
+- Tracks edit history for messages
+- Syncs content across media groups
+- Uses correlation IDs for request tracking
 
-## Architecture
+## Edit History Handling
 
-```mermaid
-sequenceDiagram
-    Telegram->>telegram-webhook-consolidated: Send update (message/media)
-    
-    alt Is Caption Analysis Request
-        telegram-webhook-consolidated->>captionAnalyzer: Analyze caption
-        captionAnalyzer->>Supabase: Update message with analyzed content
-        Note over captionAnalyzer: If part of media group, sync to all messages
-    else Is Webhook Update
-        Note over telegram-webhook-consolidated: Check message type
-        
-        alt Has Media
-            telegram-webhook-consolidated->>mediaUtils: Process media
-            mediaUtils->>Supabase Storage: Upload to telegram-media bucket
-            mediaUtils->>Supabase DB: Store in messages table
-            
-            Note over telegram-webhook-consolidated: Check if message has caption
-            
-            alt Has Caption
-                telegram-webhook-consolidated->>captionAnalyzer: Analyze caption
-                captionAnalyzer->>Supabase DB: Update analyzed_content
-                captionAnalyzer->>Supabase DB: Sync to media group if needed
-            else No Caption
-                telegram-webhook-consolidated->>Supabase DB: Check for media group with analyzed_content
-                
-                alt Found media group with analyzed_content
-                    telegram-webhook-consolidated->>Supabase DB: Sync analyzed_content to this message
-                end
-            end
-        else No Media
-            telegram-webhook-consolidated->>Supabase DB: Store in other_messages table
-        end
-    end
-```
+The webhook now properly tracks edit history for both media and text messages. When a message is edited, the previous content is stored in the `edit_history` field as a JSONB array. Each entry in the array contains:
 
-## File Structure
+- `edit_date`: When the edit was made
+- `previous_caption`: The caption before the edit
+- `new_caption`: The caption after the edit
+- `is_channel_post`: Whether the edit was made in a channel
 
-- `index.ts` - Main entry point that handles both webhook updates and caption analysis
-- `types.ts` - Type definitions for Telegram messages, database records, etc.
-- `config.toml` - Configuration for the Supabase Edge Function
-- `utils/` - Utility functions
-  - `corsUtils.ts` - CORS headers for HTTP responses
-  - `logger.ts` - Logging utility with correlation IDs
-  - `mediaUtils.ts` - Media processing utilities
-  - `captionAnalyzer.ts` - Caption analysis logic
-  - `quantityParser.ts` - Quantity extraction from captions
-  - `messageHandlers.ts` - Message processing handlers
+This allows for tracking the full history of edits to a message, which can be useful for auditing and debugging.
 
-## Endpoints
+## Database Changes
 
-The function exposes two main endpoints:
+The following database changes were made to support edit history:
 
-1. `/telegram-webhook-consolidated` - Handles Telegram webhook updates
-2. `/telegram-webhook-consolidated/parse-caption` - Handles caption analysis requests
+1. Added indexes for `edited_channel_post` and `update_id` fields
+2. Added a GIN index for the `edit_history` JSONB field
+3. Added a trigger to automatically update the `edit_history` field when a message is edited
 
-## Environment Variables
+## Code Structure
 
-- `TELEGRAM_BOT_TOKEN` - Telegram Bot API token
-- `OPENAI_API_KEY` - OpenAI API key for AI-powered caption analysis (optional)
+- `index.ts`: Main webhook handler
+- `utils/dbOperations.ts`: Database operations for messages
+- `utils/logger.ts`: Logging utility with correlation IDs
+- `types.ts`: TypeScript interfaces and types
 
-## Improvements Over Previous Implementation
+## Flow
 
-1. **Consolidated Functionality**: Combined two separate functions into one, reducing duplication and improving maintainability.
-2. **Streamlined Media Processing**: More efficient media handling with better error recovery.
-3. **Enhanced Caption Analysis**: Improved caption parsing with fallback mechanisms.
-4. **Consistent Error Handling**: Standardized error handling and logging throughout the codebase.
-5. **Better Media Group Handling**: More robust handling of media groups with synchronized caption analysis.
-6. **Correlation IDs**: End-to-end tracing with correlation IDs for better debugging.
+1. Webhook receives an update from Telegram
+2. Determines if it's a new message or an edit
+3. For edits, retrieves the existing message and updates the edit history
+4. For media groups, syncs content across all messages in the group
+5. For messages with captions, triggers analysis
 
 ## Deployment
 
 Deploy this function to Supabase Edge Functions:
 
 ```bash
-supabase functions deploy telegram-webhook-consolidated
+supabase functions deploy telegram-webhook
 ```
 
-Then set up your Telegram bot webhook to point to:
+## Environment Variables
 
-```
-https://[PROJECT_REF].supabase.co/functions/v1/telegram-webhook-consolidated
+- `SUPABASE_URL`: Your Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
+- `TELEGRAM_BOT_TOKEN`: Your Telegram bot token
+
+## Troubleshooting
+
+If you encounter issues with the webhook:
+
+1. Check the logs for errors
+2. Verify that the webhook URL is correctly set in the Telegram Bot API
+3. Ensure that the database schema matches the expected structure
+4. Check that the environment variables are correctly set
