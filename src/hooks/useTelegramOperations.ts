@@ -18,7 +18,10 @@ export const useTelegramOperations = () => {
         // First mark the message as being deleted from Telegram
         const { error: updateError } = await supabase
           .from('messages')
-          .update({ deleted_from_telegram: true })
+          .update({
+            deleted_from_telegram: true,
+            updated_at: new Date().toISOString()
+          })
           .eq('id', message.id);
 
         if (updateError) throw updateError;

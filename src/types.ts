@@ -1,3 +1,4 @@
+
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
@@ -67,6 +68,7 @@ export interface Message {
   glide_row_id?: string;
   created_at?: string;
   updated_at?: string;
+  deleted_from_telegram?: boolean; // Added this field
 }
 
 export interface GlProduct {

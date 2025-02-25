@@ -1787,6 +1787,7 @@ export type Database = {
           chat_type: Database["public"]["Enums"]["telegram_chat_type"] | null
           correlation_id: string | null
           created_at: string
+          deleted_from_telegram: boolean | null
           duration: number | null
           edit_date: string | null
           edit_history: Json | null
@@ -1842,6 +1843,7 @@ export type Database = {
           chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
           correlation_id?: string | null
           created_at?: string
+          deleted_from_telegram?: boolean | null
           duration?: number | null
           edit_date?: string | null
           edit_history?: Json | null
@@ -1897,6 +1899,7 @@ export type Database = {
           chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
           correlation_id?: string | null
           created_at?: string
+          deleted_from_telegram?: boolean | null
           duration?: number | null
           edit_date?: string | null
           edit_history?: Json | null
@@ -1945,6 +1948,13 @@ export type Database = {
           width?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_message_caption"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "messages_message_caption_id_fkey"
             columns: ["message_caption_id"]
