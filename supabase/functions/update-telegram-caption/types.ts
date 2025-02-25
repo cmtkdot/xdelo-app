@@ -158,7 +158,6 @@ export interface MediaInfo {
 }
 
 export interface MessageData {
-  id?: string;
   user_id: string;
   telegram_message_id: number;
   chat_id: number;
@@ -180,22 +179,18 @@ export interface MessageData {
   duration?: number;
   is_edited?: boolean;
   edit_date?: string | null;
-  edit_history?: Array<{
-    timestamp: string;
-    previous_content: Record<string, any>;
-    new_content: Record<string, any>;
-  }>;
+  edit_history?: Record<string, any>;
   processing_state: ProcessingStateType;
   processing_started_at?: string;
   processing_completed_at?: string;
   processing_correlation_id?: string;
-  analyzed_content?: AnalyzedContent;
+  analyzed_content?: Record<string, any>;
   error_message?: string;
   retry_count?: number;
   last_error_at?: string;
   group_first_message_time?: string;
   group_last_message_time?: string;
-  group_message_count?: string;
+  group_message_count?: number;
   group_completed_at?: string;
   telegram_data: Record<string, any>;
   message_url?: string;
@@ -203,22 +198,9 @@ export interface MessageData {
   sender_chat_id?: number;
   created_at?: string;
   updated_at?: string;
-  purchase_order?: string;
-  glide_row_id?: string;
-  sync_attempt?: number;
-  product_name?: string;
-  product_quantity?: number;
-  product_unit?: string;
-  vendor_name?: string;
-  product_sku?: string;
-  is_miscellaneous_item?: boolean;
-  purchase_date?: string;
-  correlation_id?: string;
-  media_type?: string;
 }
 
 export interface OtherMessageData {
-  id?: string;
   user_id: string;
   message_type: TelegramOtherMessageType;
   telegram_message_id: number;
@@ -228,27 +210,13 @@ export interface OtherMessageData {
   message_text?: string;
   is_edited: boolean;
   edit_date?: string | null;
-  edit_history?: Array<{
-    timestamp: string;
-    previous_content: Record<string, any>;
-    new_content: Record<string, any>;
-  }>;
   processing_state: ProcessingStateType;
   processing_started_at?: string;
   processing_completed_at?: string;
   processing_correlation_id?: string;
-  analyzed_content?: AnalyzedContent;
   error_message?: string;
   telegram_data: Record<string, any>;
   message_url?: string;
-  correlation_id?: string;
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  product_quantity?: number;
-  notes?: string;
-  vendor_name?: string;
   created_at?: string;
   updated_at?: string;
 }
