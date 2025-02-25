@@ -1,6 +1,6 @@
+
 import { serve } from "http/server"
 import { createClient } from "supabase"
-import { createHmac } from "crypto"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -59,9 +59,13 @@ async function logAuditEvent(
 
 async function getFileUrl(fileId: string, logger: any): Promise<string> {
   try {
+    if (!fileId) {
+      throw new Error('No file_id provided');
+    }
+    
     logger.info('Getting file URL from Telegram', { fileId });
     const response = await fetch(
-      `https://api.telegram.org/bot${telegramToken}/getFile?file_unique_id=${fileId}`
+      `https://api.telegram.org/bot${telegramToken}/getFile?file_id=${fileId}`
     );
 
     if (!response.ok) {
@@ -99,8 +103,7 @@ async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeT
       .storage
       .from('telegram-media')
       .list('', { 
-        search: storagePath,
-        limit: 1
+        search: storagePath
       });
 
     if (existingFiles && existingFiles.length > 0) {
@@ -125,8 +128,7 @@ async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeT
       .from('telegram-media')
       .upload(storagePath, mediaBuffer, {
         contentType: mimeType,
-        upsert: true,
-        cacheControl: '3600'
+        upsert: true
       });
 
     if (uploadError) throw uploadError;
@@ -258,7 +260,7 @@ serve(async (req) => {
     const video = message.video;
     const media = photo || video;
 
-    if (!media) {
+    if (!media || !media.file_id) {
       logger.info('No supported media found');
       return new Response(
         JSON.stringify({ status: 'ignored', reason: 'no supported media' }),
@@ -266,7 +268,7 @@ serve(async (req) => {
       );
     }
 
-    // Check for existing media
+    // Check for existing media using file_unique_id
     const { data: existingMedia } = await supabase
       .from('messages')
       .select('*')
@@ -274,8 +276,12 @@ serve(async (req) => {
       .single();
 
     // Get media URL and upload to storage
-    logger.info('Processing media', { fileId: media.file_unique_id });
-    const telegramFileUrl = await getFileUrl(media.file_unique_id, logger);
+    logger.info('Processing media', { 
+      file_id: media.file_id,
+      file_unique_id: media.file_unique_id 
+    });
+    
+    const telegramFileUrl = await getFileUrl(media.file_id, logger);
     const storageUrl = await uploadMediaToStorage(
       telegramFileUrl,
       media.file_unique_id,
@@ -293,7 +299,6 @@ serve(async (req) => {
       file_id: media.file_id,
       file_unique_id: media.file_unique_id,
       public_url: storageUrl,
-      storage_path: `${media.file_unique_id}.${video ? video.mime_type.split('/')[1] : 'jpeg'}`,
       mime_type: video ? video.mime_type : 'image/jpeg',
       file_size: media.file_size,
       width: media.width,
@@ -332,7 +337,6 @@ serve(async (req) => {
       if (updateError) throw updateError;
       resultMessage = updated;
 
-      // If this is an edit with changed caption, trigger reanalysis
       if (isEdit && message.caption !== existingMedia.caption) {
         await supabase.functions.invoke('parse-caption-with-ai', {
           body: { 
@@ -367,12 +371,10 @@ serve(async (req) => {
         correlationId
       );
 
-      // Handle media group synchronization
       if (mediaGroupId) {
         await handleMediaGroup(resultMessage.id, mediaGroupId, logger);
       }
 
-      // Trigger analysis for new messages with captions
       if (message.caption) {
         await supabase.functions.invoke('parse-caption-with-ai', {
           body: { 
