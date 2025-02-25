@@ -1,218 +1,302 @@
 
-import { serve } from "http/server";
-import { createClient } from '@supabase/supabase-js';
-import { corsHeaders } from '../_shared/cors.ts';
-import { downloadAndStoreMedia } from './mediaUtils.ts';
-import { getLogger } from './logger.ts';
-import { TelegramMessage } from '../_shared/types.ts';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+const supabaseUrl = Deno.env.get('SUPABASE_URL')
+const supabaseServiceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+const telegramToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
+
+if (!supabaseUrl || !supabaseServiceRole || !telegramToken) {
+  throw new Error('Missing environment variables')
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceRole)
+
+async function getFileUrl(fileId: string): Promise<string> {
+  const response = await fetch(
+    `https://api.telegram.org/bot${telegramToken}/getFile?file_id=${fileId}`
+  )
+  const data = await response.json()
+  if (!data.ok) throw new Error('Failed to get file path')
+  return `https://api.telegram.org/file/bot${telegramToken}/${data.result.file_path}`
+}
+
+async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeType: string, correlationId: string): Promise<string> {
+  const logger = (message: string, data?: any) => {
+    console.log(`[${correlationId}] ${message}`, data || '');
+  };
+
+  logger('Uploading media to storage', { fileUniqueId, mimeType });
+  
+  const ext = mimeType.split('/')[1] || 'bin'
+  const storagePath = `${fileUniqueId}.${ext}`
+  
+  try {
+    const mediaResponse = await fetch(fileUrl)
+    if (!mediaResponse.ok) throw new Error('Failed to download media from Telegram')
+    
+    const mediaBuffer = await mediaResponse.arrayBuffer()
+
+    const { data: existingFile } = await supabase
+      .storage
+      .from('telegram-media')
+      .list('', { 
+        search: storagePath,
+        limit: 1
+      })
+
+    // If file exists, get its public URL
+    if (existingFile && existingFile.length > 0) {
+      const { data: { publicUrl } } = supabase
+        .storage
+        .from('telegram-media')
+        .getPublicUrl(storagePath)
+      
+      logger('File already exists, returning existing URL');
+      return publicUrl;
+    }
+
+    // Upload new file
+    const { error: uploadError } = await supabase
+      .storage
+      .from('telegram-media')
+      .upload(storagePath, mediaBuffer, {
+        contentType: mimeType,
+        upsert: true,
+        cacheControl: '3600'
+      })
+
+    if (uploadError) throw uploadError
+
+    const { data: { publicUrl } } = supabase
+      .storage
+      .from('telegram-media')
+      .getPublicUrl(storagePath)
+
+    logger('Media uploaded successfully');
+    return publicUrl
+
+  } catch (error) {
+    logger('Error uploading media:', error);
+    throw error;
+  }
+}
+
+async function findAnalyzedMessageInGroup(mediaGroupId: string): Promise<any> {
+  const { data } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('media_group_id', mediaGroupId)
+    .not('analyzed_content', 'is', null)
+    .order('created_at', { ascending: true })
+    .limit(1);
+
+  return data?.[0] || null;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders })
   }
 
-  const correlationId = crypto.randomUUID();
-  const logger = getLogger(correlationId);
+  const correlationId = `webhook-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const logger = (message: string, data?: any) => {
+    console.log(`[${correlationId}] ${message}`, data || '');
+  };
 
   try {
-    const update = await req.json();
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+    const rawBody = await req.text();
+    logger('Raw request body:', rawBody);
 
-    logger.info('Received update', {
-      has_new_message: !!update.message,
-      has_channel_post: !!update.channel_post,
-      has_edited_message: !!update.edited_message,
-      has_edited_channel_post: !!update.edited_channel_post,
-      correlation_id
-    });
-
-    // Check for duplicate message by unique identifiers
-    const isDuplicate = async (messageId: number, chatId: number) => {
-      const { data: existing } = await supabase
-        .from('messages')
-        .select('id')
-        .eq('telegram_message_id', messageId)
-        .eq('chat_id', chatId)
-        .single();
-      return !!existing;
-    };
-
-    // Handle edited messages (both regular and channel)
-    if (update.edited_message || update.edited_channel_post) {
-      const editedMessage = update.edited_message || update.edited_channel_post;
-      const isChannelPost = !!update.edited_channel_post;
-      
-      logger.info('Processing edit', {
-        message_id: editedMessage.message_id,
-        chat_id: editedMessage.chat.id,
-        is_channel_post: isChannelPost,
-        correlation_id
-      });
-
-      // Process edit through dedicated handler
-      const { error: editError } = await supabase.functions.invoke('handle-edited-channel-post', {
-        body: {
-          message_id: editedMessage.message_id,
-          chat_id: editedMessage.chat.id,
-          chat_type: isChannelPost ? 'channel' : editedMessage.chat.type,
-          caption: editedMessage.caption || '',
-          media_group_id: editedMessage.media_group_id,
-          correlation_id,
-          is_channel_post: isChannelPost
-        }
-      });
-
-      if (editError) {
-        logger.error('Edit handling failed', { error: editError, correlation_id });
-        throw editError;
-      }
-
+    let update;
+    try {
+      update = JSON.parse(rawBody);
+    } catch (e) {
+      logger('Failed to parse JSON:', e);
       return new Response(
-        JSON.stringify({
-          success: true,
-          type: 'edit',
-          is_channel_post: isChannelPost,
-          correlation_id
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
+        JSON.stringify({ status: 'error', reason: 'invalid json', correlation_id: correlationId }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
-    // Handle new messages (both regular and channel posts)
-    const message = update.message || update.channel_post;
+    // Handle different message types
+    const message = update.message || update.channel_post || 
+                   update.edited_message || update.edited_channel_post;
+    
     if (!message) {
-      logger.info('No valid message found in update', { correlation_id });
+      logger('No valid message found in update');
       return new Response(
         JSON.stringify({ status: 'skipped', reason: 'no valid message' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
       );
     }
 
-    // Check for duplicate message
-    const isDuplicateMessage = await isDuplicate(message.message_id, message.chat.id);
-    if (isDuplicateMessage) {
-      logger.info('Duplicate message detected', {
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        correlation_id
-      });
+    const isEdit = !!update.edited_message || !!update.edited_channel_post;
+    const chat = message.chat;
+    const mediaGroupId = message.media_group_id;
+    
+    // Check for media content
+    const photo = message.photo ? message.photo[message.photo.length - 1] : null;
+    const video = message.video;
+    const media = photo || video;
+
+    if (!media) {
+      logger('No media, storing in other_messages');
+      // Store text message in other_messages table
+      const { error } = await supabase
+        .from('other_messages')
+        .insert({
+          chat_id: chat.id,
+          chat_type: chat.type,
+          chat_title: chat.title,
+          telegram_message_id: message.message_id,
+          message_text: message.text,
+          telegram_data: update,
+          correlation_id: correlationId
+        });
+
+      if (error) throw error;
+
       return new Response(
-        JSON.stringify({ 
-          status: 'skipped', 
-          reason: 'duplicate message',
-          correlation_id 
-        }),
+        JSON.stringify({ status: 'success', type: 'text_message' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
       );
     }
 
-    // Process new message with media
-    if (message.photo || message.video) {
-      const { success, publicUrl, error: uploadError } = await downloadAndStoreMedia(
-        message as TelegramMessage,
-        supabase,
-        correlationId
-      );
+    // Check for existing media
+    const { data: existingMedia } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('file_unique_id', media.file_unique_id)
+      .single();
 
-      if (!success || uploadError) {
-        logger.error('Media upload failed', { error: uploadError, correlation_id });
-        throw new Error(uploadError || 'Failed to upload media');
-      }
+    // Get media URL and upload to storage
+    const telegramFileUrl = await getFileUrl(media.file_id);
+    const storageUrl = await uploadMediaToStorage(
+      telegramFileUrl,
+      media.file_unique_id,
+      video ? video.mime_type : 'image/jpeg',
+      correlationId
+    );
 
-      const baseMessageData = {
-        telegram_message_id: message.message_id,
-        chat_id: message.chat.id,
-        chat_type: message.chat.type,
-        chat_title: message.chat.title,
-        caption: message.caption || '',
-        media_group_id: message.media_group_id,
-        public_url: publicUrl,
-        processing_state: message.caption ? 'pending' : 'initialized',
-        created_at: new Date().toISOString()
-      };
+    const messageData = {
+      telegram_message_id: message.message_id,
+      chat_id: chat.id,
+      chat_type: chat.type,
+      chat_title: chat.title,
+      media_group_id: mediaGroupId,
+      caption: message.caption || '',
+      file_id: media.file_id,
+      file_unique_id: media.file_unique_id,
+      public_url: storageUrl,
+      storage_path: `${media.file_unique_id}.${video ? video.mime_type.split('/')[1] : 'jpeg'}`,
+      mime_type: video ? video.mime_type : 'image/jpeg',
+      file_size: media.file_size,
+      width: media.width,
+      height: media.height,
+      duration: video?.duration,
+      processing_state: message.caption ? 'pending' : 'initialized',
+      telegram_data: update,
+      correlation_id: correlationId,
+      is_edited: isEdit,
+      edit_date: isEdit ? new Date(message.edit_date * 1000).toISOString() : null
+    };
 
-      // Store the message
-      const { error: insertError } = await supabase
+    let resultMessage;
+
+    if (existingMedia) {
+      // Update existing record
+      const { data: updated, error } = await supabase
         .from('messages')
-        .insert([baseMessageData]);
+        .update(messageData)
+        .eq('id', existingMedia.id)
+        .select()
+        .single();
 
-      if (insertError) {
-        logger.error('Failed to store message', { error: insertError, correlation_id });
-        throw insertError;
-      }
+      if (error) throw error;
+      resultMessage = updated;
 
-      // If message has caption, send for analysis
-      if (message.caption) {
+      // If this is an edit with changed caption, trigger reanalysis
+      if (isEdit && message.caption !== existingMedia.caption) {
         await supabase.functions.invoke('parse-caption-with-ai', {
           body: { 
-            message_id: message.message_id,
+            messageId: existingMedia.id,
             caption: message.caption,
-            correlation_id,
-            media_group_id: message.media_group_id
+            correlation_id: correlationId,
+            is_edit: true,
+            media_group_id: mediaGroupId
           }
         });
       }
+    } else {
+      // Insert new record
+      const { data: inserted, error } = await supabase
+        .from('messages')
+        .insert(messageData)
+        .select()
+        .single();
 
-      return new Response(
-        JSON.stringify({
-          success: true,
-          type: 'new_message',
-          has_media: true,
-          has_caption: !!message.caption,
-          correlation_id
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
-      );
-    }
+      if (error) throw error;
+      resultMessage = inserted;
 
-    // Handle non-media messages
-    logger.info('Processing non-media message', { 
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-      correlation_id 
-    });
+      // For new messages in a media group, check for existing analyzed content
+      if (mediaGroupId) {
+        const analyzedMessage = await findAnalyzedMessageInGroup(mediaGroupId);
+        if (analyzedMessage?.analyzed_content) {
+          await supabase
+            .from('messages')
+            .update({
+              analyzed_content: analyzedMessage.analyzed_content,
+              message_caption_id: analyzedMessage.id,
+              is_original_caption: false,
+              group_caption_synced: true,
+              processing_state: 'completed'
+            })
+            .eq('id', resultMessage.id);
+        }
+      }
 
-    const { error: textError } = await supabase
-      .from('other_messages')
-      .insert({
-        telegram_message_id: message.message_id,
-        chat_id: message.chat.id,
-        chat_type: message.chat.type,
-        message_text: message.text,
-        created_at: new Date().toISOString(),
-        correlation_id
-      });
-
-    if (textError) {
-      logger.error('Failed to store text message', { error: textError, correlation_id });
-      throw textError;
+      // Trigger analysis for new messages with captions
+      if (message.caption) {
+        await supabase.functions.invoke('parse-caption-with-ai', {
+          body: { 
+            messageId: resultMessage.id,
+            caption: message.caption,
+            correlation_id: correlationId,
+            media_group_id: mediaGroupId
+          }
+        });
+      }
     }
 
     return new Response(
       JSON.stringify({
-        success: true,
-        type: 'new_message',
-        has_media: false,
-        correlation_id
+        status: 'success',
+        correlation_id: correlationId,
+        message: 'Message processed',
+        messageId: resultMessage.id,
+        isEdit,
+        hasCaption: !!message.caption,
+        mediaGroupId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
     );
 
   } catch (error) {
-    console.error('Webhook error:', error);
+    console.error(`[${correlationId}] Error:`, error);
     return new Response(
       JSON.stringify({ 
-        success: false, 
-        error: error.message,
-        correlation_id: crypto.randomUUID()
+        status: 'error',
+        correlation_id: correlationId,
+        message: error.message,
+        stack: error.stack
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });
