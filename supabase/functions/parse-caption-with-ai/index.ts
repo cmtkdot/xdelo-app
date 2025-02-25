@@ -62,28 +62,114 @@ function extractProductInfo(caption: string): AnalyzedContent {
     }
   };
 
-  // Extract product name and code
-  const hashtagMatch = caption.match(/([^#]+)\s*#([A-Za-z0-9-]+)/);
-  if (hashtagMatch) {
-    analyzedContent.product_name = hashtagMatch[1].trim();
-    analyzedContent.product_code = hashtagMatch[2].trim();
-  } else {
-    analyzedContent.product_name = caption.split('#')[0].trim();
+  // Extract product name using delimiters (priority: #, line break, dash, or 'x')
+  let productName = caption;
+  const productNameDelimiters = ['#', '\n', '-', 'x'];
+  for (const delimiter of productNameDelimiters) {
+    if (caption.includes(delimiter)) {
+      productName = caption.split(delimiter)[0].trim();
+      break;
+    }
+  }
+  analyzedContent.product_name = productName;
+
+  // Extract product code (text following # symbol)
+  const productCodeMatch = caption.match(/#([A-Za-z0-9-]+)/);
+  if (productCodeMatch) {
+    analyzedContent.product_code = productCodeMatch[1].trim();
   }
 
-  // Extract quantity (looking for "x NUMBER" pattern)
-  const quantityMatch = caption.match(/x\s*(\d+)/i);
-  if (quantityMatch) {
-    analyzedContent.quantity = parseInt(quantityMatch[1], 10);
+  // Extract vendor UID (first 1-4 letters of product_code, uppercase)
+  if (analyzedContent.product_code) {
+    const vendorMatch = analyzedContent.product_code.match(/^([A-Za-z]{1,4})/);
+    if (vendorMatch) {
+      analyzedContent.vendor_uid = vendorMatch[1].toUpperCase();
+    }
   }
 
-  // Extract vendor UID from product code if present (first 3 letters)
-  if (analyzedContent.product_code && analyzedContent.product_code.length >= 3) {
-    analyzedContent.vendor_uid = analyzedContent.product_code.substring(0, 3);
+  // Extract purchase date from product code
+  if (analyzedContent.product_code && analyzedContent.vendor_uid) {
+    // Remove vendor UID from the beginning of product code to get date portion
+    const dateDigits = analyzedContent.product_code
+      .substring(analyzedContent.vendor_uid.length)
+      .match(/^\d+/);
+      
+    if (dateDigits && dateDigits[0]) {
+      const digits = dateDigits[0];
+      
+      // Handle both 6-digit (mmDDyy) and 5-digit (mDDyy) formats
+      if (digits.length === 6 || digits.length === 5) {
+        try {
+          let month, day, year;
+          
+          if (digits.length === 6) {
+            // Format: mmDDyy
+            month = parseInt(digits.substring(0, 2), 10);
+            day = parseInt(digits.substring(2, 4), 10);
+            year = parseInt(digits.substring(4, 6), 10);
+          } else {
+            // Format: mDDyy
+            month = parseInt(digits.substring(0, 1), 10);
+            day = parseInt(digits.substring(1, 3), 10);
+            year = parseInt(digits.substring(3, 5), 10);
+          }
+          
+          // Add 2000 to get full year
+          year += 2000;
+          
+          // Validate date
+          const date = new Date(year, month - 1, day);
+          if (
+            date.getFullYear() === year &&
+            date.getMonth() === month - 1 &&
+            date.getDate() === day &&
+            date <= new Date() // Not in future
+          ) {
+            // Format as YYYY-MM-DD
+            analyzedContent.purchase_date = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+          }
+        } catch (e) {
+          // Invalid date, ignore
+        }
+      }
+    }
   }
 
+  // Extract quantity with multiple patterns
+  const quantityPatterns = [
+    /x\s*(\d+)/i,                // x2
+    /qty:\s*(\d+)/i,             // qty: 2
+    /quantity:\s*(\d+)/i,        // quantity: 2
+    /(\d+)\s*pcs/i,              // 2 pcs
+    /(\d+)\s*pieces/i,           // 2 pieces
+    /(\d+)\s*units/i             // 2 units
+  ];
+
+  for (const pattern of quantityPatterns) {
+    const match = caption.match(pattern);
+    if (match) {
+      const quantity = parseInt(match[1], 10);
+      if (quantity > 0 && quantity < 10000) { // Validate quantity
+        analyzedContent.quantity = quantity;
+        break;
+      }
+    }
+  }
+
+  // Extract notes (text in parentheses)
+  const notesMatch = caption.match(/\(([^)]+)\)/);
+  if (notesMatch) {
+    analyzedContent.notes = notesMatch[1].trim();
+  }
+
+  // Set AI analysis flag based on product name length and missing fields
   if (analyzedContent.parsing_metadata) {
-    analyzedContent.parsing_metadata.needs_ai_analysis = !analyzedContent.product_code || !analyzedContent.quantity;
+    const needsAiAnalysis = 
+      (analyzedContent.product_name && analyzedContent.product_name.length > 23) || 
+      !analyzedContent.product_code || 
+      !analyzedContent.quantity;
+      
+    analyzedContent.parsing_metadata.needs_ai_analysis = needsAiAnalysis;
   }
   
   return analyzedContent;
@@ -238,15 +324,56 @@ serve(async (req) => {
       hasProductName: !!analyzedContent.product_name,
       hasProductCode: !!analyzedContent.product_code,
       hasQuantity: !!analyzedContent.quantity,
-      needsAiAnalysis: analyzedContent.parsing_metadata?.needs_ai_analysis
+      needsAiAnalysis: analyzedContent.parsing_metadata?.needs_ai_analysis,
+      productNameLength: analyzedContent.product_name?.length
     });
+
+    // Check if we need AI analysis based on product name length
+    let finalAnalyzedContent = analyzedContent;
+    if (analyzedContent.product_name && analyzedContent.product_name.length > 23) {
+      requestLogger.info('Product name exceeds 23 characters, triggering AI analysis', {
+        productName: analyzedContent.product_name,
+        length: analyzedContent.product_name.length
+      });
+      
+      try {
+        // Call the analyze-with-ai function
+        const aiResponse = await supabase.functions.invoke('analyze-with-ai', {
+          body: { 
+            messageId: messageId,
+            caption: caption,
+            existingContent: analyzedContent,
+            correlationId: requestCorrelationId,
+            media_group_id: media_group_id
+          }
+        });
+        
+        if (aiResponse.data && aiResponse.data.analyzed_content) {
+          requestLogger.info('AI analysis successful, using AI results');
+          finalAnalyzedContent = aiResponse.data.analyzed_content;
+          
+          // Ensure we mark this as AI analyzed
+          if (finalAnalyzedContent.parsing_metadata) {
+            finalAnalyzedContent.parsing_metadata.method = 'hybrid';
+            finalAnalyzedContent.parsing_metadata.ai_confidence = 0.9;
+            finalAnalyzedContent.parsing_metadata.manual_confidence = 
+              analyzedContent.parsing_metadata?.confidence || 0.8;
+          }
+        }
+      } catch (aiError) {
+        requestLogger.error('Error in AI analysis, falling back to manual parsing', { 
+          error: aiError.message 
+        });
+        // Continue with manual parsing results
+      }
+    }
 
     // Update source message first
     requestLogger.info('Updating source message', { messageId });
     const { error: updateError } = await supabase
       .from('messages')
       .update({
-        analyzed_content: analyzedContent,
+        analyzed_content: finalAnalyzedContent,
         processing_state: 'completed',
         processing_started_at: new Date().toISOString(),
         processing_completed_at: new Date().toISOString(),
@@ -265,7 +392,7 @@ serve(async (req) => {
     // If part of a media group, sync other messages
     if (media_group_id) {
       requestLogger.info('Message is part of a media group, syncing to other messages', { media_group_id });
-      await syncMediaGroup(supabase, messageId, media_group_id, analyzedContent, requestCorrelationId);
+      await syncMediaGroup(supabase, messageId, media_group_id, finalAnalyzedContent, requestCorrelationId);
     }
 
     requestLogger.info('Caption analysis completed successfully');
