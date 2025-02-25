@@ -1,4 +1,4 @@
-import { getLogger } from "./logger.ts";
+import { getLogger } from "./logger";
 
 export async function ensureStorageBucketExists(
   supabase: any,
