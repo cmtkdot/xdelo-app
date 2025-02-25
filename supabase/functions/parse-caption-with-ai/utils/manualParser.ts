@@ -1,7 +1,7 @@
-import { ParsedContent } from "../types.ts";
+import { AnalyzedContent } from "../../_shared/types.ts";
 import { parseQuantity } from "./quantityParser.ts";
 
-function calculateConfidence(result: ParsedContent, fallbacks: string[], caption: string): number {
+function calculateConfidence(result: AnalyzedContent, fallbacks: string[], caption: string): number {
   let score = 1.0;
   
   // Structure Analysis (40% weight)
@@ -54,9 +54,9 @@ function calculateConfidence(result: ParsedContent, fallbacks: string[], caption
   return Math.max(0.1, Math.min(1, score));
 }
 
-export async function manualParse(caption: string): Promise<ParsedContent> {
+export async function manualParse(caption: string): Promise<AnalyzedContent> {
   console.log("Starting manual parsing for:", caption);
-  const result: ParsedContent = {};
+  const result: AnalyzedContent = {};
   const fallbacks_used: string[] = [];
 
   // Extract product name (text before line break, dash, # or x)
@@ -143,19 +143,27 @@ export async function manualParse(caption: string): Promise<ParsedContent> {
   // Calculate if we have critical fallbacks
   const criticalFallbacks = ['no_product_code', 'no_quantity'];
   const hasCriticalFallbacks = fallbacks_used.some(f => criticalFallbacks.includes(f));
+  
+  // Only check product_name length for AI analysis, no confidence score needed
+  const needsAiAnalysis = !!(result.product_name && result.product_name.length > 23);
 
   result.parsing_metadata = {
     method: 'manual',
     confidence,
-    fallbacks_used: fallbacks_used.length ? fallbacks_used : undefined,
     timestamp: new Date().toISOString(),
-    needs_ai_analysis: confidence < 0.4 || hasCriticalFallbacks
+    needs_ai_analysis: needsAiAnalysis
   };
+  
+  // Store fallbacks in notes if there are any
+  if (fallbacks_used.length) {
+    result.notes = (result.notes ? result.notes + ' ' : '') + 
+      `[Fallbacks used: ${fallbacks_used.join(', ')}]`;
+  }
 
   console.log("Manual parsing result:", {
     ...result,
     confidence,
-    needs_ai_analysis: result.parsing_metadata.needs_ai_analysis,
+    needs_ai_analysis: result.parsing_metadata?.needs_ai_analysis,
     fallbacks: fallbacks_used
   });
 

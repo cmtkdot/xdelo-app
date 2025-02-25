@@ -13,13 +13,10 @@ export function formatDate(date: Date): string {
 export const messageToMediaItem = (message: Message) => {
   return {
     id: message.id,
-    url: message.public_url || '',
-    type: message.mime_type?.startsWith('video/') ? 'video' : 'image',
-    caption: message.caption || '',
-    width: message.width || 0,
-    height: message.height || 0,
     public_url: message.public_url || '',
-    created_at: message.created_at || new Date().toISOString()
+    mime_type: message.mime_type || '',
+    created_at: message.created_at || new Date().toISOString(),
+    analyzed_content: message.analyzed_content || undefined
   };
 };
 
@@ -36,3 +33,4 @@ export { logSyncOperationBatch, logSyncWarning };
 
 // We'll use logSyncOperation from productMatching
 export { logSyncOperation } from './productMatching';
+

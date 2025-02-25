@@ -1,4 +1,28 @@
-// Supabase Edge Function Types
+
+export interface GlProduct {
+  id: string;
+  glide_id: string | null;
+  main_product_name: string | null;
+  main_vendor_product_name: string | null;
+  main_vendor_uid: string | null;
+  main_product_purchase_date: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductMatch {
+  product_id: string;
+  glide_id: string | null;
+  confidence_score: number;
+  match_priority: number;
+  match_details: string;
+  match_criteria: {
+    name_match: boolean;
+    vendor_match: boolean;
+    date_match: boolean;
+  };
+}
+
 export interface ProductMatchRequest {
   productName: string;
   vendorName?: string;
@@ -15,32 +39,6 @@ export interface ProductMatchResponse {
     bestMatch: ProductMatch | null;
   };
   error?: string;
-}
-
-export interface ProductMatch {
-  product_id: string;
-  glide_id: string | null;
-  confidence_score: number;
-  match_priority: number;
-  match_details: string;
-  match_criteria: {
-    name_match: boolean;
-    vendor_match: boolean;
-    po_match: boolean;
-    date_match: boolean;
-  };
-}
-
-export interface GlProduct {
-  id: string;
-  glide_id: string | null;
-  main_product_name: string | null;
-  main_vendor_product_name: string | null;
-  main_vendor_uid: string | null;
-  main_product_purchase_date: string | null;
-  rowid_purchase_order_row_id: string | null;
-  created_at?: string;
-  updated_at?: string;
 }
 
 export const NAME_MATCH_WEIGHTS = {

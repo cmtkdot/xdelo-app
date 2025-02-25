@@ -102,26 +102,6 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
     try {
       const mediaToDelete = mainMedia;
       
-      if (deleteTelegram && mediaToDelete.telegram_message_id && mediaToDelete.chat_id) {
-        const response = await supabase.functions.invoke('delete-telegram-message', {
-          body: {
-            message_id: mediaToDelete.telegram_message_id,
-            chat_id: mediaToDelete.chat_id,
-            media_group_id: mediaToDelete.media_group_id
-          }
-        });
-
-        if (response.error) throw response.error;
-      } else {
-        const { error: storageError } = await supabase.storage
-          .from('telegram-media')
-          .remove([`${mediaToDelete.file_unique_id}.${mediaToDelete.mime_type?.split('/')[1] || 'jpg'}`]);
-
-        if (storageError) {
-          console.error('Storage deletion error:', storageError);
-        }
-      }
-
       const { error } = await supabase
         .from('messages')
         .delete()
@@ -180,11 +160,65 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
             </div>
           )}
           
+          {mainMedia.analyzed_content?.product_name && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Product</span>
+              <span className="text-sm font-medium truncate max-w-[60%] text-right">
+                {mainMedia.analyzed_content.product_name}
+              </span>
+            </div>
+          )}
+          
           {mainMedia.analyzed_content?.quantity && (
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Quantity</span>
               <span className="text-sm font-medium">
                 {mainMedia.analyzed_content.quantity}
+              </span>
+            </div>
+          )}
+          
+          {mainMedia.analyzed_content?.vendor_uid && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Vendor</span>
+              <span className="text-sm font-medium truncate max-w-[60%] text-right">
+                {mainMedia.analyzed_content.vendor_uid}
+              </span>
+            </div>
+          )}
+          
+          {mainMedia.analyzed_content?.product_code && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Product Code</span>
+              <span className="text-sm font-medium truncate max-w-[60%] text-right">
+                {mainMedia.analyzed_content.product_code}
+              </span>
+            </div>
+          )}
+          
+          {mainMedia.analyzed_content?.purchase_date && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Purchase Date</span>
+              <span className="text-sm font-medium">
+                {new Date(mainMedia.analyzed_content.purchase_date).toLocaleDateString()}
+              </span>
+            </div>
+          )}
+          
+          {mainMedia.analyzed_content?.unit_price && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Unit Price</span>
+              <span className="text-sm font-medium">
+                ${mainMedia.analyzed_content.unit_price.toFixed(2)}
+              </span>
+            </div>
+          )}
+          
+          {mainMedia.analyzed_content?.total_price && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Total Price</span>
+              <span className="text-sm font-medium">
+                ${mainMedia.analyzed_content.total_price.toFixed(2)}
               </span>
             </div>
           )}

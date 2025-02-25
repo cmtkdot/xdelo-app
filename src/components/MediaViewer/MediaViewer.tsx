@@ -113,12 +113,42 @@ export const MediaViewer = ({
                 </div>
               )}
               
+              {analyzedContent?.product_name && (
+                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Tag className="w-5 h-5 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-muted-foreground">Product</p>
+                    <p className="text-base font-medium truncate">{analyzedContent.product_name}</p>
+                  </div>
+                </div>
+              )}
+              
               {analyzedContent?.quantity && (
                 <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
                   <Package className="w-5 h-5 text-primary" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-muted-foreground">Quantity</p>
                     <p className="text-base font-medium truncate">{analyzedContent.quantity}</p>
+                  </div>
+                </div>
+              )}
+
+              {analyzedContent?.vendor_uid && (
+                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Tag className="w-5 h-5 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-muted-foreground">Vendor</p>
+                    <p className="text-base font-medium truncate">{analyzedContent.vendor_uid}</p>
+                  </div>
+                </div>
+              )}
+              
+              {analyzedContent?.product_code && (
+                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Tag className="w-5 h-5 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-muted-foreground">Product Code</p>
+                    <p className="text-base font-medium truncate">{analyzedContent.product_code}</p>
                   </div>
                 </div>
               )}
@@ -130,6 +160,30 @@ export const MediaViewer = ({
                     <p className="text-sm text-muted-foreground">Purchase Date</p>
                     <p className="text-base font-medium truncate">
                       {formatDate(analyzedContent.purchase_date)}
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {analyzedContent?.unit_price && (
+                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Tag className="w-5 h-5 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-muted-foreground">Unit Price</p>
+                    <p className="text-base font-medium truncate">
+                      ${analyzedContent.unit_price.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {analyzedContent?.total_price && (
+                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Tag className="w-5 h-5 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-muted-foreground">Total Price</p>
+                    <p className="text-base font-medium truncate">
+                      ${analyzedContent.total_price.toFixed(2)}
                     </p>
                   </div>
                 </div>

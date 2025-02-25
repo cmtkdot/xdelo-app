@@ -1,190 +1,197 @@
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { 
+  findExistingMessage, 
+  findMessageByFileUniqueId,
+  updateMessage,
+  handleEditedCaption,
+  findAnalyzedMessageInGroup
+} from './utils/dbOperations.ts';
+import { getLogger } from './utils/logger.ts';
+import { MessageData, EditHistoryEntry } from './types.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// Define types for message data
+interface NonMediaMessage {
+  chat_id: number;
+  chat_type: string;
+  chat_title?: string;
+  telegram_message_id: number;
+  message_type: string;
+  message_text?: string;
+  is_edited: boolean;
+  edit_date: string | null;
+  telegram_data: Record<string, unknown>;
+  processing_state: string;
+  correlation_id: string;
+  edit_history?: EditHistoryEntry[];
 }
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')
-const supabaseServiceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-const telegramToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
-
-if (!supabaseUrl || !supabaseServiceRole || !telegramToken) {
-  throw new Error('Missing environment variables')
+interface MediaMessageData {
+  chat_id: number;
+  chat_type: string;
+  chat_title?: string;
+  media_group_id?: string;
+  caption: string;
+  file_id: string;
+  file_unique_id: string;
+  mime_type: string;
+  file_size?: number;
+  width: number;
+  height: number;
+  duration?: number;
+  processing_state: string;
+  telegram_data: Record<string, unknown>;
+  telegram_message_id: number;
+  correlation_id: string;
+  update_id?: string;
+  is_edited?: boolean;
+  edit_date?: string;
+  edited_channel_post?: string;
+  edit_history?: EditHistoryEntry[];
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceRole)
+  // Generate a correlation ID for tracking this request
+  const correlationId = `webhook-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  const logger = getLogger(correlationId);
 
-async function getFileUrl(fileId: string): Promise<string> {
-  console.log('🔍 Getting file URL for fileId:', fileId)
-  const response = await fetch(
-    `https://api.telegram.org/bot${telegramToken}/getFile?file_id=${fileId}`
-  )
-  const data = await response.json()
-  if (!data.ok) throw new Error('Failed to get file path')
-  return `https://api.telegram.org/file/bot${telegramToken}/${data.result.file_path}`
-}
-
-async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeType: string): Promise<string> {
-  console.log('📤 Uploading media to storage:', { fileUniqueId, mimeType })
-  
-  const ext = mimeType.split('/')[1] || 'bin'
-  const storagePath = `${fileUniqueId}.${ext}`
-  
-  try {
-    const mediaResponse = await fetch(fileUrl)
-    if (!mediaResponse.ok) throw new Error('Failed to download media from Telegram')
+    const update = await req.json();
+    logger.info('Received webhook update:', { updateKeys: Object.keys(update) });
     
-    const mediaBuffer = await mediaResponse.arrayBuffer()
-
-    const { error: uploadError } = await supabase
-      .storage
-      .from('telegram-media')
-      .upload(storagePath, mediaBuffer, {
-        contentType: mimeType,
-        upsert: true
-      })
-
-    if (uploadError) throw uploadError
-
-    const { data: { publicUrl } } = supabase
-      .storage
-      .from('telegram-media')
-      .getPublicUrl(storagePath)
-
-    console.log('✅ Media uploaded successfully:', publicUrl)
-    return publicUrl
-
-  } catch (error) {
-    console.error('❌ Error uploading media:', error)
-    throw error
-  }
-}
-
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
-
-  try {
-    const rawBody = await req.text();
-    console.log('📝 Raw request body:', rawBody);
-
-    let update;
-    try {
-      update = JSON.parse(rawBody);
-    } catch (e) {
-      console.error('❌ Failed to parse JSON:', e);
-      return new Response(
-        JSON.stringify({ status: 'error', reason: 'invalid json' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      );
+    // Log the structure of edited_channel_post if present for debugging
+    if (update.edited_channel_post) {
+      logger.info('Edited channel post structure:', { 
+        keys: Object.keys(update.edited_channel_post),
+        hasMessageId: !!update.edited_channel_post.message_id
+      });
     }
-
-    console.log('📥 Parsed webhook update:', JSON.stringify(update, null, 2));
-
-    // Handle both regular messages and channel posts
-    const message = update.message || update.channel_post;
+    
+    const message = update.message || update.channel_post || 
+                    (update.edited_channel_post ? update.edited_channel_post : null) || 
+                    (update.edited_message ? update.edited_message : null);
+    const isEdited = Boolean(update.edited_message || update.edited_channel_post);
+    const isChannelPost = Boolean(update.channel_post || update.edited_channel_post);
     
     if (!message) {
-      console.log('❌ No message or channel_post in update. Update keys:', Object.keys(update));
+      logger.error('No message found in update:', update);
       return new Response(
         JSON.stringify({ 
           status: 'skipped', 
           reason: 'no message or channel_post',
-          update_keys: Object.keys(update)
+          update_keys: Object.keys(update),
+          correlation_id: correlationId
         }), 
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
       );
     }
 
-    console.log('📨 Message content:', JSON.stringify(message, null, 2));
-
-    const chat = message.chat
-    const mediaGroupId = message.media_group_id
-    const photo = message.photo ? message.photo[message.photo.length - 1] : null
-    const video = message.video
-    const media = photo || video
-
-    console.log('📸 Media details:', {
-      hasPhoto: !!photo,
-      hasVideo: !!video,
-      mediaGroupId,
-      mediaObject: media
+    // Log the message structure to help with debugging
+    logger.info('Message structure', { 
+      messageKeys: Object.keys(message),
+      hasPhoto: !!message.photo,
+      hasVideo: !!message.video,
+      isEdited: isEdited,
+      isChannelPost: isChannelPost
     });
+
+    const chat = message.chat;
+    const mediaGroupId = message.media_group_id;
+    const photo = message.photo ? message.photo[message.photo.length - 1] : null;
+    const video = message.video;
+    const media = photo || video;
 
     if (!media) {
-      console.log('❌ No media in message. Message type:', message.type);
-      return new Response(
-        JSON.stringify({ 
-          status: 'skipped', 
-          reason: 'no media',
-          messageType: message.type 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
-      )
-    }
-
-    const { data: existingMedia, error: queryError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('file_unique_id', media.file_unique_id)
-      .single()
-
-    if (queryError) {
-      console.error('❌ Error checking existing media:', queryError);
-    }
-
-    console.log('🔍 Existing media check:', {
-      exists: !!existingMedia,
-      fileUniqueId: media.file_unique_id
-    });
-
-    let messageData = existingMedia;
-    let storageUrl = existingMedia?.public_url;
-
-    // Always process media updates
-    console.log('🔄 Processing media update');
-    
-    const telegramFileUrl = await getFileUrl(media.file_id)
-    console.log('📥 Got Telegram file URL:', telegramFileUrl);
-    
-    if (!existingMedia) {
-      console.log('📤 New media detected, uploading to storage');
-      storageUrl = await uploadMediaToStorage(
-        telegramFileUrl,
-        media.file_unique_id,
-        video ? video.mime_type : 'image/jpeg'
-      )
-    } else {
-      console.log('♻️ Using existing storage URL:', storageUrl);
-    }
+      logger.info('No media in message, handling as text message');
       
-    const newMessageData: {
-      telegram_message_id: number;
-      chat_id: number;
-      chat_type: string;
-      chat_title: string;
-      media_group_id?: string;
-      caption: string;
-      file_id: string;
-      file_unique_id: string;
-      public_url?: string;
-      storage_path: string;
-      mime_type: string;
-      file_size?: number;
-      width: number;
-      height: number;
-      duration?: number;
-      processing_state: string;
-      telegram_data: Record<string, unknown>;
-      is_edited?: boolean;
-      edit_date?: string;
-      analyzed_content?: Record<string, unknown> | null;
-    } = {
-      telegram_message_id: message.message_id,
+      // Handle non-media messages
+      const nonMediaMessage: NonMediaMessage = {
+        chat_id: message.chat.id,
+        chat_type: message.chat.type,
+        chat_title: message.chat.title,
+        telegram_message_id: message.message_id,
+        message_type: 'text',
+        message_text: message.text,
+        is_edited: isEdited,
+        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : null,
+        telegram_data: update,
+        processing_state: 'initialized',
+        correlation_id: correlationId
+      };
+
+      // If this is an edited message, update the edit history
+      if (isEdited) {
+        // Get the existing message
+        const { data: existingMessage } = await supabaseClient
+          .from('other_messages')
+          .select('*')
+          .eq('chat_id', message.chat.id)
+          .eq('telegram_message_id', message.message_id)
+          .single();
+          
+        if (existingMessage) {
+          // Create new edit history entry
+          const newEntry: EditHistoryEntry = {
+            edit_date: new Date(message.edit_date * 1000).toISOString(),
+            previous_caption: existingMessage.message_text || '',
+            new_caption: message.text || '',
+            is_channel_post: isChannelPost
+          };
+          
+          // Update the edit_history array
+          const updatedHistory = existingMessage.edit_history 
+            ? [...existingMessage.edit_history, newEntry] 
+            : [newEntry];
+            
+          // Update the message with edit history
+          nonMediaMessage.edit_history = updatedHistory;
+        }
+      }
+
+      const { error: textError } = await supabaseClient
+        .from('other_messages')
+        .upsert([nonMediaMessage], { onConflict: 'chat_id,telegram_message_id' });
+
+      if (textError) throw textError;
+
+      return new Response(JSON.stringify({ 
+        status: 'success', 
+        message: 'Text message processed',
+        correlation_id: correlationId
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      });
+    }
+
+    // Check if this media has been processed before using file_unique_id
+    let existingMedia: MessageData | null = null;
+    try {
+      const { data } = await supabaseClient
+        .from("messages")
+        .select("*")
+        .eq("file_unique_id", media.file_unique_id)
+        .maybeSingle();
+        
+      existingMedia = data;
+      
+      logger.info('Existing media check', {
+        exists: !!existingMedia,
+        fileUniqueId: media.file_unique_id,
+        existingId: existingMedia?.id,
+        isEdited: isEdited
+      });
+    } catch (error) {
+      logger.error('Error checking existing media', {
+        error: error.message,
+        fileUniqueId: media.file_unique_id
+      });
+    }
+
+    // Prepare message data
+    const messageData: MediaMessageData = {
       chat_id: chat.id,
       chat_type: chat.type,
       chat_title: chat.title,
@@ -192,92 +199,140 @@ serve(async (req) => {
       caption: message.caption || '', // Store empty string if no caption
       file_id: media.file_id,
       file_unique_id: media.file_unique_id,
-      public_url: storageUrl,
-      storage_path: `${media.file_unique_id}.${video ? video.mime_type.split('/')[1] : 'jpeg'}`,
       mime_type: video ? video.mime_type : 'image/jpeg',
       file_size: media.file_size,
       width: media.width,
       height: media.height,
       duration: video?.duration,
       processing_state: message.caption ? 'pending' : 'initialized',
-      telegram_data: update
-    }
+      telegram_data: update,
+      telegram_message_id: message.message_id,
+      correlation_id: correlationId,
+      update_id: update.update_id ? update.update_id.toString() : undefined
+    };
 
     // Handle edited messages
-    if (message.edit_date) {
-      newMessageData.is_edited = true;
-      newMessageData.edit_date = new Date(message.edit_date * 1000).toISOString();
-      newMessageData.analyzed_content = null; // Clear for re-analysis
-      newMessageData.processing_state = message.caption ? 'pending' : 'initialized';
-      if (existingMedia?.telegram_data) {
-        newMessageData.telegram_data = {
-          original_message: existingMedia.telegram_data.message,
-          edited_message: message
+    if (isEdited) {
+      messageData.is_edited = true;
+      messageData.edit_date = new Date(message.edit_date * 1000).toISOString();
+      messageData.processing_state = message.caption ? 'pending' : 'initialized';
+      
+      // Store edited_channel_post if this is from an edited channel post
+      if (update.edited_channel_post) {
+        messageData.edited_channel_post = JSON.stringify(update.edited_channel_post);
+      }
+      
+      // If we have an existing message, update the edit history
+      if (existingMedia) {
+        // Create new edit history entry
+        const newEntry: EditHistoryEntry = {
+          edit_date: messageData.edit_date!,
+          previous_caption: existingMedia.caption || '',
+          new_caption: message.caption || '',
+          is_channel_post: isChannelPost
         };
+        
+        // Update the edit_history array
+        const updatedHistory = existingMedia.edit_history 
+          ? [...existingMedia.edit_history, newEntry] 
+          : [newEntry];
+          
+        // Add edit history to message data
+        messageData.edit_history = updatedHistory;
       }
     }
 
-    console.log('📝 Prepared message data:', JSON.stringify(newMessageData, null, 2));
-
+    // For edits, update existing record
     if (existingMedia) {
-      console.log('🔄 Updating existing media');
-      const { data: updatedMessage, error } = await supabase
+      logger.info('Updating existing media');
+      const { error: updateError } = await supabaseClient
         .from('messages')
-        .update(newMessageData)
-        .eq('id', existingMedia.id)
-        .select()
-        .single();
-        
-      if (error) {
-        console.error('❌ Error updating message:', error);
-        throw error;
-      }
-      messageData = updatedMessage;
-    } else {
-      console.log('📥 Inserting new media');
-      const { data: newMessage, error } = await supabase
-        .from('messages')
-        .insert(newMessageData)
-        .select()
-        .single();
-        
-      if (error) {
-        console.error('❌ Error inserting message:', error);
-        throw error;
-      }
-      messageData = newMessage;
-    }
+        .update(messageData)
+        .eq('id', existingMedia.id);
 
-    // Only trigger analysis if there's a caption
-    if (message.caption) {
-      console.log('🔄 Triggering caption analysis for message:', messageData.id);
-      await supabase.functions.invoke('parse-caption-with-ai', {
-        body: { 
-          messageId: messageData.id,
-          caption: message.caption
+      if (updateError) throw updateError;
+      
+      // If this is an edited message with caption, trigger re-analysis
+      if (isEdited && message.caption) {
+        // Call handleEditedCaption with the updated parameters
+        await handleEditedCaption(
+          supabaseClient,
+          existingMedia.id,
+          existingMedia.caption || '',
+          message.caption,
+          correlationId,
+          // @ts-expect-error - analyzed_content can be null during re-analysis
+          existingMedia.analyzed_content,
+          messageData.edit_date!,
+          isChannelPost,
+          mediaGroupId
+        );
+      }
+    } 
+    // For new messages, insert
+    else {
+      logger.info('Inserting new media');
+      const { data, error: insertError } = await supabaseClient
+        .from('messages')
+        .insert([messageData])
+        .select();
+
+      if (insertError) throw insertError;
+      
+      // If part of a media group, check if any other message in the group has analyzed content
+      if (mediaGroupId && data && data.length > 0) {
+        logger.info('Message is part of a media group, checking for analyzed content');
+        
+        const analyzedMessage = await findAnalyzedMessageInGroup(supabaseClient, mediaGroupId);
+        
+        if (analyzedMessage && analyzedMessage.analyzed_content) {
+          logger.info('Found analyzed content in group, syncing to this message');
+          
+          // Update the message with the analyzed content
+          await updateMessage(
+            supabaseClient,
+            data[0].id,
+            {
+              analyzed_content: analyzedMessage.analyzed_content,
+              message_caption_id: analyzedMessage.id,
+              is_original_caption: false,
+              group_caption_synced: true,
+              processing_state: 'completed',
+              processing_completed_at: new Date().toISOString()
+            }
+          );
         }
-      });
+      }
     }
 
     return new Response(
       JSON.stringify({ 
         status: 'success', 
         message: 'Message processed',
-        messageId: messageData.id,
-        storagePath: messageData.storage_path
+        correlation_id: correlationId,
+        mediaGroupId: mediaGroupId || null,
+        isEdited: isEdited,
+        isChannelPost: isChannelPost
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
-    )
+    );
 
   } catch (error) {
-    console.error('❌ Error processing webhook:', error);
+    logger.error('Error processing webhook', { 
+      error: error.message,
+      stack: error.stack
+    });
+    
     return new Response(
       JSON.stringify({ 
         status: 'error', 
         message: error.message,
-        stack: error.stack 
+        correlation_id: correlationId
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    )
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
+      }
+    );
   }
-})
+});

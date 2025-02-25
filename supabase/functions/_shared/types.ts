@@ -1,4 +1,4 @@
-export interface ParsedContent {
+export interface AnalyzedContent {
   product_name?: string;
   product_code?: string;
   vendor_uid?: string;
@@ -14,7 +14,14 @@ export interface ParsedContent {
     manual_confidence?: number;
     ai_confidence?: number;
   };
+  sync_metadata?: {
+    sync_source_message_id?: string;
+    media_group_id?: string;
+  };
 }
+
+// Keeping ParsedContent for backward compatibility
+export interface ParsedContent extends AnalyzedContent {}
 
 export interface QuantityParseResult {
   value: number;
