@@ -16,6 +16,16 @@ BEGIN
         ADD CONSTRAINT message_deletion_logs_deletion_source_check 
         CHECK (deletion_source = ANY (ARRAY['telegram'::text, 'database'::text, 'both'::text]));
     END IF;
+    
+    -- Add additional_info column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'message_deletion_logs' 
+        AND column_name = 'additional_info'
+    ) THEN
+        ALTER TABLE public.message_deletion_logs ADD COLUMN additional_info jsonb NULL;
+    END IF;
 END
 $$;
 
@@ -31,7 +41,8 @@ BEGIN
     chat_id,
     deleted_at,
     deletion_reason,
-    deletion_source
+    deletion_source,
+    additional_info
   ) VALUES (
     OLD.id,
     'other_message',
@@ -39,7 +50,8 @@ BEGIN
     OLD.chat_id,
     NOW(),
     'user_initiated',
-    'database'  -- Default to 'database' since this is triggered by a database deletion
+    'database',  -- Default to 'database' since this is triggered by a database deletion
+    jsonb_build_object('message_text', OLD.message_text, 'chat_title', OLD.chat_title)
   );
   
   -- Return the old record to allow the deletion to proceed
@@ -92,7 +104,8 @@ BEGIN
     chat_id,
     deleted_at,
     deletion_reason,
-    deletion_source
+    deletion_source,
+    additional_info
   ) VALUES (
     OLD.id,
     'message',
@@ -103,7 +116,8 @@ BEGIN
       WHEN source = 'telegram' THEN 'deleted_from_telegram'
       ELSE 'user_initiated'
     END,
-    source  -- Use the provided source parameter
+    source,  -- Use the provided source parameter
+    jsonb_build_object('caption', OLD.caption, 'chat_title', OLD.chat_title, 'media_group_id', OLD.media_group_id)
   );
   
   -- Return the old record to allow the deletion to proceed
