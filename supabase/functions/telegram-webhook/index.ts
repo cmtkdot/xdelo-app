@@ -1,9 +1,9 @@
+
 import { serve } from "http/server";
 import { createClient } from '@supabase/supabase-js';
 import { corsHeaders } from '../_shared/cors.ts';
 import { downloadAndStoreMedia } from './mediaUtils.ts';
 import { getLogger } from './logger.ts';
-import { handleEditedMessage } from './messageHandlers.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -27,7 +27,9 @@ serve(async (req) => {
       
       logger.info('Processing edited content', {
         is_channel_post: isChannelPost,
-        has_media_group: !!editedMessage.media_group_id
+        has_media_group: !!editedMessage.media_group_id,
+        message_id: editedMessage.message_id,
+        chat_id: editedMessage.chat.id
       });
 
       // Use the dedicated edge function for handling edits
@@ -43,7 +45,15 @@ serve(async (req) => {
         }
       });
 
-      if (editError) throw editError;
+      if (editError) {
+        logger.error('Error handling edit', { error: editError });
+        throw editError;
+      }
+
+      logger.info('Successfully processed edit', {
+        message_id: editedMessage.message_id,
+        is_channel_post: isChannelPost
+      });
 
       return new Response(
         JSON.stringify({
@@ -215,12 +225,17 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    logger.error('Webhook error', { error });
+    logger.error('Webhook error', { 
+      error: error.message,
+      stack: error.stack,
+      correlation_id
+    });
+    
     return new Response(
       JSON.stringify({ 
         success: false, 
         error: error.message,
-        correlation_id: correlationId
+        correlation_id
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

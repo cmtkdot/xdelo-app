@@ -9,6 +9,7 @@ serve(async (req) => {
   }
 
   const correlationId = crypto.randomUUID();
+  console.log('Starting edit handler', { correlation_id: correlationId });
 
   try {
     const {
@@ -25,6 +26,13 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
+    console.log('Processing edit request', {
+      message_id,
+      chat_id,
+      media_group_id,
+      correlation_id: correlationId
+    });
+
     // Find and update the message
     const { data: message, error: messageError } = await supabase
       .from('messages')
@@ -40,16 +48,21 @@ serve(async (req) => {
       .select()
       .single();
 
-    if (messageError) throw messageError;
+    if (messageError) {
+      console.error('Error updating message', {
+        error: messageError,
+        correlation_id: correlationId
+      });
+      throw messageError;
+    }
 
-    // The database trigger will handle:
-    // 1. Resetting analyzed_content
-    // 2. Updating processing state
-    // 3. Updating media group messages
-    // 4. Maintaining edit history
+    console.log('Message updated successfully', {
+      message_id: message.id,
+      correlation_id: correlationId
+    });
 
-    // Trigger reanalysis
-    await supabase.functions.invoke('parse-caption-with-ai', {
+    // Trigger reanalysis - the database trigger will handle group syncing
+    const { error: analysisError } = await supabase.functions.invoke('parse-caption-with-ai', {
       body: {
         message_id: message.id,
         caption,
@@ -58,6 +71,19 @@ serve(async (req) => {
         media_group_id,
         is_channel_post
       }
+    });
+
+    if (analysisError) {
+      console.error('Error triggering reanalysis', {
+        error: analysisError,
+        correlation_id: correlationId
+      });
+      throw analysisError;
+    }
+
+    console.log('Edit processing completed', {
+      message_id: message.id,
+      correlation_id: correlationId
     });
 
     return new Response(
@@ -70,6 +96,12 @@ serve(async (req) => {
     );
 
   } catch (error) {
+    console.error('Edit handler error', {
+      error: error.message,
+      stack: error.stack,
+      correlation_id: correlationId
+    });
+
     return new Response(
       JSON.stringify({
         success: false,
