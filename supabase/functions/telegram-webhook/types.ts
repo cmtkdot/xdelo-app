@@ -1,295 +1,135 @@
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-export type TelegramChatType = 'private' | 'group' | 'supergroup' | 'channel';
-export type ProcessingStateType = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
-export type TelegramOtherMessageType = 
-  | 'text'
-  | 'command'
-  | 'contact'
-  | 'location'
-  | 'voice'
-  | 'document'
-  | 'sticker'
-  | 'chat_member'
-  | 'my_chat_member'
-  | 'channel_post'
-  | 'edited_message'
-  | 'edited_channel_post'
-  | 'venue'
-  | 'poll'
-  | 'dice'
-  | 'game'
-  | 'callback_query'
-  | 'inline_query';
+import { createClient } from '@supabase/supabase-js';
+import type { Database } from '../../../src/types'; // Using relative path to share types
+
+// Telegram API Types
+export interface TelegramWebhookPayload {
+  update_id: number;
+  message?: TelegramMessage;
+  edited_message?: TelegramMessage;
+  channel_post?: TelegramMessage;
+  edited_channel_post?: TelegramMessage;
+}
+
+export interface TelegramMessage {
+  message_id: number;
+  from?: TelegramUser;
+  chat: TelegramChat;
+  date: number;
+  text?: string;
+  caption?: string;
+  photo?: TelegramPhotoSize[];
+  video?: TelegramVideo;
+  document?: TelegramDocument;
+  media_group_id?: string;
+}
+
+export interface TelegramUser {
+  id: number;
+  is_bot: boolean;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+}
 
 export interface TelegramChat {
   id: number;
-  type: TelegramChatType;
+  type: string;
   title?: string;
   username?: string;
   first_name?: string;
   last_name?: string;
 }
 
-export interface TelegramPhoto {
+export interface TelegramPhotoSize {
   file_id: string;
   file_unique_id: string;
-  file_size?: number;
   width: number;
   height: number;
+  file_size?: number;
 }
 
 export interface TelegramVideo {
   file_id: string;
   file_unique_id: string;
-  file_size?: number;
-  mime_type?: string;
   width: number;
   height: number;
   duration: number;
+  thumb?: TelegramPhotoSize;
+  mime_type?: string;
+  file_size?: number;
 }
 
 export interface TelegramDocument {
   file_id: string;
   file_unique_id: string;
-  file_size?: number;
-  mime_type?: string;
+  thumb?: TelegramPhotoSize;
   file_name?: string;
+  mime_type?: string;
+  file_size?: number;
 }
 
-export interface TelegramVoice {
+export interface TelegramFile {
   file_id: string;
   file_unique_id: string;
-  duration: number;
-  mime_type?: string;
   file_size?: number;
-}
-
-export interface TelegramMessage {
-  message_id: number;
-  from?: {
-    id: number;
-    first_name?: string;
-    last_name?: string;
-    username?: string;
-  };
-  chat: TelegramChat;
-  media_group_id?: string;
-  caption?: string;
-  edit_date?: number;
-  edit_history?: Array<{
-    timestamp: string;
-    previous_content: Record<string, any>;
-    new_content: Record<string, any>;
-  }>;
-  photo?: TelegramPhoto[];
-  video?: TelegramVideo;
-  document?: TelegramDocument;
-  voice?: TelegramVoice;
-  text?: string;
-  sticker?: any;
-  dice?: any;
-  location?: {
-    latitude: number;
-    longitude: number;
-  };
-  contact?: {
-    phone_number: string;
-    first_name: string;
-    last_name?: string;
-  };
-  venue?: {
-    location: {
-      latitude: number;
-      longitude: number;
-    };
-    title: string;
-    address: string;
-  };
-  game?: any;
-  poll?: {
-    id: string;
-    question: string;
-    options: Array<{
-      text: string;
-      voter_count: number;
-    }>;
-  };
-  callback_query?: {
-    id: string;
-    from: {
-      id: number;
-    };
-    data?: string;
-  };
-  inline_query?: {
-    id: string;
-    query: string;
-  };
-}
-
-export interface TelegramUpdate {
-  update_id: number;
-  message?: TelegramMessage;
-  edited_message?: TelegramMessage;
-  channel_post?: TelegramMessage;
-  edited_channel_post?: TelegramMessage;
-  callback_query?: TelegramMessage['callback_query'];
-  inline_query?: TelegramMessage['inline_query'];
-  my_chat_member?: any;
-  chat_member?: any;
-  chat_join_request?: any;
-}
-
-export interface ChatInfo {
-  chat_id: number;
-  chat_type: TelegramChatType;
-  chat_title: string;
-}
-
-export interface MediaInfo {
-  file_id: string;
-  file_unique_id: string;
-  mime_type?: string;
-  file_size?: number;
-  width?: number;
-  height?: number;
-  duration?: number;
-  media_type?: 'photo' | 'video' | 'document' | 'voice';
-}
-
-export interface MessageData {
-  id?: string;
-  user_id: string;
-  telegram_message_id: number;
-  chat_id: number;
-  chat_type: TelegramChatType;
-  chat_title: string;
-  media_group_id?: string;
-  message_caption_id?: string;
-  is_original_caption?: boolean;
-  group_caption_synced?: boolean;
-  caption?: string;
-  file_id?: string;
-  file_unique_id?: string;
-  public_url?: string;
-  storage_path?: string;
-  mime_type?: string;
-  file_size?: number;
-  width?: number;
-  height?: number;
-  duration?: number;
-  is_edited?: boolean;
-  edit_date?: string | null;
-  edit_history?: Array<{
-    timestamp: string;
-    previous_content: Record<string, any>;
-    new_content: Record<string, any>;
-  }>;
-  processing_state: ProcessingStateType;
-  processing_started_at?: string;
-  processing_completed_at?: string;
-  processing_correlation_id?: string;
-  analyzed_content?: AnalyzedContent;
-  error_message?: string;
-  retry_count?: number;
-  last_error_at?: string;
-  group_first_message_time?: string;
-  group_last_message_time?: string;
-  group_message_count?: string;
-  group_completed_at?: string;
-  telegram_data: Record<string, any>;
-  message_url?: string;
-  is_channel_post?: boolean;
-  sender_chat_id?: number;
-  created_at?: string;
-  updated_at?: string;
-  purchase_order?: string;
-  glide_row_id?: string;
-  sync_attempt?: number;
-  product_name?: string;
-  product_quantity?: number;
-  product_unit?: string;
-  vendor_name?: string;
-  product_sku?: string;
-  is_miscellaneous_item?: boolean;
-  purchase_date?: string;
-  correlation_id?: string;
-  media_type?: string;
-}
-
-export interface OtherMessageData {
-  id?: string;
-  user_id: string;
-  message_type: TelegramOtherMessageType;
-  telegram_message_id: number;
-  chat_id: number;
-  chat_type: TelegramChatType;
-  chat_title?: string;
-  message_text?: string;
-  is_edited: boolean;
-  edit_date?: string | null;
-  edit_history?: Array<{
-    timestamp: string;
-    previous_content: Record<string, any>;
-    new_content: Record<string, any>;
-  }>;
-  processing_state: ProcessingStateType;
-  processing_started_at?: string;
-  processing_completed_at?: string;
-  processing_correlation_id?: string;
-  analyzed_content?: AnalyzedContent;
-  error_message?: string;
-  telegram_data: Record<string, any>;
-  message_url?: string;
-  correlation_id?: string;
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  product_quantity?: number;
-  notes?: string;
-  vendor_name?: string;
-  created_at?: string;
-  updated_at?: string;
+  file_path?: string;
 }
 
 export interface WebhookResponse {
   success: boolean;
   message: string;
-  correlation_id?: string;
-  error?: string;
-  details?: Record<string, any>;
+  data?: Record<string, unknown>;
+  error?: Error;
 }
 
-export interface StateLogEntry {
-  message_id: string;
-  previous_state: ProcessingStateType;
-  new_state: ProcessingStateType;
-  changed_at?: string;
+// Configuration Types
+export interface Config {
+  supabaseUrl: string;
+  supabaseKey: string;
+  telegramBotToken: string;
+  webhookSecret: string;
 }
 
-export interface AnalyzedContent {
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  quantity?: number;
-  notes?: string;
-  parsing_metadata?: {
-    method: 'manual' | 'ai' | 'hybrid';
-    confidence: number;
-    fallbacks_used?: string[];
-    timestamp: string;
-    needs_ai_analysis?: boolean;
-  };
-  sync_metadata?: {
-    sync_source_message_id?: string;
-    media_group_id?: string;
-  };
+// Database Operation Types
+export interface DbOperationResult {
+  success: boolean;
+  data?: Record<string, unknown>;
+  error?: Error;
 }
 
-export interface QuantityParseResult {
-  value: number;
-  confidence: number;
+// Media Processing Types
+export interface MediaProcessingResult {
+  success: boolean;
+  publicUrl?: string;
+  error?: Error;
+  metadata: Record<string, unknown>;
 }
+
+// Analysis Types
+export interface AnalysisResult {
+  success: boolean;
+  content?: Record<string, unknown>;
+  confidence?: number;
+  error?: Error;
+}
+
+// Logging Types
+export interface LogEntry {
+  level: 'info' | 'warn' | 'error';
+  message: string;
+  metadata?: Record<string, unknown>;
+  timestamp: string;
+}
+
+// Error Types
+export interface WebhookError extends Error {
+  code?: string;
+  details?: Record<string, unknown>;
+}
+
+export interface ProcessingError extends Error {
+  stage?: string;
+  metadata?: Record<string, unknown>;
+}
+
