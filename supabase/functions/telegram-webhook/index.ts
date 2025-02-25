@@ -1,6 +1,6 @@
-
 import { serve } from "http/server"
 import { createClient } from "supabase"
+import { createHmac } from "crypto"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,12 +10,29 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get('SUPABASE_URL')
 const supabaseServiceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 const telegramToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
+const webhookSecret = Deno.env.get('TELEGRAM_WEBHOOK_SECRET')
 
-if (!supabaseUrl || !supabaseServiceRole || !telegramToken) {
+if (!supabaseUrl || !supabaseServiceRole || !telegramToken || !webhookSecret) {
   throw new Error('Missing environment variables')
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceRole)
+
+// Verify Telegram webhook request
+function verifyTelegramWebhook(request: Request): boolean {
+  try {
+    const signature = request.headers.get('x-telegram-bot-api-secret-token');
+    if (!signature) {
+      console.error('No secret token in headers');
+      return false;
+    }
+    
+    return signature === webhookSecret;
+  } catch (error) {
+    console.error('Error verifying webhook:', error);
+    return false;
+  }
+}
 
 // Helper to get a logger instance with correlation tracking
 function getLogger(correlationId: string) {
@@ -176,13 +193,29 @@ async function handleMediaGroup(messageId: string, mediaGroupId: string, logger:
 }
 
 serve(async (req) => {
+  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   const correlationId = `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
   const logger = getLogger(correlationId);
-  
+
+  // Verify webhook request
+  if (!verifyTelegramWebhook(req)) {
+    logger.error('Invalid webhook signature');
+    return new Response(
+      JSON.stringify({ 
+        error: 'Invalid webhook signature',
+        correlation_id: correlationId 
+      }), 
+      { 
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
+  }
+
   try {
     const rawBody = await req.text();
     logger.info('Raw request body:', rawBody);
