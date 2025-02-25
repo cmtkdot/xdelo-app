@@ -1750,6 +1750,7 @@ export type Database = {
           chat_id: number
           deleted_at: string
           deletion_reason: string | null
+          deletion_source: string | null
           id: string
           message_id: string
           message_type: string
@@ -1759,6 +1760,7 @@ export type Database = {
           chat_id: number
           deleted_at: string
           deletion_reason?: string | null
+          deletion_source?: string | null
           id?: string
           message_id: string
           message_type: string
@@ -1768,6 +1770,7 @@ export type Database = {
           chat_id?: number
           deleted_at?: string
           deletion_reason?: string | null
+          deletion_source?: string | null
           id?: string
           message_id?: string
           message_type?: string
