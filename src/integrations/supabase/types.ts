@@ -1790,7 +1790,6 @@ export type Database = {
           deleted_from_telegram: boolean | null
           duration: number | null
           edit_date: string | null
-          edit_history: Json | null
           error_message: string | null
           file_id: string | null
           file_size: number | null
@@ -1854,7 +1853,6 @@ export type Database = {
           deleted_from_telegram?: boolean | null
           duration?: number | null
           edit_date?: string | null
-          edit_history?: Json | null
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
@@ -1918,7 +1916,6 @@ export type Database = {
           deleted_from_telegram?: boolean | null
           duration?: number | null
           edit_date?: string | null
-          edit_history?: Json | null
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
