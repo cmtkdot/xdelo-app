@@ -1,6 +1,4 @@
-// @deno-types="https://deno.land/std@0.168.0/http/server.ts"
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-// @deno-types="https://esm.sh/@supabase/supabase-js@2.7.1"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { 
   findExistingMessage, 
@@ -11,6 +9,10 @@ import {
 } from './utils/dbOperations.ts';
 import { getLogger } from './utils/logger.ts';
 import { MessageData, EditHistoryEntry } from './types.ts';
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 // Define types for message data
 interface NonMediaMessage {
@@ -52,27 +54,9 @@ interface MediaMessageData {
   edit_history?: EditHistoryEntry[];
 }
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-serve(async (req) => {
-  // Handle CORS
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
-
   // Generate a correlation ID for tracking this request
   const correlationId = `webhook-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   const logger = getLogger(correlationId);
-  
-  try {
-    // @ts-expect-error - Deno is available in Supabase Edge Functions
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
 
     const update = await req.json();
     logger.info('Received webhook update:', { updateKeys: Object.keys(update) });
