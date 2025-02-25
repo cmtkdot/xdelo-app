@@ -1745,6 +1745,36 @@ export type Database = {
           },
         ]
       }
+      message_deletion_logs: {
+        Row: {
+          chat_id: number
+          deleted_at: string
+          deletion_reason: string | null
+          id: string
+          message_id: string
+          message_type: string
+          telegram_message_id: number
+        }
+        Insert: {
+          chat_id: number
+          deleted_at: string
+          deletion_reason?: string | null
+          id?: string
+          message_id: string
+          message_type: string
+          telegram_message_id: number
+        }
+        Update: {
+          chat_id?: number
+          deleted_at?: string
+          deletion_reason?: string | null
+          id?: string
+          message_id?: string
+          message_type?: string
+          telegram_message_id?: number
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
@@ -1777,10 +1807,12 @@ export type Database = {
           message_caption_id: string | null
           message_url: string | null
           mime_type: string | null
+          notes: string | null
           processing_completed_at: string | null
           processing_correlation_id: string | null
           processing_started_at: string | null
           processing_state: Database["public"]["Enums"]["processing_state_type"]
+          product_code: string | null
           product_name: string | null
           product_quantity: number | null
           product_sku: string | null
@@ -1796,6 +1828,7 @@ export type Database = {
           updated_at: string
           user_id: string | null
           vendor_name: string | null
+          vendor_uid: string | null
           width: number | null
         }
         Insert: {
@@ -1829,10 +1862,12 @@ export type Database = {
           message_caption_id?: string | null
           message_url?: string | null
           mime_type?: string | null
+          notes?: string | null
           processing_completed_at?: string | null
           processing_correlation_id?: string | null
           processing_started_at?: string | null
           processing_state?: Database["public"]["Enums"]["processing_state_type"]
+          product_code?: string | null
           product_name?: string | null
           product_quantity?: number | null
           product_sku?: string | null
@@ -1848,6 +1883,7 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
           vendor_name?: string | null
+          vendor_uid?: string | null
           width?: number | null
         }
         Update: {
@@ -1881,10 +1917,12 @@ export type Database = {
           message_caption_id?: string | null
           message_url?: string | null
           mime_type?: string | null
+          notes?: string | null
           processing_completed_at?: string | null
           processing_correlation_id?: string | null
           processing_started_at?: string | null
           processing_state?: Database["public"]["Enums"]["processing_state_type"]
+          product_code?: string | null
           product_name?: string | null
           product_quantity?: number | null
           product_sku?: string | null
@@ -1900,6 +1938,7 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
           vendor_name?: string | null
+          vendor_uid?: string | null
           width?: number | null
         }
         Relationships: [
@@ -1911,6 +1950,102 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      other_messages: {
+        Row: {
+          analyzed_content: Json | null
+          chat_id: number
+          chat_title: string | null
+          chat_type: Database["public"]["Enums"]["telegram_chat_type"]
+          correlation_id: string | null
+          created_at: string
+          edit_date: string | null
+          edit_history: Json | null
+          error_message: string | null
+          id: string
+          is_edited: boolean
+          message_text: string | null
+          message_type: string
+          message_url: string | null
+          notes: string | null
+          processing_completed_at: string | null
+          processing_correlation_id: string | null
+          processing_started_at: string | null
+          processing_state: Database["public"]["Enums"]["processing_state_type"]
+          product_code: string | null
+          product_name: string | null
+          product_quantity: number | null
+          purchase_date: string | null
+          telegram_data: Json | null
+          telegram_message_id: number
+          updated_at: string
+          user_id: string | null
+          vendor_name: string | null
+          vendor_uid: string | null
+        }
+        Insert: {
+          analyzed_content?: Json | null
+          chat_id: number
+          chat_title?: string | null
+          chat_type: Database["public"]["Enums"]["telegram_chat_type"]
+          correlation_id?: string | null
+          created_at?: string
+          edit_date?: string | null
+          edit_history?: Json | null
+          error_message?: string | null
+          id?: string
+          is_edited?: boolean
+          message_text?: string | null
+          message_type: string
+          message_url?: string | null
+          notes?: string | null
+          processing_completed_at?: string | null
+          processing_correlation_id?: string | null
+          processing_started_at?: string | null
+          processing_state?: Database["public"]["Enums"]["processing_state_type"]
+          product_code?: string | null
+          product_name?: string | null
+          product_quantity?: number | null
+          purchase_date?: string | null
+          telegram_data?: Json | null
+          telegram_message_id: number
+          updated_at?: string
+          user_id?: string | null
+          vendor_name?: string | null
+          vendor_uid?: string | null
+        }
+        Update: {
+          analyzed_content?: Json | null
+          chat_id?: number
+          chat_title?: string | null
+          chat_type?: Database["public"]["Enums"]["telegram_chat_type"]
+          correlation_id?: string | null
+          created_at?: string
+          edit_date?: string | null
+          edit_history?: Json | null
+          error_message?: string | null
+          id?: string
+          is_edited?: boolean
+          message_text?: string | null
+          message_type?: string
+          message_url?: string | null
+          notes?: string | null
+          processing_completed_at?: string | null
+          processing_correlation_id?: string | null
+          processing_started_at?: string | null
+          processing_state?: Database["public"]["Enums"]["processing_state_type"]
+          product_code?: string | null
+          product_name?: string | null
+          product_quantity?: number | null
+          purchase_date?: string | null
+          telegram_data?: Json | null
+          telegram_message_id?: number
+          updated_at?: string
+          user_id?: string | null
+          vendor_name?: string | null
+          vendor_uid?: string | null
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
