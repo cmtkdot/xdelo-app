@@ -3,9 +3,9 @@ import {
   MessageData, 
   OtherMessageData, 
   ProcessingStateType,
-  StateLogEntry,
-  AnalyzedContent
+  StateLogEntry
 } from "../types.ts";
+import { AnalyzedContent } from "../../_shared/types.ts";
 import { getLogger } from "./logger.ts";
 
 // Retrieve an existing message by telegram_message_id and chat_id

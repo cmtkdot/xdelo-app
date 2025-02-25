@@ -1,4 +1,4 @@
-import { AnalyzedContent } from "../types.ts";
+import { AnalyzedContent } from "../../_shared/types.ts";
 import { parseQuantity } from "./quantityParser.ts";
 
 function calculateConfidence(result: AnalyzedContent, fallbacks: string[], caption: string): number {

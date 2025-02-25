@@ -1,7 +1,7 @@
 
-import { ParsedContent, QuantityParseResult } from "../_shared/types.ts";
+import { AnalyzedContent, QuantityParseResult } from "../_shared/types.ts";
 
-export function validateParsedContent(content: ParsedContent): boolean {
+export function validateParsedContent(content: AnalyzedContent): boolean {
   // Only require that content is an object and has a product name
   return content && typeof content === 'object' && typeof content.product_name === 'string';
 }
@@ -14,14 +14,23 @@ export function validateQuantityResult(quantity: QuantityParseResult): boolean {
   );
 }
 
-export function validateAnalyzedContent(content: any): boolean {
+export function validateAnalyzedContent(content: unknown): boolean {
   // Simplified validation that only checks basic structure
   if (!content || typeof content !== 'object') {
     return false;
   }
 
-  // Only require product_name
-  if (!content.product_name || typeof content.product_name !== 'string') {
+  // Type guard to check if content has product_name property
+  const hasProductName = (obj: object): obj is { product_name: unknown } => 
+    'product_name' in obj;
+
+  // Check if content has product_name property
+  if (!hasProductName(content)) {
+    return false;
+  }
+
+  // Check if product_name is a string
+  if (typeof content.product_name !== 'string') {
     return false;
   }
 

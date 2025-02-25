@@ -1,4 +1,4 @@
-import { ParsedContent } from "../../_shared/types.ts";
+import { AnalyzedContent } from "../../_shared/types.ts";
 import { manualParse } from "./manualParser.ts";
 
 const SYSTEM_PROMPT = `You are a specialized product information extractor. Extract structured information following these rules:
@@ -33,7 +33,7 @@ Expected Output: {
   "quantity": 2
 }`;
 
-export async function analyzeCaption(caption: string): Promise<ParsedContent> {
+export async function analyzeCaption(caption: string): Promise<AnalyzedContent> {
   try {
     console.log("Starting caption analysis:", caption);
 
@@ -79,7 +79,7 @@ export async function analyzeCaption(caption: string): Promise<ParsedContent> {
     const result = JSON.parse(data.choices[0].message.content);
 
     // Clean up and validate the result
-    const cleanResult: ParsedContent = {
+    const cleanResult: AnalyzedContent = {
       product_name: result.product_name?.trim() || caption.split('\n')[0]?.trim() || 'Untitled Product',
       product_code: result.product_code || '',
       vendor_uid: result.vendor_uid || '',

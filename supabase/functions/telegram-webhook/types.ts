@@ -1,4 +1,5 @@
-
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { AnalyzedContent } from "../_shared/types.ts";
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../../../src/types'; // Using relative path to share types
 
@@ -106,6 +107,11 @@ export interface MediaProcessingResult {
   metadata: Record<string, unknown>;
 }
 
+export interface QuantityParseResult {
+  value: number;
+  confidence: number;
+}
+
 // Analysis Types
 export interface AnalysisResult {
   success: boolean;
@@ -132,4 +138,3 @@ export interface ProcessingError extends Error {
   stage?: string;
   metadata?: Record<string, unknown>;
 }
-
