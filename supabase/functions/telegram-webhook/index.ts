@@ -17,54 +17,78 @@ if (!supabaseUrl || !supabaseServiceRole || !telegramToken) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceRole)
 
-async function logWebhookEvent(eventType: string, chatId: number | null, messageId: number | null, mediaType: string | null = null, errorMessage: string | null = null, rawData: any = null) {
-  try {
-    const { error } = await supabase.rpc('xdelo_log_webhook_event', {
-      p_event_type: eventType,
-      p_chat_id: chatId,
-      p_message_id: messageId,
-      p_media_type: mediaType,
-      p_error_message: errorMessage,
-      p_raw_data: rawData
-    });
-    
-    if (error) {
-      console.error('Error logging webhook event:', error);
+// Helper to get a logger instance with correlation tracking
+function getLogger(correlationId: string) {
+  return {
+    info: (message: string, data?: any) => {
+      console.log(`[${correlationId}] ${message}`, data || '');
+    },
+    error: (message: string, error?: any) => {
+      console.error(`[${correlationId}] ${message}`, error || '');
     }
-  } catch (err) {
-    console.error('Failed to log webhook event:', err);
+  };
+}
+
+async function logAuditEvent(
+  eventType: string,
+  entityId: string,
+  telegramMessageId: number | null,
+  chatId: number | null,
+  previousState: any = null,
+  newState: any = null,
+  metadata: any = null,
+  correlationId: string | null = null,
+  errorMessage: string | null = null
+) {
+  try {
+    await supabase.rpc('xdelo_log_event', {
+      p_event_type: eventType,
+      p_entity_id: entityId,
+      p_telegram_message_id: telegramMessageId,
+      p_chat_id: chatId,
+      p_previous_state: previousState,
+      p_new_state: newState,
+      p_metadata: metadata,
+      p_correlation_id: correlationId,
+      p_error_message: errorMessage
+    });
+  } catch (error) {
+    console.error('Failed to log audit event:', error);
   }
 }
 
-async function getFileUrl(fileId: string): Promise<string> {
+async function getFileUrl(fileId: string, logger: any): Promise<string> {
   try {
-    console.log('Getting file URL for fileId:', fileId);
+    logger.info('Getting file URL from Telegram', { fileId });
     const response = await fetch(
       `https://api.telegram.org/bot${telegramToken}/getFile?file_id=${fileId}`
     );
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error('Telegram API error:', error);
-      throw new Error(`Telegram API error: ${error}`);
+      const errorData = await response.text();
+      logger.error('Telegram API error:', errorData);
+      throw new Error(`Telegram API error: ${errorData}`);
     }
 
     const data = await response.json();
     
     if (!data.ok || !data.result?.file_path) {
-      console.error('Invalid response from Telegram:', data);
+      logger.error('Invalid response from Telegram:', data);
       throw new Error('Invalid response from Telegram API');
     }
 
-    return `https://api.telegram.org/file/bot${telegramToken}/${data.result.file_path}`;
+    const fileUrl = `https://api.telegram.org/file/bot${telegramToken}/${data.result.file_path}`;
+    logger.info('Successfully got file URL');
+    return fileUrl;
+
   } catch (error) {
-    console.error('Error in getFileUrl:', error);
+    logger.error('Error in getFileUrl:', error);
     throw error;
   }
 }
 
-async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeType: string): Promise<string> {
-  console.log('Uploading media to storage', { fileUniqueId, mimeType });
+async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeType: string, logger: any): Promise<string> {
+  logger.info('Uploading media to storage', { fileUniqueId, mimeType });
   
   const ext = mimeType.split('/')[1] || 'bin';
   const storagePath = `${fileUniqueId}.${ext}`;
@@ -85,11 +109,10 @@ async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeT
         .from('telegram-media')
         .getPublicUrl(storagePath);
       
-      console.log('File already exists, returning existing URL');
+      logger.info('File already exists, returning existing URL');
       return publicUrl;
     }
 
-    // Download media from Telegram
     const mediaResponse = await fetch(fileUrl);
     if (!mediaResponse.ok) {
       throw new Error(`Failed to download media: ${mediaResponse.statusText}`);
@@ -97,66 +120,89 @@ async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeT
     
     const mediaBuffer = await mediaResponse.arrayBuffer();
 
-    // Upload to storage
     const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')
       .upload(storagePath, mediaBuffer, {
         contentType: mimeType,
-        upsert: true
+        upsert: true,
+        cacheControl: '3600'
       });
 
-    if (uploadError) {
-      throw uploadError;
-    }
+    if (uploadError) throw uploadError;
 
     const { data: { publicUrl } } = supabase
       .storage
       .from('telegram-media')
       .getPublicUrl(storagePath);
 
-    console.log('Successfully uploaded media to storage');
+    logger.info('Media uploaded successfully');
     return publicUrl;
 
   } catch (error) {
-    console.error('Error uploading media:', error);
+    logger.error('Error uploading media:', error);
+    throw error;
+  }
+}
+
+async function handleMediaGroup(messageId: string, mediaGroupId: string, logger: any) {
+  try {
+    const { data: analyzedMessage } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('media_group_id', mediaGroupId)
+      .not('analyzed_content', 'is', null)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .single();
+
+    if (analyzedMessage?.analyzed_content) {
+      logger.info('Found existing analyzed content in media group');
+      await supabase
+        .from('messages')
+        .update({
+          analyzed_content: analyzedMessage.analyzed_content,
+          message_caption_id: analyzedMessage.id,
+          is_original_caption: false,
+          group_caption_synced: true,
+          processing_state: 'completed'
+        })
+        .eq('id', messageId);
+    }
+  } catch (error) {
+    logger.error('Error handling media group:', error);
     throw error;
   }
 }
 
 serve(async (req) => {
-  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   const correlationId = `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-  console.log(`[${correlationId}] Processing webhook request`);
-
+  const logger = getLogger(correlationId);
+  
   try {
     const rawBody = await req.text();
-    let update;
+    logger.info('Raw request body:', rawBody);
 
+    let update;
     try {
       update = JSON.parse(rawBody);
-      console.log(`[${correlationId}] Received update:`, update);
     } catch (e) {
-      console.error(`[${correlationId}] Failed to parse JSON:`, e);
+      logger.error('Failed to parse JSON:', e);
       return new Response(
         JSON.stringify({ error: 'Invalid JSON' }),
-        { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Get the message object (regular or edited)
     const message = update.message || update.edited_message || 
                    update.channel_post || update.edited_channel_post;
 
     if (!message) {
-      console.log(`[${correlationId}] No valid message in update`);
+      logger.info('No valid message in update');
       return new Response(
         JSON.stringify({ status: 'ignored', reason: 'no valid message' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -165,18 +211,21 @@ serve(async (req) => {
 
     const isEdit = !!update.edited_message || !!update.edited_channel_post;
     const chat = message.chat;
-    
-    // Handle text messages
-    if (!message.photo && !message.video && !message.document) {
-      console.log(`[${correlationId}] Processing text message`);
+    const mediaGroupId = message.media_group_id;
+
+    // Handle text messages (non-media)
+    if (!message.photo && !message.video) {
+      logger.info('Processing text message');
       
-      await logWebhookEvent(
-        'text_message_received',
-        chat.id,
+      await logAuditEvent(
+        'message_received',
+        message.message_id.toString(),
         message.message_id,
-        'text',
+        chat.id,
         null,
-        update
+        { message_type: 'text' },
+        { message_text: message.text },
+        correlationId
       );
 
       const { error: insertError } = await supabase
@@ -188,12 +237,11 @@ serve(async (req) => {
           telegram_message_id: message.message_id,
           message_text: message.text,
           telegram_data: update,
-          correlation_id: correlationId
+          correlation_id: correlationId,
+          processing_state: 'completed'
         });
 
-      if (insertError) {
-        throw insertError;
-      }
+      if (insertError) throw insertError;
 
       return new Response(
         JSON.stringify({ 
@@ -211,13 +259,9 @@ serve(async (req) => {
     const media = photo || video;
 
     if (!media) {
-      console.log(`[${correlationId}] No supported media found`);
+      logger.info('No supported media found');
       return new Response(
-        JSON.stringify({ 
-          status: 'ignored',
-          reason: 'no supported media',
-          correlation_id: correlationId 
-        }),
+        JSON.stringify({ status: 'ignored', reason: 'no supported media' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -229,12 +273,14 @@ serve(async (req) => {
       .eq('file_unique_id', media.file_unique_id)
       .single();
 
-    // Get file URL and upload to storage
-    const telegramFileUrl = await getFileUrl(media.file_id);
+    // Get media URL and upload to storage
+    logger.info('Processing media', { fileId: media.file_id });
+    const telegramFileUrl = await getFileUrl(media.file_id, logger);
     const storageUrl = await uploadMediaToStorage(
       telegramFileUrl,
       media.file_unique_id,
-      video ? video.mime_type : 'image/jpeg'
+      video ? video.mime_type : 'image/jpeg',
+      logger
     );
 
     const messageData = {
@@ -242,11 +288,12 @@ serve(async (req) => {
       chat_id: chat.id,
       chat_type: chat.type,
       chat_title: chat.title,
-      media_group_id: message.media_group_id,
+      media_group_id: mediaGroupId,
       caption: message.caption || '',
       file_id: media.file_id,
       file_unique_id: media.file_unique_id,
       public_url: storageUrl,
+      storage_path: `${media.file_unique_id}.${video ? video.mime_type.split('/')[1] : 'jpeg'}`,
       mime_type: video ? video.mime_type : 'image/jpeg',
       file_size: media.file_size,
       width: media.width,
@@ -262,7 +309,19 @@ serve(async (req) => {
     let resultMessage;
 
     if (existingMedia) {
-      console.log(`[${correlationId}] Updating existing media message`);
+      logger.info('Updating existing media message');
+      
+      await logAuditEvent(
+        'message_updated',
+        existingMedia.id,
+        message.message_id,
+        chat.id,
+        existingMedia,
+        messageData,
+        { is_edit: isEdit },
+        correlationId
+      );
+
       const { data: updated, error: updateError } = await supabase
         .from('messages')
         .update(messageData)
@@ -273,8 +332,21 @@ serve(async (req) => {
       if (updateError) throw updateError;
       resultMessage = updated;
 
+      // If this is an edit with changed caption, trigger reanalysis
+      if (isEdit && message.caption !== existingMedia.caption) {
+        await supabase.functions.invoke('parse-caption-with-ai', {
+          body: { 
+            messageId: existingMedia.id,
+            caption: message.caption,
+            correlationId,
+            is_edit: true,
+            media_group_id: mediaGroupId
+          }
+        });
+      }
     } else {
-      console.log(`[${correlationId}] Inserting new media message`);
+      logger.info('Creating new media message');
+
       const { data: inserted, error: insertError } = await supabase
         .from('messages')
         .insert(messageData)
@@ -283,51 +355,62 @@ serve(async (req) => {
 
       if (insertError) throw insertError;
       resultMessage = inserted;
-    }
 
-    // Trigger caption analysis if needed
-    if (message.caption) {
-      await supabase.functions.invoke('parse-caption-with-ai', {
-        body: {
-          messageId: resultMessage.id,
-          caption: message.caption,
-          correlation_id: correlationId,
-          is_edit: isEdit,
-          media_group_id: message.media_group_id
-        }
-      });
-    }
+      await logAuditEvent(
+        'message_created',
+        resultMessage.id,
+        message.message_id,
+        chat.id,
+        null,
+        messageData,
+        { media_type: video ? 'video' : 'photo' },
+        correlationId
+      );
 
-    await logWebhookEvent(
-      'media_message_processed',
-      chat.id,
-      message.message_id,
-      video ? 'video' : 'photo',
-      null,
-      { messageId: resultMessage.id }
-    );
+      // Handle media group synchronization
+      if (mediaGroupId) {
+        await handleMediaGroup(resultMessage.id, mediaGroupId, logger);
+      }
+
+      // Trigger analysis for new messages with captions
+      if (message.caption) {
+        await supabase.functions.invoke('parse-caption-with-ai', {
+          body: { 
+            messageId: resultMessage.id,
+            caption: message.caption,
+            correlationId,
+            media_group_id: mediaGroupId
+          }
+        });
+      }
+    }
 
     return new Response(
       JSON.stringify({
         status: 'success',
-        message_id: resultMessage.id,
         correlation_id: correlationId,
-        is_edit: isEdit,
-        has_caption: !!message.caption
+        message: 'Message processed',
+        messageId: resultMessage.id,
+        isEdit,
+        hasCaption: !!message.caption,
+        mediaGroupId
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
     );
 
   } catch (error) {
-    console.error(`[${correlationId}] Error processing webhook:`, error);
+    logger.error('Error processing webhook:', error);
 
-    await logWebhookEvent(
+    await logAuditEvent(
       'webhook_error',
+      'system',
       null,
       null,
       null,
-      error.message,
-      { stack: error.stack }
+      null,
+      { error: error.message, stack: error.stack },
+      correlationId,
+      error.message
     );
 
     return new Response(
