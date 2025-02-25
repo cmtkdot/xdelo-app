@@ -1,7 +1,7 @@
 
 import { AnalyzedContent, QuantityParseResult } from "../_shared/types.ts";
 
-export function validateParsedContent(content: AnalyzedContent): boolean {
+export function validateAnalyzedContent(content: AnalyzedContent): boolean {
   // Only require that content is an object and has a product name
   return content && typeof content === 'object' && typeof content.product_name === 'string';
 }

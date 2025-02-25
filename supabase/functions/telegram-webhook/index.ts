@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -17,7 +16,9 @@ if (!supabaseUrl || !supabaseServiceRole || !telegramToken) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceRole)
 
-async function getFileUrl(fileId: string): Promise<string> {
+async function getFileUrl(fileId: string, correlationId?: string): Promise<string> {
+  const logPrefix = correlationId ? `[${correlationId}]` : '';
+  console.log(`${logPrefix} 🔍 Getting file URL for fileId:`, fileId)
   const response = await fetch(
     `https://api.telegram.org/bot${telegramToken}/getFile?file_id=${fileId}`
   )
@@ -26,9 +27,9 @@ async function getFileUrl(fileId: string): Promise<string> {
   return `https://api.telegram.org/file/bot${telegramToken}/${data.result.file_path}`
 }
 
-async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeType: string, correlationId: string): Promise<string> {
+async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeType: string, correlationId?: string): Promise<string> {
   const logger = (message: string, data?: any) => {
-    console.log(`[${correlationId}] ${message}`, data || '');
+    console.log(`[${correlationId || ''}] ${message}`, data || '');
   };
 
   logger('Uploading media to storage', { fileUniqueId, mimeType });
@@ -38,7 +39,10 @@ async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeT
   
   try {
     const mediaResponse = await fetch(fileUrl)
-    if (!mediaResponse.ok) throw new Error('Failed to download media from Telegram')
+    if (!mediaResponse.ok) {
+      logger('Failed to download media:', { status: mediaResponse.status });
+      throw new Error('Failed to download media from Telegram')
+    }
     
     const mediaBuffer = await mediaResponse.arrayBuffer()
 
@@ -87,16 +91,14 @@ async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeT
   }
 }
 
-async function findAnalyzedMessageInGroup(mediaGroupId: string): Promise<any> {
-  const { data } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('media_group_id', mediaGroupId)
-    .not('analyzed_content', 'is', null)
-    .order('created_at', { ascending: true })
-    .limit(1);
-
-  return data?.[0] || null;
+// Helper function to create edit history entry
+function createEditHistoryEntry(previousCaption: string, newCaption: string, isChannelPost: boolean): any {
+  return {
+    edit_date: new Date().toISOString(),
+    previous_caption: previousCaption || '',
+    new_caption: newCaption || '',
+    is_channel_post: isChannelPost
+  };
 }
 
 serve(async (req) => {
@@ -137,6 +139,7 @@ serve(async (req) => {
     }
 
     const isEdit = !!update.edited_message || !!update.edited_channel_post;
+    const isChannelPost = !!update.channel_post || !!update.edited_channel_post;
     const chat = message.chat;
     const mediaGroupId = message.media_group_id;
     
@@ -147,7 +150,56 @@ serve(async (req) => {
 
     if (!media) {
       logger('No media, storing in other_messages');
-      // Store text message in other_messages table
+      
+      // For text message edits, check if the original exists
+      if (isEdit) {
+        const { data: existingMessage } = await supabase
+          .from('other_messages')
+          .select('*')
+          .eq('chat_id', chat.id)
+          .eq('telegram_message_id', message.message_id)
+          .single();
+
+        if (existingMessage) {
+          logger('Updating existing text message', { messageId: existingMessage.id });
+          
+          // Create edit history entry
+          const editHistoryEntry = createEditHistoryEntry(
+            existingMessage.message_text, 
+            message.text, 
+            isChannelPost
+          );
+          
+          // Update existing message
+          const editHistory = existingMessage.edit_history || [];
+          editHistory.push(editHistoryEntry);
+          
+          const { error: updateError } = await supabase
+            .from('other_messages')
+            .update({
+              message_text: message.text,
+              edit_history: editHistory,
+              is_edited: true,
+              edit_date: new Date(message.edit_date * 1000).toISOString(),
+              telegram_data: update,
+              correlation_id: correlationId
+            })
+            .eq('id', existingMessage.id);
+            
+          if (updateError) throw updateError;
+          
+          return new Response(
+            JSON.stringify({ 
+              status: 'success', 
+              type: 'text_message_edit',
+              isChannelPost
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
+          );
+        }
+      }
+      
+      // Store new text message in other_messages table
       const { error } = await supabase
         .from('other_messages')
         .insert({
@@ -157,13 +209,19 @@ serve(async (req) => {
           telegram_message_id: message.message_id,
           message_text: message.text,
           telegram_data: update,
-          correlation_id: correlationId
+          correlation_id: correlationId,
+          is_channel_post: isChannelPost,
+          edit_history: isEdit ? [createEditHistoryEntry('', message.text, isChannelPost)] : []
         });
 
       if (error) throw error;
 
       return new Response(
-        JSON.stringify({ status: 'success', type: 'text_message' }),
+        JSON.stringify({ 
+          status: 'success', 
+          type: 'text_message',
+          isChannelPost
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
       );
     }
@@ -176,7 +234,9 @@ serve(async (req) => {
       .single();
 
     // Get media URL and upload to storage
-    const telegramFileUrl = await getFileUrl(media.file_id);
+    logger('Getting file URL for media', { fileId: media.file_id });
+    const telegramFileUrl = await getFileUrl(media.file_id, correlationId);
+    logger('Uploading media to storage', { fileUrl: telegramFileUrl });
     const storageUrl = await uploadMediaToStorage(
       telegramFileUrl,
       media.file_unique_id,
@@ -204,12 +264,27 @@ serve(async (req) => {
       telegram_data: update,
       correlation_id: correlationId,
       is_edited: isEdit,
+      is_channel_post: isChannelPost,
       edit_date: isEdit ? new Date(message.edit_date * 1000).toISOString() : null
     };
 
     let resultMessage;
 
     if (existingMedia) {
+      // Create edit history entry for caption changes
+      if (isEdit && existingMedia.caption !== message.caption) {
+        const editHistoryEntry = createEditHistoryEntry(
+          existingMedia.caption, 
+          message.caption, 
+          isChannelPost
+        );
+        
+        // Update edit history
+        const editHistory = existingMedia.edit_history || [];
+        editHistory.push(editHistoryEntry);
+        messageData.edit_history = editHistory;
+      }
+      
       // Update existing record
       const { data: updated, error } = await supabase
         .from('messages')
@@ -222,6 +297,7 @@ serve(async (req) => {
       resultMessage = updated;
 
       // If this is an edit with changed caption, trigger reanalysis
+      // Works for both regular messages and channel posts
       if (isEdit && message.caption !== existingMedia.caption) {
         await supabase.functions.invoke('parse-caption-with-ai', {
           body: { 
@@ -229,11 +305,17 @@ serve(async (req) => {
             caption: message.caption,
             correlation_id: correlationId,
             is_edit: true,
+            is_channel_post: isChannelPost,
             media_group_id: mediaGroupId
           }
         });
       }
     } else {
+      // Initialize edit history for new edited messages
+      if (isEdit) {
+        messageData.edit_history = [createEditHistoryEntry('', message.caption || '', isChannelPost)];
+      }
+      
       // Insert new record
       const { data: inserted, error } = await supabase
         .from('messages')
@@ -246,7 +328,15 @@ serve(async (req) => {
 
       // For new messages in a media group, check for existing analyzed content
       if (mediaGroupId) {
-        const analyzedMessage = await findAnalyzedMessageInGroup(mediaGroupId);
+        const { data: analyzedMessage } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('media_group_id', mediaGroupId)
+          .not('analyzed_content', 'is', null)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .single();
+
         if (analyzedMessage?.analyzed_content) {
           await supabase
             .from('messages')
@@ -262,12 +352,14 @@ serve(async (req) => {
       }
 
       // Trigger analysis for new messages with captions
+      // Works for both regular messages and channel posts
       if (message.caption) {
         await supabase.functions.invoke('parse-caption-with-ai', {
           body: { 
             messageId: resultMessage.id,
             caption: message.caption,
             correlation_id: correlationId,
+            is_channel_post: isChannelPost,
             media_group_id: mediaGroupId
           }
         });
@@ -281,6 +373,7 @@ serve(async (req) => {
         message: 'Message processed',
         messageId: resultMessage.id,
         isEdit,
+        isChannelPost,
         hasCaption: !!message.caption,
         mediaGroupId
       }),

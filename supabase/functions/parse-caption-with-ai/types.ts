@@ -1,11 +1,30 @@
 
 import { AnalyzedContent } from "../_shared/types.ts";
 
+
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
+
+export interface AnalyzedContent {
+  product_name?: string;
+  product_code?: string;
+  vendor_uid?: string;
+  purchase_date?: string;
+  quantity?: number;
+  notes?: string;
+  parsing_metadata?: {
+    method: 'manual' | 'ai' | 'hybrid';
+    confidence: number;
+    timestamp: string;
+    needs_ai_analysis?: boolean;
+  };
+  sync_metadata?: {
+    sync_source_message_id?: string;
+    media_group_id?: string;
+  };
+}
 
 export interface AIAnalysisResult {
   content: AnalyzedContent;
-  confidence: number;
 }
 
 export interface MessageUpdate {
