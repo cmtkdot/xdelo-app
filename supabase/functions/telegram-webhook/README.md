@@ -33,16 +33,30 @@ The following database changes were made to support edit history:
 
 - `index.ts`: Main webhook handler
 - `utils/dbOperations.ts`: Database operations for messages
+- `utils/mediaUtils.ts`: Media processing utilities
 - `utils/logger.ts`: Logging utility with correlation IDs
 - `types.ts`: TypeScript interfaces and types
+
+## Media Processing
+
+The webhook now uses an improved media processing flow:
+
+1. `extractMediaInfo`: Extracts media information from Telegram messages
+2. `downloadMedia`: Downloads media from Telegram and stores it in Supabase storage
+   - Checks if the file already exists in storage
+   - Downloads the file from Telegram if needed
+   - Uploads to Supabase storage with proper error handling
+   - Returns the public URL for storage in the message record
+3. `downloadAndStoreMedia`: Legacy function maintained for backward compatibility
 
 ## Flow
 
 1. Webhook receives an update from Telegram
 2. Determines if it's a new message or an edit
 3. For edits, retrieves the existing message and updates the edit history
-4. For media groups, syncs content across all messages in the group
-5. For messages with captions, triggers analysis
+4. For media messages, processes and stores the media using `downloadMedia`
+5. For media groups, syncs content across all messages in the group
+6. For messages with captions, triggers analysis
 
 ## Deployment
 

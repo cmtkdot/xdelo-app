@@ -372,11 +372,12 @@ serve(async (req) => {
     if (!existingMedia || !storageUrl) {
       console.log(`📤 [${correlationId}] Processing media for storage`);
       try {
-        // Use the new downloadMedia function which handles everything
+        // Use the downloadMedia function which handles everything
         const newStorageUrl = await downloadMedia(
           supabase,
           mediaInfo,
-          existingMedia?.id || 'new'
+          existingMedia?.id || 'new',
+          telegramToken
         );
         
         if (newStorageUrl) {
