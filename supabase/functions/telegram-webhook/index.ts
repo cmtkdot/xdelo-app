@@ -1,4 +1,3 @@
-
 import { serve } from "http/server"
 import { createClient } from "supabase"
 
@@ -91,7 +90,7 @@ async function getFileUrl(fileId: string, logger: any): Promise<string> {
   }
 }
 
-async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeType: string, logger: any): Promise<string> {
+async function uploadMediaToStorage(fileUniqueId: string, mimeType: string, logger: any): Promise<string> {
   logger.info('Uploading media to storage', { fileUniqueId, mimeType });
   
   const ext = mimeType.split('/')[1] || 'bin';
@@ -116,33 +115,16 @@ async function uploadMediaToStorage(fileUrl: string, fileUniqueId: string, mimeT
       return publicUrl;
     }
 
-    const mediaResponse = await fetch(fileUrl);
-    if (!mediaResponse.ok) {
-      throw new Error(`Failed to download media: ${mediaResponse.statusText}`);
-    }
-    
-    const mediaBuffer = await mediaResponse.arrayBuffer();
-
-    const { error: uploadError } = await supabase
-      .storage
-      .from('telegram-media')
-      .upload(storagePath, mediaBuffer, {
-        contentType: mimeType,
-        upsert: true
-      });
-
-    if (uploadError) throw uploadError;
-
     const { data: { publicUrl } } = supabase
       .storage
       .from('telegram-media')
       .getPublicUrl(storagePath);
 
-    logger.info('Media uploaded successfully');
+    logger.info('Generated public URL for media');
     return publicUrl;
 
   } catch (error) {
-    logger.error('Error uploading media:', error);
+    logger.error('Error with storage operation:', error);
     throw error;
   }
 }
@@ -260,7 +242,7 @@ serve(async (req) => {
     const video = message.video;
     const media = photo || video;
 
-    if (!media || !media.file_id) {
+    if (!media || !media.file_unique_id) {
       logger.info('No supported media found');
       return new Response(
         JSON.stringify({ status: 'ignored', reason: 'no supported media' }),
@@ -275,15 +257,10 @@ serve(async (req) => {
       .eq('file_unique_id', media.file_unique_id)
       .single();
 
-    // Get media URL and upload to storage
-    logger.info('Processing media', { 
-      file_id: media.file_id,
-      file_unique_id: media.file_unique_id 
-    });
+    // Generate storage URL using file_unique_id
+    logger.info('Processing media', { file_unique_id: media.file_unique_id });
     
-    const telegramFileUrl = await getFileUrl(media.file_id, logger);
     const storageUrl = await uploadMediaToStorage(
-      telegramFileUrl,
       media.file_unique_id,
       video ? video.mime_type : 'image/jpeg',
       logger
@@ -296,7 +273,6 @@ serve(async (req) => {
       chat_title: chat.title,
       media_group_id: mediaGroupId,
       caption: message.caption || '',
-      file_id: media.file_id,
       file_unique_id: media.file_unique_id,
       public_url: storageUrl,
       mime_type: video ? video.mime_type : 'image/jpeg',
