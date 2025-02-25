@@ -1812,6 +1812,14 @@ export type Database = {
           message_url: string | null
           mime_type: string | null
           notes: string | null
+          parsed_caption: string | null
+          parsed_notes: string | null
+          parsed_product_code: string | null
+          parsed_purchase_date: string | null
+          parsed_quantity: number | null
+          parsed_total_price: number | null
+          parsed_unit_price: number | null
+          parsed_vendor_uid: string | null
           processing_completed_at: string | null
           processing_correlation_id: string | null
           processing_started_at: string | null
@@ -1868,6 +1876,14 @@ export type Database = {
           message_url?: string | null
           mime_type?: string | null
           notes?: string | null
+          parsed_caption?: string | null
+          parsed_notes?: string | null
+          parsed_product_code?: string | null
+          parsed_purchase_date?: string | null
+          parsed_quantity?: number | null
+          parsed_total_price?: number | null
+          parsed_unit_price?: number | null
+          parsed_vendor_uid?: string | null
           processing_completed_at?: string | null
           processing_correlation_id?: string | null
           processing_started_at?: string | null
@@ -1924,6 +1940,14 @@ export type Database = {
           message_url?: string | null
           mime_type?: string | null
           notes?: string | null
+          parsed_caption?: string | null
+          parsed_notes?: string | null
+          parsed_product_code?: string | null
+          parsed_purchase_date?: string | null
+          parsed_quantity?: number | null
+          parsed_total_price?: number | null
+          parsed_unit_price?: number | null
+          parsed_vendor_uid?: string | null
           processing_completed_at?: string | null
           processing_correlation_id?: string | null
           processing_started_at?: string | null
