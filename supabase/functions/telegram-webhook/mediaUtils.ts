@@ -1,14 +1,7 @@
 
-import { SupabaseClient } from '@supabase/supabase-js';
-import { MediaInfo, TelegramMessage } from './types';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { TelegramMessage, MediaInfo } from './types';
 import { getLogger } from './logger';
-
-interface MediaResult {
-  success: boolean;
-  error?: string;
-  publicUrl?: string;
-  storagePath?: string;
-}
 
 export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
   if (message.photo) {
@@ -218,7 +211,12 @@ export async function downloadAndStoreMedia(
   message: TelegramMessage,
   supabase: SupabaseClient,
   correlationId: string
-): Promise<MediaResult> {
+): Promise<{
+  success: boolean;
+  error?: string;
+  publicUrl?: string;
+  storagePath?: string;
+}> {
   const logger = getLogger(correlationId);
   
   try {
