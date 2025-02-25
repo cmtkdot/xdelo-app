@@ -782,6 +782,27 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_gl_invoice_lines_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_gl_invoice_lines_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_summary"
+            referencedColumns: ["invoice_id"]
+          },
+          {
+            foreignKeyName: "fk_gl_invoice_lines_products"
+            columns: ["sb_products_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "fk_invoice_lines_invoices"
             columns: ["sb_invoices_id"]
             isOneToOne: false
