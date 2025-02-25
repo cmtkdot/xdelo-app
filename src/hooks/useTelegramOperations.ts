@@ -15,6 +15,15 @@ export const useTelegramOperations = () => {
       setIsProcessing(true);
       
       if (deleteTelegram && message.telegram_message_id && message.chat_id) {
+        // First mark the message as being deleted from Telegram
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({ deleted_from_telegram: true })
+          .eq('id', message.id);
+
+        if (updateError) throw updateError;
+
+        // Then attempt to delete from Telegram
         const response = await supabase.functions.invoke('delete-telegram-message', {
           body: {
             message_id: message.telegram_message_id,
@@ -26,6 +35,7 @@ export const useTelegramOperations = () => {
         if (response.error) throw response.error;
       }
 
+      // Delete from database
       const { error } = await supabase
         .from('messages')
         .delete()
@@ -39,6 +49,7 @@ export const useTelegramOperations = () => {
       });
 
       queryClient.invalidateQueries({ queryKey: ['messages'] });
+      queryClient.invalidateQueries({ queryKey: ['media-groups'] });
 
     } catch (error: unknown) {
       console.error('Delete error:', error);
@@ -86,6 +97,7 @@ export const useTelegramOperations = () => {
       });
 
       queryClient.invalidateQueries({ queryKey: ['messages'] });
+      queryClient.invalidateQueries({ queryKey: ['media-groups'] });
 
     } catch (error) {
       console.error('Error updating caption:', error);
