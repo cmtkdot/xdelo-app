@@ -9,42 +9,6 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      analysis_audit_log: {
-        Row: {
-          analyzed_content: Json | null
-          created_at: string | null
-          event_type: string
-          id: string
-          media_group_id: string | null
-          message_id: string | null
-          new_state: string | null
-          old_state: string | null
-          processing_details: Json | null
-        }
-        Insert: {
-          analyzed_content?: Json | null
-          created_at?: string | null
-          event_type: string
-          id?: string
-          media_group_id?: string | null
-          message_id?: string | null
-          new_state?: string | null
-          old_state?: string | null
-          processing_details?: Json | null
-        }
-        Update: {
-          analyzed_content?: Json | null
-          created_at?: string | null
-          event_type?: string
-          id?: string
-          media_group_id?: string | null
-          message_id?: string | null
-          new_state?: string | null
-          old_state?: string | null
-          processing_details?: Json | null
-        }
-        Relationships: []
-      }
       deleted_messages: {
         Row: {
           analyzed_content: Json | null
@@ -1952,13 +1916,6 @@ export type Database = {
             referencedRelation: "messages"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "messages_message_caption_id_fkey"
-            columns: ["message_caption_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
         ]
       }
       other_messages: {
@@ -2171,135 +2128,6 @@ export type Database = {
         }
         Relationships: []
       }
-      temp_analysis_logs: {
-        Row: {
-          analyzed_content: Json | null
-          created_at: string | null
-          event_type: string | null
-          id: string | null
-          media_group_id: string | null
-          message_id: string | null
-          new_state: string | null
-          old_state: string | null
-          processing_details: Json | null
-        }
-        Insert: {
-          analyzed_content?: Json | null
-          created_at?: string | null
-          event_type?: string | null
-          id?: string | null
-          media_group_id?: string | null
-          message_id?: string | null
-          new_state?: string | null
-          old_state?: string | null
-          processing_details?: Json | null
-        }
-        Update: {
-          analyzed_content?: Json | null
-          created_at?: string | null
-          event_type?: string | null
-          id?: string | null
-          media_group_id?: string | null
-          message_id?: string | null
-          new_state?: string | null
-          old_state?: string | null
-          processing_details?: Json | null
-        }
-        Relationships: []
-      }
-      temp_backup_logs: {
-        Row: {
-          chat_id: number | null
-          correlation_id: string | null
-          error_message: string | null
-          event_type: string | null
-          id: string | null
-          media_type: string | null
-          message_id: string | null
-          metadata: string | null
-          raw_data: Json | null
-          telegram_message_id: number | null
-          timestamp: string | null
-        }
-        Insert: {
-          chat_id?: number | null
-          correlation_id?: string | null
-          error_message?: string | null
-          event_type?: string | null
-          id?: string | null
-          media_type?: string | null
-          message_id?: string | null
-          metadata?: string | null
-          raw_data?: Json | null
-          telegram_message_id?: number | null
-          timestamp?: string | null
-        }
-        Update: {
-          chat_id?: number | null
-          correlation_id?: string | null
-          error_message?: string | null
-          event_type?: string | null
-          id?: string | null
-          media_type?: string | null
-          message_id?: string | null
-          metadata?: string | null
-          raw_data?: Json | null
-          telegram_message_id?: number | null
-          timestamp?: string | null
-        }
-        Relationships: []
-      }
-      temp_deletion_logs: {
-        Row: {
-          additonal_info: string | null
-          chat_id: number | null
-          deleted_at: string | null
-          deletion_reason: string | null
-          deletion_source: string | null
-          id: string | null
-          message_id: string | null
-          message_type: string | null
-          telegram_message_id: number | null
-        }
-        Insert: {
-          additonal_info?: string | null
-          chat_id?: number | null
-          deleted_at?: string | null
-          deletion_reason?: string | null
-          deletion_source?: string | null
-          id?: string | null
-          message_id?: string | null
-          message_type?: string | null
-          telegram_message_id?: number | null
-        }
-        Update: {
-          additonal_info?: string | null
-          chat_id?: number | null
-          deleted_at?: string | null
-          deletion_reason?: string | null
-          deletion_source?: string | null
-          id?: string | null
-          message_id?: string | null
-          message_type?: string | null
-          telegram_message_id?: number | null
-        }
-        Relationships: []
-      }
-      temp_orphaned_products: {
-        Row: {
-          id: string | null
-          rowid_purchase_order_row_id: string | null
-        }
-        Insert: {
-          id?: string | null
-          rowid_purchase_order_row_id?: string | null
-        }
-        Update: {
-          id?: string | null
-          rowid_purchase_order_row_id?: string | null
-        }
-        Relationships: []
-      }
       unified_audit_logs: {
         Row: {
           chat_id: number | null
@@ -2307,7 +2135,6 @@ export type Database = {
           entity_id: string
           error_message: string | null
           event_timestamp: string
-          event_type: Database["public"]["Enums"]["audit_event_type"]
           id: string
           metadata: Json | null
           new_state: Json | null
@@ -2321,7 +2148,6 @@ export type Database = {
           entity_id: string
           error_message?: string | null
           event_timestamp?: string
-          event_type: Database["public"]["Enums"]["audit_event_type"]
           id?: string
           metadata?: Json | null
           new_state?: Json | null
@@ -2335,7 +2161,6 @@ export type Database = {
           entity_id?: string
           error_message?: string | null
           event_timestamp?: string
-          event_type?: Database["public"]["Enums"]["audit_event_type"]
           id?: string
           metadata?: Json | null
           new_state?: Json | null
@@ -2344,56 +2169,6 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
-      }
-      webhook_logs: {
-        Row: {
-          chat_id: number | null
-          correlation_id: string | null
-          error_message: string | null
-          event_type: string | null
-          id: string
-          media_type: string | null
-          message_id: string | null
-          metadata: string | null
-          raw_data: Json | null
-          telegram_message_id: number | null
-          timestamp: string | null
-        }
-        Insert: {
-          chat_id?: number | null
-          correlation_id?: string | null
-          error_message?: string | null
-          event_type?: string | null
-          id?: string
-          media_type?: string | null
-          message_id?: string | null
-          metadata?: string | null
-          raw_data?: Json | null
-          telegram_message_id?: number | null
-          timestamp?: string | null
-        }
-        Update: {
-          chat_id?: number | null
-          correlation_id?: string | null
-          error_message?: string | null
-          event_type?: string | null
-          id?: string
-          media_type?: string | null
-          message_id?: string | null
-          metadata?: string | null
-          raw_data?: Json | null
-          telegram_message_id?: number | null
-          timestamp?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fk_webhook_logs_message_id"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
       }
     }
     Views: {
@@ -2734,14 +2509,6 @@ export type Database = {
             }
             Returns: undefined
           }
-      xdelo_sync_media_group_content: {
-        Args: {
-          p_source_message_id: string
-          p_media_group_id: string
-          p_analyzed_content: Json
-        }
-        Returns: undefined
-      }
       xdelo_update_message_processing_state: {
         Args: {
           p_message_id: string
@@ -2752,15 +2519,6 @@ export type Database = {
       }
     }
     Enums: {
-      audit_event_type:
-        | "message_created"
-        | "message_updated"
-        | "message_deleted"
-        | "message_analyzed"
-        | "webhook_received"
-        | "media_group_synced"
-        | "storage_deleted"
-        | "telegram_deleted"
       processing_state_type:
         | "initialized"
         | "pending"
