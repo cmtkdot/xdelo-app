@@ -1747,6 +1747,7 @@ export type Database = {
       }
       message_deletion_logs: {
         Row: {
+          additonal_info: string | null
           chat_id: number
           deleted_at: string
           deletion_reason: string | null
@@ -1757,6 +1758,7 @@ export type Database = {
           telegram_message_id: number
         }
         Insert: {
+          additonal_info?: string | null
           chat_id: number
           deleted_at: string
           deletion_reason?: string | null
@@ -1767,6 +1769,7 @@ export type Database = {
           telegram_message_id: number
         }
         Update: {
+          additonal_info?: string | null
           chat_id?: number
           deleted_at?: string
           deletion_reason?: string | null
@@ -2575,6 +2578,12 @@ export type Database = {
           analyzed_content: Json
         }
         Returns: string
+      }
+      xdelo_get_logger: {
+        Args: {
+          p_correlation_id: string
+        }
+        Returns: Json
       }
       xdelo_log_webhook_event:
         | {
