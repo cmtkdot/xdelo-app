@@ -10,7 +10,7 @@ export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
   if (message.photo) {
     const photo = message.photo[message.photo.length - 1];
     return {
-      file_unique_id: photo.file_unique_id,
+      file_id: photo.file_id,
       file_unique_id: photo.file_unique_id,
       mime_type: 'image/jpeg',
       width: photo.width,
@@ -21,7 +21,7 @@ export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
   
   if (message.video) {
     return {
-      file_unique_id: message.video.file_unique_id,
+      file_id: message.video.file_id,
       file_unique_id: message.video.file_unique_id,
       mime_type: message.video.mime_type || 'video/mp4',
       width: message.video.width,
@@ -33,7 +33,7 @@ export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
   
   if (message.document) {
     return {
-      file_unique_id: message.document.file_unique_id,
+      file_id: message.document.file_id,
       file_unique_id: message.document.file_unique_id,
       mime_type: message.document.mime_type || 'application/octet-stream',
       file_size: message.document.file_size
@@ -63,7 +63,7 @@ export async function getFileUrl(fileId: string, telegramToken?: string): Promis
   logger.info(`Getting file URL for fileId: ${fileId}`);
   
   const response = await fetch(
-    `https://api.telegram.org/bot${token}/getFile?file_unique_id=${fileId}`
+    `https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`
   );
   const data = await response.json();
   if (!data.ok) throw new Error('Failed to get file path');
@@ -145,7 +145,7 @@ export async function downloadMedia(
     }
     
     // Get file URL from Telegram
-    const telegramFileUrl = await getFileUrl(mediaInfo.file_unique_id, telegramToken);
+    const telegramFileUrl = await getFileUrl(mediaInfo.file_id, telegramToken);
     
     // Download media from Telegram
     let mediaBuffer: ArrayBuffer;
