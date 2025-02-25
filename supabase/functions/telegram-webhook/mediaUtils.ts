@@ -1,3 +1,4 @@
+
 import { MediaInfo, TelegramMessage } from "./types";
 import { getLogger } from "./logger";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
@@ -71,13 +72,6 @@ export async function getFileUrl(fileId: string, telegramToken?: string): Promis
 
 /**
  * Downloads media from Telegram and stores it in Supabase storage
- * 
- * @param supabase Supabase client
- * @param mediaInfo Media information object
- * @param messageId Message ID or 'new' for new messages
- * @param telegramToken Optional Telegram bot token
- * @param storagePath Optional custom storage path/filename
- * @returns Public URL of the stored media or null if failed
  */
 export async function downloadMedia(
   supabase: SupabaseClient,
@@ -144,7 +138,6 @@ export async function downloadMedia(
             .eq('id', messageId);
         } catch (updateError) {
           logger.error('Error updating message with existing URL', { error: updateError });
-          // Continue despite update error
         }
       }
       
@@ -170,29 +163,10 @@ export async function downloadMedia(
     } catch (downloadError) {
       logger.error('Download error', { error: downloadError });
       
-      // If we have existing URL, use it despite download error
       if (existingUrl) {
         logger.info('Using existing file despite download error', {
           publicUrl: existingUrl
         });
-        
-        // Update message with existing URL if messageId is a valid ID
-        if (messageId && messageId !== 'new') {
-          try {
-            await supabase
-              .from('messages')
-              .update({
-                public_url: existingUrl,
-                storage_path: fileName,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', messageId);
-          } catch (updateError) {
-            logger.error('Error updating message with existing URL', { error: updateError });
-            // Continue despite update error
-          }
-        }
-        
         return existingUrl;
       }
       
@@ -225,7 +199,6 @@ export async function downloadMedia(
     } catch (uploadError) {
       logger.error('Upload error', { error: uploadError });
       
-      // If we have existing URL, use it despite upload error
       if (existingUrl) {
         logger.info('Using existing file despite upload error', {
           publicUrl: existingUrl
@@ -254,7 +227,6 @@ export async function downloadMedia(
           .eq('id', messageId);
       } catch (updateError) {
         logger.error('Error updating message with public URL', { error: updateError });
-        // Continue despite update error
       }
     }
     
@@ -283,7 +255,6 @@ export async function downloadMedia(
           .eq('id', messageId);
       } catch (updateError) {
         logger.error('Error updating message with error status', { error: updateError });
-        // Continue despite update error
       }
     }
     
@@ -291,10 +262,7 @@ export async function downloadMedia(
   }
 }
 
-/**
- * Legacy function for downloading and storing media from a message
- * Maintained for backward compatibility
- */
+// Legacy function for backward compatibility
 export async function downloadAndStoreMedia(
   message: TelegramMessage,
   supabase: SupabaseClient,
