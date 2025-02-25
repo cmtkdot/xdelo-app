@@ -255,6 +255,7 @@ export async function triggerAnalysis(
     throw error;
   }
 }
+
 // Update message edits when a message is edited
 export async function updateMessageEdits(
   supabase: SupabaseClient,
@@ -283,6 +284,76 @@ export async function updateMessageEdits(
     if (error) throw error;
   } catch (error) {
     console.error("❌ Error updating message edits:", error);
+    throw error;
+  }
+}
+
+export async function handleEditedChannelPost(
+  supabase: SupabaseClient,
+  messageId: number,
+  chatId: number,
+  caption: string,
+  mediaGroupId?: string,
+  correlationId?: string
+) {
+  const logger = getLogger(correlationId || crypto.randomUUID());
+
+  try {
+    // Find existing message
+    const { data: message, error: findError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('telegram_message_id', messageId)
+      .eq('chat_id', chatId)
+      .single();
+
+    if (findError) throw findError;
+
+    const editHistoryEntry = {
+      edit_date: new Date().toISOString(),
+      previous_caption: message.caption,
+      new_caption: caption,
+      is_channel_post: true
+    };
+
+    // Update message
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        caption,
+        edit_history: message.edit_history 
+          ? [...message.edit_history, editHistoryEntry]
+          : [editHistoryEntry],
+        is_edited: true,
+        edit_date: new Date().toISOString(),
+        analyzed_content: null,
+        processing_state: 'pending',
+        group_caption_synced: false,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', message.id);
+
+    if (updateError) throw updateError;
+
+    // If part of media group, update related messages
+    if (mediaGroupId) {
+      const { error: groupUpdateError } = await supabase
+        .from('messages')
+        .update({
+          analyzed_content: null,
+          processing_state: 'pending',
+          group_caption_synced: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('media_group_id', mediaGroupId)
+        .neq('id', message.id);
+
+      if (groupUpdateError) throw groupUpdateError;
+    }
+
+    return { success: true, messageId: message.id };
+  } catch (error) {
+    logger.error('Error handling edited channel post', { error });
     throw error;
   }
 }

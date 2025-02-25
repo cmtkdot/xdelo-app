@@ -1,156 +1,12 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { serve } from "http/server";
+import { createClient } from '@supabase/supabase-js';
+import { corsHeaders } from '../_shared/cors.ts';
 import { downloadAndStoreMedia } from './mediaUtils.ts';
 import { getLogger } from './logger.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-const supabaseUrl = Deno.env.get('SUPABASE_URL')
-const supabaseServiceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-const telegramToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
-
-if (!supabaseUrl || !supabaseServiceRole || !telegramToken) {
-  throw new Error('Missing environment variables')
-}
-
-const supabase = createClient(supabaseUrl, supabaseServiceRole)
-
-async function handleEditedMessage(
-  message: any,
-  isChannelPost: boolean,
-  correlationId: string
-) {
-  const logger = getLogger(correlationId);
-  
-  try {
-    logger.info('Processing edited message', {
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-      is_channel_post: isChannelPost
-    });
-
-    // Find existing message
-    const { data: existingMessage, error: findError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('telegram_message_id', message.message_id)
-      .eq('chat_id', message.chat.id)
-      .single();
-
-    if (findError || !existingMessage) {
-      logger.error('Could not find original message', { error: findError });
-      throw new Error('Original message not found');
-    }
-
-    // Check if caption actually changed
-    const currentCaption = message.caption || '';
-    const previousCaption = existingMessage.caption || '';
-    const captionChanged = currentCaption !== previousCaption;
-
-    logger.info('Caption comparison', {
-      current: currentCaption,
-      previous: previousCaption,
-      changed: captionChanged
-    });
-
-    // Build edit history entry
-    const editHistoryEntry = {
-      edit_date: new Date(message.edit_date * 1000).toISOString(),
-      previous_caption: previousCaption,
-      new_caption: currentCaption,
-      is_channel_post: isChannelPost
-    };
-
-    // Prepare base updates
-    const updates: any = {
-      is_edited: true,
-      edit_date: new Date(message.edit_date * 1000).toISOString(),
-      edit_history: existingMessage.edit_history 
-        ? [...existingMessage.edit_history, editHistoryEntry]
-        : [editHistoryEntry],
-      caption: currentCaption,
-      telegram_data: {
-        original_message: existingMessage.telegram_data,
-        edited_message: message
-      },
-      updated_at: new Date().toISOString()
-    };
-
-    // If caption changed, reset analysis state and trigger reanalysis
-    if (captionChanged) {
-      logger.info('Caption changed, resetting analysis state', {
-        message_id: existingMessage.id,
-        media_group_id: existingMessage.media_group_id
-      });
-
-      updates.analyzed_content = null;
-      updates.processing_state = 'pending';
-      updates.group_caption_synced = false;
-
-      // Update the edited message first
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update(updates)
-        .eq('id', existingMessage.id);
-
-      if (updateError) throw updateError;
-
-      // If part of media group, update all related messages
-      if (existingMessage.media_group_id) {
-        logger.info('Updating media group messages', {
-          media_group_id: existingMessage.media_group_id
-        });
-
-        const { error: groupUpdateError } = await supabase
-          .from('messages')
-          .update({
-            analyzed_content: null,
-            processing_state: 'pending',
-            group_caption_synced: false,
-            updated_at: new Date().toISOString()
-          })
-          .eq('media_group_id', existingMessage.media_group_id)
-          .neq('id', existingMessage.id);
-
-        if (groupUpdateError) {
-          logger.error('Failed to update media group', { error: groupUpdateError });
-        }
-      }
-
-      // Trigger reanalysis
-      logger.info('Triggering reanalysis');
-      await supabase.functions.invoke('parse-caption-with-ai', {
-        body: {
-          message_id: existingMessage.id,
-          caption: currentCaption,
-          correlation_id: correlationId,
-          is_edit: true,
-          media_group_id: existingMessage.media_group_id
-        }
-      });
-    } else {
-      // If caption didn't change, just update the metadata
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update(updates)
-        .eq('id', existingMessage.id);
-
-      if (updateError) throw updateError;
-    }
-
-    return { success: true };
-  } catch (error) {
-    logger.error('Error handling edited message', { error });
-    return { success: false, error: error.message };
-  }
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders });
   }
 
   const correlationId = crypto.randomUUID();
@@ -158,7 +14,54 @@ serve(async (req) => {
 
   try {
     const update = await req.json();
-    
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    // Handle edited channel posts
+    if (update.edited_channel_post) {
+      const editedMessage = update.edited_channel_post;
+      
+      logger.info('Processing edited channel post', {
+        message_id: editedMessage.message_id,
+        chat_id: editedMessage.chat.id,
+        media_group_id: editedMessage.media_group_id
+      });
+
+      // Log the edit in unified_audit_logs
+      await supabase.from('unified_audit_logs').insert({
+        event_type: 'channel_post_edited',
+        telegram_message_id: editedMessage.message_id,
+        chat_id: editedMessage.chat.id,
+        metadata: {
+          media_group_id: editedMessage.media_group_id,
+          new_caption: editedMessage.caption
+        },
+        correlation_id
+      });
+
+      // Call the specialized handler
+      const response = await supabase.functions.invoke('handle-edited-channel-post', {
+        body: {
+          message_id: editedMessage.message_id,
+          chat_id: editedMessage.chat.id,
+          caption: editedMessage.caption || '',
+          media_group_id: editedMessage.media_group_id,
+          correlation_id
+        }
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          is_edited_channel_post: true,
+          correlation_id
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
+      );
+    }
+
     // Handle edited messages and channel posts
     if (update.edited_message || update.edited_channel_post) {
       const editedMessage = update.edited_message || update.edited_channel_post;

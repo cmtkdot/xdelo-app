@@ -401,6 +401,27 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_customer_payments_accounts"
+            columns: ["sb_accounts_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_customer_payments_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_customer_payments_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_summary"
+            referencedColumns: ["invoice_id"]
+          },
+          {
             foreignKeyName: "gl_customer_payments_sb_accounts_id_fkey"
             columns: ["sb_accounts_id"]
             isOneToOne: false
@@ -497,6 +518,20 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_estimate_lines_estimates"
+            columns: ["sb_estimates_id"]
+            isOneToOne: false
+            referencedRelation: "gl_estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_estimate_lines_products"
+            columns: ["sb_products_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "gl_estimate_lines_sb_estimates_id_fkey"
             columns: ["sb_estimates_id"]
