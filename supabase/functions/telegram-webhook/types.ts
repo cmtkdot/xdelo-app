@@ -223,6 +223,17 @@ export interface DbOperationResult {
 }
 
 // Media Processing Types
+export interface MediaInfo {
+  file_id: string;
+  file_unique_id: string;
+  mime_type: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  file_size?: number;
+  media_type: 'photo' | 'video' | 'document' | 'voice';
+}
+
 export interface MediaProcessingResult {
   success: boolean;
   publicUrl?: string;
