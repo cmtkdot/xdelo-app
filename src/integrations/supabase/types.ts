@@ -401,6 +401,27 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_customer_payments_accounts"
+            columns: ["sb_accounts_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_customer_payments_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_customer_payments_invoices"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_summary"
+            referencedColumns: ["invoice_id"]
+          },
+          {
             foreignKeyName: "gl_customer_payments_sb_accounts_id_fkey"
             columns: ["sb_accounts_id"]
             isOneToOne: false
@@ -497,6 +518,20 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_estimate_lines_estimates"
+            columns: ["sb_estimates_id"]
+            isOneToOne: false
+            referencedRelation: "gl_estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_estimate_lines_products"
+            columns: ["sb_products_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "gl_estimate_lines_sb_estimates_id_fkey"
             columns: ["sb_estimates_id"]
@@ -782,48 +817,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_gl_invoice_lines_invoices"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_gl_invoice_lines_invoices"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_summary"
-            referencedColumns: ["invoice_id"]
-          },
-          {
-            foreignKeyName: "fk_gl_invoice_lines_products"
-            columns: ["sb_products_id"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_invoice_lines_invoices"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_invoice_lines_invoices"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_summary"
-            referencedColumns: ["invoice_id"]
-          },
-          {
-            foreignKeyName: "fk_invoice_lines_products"
-            columns: ["sb_products_id"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "gl_invoice_lines_sb_invoices_id_fkey"
             columns: ["sb_invoices_id"]
             isOneToOne: false
@@ -836,6 +829,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "invoice_summary"
             referencedColumns: ["invoice_id"]
+          },
+          {
+            foreignKeyName: "gl_invoice_lines_sb_products_id_fkey"
+            columns: ["sb_products_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -931,20 +931,6 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "fk_gl_invoices_accounts"
-            columns: ["sb_accounts_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_invoices_accounts"
-            columns: ["sb_accounts_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "gl_invoices_sb_accounts_id_fkey"
             columns: ["sb_accounts_id"]
@@ -1203,23 +1189,9 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_gl_products_accounts"
-            columns: ["sb_accounts_id"]
-            isOneToOne: true
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "fk_products_accounts"
             columns: ["sb_accounts_id"]
-            isOneToOne: true
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_products_sb_accounts_id_fkey"
-            columns: ["sb_accounts_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "gl_accounts"
             referencedColumns: ["id"]
           },
