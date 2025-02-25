@@ -340,19 +340,23 @@ serve(async (req) => {
     }
 
     // Check if this media has been processed before using file_unique_id
+    // We need to check both chat_id and file_unique_id to handle cases where the same media
+    // is sent to different chats
     const { data: existingMedia, error: queryError } = await supabase
       .from('messages')
       .select('*')
       .eq('file_unique_id', media.file_unique_id)
-      .single();
+      .eq('chat_id', chat.id)
+      .maybeSingle();
 
-    if (queryError && queryError.code !== 'PGRST116') { // PGRST116 is "not found" which is expected
+    if (queryError) {
       console.error(`❌ [${correlationId}] Error checking existing media:`, queryError);
     }
 
     console.log(`🔍 [${correlationId}] Existing media check:`, {
       exists: !!existingMedia,
       fileUniqueId: media.file_unique_id,
+      chatId: chat.id,
       existingId: existingMedia?.id
     });
 
@@ -363,8 +367,9 @@ serve(async (req) => {
       throw new Error('Failed to extract media info');
     }
     
-    // Generate filename
-    const storagePath = `${media.file_unique_id}.${video ? video.mime_type.split('/')[1] : 'jpeg'}`;
+    // Generate filename with chat_id to ensure uniqueness across chats
+    const fileExt = video ? video.mime_type.split('/')[1] : 'jpeg';
+    const storagePath = `${chat.id}_${media.file_unique_id}.${fileExt}`;
     
     // Process media - this will handle checking if it exists, downloading, and uploading
     let storageUrl = existingMedia?.public_url;
@@ -372,20 +377,38 @@ serve(async (req) => {
     if (!existingMedia || !storageUrl) {
       console.log(`📤 [${correlationId}] Processing media for storage`);
       try {
+        // Ensure storage bucket exists
+        await ensureStorageBucketExists(supabase, 'telegram-media', correlationId);
+        
         // Use the downloadMedia function which handles everything
         const newStorageUrl = await downloadMedia(
           supabase,
           mediaInfo,
           existingMedia?.id || 'new',
-          telegramToken
+          telegramToken,
+          storagePath
         );
         
         if (newStorageUrl) {
           storageUrl = newStorageUrl;
           console.log(`✅ [${correlationId}] Media processed successfully, public URL:`, storageUrl);
+        } else {
+          console.error(`❌ [${correlationId}] Failed to get storage URL for media`);
+          // Create a fallback URL that points to Telegram's CDN directly
+          const fileUrl = await getFileUrl(media.file_id, telegramToken);
+          storageUrl = fileUrl;
+          console.log(`⚠️ [${correlationId}] Using Telegram CDN URL as fallback:`, storageUrl);
         }
       } catch (mediaError) {
         console.error(`❌ [${correlationId}] Error processing media:`, mediaError);
+        // Try to get a direct Telegram URL as fallback
+        try {
+          const fileUrl = await getFileUrl(media.file_id, telegramToken);
+          storageUrl = fileUrl;
+          console.log(`⚠️ [${correlationId}] Using Telegram CDN URL as fallback:`, storageUrl);
+        } catch (fileUrlError) {
+          console.error(`❌ [${correlationId}] Failed to get Telegram file URL:`, fileUrlError);
+        }
         // Continue with the process even if media processing fails
         console.log(`⚠️ [${correlationId}] Continuing despite media processing error`);
       }

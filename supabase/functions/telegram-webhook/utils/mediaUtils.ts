@@ -80,13 +80,15 @@ export async function getFileUrl(fileId: string, telegramToken?: string): Promis
  * @param mediaInfo Media information object
  * @param messageId Message ID or 'new' for new messages
  * @param telegramToken Optional Telegram bot token
+ * @param storagePath Optional custom storage path/filename
  * @returns Public URL of the stored media or null if failed
  */
 export async function downloadMedia(
   supabase: SupabaseClient,
   mediaInfo: MediaInfo,
   messageId: string | number,
-  telegramToken?: string
+  telegramToken?: string,
+  storagePath?: string
 ): Promise<string | null> {
   const correlationId = `media-${messageId}-${Date.now()}`;
   const logger = getLogger(correlationId);
@@ -100,13 +102,19 @@ export async function downloadMedia(
     logger.info('Processing media', { 
       messageId,
       fileId: mediaInfo.file_id,
-      fileUniqueId: mediaInfo.file_unique_id
+      fileUniqueId: mediaInfo.file_unique_id,
+      customPath: !!storagePath
     });
     
-    // Generate filename using file_unique_id
-    const mimeType = mediaInfo.mime_type || '';
-    const fileExt = mimeType ? mimeType.split('/')[1] || 'bin' : 'bin';
-    const fileName = `${mediaInfo.file_unique_id}.${fileExt}`;
+    // Use provided storagePath or generate filename using file_unique_id
+    let fileName: string;
+    if (storagePath) {
+      fileName = storagePath;
+    } else {
+      const mimeType = mediaInfo.mime_type || '';
+      const fileExt = mimeType ? mimeType.split('/')[1] || 'bin' : 'bin';
+      fileName = `${mediaInfo.file_unique_id}.${fileExt}`;
+    }
     
     // Check if file already exists in storage
     const { data: existingFile } = await supabase
@@ -134,6 +142,7 @@ export async function downloadMedia(
             .from('messages')
             .update({
               public_url: existingUrl,
+              storage_path: fileName,
               updated_at: new Date().toISOString()
             })
             .eq('id', messageId);
@@ -154,12 +163,13 @@ export async function downloadMedia(
     try {
       const mediaResponse = await fetch(telegramFileUrl);
       if (!mediaResponse.ok) {
-        throw new Error('Failed to download media from Telegram');
+        throw new Error(`Failed to download media from Telegram: ${mediaResponse.status} ${mediaResponse.statusText}`);
       }
       
       mediaBuffer = await mediaResponse.arrayBuffer();
       logger.info('Successfully downloaded from Telegram', {
-        fileSize: mediaBuffer.byteLength
+        fileSize: mediaBuffer.byteLength,
+        fileName
       });
     } catch (downloadError) {
       logger.error('Download error', { error: downloadError });
@@ -177,6 +187,7 @@ export async function downloadMedia(
               .from('messages')
               .update({
                 public_url: existingUrl,
+                storage_path: fileName,
                 updated_at: new Date().toISOString()
               })
               .eq('id', messageId);
@@ -241,6 +252,7 @@ export async function downloadMedia(
           .from('messages')
           .update({
             public_url: publicUrl,
+            storage_path: fileName,
             updated_at: new Date().toISOString()
           })
           .eq('id', messageId);
@@ -250,7 +262,7 @@ export async function downloadMedia(
       }
     }
     
-    logger.info('Media processing completed', { publicUrl });
+    logger.info('Media processing completed', { publicUrl, fileName });
     
     return publicUrl;
     
@@ -302,22 +314,23 @@ export async function downloadAndStoreMedia(
   }
   
   try {
-    // Use the new downloadMedia function
+    // Generate filename with chat_id to ensure uniqueness across chats
+    const mimeType = mediaInfo.mime_type || '';
+    const fileExt = mimeType ? mimeType.split('/')[1] || 'bin' : 'bin';
+    const storagePath = `${message.chat.id}_${mediaInfo.file_unique_id}.${fileExt}`;
+    
+    // Use the new downloadMedia function with the custom storage path
     const publicUrl = await downloadMedia(
       supabase,
       mediaInfo,
       message.message_id,
-      telegramToken
+      telegramToken,
+      storagePath
     );
     
     if (!publicUrl) {
       throw new Error('Failed to download media');
     }
-    
-    // Generate filename for storage path
-    const mimeType = mediaInfo.mime_type || '';
-    const fileExt = mimeType ? mimeType.split('/')[1] || 'bin' : 'bin';
-    const storagePath = `${mediaInfo.file_unique_id}.${fileExt}`;
     
     return {
       publicUrl,
