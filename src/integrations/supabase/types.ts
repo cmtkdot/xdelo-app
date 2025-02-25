@@ -837,6 +837,121 @@ export type Database = {
           main_processed: boolean | null
           main_submitted_timestamp: string | null
           main_user_email: string | null
+          rowids_accountsid_new: string | null
+          rowids_credit_row_id: string | null
+          rowids_estimatorowid: string | null
+          rowids_userid_sales_invoices: string | null
+          sb_accounts_id: string | null
+          sb_estimates_id: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          timestamp_estimate_converted: string | null
+          tre_order_items_invoice: Json | null
+          tre_total: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          account_name?: string | null
+          account_uid?: string | null
+          created_at?: string | null
+          doc_document?: string | null
+          doc_glideforeverlink?: string | null
+          glide_id?: string | null
+          id?: string
+          last_modified_at?: string | null
+          last_sync_time?: string | null
+          main_created_timestamp?: string | null
+          main_edit_date?: string | null
+          main_invoice_order_date?: string | null
+          main_invoice_uid?: string | null
+          main_notes?: string | null
+          main_processed?: boolean | null
+          main_submitted_timestamp?: string | null
+          main_user_email?: string | null
+          rowids_accountsid_new?: string | null
+          rowids_credit_row_id?: string | null
+          rowids_estimatorowid?: string | null
+          rowids_userid_sales_invoices?: string | null
+          sb_accounts_id?: string | null
+          sb_estimates_id?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          timestamp_estimate_converted?: string | null
+          tre_order_items_invoice?: Json | null
+          tre_total?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          account_name?: string | null
+          account_uid?: string | null
+          created_at?: string | null
+          doc_document?: string | null
+          doc_glideforeverlink?: string | null
+          glide_id?: string | null
+          id?: string
+          last_modified_at?: string | null
+          last_sync_time?: string | null
+          main_created_timestamp?: string | null
+          main_edit_date?: string | null
+          main_invoice_order_date?: string | null
+          main_invoice_uid?: string | null
+          main_notes?: string | null
+          main_processed?: boolean | null
+          main_submitted_timestamp?: string | null
+          main_user_email?: string | null
+          rowids_accountsid_new?: string | null
+          rowids_credit_row_id?: string | null
+          rowids_estimatorowid?: string | null
+          rowids_userid_sales_invoices?: string | null
+          sb_accounts_id?: string | null
+          sb_estimates_id?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          timestamp_estimate_converted?: string | null
+          tre_order_items_invoice?: Json | null
+          tre_total?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_gl_invoices_accounts"
+            columns: ["sb_accounts_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_invoices_accounts"
+            columns: ["sb_accounts_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_invoices_sb_accounts_id_fkey"
+            columns: ["sb_accounts_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gl_invoices_backup: {
+        Row: {
+          account_name: string | null
+          account_uid: string | null
+          created_at: string | null
+          doc_document: string | null
+          doc_glideforeverlink: string | null
+          glide_id: string | null
+          id: string | null
+          last_modified_at: string | null
+          last_sync_time: string | null
+          main_created_timestamp: string | null
+          main_edit_date: string | null
+          main_invoice_order_date: string | null
+          main_invoice_uid: string | null
+          main_notes: string | null
+          main_processed: boolean | null
+          main_submitted_timestamp: string | null
+          main_user_email: string | null
           rowids_accountid_sales_invoices: string | null
           rowids_accountsid_new: string | null
           rowids_credit_row_id: string | null
@@ -858,7 +973,7 @@ export type Database = {
           doc_document?: string | null
           doc_glideforeverlink?: string | null
           glide_id?: string | null
-          id?: string
+          id?: string | null
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_created_timestamp?: string | null
@@ -890,7 +1005,7 @@ export type Database = {
           doc_document?: string | null
           doc_glideforeverlink?: string | null
           glide_id?: string | null
-          id?: string
+          id?: string | null
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_created_timestamp?: string | null
@@ -915,22 +1030,7 @@ export type Database = {
           tre_total?: number | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_invoices_accounts"
-            columns: ["sb_accounts_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_invoices_sb_accounts_id_fkey"
-            columns: ["sb_accounts_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       gl_products: {
         Row: {
@@ -941,6 +1041,178 @@ export type Database = {
           email_email_of_user_who_added_product: string | null
           glide_id: string | null
           id: string
+          last_edited_date: string | null
+          last_modified_at: string | null
+          last_sync_time: string | null
+          main_category: string | null
+          main_cost: number | null
+          main_cost_update: number | null
+          main_fronted: boolean | null
+          main_has_purchase_note: boolean | null
+          main_leave_no: boolean | null
+          main_miscellaneous_items: boolean | null
+          main_more_units_behind: boolean | null
+          main_new_product_name: string | null
+          main_product_image1: string | null
+          main_product_name: string | null
+          main_product_purchase_date: string | null
+          main_purchase_notes: string | null
+          main_rename_product: boolean | null
+          main_samples: boolean | null
+          main_samples_or_fronted: boolean | null
+          main_terms_for_fronted_product: string | null
+          main_total_qty_purchased: number | null
+          main_total_units_behind_sample: number | null
+          main_vendor_product_name: string | null
+          main_vendor_uid: string | null
+          new_rel_new: string | null
+          po_added_to_old_po: boolean | null
+          po_converted_po: boolean | null
+          po_old_po_row_id: boolean | null
+          po_po_date: string | null
+          po_poui_dfrom_add_prod: string | null
+          po_pouid_from_add_prod: string | null
+          product_name_display: string | null
+          rowid_product_row_id_for_choice_add_item: string | null
+          rowid_purchase_order_row_id: string | null
+          rowid_sheet21_pics: string | null
+          rowid_vpay_row_id: string | null
+          sb_accounts_id: string | null
+          sb_purchase_orders_id: string | null
+          sync_status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          cart_add_note?: boolean | null
+          cart_rename?: boolean | null
+          created_at?: string | null
+          date_timestamp_subm?: string | null
+          email_email_of_user_who_added_product?: string | null
+          glide_id?: string | null
+          id?: string
+          last_edited_date?: string | null
+          last_modified_at?: string | null
+          last_sync_time?: string | null
+          main_category?: string | null
+          main_cost?: number | null
+          main_cost_update?: number | null
+          main_fronted?: boolean | null
+          main_has_purchase_note?: boolean | null
+          main_leave_no?: boolean | null
+          main_miscellaneous_items?: boolean | null
+          main_more_units_behind?: boolean | null
+          main_new_product_name?: string | null
+          main_product_image1?: string | null
+          main_product_name?: string | null
+          main_product_purchase_date?: string | null
+          main_purchase_notes?: string | null
+          main_rename_product?: boolean | null
+          main_samples?: boolean | null
+          main_samples_or_fronted?: boolean | null
+          main_terms_for_fronted_product?: string | null
+          main_total_qty_purchased?: number | null
+          main_total_units_behind_sample?: number | null
+          main_vendor_product_name?: string | null
+          main_vendor_uid?: string | null
+          new_rel_new?: string | null
+          po_added_to_old_po?: boolean | null
+          po_converted_po?: boolean | null
+          po_old_po_row_id?: boolean | null
+          po_po_date?: string | null
+          po_poui_dfrom_add_prod?: string | null
+          po_pouid_from_add_prod?: string | null
+          product_name_display?: string | null
+          rowid_product_row_id_for_choice_add_item?: string | null
+          rowid_purchase_order_row_id?: string | null
+          rowid_sheet21_pics?: string | null
+          rowid_vpay_row_id?: string | null
+          sb_accounts_id?: string | null
+          sb_purchase_orders_id?: string | null
+          sync_status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          cart_add_note?: boolean | null
+          cart_rename?: boolean | null
+          created_at?: string | null
+          date_timestamp_subm?: string | null
+          email_email_of_user_who_added_product?: string | null
+          glide_id?: string | null
+          id?: string
+          last_edited_date?: string | null
+          last_modified_at?: string | null
+          last_sync_time?: string | null
+          main_category?: string | null
+          main_cost?: number | null
+          main_cost_update?: number | null
+          main_fronted?: boolean | null
+          main_has_purchase_note?: boolean | null
+          main_leave_no?: boolean | null
+          main_miscellaneous_items?: boolean | null
+          main_more_units_behind?: boolean | null
+          main_new_product_name?: string | null
+          main_product_image1?: string | null
+          main_product_name?: string | null
+          main_product_purchase_date?: string | null
+          main_purchase_notes?: string | null
+          main_rename_product?: boolean | null
+          main_samples?: boolean | null
+          main_samples_or_fronted?: boolean | null
+          main_terms_for_fronted_product?: string | null
+          main_total_qty_purchased?: number | null
+          main_total_units_behind_sample?: number | null
+          main_vendor_product_name?: string | null
+          main_vendor_uid?: string | null
+          new_rel_new?: string | null
+          po_added_to_old_po?: boolean | null
+          po_converted_po?: boolean | null
+          po_old_po_row_id?: boolean | null
+          po_po_date?: string | null
+          po_poui_dfrom_add_prod?: string | null
+          po_pouid_from_add_prod?: string | null
+          product_name_display?: string | null
+          rowid_product_row_id_for_choice_add_item?: string | null
+          rowid_purchase_order_row_id?: string | null
+          rowid_sheet21_pics?: string | null
+          rowid_vpay_row_id?: string | null
+          sb_accounts_id?: string | null
+          sb_purchase_orders_id?: string | null
+          sync_status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_gl_products_accounts"
+            columns: ["sb_accounts_id"]
+            isOneToOne: true
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_products_accounts"
+            columns: ["sb_accounts_id"]
+            isOneToOne: true
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_products_sb_accounts_id_fkey"
+            columns: ["sb_accounts_id"]
+            isOneToOne: true
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gl_products_backup: {
+        Row: {
+          cart_add_note: boolean | null
+          cart_rename: boolean | null
+          created_at: string | null
+          date_timestamp_subm: string | null
+          email_email_of_user_who_added_product: string | null
+          glide_id: string | null
+          id: string | null
           last_edited_date: string | null
           last_modified_at: string | null
           last_sync_time: string | null
@@ -994,7 +1266,7 @@ export type Database = {
           date_timestamp_subm?: string | null
           email_email_of_user_who_added_product?: string | null
           glide_id?: string | null
-          id?: string
+          id?: string | null
           last_edited_date?: string | null
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -1048,7 +1320,7 @@ export type Database = {
           date_timestamp_subm?: string | null
           email_email_of_user_who_added_product?: string | null
           glide_id?: string | null
-          id?: string
+          id?: string | null
           last_edited_date?: string | null
           last_modified_at?: string | null
           last_sync_time?: string | null
@@ -1095,22 +1367,7 @@ export type Database = {
           sync_status?: string | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_products_accounts"
-            columns: ["sb_accounts_id"]
-            isOneToOne: true
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_products_sb_accounts_id_fkey"
-            columns: ["sb_accounts_id"]
-            isOneToOne: true
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       gl_purchase_orders: {
         Row: {
@@ -1255,6 +1512,203 @@ export type Database = {
           id: string
           last_modified_at: string | null
           last_sync_time: string | null
+          main_accounuid_list: string | null
+          main_box_sizes: string | null
+          main_box_weight: number | null
+          main_delivery_time_end: string | null
+          main_delivery_time_range: string | null
+          main_delivery_time_start: string | null
+          main_drop_off_address: string | null
+          main_drop_off_city: string | null
+          main_drop_off_location_uid: string | null
+          main_email_of_user_sub: string | null
+          main_invoices_row_id: string | null
+          main_notes_for_tp_split_orders: string | null
+          main_service_used: string | null
+          main_ship_date: string | null
+          main_ship_date_ical: string | null
+          main_timestamp_submit: string | null
+          main_total_units_1st_account: number | null
+          main_total_units_2nd_account: number | null
+          main_total_units_3rd_account_copy: number | null
+          main_total_units_inside: number | null
+          main_tp_id: string | null
+          main_tp_id_ical: string | null
+          main_tracking_link: string | null
+          main_tracking_number: string | null
+          multiple_accounts: boolean | null
+          receiver_receiver_address: string | null
+          receiver_receiver_name: string | null
+          receiver_state: string | null
+          rowid_invoicerelated: string | null
+          sb_accounts_id: string | null
+          sb_invoices_id: string | null
+          sender_sender_address: string | null
+          sender_sender_name_company: string | null
+          sender_sender_phone: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          tp_history_rowid: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          ai_ai_extracted_text?: string | null
+          ai_ai_json?: Json | null
+          ai_label_upload?: Json | null
+          ai_tracking_ai_extracted_text?: string | null
+          ai_tracking_json_extracted?: Json | null
+          created_at?: string | null
+          glide_id?: string | null
+          ical_calendar_google_updated?: boolean | null
+          ical_end_date?: string | null
+          ical_last_tracked?: string | null
+          ical_last_updated?: string | null
+          ical_state_abbrievation?: string | null
+          ical_status?: string | null
+          id?: string
+          last_modified_at?: string | null
+          last_sync_time?: string | null
+          main_accounuid_list?: string | null
+          main_box_sizes?: string | null
+          main_box_weight?: number | null
+          main_delivery_time_end?: string | null
+          main_delivery_time_range?: string | null
+          main_delivery_time_start?: string | null
+          main_drop_off_address?: string | null
+          main_drop_off_city?: string | null
+          main_drop_off_location_uid?: string | null
+          main_email_of_user_sub?: string | null
+          main_invoices_row_id?: string | null
+          main_notes_for_tp_split_orders?: string | null
+          main_service_used?: string | null
+          main_ship_date?: string | null
+          main_ship_date_ical?: string | null
+          main_timestamp_submit?: string | null
+          main_total_units_1st_account?: number | null
+          main_total_units_2nd_account?: number | null
+          main_total_units_3rd_account_copy?: number | null
+          main_total_units_inside?: number | null
+          main_tp_id?: string | null
+          main_tp_id_ical?: string | null
+          main_tracking_link?: string | null
+          main_tracking_number?: string | null
+          multiple_accounts?: boolean | null
+          receiver_receiver_address?: string | null
+          receiver_receiver_name?: string | null
+          receiver_state?: string | null
+          rowid_invoicerelated?: string | null
+          sb_accounts_id?: string | null
+          sb_invoices_id?: string | null
+          sender_sender_address?: string | null
+          sender_sender_name_company?: string | null
+          sender_sender_phone?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          tp_history_rowid?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          ai_ai_extracted_text?: string | null
+          ai_ai_json?: Json | null
+          ai_label_upload?: Json | null
+          ai_tracking_ai_extracted_text?: string | null
+          ai_tracking_json_extracted?: Json | null
+          created_at?: string | null
+          glide_id?: string | null
+          ical_calendar_google_updated?: boolean | null
+          ical_end_date?: string | null
+          ical_last_tracked?: string | null
+          ical_last_updated?: string | null
+          ical_state_abbrievation?: string | null
+          ical_status?: string | null
+          id?: string
+          last_modified_at?: string | null
+          last_sync_time?: string | null
+          main_accounuid_list?: string | null
+          main_box_sizes?: string | null
+          main_box_weight?: number | null
+          main_delivery_time_end?: string | null
+          main_delivery_time_range?: string | null
+          main_delivery_time_start?: string | null
+          main_drop_off_address?: string | null
+          main_drop_off_city?: string | null
+          main_drop_off_location_uid?: string | null
+          main_email_of_user_sub?: string | null
+          main_invoices_row_id?: string | null
+          main_notes_for_tp_split_orders?: string | null
+          main_service_used?: string | null
+          main_ship_date?: string | null
+          main_ship_date_ical?: string | null
+          main_timestamp_submit?: string | null
+          main_total_units_1st_account?: number | null
+          main_total_units_2nd_account?: number | null
+          main_total_units_3rd_account_copy?: number | null
+          main_total_units_inside?: number | null
+          main_tp_id?: string | null
+          main_tp_id_ical?: string | null
+          main_tracking_link?: string | null
+          main_tracking_number?: string | null
+          multiple_accounts?: boolean | null
+          receiver_receiver_address?: string | null
+          receiver_receiver_name?: string | null
+          receiver_state?: string | null
+          rowid_invoicerelated?: string | null
+          sb_accounts_id?: string | null
+          sb_invoices_id?: string | null
+          sender_sender_address?: string | null
+          sender_sender_name_company?: string | null
+          sender_sender_phone?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          tp_history_rowid?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_gl_shipping_records_accounts"
+            columns: ["sb_accounts_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_shipping_records_sb_accounts_id_fkey"
+            columns: ["sb_accounts_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_shipping_records_sb_invoices_id_fkey"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_shipping_records_sb_invoices_id_fkey"
+            columns: ["sb_invoices_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_summary"
+            referencedColumns: ["invoice_id"]
+          },
+        ]
+      }
+      gl_shipping_records_backup: {
+        Row: {
+          ai_ai_extracted_text: string | null
+          ai_ai_json: Json | null
+          ai_label_upload: Json | null
+          ai_tracking_ai_extracted_text: string | null
+          ai_tracking_json_extracted: Json | null
+          created_at: string | null
+          glide_id: string | null
+          ical_calendar_google_updated: boolean | null
+          ical_end_date: string | null
+          ical_last_tracked: string | null
+          ical_last_updated: string | null
+          ical_state_abbrievation: string | null
+          ical_status: string | null
+          id: string | null
+          last_modified_at: string | null
+          last_sync_time: string | null
           main_account_rowid: string | null
           main_account_rowid_2: string | null
           main_account_uid: string | null
@@ -1312,7 +1766,7 @@ export type Database = {
           ical_last_updated?: string | null
           ical_state_abbrievation?: string | null
           ical_status?: string | null
-          id?: string
+          id?: string | null
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_account_rowid?: string | null
@@ -1372,7 +1826,7 @@ export type Database = {
           ical_last_updated?: string | null
           ical_state_abbrievation?: string | null
           ical_status?: string | null
-          id?: string
+          id?: string | null
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_account_rowid?: string | null
@@ -1418,29 +1872,7 @@ export type Database = {
           tp_history_rowid?: string | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_shipping_records_sb_accounts_id_fkey"
-            columns: ["sb_accounts_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_shipping_records_sb_invoices_id_fkey"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_shipping_records_sb_invoices_id_fkey"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_summary"
-            referencedColumns: ["invoice_id"]
-          },
-        ]
+        Relationships: []
       }
       gl_sync_logs: {
         Row: {
