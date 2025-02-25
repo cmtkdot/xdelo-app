@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { motion, useMotionValue } from 'framer-motion'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MediaItem } from '@/types'
@@ -61,17 +62,7 @@ export function ImageSwiper({ media, className, showNavigation, ...props }: Imag
     if (isVideo && videoRef.current) {
       if (isHovered) {
         videoRef.current.currentTime = 0;
-        // Try to play the video and handle any errors
-        videoRef.current.play().catch(error => {
-          console.error("Video playback error:", error);
-          // Try playing again with user interaction simulation
-          document.addEventListener('click', function playVideoOnce() {
-            if (videoRef.current) {
-              videoRef.current.play().catch(console.error);
-            }
-            document.removeEventListener('click', playVideoOnce);
-          }, { once: true });
-        });
+        videoRef.current.play().catch(console.error);
       } else {
         videoRef.current.pause();
       }
@@ -93,7 +84,7 @@ export function ImageSwiper({ media, className, showNavigation, ...props }: Imag
       <div className="group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
         <span className="text-gray-400">No media available</span>
       </div>
-    );
+    )
   }
 
   return (
@@ -151,19 +142,7 @@ export function ImageSwiper({ media, className, showNavigation, ...props }: Imag
           loop
           muted
           playsInline
-          autoPlay={isHovered}
-          controls={false}
-          preload="metadata"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (videoRef.current) {
-              if (videoRef.current.paused) {
-                videoRef.current.play().catch(console.error);
-              } else {
-                videoRef.current.pause();
-              }
-            }
-          }}
+          autoPlay={true}
         />
       ) : (
         <img 
@@ -173,5 +152,5 @@ export function ImageSwiper({ media, className, showNavigation, ...props }: Imag
         />
       )}
     </div>
-  );
+  )
 }

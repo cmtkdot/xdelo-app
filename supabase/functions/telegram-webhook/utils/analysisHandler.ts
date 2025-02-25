@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { getLogger } from '../../telegram-webhook-old/logger';
+import { getLogger } from '../../telegram-webhook/logger';
 
 interface AnalysisResult {
   success: boolean;

@@ -1,4 +1,3 @@
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { MediaInfo, TelegramMessage } from "../types.ts";
 import { getLogger } from "./logger.ts";
 
