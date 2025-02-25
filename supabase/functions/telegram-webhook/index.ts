@@ -1,6 +1,7 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { handleEditedMessage } from "./messageHandlers.ts";
+import { getLogger } from "./logger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -104,23 +105,29 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  const correlationId = `webhook-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const logger = (message: string, data?: any) => {
-    console.log(`[${correlationId}] ${message}`, data || '');
-  };
+  const correlationId = crypto.randomUUID();
+  const logger = getLogger(correlationId);
 
   try {
-    const rawBody = await req.text();
-    logger('Raw request body:', rawBody);
+    const update = await req.json();
+    
+    // Handle edited messages
+    if (update.edited_message || update.edited_channel_post) {
+      const editedMessage = update.edited_message || update.edited_channel_post;
+      
+      const result = await handleEditedMessage(
+        editedMessage,
+        supabase,
+        correlationId
+      );
 
-    let update;
-    try {
-      update = JSON.parse(rawBody);
-    } catch (e) {
-      logger('Failed to parse JSON:', e);
       return new Response(
-        JSON.stringify({ status: 'error', reason: 'invalid json', correlation_id: correlationId }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        JSON.stringify({
+          success: result.success,
+          correlation_id: correlationId,
+          error: result.error
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
       );
     }
 
@@ -288,15 +295,17 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error(`[${correlationId}] Error:`, error);
+    logger.error('Webhook error', { error });
     return new Response(
       JSON.stringify({ 
-        status: 'error',
-        correlation_id: correlationId,
-        message: error.message,
-        stack: error.stack
+        success: false, 
+        error: error.message,
+        correlation_id: correlationId
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
+      }
     );
   }
 });
