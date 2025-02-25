@@ -77,7 +77,17 @@ serve(async (req) => {
     const update = await req.json();
     logger.info('Received webhook update:', { updateKeys: Object.keys(update) });
     
-    const message = update.message || update.channel_post || update.edited_channel_post || update.edited_message;
+    // Log the structure of edited_channel_post if present for debugging
+    if (update.edited_channel_post) {
+      logger.info('Edited channel post structure:', { 
+        keys: Object.keys(update.edited_channel_post),
+        hasMessageId: !!update.edited_channel_post.message_id
+      });
+    }
+    
+    const message = update.message || update.channel_post || 
+                    (update.edited_channel_post ? update.edited_channel_post : null) || 
+                    (update.edited_message ? update.edited_message : null);
     const isEdited = Boolean(update.edited_message || update.edited_channel_post);
     const isChannelPost = Boolean(update.channel_post || update.edited_channel_post);
     
