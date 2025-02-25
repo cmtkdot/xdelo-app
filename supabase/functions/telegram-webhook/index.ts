@@ -1,3 +1,4 @@
+
 import { serve } from "http/server"
 import { createClient } from "supabase"
 
@@ -8,15 +9,13 @@ const corsHeaders = {
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')
 const supabaseServiceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-const telegramToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
 
-if (!supabaseUrl || !supabaseServiceRole || !telegramToken) {
+if (!supabaseUrl || !supabaseServiceRole) {
   throw new Error('Missing environment variables')
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceRole)
 
-// Helper to get a logger instance with correlation tracking
 function getLogger(correlationId: string) {
   return {
     info: (message: string, data?: any) => {
@@ -53,79 +52,6 @@ async function logAuditEvent(
     });
   } catch (error) {
     console.error('Failed to log audit event:', error);
-  }
-}
-
-async function getFileUrl(fileId: string, logger: any): Promise<string> {
-  try {
-    if (!fileId) {
-      throw new Error('No file_id provided');
-    }
-    
-    logger.info('Getting file URL from Telegram', { fileId });
-    const response = await fetch(
-      `https://api.telegram.org/bot${telegramToken}/getFile?file_id=${fileId}`
-    );
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      logger.error('Telegram API error:', errorData);
-      throw new Error(`Telegram API error: ${errorData}`);
-    }
-
-    const data = await response.json();
-    
-    if (!data.ok || !data.result?.file_path) {
-      logger.error('Invalid response from Telegram:', data);
-      throw new Error('Invalid response from Telegram API');
-    }
-
-    const fileUrl = `https://api.telegram.org/file/bot${telegramToken}/${data.result.file_path}`;
-    logger.info('Successfully got file URL');
-    return fileUrl;
-
-  } catch (error) {
-    logger.error('Error in getFileUrl:', error);
-    throw error;
-  }
-}
-
-async function uploadMediaToStorage(fileUniqueId: string, mimeType: string, logger: any): Promise<string> {
-  logger.info('Uploading media to storage', { fileUniqueId, mimeType });
-  
-  const ext = mimeType.split('/')[1] || 'bin';
-  const storagePath = `${fileUniqueId}.${ext}`;
-  
-  try {
-    // Check if file already exists
-    const { data: existingFiles } = await supabase
-      .storage
-      .from('telegram-media')
-      .list('', { 
-        search: storagePath
-      });
-
-    if (existingFiles && existingFiles.length > 0) {
-      const { data: { publicUrl } } = supabase
-        .storage
-        .from('telegram-media')
-        .getPublicUrl(storagePath);
-      
-      logger.info('File already exists, returning existing URL');
-      return publicUrl;
-    }
-
-    const { data: { publicUrl } } = supabase
-      .storage
-      .from('telegram-media')
-      .getPublicUrl(storagePath);
-
-    logger.info('Generated public URL for media');
-    return publicUrl;
-
-  } catch (error) {
-    logger.error('Error with storage operation:', error);
-    throw error;
   }
 }
 
@@ -257,15 +183,6 @@ serve(async (req) => {
       .eq('file_unique_id', media.file_unique_id)
       .single();
 
-    // Generate storage URL using file_unique_id
-    logger.info('Processing media', { file_unique_id: media.file_unique_id });
-    
-    const storageUrl = await uploadMediaToStorage(
-      media.file_unique_id,
-      video ? video.mime_type : 'image/jpeg',
-      logger
-    );
-
     const messageData = {
       telegram_message_id: message.message_id,
       chat_id: chat.id,
@@ -274,7 +191,6 @@ serve(async (req) => {
       media_group_id: mediaGroupId,
       caption: message.caption || '',
       file_unique_id: media.file_unique_id,
-      public_url: storageUrl,
       mime_type: video ? video.mime_type : 'image/jpeg',
       file_size: media.file_size,
       width: media.width,
@@ -284,7 +200,8 @@ serve(async (req) => {
       telegram_data: update,
       correlation_id: correlationId,
       is_edited: isEdit,
-      edit_date: isEdit ? new Date(message.edit_date * 1000).toISOString() : null
+      edit_date: isEdit ? new Date(message.edit_date * 1000).toISOString() : null,
+      message_url: `https://t.me/c/${Math.abs(chat.id).toString().substring(3)}/${message.message_id}`
     };
 
     let resultMessage;
