@@ -22,6 +22,15 @@ flowchart TD
     I -->|Max 3 attempts| E
 
     B -->|Trigger: log_analysis_event| J[analysis_audit_log]
+    
+    %% Edit handling flow
+    K[Edited Message] -->|Edge Function: telegram-webhook| L{Existing Message?}
+    L -->|Yes| M[Update edit_history]
+    M -->|Caption changed| N[Re-analyze content]
+    N --> O{Part of Media Group?}
+    O -->|Yes| P[Re-sync to group]
+    O -->|No| B
+    P --> B
 ```
 
 ## Core Components
@@ -32,6 +41,8 @@ flowchart TD
    - Validates and processes incoming Telegram updates
    - Handles message deduplication
    - Stores messages with proper JSONB handling
+   - Tracks edit history for message changes
+   - Handles edited messages and channel posts
 
 2. `parse-caption-with-ai`
    - Uses OpenAI for caption analysis
@@ -49,6 +60,8 @@ flowchart TD
    - Stores message data and analysis results
    - Handles media groups and caption relationships
    - Tracks processing state and retry attempts
+   - Maintains edit history for message changes
+   - Stores channel post edits
 
 2. `analysis_audit_log` Table
    - Tracks analysis events and changes
@@ -75,6 +88,12 @@ flowchart TD
    - Media group navigation
    - Mobile-optimized layout
 
+4. Edit History Tracking
+   - Complete history of message edits
+   - Timestamp tracking for all changes
+   - Channel post edit handling
+   - Automatic re-analysis of edited content
+
 ### Error Handling
 
 - Automatic retry for failed syncs (max 3 attempts)
@@ -88,5 +107,13 @@ flowchart TD
 - Processing state tracking
 - Media group sync status
 - Error rate monitoring
+- Edit history tracking
+
+## Database Optimizations
+
+- Indexes for frequently queried fields
+- GIN index for JSONB fields (edit_history, analyzed_content)
+- Partial indexes for edited messages
+- Database triggers for automatic edit history updates
 
 For detailed technical documentation and API references, please refer to the respective component directories.

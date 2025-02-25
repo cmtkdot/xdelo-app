@@ -29,6 +29,27 @@ flowchart TD
     
     M -->|Yes| O[Sync analyzed_content from group]
     M -->|No| N
+
+    %% Edit handling flow
+    P[Telegram Webhook Receives Edit] --> Q{Is Edited Message?}
+    Q -->|Yes| R{Contains Media?}
+    Q -->|No| S[Process as new message]
+    
+    R -->|Yes| T[Update existing media record]
+    R -->|No| U[Update other_messages record]
+    
+    T --> V{Caption Changed?}
+    U --> V
+    
+    V -->|Yes| W[Update edit_history]
+    V -->|No| X[Update metadata only]
+    
+    W --> Y{Is part of Media Group?}
+    
+    Y -->|Yes| Z[Re-sync caption to group]
+    Y -->|No| AA[Re-analyze caption if needed]
+    
+    Z --> AA
 </flowchart>
 ```
 
@@ -109,7 +130,35 @@ flowchart TD
   - This creates a direct reference to the message containing the original caption
   - Enables efficient querying of related messages and their source caption
 
-### 6. Error Handling & Recovery
+### 6. Edit History Handling
+- **Edit Detection**:
+  - Webhook receives update with edited_message or edited_channel_post
+  - System identifies existing message by chat_id and message_id
+- **Edit History Tracking**:
+  - Each edit is stored in edit_history JSONB array
+  - Each entry contains:
+    - edit_date: Timestamp of the edit
+    - previous_caption: Caption before the edit
+    - new_caption: Caption after the edit
+    - is_channel_post: Whether the edit was made in a channel
+  - Database trigger automatically updates edit_history on caption changes
+- **Caption Re-Analysis**:
+  - If caption changes significantly, message is re-analyzed
+  - New analysis results are stored in analyzed_content
+  - Previous analysis is preserved in edit_history
+- **Media Group Re-Synchronization**:
+  - If edited message is part of a media group and is the caption holder:
+    - Updated caption is re-analyzed
+    - New analysis is propagated to all group members
+    - All group members receive updated message_caption_id reference
+  - If edited message is part of a group but not the caption holder:
+    - Edit is recorded but doesn't trigger group re-synchronization
+- **Channel Post Handling**:
+  - Channel post edits are tracked separately with edited_channel_post field
+  - Special handling for anonymous edits in channels
+  - Preserves edit history even when editor information is not available
+
+### 7. Error Handling & Recovery
 - **Error States**: Track processing failures in error_message field
 - **Retry Mechanism**: Increment retry_count and schedule retries
 - **Logging**: Record all state transitions in message_state_logs table
@@ -133,6 +182,24 @@ flowchart TD
     "needs_ai_analysis": "Boolean based on product_name length > 23 chars"
   }
 }
+```
+
+### edit_history Array Structure
+```json
+[
+  {
+    "edit_date": "2025-02-24T12:34:56.789Z",
+    "previous_caption": "Original caption text",
+    "new_caption": "Updated caption text",
+    "is_channel_post": false
+  },
+  {
+    "edit_date": "2025-02-24T13:45:12.345Z",
+    "previous_caption": "Updated caption text",
+    "new_caption": "Final caption text",
+    "is_channel_post": false
+  }
+]
 ```
 
 ## Detailed Parsing Rules & Examples
