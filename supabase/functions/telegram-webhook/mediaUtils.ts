@@ -1,357 +1,99 @@
-import { MediaInfo, TelegramMessage } from "./types.ts";
-import { getLogger } from "./logger.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-type SupabaseClient = ReturnType<typeof createClient>;
 
-/**
- * Extracts media information from a Telegram message.
- * 
- * IMPORTANT: This function only extracts media for photos and videos.
- * Documents are NOT considered media in this context to avoid the conflict
- * with determineMessageType() which categorizes documents as "other messages".
- * 
- * @param message The Telegram message to extract media from
- * @returns MediaInfo object or null if no supported media is found
- */
-export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
-  // Handle photos (always treated as media)
-  if (message.photo) {
-    const photo = message.photo[message.photo.length - 1];
-    return {
-      file_id: photo.file_id,
-      file_unique_id: photo.file_unique_id,
-      mime_type: 'image/jpeg',
-      width: photo.width,
-      height: photo.height,
-      file_size: photo.file_size
-    };
-  } 
-  
-  // Handle videos (always treated as media)
-  if (message.video) {
-    return {
-      file_id: message.video.file_id,
-      file_unique_id: message.video.file_unique_id,
-      mime_type: message.video.mime_type || 'video/mp4',
-      width: message.video.width,
-      height: message.video.height,
-      duration: message.video.duration,
-      file_size: message.video.file_size
-    };
+import { createClient } from '@supabase/supabase-js';
+import { FunctionInvocationContext } from './types';
+
+const supabaseAdmin = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+);
+
+export async function downloadMedia(fileId: string, botToken: string): Promise<ArrayBuffer> {
+  // First get file path from Telegram
+  const getFileUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`;
+  const filePathResponse = await fetch(getFileUrl);
+  const filePathData = await filePathResponse.json();
+
+  if (!filePathData.ok || !filePathData.result.file_path) {
+    throw new Error(`Failed to get file path: ${JSON.stringify(filePathData)}`);
   }
+
+  // Now download the actual file
+  const fileUrl = `https://api.telegram.org/file/bot${botToken}/${filePathData.result.file_path}`;
+  const fileResponse = await fetch(fileUrl);
   
-  // Documents are now explicitly NOT handled as media
-  // They will be processed through the other_messages flow
-  
-  return null;
+  if (!fileResponse.ok) {
+    throw new Error(`Failed to download file: ${fileResponse.statusText}`);
+  }
+
+  return await fileResponse.arrayBuffer();
 }
 
-// Cache the token to avoid repeated environment lookups
-let cachedTelegramToken: string | null = null;
-
-export async function getFileUrl(fileId: string, telegramToken?: string): Promise<string> {
-  // Use provided token, cached token, or get from environment
-  const token = telegramToken || cachedTelegramToken || Deno.env.get('TELEGRAM_BOT_TOKEN');
-  
-  if (!token) {
-    throw new Error('TELEGRAM_BOT_TOKEN environment variable is required');
-  }
-  
-  // Cache the token for future use
-  if (!cachedTelegramToken && token) {
-    cachedTelegramToken = token;
-  }
-  
-  const logger = getLogger('getFileUrl');
-  logger.info(`Getting file URL for fileId: ${fileId}`);
-  
-  const response = await fetch(
-    `https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`
-  );
-  const data = await response.json();
-  if (!data.ok) throw new Error('Failed to get file path');
-  return `https://api.telegram.org/file/bot${token}/${data.result.file_path}`;
-}
-
-/**
- * Downloads media (photos and videos) from Telegram and stores it in Supabase storage.
- * 
- * This function is part of the media-first approach, which prioritizes
- * processing media content. It handles:
- * - Retrieving file information from Telegram
- * - Downloading the file content
- * - Storing the file in Supabase storage
- * - Updating the message record with the public URL
- * 
- * Note: This function only handles photos and videos, not documents.
- * Documents are processed through the other_messages flow.
- */
-export async function downloadMedia(
-  supabase: SupabaseClient,
-  mediaInfo: MediaInfo,
-  messageId: string | number,
-  telegramToken?: string,
-  storagePath?: string
-): Promise<string | null> {
-  const correlationId = `media-${messageId}-${Date.now()}`;
-  const logger = getLogger(correlationId);
-  
-  if (!mediaInfo) {
-    logger.error('No media info provided');
-    return null;
-  }
-  
+export async function uploadMediaToStorage(
+  fileData: ArrayBuffer,
+  storagePath: string,
+  mimeType: string,
+  context: FunctionInvocationContext
+): Promise<string> {
   try {
-    logger.info('Processing media', { 
-      messageId,
-      fileId: mediaInfo.file_id,
-      fileUniqueId: mediaInfo.file_unique_id,
-      customPath: !!storagePath
-    });
-    
-    // Use provided storagePath or generate filename using file_unique_id
-    let fileName: string;
-    if (storagePath) {
-      fileName = storagePath;
-    } else {
-      const mimeType = mediaInfo.mime_type || '';
-      const fileExt = mimeType ? mimeType.split('/')[1] || 'bin' : 'bin';
-      fileName = `${mediaInfo.file_unique_id}.${fileExt}`;
-    }
-    
-    // Check if file already exists in storage
-    const { data: existingFile } = await supabase
-      .storage
+    context.logger.info(`Uploading file to ${storagePath}`);
+
+    const { data, error } = await supabaseAdmin.storage
       .from('telegram-media')
-      .list('', {
-        search: fileName
+      .upload(storagePath, fileData, {
+        contentType: mimeType,
+        upsert: true
       });
-      
-    const fileExists = existingFile && existingFile.length > 0;
-    
-    // Get existing URL if file exists
-    const { data: { publicUrl: existingUrl } } = supabase
-      .storage
+
+    if (error) {
+      context.logger.error('Storage upload error:', error);
+      throw error;
+    }
+
+    // Get public URL
+    const { data: publicUrlData } = supabaseAdmin.storage
       .from('telegram-media')
-      .getPublicUrl(fileName);
+      .getPublicUrl(storagePath);
+
+    context.logger.info(`File uploaded successfully, public URL: ${publicUrlData.publicUrl}`);
     
-    // Check if this is an edited message that needs to replace the existing file
-    const isEditedMessage = typeof messageId === 'string' && 
-                           messageId !== 'new' && 
-                           fileExists;
-    
-    if (isEditedMessage) {
-      // For edited messages, we'll delete the existing file and upload a new one
-      logger.info('Edited message detected, will replace existing file', { 
-        fileName, 
-        messageId 
-      });
-      
-      // We'll continue with the download and upload process
-      // The existing file will be deleted before upload
-    } else if (fileExists && existingUrl) {
-      // For non-edited messages, we can just use the existing file
-      logger.info('File already exists in storage', { fileName });
-      
-      // Update message with existing URL if messageId is a valid ID
-      if (messageId && messageId !== 'new') {
-        try {
-          await supabase
-            .from('messages')
-            .update({
-              public_url: existingUrl,
-              storage_path: fileName,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', messageId);
-        } catch (updateError) {
-          logger.error('Error updating message with existing URL', { error: updateError });
-        }
-      }
-      
-      return existingUrl;
-    }
-    
-    // Get file URL from Telegram
-    const telegramFileUrl = await getFileUrl(mediaInfo.file_id, telegramToken);
-    
-    // Download media from Telegram
-    let mediaBuffer: ArrayBuffer;
-    try {
-      const mediaResponse = await fetch(telegramFileUrl);
-      if (!mediaResponse.ok) {
-        throw new Error(`Failed to download media from Telegram: ${mediaResponse.status} ${mediaResponse.statusText}`);
-      }
-      
-      mediaBuffer = await mediaResponse.arrayBuffer();
-      logger.info('Successfully downloaded from Telegram', {
-        fileSize: mediaBuffer.byteLength,
-        fileName
-      });
-    } catch (downloadError) {
-      logger.error('Download error', { error: downloadError });
-      
-      if (existingUrl) {
-        logger.info('Using existing file despite download error', {
-          publicUrl: existingUrl
-        });
-        return existingUrl;
-      }
-      
-      throw downloadError;
-    }
-    
-    // Upload to storage
-    try {
-      // If file exists and this is an edited message, delete the existing file first
-      if (fileExists && isEditedMessage) {
-        logger.info('Deleting existing file before upload', { fileName });
-        
-        const { error: deleteError } = await supabase
-          .storage
-          .from('telegram-media')
-          .remove([fileName]);
-          
-        if (deleteError) {
-          logger.warn('Error deleting existing file, will try to overwrite', { 
-            error: deleteError,
-            fileName 
-          });
-        }
-      }
-      
-      logger.info('Uploading media to storage', { fileName });
-      
-      const { error: uploadError } = await supabase
-        .storage
-        .from('telegram-media')
-        .upload(fileName, mediaBuffer, {
-          contentType: mediaInfo.mime_type,
-          upsert: true, // This will overwrite if the file exists
-          cacheControl: '3600'
-        });
-      
-      if (uploadError) {
-        // If file exists, just use the existing URL
-        if (uploadError.message.includes('The resource already exists')) {
-          logger.info('File exists, using existing URL');
-        } else {
-          throw uploadError;
-        }
-      } else {
-        logger.info('New file uploaded successfully', { fileName });
-      }
-    } catch (uploadError) {
-      logger.error('Upload error', { error: uploadError });
-      
-      if (existingUrl) {
-        logger.info('Using existing file despite upload error', {
-          publicUrl: existingUrl
-        });
-      } else {
-        throw uploadError;
-      }
-    }
-    
-    // Get final public URL
-    const { data: { publicUrl } } = supabase
-      .storage
-      .from('telegram-media')
-      .getPublicUrl(fileName);
-    
-    // Update message with public URL if messageId is a valid ID
-    if (messageId && messageId !== 'new') {
-      try {
-        await supabase
-          .from('messages')
-          .update({
-            public_url: publicUrl,
-            storage_path: fileName,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', messageId);
-      } catch (updateError) {
-        logger.error('Error updating message with public URL', { error: updateError });
-      }
-    }
-    
-    logger.info('Media processing completed', { publicUrl, fileName });
-    
-    return publicUrl;
-    
+    return publicUrlData.publicUrl;
   } catch (error) {
-    logger.error('Media processing failed', {
-      messageId,
-      error: error.message,
-      stack: error.stack
-    });
-    
-    // Update message with error status if messageId is a valid ID
-    if (messageId && messageId !== 'new') {
-      try {
-        await supabase
-          .from('messages')
-          .update({
-            error_message: error.message,
-            processing_state: 'error',
-            last_error_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', messageId);
-      } catch (updateError) {
-        logger.error('Error updating message with error status', { error: updateError });
-      }
-    }
-    
-    return null;
+    context.logger.error('Error in uploadMediaToStorage:', error);
+    throw error;
   }
 }
 
-// Legacy function for backward compatibility
-export async function downloadAndStoreMedia(
-  message: TelegramMessage,
-  supabase: SupabaseClient,
-  correlationId: string,
-  telegramToken?: string
-): Promise<{ publicUrl: string; storagePath: string } | null> {
-  const logger = getLogger(correlationId);
-  const mediaInfo = extractMediaInfo(message);
+export function getMimeType(message: any): string {
+  if (message.photo) return 'image/jpeg';
+  if (message.video) return message.video.mime_type || 'video/mp4';
+  if (message.document) return message.document.mime_type || 'application/octet-stream';
+  return 'application/octet-stream';
+}
+
+export function getStoragePath(fileUniqueId: string, mimeType: string): string {
+  const extension = mimeType.split('/')[1] || 'bin';
+  return `${fileUniqueId}.${extension}`;
+}
+
+export async function extractMediaInfo(message: any, context: FunctionInvocationContext) {
+  const photo = message.photo ? message.photo[message.photo.length - 1] : null;
+  const video = message.video;
+  const document = message.document;
   
-  if (!mediaInfo) {
-    logger.error('No media found in message', { messageId: message.message_id });
-    return null;
-  }
-  
-  try {
-    // Generate filename with chat_id to ensure uniqueness across chats
-    const mimeType = mediaInfo.mime_type || '';
-    const fileExt = mimeType ? mimeType.split('/')[1] || 'bin' : 'bin';
-    const storagePath = `${message.chat.id}_${mediaInfo.file_unique_id}.${fileExt}`;
-    
-    // Use the new downloadMedia function with the custom storage path
-    const publicUrl = await downloadMedia(
-      supabase,
-      mediaInfo,
-      message.message_id,
-      telegramToken,
-      storagePath
-    );
-    
-    if (!publicUrl) {
-      throw new Error('Failed to download media');
-    }
-    
-    return {
-      publicUrl,
-      storagePath
-    };
-  } catch (error) {
-    logger.error('Media processing failed', {
-      messageId: message.message_id,
-      error: error.message,
-      stack: error.stack
-    });
-    
-    return null;
-  }
+  const media = photo || video || document;
+  if (!media) return null;
+
+  const mimeType = getMimeType(message);
+  const storagePath = getStoragePath(media.file_unique_id, mimeType);
+
+  return {
+    file_id: media.file_id,
+    file_unique_id: media.file_unique_id,
+    mime_type: mimeType,
+    file_size: media.file_size,
+    width: media.width,
+    height: media.height,
+    duration: video?.duration,
+    storage_path: storagePath
+  };
 }

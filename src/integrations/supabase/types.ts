@@ -1363,7 +1363,9 @@ export type Database = {
           group_message_count: string | null
           height: number | null
           id: string
+          is_channel_post: string | null
           is_edited: boolean | null
+          is_forwarded: string | null
           is_miscellaneous_item: boolean | null
           is_original_caption: boolean | null
           last_error_at: string | null
@@ -1429,7 +1431,9 @@ export type Database = {
           group_message_count?: string | null
           height?: number | null
           id?: string
+          is_channel_post?: string | null
           is_edited?: boolean | null
+          is_forwarded?: string | null
           is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
@@ -1495,7 +1499,9 @@ export type Database = {
           group_message_count?: string | null
           height?: number | null
           id?: string
+          is_channel_post?: string | null
           is_edited?: boolean | null
+          is_forwarded?: string | null
           is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
@@ -1597,7 +1603,6 @@ export type Database = {
           telegram_message_id: number
           updated_at: string
           user_id: string | null
-          vendor_name: string | null
           vendor_uid: string | null
         }
         Insert: {
@@ -1628,7 +1633,6 @@ export type Database = {
           telegram_message_id: number
           updated_at?: string
           user_id?: string | null
-          vendor_name?: string | null
           vendor_uid?: string | null
         }
         Update: {
@@ -1659,7 +1663,6 @@ export type Database = {
           telegram_message_id?: number
           updated_at?: string
           user_id?: string | null
-          vendor_name?: string | null
           vendor_uid?: string | null
         }
         Relationships: []
