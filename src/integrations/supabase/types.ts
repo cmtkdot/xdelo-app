@@ -105,7 +105,6 @@ export type Database = {
           main_photo: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
-          user_email_who_added: string | null
         }
         Insert: {
           created_at?: string | null
@@ -121,7 +120,6 @@ export type Database = {
           main_photo?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
-          user_email_who_added?: string | null
         }
         Update: {
           created_at?: string | null
@@ -137,7 +135,6 @@ export type Database = {
           main_photo?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
-          user_email_who_added?: string | null
         }
         Relationships: []
       }
@@ -1666,6 +1663,27 @@ export type Database = {
           },
         ]
       }
+      n8_telegram_message: {
+        Row: {
+          created_at: string
+          id: number
+          message: string | null
+          telegram_data: Json | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          message?: string | null
+          telegram_data?: Json | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          message?: string | null
+          telegram_data?: Json | null
+        }
+        Relationships: []
+      }
       other_messages: {
         Row: {
           analyzed_content: Json | null
@@ -1885,6 +1903,7 @@ export type Database = {
           event_timestamp: string
           event_type: Database["public"]["Enums"]["audit_event_type"]
           id: string
+          message_type: string | null
           metadata: Json | null
           new_state: Json | null
           previous_state: Json | null
@@ -1899,6 +1918,7 @@ export type Database = {
           event_timestamp?: string
           event_type: Database["public"]["Enums"]["audit_event_type"]
           id?: string
+          message_type?: string | null
           metadata?: Json | null
           new_state?: Json | null
           previous_state?: Json | null
@@ -1913,6 +1933,7 @@ export type Database = {
           event_timestamp?: string
           event_type?: Database["public"]["Enums"]["audit_event_type"]
           id?: string
+          message_type?: string | null
           metadata?: Json | null
           new_state?: Json | null
           previous_state?: Json | null
