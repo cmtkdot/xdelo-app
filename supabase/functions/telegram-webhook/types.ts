@@ -40,7 +40,14 @@ export type TelegramOtherMessageType =
   | 'dice'
   | 'game'
   | 'callback_query'
-  | 'inline_query';
+  | 'inline_query'
+  | 'message_created'
+  | 'message_edited'
+  | 'message_updated'
+  | 'message_deleted'
+  | 'message_analyzed'
+  | 'webhook_received'
+  | 'media_group_synced';
 
 export interface TelegramChat {
   id: number;
