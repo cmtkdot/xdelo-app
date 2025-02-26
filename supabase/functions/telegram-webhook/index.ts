@@ -1,4 +1,3 @@
-
 import { serve } from "http/server"
 import { createClient } from "supabase"
 
@@ -146,6 +145,8 @@ serve(async (req) => {
           chat_title: chat.title,
           telegram_message_id: message.message_id,
           message_text: message.text,
+          message_type: 'text',
+          is_edited: isEdit,
           telegram_data: update,
           correlation_id: correlationId,
           processing_state: 'completed'
