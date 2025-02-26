@@ -2406,6 +2406,7 @@ export type Database = {
         | "message_edited"
         | "media_group_history_synced"
         | "forward_media_synced"
+        | "message_forwarded"
       client_type: "Vendor" | "Customer" | "Both"
       processing_state_type:
         | "initialized"
