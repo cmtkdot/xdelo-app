@@ -1584,6 +1584,13 @@ export type Database = {
             referencedRelation: "messages"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_forwards"
+            referencedColumns: ["id"]
+          },
         ]
       }
       n8_telegram_message: {
@@ -1900,6 +1907,27 @@ export type Database = {
           new_state?: Json | null
           previous_state?: Json | null
           telegram_message_id?: number | null
+        }
+        Relationships: []
+      }
+      v_message_forwards: {
+        Row: {
+          analyzed_content: Json | null
+          chat_id: number | null
+          created_at: string | null
+          file_unique_id: string | null
+          forward_chain: Json[] | null
+          forward_count: number | null
+          id: string | null
+          old_analyzed_content: Json[] | null
+          original_analyzed_content: Json | null
+          original_chat_id: number | null
+          original_message_id: string | null
+          original_telegram_message_id: number | null
+          processing_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          telegram_message_id: number | null
         }
         Relationships: []
       }
@@ -2298,6 +2326,19 @@ export type Database = {
           p_correlation_id: string
         }
         Returns: Json
+      }
+      xdelo_get_message_forward_history: {
+        Args: {
+          p_message_id: string
+        }
+        Returns: {
+          message_id: string
+          telegram_message_id: number
+          chat_id: number
+          forward_date: string
+          analyzed_content: Json
+          forward_count: number
+        }[]
       }
       xdelo_log_event: {
         Args: {
