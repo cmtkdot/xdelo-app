@@ -36,11 +36,12 @@ export const getMediaInfo = async (message: any) => {
     `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`
   ).then(res => res.blob())
 
-  // Get file extension from mime type or file path
-  const extension = video ? video.mime_type.split('/')[1] : 
-                   document ? document.mime_type.split('/')[1] : 
-                   'jpeg'
-
+  // Get mime type and extension
+  const mimeType = video ? (video.mime_type || 'video/mp4') :
+                  document ? (document.mime_type || 'application/octet-stream') :
+                  'image/jpeg'
+  
+  const extension = mimeType.split('/')[1]
   const fileName = `${media.file_unique_id}.${extension}`
 
   // Upload to Supabase Storage
@@ -48,7 +49,7 @@ export const getMediaInfo = async (message: any) => {
     .storage
     .from('telegram-media')
     .upload(fileName, fileData, {
-      contentType: media.mime_type || 'image/jpeg',
+      contentType: mimeType,
       upsert: true
     })
 
@@ -63,7 +64,7 @@ export const getMediaInfo = async (message: any) => {
   return {
     file_id: media.file_id,
     file_unique_id: media.file_unique_id,
-    mime_type: video ? video.mime_type : document ? document.mime_type : 'image/jpeg',
+    mime_type: mimeType,
     file_size: media.file_size,
     width: media.width,
     height: media.height,
