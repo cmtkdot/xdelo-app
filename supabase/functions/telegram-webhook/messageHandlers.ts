@@ -2,6 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { TelegramMessage, WebhookResponse, OtherMessageData, TelegramChatType, TelegramOtherMessageType, MessageData, ChatInfo, MediaInfo, TelegramUpdate } from './types';
 import { getLogger } from './logger';
 import { downloadMedia } from './mediaUtils';
+import { prepareMediaGroupForAnalysis, triggerAnalysis } from './dbOperations';
 
 function determineMessageType(message: TelegramMessage): TelegramOtherMessageType {
   if (message.text?.startsWith('/')) return 'command';
@@ -695,7 +696,21 @@ export async function handleMediaMessage(
 
     // Handle media group syncing and analysis
     if (message.media_group_id) {
-      if (!message.caption) {
+      if (message.caption) {
+        // For media group messages with caption, prepare the group for analysis
+        logger.info('Preparing media group for analysis', { 
+          messageId, 
+          mediaGroupId: message.media_group_id 
+        });
+        
+        await prepareMediaGroupForAnalysis(
+          supabase,
+          messageId,
+          message.media_group_id,
+          message.caption,
+          correlationId
+        );
+      } else {
         // For messages without caption, check if any message in the group has analyzed content
         const { data: analyzedGroupMessages, error: groupQueryError } = await supabase
           .from("messages")
@@ -735,17 +750,11 @@ export async function handleMediaMessage(
             .eq("id", messageId);
         }
       }
-      // If message has caption, let database trigger handle group syncing
     } else if (message.caption) {
       // Single message with caption - trigger analysis
       logger.info('Triggering analysis for single message', { messageId });
 
-      await supabase.functions.invoke('parse-caption-with-ai', {
-        body: { 
-          messageId,
-          caption: message.caption
-        }
-      });
+      await triggerAnalysis(supabase, messageId, message.caption, correlationId);
     }
 
     return {

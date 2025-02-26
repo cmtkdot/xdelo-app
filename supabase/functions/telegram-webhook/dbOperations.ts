@@ -149,7 +149,7 @@ export async function createStateLog(
   }
 }
 
-export async function syncMediaGroupContent(
+export async function prepareMediaGroupForAnalysis(
   supabase: SupabaseClient,
   messageId: string,
   mediaGroupId: string,
@@ -157,7 +157,7 @@ export async function syncMediaGroupContent(
   correlationId: string
 ): Promise<void> {
   try {
-    console.log('🔄 Syncing media group:', {
+    console.log('🔄 Preparing media group for analysis:', {
       correlation_id: correlationId,
       message_id: messageId,
       media_group_id: mediaGroupId
@@ -172,10 +172,10 @@ export async function syncMediaGroupContent(
     const groupCount = groupMessages?.length || 0;
     const timestamps = groupMessages?.map(m => new Date(m.created_at).getTime()) || [];
     
-    // Mark source message
+    // Mark source message with metadata only
     await updateMessage(supabase, messageId, {
       is_original_caption: true,
-      group_caption_synced: true,
+      // Don't set group_caption_synced yet - this will happen after analysis
       group_message_count: groupCount,
       group_first_message_time: new Date(Math.min(...timestamps)).toISOString(),
       group_last_message_time: new Date(Math.max(...timestamps)).toISOString(),
@@ -183,16 +183,15 @@ export async function syncMediaGroupContent(
       updated_at: new Date().toISOString()
     });
 
-    // Update other messages in group
+    // Update other messages with metadata only - NO CAPTION SYNCING
     const { error } = await supabase
       .from("messages")
       .update({
-        caption,
-        message_caption_id: messageId,
-        is_original_caption: false,
-        group_caption_synced: true,
+        // Remove caption syncing here
+        // Don't set message_caption_id yet
+        // Don't set is_original_caption yet
+        // Don't set group_caption_synced yet
         group_message_count: groupCount,
-        processing_state: 'pending',
         processing_correlation_id: correlationId,
         updated_at: new Date().toISOString()
       })
@@ -201,7 +200,8 @@ export async function syncMediaGroupContent(
 
     if (error) throw error;
 
-    // Trigger analysis
+    // Trigger analysis - this will eventually lead to analyzed_content
+    // which will trigger the database function for proper syncing
     await triggerAnalysis(supabase, messageId, caption, correlationId);
 
   } catch (error) {

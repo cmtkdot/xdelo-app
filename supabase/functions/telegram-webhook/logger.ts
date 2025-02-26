@@ -6,6 +6,12 @@ interface Logger {
 
 export function getLogger(correlationId: string): Logger {
   return {
+    /**
+     * Log an info message with the given correlation ID and any additional data.
+     *
+     * @param message The message to log.
+     * @param data Additional data to log as key-value pairs.
+     */
     info: (message: string, data?: Record<string, any>) => {
       console.log(`ℹ️ ${message}`, {
         correlation_id: correlationId,

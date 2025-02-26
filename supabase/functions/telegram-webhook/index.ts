@@ -9,6 +9,7 @@ import {
   handleEditedMessage
 } from "./messageHandlers.ts"
 import { downloadMedia } from "./mediaUtils.ts"
+import "./dbOperations.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
