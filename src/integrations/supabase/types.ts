@@ -1357,6 +1357,8 @@ export type Database = {
           file_id: string | null
           file_size: number | null
           file_unique_id: string | null
+          forward_chain: Json[] | null
+          forward_count: number | null
           forward_date: string | null
           forward_info: Json | null
           glide_row_id: string | null
@@ -1383,6 +1385,7 @@ export type Database = {
           mime_type: string | null
           notes: string | null
           old_analyzed_content: Json[] | null
+          original_message_id: string | null
           parsed_caption: string | null
           parsed_notes: string | null
           parsed_product_code: string | null
@@ -1433,6 +1436,8 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
+          forward_chain?: Json[] | null
+          forward_count?: number | null
           forward_date?: string | null
           forward_info?: Json | null
           glide_row_id?: string | null
@@ -1459,6 +1464,7 @@ export type Database = {
           mime_type?: string | null
           notes?: string | null
           old_analyzed_content?: Json[] | null
+          original_message_id?: string | null
           parsed_caption?: string | null
           parsed_notes?: string | null
           parsed_product_code?: string | null
@@ -1509,6 +1515,8 @@ export type Database = {
           file_id?: string | null
           file_size?: number | null
           file_unique_id?: string | null
+          forward_chain?: Json[] | null
+          forward_count?: number | null
           forward_date?: string | null
           forward_info?: Json | null
           glide_row_id?: string | null
@@ -1535,6 +1543,7 @@ export type Database = {
           mime_type?: string | null
           notes?: string | null
           old_analyzed_content?: Json[] | null
+          original_message_id?: string | null
           parsed_caption?: string | null
           parsed_notes?: string | null
           parsed_product_code?: string | null
@@ -2313,6 +2322,13 @@ export type Database = {
           p_media_type?: string
           p_error_message?: string
           p_raw_data?: Json
+        }
+        Returns: undefined
+      }
+      xdelo_sync_media_group_content: {
+        Args: {
+          p_media_group_id: string
+          p_message_id: string
         }
         Returns: undefined
       }
