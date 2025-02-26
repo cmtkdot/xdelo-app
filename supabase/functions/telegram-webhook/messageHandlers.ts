@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { TelegramMessage, WebhookResponse, OtherMessageData, TelegramChatType, TelegramOtherMessageType, MessageData, ChatInfo, MediaInfo, TelegramUpdate } from './types';
 import { getLogger } from './logger';
+import { downloadMedia } from './mediaUtils';
 
 function determineMessageType(message: TelegramMessage): TelegramOtherMessageType {
   if (message.text?.startsWith('/')) return 'command';
@@ -575,6 +576,7 @@ export async function handleMediaMessage(
   correlationId: string
 ): Promise<WebhookResponse> {
   const logger = getLogger(correlationId);
+  let publicUrl: string | null = null;
   
   try {
     const chatInfo = extractChatInfo(message);
@@ -668,36 +670,28 @@ export async function handleMediaMessage(
     }
 
     // Download and store media
-    const { data: storageData } = await supabase
-      .storage
-      .from('telegram-media')
-      .upload(
-        storagePath,
-        await (await fetch(
-          `https://api.telegram.org/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/getFile?file_id=${mediaInfo.file_id}`
-        )).arrayBuffer(),
-        {
-          contentType: mimeType,
-          upsert: true
-        }
+    try {
+      publicUrl = await downloadMedia(
+        supabase,
+        mediaInfo,
+        messageId,
+        Deno.env.get('TELEGRAM_BOT_TOKEN')
       );
-
-    // Get public URL
-    const { data: urlData } = supabase
-      .storage
-      .from('telegram-media')
-      .getPublicUrl(storagePath);
-
-    const publicUrl = urlData.publicUrl;
-
-    // Update media URL
-    await supabase
-      .from("messages")
-      .update({
-        public_url: publicUrl,
-        storage_path: storagePath
-      })
-      .eq("id", messageId);
+      
+      if (!publicUrl) {
+        logger.warn('Failed to download media', { 
+          messageId,
+          fileUniqueId: mediaInfo.file_unique_id
+        });
+      } else {
+        logger.info('Media downloaded successfully', { 
+          messageId,
+          publicUrl
+        });
+      }
+    } catch (mediaError) {
+      logger.error('Error downloading media', { error: mediaError });
+    }
 
     // Handle media group syncing and analysis
     if (message.media_group_id) {

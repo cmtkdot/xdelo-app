@@ -1,4 +1,4 @@
-# Telegram Webhook Flow - Detailed Implementation
+# Telegram Webhook Flow - Implementation Details
 
 ## Message Processing Flow Diagram
 
@@ -6,251 +6,153 @@
 flowchart TD
     A[Telegram Webhook Receives Message] --> B{Contains Media?}
     
-    B -->|Yes| C[Upload to telegram-media storage]
-    B -->|No| D[Store in other_messages table]
+    B -->|Yes| C1[extractMediaInfo]
+    B -->|No| D[handleOtherMessage]
     
-    C --> E{Has Caption?}
+    C1 --> C2[handleMediaMessage]
+    C2 --> C3[downloadMedia from Telegram]
+    C3 --> C4[Store in telegram-media bucket]
+    C4 --> C5[Update message with publicUrl]
     
-    E -->|Yes| F[Send for Manual Parsing]
+    C5 --> E{Has Caption?}
+    
+    E -->|Yes| F[triggerAnalysis]
     E -->|No| G{Is part of Media Group?}
     
-    F --> H{Product Name > 23 chars?}
+    F --> F1[parse-caption-with-ai Edge Function]
+    F1 --> K[Update analyzed_content]
     
-    H -->|Yes| I[Send to AI for Analysis]
-    H -->|No| J[Use Manual Parsing Result]
+    K --> L[syncMediaGroupContent]
     
-    I --> K[Update analyzed_content]
-    J --> K
+    G -->|Yes| M{Group has analyzed_content?}
+    G -->|No| N[Leave state as initialized]
     
-    K --> L[Sync analyzed_content to all media in group]
-    
-    G -->|Yes| M{Group has message with analyzed_content?}
-    G -->|No| N[Leave state as pending]
-    
-    M -->|Yes| O[Sync analyzed_content from group]
+    M -->|Yes| O[Copy analyzed_content from group]
     M -->|No| N
 
     %% Edit handling flow
-    P[Telegram Webhook Receives Edit] --> Q{Is Edited Message?}
-    Q -->|Yes| R{Contains Media?}
+    P[Webhook Receives Edit] --> Q{Is Edited Message?}
+    Q -->|Yes| R[handleEditedMessage]
     Q -->|No| S[Process as new message]
     
-    R -->|Yes| T[Update existing media record]
-    R -->|No| U[Update other_messages record]
+    R --> R1{Contains Media?}
     
-    T --> V{Caption Changed?}
+    R1 -->|Yes| T1[Extract Updated MediaInfo]
+    R1 -->|No| U[Update other_messages]
+    
+    T1 --> T2[downloadMedia]
+    T2 --> T4[updateMessageEdits]
+    T4 --> V{Caption Changed?}
+    
     U --> V
     
-    V -->|Yes| W[Update edit_history]
-    V -->|No| X[Update metadata only]
+    V -->|Yes| W[xdelo_trg_handle_message_edit trigger]
+    V -->|No| X[xdelo_trg_message_update trigger]
     
-    W --> Y{Is part of Media Group?}
-    
-    Y -->|Yes| Z[Re-sync caption to group]
-    Y -->|No| AA[Re-analyze caption if needed]
-    
-    Z --> AA
-</flowchart>
+    W --> AA[triggerAnalysis]
 ```
 
-## Comprehensive Process Flow
+## Function Flow
 
-### 1. Webhook Message Reception
-- **Entry Point**: Telegram sends an update to the webhook endpoint
-- **Data Received**: Contains message object with chat info, message ID, media (if any), caption (if any)
-- **Initial Processing**: Log the incoming request with correlation ID for tracing
-- **Validation**: Verify the update contains a valid message or channel post
+### 1. Initial Reception - `handleWebhookUpdate` (messageHandlers.ts)
+- **Entry Point**: Receives Telegram update from webhook
+- **Processing**:
+  - Generates correlation ID: `correlationId = webhook-${timestamp}-${random}`
+  - Logs via getLogger
+  - Routes to appropriate handler based on message type
 
-### 2. Media Detection & Classification
-- **Decision Point**: Check if message contains media (photo, video, document)
-  - **Media Types Handled**:
-    - Photos: Use largest size from photo array
-    - Videos: Extract thumbnail and metadata
-    - Documents: Process if they have visual content
-  - **Non-Media Handling**: Route text messages, commands, etc. to other_messages table
-  - **Data Extraction**: Get file_id, file_unique_id, dimensions, mime_type, etc.
+### 2. Text Message Flow - `handleOtherMessage` (messageHandlers.ts)
+- **Database Operations**:
+  - `findExistingMessage` - Checks if message already exists
+  - `createOtherMessage` or `updateOtherMessage` - Inserts/updates in other_messages table
+- **Database Triggers**:
+  - `xdelo_trg_set_timestamp` (INSERT)
+  - `xdelo_trg_update_timestamp` (UPDATE)
+- **State**: Sets processing_state as 'completed' immediately
 
-### 3. Media Processing & Storage
-- **Duplicate Check**: Query database for existing media with same file_unique_id
-- **Storage Process**:
-  - Get file URL from Telegram using getFile API
-  - Download media content as binary data
-  - Upload to 'telegram-media' bucket with file_unique_id as unique identifier
-  - Generate public URL for future access
-- **Database Storage**:
-  - Store complete metadata in 'messages' table
-  - Include chat info, message info, file details, processing state
-  - Set initial processing_state to 'initialized' or 'pending' based on caption presence
+### 3. Media Message Flow - `handleMediaMessage` (messageHandlers.ts)
 
-### 4. Caption Analysis & Parsing
-- **With Caption**:
-  - **Manual Parsing Process**:
-    - Extract product_name: Text before '#', line break, dash, or 'x'
-    - Extract product_code: Text following '#' symbol
-    - Extract vendor_uid: First 1-4 letters of product_code (uppercase)
-    - Extract purchase_date: Parse date portion from product_code
-      - Format 6 digits (mmDDyy) to YYYY-MM-DD
-      - Format 5 digits (mDDyy) to YYYY-MM-DD with leading zero
-    - Extract quantity: Number following 'x' or similar quantity indicators
-    - Extract notes: Text in parentheses or remaining unclassified text
-  - **AI Analysis Decision**:
-    - Check if product_name length > 23 characters
-    - If yes, send for AI analysis without considering confidence score
-    - AI enhances extraction accuracy for complex product descriptions
-  - **Result Storage**:
-    - Update message record with analyzed_content
-    - Set processing_state to 'completed'
-    - Record processing timestamp
+#### A. New Media Processing:
+- **Key Functions**:
+  - `extractMediaInfo` - Gets media metadata
+  - `downloadMedia` - Downloads and stores media in Supabase
+- **Database Operations**:
+  - `findExistingMessage` - Checks for existing media by file_unique_id
+  - `createMessage` or `updateMessage` - Creates/updates messages table
+- **Triggers**:
+  - `xdelo_trg_set_timestamp` (INSERT)
+- **State Setting**:
+  - With caption: Sets processing_state to 'pending'
+  - Without caption: Sets processing_state to 'initialized'
+- **Analysis**:
+  - With caption: Calls `triggerAnalysis`
 
-- **Without Caption**:
-  - **Media Group Check**:
-    - Query for other messages with same media_group_id
-    - Look for any message in group with analyzed_content
-    - If found, copy analyzed_content to current message
-    - If not found, leave processing_state as 'pending'
-    - System will update when caption-containing message arrives
+#### B. Media Group Handling:
+- **Group Detection**: Identifies messages with same media_group_id
+- **Group Synchronization**: 
+  - Checks for existing analyzed content in the group
+  - Uses `syncMediaGroupContent` to update all group messages
+- **Database Triggers**:
+  - `xdelo_trg_sync_media_group_content` - Syncs any analyzed content changes
 
-### 5. Media Group Synchronization
-- **Group Detection**: Identify all messages with same media_group_id
-- **Source of Truth**: First message with caption becomes authoritative
-- **Synchronization Process**:
-  - Mark source message with is_original_caption = true
-  - Update all other messages in group with:
-    - Same analyzed_content
-    - message_caption_id pointing to source message ID (explicitly linking non-caption holders to the caption holder)
-    - is_original_caption = false
-    - group_caption_synced = true
-    - processing_state = 'completed'
-  - Update group metadata (count, timestamps)
-- **Handling Late Arrivals**:
-  - If new message joins existing group, check for analyzed content
-  - Apply group content if available, otherwise wait for caption
-- **Message ID Propagation**:
-  - All non-caption holders in the group receive the message_caption_id field
-  - This creates a direct reference to the message containing the original caption
-  - Enables efficient querying of related messages and their source caption
+### 4. Edit Flow - `handleEditedMessage` (messageHandlers.ts)
+- **Detection**: Identifies edits via edited_message or edited_channel_post
+- **Database Operations**:
+  - `updateMessageEdits` - Updates message with edit information
+- **Triggers**:
+  - `xdelo_trg_handle_message_edit` - For caption changes
+  - `xdelo_trg_message_update` - For general updates
+- **Re-analysis**:
+  - If caption changed: Calls `triggerAnalysis`
 
-### 6. Edit History Handling
-- **Edit Detection**:
-  - Webhook receives update with edited_message or edited_channel_post
-  - System identifies existing message by chat_id and message_id
-- **Edit History Tracking**:
-  - Each edit is stored in edit_history JSONB array
-  - Each entry contains:
-    - edit_date: Timestamp of the edit
-    - previous_caption: Caption before the edit
-    - new_caption: Caption after the edit
-    - is_channel_post: Whether the edit was made in a channel
-  - Database trigger automatically updates edit_history on caption changes
-- **Caption Re-Analysis**:
-  - If caption changes significantly, message is re-analyzed
-  - New analysis results are stored in analyzed_content
-  - Previous analysis is preserved in edit_history
-- **Media Group Re-Synchronization**:
-  - If edited message is part of a media group and is the caption holder:
-    - Updated caption is re-analyzed
-    - New analysis is propagated to all group members
-    - All group members receive updated message_caption_id reference
-  - If edited message is part of a group but not the caption holder:
-    - Edit is recorded but doesn't trigger group re-synchronization
-- **Channel Post Handling**:
-  - Channel post edits are tracked separately with edited_channel_post field
-  - Special handling for anonymous edits in channels
-  - Preserves edit history even when editor information is not available
-
-### 7. Error Handling & Recovery
-- **Error States**: Track processing failures in error_message field
-- **Retry Mechanism**: Increment retry_count and schedule retries
-- **Logging**: Record all state transitions in message_state_logs table
-- **Correlation**: Use correlation_id to track message processing across systems
-
-## Data Structure Details
-
-### analyzed_content Object Structure
-```json
-{
-  "product_name": "Cannabis product name (text before '#')",
-  "product_code": "Abbreviation with '#' prefix (e.g., #CHAD120523)",
-  "vendor_uid": "Vendor short code (1-4 letters after '#')",
-  "purchase_date": "Date in YYYY-MM-DD format (converted from mmDDyy or mDDyy)",
-  "quantity": "Integer value (after 'x')",
-  "notes": "Any other information not covered by other fields",
-  "parsing_metadata": {
-    "method": "manual | ai | hybrid",
-    "confidence": "Score between 0.1 and 1.0",
-    "timestamp": "ISO date string",
-    "needs_ai_analysis": "Boolean based on product_name length > 23 chars"
-  }
-}
-```
-
-### edit_history Array Structure
-```json
-[
-  {
-    "edit_date": "2025-02-24T12:34:56.789Z",
-    "previous_caption": "Original caption text",
-    "new_caption": "Updated caption text",
-    "is_channel_post": false
-  },
-  {
-    "edit_date": "2025-02-24T13:45:12.345Z",
-    "previous_caption": "Updated caption text",
-    "new_caption": "Final caption text",
-    "is_channel_post": false
-  }
-]
-```
-
-## Detailed Parsing Rules & Examples
-
-### 1. Product Name Extraction
-- **Rule**: Extract text before '#', line break, dash, or 'x'
-- **Priority**: First delimiter encountered determines end of product name
-- **Example**: "Blue Dream #CHAD120523 x2" → "Blue Dream"
-- **Edge Case**: If no delimiter found, use entire caption as product name
-
-### 2. Product Code Parsing
-- **Format**: #[vendor_uid][purchase_date]
-- **Regex**: `/#([A-Za-z0-9-]+)/`
-- **Example**: "#CHAD120523" → "CHAD120523"
-- **Validation**: Must follow # symbol, may contain letters, numbers, hyphens
-
-### 3. Vendor UID Extraction
-- **Rule**: First 1-4 uppercase letters in product_code
-- **Regex**: `/^([A-Za-z]{1,4})/`
-- **Examples**: 
-  - "CHAD120523" → "CHAD"
-  - "Z31524" → "Z"
-- **Storage**: Always stored in uppercase
-
-### 4. Purchase Date Parsing
-- **Input Formats**:
-  - 6 digits (mmDDyy): "120523" → "2023-12-05"
-  - 5 digits (mDDyy): "31524" → "2024-03-15"
+### 5. Analysis Flow - `triggerAnalysis` (dbOperations.ts)
 - **Process**:
-  1. Extract digits after vendor_uid
-  2. Add leading zero if 5 digits
-  3. Parse month (first 2 digits)
-  4. Parse day (next 2 digits)
-  5. Parse year (last 2 digits, prefixed with "20")
-  6. Validate as real date
-  7. Format as YYYY-MM-DD
-- **Validation**: Check if resulting date is valid and not in future
+  - Updates state to 'processing'
+  - Invokes parse-caption-with-ai edge function
+  - Edge function updates analyzed_content
+- **Database Triggers**:
+  - `xdelo_trg_sync_media_group_content` - Syncs analysis to media group
 
-### 5. Quantity Detection
-- **Primary Pattern**: Number after "x"
-- **Alternative Patterns**:
-  - "qty: 2"
-  - "quantity: 2"
-  - "2 pcs" or "2 pieces"
-  - "2 units"
-  - Standalone number at end
-- **Example**: "Blue Dream #CHAD120523 x2" → quantity: 2
-- **Validation**: Must be positive integer less than 10,000
+### 6. Caption Analysis - `parse-caption-with-ai` (Edge Function)
+- **Parsing Process**:
+  - Manual parsing first (extracting product name, code, etc.)
+  - AI enhancement if product_name > 23 characters
+  - Updates message with analyzed_content
+  - For media groups: Syncs analysis to all group messages
 
-### 6. Notes Extraction
-- **Primary Source**: Text in parentheses
-- **Alternative**: Any remaining text after removing product name, code, and quantity
-- **Example**: "Blue Dream #CHAD120523 x2 (organic)" → notes: "organic"
-- **Fallback Information**: If parsing encounters issues, fallback information is added to notes
+## Core Functions & Their Roles
+
+### In messageHandlers.ts:
+- `handleWebhookUpdate`: Main entry point for all webhook updates
+- `extractMediaInfo`: Extracts media details from messages
+- `handleMediaMessage`: Processes messages with media
+- `handleOtherMessage`: Processes text messages and commands
+- `handleEditedMessage`: Handles message edits
+- `determineMessageType`: Identifies message type (text, command, etc.)
+
+### In dbOperations.ts:
+- `findExistingMessage`: Queries for existing messages
+- `createMessage`/`updateMessage`: Creates/updates media messages
+- `createOtherMessage`/`updateOtherMessage`: Creates/updates text messages
+- `createStateLog`: Logs state changes
+- `syncMediaGroupContent`: Synchronizes content across media groups
+- `triggerAnalysis`: Initiates caption analysis
+- `updateMessageEdits`: Updates edit history
+
+### In mediaUtils.ts:
+- `downloadMedia`: Downloads and stores media from Telegram
+- `extractMediaInfo`: Extracts media metadata
+
+## Database Triggers
+
+- `xdelo_trg_set_timestamp`: Sets created_at on INSERT
+- `xdelo_trg_update_timestamp`: Updates updated_at on UPDATE
+- `xdelo_trg_handle_message_edit`: Processes caption changes
+- `xdelo_trg_message_update`: Handles general message updates
+- `xdelo_trg_sync_media_group_content`: Synchronizes media group content
+- `xdelo_trg_message_deletion`: Handles message deletions
+
+## Edge Functions
+
+- `telegram-webhook`: Main webhook handler
+- `parse-caption-with-ai`: Caption parsing and analysis

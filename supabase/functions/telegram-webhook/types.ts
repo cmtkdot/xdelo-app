@@ -227,7 +227,7 @@ export interface MessageData {
 export interface OtherMessageData {
   id?: string;
   user_id?: string;
-  message_type: TelegramOtherMessageType;
+  message_type?: TelegramOtherMessageType;
   telegram_message_id: number;
   chat_id: number;
   chat_type: TelegramChatType;
