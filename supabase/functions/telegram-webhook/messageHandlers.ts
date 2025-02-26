@@ -33,7 +33,7 @@ export const handleMediaMessage = async (message: any, mediaInfo: any, context: 
     // First check if message already exists
     const { data: existingMessage } = await supabaseClient
       .from('messages')
-      .select('id, processing_state, analyzed_content')
+      .select('id, processing_state, analyzed_content, old_analyzed_content')
       .eq('telegram_message_id', message.message_id)
       .eq('chat_id', message.chat.id)
       .maybeSingle()
@@ -50,30 +50,38 @@ export const handleMediaMessage = async (message: any, mediaInfo: any, context: 
       if (message.caption !== undefined) {
         console.log('Changes detected, updating message and triggering reanalysis')
         console.log('Caption changed, triggering AI analysis')
-      }
 
-      const { error: updateError } = await supabaseClient
-        .from('messages')
-        .update({
-          caption: message.caption,
-          is_edited: true,
-          edit_date: new Date().toISOString(),
-          processing_state: 'pending',
-          telegram_data: message,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingMessage.id)
+        // Store current analyzed_content in old_analyzed_content array
+        const old_analyzed_content = existingMessage.old_analyzed_content || []
+        if (existingMessage.analyzed_content) {
+          old_analyzed_content.push(existingMessage.analyzed_content)
+        }
 
-      if (updateError) throw updateError
-
-      if (message.caption) {
-        await supabaseClient.functions.invoke('parse-caption-with-ai', {
-          body: { 
-            messageId: existingMessage.id,
+        const { error: updateError } = await supabaseClient
+          .from('messages')
+          .update({
             caption: message.caption,
-            correlationId
-          }
-        })
+            is_edited: true,
+            edit_date: new Date().toISOString(),
+            processing_state: 'pending',
+            telegram_data: message,
+            old_analyzed_content,
+            group_caption_synced: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingMessage.id)
+
+        if (updateError) throw updateError
+
+        if (message.caption) {
+          await supabaseClient.functions.invoke('parse-caption-with-ai', {
+            body: { 
+              messageId: existingMessage.id,
+              caption: message.caption,
+              correlationId
+            }
+          })
+        }
       }
     } else {
       // Prepare new message data
@@ -98,9 +106,11 @@ export const handleMediaMessage = async (message: any, mediaInfo: any, context: 
         forward_from: message.forward_from,
         forward_from_chat: message.forward_from_chat,
         processing_state: message.caption ? 'pending' : 'initialized',
+        old_analyzed_content: [],
         telegram_data: message,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        correlation_id: correlationId,
         // Set group metadata if part of media group
         ...(message.media_group_id ? {
           group_first_message_time: new Date().toISOString(),

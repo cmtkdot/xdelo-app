@@ -1,116 +1,58 @@
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { corsHeaders } from '../_shared/cors.ts'
-import { supabaseClient } from '../_shared/supabase.ts'
 import { handleMediaMessage, handleOtherMessage } from './messageHandlers.ts'
-import { extractMediaInfo } from './mediaUtils.ts'
+import { getMediaInfo } from './mediaUtils.ts'
+
+const webhookSecret = Deno.env.get('TELEGRAM_WEBHOOK_SECRET')
 
 serve(async (req) => {
-  // Handle CORS
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    const { message, edited_message } = await req.json()
-    const updateMessage = edited_message || message
-    
+    // Generate correlation ID for this request
     const correlationId = crypto.randomUUID()
-    console.log('Received webhook update:', { 
-      correlationId, 
-      messageType: updateMessage?.chat?.type,
-      isEdit: !!edited_message
-    })
+    console.log(`Processing update with correlation ID: ${correlationId}`)
+    console.log(`Webhook received: ${new Date().toISOString()}`)
 
-    if (updateMessage) {
-      const isChannelPost = updateMessage.chat.type === 'channel'
-      const isForwarded = updateMessage.forward_from || updateMessage.forward_from_chat
-      
-      console.log('Processing message:', {
-        message_id: updateMessage.message_id,
-        chat_id: updateMessage.chat.id,
-        is_channel_post: isChannelPost,
-        is_forwarded: isForwarded,
-        is_edit: !!edited_message,
-        has_media: !!updateMessage.photo || !!updateMessage.video || !!updateMessage.document
-      })
+    const update = await req.json()
 
-      // Extract media info if present
-      const mediaInfo = extractMediaInfo(updateMessage)
-
-      if (mediaInfo) {
-        // Get file path from Telegram
-        const fileResponse = await fetch(
-          `https://api.telegram.org/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/getFile?file_id=${mediaInfo.file_id}`
-        )
-        const fileData = await fileResponse.json()
-
-        if (!fileData.ok) {
-          throw new Error(`Failed to get file path: ${fileData.description}`)
-        }
-
-        const filePath = fileData.result.file_path
-        const fileUrl = `https://api.telegram.org/file/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/${filePath}`
-
-        // Download file
-        const fileContent = await fetch(fileUrl)
-        const fileBlob = await fileContent.blob()
-
-        // Upload to Supabase Storage
-        const storagePath = `${mediaInfo.file_unique_id}.${filePath.split('.').pop()}`
-        const { error: uploadError } = await supabaseClient
-          .storage
-          .from('telegram-media')
-          .upload(storagePath, fileBlob, {
-            contentType: mediaInfo.mime_type,
-            upsert: true
-          })
-
-        if (uploadError) {
-          throw uploadError
-        }
-
-        // Get public URL
-        const { data: { publicUrl } } = supabaseClient
-          .storage
-          .from('telegram-media')
-          .getPublicUrl(storagePath)
-
-        // Add public URL to media info
-        mediaInfo.public_url = publicUrl
-        mediaInfo.storage_path = storagePath
-
-        return await handleMediaMessage(updateMessage, mediaInfo, {
-          isChannelPost,
-          isForwarded,
-          correlationId,
-          isEdit: !!edited_message
-        })
-      }
-
-      return await handleOtherMessage(updateMessage, {
-        isChannelPost,
-        isForwarded,
-        correlationId,
-        isEdit: !!edited_message
+    // Get the message object, checking for different types of updates
+    const message = update.message || update.edited_message || update.channel_post || update.edited_channel_post
+    if (!message) {
+      console.log('No processable content in update')
+      return new Response(JSON.stringify({ message: "No processable content" }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
       })
     }
 
-    console.log('No processable content in update')
-    return new Response(
-      JSON.stringify({ message: 'No processable content in update' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    // Determine message context
+    const context = {
+      isChannelPost: !!update.channel_post || !!update.edited_channel_post,
+      isForwarded: !!message.forward_from || !!message.forward_from_chat,
+      correlationId,
+      isEdit: !!update.edited_message || !!update.edited_channel_post
+    }
+
+    // Handle media messages (photos, videos, documents)
+    if (message.photo || message.video || message.document) {
+      const mediaInfo = await getMediaInfo(message)
+      return await handleMediaMessage(message, mediaInfo, context)
+    }
+
+    // Handle other types of messages
+    return await handleOtherMessage(message, context)
 
   } catch (error) {
     console.error('Error processing webhook:', error)
-    
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
-      }
-    )
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500
+    })
   }
 })
