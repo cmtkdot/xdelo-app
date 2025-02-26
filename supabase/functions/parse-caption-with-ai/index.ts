@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
@@ -147,7 +146,10 @@ serve(async (req) => {
 
     // If this is part of a media group, sync the analyzed content
     if (media_group_id) {
-      console.log('Syncing analyzed content to media group:', media_group_id);
+      console.log('Syncing analyzed content to media group:', {
+        media_group_id,
+        message_id: messageId
+      });
       
       const { error: syncError } = await supabaseClient
         .rpc('xdelo_sync_media_group_content', {
@@ -156,9 +158,15 @@ serve(async (req) => {
         });
 
       if (syncError) {
-        console.error('Error syncing media group:', syncError);
+        console.error('Error syncing media group:', {
+          error: syncError,
+          media_group_id,
+          message_id: messageId
+        });
         throw syncError;
       }
+
+      console.log('Media group sync completed successfully');
     }
 
     // Log the analysis completion

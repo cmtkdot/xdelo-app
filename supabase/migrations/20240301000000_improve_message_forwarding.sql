@@ -15,6 +15,64 @@ ADD CONSTRAINT messages_file_unique_id_active_key
 UNIQUE (file_unique_id) 
 WHERE deleted_from_telegram = false AND is_forward = false;
 
+-- Create RPC function to handle media group content sync
+CREATE OR REPLACE FUNCTION public.xdelo_sync_media_group_content(
+  p_media_group_id text,
+  p_message_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_source_message messages;
+BEGIN
+  -- Get the source message that contains the analyzed content
+  SELECT * INTO v_source_message
+  FROM messages
+  WHERE id = p_message_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Source message not found';
+  END IF;
+
+  -- Update all other messages in the media group
+  UPDATE messages
+  SET 
+    analyzed_content = v_source_message.analyzed_content,
+    processing_state = 'completed',
+    group_caption_synced = true,
+    message_caption_id = p_message_id,
+    processing_completed_at = NOW(),
+    updated_at = NOW()
+  WHERE 
+    media_group_id = p_media_group_id 
+    AND id != p_message_id;
+
+  -- Log the sync operation
+  PERFORM xdelo_log_event(
+    'media_group_synced'::audit_event_type,
+    p_message_id,
+    v_source_message.telegram_message_id,
+    v_source_message.chat_id,
+    NULL,
+    jsonb_build_object(
+      'media_group_id', p_media_group_id,
+      'analyzed_content', v_source_message.analyzed_content
+    ),
+    jsonb_build_object(
+      'sync_source', 'rpc_function',
+      'affected_messages', (
+        SELECT json_agg(id) 
+        FROM messages 
+        WHERE media_group_id = p_media_group_id 
+        AND id != p_message_id
+      )
+    ),
+    v_source_message.correlation_id
+  );
+END;
+$function$;
+
 -- Create or replace function to handle message forwards
 CREATE OR REPLACE FUNCTION public.xdelo_handle_message_forward()
 RETURNS trigger
