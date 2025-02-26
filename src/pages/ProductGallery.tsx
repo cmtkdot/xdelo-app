@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,6 +10,7 @@ import { ProductPagination } from "@/components/ProductGallery/ProductPagination
 import ProductFilters from "@/components/ProductGallery/ProductFilters";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
 import { useVendors } from "@/hooks/useVendors";
+import { logMessageOperation } from "@/lib/syncLogger";
 
 const ITEMS_PER_PAGE = 12;
 
@@ -24,7 +26,7 @@ const ProductGallery = () => {
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: mediaGroups = {} } = useMediaGroups(); // Provide default empty object
+  const { data: mediaGroups = {}, isLoading } = useMediaGroups(); // Add isLoading state
   const { data: vendors = [] } = useVendors();
 
   // Set up realtime subscription
@@ -38,7 +40,20 @@ const ProductGallery = () => {
           schema: 'public',
           table: 'messages'
         },
-        () => {
+        async (payload) => {
+          // Log the sync operation
+          if (payload.new) {
+            try {
+              await logMessageOperation('sync', payload.new.id, {
+                event: payload.eventType,
+                table: 'messages',
+                chat_id: payload.new.chat_id,
+                media_group_id: payload.new.media_group_id
+              });
+            } catch (error) {
+              console.error('Error logging sync:', error);
+            }
+          }
           // Invalidate and refetch messages
           queryClient.invalidateQueries({ queryKey: ['media-groups'] });
         }
@@ -50,8 +65,18 @@ const ProductGallery = () => {
     };
   }, [queryClient]);
 
-  const handleEdit = (media: Message) => {
-    setEditItem(media);
+  const handleEdit = async (media: Message) => {
+    try {
+      await logMessageOperation('update', media.id, {
+        action: 'start_edit',
+        media_group_id: media.media_group_id
+      });
+      setEditItem(media);
+    } catch (error) {
+      console.error('Error logging edit operation:', error);
+      // Still allow edit even if logging fails
+      setEditItem(media);
+    }
   };
 
   const handleView = () => {
@@ -93,6 +118,7 @@ const ProductGallery = () => {
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(group => {
         const mainMedia = group.find(m => m.is_original_caption) || group[0];
+        if (!mainMedia) return false;
         
         // Search in product name, vendor, product code, or caption
         return (
@@ -109,7 +135,15 @@ const ProductGallery = () => {
     if (filters.vendors && filters.vendors.length > 0) {
       filtered = filtered.filter(group => {
         const mainMedia = group.find(m => m.is_original_caption) || group[0];
-        return filters.vendors?.includes(mainMedia.analyzed_content?.vendor_uid || '');
+        return mainMedia && filters.vendors?.includes(mainMedia.analyzed_content?.vendor_uid || '');
+      });
+    }
+    
+    // Filter by processing state
+    if (filters.processingState && filters.processingState.length > 0) {
+      filtered = filtered.filter(group => {
+        const mainMedia = group.find(m => m.is_original_caption) || group[0];
+        return mainMedia && filters.processingState?.includes(mainMedia.processing_state);
       });
     }
     
@@ -151,19 +185,27 @@ const ProductGallery = () => {
         onFilterChange={setFilters}
       />
       
-      <ProductGrid
-        products={paginatedProducts}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        onView={handleView}
-      />
-      
-      {totalPages > 1 && (
-        <ProductPagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-        />
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        </div>
+      ) : (
+        <>
+          <ProductGrid
+            products={paginatedProducts}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onView={handleView}
+          />
+          
+          {totalPages > 1 && (
+            <ProductPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
+          )}
+        </>
       )}
 
       {editItem && (

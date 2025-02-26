@@ -1,3 +1,4 @@
+
 import { Message } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
 import { cn } from "@/lib/utils";
@@ -37,15 +38,20 @@ export const ProductGrid = ({
         className
       )}
     >
-      {products.map((group, index) => (
-        <ProductGroup
-          key={group[0]?.id || index}
-          group={group}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onView={onView}
-        />
-      ))}
+      {products.map((group, index) => {
+        // Ensure we have valid messages in the group
+        if (!group || group.length === 0) return null;
+        
+        return (
+          <ProductGroup
+            key={group[0]?.id || index}
+            group={group}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onView={onView}
+          />
+        );
+      })}
     </div>
   );
 };
