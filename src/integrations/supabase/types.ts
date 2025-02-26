@@ -1356,7 +1356,7 @@ export type Database = {
           error_message: string | null
           file_id: string | null
           file_size: number | null
-          file_unique_id: string
+          file_unique_id: string | null
           forward_date: string | null
           forward_info: Json | null
           glide_row_id: string | null
@@ -1429,7 +1429,7 @@ export type Database = {
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
-          file_unique_id: string
+          file_unique_id?: string | null
           forward_date?: string | null
           forward_info?: Json | null
           glide_row_id?: string | null
@@ -1502,7 +1502,7 @@ export type Database = {
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
-          file_unique_id?: string
+          file_unique_id?: string | null
           forward_date?: string | null
           forward_info?: Json | null
           glide_row_id?: string | null

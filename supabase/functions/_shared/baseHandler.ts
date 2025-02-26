@@ -1,5 +1,6 @@
 
 import { corsHeaders } from './cors.ts';
+import { createClient } from "@supabase/supabase-js";
 
 interface ErrorResponse {
   error: string;
@@ -67,29 +68,43 @@ export const handleError = (error: any): Response => {
   );
 };
 
-export const createHandler = (handler: (req: Request) => Promise<Response>) => {
-  return async (req: Request) => {
-    // Handle CORS
-    if (req.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
-    }
+export const createHandler = async (req: Request, handler: (supabaseClient: any, body: any) => Promise<any>) => {
+  // Handle CORS
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
 
+  try {
+    // Create Supabase client
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          persistSession: false
+        }
+      }
+    );
+
+    // Parse request body
+    let body;
     try {
-      // Run the actual handler
-      const response = await handler(req);
-      
-      // Ensure CORS headers are added
-      const headers = new Headers(response.headers);
-      Object.entries(corsHeaders).forEach(([key, value]) => {
-        headers.set(key, value);
-      });
-
-      return new Response(response.body, {
-        status: response.status,
-        headers
-      });
+      body = await req.json();
     } catch (error) {
-      return handleError(error);
+      throw new Error('Invalid JSON payload');
     }
-  };
+
+    // Run the actual handler
+    const result = await handler(supabaseClient, body);
+
+    // Return success response with CORS headers
+    return new Response(
+      JSON.stringify(result),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
+  } catch (error) {
+    return handleError(error);
+  }
 };

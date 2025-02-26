@@ -1,8 +1,8 @@
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 import { corsHeaders } from "../_shared/cors.ts";
 import { Database } from "../_shared/types.ts";
-import { baseHandler } from "../_shared/baseHandler.ts";
+import { createHandler } from "../_shared/baseHandler.ts";
 
 interface RequestPayload {
   messageId: string;
@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  return baseHandler(req, async (supabaseClient, body: RequestPayload) => {
+  return createHandler(req, async (supabaseClient, body: RequestPayload) => {
     const { messageId, caption, correlationId } = body;
 
     if (!messageId || !caption) {
