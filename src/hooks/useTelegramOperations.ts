@@ -1,19 +1,10 @@
+
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/useToast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Message } from "@/types";
-
-const logDeletion = async (messageId: string, source: 'database' | 'telegram' | 'both', details: Record<string, any>) => {
-  await supabase.functions.invoke('log-operation', {
-    body: {
-      operation: 'message_deletion',
-      messageId,
-      source,
-      details
-    }
-  });
-};
+import { logMessageOperation, logDeletion } from "@/lib/syncLogger";
 
 export const useTelegramOperations = () => {
   const [isProcessing, setIsProcessing] = useState(false);
