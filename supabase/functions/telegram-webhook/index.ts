@@ -1,7 +1,8 @@
 
-import { serve } from "std/http/server.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
 import { corsHeaders } from "../_shared/cors.ts";
+import { handleMessage } from "./messageHandlers.ts";
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -21,6 +22,47 @@ serve(async (req) => {
   };
 
   try {
+    // Initialize Supabase Admin client
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // Verify JWT token if it's a manual request
+    const authHeader = req.headers.get('Authorization');
+    if (authHeader) {
+      const jwt = authHeader.replace('Bearer ', '');
+      const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
+      
+      if (authError || !user) {
+        logger.error('Invalid JWT token');
+        return new Response(
+          JSON.stringify({ status: 'error', message: 'Unauthorized' }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 401 
+          }
+        );
+      }
+      logger.info('Manual request authenticated', { userId: user.id });
+    } else {
+      // For Telegram webhook requests, verify using the webhook secret
+      const telegramSecret = Deno.env.get('TELEGRAM_WEBHOOK_SECRET');
+      const secretHeader = req.headers.get('X-Telegram-Bot-Api-Secret-Token');
+      
+      if (!secretHeader || secretHeader !== telegramSecret) {
+        logger.error('Invalid Telegram webhook secret');
+        return new Response(
+          JSON.stringify({ status: 'error', message: 'Unauthorized' }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 401 
+          }
+        );
+      }
+      logger.info('Telegram webhook request authenticated');
+    }
+
     const rawBody = await req.text();
     logger.info('📝 Raw request body:', rawBody);
 
@@ -52,11 +94,6 @@ serve(async (req) => {
       );
     }
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
     const context = {
       supabaseClient: supabase,
       logger,
@@ -64,9 +101,19 @@ serve(async (req) => {
       botToken: Deno.env.get('TELEGRAM_BOT_TOKEN') ?? ''
     };
 
-    // Import and use message handler
-    const { handleMessage } = await import('./messageHandlers.ts');
     const result = await handleMessage(update, context);
+
+    // Log the request to webhook_logs table
+    await supabase
+      .from('webhook_logs')
+      .insert({
+        event_type: 'telegram_webhook',
+        chat_id: message.chat.id,
+        telegram_message_id: message.message_id,
+        media_type: message.photo ? 'photo' : message.video ? 'video' : 'other',
+        raw_data: update,
+        correlation_id: correlationId
+      });
 
     return new Response(
       JSON.stringify(result),
