@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -204,6 +203,33 @@ serve(async (req) => {
         } else if (insertError) {
           console.error('Error inserting message:', insertError);
           throw insertError;
+        }
+
+        // After successful insert, if there's a caption, trigger analysis
+        if (!insertError && messageData.caption) {
+          console.log('New message with caption, triggering AI analysis');
+          const { data: insertedMessage } = await supabaseClient
+            .from('messages')
+            .select('id')
+            .eq('telegram_message_id', messageData.message_id)
+            .eq('chat_id', messageData.chat.id)
+            .single();
+
+          if (insertedMessage) {
+            const { error: analysisError } = await supabaseClient.functions.invoke('parse-caption-with-ai', {
+              body: {
+                messageId: insertedMessage.id,
+                caption: messageData.caption,
+                media_group_id: messageData.media_group_id,
+                correlationId: correlationId
+              }
+            });
+
+            if (analysisError) {
+              console.error('Error invoking parse-caption-with-ai:', analysisError);
+              throw analysisError;
+            }
+          }
         }
 
         // Log webhook event with detailed metadata
