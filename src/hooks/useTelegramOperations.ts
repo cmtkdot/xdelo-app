@@ -70,9 +70,9 @@ export const useTelegramOperations = () => {
       }
 
       // Check for forwards before deletion
-      const { data: forwardCount } = await supabase
+      const { count } = await supabase
         .from('messages')
-        .select('id', { count: 'exact' })
+        .select('id', { count: 'exact', head: true })
         .eq('original_message_id', message.id)
         .eq('is_forward', true);
 
@@ -94,7 +94,7 @@ export const useTelegramOperations = () => {
       // Log successful database deletion
       await logDeletion(message.id, 'database', {
         operation: 'database_deletion_completed',
-        had_forwards: forwardCount && forwardCount.count > 0
+        had_forwards: count ? count > 0 : false
       });
 
       toast({
