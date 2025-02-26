@@ -1,10 +1,11 @@
-import { SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { 
   MessageData, 
   OtherMessageData, 
   ProcessingStateType,
   StateLogEntry
 } from "./types";
+type SupabaseClient = ReturnType<typeof createClient>;
 
 // Retrieve an existing message by telegram_message_id and chat_id
 export async function findExistingMessage(
@@ -266,13 +267,18 @@ export async function triggerAnalysis(
       processing_started_at: new Date().toISOString()
     });
 
+    // Generate a UUID for the correlation ID to ensure it's compatible with the database
+    // This fixes the "invalid input syntax for type uuid" error
+    const analysisCorrelationId = crypto.randomUUID();
+
     const { error } = await supabase.functions.invoke(
       'parse-caption-with-ai',
       {
         body: {
           messageId,
           caption,
-          correlation_id: correlationId,
+          correlation_id: analysisCorrelationId, // Use UUID format
+          webhook_correlation_id: correlationId, // Pass original correlation ID as separate field
           is_edit: message?.is_edited || false,
           is_channel_post: message?.is_channel_post || false,
           is_forwarded: message?.is_forwarded || false

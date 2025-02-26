@@ -24,7 +24,7 @@ export interface AnalyzedContent {
   quantity?: number;
   notes?: string;
   parsing_metadata?: {
-    method: 'manual' | 'ai' | 'hybrid';
+    method: 'manual' | 'ai' ;
     confidence: number;
     timestamp: string;
     needs_ai_analysis?: boolean;

@@ -23,7 +23,7 @@ export interface AnalyzedContent {
   notes?: string;
   caption?: string;
   parsing_metadata?: {
-    method: 'manual' | 'ai' | 'hybrid';
+    method: 'manual' | 'ai' ;
     confidence: number;
     timestamp: string;
   };

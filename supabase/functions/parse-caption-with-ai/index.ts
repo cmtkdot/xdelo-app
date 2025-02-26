@@ -1,9 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { Configuration, OpenAIApi } from "https://esm.sh/openai@3.2.1";import { corsHeaders } from "../_shared/cors.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { AnalyzedContent, ProcessingState } from "../_shared/types.ts";
 import { validateAnalyzedContent } from "../_shared/validators.ts";
-import { getLogger } from "../telegram-webhook/logger.ts";  // <-- Adjust path as needed
+import { getLogger } from "../telegram-webhook/logger.ts";
+
+// Environment variables
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseServiceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+
+if (!supabaseUrl || !supabaseServiceRole || !openAIApiKey) {
+  throw new Error('Missing required environment variables');
+}
+
+// Initialize Supabase client once
+const supabase = createClient(supabaseUrl, supabaseServiceRole);
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -182,11 +194,6 @@ function manualParse(caption: string, logger: Logger): AnalyzedContent {
 async function analyzeWithAI(caption: string, logger: Logger): Promise<AnalyzedContent> {
   logger.info("Starting AI analysis");
   try {
-    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openAIApiKey) {
-      throw new Error('OpenAI API key not configured');
-    }
-
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -305,13 +312,7 @@ serve(async (req) => {
       );
     }
 
-    // 6) Initialize Supabase client
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
-    // 7) Parse caption manually
+    // Parse caption manually
     logger.info('Parsing caption', { captionLength: caption.length });
     const manualResult = manualParse(caption, logger);
     
@@ -330,7 +331,7 @@ serve(async (req) => {
         finalAnalyzedContent = {
           ...aiResult,
           parsing_metadata: {
-            method: 'hybrid',
+            method: 'ai',
             timestamp: new Date().toISOString()
           }
         };
@@ -437,11 +438,6 @@ serve(async (req) => {
     // 14) Update error state if we have a messageId
     if (sourceMessageId) {
       console.log('ℹ️ Updating message to error state', { messageId: sourceMessageId });
-      const supabase = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-      );
-
       try {
         // Get current message
         const { data: currentMessage, error: fetchError } = await supabase

@@ -1,14 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-import { MediaInfo, TelegramMessage } from "./types";
-import { getLogger } from "./logger";
-
-
-// Use the type from the imported library
+import { MediaInfo, TelegramMessage } from "./types.ts";
+import { getLogger } from "./logger.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 type SupabaseClient = ReturnType<typeof createClient>;
 
 /**
@@ -143,7 +135,22 @@ export async function downloadMedia(
       .from('telegram-media')
       .getPublicUrl(fileName);
     
-    if (fileExists && existingUrl) {
+    // Check if this is an edited message that needs to replace the existing file
+    const isEditedMessage = typeof messageId === 'string' && 
+                           messageId !== 'new' && 
+                           fileExists;
+    
+    if (isEditedMessage) {
+      // For edited messages, we'll delete the existing file and upload a new one
+      logger.info('Edited message detected, will replace existing file', { 
+        fileName, 
+        messageId 
+      });
+      
+      // We'll continue with the download and upload process
+      // The existing file will be deleted before upload
+    } else if (fileExists && existingUrl) {
+      // For non-edited messages, we can just use the existing file
       logger.info('File already exists in storage', { fileName });
       
       // Update message with existing URL if messageId is a valid ID
@@ -196,6 +203,23 @@ export async function downloadMedia(
     
     // Upload to storage
     try {
+      // If file exists and this is an edited message, delete the existing file first
+      if (fileExists && isEditedMessage) {
+        logger.info('Deleting existing file before upload', { fileName });
+        
+        const { error: deleteError } = await supabase
+          .storage
+          .from('telegram-media')
+          .remove([fileName]);
+          
+        if (deleteError) {
+          logger.warn('Error deleting existing file, will try to overwrite', { 
+            error: deleteError,
+            fileName 
+          });
+        }
+      }
+      
       logger.info('Uploading media to storage', { fileName });
       
       const { error: uploadError } = await supabase
@@ -203,7 +227,7 @@ export async function downloadMedia(
         .from('telegram-media')
         .upload(fileName, mediaBuffer, {
           contentType: mediaInfo.mime_type,
-          upsert: true,
+          upsert: true, // This will overwrite if the file exists
           cacheControl: '3600'
         });
       

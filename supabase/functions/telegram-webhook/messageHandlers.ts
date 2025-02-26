@@ -1,9 +1,15 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { TelegramMessage, WebhookResponse, OtherMessageData, TelegramChatType, TelegramOtherMessageType, MessageData, ChatInfo, MediaInfo, TelegramUpdate } from './types';
 import { getLogger } from './logger';
 import { downloadMedia } from './mediaUtils';
 import { prepareMediaGroupForAnalysis, triggerAnalysis } from './dbOperations';
+
+// Define SupabaseClient type
+type SupabaseClient = ReturnType<typeof createClient>;
+
+// Get environment variables
+const telegramToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -890,6 +896,18 @@ export async function handleMediaMessage(
     const isEditedMessage = flags?.isEditedMessage || false;
     const isEditedChannelPost = flags?.isEditedChannelPost || false;
     const isForwarded = flags?.isForwarded || Boolean(message.forward_from_chat || message.forward_from);
+    const isEdited = isEditedMessage || isEditedChannelPost;
+    
+    // Log detailed information about edited messages
+    if (isEdited) {
+      logger.info('Processing edited media message', {
+        message_id: message.message_id,
+        chat_id: chatInfo.chat_id,
+        file_unique_id: mediaInfo.file_unique_id,
+        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : null,
+        is_channel_post: isChannelPost
+      });
+    }
     
     const messageData: MessageData = {
       user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
@@ -911,7 +929,7 @@ export async function handleMediaMessage(
       processing_correlation_id: correlationId,
       is_original_caption: Boolean(message.caption),
       is_channel_post: isChannelPost,
-      is_edited: isEditedMessage || isEditedChannelPost,
+      is_edited: isEdited,
       is_forwarded: isForwarded,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -927,35 +945,70 @@ export async function handleMediaMessage(
     }
     
     // Add edit date if it's an edited message
-    if ((isEditedMessage || isEditedChannelPost) && message.edit_date) {
+    if (isEdited && message.edit_date) {
       messageData.edit_date = new Date(message.edit_date * 1000).toISOString();
     }
 
     let messageId: string;
 
     if (existingMessage) {
-      // For existing messages, preserve important fields
-      const { error: updateError } = await supabase
-        .from("messages")
-        .update({
-          ...messageData,
-          retry_count: existingMessage.retry_count,
-          analyzed_content: existingMessage.analyzed_content,
-          // Preserve group sync status if already synced
-          group_caption_synced: existingMessage.group_caption_synced,
-          message_caption_id: existingMessage.message_caption_id
-        })
-        .eq("id", existingMessage.id);
+      // For existing messages, we need special handling for edits
+      if (isEdited) {
+        // For edited messages, we want to reset analyzed content if caption changed
+        const captionChanged = message.caption !== existingMessage.caption;
+        
+        // Update the message with new data
+        const { error: updateError } = await supabase
+          .from("messages")
+          .update({
+            ...messageData,
+            retry_count: existingMessage.retry_count,
+            // Reset analyzed content if caption changed
+            analyzed_content: captionChanged ? null : existingMessage.analyzed_content,
+            // Reset group sync status if caption changed
+            group_caption_synced: captionChanged ? false : existingMessage.group_caption_synced,
+            message_caption_id: captionChanged ? null : existingMessage.message_caption_id,
+            // Set processing state based on caption
+            processing_state: captionChanged && message.caption ? "pending" : 
+                             captionChanged ? "initialized" : 
+                             existingMessage.processing_state
+          })
+          .eq("id", existingMessage.id);
 
-      if (updateError) throw updateError;
-      messageId = existingMessage.id;
+        if (updateError) throw updateError;
+        
+        logger.info('Updated existing message with edit', { 
+          messageId: existingMessage.id,
+          captionChanged,
+          hasCaption: Boolean(message.caption),
+          inMediaGroup: Boolean(message.media_group_id)
+        });
+      } else {
+        // For non-edited messages, preserve important fields
+        const { error: updateError } = await supabase
+          .from("messages")
+          .update({
+            ...messageData,
+            retry_count: existingMessage.retry_count,
+            analyzed_content: existingMessage.analyzed_content,
+            // Preserve group sync status if already synced
+            group_caption_synced: existingMessage.group_caption_synced,
+            message_caption_id: existingMessage.message_caption_id
+          })
+          .eq("id", existingMessage.id);
+
+        if (updateError) throw updateError;
+        
+        logger.info('Updated existing message', { 
+          messageId: existingMessage.id,
+          hasCaption: Boolean(message.caption),
+          inMediaGroup: Boolean(message.media_group_id)
+        });
+      }
       
-      logger.info('Updated existing message', { 
-        messageId,
-        hasCaption: Boolean(message.caption),
-        inMediaGroup: Boolean(message.media_group_id)
-      });
+      messageId = existingMessage.id;
     } else {
+      // For new messages, just insert them
       const { data: newMessage, error: insertError } = await supabase
         .from("messages")
         .insert(messageData)
@@ -974,11 +1027,13 @@ export async function handleMediaMessage(
 
     // Download and store media
     try {
+      // Pass the messageId to downloadMedia - this will trigger the edited message handling
+      // in the downloadMedia function if this is an edited message
       publicUrl = await downloadMedia(
         supabase,
         mediaInfo,
         messageId,
-        Deno.env.get('TELEGRAM_BOT_TOKEN')
+        telegramToken
       );
       
       if (!publicUrl) {

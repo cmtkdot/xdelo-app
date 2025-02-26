@@ -1,5 +1,3 @@
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-
 export type TelegramChatType = 'private' | 'group' | 'supergroup' | 'channel';
 export type ProcessingStateType = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
 export type TelegramOtherMessageType = 
@@ -244,7 +242,7 @@ export interface AnalyzedContent {
   quantity?: number;
   notes?: string;
   parsing_metadata?: {
-    method: 'manual' | 'ai' | 'hybrid';
+    method: 'manual' | 'ai' ;
     fallbacks_used?: string[];
     timestamp: string;
     needs_ai_analysis?: boolean;
