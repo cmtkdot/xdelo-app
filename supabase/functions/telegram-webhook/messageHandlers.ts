@@ -19,7 +19,7 @@ interface MessageContext {
   previousMessage?: TelegramMessage;
 }
 
-export async function handleMediaMessage(message: TelegramMessage, context: MessageContext) {
+export async function handleMediaMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
     const { correlationId, isEdit, previousMessage } = context;
     const mediaInfo = await getMediaInfo(message);
@@ -70,7 +70,10 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
           }
         );
 
-        return;
+        return new Response(
+          JSON.stringify({ success: true }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
     }
 
@@ -119,7 +122,10 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
         }
       );
 
-      return;
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Prepare forward info if message is forwarded
@@ -174,6 +180,11 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       }
     );
 
+    return new Response(
+      JSON.stringify({ success: true }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
   } catch (error) {
     console.error('Error handling media message:', error);
     // Log error event
@@ -189,7 +200,10 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
         processing_stage: 'media_handling'
       }
     );
-    throw error;
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
   }
 }
 

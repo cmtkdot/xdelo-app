@@ -1,11 +1,7 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { corsHeaders } from '../_shared/cors.ts'
-import { handleMediaMessage, handleOtherMessage } from './messageHandlers.ts'
-import { getMediaInfo } from './mediaUtils.ts'
-
-const webhookSecret = Deno.env.get('TELEGRAM_WEBHOOK_SECRET')
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { corsHeaders } from '../_shared/cors.ts';
+import { handleMediaMessage, handleOtherMessage } from './messageHandlers.ts';
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -41,8 +37,7 @@ serve(async (req) => {
 
     // Handle media messages (photos, videos, documents)
     if (message.photo || message.video || message.document) {
-      const mediaInfo = await getMediaInfo(message)
-      return await handleMediaMessage(message, mediaInfo, context)
+      return await handleMediaMessage(message, context);
     }
 
     // Handle other types of messages
