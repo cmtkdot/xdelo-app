@@ -138,6 +138,39 @@ export type Database = {
         }
         Relationships: []
       }
+      gl_audit_trail: {
+        Row: {
+          action_timestamp: string | null
+          action_type: string
+          changed_fields: Json | null
+          id: string
+          notes: string | null
+          record_id: string
+          table_name: string
+          user_identifier: string | null
+        }
+        Insert: {
+          action_timestamp?: string | null
+          action_type: string
+          changed_fields?: Json | null
+          id?: string
+          notes?: string | null
+          record_id: string
+          table_name: string
+          user_identifier?: string | null
+        }
+        Update: {
+          action_timestamp?: string | null
+          action_type?: string
+          changed_fields?: Json | null
+          id?: string
+          notes?: string | null
+          record_id?: string
+          table_name?: string
+          user_identifier?: string | null
+        }
+        Relationships: []
+      }
       gl_column_mappings: {
         Row: {
           data_type: string
@@ -286,29 +319,7 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_customer_credits_account"
-            columns: ["sb_accounts_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_customer_credits_estimate"
-            columns: ["sb_estimates_id"]
-            isOneToOne: false
-            referencedRelation: "gl_estimates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_customer_credits_invoice"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       gl_customer_payments: {
         Row: {
@@ -365,22 +376,7 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_customer_payments_account"
-            columns: ["sb_accounts_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_customer_payments_invoice"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       gl_estimate_lines: {
         Row: {
@@ -449,29 +445,7 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_estimate_lines_estimate"
-            columns: ["sb_estimates_id"]
-            isOneToOne: false
-            referencedRelation: "gl_estimates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_estimate_lines_invoice_line"
-            columns: ["sb_invoice_lines_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoice_lines"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_estimate_lines_product"
-            columns: ["sb_products_id"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       gl_estimates: {
         Row: {
@@ -486,6 +460,7 @@ export type Database = {
           main_estimate_date: string | null
           main_estimate_total: number | null
           main_is_a_sample: boolean | null
+          main_total_payments: number | null
           rowids_account_row_id_estimates: string | null
           rowids_invoice_created: string | null
           sb_accounts_id: string | null
@@ -508,6 +483,7 @@ export type Database = {
           main_estimate_date?: string | null
           main_estimate_total?: number | null
           main_is_a_sample?: boolean | null
+          main_total_payments?: number | null
           rowids_account_row_id_estimates?: string | null
           rowids_invoice_created?: string | null
           sb_accounts_id?: string | null
@@ -530,6 +506,7 @@ export type Database = {
           main_estimate_date?: string | null
           main_estimate_total?: number | null
           main_is_a_sample?: boolean | null
+          main_total_payments?: number | null
           rowids_account_row_id_estimates?: string | null
           rowids_invoice_created?: string | null
           sb_accounts_id?: string | null
@@ -540,22 +517,7 @@ export type Database = {
           updated_at?: string | null
           valid_final_create_invoice_clicked?: boolean | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_estimates_account"
-            columns: ["sb_accounts_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_estimates_invoice"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       gl_expenses: {
         Row: {
@@ -699,29 +661,7 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_invoice_lines_estimate_line"
-            columns: ["sb_estimate_lines_id"]
-            isOneToOne: false
-            referencedRelation: "gl_estimate_lines"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_invoice_lines_invoice"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_invoice_lines_product"
-            columns: ["sb_products_id"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       gl_invoices: {
         Row: {
@@ -790,22 +730,7 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_invoices_account"
-            columns: ["sb_accounts_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_invoices_estimate"
-            columns: ["sb_estimates_id"]
-            isOneToOne: false
-            referencedRelation: "gl_estimates"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       gl_products: {
         Row: {
@@ -907,22 +832,7 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_products_account"
-            columns: ["sb_accounts_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_products_purchase_order"
-            columns: ["sb_purchase_orders_id"]
-            isOneToOne: false
-            referencedRelation: "gl_purchase_orders"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       gl_purchase_orders: {
         Row: {
@@ -976,15 +886,7 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_purchase_orders_account"
-            columns: ["sb_accounts_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       gl_secure_links: {
         Row: {
@@ -1182,36 +1084,40 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_shipping_records_account1"
-            columns: ["sb_account1_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_shipping_records_account2"
-            columns: ["sb_account2_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_shipping_records_account3"
-            columns: ["sb_account3_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_shipping_records_invoice"
-            columns: ["sb_invoices_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
+      }
+      gl_sync_errors: {
+        Row: {
+          error_message: string | null
+          error_time: string | null
+          id: string
+          record_id: string
+          resolution_notes: string | null
+          resolved: boolean | null
+          resolved_at: string | null
+          table_name: string
+        }
+        Insert: {
+          error_message?: string | null
+          error_time?: string | null
+          id?: string
+          record_id: string
+          resolution_notes?: string | null
+          resolved?: boolean | null
+          resolved_at?: string | null
+          table_name: string
+        }
+        Update: {
+          error_message?: string | null
+          error_time?: string | null
+          id?: string
+          record_id?: string
+          resolution_notes?: string | null
+          resolved?: boolean | null
+          resolved_at?: string | null
+          table_name?: string
+        }
+        Relationships: []
       }
       gl_sync_logs: {
         Row: {
@@ -1364,29 +1270,7 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_vendor_payments_account"
-            columns: ["sb_accounts_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_vendor_payments_product"
-            columns: ["sb_products_id"]
-            isOneToOne: false
-            referencedRelation: "gl_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_vendor_payments_purchase_order"
-            columns: ["sb_purchase_orders_id"]
-            isOneToOne: false
-            referencedRelation: "gl_purchase_orders"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       glide_sync_results: {
         Row: {
@@ -2043,6 +1927,55 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_accounts_aging_report: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      get_data_quality_report: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      get_database_statistics: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      get_financial_summary: {
+        Args: {
+          p_start_date?: string
+          p_end_date?: string
+        }
+        Returns: Json
+      }
+      get_monthly_revenue_analysis: {
+        Args: {
+          p_year?: number
+        }
+        Returns: Json
+      }
+      get_paginated_account_data: {
+        Args: {
+          p_account_id: string
+          p_table_name: string
+          p_page?: number
+          p_page_size?: number
+        }
+        Returns: Json
+      }
+      get_product_sales_analysis: {
+        Args: {
+          p_start_date?: string
+          p_end_date?: string
+        }
+        Returns: Json
+      }
+      get_top_customers: {
+        Args: {
+          p_limit?: number
+          p_start_date?: string
+          p_end_date?: string
+        }
+        Returns: Json
+      }
       glide_sync_products: {
         Args: Record<PropertyKey, never>
         Returns: number
@@ -2145,6 +2078,16 @@ export type Database = {
             }
             Returns: unknown
           }
+      manually_create_invoice_from_estimate: {
+        Args: {
+          p_estimate_id: string
+        }
+        Returns: string
+      }
+      map_circular_references: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       match_documents: {
         Args: {
           query_embedding: string
@@ -2158,13 +2101,52 @@ export type Database = {
           similarity: number
         }[]
       }
+      perform_database_maintenance: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       process_glide_sync_queue: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      recalculate_all_totals: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      record_audit_trail: {
+        Args: {
+          p_table_name: string
+          p_record_id: string
+          p_action_type: string
+          p_changed_fields?: Json
+          p_user_identifier?: string
+          p_notes?: string
+        }
+        Returns: string
+      }
+      repair_data_issues: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          fixed_issue: string
+          record_count: number
+        }[]
+      }
       schedule_sync_check: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      search_related_records: {
+        Args: {
+          search_term: string
+        }
+        Returns: {
+          record_type: string
+          record_id: string
+          account_name: string
+          document_number: string
+          amount: number
+          created_date: string
+        }[]
       }
       sparsevec_out: {
         Args: {
