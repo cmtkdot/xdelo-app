@@ -1,3 +1,4 @@
+
 interface Logger {
   info: (message: string, data?: Record<string, any>) => void;
   error: (message: string, data?: Record<string, any>) => void;
@@ -37,4 +38,4 @@ export function getLogger(correlationId: string): Logger {
       });
     }
   };
-} 
+}

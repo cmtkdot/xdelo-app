@@ -1,7 +1,8 @@
-
 import { createClient } from "@supabase/supabase-js";
 import { TelegramMessage, TelegramWebhookPayload, MessageHandlerContext, ProcessedMessageResult } from "./types.ts";
 import { downloadMedia, uploadMediaToStorage, getMimeType, getStoragePath, extractMediaInfo } from "./mediaUtils.ts";
+import { insertMediaMessage, insertTextMessage, updateMessageGroupInfo } from "./dbOperations.ts";
+import { getLogger } from "./logger.ts";
 
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
