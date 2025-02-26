@@ -1,15 +1,78 @@
 
-import { corsHeaders, handleCors, handleAuth } from './cors.ts';
+import { corsHeaders } from './cors.ts';
+
+interface ErrorResponse {
+  error: string;
+  status: number;
+  details?: any;
+}
+
+export const handleError = (error: any): Response => {
+  console.error('Error:', error);
+
+  let errorResponse: ErrorResponse = {
+    error: 'Internal Server Error',
+    status: 500
+  };
+
+  // Handle known error types
+  if (error instanceof Error) {
+    errorResponse = {
+      error: error.message,
+      status: error.name === 'AuthError' ? 401 : 500,
+      details: Deno.env.get('ENVIRONMENT') === 'development' ? error.stack : undefined
+    };
+  }
+
+  // Handle Supabase errors
+  if (error?.code) {
+    switch (error.code) {
+      case '42P01': // undefined_table
+        errorResponse = {
+          error: 'Database table not found',
+          status: 500,
+          details: error.message
+        };
+        break;
+      case '23505': // unique_violation
+        errorResponse = {
+          error: 'Duplicate record',
+          status: 409,
+          details: error.message
+        };
+        break;
+      case '23503': // foreign_key_violation
+        errorResponse = {
+          error: 'Invalid reference',
+          status: 400,
+          details: error.message
+        };
+        break;
+      default:
+        errorResponse = {
+          error: 'Database error',
+          status: 500,
+          details: error.message
+        };
+    }
+  }
+
+  // Return error response with CORS headers
+  return new Response(
+    JSON.stringify(errorResponse),
+    {
+      status: errorResponse.status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    }
+  );
+};
 
 export const createHandler = (handler: (req: Request) => Promise<Response>) => {
   return async (req: Request) => {
     // Handle CORS
-    const corsResponse = handleCors(req);
-    if (corsResponse) return corsResponse;
-
-    // Handle Auth
-    const authResponse = await handleAuth(req);
-    if (authResponse) return authResponse;
+    if (req.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
 
     try {
       // Run the actual handler
@@ -26,16 +89,7 @@ export const createHandler = (handler: (req: Request) => Promise<Response>) => {
         headers
       });
     } catch (error) {
-      return new Response(
-        JSON.stringify({
-          error: error.message,
-          stack: Deno.env.get('ENVIRONMENT') === 'development' ? error.stack : undefined
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
+      return handleError(error);
     }
   };
 };
