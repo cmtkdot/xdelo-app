@@ -1,10 +1,19 @@
-
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/useToast";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Message } from "@/types";
-import { logDeletion, logMessageOperation } from "@/lib/syncLogger";
+import { Message } from "@/types";
+
+const logDeletion = async (messageId: string, source: 'database' | 'telegram' | 'both', details: Record<string, any>) => {
+  await supabase.functions.invoke('log-operation', {
+    body: {
+      operation: 'message_deletion',
+      messageId,
+      source,
+      details
+    }
+  });
+};
 
 export const useTelegramOperations = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -23,6 +32,20 @@ export const useTelegramOperations = () => {
         operation: 'deletion_started'
       });
       
+      // Check for forwards and media group
+      const { data: relatedMessages, error: checkError } = await supabase
+        .from('messages')
+        .select('id, is_forward, original_message_id, media_group_id')
+        .or(`original_message_id.eq.${message.id},media_group_id.eq.${message.media_group_id}`)
+        .neq('id', message.id);
+
+      if (checkError) {
+        throw checkError;
+      }
+
+      const forwardedMessages = relatedMessages?.filter(m => m.is_forward && m.original_message_id === message.id) || [];
+      const mediaGroupMessages = relatedMessages?.filter(m => m.media_group_id === message.media_group_id) || [];
+
       if (deleteTelegram && message.telegram_message_id && message.chat_id) {
         // First mark the message as being deleted from Telegram
         const { error: updateError } = await supabase
@@ -42,12 +65,13 @@ export const useTelegramOperations = () => {
           throw updateError;
         }
 
-        // Then attempt to delete from Telegram
+        // Delete from Telegram with media group info
         const response = await supabase.functions.invoke('delete-telegram-message', {
           body: {
             message_id: message.telegram_message_id,
             chat_id: message.chat_id,
-            media_group_id: message.media_group_id
+            media_group_id: message.media_group_id,
+            is_media_group: mediaGroupMessages.length > 0
           }
         });
 
@@ -65,16 +89,13 @@ export const useTelegramOperations = () => {
           telegram_message_id: message.telegram_message_id,
           chat_id: message.chat_id,
           media_group_id: message.media_group_id,
-          operation: 'telegram_deletion_completed'
+          operation: 'telegram_deletion_completed',
+          related_messages: {
+            forwards: forwardedMessages.length,
+            media_group: mediaGroupMessages.length
+          }
         });
       }
-
-      // Check for forwards before deletion
-      const { data: forwardCount } = await supabase
-        .from('messages')
-        .select('id', { count: 'exact' })
-        .eq('original_message_id', message.id)
-        .eq('is_forward', true);
 
       // Delete from database
       const { error } = await supabase
@@ -94,7 +115,8 @@ export const useTelegramOperations = () => {
       // Log successful database deletion
       await logDeletion(message.id, 'database', {
         operation: 'database_deletion_completed',
-        had_forwards: forwardCount && forwardCount.count > 0
+        had_forwards: forwardedMessages.length > 0,
+        had_media_group: mediaGroupMessages.length > 0
       });
 
       toast({

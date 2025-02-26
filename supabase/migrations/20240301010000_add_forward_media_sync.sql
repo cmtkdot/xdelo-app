@@ -1,123 +1,116 @@
 
--- Function to handle media continuity after deletion
-CREATE OR REPLACE FUNCTION public.xdelo_handle_message_deletion()
-RETURNS trigger
+-- Add media group handling to forward sync
+CREATE OR REPLACE FUNCTION public.xdelo_sync_forward_media(
+  p_original_message_id uuid,
+  p_forward_message_id uuid
+)
+RETURNS void
 LANGUAGE plpgsql
 AS $function$
+DECLARE
+  v_original_message messages;
+  v_media_group_id text;
 BEGIN
-  -- Check if any forwarded messages depend on this message's media
-  IF EXISTS (
-    SELECT 1 FROM messages 
-    WHERE original_message_id = OLD.id 
-    AND is_forward = true
-  ) THEN
-    -- If this is the original message and has forwards, find the oldest forward
-    -- and make it the new original for remaining forwards
-    WITH oldest_forward AS (
-      SELECT id
-      FROM messages
-      WHERE original_message_id = OLD.id
-      AND is_forward = true
-      ORDER BY created_at ASC
-      LIMIT 1
-    )
-    UPDATE messages
-    SET 
-      original_message_id = (SELECT id FROM oldest_forward),
-      forward_chain = array_append(
-        forward_chain,
-        jsonb_build_object(
-          'previous_original_deleted', true,
-          'previous_original_id', OLD.id,
-          'new_original_id', (SELECT id FROM oldest_forward),
-          'transition_date', CURRENT_TIMESTAMP
-        )
-      )
-    WHERE original_message_id = OLD.id
-    AND id != (SELECT id FROM oldest_forward);
+  -- Get the original message
+  SELECT * INTO v_original_message
+  FROM messages
+  WHERE id = p_original_message_id;
 
-    -- Update the new original message
-    UPDATE messages
-    SET 
-      is_forward = false,
-      original_message_id = NULL,
-      forward_chain = array_append(
-        forward_chain,
-        jsonb_build_object(
-          'became_original', true,
-          'previous_original_id', OLD.id,
-          'transition_date', CURRENT_TIMESTAMP
-        )
-      )
-    FROM oldest_forward
-    WHERE messages.id = oldest_forward.id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Original message not found';
   END IF;
 
-  -- First, backup the message data
-  INSERT INTO deleted_messages (
-    original_message_id,
-    telegram_message_id,
-    media_group_id,
-    message_caption_id,
-    caption,
-    file_id,
-    file_unique_id,
-    public_url,
-    mime_type,
-    analyzed_content,
-    telegram_data,
-    deleted_from_telegram,
-    deleted_via_telegram,
-    user_id,
-    had_forwards
-  ) VALUES (
-    OLD.id,
-    OLD.telegram_message_id,
-    OLD.media_group_id,
-    OLD.message_caption_id,
-    OLD.caption,
-    OLD.file_id,
-    OLD.file_unique_id,
-    OLD.public_url,
-    OLD.mime_type,
-    OLD.analyzed_content,
-    OLD.telegram_data,
-    OLD.deleted_from_telegram,
-    TG_ARGV[0]::text = 'telegram',
-    OLD.user_id,
-    EXISTS (
-      SELECT 1 FROM messages 
-      WHERE original_message_id = OLD.id 
-      AND is_forward = true
-    )
-  );
+  -- Store the media group ID
+  v_media_group_id := v_original_message.media_group_id;
 
-  -- Log the deletion event in the unified audit log
+  -- Update the forwarded message with the original message's media info
+  UPDATE messages
+  SET 
+    file_id = v_original_message.file_id,
+    file_unique_id = v_original_message.file_unique_id,
+    public_url = v_original_message.public_url,
+    mime_type = v_original_message.mime_type,
+    file_size = v_original_message.file_size,
+    width = v_original_message.width,
+    height = v_original_message.height,
+    duration = v_original_message.duration,
+    media_group_id = v_media_group_id,
+    group_caption_synced = v_original_message.group_caption_synced,
+    message_caption_id = CASE 
+      WHEN v_original_message.is_original_caption THEN p_forward_message_id
+      ELSE v_original_message.message_caption_id
+    END,
+    updated_at = NOW()
+  WHERE 
+    id = p_forward_message_id;
+
+  -- If this is part of a media group, update all related messages in the forward
+  IF v_media_group_id IS NOT NULL THEN
+    -- Get all messages from the original media group
+    FOR v_original_message IN 
+      SELECT * FROM messages 
+      WHERE media_group_id = v_media_group_id 
+      AND id != p_original_message_id
+    LOOP
+      -- Create forwarded versions of each media group message
+      INSERT INTO messages (
+        telegram_message_id,
+        chat_id,
+        file_id,
+        file_unique_id,
+        public_url,
+        mime_type,
+        file_size,
+        width,
+        height,
+        duration,
+        media_group_id,
+        is_forward,
+        original_message_id,
+        caption,
+        group_caption_synced,
+        message_caption_id,
+        correlation_id
+      ) VALUES (
+        NEW.telegram_message_id + v_original_message.telegram_message_id - v_original_message.telegram_message_id,
+        NEW.chat_id,
+        v_original_message.file_id,
+        v_original_message.file_unique_id,
+        v_original_message.public_url,
+        v_original_message.mime_type,
+        v_original_message.file_size,
+        v_original_message.width,
+        v_original_message.height,
+        v_original_message.duration,
+        v_media_group_id,
+        true,
+        v_original_message.id,
+        v_original_message.caption,
+        true,
+        p_forward_message_id,
+        gen_random_uuid()
+      );
+    END LOOP;
+  END IF;
+
+  -- Log the sync operation
   PERFORM xdelo_log_event(
-    'message_deleted'::audit_event_type,
-    OLD.id,
-    OLD.telegram_message_id,
-    OLD.chat_id,
-    to_jsonb(OLD),
+    'forward_media_synced'::audit_event_type,
+    p_forward_message_id,
+    NULL,
+    NULL,
     NULL,
     jsonb_build_object(
-      'deletion_source', TG_ARGV[0],
-      'media_group_id', OLD.media_group_id,
-      'is_original_caption', OLD.is_original_caption,
-      'had_forwards', EXISTS (
-        SELECT 1 FROM messages 
-        WHERE original_message_id = OLD.id 
-        AND is_forward = true
-      )
+      'original_message_id', p_original_message_id,
+      'file_unique_id', v_original_message.file_unique_id,
+      'media_group_id', v_media_group_id
     ),
-    OLD.correlation_id,
-    OLD.user_id
+    jsonb_build_object(
+      'sync_source', 'forward_sync',
+      'public_url', v_original_message.public_url,
+      'is_media_group', v_media_group_id IS NOT NULL
+    ),
+    NULL
   );
-
-  RETURN OLD;
 END;
 $function$;
-
--- Update deleted_messages table to track forward status
-ALTER TABLE deleted_messages
-ADD COLUMN IF NOT EXISTS had_forwards boolean DEFAULT false;
