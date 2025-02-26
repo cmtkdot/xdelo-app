@@ -1,11 +1,9 @@
+
 import { serve } from "std/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
+import { corsHeaders } from "../_shared/cors.ts";
 import { Configuration, OpenAIApi } from "openai";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
 
 // Types
 type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
