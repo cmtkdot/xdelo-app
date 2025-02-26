@@ -53,18 +53,19 @@ serve(async (req) => {
       throw new Error('No valid message data found in update');
     }
 
-    // Check for existing message to handle duplicates
-    const { data: existingMessage } = await supabaseClient
-      .from('messages')
-      .select('id, telegram_message_id, chat_id')
-      .eq('telegram_message_id', messageData.message_id)
-      .eq('chat_id', messageData.chat.id)
-      .maybeSingle();
-
     // Handle media messages
     if (messageData.photo || messageData.video) {
       const media = messageData.photo ? messageData.photo[messageData.photo.length - 1] : messageData.video;
       const storage_path = `${media.file_unique_id}.${messageData.video ? messageData.video.mime_type.split('/')[1] : 'jpeg'}`;
+
+      // Check for existing message using file_unique_id and chat_id
+      const { data: existingMessage } = await supabaseClient
+        .from('messages')
+        .select('id, telegram_message_id, chat_id, deleted_from_telegram')
+        .eq('file_unique_id', media.file_unique_id)
+        .eq('chat_id', messageData.chat.id)
+        .eq('deleted_from_telegram', false)
+        .maybeSingle();
 
       // Prepare message data
       const messageInsert = {
@@ -84,25 +85,45 @@ serve(async (req) => {
         processing_state: messageData.caption ? 'pending' : 'initialized',
         correlation_id: correlationId,
         telegram_data: messageData,
-        message_url: `https://t.me/c/${messageData.chat.id.toString().slice(4)}/${messageData.message_id}`
+        message_url: `https://t.me/c/${messageData.chat.id.toString().slice(4)}/${messageData.message_id}`,
+        deleted_from_telegram: false
       };
 
       if (existingMessage) {
-        // Update existing message
-        const { error: updateError } = await supabaseClient
-          .from('messages')
-          .update({
-            ...messageInsert,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingMessage.id);
+        // If the message exists and is a forward or media group member
+        if (messageData.media_group_id || update.message?.forward_date) {
+          // Insert as a new message since it's a valid duplicate (forward or media group)
+          const { error: insertError } = await supabaseClient
+            .from('messages')
+            .insert([{
+              ...messageInsert,
+              is_forward: !!update.message?.forward_date
+            }]);
 
-        if (updateError) throw updateError;
+          if (insertError) {
+            console.error('Error inserting forwarded/media group message:', insertError);
+            throw insertError;
+          }
+        } else {
+          // Update existing message
+          const { error: updateError } = await supabaseClient
+            .from('messages')
+            .update({
+              ...messageInsert,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingMessage.id);
+
+          if (updateError) throw updateError;
+        }
       } else {
         // Insert new message
         const { error: insertError } = await supabaseClient
           .from('messages')
-          .insert([messageInsert]);
+          .insert([{
+            ...messageInsert,
+            is_forward: !!update.message?.forward_date
+          }]);
 
         if (insertError) throw insertError;
       }
