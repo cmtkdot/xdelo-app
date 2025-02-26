@@ -2,6 +2,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { TelegramMessage, TelegramWebhookPayload, MessageHandlerContext, ProcessedMessageResult } from "./types.ts";
 import { downloadMedia, uploadMediaToStorage, extractMediaInfo } from "./mediaUtils.ts";
+import { createMessage, updateMessage } from "./dbOperations.ts";
 
 export async function handleMessage(
   payload: TelegramWebhookPayload,
@@ -59,7 +60,8 @@ async function handleMediaMessage(
     logger.info('⬇️ Downloading media from Telegram', { 
       fileId: mediaInfo.file_id,
       fileUniqueId: mediaInfo.file_unique_id,
-      isForwarded: !!message.forward_from_chat 
+      isForwarded: !!message.forward_from_chat,
+      mediaGroupId: message.media_group_id 
     });
     
     const fileData = await downloadMedia(mediaInfo.file_id, botToken, logger);
@@ -74,7 +76,8 @@ async function handleMediaMessage(
     if (existingMedia) {
       logger.info('🔄 Found existing media, will update', { 
         existingId: existingMedia.id,
-        fileUniqueId: mediaInfo.file_unique_id 
+        fileUniqueId: mediaInfo.file_unique_id,
+        mediaGroupId: message.media_group_id
       });
       
       // Always delete and re-upload the file
@@ -127,38 +130,53 @@ async function handleMediaMessage(
 
     let result;
     if (existingMedia) {
-      const { data, error } = await supabaseClient
-        .from('messages')
-        .update(messageData)
-        .eq('id', existingMedia.id)
-        .select()
-        .single();
+      // Use dbOperations for updating
+      const { data, error } = await updateMessage(
+        existingMedia.id,
+        messageData,
+        context
+      );
         
       if (error) throw error;
       result = data;
       
-      logger.info('✅ Updated existing message record', { messageId: result.id });
+      logger.info('✅ Updated existing message record', { 
+        messageId: result.id,
+        isForwarded: !!message.forward_from_chat,
+        mediaGroupId: message.media_group_id
+      });
     } else {
-      const { data, error } = await supabaseClient
-        .from('messages')
-        .insert(messageData)
-        .select()
-        .single();
+      // Use dbOperations for creating
+      const { data, error } = await createMessage(
+        messageData,
+        context
+      );
         
       if (error) throw error;
       result = data;
       
-      logger.info('✅ Created new message record', { messageId: result.id });
+      logger.info('✅ Created new message record', { 
+        messageId: result.id,
+        isForwarded: !!message.forward_from_chat,
+        mediaGroupId: message.media_group_id
+      });
     }
 
-    // If there's a caption, trigger analysis
+    // Always trigger caption analysis for both new and updated messages with captions
     if (message.caption) {
-      logger.info('🔄 Triggering caption analysis', { messageId: result.id });
+      logger.info('🔄 Triggering caption analysis', { 
+        messageId: result.id,
+        mediaGroupId: message.media_group_id
+      });
+      
+      // Invoke parse-caption-with-ai with all necessary context
       await supabaseClient.functions.invoke('parse-caption-with-ai', {
         body: { 
           messageId: result.id,
           caption: message.caption,
-          correlationId: context.correlationId
+          media_group_id: message.media_group_id,
+          correlationId: context.correlationId,
+          is_forward: !!message.forward_from_chat
         }
       });
     }
@@ -166,7 +184,7 @@ async function handleMediaMessage(
     return { success: true, messageId: result.id };
   } catch (error) {
     logger.error('Error handling media message:', error);
-    return { success: false, error: error.message };
+    throw error;
   }
 }
 
@@ -205,6 +223,6 @@ async function handleTextMessage(
     return { success: true, messageId: data.id };
   } catch (error) {
     logger.error('Error handling text message:', error);
-    return { success: false, error: error.message };
+    throw error;
   }
 }
