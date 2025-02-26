@@ -43,13 +43,14 @@ const ProductGallery = () => {
         },
         async (payload: RealtimePostgresChangesPayload<Message>) => {
           // Log the sync operation
-          if (payload.new) {
+          const newMessage = payload.new as Message;
+          if (newMessage && 'id' in newMessage) {
             try {
-              await logMessageOperation('sync', payload.new.id, {
+              await logMessageOperation('sync', newMessage.id, {
                 event: payload.eventType,
                 table: 'messages',
-                chat_id: payload.new.chat_id,
-                media_group_id: payload.new.media_group_id
+                chat_id: newMessage.chat_id,
+                media_group_id: newMessage.media_group_id
               });
             } catch (error) {
               console.error('Error logging sync:', error);
