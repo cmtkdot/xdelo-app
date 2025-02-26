@@ -4,29 +4,9 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { logMessageOperation } from "./logger.ts";
 import { downloadMedia, uploadMediaToStorage, extractMediaInfo } from "./mediaUtils.ts";
 
-interface MessageData {
-  message_id: number;
-  chat: {
-    id: number;
-    type: string;
-    title?: string;
-  };
-  media_group_id?: string;
-  caption?: string;
-  photo?: Array<{ file_id: string; file_unique_id: string; width: number; height: number }>;
-  video?: {
-    file_id: string;
-    file_unique_id: string;
-    width: number;
-    height: number;
-    duration: number;
-    mime_type?: string;
-  };
-}
-
 async function handleMediaMessage(
   supabase: SupabaseClient,
-  messageData: MessageData,
+  messageData: any,
   botToken: string,
   correlationId: string
 ) {
@@ -66,18 +46,74 @@ async function handleMediaMessage(
 
 export const handleMessage = async (
   supabase: SupabaseClient,
-  messageData: MessageData,
+  messageData: any,
   botToken: string,
-  correlationId: string
+  correlationId: string,
+  messageType: string
 ) => {
   try {
     const { message_id, chat, media_group_id, caption } = messageData;
+    const isEdit = messageType.includes('edited');
 
-    // Handle media upload first
+    // Check for existing message if this is an edit
+    if (isEdit) {
+      const { data: existingMessage } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('telegram_message_id', message_id)
+        .eq('chat_id', chat.id)
+        .maybeSingle();
+
+      if (existingMessage) {
+        // Store current analyzed_content in history
+        const updateData = {
+          caption,
+          is_edited: true,
+          edit_date: new Date().toISOString(),
+          processing_state: 'pending',
+          old_analyzed_content: existingMessage.analyzed_content 
+            ? [...(existingMessage.old_analyzed_content || []), existingMessage.analyzed_content]
+            : existingMessage.old_analyzed_content,
+          analyzed_content: null,
+          edit_history: [
+            ...(existingMessage.edit_history || []),
+            {
+              edit_date: new Date().toISOString(),
+              previous_caption: existingMessage.caption,
+              new_caption: caption,
+              edit_type: messageType
+            }
+          ]
+        };
+
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update(updateData)
+          .eq('id', existingMessage.id);
+
+        if (updateError) throw updateError;
+        return;
+      }
+    }
+
+    // Handle media upload for new messages or untracked edits
     const mediaResult = await handleMediaMessage(supabase, messageData, botToken, correlationId);
     
     if (!mediaResult) {
-      return; // Skip if no media
+      // Store non-media messages in other_messages
+      const { error } = await supabase
+        .from('other_messages')
+        .insert({
+          telegram_message_id: message_id,
+          chat_id: chat.id,
+          chat_type: chat.type,
+          message_type: messageType,
+          telegram_data: messageData,
+          correlation_id: correlationId
+        });
+
+      if (error) throw error;
+      return;
     }
 
     // Prepare message data
@@ -97,7 +133,13 @@ export const handleMessage = async (
       public_url: mediaResult.public_url,
       processing_state: 'initialized',
       correlation_id: correlationId,
-      message_url: `https://t.me/c/${chat.id.toString().slice(4)}/${message_id}`
+      message_url: `https://t.me/c/${chat.id.toString().slice(4)}/${message_id}`,
+      is_edited_channel_post: messageType === 'edited_channel_post',
+      edit_date: isEdit ? new Date().toISOString() : null,
+      edit_history: isEdit ? [{ 
+        edit_date: new Date().toISOString(),
+        edit_type: messageType
+      }] : []
     };
 
     // Insert new message
@@ -106,23 +148,31 @@ export const handleMessage = async (
       .insert([messageInsert]);
 
     if (insertError) {
-      await logMessageOperation('error', correlationId, {
-        message: 'Error inserting message',
-        error: insertError.message,
-        telegram_message_id: message_id
-      });
-      throw insertError;
+      // If duplicate, try to update instead
+      if (insertError.code === '23505') {
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update(messageInsert)
+          .eq('telegram_message_id', message_id)
+          .eq('chat_id', chat.id);
+
+        if (updateError) throw updateError;
+      } else {
+        throw insertError;
+      }
     }
 
     await logMessageOperation('success', correlationId, {
       message: 'Message processed successfully',
-      telegram_message_id: message_id
+      telegram_message_id: message_id,
+      message_type: messageType
     });
 
   } catch (error) {
     await logMessageOperation('error', correlationId, {
       error: error instanceof Error ? error.message : 'Unknown error',
-      telegram_message_id: messageData.message_id
+      telegram_message_id: messageData.message_id,
+      message_type: messageType
     });
     throw error;
   }

@@ -1,99 +1,76 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "@supabase/supabase-js";
 import { corsHeaders } from "../_shared/cors.ts";
+import { createClient } from "@supabase/supabase-js";
 import { handleMessage } from "./messageHandlers.ts";
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders });
   }
 
-  const correlationId = crypto.randomUUID();
-
-  // Setup logger for this request
-  const logger = {
-    info: (message: string, data?: any) => {
-      console.log(`[${correlationId}] ℹ️ ${message}`, data ? data : '');
-    },
-    error: (message: string, error?: any) => {
-      console.error(`[${correlationId}] ❌ ${message}`, error ? error : '');
-    }
-  };
-
   try {
-    // Initialize Supabase Admin client
+    const body = await req.json();
+    const correlationId = crypto.randomUUID();
+
+    // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const rawBody = await req.text();
-    logger.info('📝 Raw request body:', rawBody);
-
-    let update;
-    try {
-      update = JSON.parse(rawBody);
-    } catch (e) {
-      logger.error('Failed to parse JSON:', e);
-      return new Response(
-        JSON.stringify({ status: 'error', reason: 'invalid json' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      );
+    const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+    if (!botToken) {
+      throw new Error('TELEGRAM_BOT_TOKEN is not set');
     }
 
-    logger.info('📥 Parsed webhook update:', update);
+    // Handle different types of updates
+    const update = body;
+    let messageData;
 
-    // Handle both regular messages and channel posts
-    const message = update.message || update.channel_post;
-    
-    if (!message) {
-      logger.info('No message or channel_post in update', { update_keys: Object.keys(update) });
-      return new Response(
-        JSON.stringify({ 
-          status: 'skipped', 
-          reason: 'no message or channel_post',
-          update_keys: Object.keys(update)
-        }), 
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
-      );
+    if (update.message) {
+      messageData = { type: 'message', data: update.message };
+    } else if (update.edited_message) {
+      messageData = { type: 'edited_message', data: update.edited_message };
+    } else if (update.channel_post) {
+      messageData = { type: 'channel_post', data: update.channel_post };
+    } else if (update.edited_channel_post) {
+      messageData = { type: 'edited_channel_post', data: update.edited_channel_post };
     }
 
-    const context = {
-      supabaseClient: supabase,
-      logger,
-      correlationId,
-      botToken: Deno.env.get('TELEGRAM_BOT_TOKEN') ?? ''
-    };
+    if (messageData) {
+      await handleMessage(supabase, messageData.data, botToken, correlationId, messageData.type);
+    } else {
+      // Store other types of messages
+      const { error } = await supabase
+        .from('other_messages')
+        .insert({
+          telegram_message_id: update.message?.message_id || update.update_id,
+          chat_id: update.message?.chat?.id || 0,
+          chat_type: update.message?.chat?.type || 'unknown',
+          message_type: 'other',
+          telegram_data: update,
+          correlation_id: correlationId
+        });
 
-    const result = await handleMessage(update, context);
-
-    // Log the request to webhook_logs table
-    await supabase
-      .from('webhook_logs')
-      .insert({
-        event_type: 'telegram_webhook',
-        chat_id: message.chat.id,
-        telegram_message_id: message.message_id,
-        media_type: message.photo ? 'photo' : message.video ? 'video' : 'other',
-        raw_data: update,
-        correlation_id: correlationId
-      });
+      if (error) {
+        throw error;
+      }
+    }
 
     return new Response(
-      JSON.stringify(result),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }}
+      JSON.stringify({ success: true }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    logger.error('Error processing webhook:', error);
+    console.error('Error:', error);
     return new Response(
-      JSON.stringify({ 
-        status: 'error', 
-        message: error.message,
-        correlation_id: correlationId 
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      JSON.stringify({ error: error.message }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
+      }
     );
   }
 });
