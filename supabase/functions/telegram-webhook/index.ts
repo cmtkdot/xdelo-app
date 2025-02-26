@@ -28,41 +28,6 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Verify JWT token if it's a manual request
-    const authHeader = req.headers.get('Authorization');
-    if (authHeader) {
-      const jwt = authHeader.replace('Bearer ', '');
-      const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
-      
-      if (authError || !user) {
-        logger.error('Invalid JWT token');
-        return new Response(
-          JSON.stringify({ status: 'error', message: 'Unauthorized' }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 401 
-          }
-        );
-      }
-      logger.info('Manual request authenticated', { userId: user.id });
-    } else {
-      // For Telegram webhook requests, verify using the webhook secret
-      const telegramSecret = Deno.env.get('TELEGRAM_WEBHOOK_SECRET');
-      const secretHeader = req.headers.get('X-Telegram-Bot-Api-Secret-Token');
-      
-      if (!secretHeader || secretHeader !== telegramSecret) {
-        logger.error('Invalid Telegram webhook secret');
-        return new Response(
-          JSON.stringify({ status: 'error', message: 'Unauthorized' }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 401 
-          }
-        );
-      }
-      logger.info('Telegram webhook request authenticated');
-    }
-
     const rawBody = await req.text();
     logger.info('📝 Raw request body:', rawBody);
 
