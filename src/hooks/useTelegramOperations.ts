@@ -10,12 +10,41 @@ export const useTelegramOperations = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const handleMediaDownload = async (message: Message) => {
+    if (!message.file_id) return null;
+    
+    try {
+      const fileExtension = message.mime_type ? message.mime_type.split('/')[1] : 'jpeg';
+      const storagePath = `${message.file_id}.${fileExtension}`;
+      
+      // Download the media from Telegram and store it
+      const { data: downloadResponse, error: downloadError } = await supabase.functions.invoke(
+        'download-telegram-media',
+        {
+          body: {
+            file_id: message.file_id,
+            storage_path: storagePath,
+            mime_type: message.mime_type || 'image/jpeg'
+          }
+        }
+      );
+
+      if (downloadError) {
+        throw downloadError;
+      }
+
+      return downloadResponse.publicUrl;
+    } catch (error) {
+      console.error('Media download error:', error);
+      throw error;
+    }
+  };
   
   const handleDelete = async (message: Message, deleteTelegram: boolean = true) => {
     try {
       setIsProcessing(true);
       
-      // Log the start of the deletion process
       await logDeletion(message.id, deleteTelegram ? 'both' : 'database', {
         telegram_message_id: message.telegram_message_id,
         chat_id: message.chat_id,
@@ -30,15 +59,13 @@ export const useTelegramOperations = () => {
         .or(`original_message_id.eq.${message.id},media_group_id.eq.${message.media_group_id}`)
         .neq('id', message.id);
 
-      if (checkError) {
-        throw checkError;
-      }
+      if (checkError) throw checkError;
 
       const forwardedMessages = relatedMessages?.filter(m => m.is_forward && m.original_message_id === message.id) || [];
       const mediaGroupMessages = relatedMessages?.filter(m => m.media_group_id === message.media_group_id) || [];
 
       if (deleteTelegram && message.telegram_message_id && message.chat_id) {
-        // First mark the message as being deleted from Telegram
+        // First mark as being deleted from Telegram
         const { error: updateError } = await supabase
           .from('messages')
           .update({
@@ -75,7 +102,6 @@ export const useTelegramOperations = () => {
           throw response.error;
         }
         
-        // Log successful Telegram deletion
         await logDeletion(message.id, 'telegram', {
           telegram_message_id: message.telegram_message_id,
           chat_id: message.chat_id,
@@ -103,7 +129,6 @@ export const useTelegramOperations = () => {
         throw error;
       }
       
-      // Log successful database deletion
       await logDeletion(message.id, 'database', {
         operation: 'database_deletion_completed',
         had_forwards: forwardedMessages.length > 0,
@@ -134,7 +159,6 @@ export const useTelegramOperations = () => {
   const handleSave = async (message: Message, newCaption: string) => {
     setIsProcessing(true);
     try {
-      // Log the start of the update process
       await logMessageOperation('update', message.id, {
         telegram_message_id: message.telegram_message_id,
         chat_id: message.chat_id,
@@ -143,7 +167,18 @@ export const useTelegramOperations = () => {
         operation: 'update_started'
       });
       
-      // Update the caption in Telegram
+      // First, ensure media is downloaded and stored
+      let publicUrl = message.public_url;
+      if (message.file_id) {
+        try {
+          publicUrl = await handleMediaDownload(message);
+        } catch (downloadError) {
+          console.error('Failed to download media:', downloadError);
+          // Continue with update even if download fails
+        }
+      }
+      
+      // Update caption in Telegram
       const { data: telegramResponse, error: telegramError } = await supabase
         .functions.invoke('update-telegram-caption', {
           body: {
@@ -162,17 +197,17 @@ export const useTelegramOperations = () => {
         throw telegramError;
       }
       
-      // Log successful Telegram update
       await logMessageOperation('update', message.id, {
         telegram_response: telegramResponse,
         operation: 'telegram_update_completed'
       });
 
-      // Update the caption in the database
+      // Update database with new caption and public URL
       const { error: dbError } = await supabase
         .from('messages')
         .update({ 
           caption: newCaption,
+          public_url: publicUrl,
           updated_at: new Date().toISOString(),
           processing_state: 'pending'
         })
@@ -187,9 +222,9 @@ export const useTelegramOperations = () => {
         throw dbError;
       }
       
-      // Log successful database update
       await logMessageOperation('update', message.id, {
-        operation: 'database_update_completed'
+        operation: 'database_update_completed',
+        public_url: publicUrl
       });
 
       // Send for AI analysis
@@ -215,19 +250,27 @@ export const useTelegramOperations = () => {
           operation: 'analysis_request_failed'
         });
         console.error('Error requesting analysis:', analysisError);
-        // Don't throw here, we still want to consider the update successful
       }
 
       queryClient.invalidateQueries({ queryKey: ['messages'] });
       queryClient.invalidateQueries({ queryKey: ['media-groups'] });
       
-      // Log overall success
       await logMessageOperation('update', message.id, {
         operation: 'update_completed'
       });
 
+      toast({
+        title: "Success",
+        description: "Message updated successfully",
+      });
+
     } catch (error) {
       console.error('Error updating caption:', error);
+      toast({
+        title: "Error",
+        description: `Failed to update message: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      });
       throw error;
     } finally {
       setIsProcessing(false);
