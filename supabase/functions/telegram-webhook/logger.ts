@@ -1,41 +1,45 @@
 
-interface Logger {
-  info: (message: string, data?: Record<string, any>) => void;
-  error: (message: string, data?: Record<string, any>) => void;
-  warn: (message: string, data?: Record<string, any>) => void;
+import { SupabaseClient } from "@supabase/supabase-js";
+
+type OperationType = 'edit' | 'skip' | 'duplicate' | 'reupload' | 'success' | 'error';
+
+interface LogMetadata {
+  message?: string;
+  error?: string;
+  telegram_message_id?: number;
+  chat_id?: number;
+  file_unique_id?: string;
+  existing_message_id?: string;
+  [key: string]: any;
 }
 
-export function getLogger(correlationId: string): Logger {
-  return {
-    /**
-     * Log an info message with the given correlation ID and any additional data.
-     *
-     * @param message The message to log.
-     * @param data Additional data to log as key-value pairs.
-     */
-    info: (message: string, data?: Record<string, any>) => {
-      console.log(`ℹ️ ${message}`, {
-        correlation_id: correlationId,
-        ...data
-      });
-    },
-    error: (message: string, data?: Record<string, any>) => {
-      console.error(`❌ ${message}`, {
-        correlation_id: correlationId,
-        ...data
-      });
-    },
-    /**
-     * Log a warning message with the given correlation ID and any additional data.
-     *
-     * @param message The message to log.
-     * @param data Additional data to log as key-value pairs.
-     */
-    warn: (message: string, data?: Record<string, any>) => {
-      console.warn(`⚠️ ${message}`, {
-        correlation_id: correlationId,
-        ...data
-      });
+export const logMessageOperation = async (
+  operation: OperationType,
+  correlationId: string,
+  metadata: LogMetadata
+) => {
+  try {
+    const supabase = new SupabaseClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    await supabase.from('unified_audit_logs').insert({
+      event_type: `telegram_webhook_${operation}`,
+      correlation_id: correlationId,
+      metadata: {
+        ...metadata,
+        timestamp: new Date().toISOString()
+      }
+    });
+
+    // Also log to console for debugging
+    console.log(`[${operation.toUpperCase()}] ${metadata.message || ''}`);
+    if (metadata.error) {
+      console.error(`Error details: ${metadata.error}`);
     }
-  };
-}
+  } catch (error) {
+    // Fail silently but log to console
+    console.error('Error logging operation:', error);
+  }
+};
