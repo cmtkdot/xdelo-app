@@ -2296,29 +2296,17 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_log_webhook_event:
-        | {
-            Args: {
-              p_event_type: string
-              p_chat_id: number
-              p_message_id: number
-              p_media_type: string
-              p_error_message?: string
-              p_raw_data?: Json
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_event_type: string
-              p_chat_id: number
-              p_message_id: string
-              p_media_type?: string
-              p_error_message?: string
-              p_raw_data?: Json
-            }
-            Returns: undefined
-          }
+      xdelo_log_webhook_event: {
+        Args: {
+          p_event_type: string
+          p_chat_id: number
+          p_message_id: string
+          p_media_type?: string
+          p_error_message?: string
+          p_raw_data?: Json
+        }
+        Returns: undefined
+      }
       xdelo_update_message_processing_state: {
         Args: {
           p_message_id: string
