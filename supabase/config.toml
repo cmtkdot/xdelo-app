@@ -30,3 +30,38 @@ enabled = true
 
 [storage]
 enabled = true
+
+[functions]
+
+[functions.analyze-with-ai]
+verify_jwt = false
+
+[functions.cleanup-storage-on-delete]
+verify_jwt = false
+
+[functions.create-ayd-session]
+verify_jwt = false
+
+[functions.delete-telegram-message]
+verify_jwt = false
+
+[functions.log-operation]
+verify_jwt = false
+
+[functions.parse-caption-with-ai]
+verify_jwt = false
+
+[functions.process-audio-upload]
+verify_jwt = false
+
+[functions.process-unanalyzed-messages]
+verify_jwt = false
+
+[functions.product-matching]
+verify_jwt = false
+
+[functions.telegram-webhook]
+verify_jwt = false
+
+[functions.update-telegram-caption]
+verify_jwt = false
