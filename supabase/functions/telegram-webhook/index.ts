@@ -1,14 +1,13 @@
-import { serve } from "http/server"
-import { createClient } from "supabase"
-import { getLogger } from "./logger.ts"
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { 
   handleWebhookUpdate, 
   extractMediaInfo,
   handleMediaMessage,
   handleOtherMessage,
-  handleEditedMessage
+  handleEditedMessage,
+  downloadMedia
 } from "./messageHandlers.ts"
-import { downloadMedia } from "./mediaUtils.ts"
 import "./dbOperations.ts"
 
 const corsHeaders = {
@@ -25,6 +24,21 @@ if (!supabaseUrl || !supabaseServiceRole) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceRole)
 
+/*************  ✨ Codeium Command ⭐  *************/
+/**
+ * Logs an event to the unified audit system.
+ *
+ * @param eventType The type of the event to log
+ * @param entityId The ID of the entity the event is related to
+ * @param telegramMessageId The ID of the Telegram message the event is related to, or null if not applicable
+ * @param chatId The ID of the Telegram chat the event is related to, or null if not applicable
+ * @param previousState The state of the entity before the event, or null if not applicable
+ * @param newState The state of the entity after the event, or null if not applicable
+ * @param metadata Additional metadata to log with the event, or null if not applicable
+ * @param correlationId A correlation ID to associate with the event, or null if not applicable
+ * @param errorMessage An error message to log with the event, or null if not applicable
+ */
+/******  38899cd2-ffe1-49cf-be81-af5cb7658546  *******/
 async function logAuditEvent(
   eventType: string,
   entityId: string,

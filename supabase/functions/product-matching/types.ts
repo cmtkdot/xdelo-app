@@ -1,3 +1,4 @@
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 export interface GlProduct {
   id: string;

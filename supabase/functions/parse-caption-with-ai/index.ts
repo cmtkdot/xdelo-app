@@ -1,12 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { Configuration, OpenAIApi } from "https://esm.sh/openai@3.2.1";import { corsHeaders } from "../_shared/cors.ts";
 import { AnalyzedContent, ProcessingState } from "../_shared/types.ts";
 import { validateAnalyzedContent } from "../_shared/validators.ts";
-import { corsHeaders } from "../_shared/cors.ts";
-
-// 1) Import the logger from your telegram-webhook folder:
 import { getLogger } from "../telegram-webhook/logger.ts";  // <-- Adjust path as needed
-
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 type LogData = Record<string, string | number | boolean | null | undefined | string[] | number[] | Record<string, unknown>>;
 
 interface Logger {

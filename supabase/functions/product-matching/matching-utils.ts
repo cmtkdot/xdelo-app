@@ -1,3 +1,4 @@
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { GlProduct, ProductMatch } from './types.ts';
 

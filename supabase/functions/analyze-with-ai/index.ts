@@ -1,7 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Configuration, OpenAIApi } from "https://esm.sh/openai@3.2.1";
-
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 // Types
 type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 
@@ -26,11 +29,6 @@ interface AnalyzedContent {
   parsing_metadata?: ParsingMetadata;
   sync_metadata?: SyncMetadata;
 }
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
 
 async function analyzeWithAI(caption: string, existingContent: AnalyzedContent | null = null): Promise<AnalyzedContent> {
   console.log('[ai-analysis] Starting AI analysis of caption:', { 
