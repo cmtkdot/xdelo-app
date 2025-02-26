@@ -1370,6 +1370,7 @@ export type Database = {
           is_edited: boolean | null
           is_edited_channel_post: boolean | null
           is_forwarded: string | null
+          is_forwarded_from: string | null
           is_miscellaneous_item: boolean | null
           is_original_caption: boolean | null
           last_error_at: string | null
@@ -1443,6 +1444,7 @@ export type Database = {
           is_edited?: boolean | null
           is_edited_channel_post?: boolean | null
           is_forwarded?: string | null
+          is_forwarded_from?: string | null
           is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
@@ -1516,6 +1518,7 @@ export type Database = {
           is_edited?: boolean | null
           is_edited_channel_post?: boolean | null
           is_forwarded?: string | null
+          is_forwarded_from?: string | null
           is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null

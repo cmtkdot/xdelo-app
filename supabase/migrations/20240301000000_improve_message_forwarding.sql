@@ -1,4 +1,3 @@
-
 -- Add new columns for tracking forwards and message history
 ALTER TABLE messages 
 ADD COLUMN IF NOT EXISTS forward_count integer DEFAULT 0,
@@ -213,4 +212,3 @@ BEGIN
     ORDER BY forward_date DESC;
 END;
 $function$;
-
