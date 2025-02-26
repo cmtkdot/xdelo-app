@@ -14,81 +14,7 @@ CREATE INDEX idx_messages_forward_lookup
 ON messages (file_unique_id, is_forward) 
 WHERE deleted_from_telegram = false;
 
--- Create function to sync forward media
-CREATE OR REPLACE FUNCTION public.xdelo_sync_forward_media(p_original_message_id uuid, p_forward_message_id uuid)
-RETURNS void
-LANGUAGE plpgsql
-AS $function$
-DECLARE
-  v_original_message messages;
-BEGIN
-  -- Get the original message
-  SELECT * INTO v_original_message
-  FROM messages
-  WHERE id = p_original_message_id;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Original message not found';
-  END IF;
-
-  -- Update the forwarded message with the original message's media info
-  UPDATE messages
-  SET 
-    file_id = v_original_message.file_id,
-    file_unique_id = v_original_message.file_unique_id,
-    public_url = v_original_message.public_url,
-    mime_type = v_original_message.mime_type,
-    file_size = v_original_message.file_size,
-    width = v_original_message.width,
-    height = v_original_message.height,
-    duration = v_original_message.duration,
-    updated_at = NOW()
-  WHERE 
-    id = p_forward_message_id;
-
-  -- Log the sync operation
-  PERFORM xdelo_log_event(
-    'forward_media_synced'::audit_event_type,
-    p_forward_message_id,
-    NULL,
-    NULL,
-    NULL,
-    jsonb_build_object(
-      'original_message_id', p_original_message_id,
-      'file_unique_id', v_original_message.file_unique_id
-    ),
-    jsonb_build_object(
-      'sync_source', 'forward_sync',
-      'public_url', v_original_message.public_url
-    ),
-    NULL
-  );
-END;
-$function$;
-
--- Create trigger to handle forward media syncing
-CREATE OR REPLACE FUNCTION public.xdelo_handle_forward_media()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $function$
-BEGIN
-  -- Only proceed if this is a forward and we have the original message
-  IF NEW.is_forward AND NEW.original_message_id IS NOT NULL THEN
-    -- Sync media from original message
-    PERFORM xdelo_sync_forward_media(NEW.original_message_id, NEW.id);
-  END IF;
-  RETURN NEW;
-END;
-$function$;
-
--- Add trigger for forward media handling
-DROP TRIGGER IF EXISTS xdelo_trg_forward_media ON messages;
-CREATE TRIGGER xdelo_trg_forward_media
-  AFTER INSERT ON messages
-  FOR EACH ROW
-  EXECUTE FUNCTION xdelo_handle_forward_media();
-
--- Create function to sync media group history
+-- Create function to sync media history
 CREATE OR REPLACE FUNCTION public.xdelo_sync_media_group_history()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -124,9 +50,71 @@ BEGIN
 END;
 $function$;
 
+-- Create function to handle both forwards and caption updates
+CREATE OR REPLACE FUNCTION public.xdelo_handle_message_update()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+    -- If caption changed, this will trigger a re-analysis
+    IF NEW.caption != OLD.caption OR (NEW.caption IS NOT NULL AND OLD.caption IS NULL) THEN
+        -- Reset analysis state
+        NEW.analyzed_content = NULL;
+        NEW.processing_state = 'pending';
+        NEW.group_caption_synced = false;
+        
+        -- Add to edit history
+        NEW.edit_history = COALESCE(OLD.edit_history, '[]'::jsonb) || jsonb_build_object(
+            'edit_date', CURRENT_TIMESTAMP,
+            'previous_caption', OLD.caption,
+            'new_caption', NEW.caption,
+            'is_channel_post', NEW.chat_type = 'channel',
+            'previous_analyzed_content', OLD.analyzed_content
+        );
+        
+        -- Log the edit
+        PERFORM xdelo_log_event(
+            'message_edited'::audit_event_type,
+            NEW.id,
+            NEW.telegram_message_id,
+            NEW.chat_id,
+            jsonb_build_object('caption', OLD.caption, 'analyzed_content', OLD.analyzed_content),
+            jsonb_build_object('caption', NEW.caption),
+            jsonb_build_object(
+                'media_group_id', NEW.media_group_id,
+                'is_channel_post', NEW.chat_type = 'channel'
+            ),
+            NEW.correlation_id
+        );
+        
+        -- If part of media group, update all related messages
+        IF NEW.media_group_id IS NOT NULL THEN
+            UPDATE messages
+            SET 
+                analyzed_content = NULL,
+                processing_state = 'pending',
+                group_caption_synced = false,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE 
+                media_group_id = NEW.media_group_id 
+                AND id != NEW.id;
+        END IF;
+    END IF;
+    
+    RETURN NEW;
+END;
+$function$;
+
 -- Add trigger for media group history syncing
 DROP TRIGGER IF EXISTS xdelo_media_group_history_sync ON messages;
 CREATE TRIGGER xdelo_media_group_history_sync
   AFTER UPDATE ON messages
   FOR EACH ROW
   EXECUTE FUNCTION xdelo_sync_media_group_history();
+
+-- Add trigger for message updates
+DROP TRIGGER IF EXISTS xdelo_trg_message_update ON messages;
+CREATE TRIGGER xdelo_trg_message_update
+  BEFORE UPDATE ON messages
+  FOR EACH ROW
+  EXECUTE FUNCTION xdelo_handle_message_update();
