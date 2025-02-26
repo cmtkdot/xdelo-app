@@ -1,4 +1,3 @@
-
 import { SupabaseClient } from "@supabase/supabase-js";
 
 export interface TelegramMessage {
@@ -67,4 +66,14 @@ export interface ProcessedMessageResult {
   success: boolean;
   messageId?: string;
   error?: string;
+}
+
+export interface FunctionInvocationContext {
+  supabaseClient: SupabaseClient;
+  logger: {
+    info: (message: string, data?: any) => void;
+    error: (message: string, error?: any) => void;
+    warn?: (message: string, data?: any) => void;
+  };
+  correlationId: string;
 }
