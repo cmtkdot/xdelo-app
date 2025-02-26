@@ -1545,7 +1545,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_message_caption"
+            foreignKeyName: "messages_message_caption_id_fkey"
             columns: ["message_caption_id"]
             isOneToOne: false
             referencedRelation: "messages"

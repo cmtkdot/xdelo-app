@@ -1,11 +1,12 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from '@supabase/supabase-js@2.7.1';
-import { Configuration, OpenAIApi } from "https://esm.sh/openai@3.2.1";
+import { serve } from "std/http/server.ts";
+import { createClient } from "@supabase/supabase-js";
+import { Configuration, OpenAIApi } from "openai";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
 // Types
 type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 
@@ -202,35 +203,6 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('[ai-analysis] Error:', error);
-    
-    // Update message to error state
-    try {
-      const { messageId, correlationId } = await req.json();
-      if (messageId) {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL') as string;
-        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string;
-        const supabase = createClient(supabaseUrl, supabaseKey);
-
-        await supabase
-          .from('messages')
-          .update({
-            processing_state: 'error',
-            error_message: error.message,
-            processing_completed_at: new Date().toISOString(),
-            last_error_at: new Date().toISOString(),
-            processing_correlation_id: correlationId
-          })
-          .eq('id', messageId);
-
-        console.log('[ai-analysis] Updated message to error state:', { 
-          messageId, 
-          error: error.message,
-          correlationId 
-        });
-      }
-    } catch (updateError) {
-      console.error('[ai-analysis] Error updating error state:', updateError);
-    }
     
     return new Response(
       JSON.stringify({ error: error.message }), 
