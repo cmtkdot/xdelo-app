@@ -1,4 +1,2 @@
-
 project_id = "xjhhehxcxkiumnwbirel"
-[functions.process-audio-upload]
-verify_jwt = true
+verify_jwt = false
