@@ -24,6 +24,12 @@ export function getLogger(correlationId: string): Logger {
         ...data
       });
     },
+    /**
+     * Log a warning message with the given correlation ID and any additional data.
+     *
+     * @param message The message to log.
+     * @param data Additional data to log as key-value pairs.
+     */
     warn: (message: string, data?: Record<string, any>) => {
       console.warn(`⚠️ ${message}`, {
         correlation_id: correlationId,

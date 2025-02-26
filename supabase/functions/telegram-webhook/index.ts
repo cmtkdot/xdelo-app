@@ -58,7 +58,7 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  const correlationId = `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+  const correlationId = metadata?.correlationId || `log_${crypto.randomUUID()}`;
   const logger = getLogger(correlationId);
   
   try {
