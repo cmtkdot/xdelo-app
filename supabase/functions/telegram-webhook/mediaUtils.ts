@@ -1,6 +1,5 @@
 
 import { MessageHandlerContext } from "./types.ts";
-import { createClient } from "@supabase/supabase-js";
 
 export interface MediaInfo {
   file_id: string;
@@ -53,11 +52,11 @@ export async function uploadMediaToStorage(
   mimeType: string,
   context: MessageHandlerContext
 ): Promise<string> {
-  const { logger } = context;
+  const { logger, supabaseClient } = context;
   logger.info('📤 Starting media upload to storage', { storagePath, mimeType });
 
   try {
-    const { error: uploadError } = await context.supabaseClient
+    const { error: uploadError } = await supabaseClient
       .storage
       .from('telegram-media')
       .upload(storagePath, mediaBuffer, {
@@ -70,7 +69,7 @@ export async function uploadMediaToStorage(
       throw uploadError;
     }
 
-    const { data: { publicUrl } } = context.supabaseClient
+    const { data: { publicUrl } } = supabaseClient
       .storage
       .from('telegram-media')
       .getPublicUrl(storagePath);
