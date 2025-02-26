@@ -1,155 +1,89 @@
+import { supabase } from '../_shared/supabase.ts';
+import { getMediaInfo } from './mediaUtils.ts';
+import { xdelo_log_event } from '../_shared/logger.ts';
 
-import { supabaseClient } from '../_shared/supabase.ts'
-import { corsHeaders } from '../_shared/cors.ts'
-
-interface MessageContext {
-  isChannelPost: boolean
-  isForwarded: boolean
-  correlationId: string
-  isEdit: boolean
-}
-
-export const handleMediaMessage = async (message: any, mediaInfo: any, context: MessageContext) => {
+export async function handleMediaMessage(message: any, correlationId: string) {
   try {
-    const { isChannelPost, isForwarded, correlationId, isEdit } = context
-
-    console.log('Message data extracted:', {
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-      media_group_id: message.media_group_id,
-      has_photo: !!message.photo,
-      has_video: !!message.video,
-      has_caption: !!message.caption
-    })
-
-    console.log('Processing media message:', {
-      file_unique_id: mediaInfo.file_unique_id,
-      media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
-      storage_path: `${mediaInfo.file_unique_id}.${mediaInfo.mime_type.split('/')[1]}`
-    })
-
-    console.log('Attempting to insert message...')
-
-    // First check if message already exists
-    const { data: existingMessage } = await supabaseClient
-      .from('messages')
-      .select('id, processing_state, analyzed_content, old_analyzed_content')
-      .eq('telegram_message_id', message.message_id)
-      .eq('chat_id', message.chat.id)
-      .maybeSingle()
-
-    if (existingMessage) {
-      console.log('Found existing message:', {
-        id: existingMessage.id,
-        current_state: existingMessage.processing_state,
-        has_analyzed_content: !!existingMessage.analyzed_content
-      })
-
-      console.log('Duplicate message detected, handling update flow...')
-
-      if (message.caption !== undefined) {
-        console.log('Changes detected, updating message and triggering reanalysis')
-        console.log('Caption changed, triggering AI analysis')
-
-        // Store current analyzed_content in old_analyzed_content array
-        const old_analyzed_content = existingMessage.old_analyzed_content || []
-        if (existingMessage.analyzed_content) {
-          old_analyzed_content.push(existingMessage.analyzed_content)
-        }
-
-        const { error: updateError } = await supabaseClient
-          .from('messages')
-          .update({
-            caption: message.caption,
-            is_edited: true,
-            edit_date: new Date().toISOString(),
-            processing_state: 'pending',
-            telegram_data: message,
-            old_analyzed_content,
-            group_caption_synced: false,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingMessage.id)
-
-        if (updateError) throw updateError
-
-        if (message.caption) {
-          await supabaseClient.functions.invoke('parse-caption-with-ai', {
-            body: { 
-              messageId: existingMessage.id,
-              caption: message.caption,
-              correlationId
-            }
-          })
-        }
-      }
-    } else {
-      // Prepare new message data
-      const messageData = {
-        telegram_message_id: message.message_id,
-        chat_id: message.chat.id,
-        chat_type: message.chat.type,
-        chat_title: message.chat.title,
-        message_url: `https://t.me/c/${message.chat.id.toString().slice(4)}/${message.message_id}`,
-        media_group_id: message.media_group_id,
-        caption: message.caption,
-        file_id: mediaInfo.file_id,
-        file_unique_id: mediaInfo.file_unique_id,
-        mime_type: mediaInfo.mime_type,
-        file_size: mediaInfo.file_size,
-        width: mediaInfo.width,
-        height: mediaInfo.height,
-        duration: mediaInfo.duration,
-        public_url: mediaInfo.public_url,
-        storage_path: mediaInfo.storage_path,
-        is_forward: isForwarded,
-        forward_from: message.forward_from,
-        forward_from_chat: message.forward_from_chat,
-        processing_state: message.caption ? 'pending' : 'initialized',
-        old_analyzed_content: [],
-        telegram_data: message,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        correlation_id: correlationId,
-        // Set group metadata if part of media group
-        ...(message.media_group_id ? {
-          group_first_message_time: new Date().toISOString(),
-          is_original_caption: !!message.caption,
-          group_caption_synced: false
-        } : {})
-      }
-
-      const { error: insertError, data: insertedMessage } = await supabaseClient
+    const mediaInfo = await getMediaInfo(message);
+    
+    // Try to insert as new message first
+    try {
+      const { error } = await supabase
         .from('messages')
-        .insert([messageData])
-        .select()
-        .single()
+        .insert([{
+          telegram_message_id: message.message_id,
+          chat_id: message.chat.id,
+          chat_type: message.chat.type,
+          chat_title: message.chat.title,
+          caption: message.caption,
+          media_group_id: message.media_group_id,
+          ...mediaInfo,
+          correlation_id: correlationId,
+          processing_state: message.caption ? 'pending' : 'initialized'
+        }]);
 
-      if (insertError) throw insertError
+      // If no error, message was inserted normally
+      if (!error) return;
 
-      if (message.caption) {
-        await supabaseClient.functions.invoke('parse-caption-with-ai', {
-          body: { 
-            messageId: insertedMessage.id,
+      // If we get a uniqueness violation (23505)
+      if (error.code === '23505') {
+        // Get the original message
+        const { data: originalMessage } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('file_unique_id', mediaInfo.file_unique_id)
+          .eq('deleted_from_telegram', false)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .single();
+
+        if (!originalMessage) {
+          throw new Error('Original message not found for forward');
+        }
+
+        // Insert as a forward
+        const { error: forwardError } = await supabase
+          .from('messages')
+          .insert([{
+            telegram_message_id: message.message_id,
+            chat_id: message.chat.id,
+            chat_type: message.chat.type,
+            chat_title: message.chat.title,
             caption: message.caption,
-            correlationId
-          }
-        })
+            media_group_id: message.media_group_id,
+            ...mediaInfo,
+            correlation_id: correlationId,
+            is_forward: true,
+            original_message_id: originalMessage.id,
+            forward_from: message.forward_from,
+            forward_from_chat: message.forward_from_chat,
+            processing_state: 'pending'
+          }]);
+
+        if (forwardError) throw forwardError;
+      } else {
+        throw error;
       }
+    } catch (error) {
+      console.error('Error handling media message:', error);
+      throw error;
     }
-
-    console.log('Webhook processing completed successfully')
-
-    return new Response(
-      JSON.stringify({ success: true }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
   } catch (error) {
-    console.error('Error handling media message:', error)
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    )
+    console.error('Error handling media message:', error);
+    // Log error event
+    await xdelo_log_event({
+      event_type: 'message_processing_error',
+      entity_id: message.message_id,
+      telegram_message_id: message.message_id,
+      chat_id: message.chat.id,
+      error_message: error.message,
+      metadata: {
+        error_code: error.code,
+        processing_stage: 'media_handling'
+      },
+      correlation_id: correlationId
+    });
+    throw error;
   }
 }
 
@@ -158,7 +92,7 @@ export const handleOtherMessage = async (message: any, context: MessageContext) 
     const { isChannelPost, isForwarded, correlationId, isEdit } = context
 
     // Store in other_messages table
-    const { error } = await supabaseClient
+    const { error } = await supabase
       .from('other_messages')
       .insert([{
         telegram_message_id: message.message_id,
