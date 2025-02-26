@@ -64,6 +64,7 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
   const { toast } = useToast();
 
   const isSynced = !!mainMedia.glide_row_id;
+  const isForwarded = mainMedia.is_forward;
 
   const handleReanalyze = async () => {
     if (isReanalyzing) return;
@@ -133,13 +134,30 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
         <div className="relative h-64" onClick={() => setIsViewerOpen(true)}>
           <ImageSwiper media={sortedMedia.map(message => messageToMediaItem(message))} />
           
-          {isSynced && (
-            <div className="absolute top-2 right-2">
+          <div className="absolute top-2 right-2 flex gap-2">
+            {isSynced && (
               <div className="bg-green-100 dark:bg-green-900/20 p-2 rounded-full">
                 <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
               </div>
-            </div>
-          )}
+            )}
+            {isForwarded && (
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger className="bg-blue-100 dark:bg-blue-900/20 p-2 rounded-full">
+                    <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  </TooltipTrigger>
+                  <TooltipContent className="px-2 py-1">
+                    <p className="text-xs">Forwarded message</p>
+                    {mainMedia.forward_count && (
+                      <p className="text-xs text-muted-foreground">
+                        Forwarded {mainMedia.forward_count} times
+                      </p>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
 
           {hasError && (
             <Alert variant="destructive" className="absolute bottom-0 left-0 right-0 m-2">

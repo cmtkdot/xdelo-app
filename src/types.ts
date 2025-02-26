@@ -1,4 +1,3 @@
-
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
@@ -68,7 +67,14 @@ export interface Message {
   glide_row_id?: string;
   created_at?: string;
   updated_at?: string;
-  deleted_from_telegram?: boolean; // Added this field
+  deleted_from_telegram?: boolean;
+  is_forward?: boolean;
+  forward_count?: number;
+  original_message_id?: string;
+  forward_from?: Record<string, unknown>;
+  forward_from_chat?: Record<string, unknown>;
+  forward_chain?: Record<string, unknown>[];
+  old_analyzed_content?: Record<string, unknown>[];
 }
 
 export interface GlProduct {

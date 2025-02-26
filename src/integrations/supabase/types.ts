@@ -1360,6 +1360,8 @@ export type Database = {
           forward_chain: Json[] | null
           forward_count: number | null
           forward_date: string | null
+          forward_from: Json | null
+          forward_from_chat: Json | null
           forward_info: Json | null
           glide_row_id: string | null
           group_caption_synced: boolean | null
@@ -1439,6 +1441,8 @@ export type Database = {
           forward_chain?: Json[] | null
           forward_count?: number | null
           forward_date?: string | null
+          forward_from?: Json | null
+          forward_from_chat?: Json | null
           forward_info?: Json | null
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
@@ -1518,6 +1522,8 @@ export type Database = {
           forward_chain?: Json[] | null
           forward_count?: number | null
           forward_date?: string | null
+          forward_from?: Json | null
+          forward_from_chat?: Json | null
           forward_info?: Json | null
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
