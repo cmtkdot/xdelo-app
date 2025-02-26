@@ -28,3 +28,7 @@ verify_jwt = false
 [[edge_functions]]
 name = "product-matching"
 verify_jwt = false
+
+[[edge_functions]]
+name = "process-audio-upload"
+verify_jwt = false
