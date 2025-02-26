@@ -1,210 +1,129 @@
 
-import { serve } from "std/http/server.ts";
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
 import { corsHeaders } from "../_shared/cors.ts";
-import { Configuration, OpenAIApi } from "openai";
+import { handleError } from "../_shared/baseHandler.ts";
 
+const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-// Types
-type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
-
-interface SyncMetadata {
-  sync_source_message_id: string;
-  media_group_id: string;
-}
-
-interface ParsingMetadata {
-  method: 'ai';
-  timestamp: string;
-  confidence: number;
-}
-
-interface AnalyzedContent {
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  quantity?: number;
-  notes?: string;
-  parsing_metadata?: ParsingMetadata;
-  sync_metadata?: SyncMetadata;
-}
-
-async function analyzeWithAI(caption: string, existingContent: AnalyzedContent | null = null): Promise<AnalyzedContent> {
-  console.log('[ai-analysis] Starting AI analysis of caption:', { 
-    caption_length: caption.length,
-    has_existing_content: !!existingContent 
-  });
-
-  const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-  if (!openAIApiKey) {
-    throw new Error('OpenAI API key not configured');
-  }
-
-  const configuration = new Configuration({ apiKey: openAIApiKey });
-  const openai = new OpenAIApi(configuration);
-
-  // Construct system message with existing content context if available
-  let systemMessage = 'You are a precise product information extractor.';
-  if (existingContent) {
-    systemMessage += ' Previous manual parsing found these details: ' + 
-      JSON.stringify(existingContent) + 
-      '. Please validate and enhance this information.';
-  }
-
-  const prompt = `Analyze this product caption and extract the following information in JSON format:
-- product_name: Full product name
-- product_code: Product code or SKU (if any)
-- vendor_uid: Vendor or supplier identifier
-- quantity: Numeric quantity if mentioned
-- purchase_date: Purchase date if mentioned (format: YYYY-MM-DD)
-- notes: Any additional important information
-
-Caption: "${caption}"
-
-Return ONLY valid JSON with these fields.`;
-
-  try {
-    console.log('[ai-analysis] Sending request to OpenAI');
-
-    const completion = await openai.createChatCompletion({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemMessage },
-        { role: "user", content: prompt }
-      ],
-      temperature: 0.3 // Lower temperature for more consistent results
-    });
-
-    const responseText = completion.data.choices[0].message?.content || '{}';
-    console.log('[ai-analysis] Received response from OpenAI:', { response_length: responseText.length });
-
-    let aiResult = JSON.parse(responseText);
-
-    // Merge with existing content if available
-    if (existingContent) {
-      aiResult = {
-        ...existingContent,
-        ...aiResult,
-        notes: [existingContent.notes, aiResult.notes]
-          .filter(Boolean)
-          .join('\n')
-      };
-    }
-
-    // Add AI metadata
-    const result: AnalyzedContent = {
-      ...aiResult,
-      parsing_metadata: {
-        method: 'ai',
-        timestamp: new Date().toISOString(),
-        confidence: 0.8
-      }
-    };
-
-    console.log('[ai-analysis] Analysis completed:', {
-      has_product_code: !!result.product_code,
-      has_vendor: !!result.vendor_uid,
-      has_quantity: !!result.quantity
-    });
-
-    return result;
-  } catch (error) {
-    console.error('[ai-analysis] OpenAI API error:', error);
-    throw error;
-  }
-}
+// Initialize Supabase client with service role key for admin access
+const supabaseAdmin = createClient(supabaseUrl!, supabaseServiceRoleKey!);
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { messageId, caption, existingContent, correlationId, media_group_id } = await req.json();
-    
-    if (!messageId || !caption) {
-      throw new Error('Missing required parameters: messageId and caption');
+    // Verify JWT token
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('No authorization header');
     }
 
-    console.log('[ai-analysis] Starting analysis:', { 
-      messageId, 
-      caption_length: caption?.length,
-      has_existing_content: !!existingContent,
+    const jwt = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(jwt);
+    
+    if (authError || !user) {
+      throw new Error('Invalid token');
+    }
+
+    // Parse request body
+    const { messageId, caption, media_group_id, correlationId, is_forward } = await req.json();
+
+    if (!messageId || !caption) {
+      throw new Error('Missing required fields: messageId and caption are required');
+    }
+
+    console.log('🔄 Starting caption analysis', {
+      messageId,
       correlationId,
-      media_group_id
+      media_group_id,
+      is_forward
     });
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') as string;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Call OpenAI for analysis
+    const openAiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a product analysis assistant. Extract the following information from the caption:
+              - product_name (text before '#')
+              - product_code (text after '#')
+              - vendor_uid (first 1-4 letters of product_code)
+              - purchase_date (date portion from product_code in YYYY-MM-DD format)
+              - quantity (number after 'x')
+              - notes (any other relevant information)
+              
+              Format the response as a JSON object.`
+          },
+          {
+            role: 'user',
+            content: caption
+          }
+        ],
+      }),
+    });
 
-    // Update state to processing
-    const { error: stateError } = await supabase
-      .from('messages')
-      .update({ 
-        processing_state: 'processing',
-        processing_started_at: new Date().toISOString(),
-        processing_correlation_id: correlationId
-      })
-      .eq('id', messageId);
+    const aiResult = await openAiResponse.json();
+    const analyzedContent = JSON.parse(aiResult.choices[0].message.content);
 
-    if (stateError) {
-      throw new Error(`Failed to update processing state: ${stateError.message}`);
-    }
+    console.log('✅ AI Analysis completed', {
+      messageId,
+      analyzedContent
+    });
 
-    // Perform AI analysis
-    const analyzedContent = await analyzeWithAI(caption, existingContent);
-
-    if (media_group_id) {
-      // Call xdelo_sync_media_group_content function
-      const { error: syncError } = await supabase.rpc(
-        'xdelo_sync_media_group_content',
-        {
-          p_source_message_id: messageId,
-          p_media_group_id: media_group_id,
-          p_analyzed_content: analyzedContent
-        }
-      );
-
-      if (syncError) {
-        throw new Error(`Failed to sync media group content: ${syncError.message}`);
-      }
-
-      console.log('[ai-analysis] Successfully synced media group content');
-    }
-
-    // Update the message with AI results
-    const { error: updateError } = await supabase
+    // Update the message with analyzed content
+    const { error: updateError } = await supabaseAdmin
       .from('messages')
       .update({
         analyzed_content: analyzedContent,
         processing_state: 'completed',
-        processing_completed_at: new Date().toISOString(),
-        processing_correlation_id: correlationId
+        processing_completed_at: new Date().toISOString()
       })
       .eq('id', messageId);
 
     if (updateError) {
-      throw new Error(`Failed to update message with AI analysis: ${updateError.message}`);
+      throw updateError;
     }
 
-    console.log('[ai-analysis] Successfully updated message with AI analysis');
+    // If part of a media group, update all related messages
+    if (media_group_id) {
+      console.log('🔄 Syncing media group', { media_group_id });
+      
+      const { error: groupUpdateError } = await supabaseAdmin
+        .from('messages')
+        .update({
+          analyzed_content: analyzedContent,
+          processing_state: 'completed',
+          processing_completed_at: new Date().toISOString(),
+          group_caption_synced: true
+        })
+        .eq('media_group_id', media_group_id)
+        .neq('id', messageId); // Don't update the original message again
 
-    return new Response(
-      JSON.stringify({ 
-        success: true,
-        analyzed_content: analyzedContent
-      }), 
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+      if (groupUpdateError) {
+        console.error('Error updating media group:', groupUpdateError);
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
+    });
 
   } catch (error) {
-    console.error('[ai-analysis] Error:', error);
-    
-    return new Response(
-      JSON.stringify({ error: error.message }), 
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return handleError(error);
   }
 });
