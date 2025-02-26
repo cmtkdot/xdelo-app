@@ -1,3 +1,6 @@
+
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
 
 export interface AnalyzedContent {
@@ -36,7 +39,6 @@ export interface MessageUpdate {
   error_message?: string;
   last_error_at?: string;
 }
-import { SupabaseClient } from "@supabase/supabase-js";
 
 export const PROCESSING_STATES: Record<string, ProcessingState> = {
   INITIALIZED: 'initialized',
@@ -60,6 +62,14 @@ export interface MediaGroupInfo {
   firstMessageTime: string | null;
   lastMessageTime: string | null;
   analyzedContent?: Record<string, any>;
+}
+
+export interface FunctionInvocationContext {
+  logger: {
+    info: (message: string, data?: any) => void;
+    error: (message: string, error?: any) => void;
+  };
+  correlationId: string;
 }
 
 export async function getMediaGroupInfo(
