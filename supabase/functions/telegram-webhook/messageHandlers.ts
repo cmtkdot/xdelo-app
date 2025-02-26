@@ -1,33 +1,40 @@
+
 import { createClient } from "@supabase/supabase-js";
 import { TelegramMessage, TelegramWebhookPayload, MessageHandlerContext, ProcessedMessageResult } from "./types.ts";
-import { downloadMedia, uploadMediaToStorage, getMimeType, getStoragePath, extractMediaInfo } from "./mediaUtils.ts";
-import { insertMediaMessage, insertTextMessage, updateMessageGroupInfo } from "./dbOperations.ts";
-import { getLogger } from "./logger.ts";
-
-const supabaseAdmin = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-);
+import { downloadMedia, uploadMediaToStorage, extractMediaInfo } from "./mediaUtils.ts";
 
 export async function handleMessage(
   payload: TelegramWebhookPayload,
   context: MessageHandlerContext
 ): Promise<ProcessedMessageResult> {
+  const { logger } = context;
   const message = payload.message || payload.channel_post;
   
+  logger.info('📨 Processing new message', { 
+    messageId: message?.message_id,
+    chatId: message?.chat?.id,
+    hasPhoto: !!message?.photo,
+    hasVideo: !!message?.video,
+    hasDocument: !!message?.document,
+    hasCaption: !!message?.caption,
+    mediaGroupId: message?.media_group_id
+  });
+
   if (!message) {
-    context.logger.error('No message found in payload');
+    logger.error('No message found in payload');
     return { success: false, error: 'No message found in payload' };
   }
 
   try {
     if (message.photo || message.video || message.document) {
+      logger.info('🖼️ Handling media message');
       return await handleMediaMessage(message, context);
     } else {
+      logger.info('📝 Handling text message');
       return await handleTextMessage(message, context);
     }
   } catch (error) {
-    context.logger.error('Error processing message:', error);
+    logger.error('Error processing message:', error);
     return { success: false, error: error.message };
   }
 }
@@ -36,10 +43,15 @@ async function handleMediaMessage(
   message: TelegramMessage,
   context: MessageHandlerContext
 ): Promise<ProcessedMessageResult> {
-  const mediaInfo = await extractMediaInfo(message);
+  const { logger } = context;
+  
+  const mediaInfo = extractMediaInfo(message);
   if (!mediaInfo) {
+    logger.error('No media info found in message');
     return { success: false, error: 'No media info found' };
   }
+
+  logger.info('📸 Media info extracted', mediaInfo);
 
   try {
     const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
@@ -47,14 +59,37 @@ async function handleMediaMessage(
       throw new Error('TELEGRAM_BOT_TOKEN not found');
     }
 
-    const fileData = await downloadMedia(mediaInfo.file_id, botToken);
+    // Check if media already exists
+    const { data: existingMedia } = await context.supabaseClient
+      .from('messages')
+      .select('*')
+      .eq('file_unique_id', mediaInfo.file_unique_id)
+      .single();
+
+    if (existingMedia) {
+      logger.info('♻️ Media already exists in storage', { 
+        messageId: existingMedia.id,
+        fileUniqueId: mediaInfo.file_unique_id 
+      });
+      return { success: true, messageId: existingMedia.id };
+    }
+
+    logger.info('⬇️ Downloading media from Telegram', { fileId: mediaInfo.file_id });
+    const fileData = await downloadMedia(mediaInfo.file_id, botToken, logger);
+    
+    logger.info('⬆️ Uploading media to storage', { 
+      storagePath: mediaInfo.storage_path,
+      mimeType: mediaInfo.mime_type 
+    });
+    
     const publicUrl = await uploadMediaToStorage(
-      fileData, 
+      fileData,
       mediaInfo.storage_path,
       mediaInfo.mime_type,
       context
     );
 
+    logger.info('💾 Saving message to database');
     const { data, error } = await context.supabaseClient
       .from('messages')
       .insert({
@@ -78,11 +113,19 @@ async function handleMediaMessage(
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      logger.error('Failed to insert message', error);
+      throw error;
+    }
+
+    logger.info('✅ Message processed successfully', { 
+      messageId: data.id,
+      publicUrl 
+    });
 
     return { success: true, messageId: data.id };
   } catch (error) {
-    context.logger.error('Error handling media message:', error);
+    logger.error('Error handling media message:', error);
     return { success: false, error: error.message };
   }
 }
@@ -91,7 +134,14 @@ async function handleTextMessage(
   message: TelegramMessage,
   context: MessageHandlerContext
 ): Promise<ProcessedMessageResult> {
+  const { logger } = context;
+  
   try {
+    logger.info('💬 Processing text message', { 
+      messageId: message.message_id,
+      chatId: message.chat.id 
+    });
+
     const { data, error } = await context.supabaseClient
       .from('other_messages')
       .insert({
@@ -106,11 +156,15 @@ async function handleTextMessage(
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      logger.error('Failed to insert text message', error);
+      throw error;
+    }
 
+    logger.info('✅ Text message saved successfully', { messageId: data.id });
     return { success: true, messageId: data.id };
   } catch (error) {
-    context.logger.error('Error handling text message:', error);
+    logger.error('Error handling text message:', error);
     return { success: false, error: error.message };
   }
 }

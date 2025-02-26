@@ -1,90 +1,101 @@
 
-import { createClient } from '@supabase/supabase-js';
-import { FunctionInvocationContext } from './types';
+import { MessageHandlerContext } from "./types.ts";
+import { createClient } from "@supabase/supabase-js";
 
-const supabaseAdmin = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-);
+export interface MediaInfo {
+  file_id: string;
+  file_unique_id: string;
+  mime_type: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  storage_path: string;
+}
 
-export async function downloadMedia(fileId: string, botToken: string): Promise<ArrayBuffer> {
-  // First get file path from Telegram
-  const getFileUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`;
-  const filePathResponse = await fetch(getFileUrl);
-  const filePathData = await filePathResponse.json();
-
-  if (!filePathData.ok || !filePathData.result.file_path) {
-    throw new Error(`Failed to get file path: ${JSON.stringify(filePathData)}`);
-  }
-
-  // Now download the actual file
-  const fileUrl = `https://api.telegram.org/file/bot${botToken}/${filePathData.result.file_path}`;
-  const fileResponse = await fetch(fileUrl);
+export async function getFileUrl(fileId: string, botToken: string, logger: MessageHandlerContext['logger']): Promise<string> {
+  logger.info('🔍 Getting file URL from Telegram', { fileId });
   
-  if (!fileResponse.ok) {
-    throw new Error(`Failed to download file: ${fileResponse.statusText}`);
+  const response = await fetch(
+    `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
+  );
+  const data = await response.json();
+  
+  if (!data.ok) {
+    logger.error('Failed to get file path from Telegram', { fileId, error: data });
+    throw new Error('Failed to get file path from Telegram');
   }
 
-  return await fileResponse.arrayBuffer();
+  const fileUrl = `https://api.telegram.org/file/bot${botToken}/${data.result.file_path}`;
+  logger.info('✅ Got file URL from Telegram', { fileUrl });
+  return fileUrl;
+}
+
+export async function downloadMedia(fileId: string, botToken: string, logger: MessageHandlerContext['logger']): Promise<ArrayBuffer> {
+  logger.info('📥 Starting media download from Telegram', { fileId });
+  
+  const fileUrl = await getFileUrl(fileId, botToken, logger);
+  const response = await fetch(fileUrl);
+  
+  if (!response.ok) {
+    logger.error('Failed to download media from Telegram', { fileId, status: response.status });
+    throw new Error('Failed to download media from Telegram');
+  }
+
+  const buffer = await response.arrayBuffer();
+  logger.info('✅ Successfully downloaded media from Telegram', { fileId, size: buffer.byteLength });
+  return buffer;
 }
 
 export async function uploadMediaToStorage(
-  fileData: ArrayBuffer,
+  mediaBuffer: ArrayBuffer,
   storagePath: string,
   mimeType: string,
-  context: FunctionInvocationContext
+  context: MessageHandlerContext
 ): Promise<string> {
-  try {
-    context.logger.info(`Uploading file to ${storagePath}`);
+  const { logger } = context;
+  logger.info('📤 Starting media upload to storage', { storagePath, mimeType });
 
-    const { data, error } = await supabaseAdmin.storage
+  try {
+    const { error: uploadError } = await context.supabaseClient
+      .storage
       .from('telegram-media')
-      .upload(storagePath, fileData, {
+      .upload(storagePath, mediaBuffer, {
         contentType: mimeType,
         upsert: true
       });
 
-    if (error) {
-      context.logger.error('Storage upload error:', error);
-      throw error;
+    if (uploadError) {
+      logger.error('Failed to upload to storage', { error: uploadError });
+      throw uploadError;
     }
 
-    // Get public URL
-    const { data: publicUrlData } = supabaseAdmin.storage
+    const { data: { publicUrl } } = context.supabaseClient
+      .storage
       .from('telegram-media')
       .getPublicUrl(storagePath);
 
-    context.logger.info(`File uploaded successfully, public URL: ${publicUrlData.publicUrl}`);
-    
-    return publicUrlData.publicUrl;
+    logger.info('✅ Successfully uploaded media to storage', { publicUrl });
+    return publicUrl;
+
   } catch (error) {
-    context.logger.error('Error in uploadMediaToStorage:', error);
+    logger.error('❌ Error in storage upload', { error });
     throw error;
   }
 }
 
-export function getMimeType(message: any): string {
-  if (message.photo) return 'image/jpeg';
-  if (message.video) return message.video.mime_type || 'video/mp4';
-  if (message.document) return message.document.mime_type || 'application/octet-stream';
-  return 'application/octet-stream';
-}
-
-export function getStoragePath(fileUniqueId: string, mimeType: string): string {
-  const extension = mimeType.split('/')[1] || 'bin';
-  return `${fileUniqueId}.${extension}`;
-}
-
-export async function extractMediaInfo(message: any, context: FunctionInvocationContext) {
+export function extractMediaInfo(message: any): MediaInfo | null {
   const photo = message.photo ? message.photo[message.photo.length - 1] : null;
   const video = message.video;
   const document = message.document;
-  
-  const media = photo || video || document;
-  if (!media) return null;
 
-  const mimeType = getMimeType(message);
-  const storagePath = getStoragePath(media.file_unique_id, mimeType);
+  if (!photo && !video && !document) {
+    return null;
+  }
+
+  const media = photo || video || document;
+  const mimeType = video?.mime_type || document?.mime_type || 'image/jpeg';
+  const ext = mimeType.split('/')[1] || 'bin';
 
   return {
     file_id: media.file_id,
@@ -94,6 +105,6 @@ export async function extractMediaInfo(message: any, context: FunctionInvocation
     width: media.width,
     height: media.height,
     duration: video?.duration,
-    storage_path: storagePath
+    storage_path: `${media.file_unique_id}.${ext}`
   };
 }
