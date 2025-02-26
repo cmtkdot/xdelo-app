@@ -13,7 +13,7 @@ serve(async (req) => {
 
   try {
     const { message, edited_message } = await req.json()
-    const updateMessage = edited_message || message // Use edited_message if available, otherwise use message
+    const updateMessage = edited_message || message
     
     const correlationId = crypto.randomUUID()
     console.log('Received webhook update:', { 
@@ -22,14 +22,6 @@ serve(async (req) => {
       isEdit: !!edited_message
     })
 
-    // Log webhook request
-    await supabaseClient.from('webhook_logs').insert({
-      correlation_id: correlationId,
-      request_body: { message, edited_message },
-      timestamp: new Date().toISOString()
-    })
-
-    // Process message (whether new or edited)
     if (updateMessage) {
       const isChannelPost = updateMessage.chat.type === 'channel'
       const isForwarded = updateMessage.forward_from || updateMessage.forward_from_chat
@@ -44,9 +36,50 @@ serve(async (req) => {
       })
 
       // Extract media info if present
-      const mediaInfo = await extractMediaInfo(updateMessage)
+      const mediaInfo = extractMediaInfo(updateMessage)
 
       if (mediaInfo) {
+        // Get file path from Telegram
+        const fileResponse = await fetch(
+          `https://api.telegram.org/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/getFile?file_id=${mediaInfo.file_id}`
+        )
+        const fileData = await fileResponse.json()
+
+        if (!fileData.ok) {
+          throw new Error(`Failed to get file path: ${fileData.description}`)
+        }
+
+        const filePath = fileData.result.file_path
+        const fileUrl = `https://api.telegram.org/file/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/${filePath}`
+
+        // Download file
+        const fileContent = await fetch(fileUrl)
+        const fileBlob = await fileContent.blob()
+
+        // Upload to Supabase Storage
+        const storagePath = `${mediaInfo.file_unique_id}.${filePath.split('.').pop()}`
+        const { error: uploadError } = await supabaseClient
+          .storage
+          .from('telegram-media')
+          .upload(storagePath, fileBlob, {
+            contentType: mediaInfo.mime_type,
+            upsert: true
+          })
+
+        if (uploadError) {
+          throw uploadError
+        }
+
+        // Get public URL
+        const { data: { publicUrl } } = supabaseClient
+          .storage
+          .from('telegram-media')
+          .getPublicUrl(storagePath)
+
+        // Add public URL to media info
+        mediaInfo.public_url = publicUrl
+        mediaInfo.storage_path = storagePath
+
         return await handleMediaMessage(updateMessage, mediaInfo, {
           isChannelPost,
           isForwarded,
@@ -72,13 +105,6 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error processing webhook:', error)
     
-    // Log error to webhook_logs
-    await supabaseClient.from('webhook_logs').insert({
-      error_message: error.message,
-      stack_trace: error.stack,
-      timestamp: new Date().toISOString()
-    })
-
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
