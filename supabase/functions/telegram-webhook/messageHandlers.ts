@@ -10,11 +10,12 @@ export async function handleMessage(
   const { logger } = context;
   const message = payload.message || payload.channel_post;
   
-  logger.info('📨 Processing new message', { 
+  logger.info('📨 Processing message', { 
     messageId: message?.message_id,
     chatId: message?.chat?.id,
     hasPhoto: !!message?.photo,
     hasVideo: !!message?.video,
+    isForwarded: !!message?.forward_from_chat,
     hasCaption: !!message?.caption,
     mediaGroupId: message?.media_group_id
   });
@@ -27,7 +28,7 @@ export async function handleMessage(
   try {
     if (message.photo || message.video || message.document) {
       logger.info('🖼️ Handling media message');
-      return await handleMediaMessage(message, context);
+      return await handleMediaMessage(message, payload, context);
     } else {
       logger.info('📝 Handling text message');
       return await handleTextMessage(message, context);
@@ -40,6 +41,7 @@ export async function handleMessage(
 
 async function handleMediaMessage(
   message: TelegramMessage,
+  payload: TelegramWebhookPayload,
   context: MessageHandlerContext
 ): Promise<ProcessedMessageResult> {
   const { logger, supabaseClient, botToken } = context;
@@ -53,11 +55,16 @@ async function handleMediaMessage(
   logger.info('📸 Media info extracted', mediaInfo);
 
   try {
-    // Always download media from Telegram
-    logger.info('⬇️ Downloading media from Telegram', { fileId: mediaInfo.file_id });
+    // Always download media from Telegram, regardless if it's new or forwarded
+    logger.info('⬇️ Downloading media from Telegram', { 
+      fileId: mediaInfo.file_id,
+      fileUniqueId: mediaInfo.file_unique_id,
+      isForwarded: !!message.forward_from_chat 
+    });
+    
     const fileData = await downloadMedia(mediaInfo.file_id, botToken, logger);
     
-    // Check for existing media
+    // Check for existing media by file_unique_id
     const { data: existingMedia } = await supabaseClient
       .from('messages')
       .select('*')
@@ -70,29 +77,29 @@ async function handleMediaMessage(
         fileUniqueId: mediaInfo.file_unique_id 
       });
       
-      // Delete existing file from storage
+      // Always delete and re-upload the file
       await supabaseClient
         .storage
         .from('telegram-media')
-        .remove([existingMedia.storage_path]);
+        .remove([`${mediaInfo.file_unique_id}.${mediaInfo.mime_type.split('/')[1]}`]);
       
       logger.info('🗑️ Deleted existing file from storage');
     }
 
     // Always upload new media
     logger.info('⬆️ Uploading media to storage', { 
-      storagePath: mediaInfo.storage_path,
+      fileUniqueId: mediaInfo.file_unique_id,
       mimeType: mediaInfo.mime_type 
     });
     
     await uploadMediaToStorage(
       fileData,
-      mediaInfo.storage_path,
+      `${mediaInfo.file_unique_id}.${mediaInfo.mime_type.split('/')[1]}`,
       mediaInfo.mime_type,
       context
     );
 
-    // Insert or update message record
+    // Prepare message data
     const messageData = {
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
@@ -102,7 +109,6 @@ async function handleMediaMessage(
       caption: message.caption || '',
       file_id: mediaInfo.file_id,
       file_unique_id: mediaInfo.file_unique_id,
-      storage_path: mediaInfo.storage_path,
       mime_type: mediaInfo.mime_type,
       file_size: mediaInfo.file_size,
       width: mediaInfo.width,
@@ -111,9 +117,12 @@ async function handleMediaMessage(
       processing_state: message.caption ? 'pending' : 'initialized',
       telegram_data: payload,
       correlation_id: context.correlationId,
-      // public_url will be set by trigger when analyzed_content is set
-      public_url: null,
-      analyzed_content: null
+      // Forward-specific fields
+      forward_from_chat_id: message.forward_from_chat?.id,
+      forward_from_message_id: message.forward_from_message_id,
+      forward_date: message.forward_date ? new Date(message.forward_date * 1000).toISOString() : null,
+      // public_url will be set by trigger when file_unique_id is set
+      public_url: null
     };
 
     let result;
