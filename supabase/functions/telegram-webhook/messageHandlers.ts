@@ -1,9 +1,13 @@
-import { SupabaseClient } from '@supabase/supabase-js';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { TelegramMessage, WebhookResponse, OtherMessageData, TelegramChatType, TelegramOtherMessageType, MessageData, ChatInfo, MediaInfo, TelegramUpdate } from './types';
 import { getLogger } from './logger';
 import { downloadMedia } from './mediaUtils';
 import { prepareMediaGroupForAnalysis, triggerAnalysis } from './dbOperations';
-
+export const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 function determineMessageType(message: TelegramMessage): TelegramOtherMessageType {
   if (message.text?.startsWith('/')) return 'command';
   if (message.text) return 'text';
