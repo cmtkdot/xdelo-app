@@ -1633,6 +1633,7 @@ export type Database = {
           error_message: string | null
           id: string
           is_edited: boolean
+          is_forward: string | null
           message_text: string | null
           message_type: string
           message_url: string | null
@@ -1663,6 +1664,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           is_edited?: boolean
+          is_forward?: string | null
           message_text?: string | null
           message_type: string
           message_url?: string | null
@@ -1693,6 +1695,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           is_edited?: boolean
+          is_forward?: string | null
           message_text?: string | null
           message_type?: string
           message_url?: string | null

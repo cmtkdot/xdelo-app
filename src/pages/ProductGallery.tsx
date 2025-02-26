@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -42,17 +41,16 @@ const ProductGallery = () => {
           table: 'messages'
         },
         async (payload: RealtimePostgresChangesPayload<Message>) => {
-          // Log the sync operation
-          const newMessage = payload.new;
-          // Ensure we have a valid message with required fields
-          if (newMessage && newMessage.file_unique_id) {
+          const messageData = payload.new as Message;
+          // Only proceed if we have valid message data with file_unique_id
+          if (messageData?.file_unique_id && messageData?.id) {
             try {
-              await logMessageOperation('sync', newMessage.id, {
+              await logMessageOperation('sync', messageData.id, {
                 event: payload.eventType,
                 table: 'messages',
-                chat_id: newMessage.chat_id,
-                media_group_id: newMessage.media_group_id,
-                file_unique_id: newMessage.file_unique_id // Add this for better tracking
+                file_unique_id: messageData.file_unique_id,
+                chat_id: messageData.chat_id,
+                media_group_id: messageData.media_group_id
               });
             } catch (error) {
               console.error('Error logging sync:', error);
