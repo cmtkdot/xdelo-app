@@ -2,6 +2,7 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { logMessageOperation } from "./logger.ts";
+import { downloadMedia, uploadMediaToStorage, extractMediaInfo } from "./mediaUtils.ts";
 
 interface MessageData {
   message_id: number;
@@ -23,88 +24,60 @@ interface MessageData {
   };
 }
 
+async function handleMediaMessage(
+  supabase: SupabaseClient,
+  messageData: MessageData,
+  botToken: string,
+  correlationId: string
+) {
+  const mediaInfo = extractMediaInfo(messageData);
+  
+  if (!mediaInfo) {
+    await logMessageOperation('skip', correlationId, {
+      message: 'No media found in message',
+      telegram_message_id: messageData.message_id
+    });
+    return null;
+  }
+
+  try {
+    const mediaBuffer = await downloadMedia(mediaInfo.file_id, botToken, correlationId);
+    const publicUrl = await uploadMediaToStorage(
+      mediaBuffer,
+      mediaInfo.storage_path,
+      mediaInfo.mime_type,
+      supabase,
+      correlationId
+    );
+
+    return {
+      ...mediaInfo,
+      public_url: publicUrl
+    };
+  } catch (error) {
+    await logMessageOperation('error', correlationId, {
+      message: 'Error handling media message',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      telegram_message_id: messageData.message_id
+    });
+    throw error;
+  }
+}
+
 export const handleMessage = async (
   supabase: SupabaseClient,
   messageData: MessageData,
+  botToken: string,
   correlationId: string
 ) => {
   try {
     const { message_id, chat, media_group_id, caption } = messageData;
-    const media = messageData.photo?.[messageData.photo.length - 1] || messageData.video;
 
-    // If there's no media in an edited message, just update caption
-    if (!media && messageData.edit_date) {
-      await logMessageOperation('edit', correlationId, {
-        message: 'Edited message without media, updating caption only',
-        telegram_message_id: message_id,
-        chat_id: chat.id
-      });
-
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          caption,
-          is_edited: true,
-          edit_date: new Date().toISOString(),
-          processing_state: 'pending'
-        })
-        .eq('telegram_message_id', message_id)
-        .eq('chat_id', chat.id);
-
-      if (updateError) {
-        console.error('Error updating caption:', updateError);
-      }
-      return;
-    }
-
-    // Handle cases without media
-    if (!media) {
-      await logMessageOperation('skip', correlationId, {
-        message: 'Message contains no media, skipping',
-        telegram_message_id: message_id
-      });
-      return;
-    }
-
-    // Check for existing message with same file_unique_id
-    const { data: existingMessage } = await supabase
-      .from('messages')
-      .select('id, telegram_message_id, chat_id, file_unique_id, analyzed_content')
-      .eq('file_unique_id', media.file_unique_id)
-      .maybeSingle();
-
-    // If message exists but is marked as deleted, allow re-upload
-    if (existingMessage?.id) {
-      const { data: deletedCheck } = await supabase
-        .from('messages')
-        .select('deleted_from_telegram')
-        .eq('id', existingMessage.id)
-        .single();
-
-      if (deletedCheck?.deleted_from_telegram) {
-        await logMessageOperation('reupload', correlationId, {
-          message: 'Re-uploading previously deleted message',
-          existing_message_id: existingMessage.id
-        });
-        
-        // Update the existing record instead of creating new
-        const { error: updateError } = await supabase
-          .from('messages')
-          .update({
-            deleted_from_telegram: false,
-            caption,
-            telegram_message_id: message_id,
-            chat_id: chat.id,
-            processing_state: 'pending',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingMessage.id);
-
-        if (updateError) {
-          throw updateError;
-        }
-        return;
-      }
+    // Handle media upload first
+    const mediaResult = await handleMediaMessage(supabase, messageData, botToken, correlationId);
+    
+    if (!mediaResult) {
+      return; // Skip if no media
     }
 
     // Prepare message data
@@ -115,12 +88,13 @@ export const handleMessage = async (
       chat_title: chat.title,
       media_group_id,
       caption,
-      file_id: media.file_id,
-      file_unique_id: media.file_unique_id,
-      width: media.width,
-      height: media.height,
-      duration: 'duration' in media ? media.duration : null,
-      mime_type: 'mime_type' in media ? media.mime_type : 'image/jpeg',
+      file_id: mediaResult.file_id,
+      file_unique_id: mediaResult.file_unique_id,
+      width: mediaResult.width,
+      height: mediaResult.height,
+      duration: mediaResult.duration,
+      mime_type: mediaResult.mime_type,
+      public_url: mediaResult.public_url,
       processing_state: 'initialized',
       correlation_id: correlationId,
       message_url: `https://t.me/c/${chat.id.toString().slice(4)}/${message_id}`
@@ -132,15 +106,11 @@ export const handleMessage = async (
       .insert([messageInsert]);
 
     if (insertError) {
-      // If duplicate, log and continue
-      if (insertError.code === '23505') {
-        await logMessageOperation('duplicate', correlationId, {
-          message: 'Duplicate message detected, skipping',
-          telegram_message_id: message_id,
-          file_unique_id: media.file_unique_id
-        });
-        return;
-      }
+      await logMessageOperation('error', correlationId, {
+        message: 'Error inserting message',
+        error: insertError.message,
+        telegram_message_id: message_id
+      });
       throw insertError;
     }
 

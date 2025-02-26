@@ -1,5 +1,6 @@
 
-import { MessageHandlerContext } from "./types.ts";
+import { SupabaseClient } from "@supabase/supabase-js";
+import { logMessageOperation } from "./logger.ts";
 
 export interface MediaInfo {
   file_id: string;
@@ -12,8 +13,15 @@ export interface MediaInfo {
   storage_path: string;
 }
 
-export async function getFileUrl(fileId: string, botToken: string, logger: MessageHandlerContext['logger']): Promise<string> {
-  logger.info('🔍 Getting file URL from Telegram', { fileId });
+export async function getFileUrl(
+  fileId: string, 
+  botToken: string, 
+  correlationId: string
+): Promise<string> {
+  await logMessageOperation('info', correlationId, {
+    message: '🔍 Getting file URL from Telegram',
+    fileId
+  });
   
   const response = await fetch(
     `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`
@@ -21,28 +29,50 @@ export async function getFileUrl(fileId: string, botToken: string, logger: Messa
   const data = await response.json();
   
   if (!data.ok) {
-    logger.error('Failed to get file path from Telegram', { fileId, error: data });
+    await logMessageOperation('error', correlationId, {
+      message: 'Failed to get file path from Telegram',
+      fileId,
+      error: data
+    });
     throw new Error('Failed to get file path from Telegram');
   }
 
   const fileUrl = `https://api.telegram.org/file/bot${botToken}/${data.result.file_path}`;
-  logger.info('✅ Got file URL from Telegram', { fileUrl });
+  await logMessageOperation('info', correlationId, {
+    message: '✅ Got file URL from Telegram',
+    fileUrl
+  });
   return fileUrl;
 }
 
-export async function downloadMedia(fileId: string, botToken: string, logger: MessageHandlerContext['logger']): Promise<ArrayBuffer> {
-  logger.info('📥 Starting media download from Telegram', { fileId });
+export async function downloadMedia(
+  fileId: string, 
+  botToken: string, 
+  correlationId: string
+): Promise<ArrayBuffer> {
+  await logMessageOperation('info', correlationId, {
+    message: '📥 Starting media download from Telegram',
+    fileId
+  });
   
-  const fileUrl = await getFileUrl(fileId, botToken, logger);
+  const fileUrl = await getFileUrl(fileId, botToken, correlationId);
   const response = await fetch(fileUrl);
   
   if (!response.ok) {
-    logger.error('Failed to download media from Telegram', { fileId, status: response.status });
+    await logMessageOperation('error', correlationId, {
+      message: 'Failed to download media from Telegram',
+      fileId,
+      status: response.status
+    });
     throw new Error('Failed to download media from Telegram');
   }
 
   const buffer = await response.arrayBuffer();
-  logger.info('✅ Successfully downloaded media from Telegram', { fileId, size: buffer.byteLength });
+  await logMessageOperation('info', correlationId, {
+    message: '✅ Successfully downloaded media from Telegram',
+    fileId,
+    size: buffer.byteLength
+  });
   return buffer;
 }
 
@@ -50,10 +80,14 @@ export async function uploadMediaToStorage(
   mediaBuffer: ArrayBuffer,
   storagePath: string,
   mimeType: string,
-  context: MessageHandlerContext
+  supabaseClient: SupabaseClient,
+  correlationId: string
 ): Promise<string> {
-  const { logger, supabaseClient } = context;
-  logger.info('📤 Starting media upload to storage', { storagePath, mimeType });
+  await logMessageOperation('info', correlationId, {
+    message: '📤 Starting media upload to storage',
+    storagePath,
+    mimeType
+  });
 
   try {
     const { error: uploadError } = await supabaseClient
@@ -65,7 +99,10 @@ export async function uploadMediaToStorage(
       });
 
     if (uploadError) {
-      logger.error('Failed to upload to storage', { error: uploadError });
+      await logMessageOperation('error', correlationId, {
+        message: 'Failed to upload to storage',
+        error: uploadError
+      });
       throw uploadError;
     }
 
@@ -74,11 +111,17 @@ export async function uploadMediaToStorage(
       .from('telegram-media')
       .getPublicUrl(storagePath);
 
-    logger.info('✅ Successfully uploaded media to storage', { publicUrl });
+    await logMessageOperation('info', correlationId, {
+      message: '✅ Successfully uploaded media to storage',
+      publicUrl
+    });
     return publicUrl;
 
   } catch (error) {
-    logger.error('❌ Error in storage upload', { error });
+    await logMessageOperation('error', correlationId, {
+      message: '❌ Error in storage upload',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
     throw error;
   }
 }
