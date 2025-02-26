@@ -1,7 +1,15 @@
 
 import { supabase } from '../_shared/supabase.ts';
 import { getMediaInfo } from './mediaUtils.ts';
-import { xdelo_log_event } from '../_shared/logger.ts';
+import { xdelo_log_event } from './logger.ts';
+import { corsHeaders } from '../_shared/cors.ts';
+
+interface MessageContext {
+  isChannelPost: boolean;
+  isForwarded: boolean;
+  correlationId: string;
+  isEdit: boolean;
+}
 
 export async function handleMediaMessage(message: any, correlationId: string) {
   try {
@@ -73,7 +81,7 @@ export async function handleMediaMessage(message: any, correlationId: string) {
     // Log the insert event
     await xdelo_log_event({
       event_type: 'message_created',
-      entity_id: null, // New message, ID not yet known
+      entity_id: null,
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
       previous_state: null,
@@ -106,7 +114,7 @@ export async function handleMediaMessage(message: any, correlationId: string) {
 
 export const handleOtherMessage = async (message: any, context: MessageContext) => {
   try {
-    const { isChannelPost, isForwarded, correlationId, isEdit } = context
+    const { isChannelPost, isForwarded, correlationId, isEdit } = context;
 
     // Store in other_messages table
     const { error } = await supabase
@@ -122,21 +130,21 @@ export const handleOtherMessage = async (message: any, context: MessageContext) 
         message_text: message.text,
         processing_state: 'completed',
         created_at: new Date().toISOString()
-      }])
+      }]);
 
-    if (error) throw error
+    if (error) throw error;
 
-    console.log('Webhook processing completed successfully')
+    console.log('Webhook processing completed successfully');
 
     return new Response(
       JSON.stringify({ success: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    );
   } catch (error) {
-    console.error('Error handling other message:', error)
+    console.error('Error handling other message:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    )
+    );
   }
-}
+};

@@ -40,7 +40,7 @@ const ProductGallery = () => {
           schema: 'public',
           table: 'messages'
         },
-        async (payload) => {
+        async (payload: { new: Message | null; eventType: string }) => {
           // Log the sync operation
           if (payload.new) {
             try {
