@@ -1,107 +1,206 @@
 
-import { SupabaseClient } from "@supabase/supabase-js";
-import { TelegramMessage } from "./types.ts";
-import { FunctionInvocationContext } from "./types.ts";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { Message, ProcessingState } from "../_shared/types.ts";
+import { Database } from "../_shared/types.ts";
 
-export async function insertMediaMessage(
-  supabase: SupabaseClient,
-  message: TelegramMessage,
-  publicUrl: string,
-  mediaInfo: any,
-  context: FunctionInvocationContext
-) {
-  const { data, error } = await supabase
-    .from('messages')
-    .insert({
-      telegram_message_id: message.message_id,
-      chat_id: message.chat.id,
-      chat_type: message.chat.type,
-      chat_title: message.chat.title,
-      media_group_id: message.media_group_id,
-      caption: message.caption,
-      file_id: mediaInfo.file_id,
-      file_unique_id: mediaInfo.file_unique_id,
-      public_url: publicUrl,
-      mime_type: mediaInfo.mime_type,
-      file_size: mediaInfo.file_size,
-      width: mediaInfo.width,
-      height: mediaInfo.height,
-      duration: mediaInfo.duration,
-      processing_state: message.caption ? 'pending' : 'initialized',
-      correlation_id: context.correlationId
-    })
-    .select()
-    .single();
-
-  if (error) {
-    context.logger.error('Error inserting media message:', error);
-    throw error;
-  }
-
-  return data;
+interface MessageInput {
+  telegram_message_id: number;
+  chat_id: number;
+  chat_type: string;
+  chat_title: string;
+  media_group_id?: string;
+  caption?: string;
+  file_id: string;
+  file_unique_id: string;
+  mime_type: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  telegram_data: any;
+  forward_info?: any;
+  is_edited_channel_post?: boolean;
+  edit_date?: string;
+  correlation_id: string;
 }
 
-export async function insertTextMessage(
-  supabase: SupabaseClient,
-  message: TelegramMessage,
-  context: FunctionInvocationContext
-) {
-  const { data, error } = await supabase
-    .from('other_messages')
-    .insert({
-      telegram_message_id: message.message_id,
-      chat_id: message.chat.id,
-      chat_type: message.chat.type,
-      chat_title: message.chat.title,
-      message_text: message.text,
-      processing_state: 'initialized',
-      correlation_id: context.correlationId
-    })
-    .select()
-    .single();
+export async function createMessage(
+  supabase: SupabaseClient<Database>,
+  messageData: MessageInput,
+  logger: any
+): Promise<{ id: string } | null> {
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        ...messageData,
+        processing_state: 'pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select('id')
+      .single();
 
-  if (error) {
-    context.logger.error('Error inserting text message:', error);
+    if (error) throw error;
+
+    // Log the creation event
+    await logMessageEvent(supabase, 'message_created', {
+      entity_id: data.id,
+      telegram_message_id: messageData.telegram_message_id,
+      chat_id: messageData.chat_id,
+      new_state: messageData,
+      metadata: {
+        media_group_id: messageData.media_group_id,
+        is_forward: !!messageData.forward_info,
+        correlation_id: messageData.correlation_id
+      }
+    });
+
+    return data;
+  } catch (error) {
+    logger.error('Error creating message:', error);
     throw error;
   }
-
-  return data;
 }
 
-export async function updateMessageGroupInfo(
-  supabase: SupabaseClient,
-  mediaGroupId: string,
-  context: FunctionInvocationContext
-) {
-  const { data: messages, error } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('media_group_id', mediaGroupId)
-    .order('created_at', { ascending: true });
+export async function updateMessage(
+  supabase: SupabaseClient<Database>,
+  chatId: number,
+  messageId: number,
+  updateData: Partial<Message>,
+  logger: any
+): Promise<void> {
+  try {
+    const { data: existingMessage } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('chat_id', chatId)
+      .eq('telegram_message_id', messageId)
+      .single();
 
-  if (error) {
-    context.logger.error('Error fetching media group messages:', error);
-    throw error;
-  }
+    if (!existingMessage) {
+      throw new Error('Message not found');
+    }
 
-  if (messages.length > 0) {
-    const firstMessage = messages[0];
-    const lastMessage = messages[messages.length - 1];
+    // Store current analyzed_content in old_analyzed_content array if it exists
+    let old_analyzed_content = existingMessage.old_analyzed_content || [];
+    if (existingMessage.analyzed_content) {
+      old_analyzed_content = [...old_analyzed_content, existingMessage.analyzed_content];
+    }
 
-    // Update all messages in the group with group timing information
-    const { error: updateError } = await supabase
+    const { error } = await supabase
       .from('messages')
       .update({
-        group_first_message_time: firstMessage.created_at,
-        group_last_message_time: lastMessage.created_at
+        ...updateData,
+        old_analyzed_content,
+        updated_at: new Date().toISOString(),
+        edit_count: (existingMessage.edit_count || 0) + 1
       })
-      .eq('media_group_id', mediaGroupId);
+      .eq('chat_id', chatId)
+      .eq('telegram_message_id', messageId);
 
-    if (updateError) {
-      context.logger.error('Error updating media group info:', updateError);
-      throw updateError;
-    }
+    if (error) throw error;
+
+    // Log the update event
+    await logMessageEvent(supabase, 'message_updated', {
+      entity_id: existingMessage.id,
+      telegram_message_id: messageId,
+      chat_id: chatId,
+      previous_state: existingMessage,
+      new_state: updateData,
+      metadata: {
+        media_group_id: existingMessage.media_group_id,
+        is_edit: true,
+        correlation_id: updateData.correlation_id
+      }
+    });
+  } catch (error) {
+    logger.error('Error updating message:', error);
+    throw error;
   }
+}
 
-  return messages;
+export async function updateMessageProcessingState(
+  supabase: SupabaseClient<Database>,
+  messageId: string,
+  state: ProcessingState,
+  analyzedContent?: any,
+  error?: string,
+  logger?: any
+): Promise<void> {
+  try {
+    const updateData: any = {
+      processing_state: state,
+      updated_at: new Date().toISOString()
+    };
+
+    if (analyzedContent) {
+      updateData.analyzed_content = analyzedContent;
+      updateData.processing_completed_at = new Date().toISOString();
+    }
+
+    if (error) {
+      updateData.error_message = error;
+      updateData.last_error_at = new Date().toISOString();
+    }
+
+    const { data: existingMessage } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', messageId)
+      .single();
+
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update(updateData)
+      .eq('id', messageId);
+
+    if (updateError) throw updateError;
+
+    // Log the state change
+    await logMessageEvent(supabase, 'processing_state_changed', {
+      entity_id: messageId,
+      telegram_message_id: existingMessage?.telegram_message_id,
+      chat_id: existingMessage?.chat_id,
+      previous_state: { processing_state: existingMessage?.processing_state },
+      new_state: { processing_state: state, analyzed_content: analyzedContent },
+      metadata: {
+        error_message: error,
+        media_group_id: existingMessage?.media_group_id
+      }
+    });
+  } catch (error) {
+    logger?.error('Error updating message processing state:', error);
+    throw error;
+  }
+}
+
+async function logMessageEvent(
+  supabase: SupabaseClient<Database>,
+  eventType: string,
+  data: {
+    entity_id: string;
+    telegram_message_id?: number;
+    chat_id?: number;
+    previous_state?: any;
+    new_state?: any;
+    metadata?: any;
+    error_message?: string;
+  }
+): Promise<void> {
+  try {
+    await supabase.from('unified_audit_logs').insert({
+      event_type: eventType,
+      entity_id: data.entity_id,
+      telegram_message_id: data.telegram_message_id,
+      chat_id: data.chat_id,
+      previous_state: data.previous_state,
+      new_state: data.new_state,
+      metadata: data.metadata,
+      error_message: data.error_message
+    });
+  } catch (error) {
+    console.error('Error logging event:', error);
+    // Don't throw here to prevent logging errors from affecting main operations
+  }
 }

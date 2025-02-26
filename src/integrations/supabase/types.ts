@@ -1349,6 +1349,7 @@ export type Database = {
           created_at: string
           deleted_from_telegram: boolean | null
           duration: number | null
+          edit_count: number | null
           edit_date: string | null
           edit_history: Json | null
           edited_channel_post: boolean | null
@@ -1357,6 +1358,7 @@ export type Database = {
           file_size: number | null
           file_unique_id: string
           forward_date: string | null
+          forward_info: Json | null
           glide_row_id: string | null
           group_caption_synced: boolean | null
           group_first_message_time: string | null
@@ -1366,6 +1368,7 @@ export type Database = {
           id: string
           is_channel_post: string | null
           is_edited: boolean | null
+          is_edited_channel_post: boolean | null
           is_forwarded: string | null
           is_miscellaneous_item: boolean | null
           is_original_caption: boolean | null
@@ -1376,6 +1379,7 @@ export type Database = {
           message_url: string | null
           mime_type: string | null
           notes: string | null
+          old_analyzed_content: Json[] | null
           parsed_caption: string | null
           parsed_notes: string | null
           parsed_product_code: string | null
@@ -1418,6 +1422,7 @@ export type Database = {
           created_at?: string
           deleted_from_telegram?: boolean | null
           duration?: number | null
+          edit_count?: number | null
           edit_date?: string | null
           edit_history?: Json | null
           edited_channel_post?: boolean | null
@@ -1426,6 +1431,7 @@ export type Database = {
           file_size?: number | null
           file_unique_id: string
           forward_date?: string | null
+          forward_info?: Json | null
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
@@ -1435,6 +1441,7 @@ export type Database = {
           id?: string
           is_channel_post?: string | null
           is_edited?: boolean | null
+          is_edited_channel_post?: boolean | null
           is_forwarded?: string | null
           is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
@@ -1445,6 +1452,7 @@ export type Database = {
           message_url?: string | null
           mime_type?: string | null
           notes?: string | null
+          old_analyzed_content?: Json[] | null
           parsed_caption?: string | null
           parsed_notes?: string | null
           parsed_product_code?: string | null
@@ -1487,6 +1495,7 @@ export type Database = {
           created_at?: string
           deleted_from_telegram?: boolean | null
           duration?: number | null
+          edit_count?: number | null
           edit_date?: string | null
           edit_history?: Json | null
           edited_channel_post?: boolean | null
@@ -1495,6 +1504,7 @@ export type Database = {
           file_size?: number | null
           file_unique_id?: string
           forward_date?: string | null
+          forward_info?: Json | null
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
@@ -1504,6 +1514,7 @@ export type Database = {
           id?: string
           is_channel_post?: string | null
           is_edited?: boolean | null
+          is_edited_channel_post?: boolean | null
           is_forwarded?: string | null
           is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
@@ -1514,6 +1525,7 @@ export type Database = {
           message_url?: string | null
           mime_type?: string | null
           notes?: string | null
+          old_analyzed_content?: Json[] | null
           parsed_caption?: string | null
           parsed_notes?: string | null
           parsed_product_code?: string | null
