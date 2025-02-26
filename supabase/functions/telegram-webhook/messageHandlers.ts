@@ -16,7 +16,10 @@ interface HandlerContext {
 
 export async function handleMessage(update: any, context: HandlerContext) {
   const { supabaseClient, logger, correlationId } = context;
-  const message = update.message || update.channel_post;
+  
+  // Handle both regular messages, channel posts, and edited channel posts
+  const message = update.message || update.channel_post || update.edited_channel_post;
+  const isEdit = !!update.edited_channel_post;
 
   if (!message) {
     return { status: 'skipped', reason: 'no message content' };
@@ -24,8 +27,8 @@ export async function handleMessage(update: any, context: HandlerContext) {
 
   try {
     // Extract forwarding information
-    const forwardInfo = {
-      is_forwarded: !!message.forward_origin,
+    const forwardInfo = message.forward_origin || message.forward_from_chat ? {
+      is_forwarded: true,
       forward_origin_type: message.forward_origin?.type,
       forward_from_chat_id: message.forward_from_chat?.id,
       forward_from_chat_title: message.forward_from_chat?.title,
@@ -34,8 +37,8 @@ export async function handleMessage(update: any, context: HandlerContext) {
       forward_date: message.forward_date ? new Date(message.forward_date * 1000).toISOString() : null,
       original_chat_id: message.forward_origin?.chat?.id,
       original_chat_title: message.forward_origin?.chat?.title,
-      original_message_id: message.forward_origin?.message_id,
-    };
+      original_message_id: message.forward_origin?.message_id
+    } : null;
 
     // Handle media messages (photos, videos, etc.)
     if (message.photo || message.video) {
@@ -43,22 +46,7 @@ export async function handleMessage(update: any, context: HandlerContext) {
       const caption = message.caption;
       const mediaGroupId = message.media_group_id;
 
-      // If this is a forwarded message, try to get the original message's analyzed content
-      let originalAnalyzedContent = null;
-      if (forwardInfo.is_forwarded && forwardInfo.original_chat_id && forwardInfo.original_message_id) {
-        const { data: originalMessage } = await supabaseClient
-          .from('messages')
-          .select('analyzed_content')
-          .eq('chat_id', forwardInfo.original_chat_id)
-          .eq('telegram_message_id', forwardInfo.original_message_id)
-          .single();
-
-        if (originalMessage?.analyzed_content) {
-          originalAnalyzedContent = originalMessage.analyzed_content;
-        }
-      }
-
-      // Prepare the message data
+      // Base message data
       const messageData = {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
@@ -74,56 +62,62 @@ export async function handleMessage(update: any, context: HandlerContext) {
         height: media.height,
         duration: message.video?.duration,
         telegram_data: message,
-        processing_state: originalAnalyzedContent ? 'completed' as ProcessingState : 'pending' as ProcessingState,
+        processing_state: 'pending' as ProcessingState,
         correlation_id: correlationId,
-        // Forward-specific fields
-        ...forwardInfo,
-        // If we have the original analyzed content, use it
-        analyzed_content: originalAnalyzedContent,
-        processing_completed_at: originalAnalyzedContent ? new Date().toISOString() : null
+        forward_info: forwardInfo,
+        is_edited_channel_post: isEdit,
+        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : null
       };
 
-      logger.info('Inserting message with data:', { 
-        messageId: message.message_id, 
-        mediaGroupId, 
-        isForwarded: forwardInfo.is_forwarded,
-        hasOriginalContent: !!originalAnalyzedContent 
+      logger.info('Processing message:', {
+        messageId: message.message_id,
+        isEdit,
+        isForwarded: !!forwardInfo,
+        mediaGroupId
       });
 
-      const { error: insertError } = await supabaseClient
-        .from('messages')
-        .insert(messageData);
+      if (isEdit) {
+        // Update existing message
+        const { error: updateError } = await supabaseClient
+          .from('messages')
+          .update(messageData)
+          .eq('chat_id', message.chat.id)
+          .eq('telegram_message_id', message.message_id);
 
-      if (insertError) {
-        throw insertError;
+        if (updateError) throw updateError;
+      } else {
+        // Insert new message
+        const { error: insertError } = await supabaseClient
+          .from('messages')
+          .insert(messageData);
+
+        if (insertError) throw insertError;
       }
 
-      // If we don't have analyzed content and there's a caption, trigger analysis
-      if (!originalAnalyzedContent && caption) {
-        try {
-          await supabaseClient.functions.invoke('parse-caption-with-ai', {
-            body: { 
-              messageId: message.message_id,
-              caption: caption,
-              media_group_id: mediaGroupId,
-              is_forward: forwardInfo.is_forwarded
-            }
-          });
-        } catch (error) {
-          logger.error('Error triggering caption analysis:', error);
-        }
+      // Always trigger analysis for new or edited messages
+      try {
+        await supabaseClient.functions.invoke('parse-caption-with-ai', {
+          body: { 
+            messageId: message.message_id,
+            caption: caption,
+            media_group_id: mediaGroupId,
+            is_edit: isEdit,
+            is_forward: !!forwardInfo
+          }
+        });
+      } catch (error) {
+        logger.error('Error triggering caption analysis:', error);
       }
 
       return {
         status: 'success',
         message_id: message.message_id,
         media_group_id: mediaGroupId,
-        is_forwarded: forwardInfo.is_forwarded,
-        has_original_content: !!originalAnalyzedContent
+        is_edit: isEdit,
+        is_forwarded: !!forwardInfo
       };
     }
 
-    // Handle non-media messages
     return { status: 'skipped', reason: 'not a media message' };
 
   } catch (error) {
