@@ -15,7 +15,6 @@ export async function handleMessage(
     chatId: message?.chat?.id,
     hasPhoto: !!message?.photo,
     hasVideo: !!message?.video,
-    hasDocument: !!message?.document,
     hasCaption: !!message?.caption,
     mediaGroupId: message?.media_group_id
   });
@@ -43,7 +42,7 @@ async function handleMediaMessage(
   message: TelegramMessage,
   context: MessageHandlerContext
 ): Promise<ProcessedMessageResult> {
-  const { logger } = context;
+  const { logger, supabaseClient, botToken } = context;
   
   const mediaInfo = extractMediaInfo(message);
   if (!mediaInfo) {
@@ -54,76 +53,108 @@ async function handleMediaMessage(
   logger.info('📸 Media info extracted', mediaInfo);
 
   try {
-    const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
-    if (!botToken) {
-      throw new Error('TELEGRAM_BOT_TOKEN not found');
-    }
-
-    // Check if media already exists
-    const { data: existingMedia } = await context.supabaseClient
+    // Always download media from Telegram
+    logger.info('⬇️ Downloading media from Telegram', { fileId: mediaInfo.file_id });
+    const fileData = await downloadMedia(mediaInfo.file_id, botToken, logger);
+    
+    // Check for existing media
+    const { data: existingMedia } = await supabaseClient
       .from('messages')
       .select('*')
       .eq('file_unique_id', mediaInfo.file_unique_id)
       .single();
 
     if (existingMedia) {
-      logger.info('♻️ Media already exists in storage', { 
-        messageId: existingMedia.id,
+      logger.info('🔄 Found existing media, will update', { 
+        existingId: existingMedia.id,
         fileUniqueId: mediaInfo.file_unique_id 
       });
-      return { success: true, messageId: existingMedia.id };
+      
+      // Delete existing file from storage
+      await supabaseClient
+        .storage
+        .from('telegram-media')
+        .remove([existingMedia.storage_path]);
+      
+      logger.info('🗑️ Deleted existing file from storage');
     }
 
-    logger.info('⬇️ Downloading media from Telegram', { fileId: mediaInfo.file_id });
-    const fileData = await downloadMedia(mediaInfo.file_id, botToken, logger);
-    
+    // Always upload new media
     logger.info('⬆️ Uploading media to storage', { 
       storagePath: mediaInfo.storage_path,
       mimeType: mediaInfo.mime_type 
     });
     
-    const publicUrl = await uploadMediaToStorage(
+    await uploadMediaToStorage(
       fileData,
       mediaInfo.storage_path,
       mediaInfo.mime_type,
       context
     );
 
-    logger.info('💾 Saving message to database');
-    const { data, error } = await context.supabaseClient
-      .from('messages')
-      .insert({
-        telegram_message_id: message.message_id,
-        chat_id: message.chat.id,
-        chat_type: message.chat.type,
-        chat_title: message.chat.title,
-        media_group_id: message.media_group_id,
-        caption: message.caption,
-        file_id: mediaInfo.file_id,
-        file_unique_id: mediaInfo.file_unique_id,
-        public_url: publicUrl,
-        mime_type: mediaInfo.mime_type,
-        file_size: mediaInfo.file_size,
-        width: mediaInfo.width,
-        height: mediaInfo.height,
-        duration: mediaInfo.duration,
-        processing_state: message.caption ? 'pending' : 'initialized',
-        correlation_id: context.correlationId
-      })
-      .select()
-      .single();
+    // Insert or update message record
+    const messageData = {
+      telegram_message_id: message.message_id,
+      chat_id: message.chat.id,
+      chat_type: message.chat.type,
+      chat_title: message.chat.title,
+      media_group_id: message.media_group_id,
+      caption: message.caption || '',
+      file_id: mediaInfo.file_id,
+      file_unique_id: mediaInfo.file_unique_id,
+      storage_path: mediaInfo.storage_path,
+      mime_type: mediaInfo.mime_type,
+      file_size: mediaInfo.file_size,
+      width: mediaInfo.width,
+      height: mediaInfo.height,
+      duration: mediaInfo.duration,
+      processing_state: message.caption ? 'pending' : 'initialized',
+      telegram_data: payload,
+      correlation_id: context.correlationId,
+      // public_url will be set by trigger when analyzed_content is set
+      public_url: null,
+      analyzed_content: null
+    };
 
-    if (error) {
-      logger.error('Failed to insert message', error);
-      throw error;
+    let result;
+    if (existingMedia) {
+      const { data, error } = await supabaseClient
+        .from('messages')
+        .update(messageData)
+        .eq('id', existingMedia.id)
+        .select()
+        .single();
+        
+      if (error) throw error;
+      result = data;
+      
+      logger.info('✅ Updated existing message record', { messageId: result.id });
+    } else {
+      const { data, error } = await supabaseClient
+        .from('messages')
+        .insert(messageData)
+        .select()
+        .single();
+        
+      if (error) throw error;
+      result = data;
+      
+      logger.info('✅ Created new message record', { messageId: result.id });
     }
 
-    logger.info('✅ Message processed successfully', { 
-      messageId: data.id,
-      publicUrl 
-    });
+    // If there's a caption, trigger analysis
+    if (message.caption) {
+      logger.info('🔄 Triggering caption analysis', { messageId: result.id });
+      await supabaseClient.functions.invoke('parse-caption-with-ai', {
+        body: { 
+          messageId: result.id,
+          caption: message.caption,
+          correlationId: context.correlationId
+        }
+      });
+    }
 
-    return { success: true, messageId: data.id };
+    return { success: true, messageId: result.id };
   } catch (error) {
     logger.error('Error handling media message:', error);
     return { success: false, error: error.message };
