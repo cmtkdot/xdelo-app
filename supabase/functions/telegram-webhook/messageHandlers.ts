@@ -1,3 +1,4 @@
+
 import { supabase } from '../_shared/supabase.ts';
 import { getMediaInfo } from './mediaUtils.ts';
 import { xdelo_log_event } from '../_shared/logger.ts';
@@ -6,74 +7,90 @@ export async function handleMediaMessage(message: any, correlationId: string) {
   try {
     const mediaInfo = await getMediaInfo(message);
     
-    // Try to insert as new message first
-    try {
-      const { error } = await supabase
+    // First check if message with this file_unique_id exists
+    const { data: existingMessage } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('file_unique_id', mediaInfo.file_unique_id)
+      .eq('chat_id', message.chat.id)
+      .eq('deleted_from_telegram', false)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .single();
+
+    if (existingMessage) {
+      // Message exists - handle as an update
+      const { error: updateError } = await supabase
         .from('messages')
-        .insert([{
-          telegram_message_id: message.message_id,
-          chat_id: message.chat.id,
-          chat_type: message.chat.type,
-          chat_title: message.chat.title,
+        .update({
           caption: message.caption,
-          media_group_id: message.media_group_id,
-          ...mediaInfo,
           correlation_id: correlationId,
-          processing_state: message.caption ? 'pending' : 'initialized'
-        }]);
+          updated_at: new Date().toISOString(),
+          processing_state: message.caption ? 'pending' : existingMessage.processing_state,
+          analyzed_content: message.caption ? null : existingMessage.analyzed_content,
+          group_caption_synced: message.caption ? false : existingMessage.group_caption_synced
+        })
+        .eq('id', existingMessage.id);
 
-      // If no error, message was inserted normally
-      if (!error) return;
+      if (updateError) throw updateError;
 
-      // If we get a uniqueness violation (23505)
-      if (error.code === '23505') {
-        // Get the original message
-        const { data: originalMessage } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('file_unique_id', mediaInfo.file_unique_id)
-          .eq('deleted_from_telegram', false)
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .single();
+      // Log the update event
+      await xdelo_log_event({
+        event_type: 'message_updated',
+        entity_id: existingMessage.id,
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        previous_state: { caption: existingMessage.caption },
+        new_state: { caption: message.caption },
+        metadata: {
+          update_type: 'caption_update',
+          file_unique_id: mediaInfo.file_unique_id,
+          media_group_id: message.media_group_id
+        },
+        correlation_id: correlationId
+      });
 
-        if (!originalMessage) {
-          throw new Error('Original message not found for forward');
-        }
-
-        // Insert as a forward
-        const { error: forwardError } = await supabase
-          .from('messages')
-          .insert([{
-            telegram_message_id: message.message_id,
-            chat_id: message.chat.id,
-            chat_type: message.chat.type,
-            chat_title: message.chat.title,
-            caption: message.caption,
-            media_group_id: message.media_group_id,
-            ...mediaInfo,
-            correlation_id: correlationId,
-            is_forward: true,
-            original_message_id: originalMessage.id,
-            forward_from: message.forward_from,
-            forward_from_chat: message.forward_from_chat,
-            processing_state: 'pending'
-          }]);
-
-        if (forwardError) throw forwardError;
-      } else {
-        throw error;
-      }
-    } catch (error) {
-      console.error('Error handling media message:', error);
-      throw error;
+      return;
     }
+
+    // No existing message - proceed with insert
+    const { error: insertError } = await supabase
+      .from('messages')
+      .insert([{
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        chat_type: message.chat.type,
+        chat_title: message.chat.title,
+        caption: message.caption,
+        media_group_id: message.media_group_id,
+        ...mediaInfo,
+        correlation_id: correlationId,
+        processing_state: message.caption ? 'pending' : 'initialized'
+      }]);
+
+    if (insertError) throw insertError;
+
+    // Log the insert event
+    await xdelo_log_event({
+      event_type: 'message_created',
+      entity_id: null, // New message, ID not yet known
+      telegram_message_id: message.message_id,
+      chat_id: message.chat.id,
+      previous_state: null,
+      new_state: { caption: message.caption },
+      metadata: {
+        file_unique_id: mediaInfo.file_unique_id,
+        media_group_id: message.media_group_id
+      },
+      correlation_id: correlationId
+    });
+
   } catch (error) {
     console.error('Error handling media message:', error);
     // Log error event
     await xdelo_log_event({
       event_type: 'message_processing_error',
-      entity_id: message.message_id,
+      entity_id: null,
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
       error_message: error.message,
