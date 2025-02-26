@@ -4,3 +4,27 @@ project_id = "xjhhehxcxkiumnwbirel"
 [global.env]
 TELEGRAM_BOT_TOKEN = "env(TELEGRAM_BOT_TOKEN)"
 OPENAI_API_KEY = "env(OPENAI_API_KEY)"
+
+[[edge_functions]]
+name = "telegram-webhook"
+verify_jwt = false
+
+[[edge_functions]]
+name = "analyze-with-ai"
+verify_jwt = false
+
+[[edge_functions]]
+name = "parse-caption-with-ai"
+verify_jwt = false
+
+[[edge_functions]]
+name = "process-audio-upload"
+verify_jwt = false
+
+[[edge_functions]]
+name = "delete-telegram-message"
+verify_jwt = false
+
+[[edge_functions]]
+name = "product-matching"
+verify_jwt = false
