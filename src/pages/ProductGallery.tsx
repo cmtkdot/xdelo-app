@@ -11,6 +11,7 @@ import ProductFilters from "@/components/ProductGallery/ProductFilters";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
 import { useVendors } from "@/hooks/useVendors";
 import { logMessageOperation } from "@/lib/syncLogger";
+import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
 const ITEMS_PER_PAGE = 12;
 
@@ -26,21 +27,21 @@ const ProductGallery = () => {
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: mediaGroups = {}, isLoading } = useMediaGroups(); // Add isLoading state
+  const { data: mediaGroups = {}, isLoading } = useMediaGroups();
   const { data: vendors = [] } = useVendors();
 
   // Set up realtime subscription
   useEffect(() => {
     const channel = supabase
       .channel('media-groups')
-      .on(
+      .on<Message>(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'messages'
         },
-        async (payload: { new: Message | null; eventType: string }) => {
+        async (payload: RealtimePostgresChangesPayload<Message>) => {
           // Log the sync operation
           if (payload.new) {
             try {
