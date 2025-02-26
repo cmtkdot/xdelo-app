@@ -1369,6 +1369,8 @@ export type Database = {
           is_channel_post: string | null
           is_edited: boolean | null
           is_edited_channel_post: boolean | null
+          is_forward: string | null
+          is_forward_from: string | null
           is_forwarded: string | null
           is_forwarded_from: string | null
           is_miscellaneous_item: boolean | null
@@ -1443,6 +1445,8 @@ export type Database = {
           is_channel_post?: string | null
           is_edited?: boolean | null
           is_edited_channel_post?: boolean | null
+          is_forward?: string | null
+          is_forward_from?: string | null
           is_forwarded?: string | null
           is_forwarded_from?: string | null
           is_miscellaneous_item?: boolean | null
@@ -1517,6 +1521,8 @@ export type Database = {
           is_channel_post?: string | null
           is_edited?: boolean | null
           is_edited_channel_post?: boolean | null
+          is_forward?: string | null
+          is_forward_from?: string | null
           is_forwarded?: string | null
           is_forwarded_from?: string | null
           is_miscellaneous_item?: boolean | null
@@ -2328,6 +2334,7 @@ export type Database = {
         | "webhook_received"
         | "media_group_synced"
         | "message_edited"
+        | "media_group_history_synced"
       client_type: "Vendor" | "Customer" | "Both"
       processing_state_type:
         | "initialized"
