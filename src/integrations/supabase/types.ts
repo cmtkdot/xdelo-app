@@ -2306,6 +2306,7 @@ export type Database = {
         | "message_analyzed"
         | "webhook_received"
         | "media_group_synced"
+        | "message_edited"
       client_type: "Vendor" | "Customer" | "Both"
       processing_state_type:
         | "initialized"
