@@ -4,6 +4,9 @@ import { AnalyzedContent, ProcessingState } from "../_shared/types.ts";
 import { validateAnalyzedContent } from "../_shared/validators.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
+// 1) Import the logger from your telegram-webhook folder:
+import { getLogger } from "../telegram-webhook/logger.ts";  // <-- Adjust path as needed
+
 type LogData = Record<string, string | number | boolean | null | undefined | string[] | number[] | Record<string, unknown>>;
 
 interface Logger {
@@ -43,30 +46,6 @@ Expected Output: {
   "purchase_date": "2023-12-05",
   "quantity": 2
 }`;
-
-// Logger function
-function getLogger(correlationId: string): Logger {
-  return {
-    info: (message: string, data?: LogData) => {
-      console.log(`ℹ️ ${message}`, {
-        correlation_id: correlationId,
-        ...data
-      });
-    },
-    error: (message: string, data?: LogData) => {
-      console.error(`❌ ${message}`, {
-        correlation_id: correlationId,
-        ...data
-      });
-    },
-    warn: (message: string, data?: LogData) => {
-      console.warn(`⚠️ ${message}`, {
-        correlation_id: correlationId,
-        ...data
-      });
-    }
-  };
-}
 
 // Quantity parser function
 function parseQuantity(caption: string): { value: number } | null {
@@ -278,21 +257,31 @@ serve(async (req) => {
   }
 
   let sourceMessageId: string | null = null;
-  // Use the correlation ID from the webhook if provided, or generate a new one
-  const correlationId = `caption-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  const logger = getLogger(correlationId);
 
   try {
+    // 2) Parse the request body
     const body = await req.json();
-    const { messageId, caption, media_group_id, correlation_id: webhookCorrelationId, is_edit, is_channel_post } = body;
-    
-    // Use the correlation ID from the webhook if provided
+
+    // 3) Use metadata?.correlationId or generate a new one
+    const correlationId = body.metadata?.correlationId || `log_${crypto.randomUUID()}`;
+
+    // 4) Extract other fields, including any webhookCorrelationId
+    const { 
+      messageId, 
+      caption, 
+      media_group_id, 
+      correlation_id: webhookCorrelationId, 
+      is_edit, 
+      is_channel_post 
+    } = body;
+
+    // 5) Decide final correlation ID and create logger
     const requestCorrelationId = webhookCorrelationId || correlationId;
-    const requestLogger = getLogger(requestCorrelationId);
-    
-    sourceMessageId = messageId; // Store messageId in wider scope for error handling
-    
-    requestLogger.info('Received caption analysis request', { 
+    const logger = getLogger(requestCorrelationId);
+
+    sourceMessageId = messageId; // For error handling fallback
+
+    logger.info('Received caption analysis request', { 
       messageId, 
       captionLength: caption?.length,
       hasMediaGroup: !!media_group_id,
@@ -301,7 +290,7 @@ serve(async (req) => {
     });
 
     if (!messageId || !caption) {
-      requestLogger.error('Missing required parameters', { 
+      logger.error('Missing required parameters', { 
         hasMessageId: !!messageId, 
         hasCaption: !!caption 
       });
@@ -315,28 +304,27 @@ serve(async (req) => {
       );
     }
 
+    // 6) Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Parse the caption with manual parser first
-    requestLogger.info('Parsing caption', { captionLength: caption.length });
-    const manualResult = manualParse(caption, requestLogger);
+    // 7) Parse caption manually
+    logger.info('Parsing caption', { captionLength: caption.length });
+    const manualResult = manualParse(caption, logger);
     
-    // Determine if we need to use AI analysis
+    // 8) Check if AI analysis is needed
     let finalAnalyzedContent: AnalyzedContent = manualResult;
     
     if (manualResult.parsing_metadata?.needs_ai_analysis) {
-      requestLogger.info('Caption requires AI analysis', { 
+      logger.info('Caption requires AI analysis', { 
         product_name: manualResult.product_name,
         product_name_length: manualResult.product_name?.length
       });
       
       try {
-        // Call the AI analysis function directly
-        const aiResult = await analyzeWithAI(caption, requestLogger);
-        
+        const aiResult = await analyzeWithAI(caption, logger);
         // Merge results, preferring AI for complex scenarios
         finalAnalyzedContent = {
           ...aiResult,
@@ -346,19 +334,19 @@ serve(async (req) => {
           }
         };
         
-        requestLogger.info('AI analysis successful', {
+        logger.info('AI analysis successful', {
           product_name: finalAnalyzedContent.product_name,
           product_code: finalAnalyzedContent.product_code
         });
       } catch (aiError) {
-        requestLogger.error('Error in AI analysis, using manual results', { 
+        logger.error('Error in AI analysis, using manual results', { 
           error: aiError.message 
         });
         // Continue with manual parsing results
       }
     }
 
-    // Get the current message state before updating
+    // 9) Fetch the current message state from DB
     const { data: currentMessage, error: fetchError } = await supabase
       .from('messages')
       .select('*')
@@ -366,11 +354,11 @@ serve(async (req) => {
       .single();
       
     if (fetchError) {
-      requestLogger.error('Error fetching current message state', { error: fetchError.message });
+      logger.error('Error fetching current message state', { error: fetchError.message });
       throw fetchError;
     }
     
-    // Prepare the new state
+    // 10) Prepare new state
     const newState = {
       analyzed_content: finalAnalyzedContent,
       processing_state: 'completed',
@@ -382,9 +370,8 @@ serve(async (req) => {
       updated_at: new Date().toISOString()
     };
     
-    // Update the message with analyzed content
-    // The database trigger will handle syncing to media group if needed
-    requestLogger.info('Updating message with analyzed content', { 
+    // 11) Update message in DB
+    logger.info('Updating message with analyzed content', { 
       messageId, 
       hasMediaGroup: !!media_group_id 
     });
@@ -395,11 +382,11 @@ serve(async (req) => {
       .eq('id', messageId);
 
     if (updateError) {
-      requestLogger.error('Error updating message', { error: updateError.message });
+      logger.error('Error updating message', { error: updateError.message });
       throw updateError;
     }
     
-    // Log the analysis event using the unified audit logging system
+    // 12) Log analysis event via RPC
     await supabase.rpc('xdelo_log_event', {
       p_event_type: 'message_analyzed',
       p_entity_id: messageId,
@@ -420,14 +407,14 @@ serve(async (req) => {
       p_user_id: currentMessage.user_id
     });
     
-    // Let the database trigger handle media group syncing
+    // 13) Let DB trigger handle media group syncing
     if (media_group_id) {
-      requestLogger.info('Message is part of a media group, database trigger will sync', { 
+      logger.info('Message is part of a media group, database trigger will sync', { 
         media_group_id 
       });
     }
 
-    requestLogger.info('Caption analysis completed successfully');
+    logger.info('Caption analysis completed successfully');
     return new Response(
       JSON.stringify({
         success: true,
@@ -440,43 +427,41 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    logger.error('Error processing message', { 
+    // Use the top-level logger since we might fail before building the requestLogger
+    console.error('❌ Error processing message', { 
       error: error.message,
       stack: error.stack
     });
 
-    // Only try to update error state if we have a messageId
+    // 14) Update error state if we have a messageId
     if (sourceMessageId) {
-      logger.info('Updating message to error state', { messageId: sourceMessageId });
+      console.log('ℹ️ Updating message to error state', { messageId: sourceMessageId });
       const supabase = createClient(
         Deno.env.get('SUPABASE_URL')!,
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
 
       try {
-        // Get current message state
+        // Get current message
         const { data: currentMessage, error: fetchError } = await supabase
           .from('messages')
           .select('*')
           .eq('id', sourceMessageId)
           .single();
           
-        if (fetchError) {
-          logger.error('Error fetching message for error state update', { error: fetchError.message });
-        } else {
-          // Update message state
+        if (!fetchError && currentMessage) {
           await supabase
             .from('messages')
             .update({
               processing_state: 'error',
               error_message: error.message,
               processing_completed_at: new Date().toISOString(),
-              processing_correlation_id: correlationId,
+              // Use the fallback correlationId if requestLogger wasn't established
+              processing_correlation_id: sourceMessageId, 
               updated_at: new Date().toISOString()
             })
             .eq('id', sourceMessageId);
             
-          // Log the error event using the unified audit logging system
           await supabase.rpc('xdelo_log_event', {
             p_event_type: 'message_analyzed',
             p_entity_id: sourceMessageId,
@@ -489,20 +474,20 @@ serve(async (req) => {
               stack_trace: error.stack,
               has_media_group: !!currentMessage.media_group_id
             },
-            p_correlation_id: correlationId,
+            p_correlation_id: sourceMessageId,
             p_user_id: currentMessage.user_id,
             p_error_message: error.message
           });
         }
       } catch (stateError) {
-        logger.error('Error updating error state', { error: stateError.message });
+        console.error('❌ Error updating error state', { error: stateError.message });
       }
     }
 
     return new Response(
       JSON.stringify({ 
         error: error.message,
-        correlation_id: correlationId
+        correlation_id: sourceMessageId || "unknown_correlation_id"
       }),
       { 
         status: 500,

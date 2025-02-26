@@ -107,7 +107,7 @@ export async function downloadMedia(
   try {
     logger.info('Processing media', { 
       messageId,
-      fileId: mediaInfo.file_unique_id,
+      fileId: mediaInfo.file_id,
       fileUniqueId: mediaInfo.file_unique_id,
       customPath: !!storagePath
     });
