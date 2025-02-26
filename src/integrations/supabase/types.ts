@@ -2341,6 +2341,12 @@ export type Database = {
         | "game"
         | "chat_member"
         | "edited_channel_post"
+        | "message_created"
+        | "message_updated"
+        | "message_deleted"
+        | "message_analyzed"
+        | "webhook_received"
+        | "media_group_synced"
     }
     CompositeTypes: {
       [_ in never]: never
