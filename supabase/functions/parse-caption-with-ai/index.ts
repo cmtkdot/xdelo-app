@@ -1,27 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { AnalyzedContent, ProcessingState } from "../_shared/types.ts";
+import { validateAnalyzedContent } from "../_shared/validators.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
-// Types
-interface AnalyzedContent {
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  quantity?: number;
-  notes?: string;
-  parsing_metadata?: {
-    method: 'manual' | 'ai' | 'hybrid';
-    timestamp: string;
-    needs_ai_analysis?: boolean;
-    fallbacks_used?: string[];
-  };
-}
-
-interface QuantityParseResult {
-  value: number;
-}
-
-type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 type LogData = Record<string, string | number | boolean | null | undefined | string[] | number[] | Record<string, unknown>>;
 
 interface Logger {
@@ -62,12 +44,6 @@ Expected Output: {
   "quantity": 2
 }`;
 
-// CORS headers for all responses
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
 // Logger function
 function getLogger(correlationId: string): Logger {
   return {
@@ -93,7 +69,7 @@ function getLogger(correlationId: string): Logger {
 }
 
 // Quantity parser function
-function parseQuantity(caption: string): QuantityParseResult | null {
+function parseQuantity(caption: string): { value: number } | null {
   // Look for patterns like "x2", "x 2", "qty: 2", "quantity: 2"
   const patterns = [
     /x\s*(\d+)/i,                    // x2 or x 2
@@ -295,130 +271,6 @@ async function analyzeWithAI(caption: string, logger: Logger): Promise<AnalyzedC
   }
 }
 
-// Simplified media group synchronization - always resets and updates all messages
-async function syncMediaGroup(
-  supabase: any,
-  sourceMessageId: string,
-  media_group_id: string,
-  analyzedContent: AnalyzedContent,
-  correlationId: string
-): Promise<void> {
-  const logger = getLogger(correlationId);
-  
-  try {
-    logger.info('Syncing media group content', {
-      source_message_id: sourceMessageId,
-      media_group_id: media_group_id
-    });
-
-    // Get all messages in the group to calculate group metadata
-    const { data: groupMessages, error: fetchError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('media_group_id', media_group_id);
-      
-    if (fetchError) {
-      logger.error('Error fetching group messages', { error: fetchError.message });
-      throw fetchError;
-    }
-    
-    const groupCount = groupMessages?.length || 0;
-    logger.info('Found messages in group', { count: groupCount });
-    
-    if (groupCount === 0) {
-      logger.warn('No messages found in group, skipping sync');
-      return;
-    }
-    
-    // Calculate group timestamps
-    const timestamps = groupMessages.map(m => new Date(m.created_at).getTime());
-    const firstMessageTime = new Date(Math.min(...timestamps)).toISOString();
-    const lastMessageTime = new Date(Math.max(...timestamps)).toISOString();
-    
-    // First, clear analyzed_content from all group messages 
-    // This ensures all triggers fire properly when the content is later updated
-    logger.info('Clearing analyzed_content from all group messages');
-    
-    const { error: clearError } = await supabase
-      .from('messages')
-      .update({
-        analyzed_content: null,
-        processing_state: 'pending',
-        group_caption_synced: false,
-        is_original_caption: false,
-        message_caption_id: null,
-        processing_correlation_id: correlationId,
-        updated_at: new Date().toISOString()
-      })
-      .eq('media_group_id', media_group_id);
-      
-    if (clearError) {
-      logger.error('Error clearing group messages', { error: clearError.message });
-      throw clearError;
-    }
-    
-    // Update source message to mark it as the original caption
-    logger.info('Updating source message', { messageId: sourceMessageId });
-    const { error: sourceUpdateError } = await supabase
-      .from('messages')
-      .update({
-        analyzed_content: analyzedContent,
-        processing_state: 'completed',
-        processing_completed_at: new Date().toISOString(),
-        is_original_caption: true,
-        group_caption_synced: true,
-        message_caption_id: sourceMessageId,    // Reference itself as the caption source
-        group_message_count: groupCount.toString(),
-        group_first_message_time: firstMessageTime,
-        group_last_message_time: lastMessageTime,
-        processing_correlation_id: correlationId,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', sourceMessageId);
-      
-    if (sourceUpdateError) {
-      logger.error('Error updating source message', { error: sourceUpdateError.message });
-      throw sourceUpdateError;
-    }
-    
-    // Update all other messages in the group
-    logger.info('Updating other messages in the group');
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update({
-        analyzed_content: analyzedContent,
-        processing_state: 'completed',
-        processing_completed_at: new Date().toISOString(),
-        group_caption_synced: true,
-        message_caption_id: sourceMessageId,  // Set the source message ID as the caption reference
-        is_original_caption: false,  // These are not the original caption messages
-        group_message_count: groupCount.toString(),
-        group_first_message_time: firstMessageTime,
-        group_last_message_time: lastMessageTime,
-        processing_correlation_id: correlationId,
-        updated_at: new Date().toISOString()
-      })
-      .eq('media_group_id', media_group_id)
-      .neq('id', sourceMessageId);
-
-    if (updateError) {
-      logger.error('Error updating group messages', { error: updateError.message });
-      throw updateError;
-    }
-    
-    logger.info('Successfully synced media group content', { 
-      group_count: groupCount,
-      first_message_time: firstMessageTime,
-      last_message_time: lastMessageTime
-    });
-  } catch (error) {
-    logger.error('Error in syncMediaGroup', { 
-      error: error.message
-    });
-    throw error;
-  }
-}
-
 // Main handler
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -506,31 +358,73 @@ serve(async (req) => {
       }
     }
 
-    // If part of a media group, sync all messages in the group
-    if (media_group_id) {
-      requestLogger.info('Message is part of a media group, syncing all messages', { media_group_id });
-      await syncMediaGroup(supabase, messageId, media_group_id, finalAnalyzedContent, requestCorrelationId);
-    } else {
-      // Update just this message if not part of a media group
-      requestLogger.info('Updating single message', { messageId });
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          analyzed_content: finalAnalyzedContent,
-          processing_state: 'completed',
-          processing_started_at: new Date().toISOString(),
-          processing_completed_at: new Date().toISOString(),
-          is_original_caption: true,
-          message_caption_id: messageId,
-          processing_correlation_id: requestCorrelationId,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', messageId);
+    // Get the current message state before updating
+    const { data: currentMessage, error: fetchError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', messageId)
+      .single();
+      
+    if (fetchError) {
+      requestLogger.error('Error fetching current message state', { error: fetchError.message });
+      throw fetchError;
+    }
+    
+    // Prepare the new state
+    const newState = {
+      analyzed_content: finalAnalyzedContent,
+      processing_state: 'completed',
+      processing_started_at: new Date().toISOString(),
+      processing_completed_at: new Date().toISOString(),
+      is_original_caption: true,
+      message_caption_id: messageId,
+      processing_correlation_id: requestCorrelationId,
+      updated_at: new Date().toISOString()
+    };
+    
+    // Update the message with analyzed content
+    // The database trigger will handle syncing to media group if needed
+    requestLogger.info('Updating message with analyzed content', { 
+      messageId, 
+      hasMediaGroup: !!media_group_id 
+    });
+    
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update(newState)
+      .eq('id', messageId);
 
-      if (updateError) {
-        requestLogger.error('Error updating message', { error: updateError.message });
-        throw updateError;
-      }
+    if (updateError) {
+      requestLogger.error('Error updating message', { error: updateError.message });
+      throw updateError;
+    }
+    
+    // Log the analysis event using the unified audit logging system
+    await supabase.rpc('xdelo_log_event', {
+      p_event_type: 'message_analyzed',
+      p_entity_id: messageId,
+      p_telegram_message_id: currentMessage.telegram_message_id,
+      p_chat_id: currentMessage.chat_id,
+      p_previous_state: { processing_state: currentMessage.processing_state },
+      p_new_state: { 
+        processing_state: 'completed',
+        analyzed_content: finalAnalyzedContent
+      },
+      p_metadata: {
+        analysis_method: finalAnalyzedContent.parsing_metadata?.method || 'unknown',
+        has_media_group: !!media_group_id,
+        is_edit: !!is_edit,
+        is_channel_post: !!is_channel_post
+      },
+      p_correlation_id: requestCorrelationId,
+      p_user_id: currentMessage.user_id
+    });
+    
+    // Let the database trigger handle media group syncing
+    if (media_group_id) {
+      requestLogger.info('Message is part of a media group, database trigger will sync', { 
+        media_group_id 
+      });
     }
 
     requestLogger.info('Caption analysis completed successfully');
@@ -560,16 +454,46 @@ serve(async (req) => {
       );
 
       try {
-        await supabase
+        // Get current message state
+        const { data: currentMessage, error: fetchError } = await supabase
           .from('messages')
-          .update({
-            processing_state: 'error',
-            error_message: error.message,
-            processing_completed_at: new Date().toISOString(),
-            processing_correlation_id: correlationId,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', sourceMessageId);
+          .select('*')
+          .eq('id', sourceMessageId)
+          .single();
+          
+        if (fetchError) {
+          logger.error('Error fetching message for error state update', { error: fetchError.message });
+        } else {
+          // Update message state
+          await supabase
+            .from('messages')
+            .update({
+              processing_state: 'error',
+              error_message: error.message,
+              processing_completed_at: new Date().toISOString(),
+              processing_correlation_id: correlationId,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', sourceMessageId);
+            
+          // Log the error event using the unified audit logging system
+          await supabase.rpc('xdelo_log_event', {
+            p_event_type: 'message_analyzed',
+            p_entity_id: sourceMessageId,
+            p_telegram_message_id: currentMessage.telegram_message_id,
+            p_chat_id: currentMessage.chat_id,
+            p_previous_state: { processing_state: currentMessage.processing_state },
+            p_new_state: { processing_state: 'error' },
+            p_metadata: {
+              error_message: error.message,
+              stack_trace: error.stack,
+              has_media_group: !!currentMessage.media_group_id
+            },
+            p_correlation_id: correlationId,
+            p_user_id: currentMessage.user_id,
+            p_error_message: error.message
+          });
+        }
       } catch (stateError) {
         logger.error('Error updating error state', { error: stateError.message });
       }

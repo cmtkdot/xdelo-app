@@ -21,7 +21,18 @@ function determineMessageType(message: TelegramMessage): TelegramOtherMessageTyp
   return 'text';
 }
 
+/**
+ * Extracts media information from a Telegram message.
+ * 
+ * IMPORTANT: This function only extracts media for photos and videos.
+ * Documents are NOT considered media in this context to avoid the conflict
+ * with determineMessageType() which categorizes documents as "other messages".
+ * 
+ * @param message The Telegram message to extract media from
+ * @returns MediaInfo object or null if no supported media is found
+ */
 export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
+  // Handle photos (always treated as media)
   if (message.photo) {
     const photo = message.photo[message.photo.length - 1];
     return {
@@ -34,6 +45,7 @@ export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
     };
   } 
   
+  // Handle videos (always treated as media)
   if (message.video) {
     return {
       file_id: message.video.file_id,
@@ -44,16 +56,10 @@ export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
       duration: message.video.duration,
       file_size: message.video.file_size
     };
-  } 
-  
-  if (message.document) {
-    return {
-      file_id: message.document.file_id,
-      file_unique_id: message.document.file_unique_id,
-      mime_type: message.document.mime_type || 'application/octet-stream',
-      file_size: message.document.file_size
-    };
   }
+  
+  // Documents are now explicitly NOT handled as media
+  // They will be processed through the other_messages flow
   
   return null;
 }
@@ -66,6 +72,24 @@ export function extractChatInfo(message: TelegramMessage): ChatInfo {
   };
 }
 
+/**
+ * Handles incoming webhook updates from Telegram.
+ * 
+ * This function implements a "media-first" approach to message processing:
+ * 1. First, it checks if the message contains media (photos or videos)
+ * 2. If media is found, it processes the message through the media pipeline
+ * 3. If no media is found, it processes the message as an "other message"
+ * 
+ * This approach prioritizes media content because:
+ * - Media often contains the most valuable content for analysis
+ * - Media requires special handling for downloading and storage
+ * - Media groups need to be processed together for caption synchronization
+ * 
+ * @param supabase The Supabase client
+ * @param update The Telegram update object
+ * @param correlationId Correlation ID for tracking this request
+ * @returns WebhookResponse with processing results
+ */
 export async function handleWebhookUpdate(
   supabase: SupabaseClient,
   update: TelegramUpdate,
@@ -84,18 +108,78 @@ export async function handleWebhookUpdate(
                    update.edited_message ||
                    update.edited_channel_post;
 
+    // Set message type flags
+    const isChannelPost = Boolean(update.channel_post);
+    const isEditedMessage = Boolean(update.edited_message);
+    const isEditedChannelPost = Boolean(update.edited_channel_post);
+    const isForwarded = Boolean(message?.forward_from_chat || message?.forward_from);
+
     // First check for media in any message type
     if (message) {
+      // Enhanced logging for forwarded messages
+      if (isForwarded) {
+        logger.info('Processing forwarded message', {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          forward_from_chat_id: message.forward_from_chat?.id,
+          forward_from_chat_title: message.forward_from_chat?.title,
+          forward_from_user_id: message.forward_from?.id,
+          forward_from_username: message.forward_from?.username,
+          forward_date: message.forward_date ? new Date(message.forward_date * 1000).toISOString() : null,
+          forward_signature: message.forward_signature,
+          forward_sender_name: message.forward_sender_name,
+          forward_from_message_id: message.forward_from_message_id,
+          has_document: Boolean(message.document),
+          has_photo: Boolean(message.photo),
+          has_video: Boolean(message.video),
+          has_caption: Boolean(message.caption)
+        });
+      }
+
+      // Check if message contains a document
+      if (message.document) {
+        logger.info('Processing document message', {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          file_id: message.document.file_id,
+          file_unique_id: message.document.file_unique_id,
+          file_name: message.document.file_name,
+          mime_type: message.document.mime_type,
+          file_size: message.document.file_size,
+          is_channel: isChannelPost,
+          is_edited: isEditedMessage || isEditedChannelPost,
+          is_forwarded: isForwarded
+        });
+        
+        // Documents are now explicitly routed to other_messages
+        return await handleOtherMessage(supabase, message, correlationId);
+      }
+
+      // Check for photos and videos (true media)
       const mediaInfo = extractMediaInfo(message);
       if (mediaInfo) {
         logger.info('Processing message with media', {
           message_id: message.message_id,
           chat_id: message.chat.id,
           file_unique_id: mediaInfo.file_unique_id,
-          is_channel: Boolean(update.channel_post),
-          is_edited: Boolean(update.edited_message || update.edited_channel_post)
+          media_type: message.photo ? 'photo' : 'video',
+          is_channel: isChannelPost,
+          is_edited: isEditedMessage || isEditedChannelPost,
+          is_forwarded: isForwarded
         });
-        return await handleMediaMessage(supabase, message, correlationId);
+        
+        // Pass all message type flags to handleMediaMessage
+        return await handleMediaMessage(
+          supabase, 
+          message, 
+          correlationId,
+          {
+            isChannelPost,
+            isEditedMessage,
+            isEditedChannelPost,
+            isForwarded
+          }
+        );
       } else {
         return await handleOtherMessage(supabase, message, correlationId);
       }
@@ -188,7 +272,21 @@ export async function handleEditedMessage(
         edit_history: editHistory,
         edit_date: message.edit_date
       };
-      return await handleMediaMessage(supabase, editedMessage, correlationId);
+      
+      // Determine if this is a channel post edit
+      const isChannelPost = message.chat.type === 'channel';
+      
+      return await handleMediaMessage(
+        supabase, 
+        editedMessage, 
+        correlationId,
+        {
+          isChannelPost,
+          isEditedMessage: !isChannelPost,
+          isEditedChannelPost: isChannelPost,
+          isForwarded: Boolean(message.forward_from_chat || message.forward_from)
+        }
+      );
     }
 
     // For non-media edits, handle in other_messages
@@ -296,6 +394,17 @@ export async function handleEditedMessage(
   }
 }
 
+/**
+ * Handles non-media messages from Telegram.
+ * 
+ * This function processes messages that don't contain photos or videos,
+ * including text messages, commands, stickers, documents, etc.
+ * 
+ * @param supabase The Supabase client
+ * @param message The Telegram message to process
+ * @param correlationId Correlation ID for tracking this request
+ * @returns WebhookResponse with processing results
+ */
 export async function handleOtherMessage(
   supabase: SupabaseClient,
   message: TelegramMessage,
@@ -304,10 +413,32 @@ export async function handleOtherMessage(
   const logger = getLogger(correlationId);
   
   try {
-    // Check if this is a media message first
-    const mediaInfo = extractMediaInfo(message);
-    if (mediaInfo) {
-      return await handleMediaMessage(supabase, message, correlationId);
+    // Check if this is a photo or video message (should be handled by media flow)
+    // Note: We explicitly exclude documents from this check as they're now handled as other messages
+    if (message.photo || message.video) {
+      // Determine message type flags
+      const isChannelPost = message.chat.type === 'channel';
+      const isEditedMessage = Boolean(message.edit_date) && !isChannelPost;
+      const isEditedChannelPost = Boolean(message.edit_date) && isChannelPost;
+      const isForwarded = Boolean(message.forward_from_chat || message.forward_from);
+      
+      logger.info('Redirecting media message from other_messages handler to media handler', {
+        message_id: message.message_id,
+        chat_id: message.chat.id,
+        media_type: message.photo ? 'photo' : 'video'
+      });
+      
+      return await handleMediaMessage(
+        supabase, 
+        message, 
+        correlationId,
+        {
+          isChannelPost,
+          isEditedMessage,
+          isEditedChannelPost,
+          isForwarded
+        }
+      );
     }
 
     const messageType = determineMessageType(message);
@@ -571,10 +702,32 @@ export async function handleChatMemberUpdate(
   }
 }
 
+/**
+ * Handles media messages (photos and videos) from Telegram.
+ * 
+ * This function is part of the "media-first" approach, which prioritizes
+ * processing media content. It handles:
+ * - Downloading and storing media files
+ * - Processing captions for analysis
+ * - Synchronizing media groups
+ * - Tracking message metadata
+ * 
+ * @param supabase The Supabase client
+ * @param message The Telegram message containing media
+ * @param correlationId Correlation ID for tracking this request
+ * @param flags Optional flags for message type (channel, edited, forwarded)
+ * @returns WebhookResponse with processing results
+ */
 export async function handleMediaMessage(
   supabase: SupabaseClient,
   message: TelegramMessage,
-  correlationId: string
+  correlationId: string,
+  flags?: {
+    isChannelPost?: boolean,
+    isEditedMessage?: boolean,
+    isEditedChannelPost?: boolean,
+    isForwarded?: boolean
+  }
 ): Promise<WebhookResponse> {
   const logger = getLogger(correlationId);
   let publicUrl: string | null = null;
@@ -606,6 +759,12 @@ export async function handleMediaMessage(
       .eq("file_unique_id", mediaInfo.file_unique_id)
       .maybeSingle();
 
+    // Set flags for message type
+    const isChannelPost = flags?.isChannelPost || false;
+    const isEditedMessage = flags?.isEditedMessage || false;
+    const isEditedChannelPost = flags?.isEditedChannelPost || false;
+    const isForwarded = flags?.isForwarded || Boolean(message.forward_from_chat || message.forward_from);
+    
     const messageData: MessageData = {
       user_id: "f1cdf0f8-082b-4b10-a949-2e0ba7f84db7",
       telegram_message_id: message.message_id,
@@ -625,9 +784,26 @@ export async function handleMediaMessage(
       processing_state: message.caption ? "pending" : "initialized",
       processing_correlation_id: correlationId,
       is_original_caption: Boolean(message.caption),
+      is_channel_post: isChannelPost,
+      is_edited: isEditedMessage || isEditedChannelPost,
+      is_forwarded: isForwarded,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
+    
+    // Add forwarded message properties if available
+    if (isForwarded && message.forward_from_chat) {
+      messageData.forward_from_chat_id = message.forward_from_chat.id;
+      messageData.forward_from_chat_title = message.forward_from_chat.title;
+      if (message.forward_date) {
+        messageData.forward_date = new Date(message.forward_date * 1000).toISOString();
+      }
+    }
+    
+    // Add edit date if it's an edited message
+    if ((isEditedMessage || isEditedChannelPost) && message.edit_date) {
+      messageData.edit_date = new Date(message.edit_date * 1000).toISOString();
+    }
 
     let messageId: string;
 

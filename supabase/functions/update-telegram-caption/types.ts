@@ -245,7 +245,6 @@ export interface AnalyzedContent {
   notes?: string;
   parsing_metadata?: {
     method: 'manual' | 'ai' | 'hybrid';
-    confidence: number;
     fallbacks_used?: string[];
     timestamp: string;
     needs_ai_analysis?: boolean;
@@ -254,9 +253,4 @@ export interface AnalyzedContent {
     sync_source_message_id?: string;
     media_group_id?: string;
   };
-}
-
-export interface QuantityParseResult {
-  value: number;
-  confidence: number;
 }

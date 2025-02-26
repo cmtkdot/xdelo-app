@@ -153,6 +153,23 @@ export interface TelegramMessage {
     id: string;
     query: string;
   };
+  // Added forwarded message properties
+  forward_from?: {
+    id: number;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+  };
+  forward_from_chat?: {
+    id: number;
+    type: TelegramChatType;
+    title?: string;
+    username?: string;
+  };
+  forward_date?: number;
+  forward_signature?: string;
+  forward_sender_name?: string;
+  forward_from_message_id?: number;
 }
 
 export interface TelegramUpdate {
@@ -226,6 +243,10 @@ export interface MessageData {
   telegram_data: Record<string, any>;
   message_url?: string;
   is_channel_post?: boolean;
+  is_forwarded?: boolean;
+  forward_from_chat_id?: number;
+  forward_from_chat_title?: string;
+  forward_date?: string;
   sender_chat_id?: number;
   created_at?: string;
   updated_at?: string;

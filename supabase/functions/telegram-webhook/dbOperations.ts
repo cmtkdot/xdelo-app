@@ -163,6 +163,15 @@ export async function prepareMediaGroupForAnalysis(
       media_group_id: mediaGroupId
     });
 
+    // Get the source message to check if it's edited
+    const { data: sourceMessage } = await supabase
+      .from("messages")
+      .select("is_edited, is_channel_post, is_forwarded")
+      .eq("id", messageId)
+      .single();
+    
+    const isEdited = sourceMessage?.is_edited || false;
+
     // Get current group messages
     const { data: groupMessages } = await supabase
       .from("messages")
@@ -182,6 +191,29 @@ export async function prepareMediaGroupForAnalysis(
       processing_correlation_id: correlationId,
       updated_at: new Date().toISOString()
     });
+
+    // If this is an edited message, reset analyzed_content for all messages in the group
+    if (isEdited) {
+      console.log('🔄 Resetting analyzed content for edited media group:', {
+        correlation_id: correlationId,
+        media_group_id: mediaGroupId
+      });
+      
+      // Reset analyzed content for all messages in the group
+      const { error: resetError } = await supabase
+        .from("messages")
+        .update({
+          analyzed_content: null,
+          processing_state: "initialized",
+          group_caption_synced: false,
+          message_caption_id: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("media_group_id", mediaGroupId)
+        .neq("id", messageId);
+        
+      if (resetError) throw resetError;
+    }
 
     // Update other messages with metadata only - NO CAPTION SYNCING
     const { error } = await supabase
@@ -221,6 +253,13 @@ export async function triggerAnalysis(
   correlationId: string
 ): Promise<void> {
   try {
+    // Get message to check if it's edited, a channel post, or forwarded
+    const { data: message } = await supabase
+      .from("messages")
+      .select("is_edited, is_channel_post, is_forwarded")
+      .eq("id", messageId)
+      .single();
+      
     // First update state to processing
     await updateMessage(supabase, messageId, {
       processing_state: 'processing',
@@ -231,9 +270,12 @@ export async function triggerAnalysis(
       'parse-caption-with-ai',
       {
         body: {
-          message_id: messageId,
+          messageId,
           caption,
-          correlation_id: correlationId
+          correlation_id: correlationId,
+          is_edit: message?.is_edited || false,
+          is_channel_post: message?.is_channel_post || false,
+          is_forwarded: message?.is_forwarded || false
         }
       }
     );
@@ -260,27 +302,98 @@ export async function updateMessageEdits(
   supabase: SupabaseClient,
   messageId: string,
   message: any,
-  correlationId: string
+  correlationId: string,
+  flags?: {
+    isChannelPost?: boolean,
+    isEditedMessage?: boolean,
+    isEditedChannelPost?: boolean,
+    isForwarded?: boolean
+  }
 ): Promise<void> {
   const now = new Date().toISOString();
   
   try {
+    // Get the existing message to preserve important fields
+    const { data: existingMessage } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("id", messageId)
+      .single();
+      
+    if (!existingMessage) {
+      throw new Error(`Message with ID ${messageId} not found`);
+    }
+    
+    // Set flags based on parameters or existing message
+    const isChannelPost = flags?.isChannelPost || existingMessage.is_channel_post || false;
+    const isForwarded = flags?.isForwarded || existingMessage.is_forwarded || false;
+    
+    // If caption has changed, reset analyzed content
+    const captionChanged = message.caption !== existingMessage.caption;
+    const analyzedContent = captionChanged ? null : existingMessage.analyzed_content;
+    
+    // Create edit history entry
+    const editHistory = existingMessage.edit_history || [];
+    editHistory.push({
+      edit_date: new Date(message.edit_date * 1000).toISOString(),
+      previous_caption: existingMessage.caption || '',
+      new_caption: message.caption || '',
+      is_channel_post: isChannelPost
+    });
+    
     const { error } = await supabase
       .from("messages")
       .update({
         is_edited: true,
+        is_channel_post: isChannelPost,
+        is_forwarded: isForwarded,
         edit_date: new Date(message.edit_date * 1000).toISOString(),
+        edit_history: editHistory,
+        caption: message.caption || '',
         telegram_data: {
-          original_message: message.telegram_data?.message,
+          original_message: existingMessage.telegram_data?.message || existingMessage.telegram_data,
           edited_message: message
         },
-        processing_state: message.caption ? "pending" : "completed",
+        // Reset analyzed content if caption changed
+        analyzed_content: analyzedContent,
+        // Set processing state based on caption
+        processing_state: captionChanged && message.caption ? "pending" : 
+                         captionChanged ? "initialized" : 
+                         existingMessage.processing_state,
         processing_correlation_id: correlationId,
         updated_at: now
       })
       .eq("id", messageId);
 
     if (error) throw error;
+    
+    // If this is part of a media group and caption changed, reset the group
+    if (captionChanged && existingMessage.media_group_id) {
+      console.log('🔄 Resetting media group due to caption change:', {
+        correlation_id: correlationId,
+        media_group_id: existingMessage.media_group_id
+      });
+      
+      // Reset other messages in the group
+      const { error: resetError } = await supabase
+        .from("messages")
+        .update({
+          analyzed_content: null,
+          processing_state: "initialized",
+          group_caption_synced: false,
+          message_caption_id: null,
+          updated_at: now
+        })
+        .eq("media_group_id", existingMessage.media_group_id)
+        .neq("id", messageId);
+        
+      if (resetError) throw resetError;
+      
+      // If there's a caption, trigger analysis
+      if (message.caption) {
+        await triggerAnalysis(supabase, messageId, message.caption, correlationId);
+      }
+    }
   } catch (error) {
     console.error("❌ Error updating message edits:", error);
     throw error;

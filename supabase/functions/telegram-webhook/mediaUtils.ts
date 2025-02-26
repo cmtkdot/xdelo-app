@@ -6,7 +6,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 // Use the type from the imported library
 type SupabaseClient = ReturnType<typeof createClient>;
 
+/**
+ * Extracts media information from a Telegram message.
+ * 
+ * IMPORTANT: This function only extracts media for photos and videos.
+ * Documents are NOT considered media in this context to avoid the conflict
+ * with determineMessageType() which categorizes documents as "other messages".
+ * 
+ * @param message The Telegram message to extract media from
+ * @returns MediaInfo object or null if no supported media is found
+ */
 export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
+  // Handle photos (always treated as media)
   if (message.photo) {
     const photo = message.photo[message.photo.length - 1];
     return {
@@ -19,6 +30,7 @@ export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
     };
   } 
   
+  // Handle videos (always treated as media)
   if (message.video) {
     return {
       file_id: message.video.file_id,
@@ -29,16 +41,10 @@ export function extractMediaInfo(message: TelegramMessage): MediaInfo | null {
       duration: message.video.duration,
       file_size: message.video.file_size
     };
-  } 
-  
-  if (message.document) {
-    return {
-      file_id: message.document.file_id,
-      file_unique_id: message.document.file_unique_id,
-      mime_type: message.document.mime_type || 'application/octet-stream',
-      file_size: message.document.file_size
-    };
   }
+  
+  // Documents are now explicitly NOT handled as media
+  // They will be processed through the other_messages flow
   
   return null;
 }
@@ -71,7 +77,17 @@ export async function getFileUrl(fileId: string, telegramToken?: string): Promis
 }
 
 /**
- * Downloads media from Telegram and stores it in Supabase storage
+ * Downloads media (photos and videos) from Telegram and stores it in Supabase storage.
+ * 
+ * This function is part of the media-first approach, which prioritizes
+ * processing media content. It handles:
+ * - Retrieving file information from Telegram
+ * - Downloading the file content
+ * - Storing the file in Supabase storage
+ * - Updating the message record with the public URL
+ * 
+ * Note: This function only handles photos and videos, not documents.
+ * Documents are processed through the other_messages flow.
  */
 export async function downloadMedia(
   supabase: SupabaseClient,
