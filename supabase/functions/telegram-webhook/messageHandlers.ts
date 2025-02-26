@@ -1,228 +1,133 @@
 
 import { createClient } from "@supabase/supabase-js";
-import { TelegramMessage, TelegramWebhookPayload, MessageHandlerContext, ProcessedMessageResult } from "./types.ts";
-import { downloadMedia, uploadMediaToStorage, extractMediaInfo } from "./mediaUtils.ts";
-import { createMessage, updateMessage } from "./dbOperations.ts";
+import { handleError } from "../_shared/baseHandler.ts";
+import { corsHeaders } from "../_shared/cors.ts";
+import { Message, ProcessingState } from "../_shared/types.ts";
 
-export async function handleMessage(
-  payload: TelegramWebhookPayload,
-  context: MessageHandlerContext
-): Promise<ProcessedMessageResult> {
-  const { logger } = context;
-  const message = payload.message || payload.channel_post;
-  
-  logger.info('📨 Processing message', { 
-    messageId: message?.message_id,
-    chatId: message?.chat?.id,
-    hasPhoto: !!message?.photo,
-    hasVideo: !!message?.video,
-    isForwarded: !!message?.forward_from_chat,
-    hasCaption: !!message?.caption,
-    mediaGroupId: message?.media_group_id
-  });
+interface HandlerContext {
+  supabaseClient: ReturnType<typeof createClient>;
+  logger: {
+    info: (message: string, data?: any) => void;
+    error: (message: string, error?: any) => void;
+  };
+  correlationId: string;
+  botToken: string;
+}
+
+export async function handleMessage(update: any, context: HandlerContext) {
+  const { supabaseClient, logger, correlationId } = context;
+  const message = update.message || update.channel_post;
 
   if (!message) {
-    logger.error('No message found in payload');
-    return { success: false, error: 'No message found in payload' };
+    return { status: 'skipped', reason: 'no message content' };
   }
 
   try {
-    if (message.photo || message.video || message.document) {
-      logger.info('🖼️ Handling media message');
-      return await handleMediaMessage(message, payload, context);
-    } else {
-      logger.info('📝 Handling text message');
-      return await handleTextMessage(message, context);
-    }
-  } catch (error) {
-    logger.error('Error processing message:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-async function handleMediaMessage(
-  message: TelegramMessage,
-  payload: TelegramWebhookPayload,
-  context: MessageHandlerContext
-): Promise<ProcessedMessageResult> {
-  const { logger, supabaseClient, botToken } = context;
-  
-  const mediaInfo = extractMediaInfo(message);
-  if (!mediaInfo) {
-    logger.error('No media info found in message');
-    return { success: false, error: 'No media info found' };
-  }
-
-  logger.info('📸 Media info extracted', mediaInfo);
-
-  try {
-    // Always download media from Telegram, regardless if it's new or forwarded
-    logger.info('⬇️ Downloading media from Telegram', { 
-      fileId: mediaInfo.file_id,
-      fileUniqueId: mediaInfo.file_unique_id,
-      isForwarded: !!message.forward_from_chat,
-      mediaGroupId: message.media_group_id 
-    });
-    
-    const fileData = await downloadMedia(mediaInfo.file_id, botToken, logger);
-    
-    // Check for existing media by file_unique_id
-    const { data: existingMedia } = await supabaseClient
-      .from('messages')
-      .select('*')
-      .eq('file_unique_id', mediaInfo.file_unique_id)
-      .single();
-
-    if (existingMedia) {
-      logger.info('🔄 Found existing media, will update', { 
-        existingId: existingMedia.id,
-        fileUniqueId: mediaInfo.file_unique_id,
-        mediaGroupId: message.media_group_id
-      });
-      
-      // Always delete and re-upload the file
-      await supabaseClient
-        .storage
-        .from('telegram-media')
-        .remove([`${mediaInfo.file_unique_id}.${mediaInfo.mime_type.split('/')[1]}`]);
-      
-      logger.info('🗑️ Deleted existing file from storage');
-    }
-
-    // Always upload new media
-    logger.info('⬆️ Uploading media to storage', { 
-      fileUniqueId: mediaInfo.file_unique_id,
-      mimeType: mediaInfo.mime_type 
-    });
-    
-    await uploadMediaToStorage(
-      fileData,
-      `${mediaInfo.file_unique_id}.${mediaInfo.mime_type.split('/')[1]}`,
-      mediaInfo.mime_type,
-      context
-    );
-
-    // Prepare message data
-    const messageData = {
-      telegram_message_id: message.message_id,
-      chat_id: message.chat.id,
-      chat_type: message.chat.type,
-      chat_title: message.chat.title,
-      media_group_id: message.media_group_id,
-      caption: message.caption || '',
-      file_id: mediaInfo.file_id,
-      file_unique_id: mediaInfo.file_unique_id,
-      mime_type: mediaInfo.mime_type,
-      file_size: mediaInfo.file_size,
-      width: mediaInfo.width,
-      height: mediaInfo.height,
-      duration: mediaInfo.duration,
-      processing_state: message.caption ? 'pending' : 'initialized',
-      telegram_data: payload,
-      correlation_id: context.correlationId,
-      // Forward-specific fields
+    // Extract forwarding information
+    const forwardInfo = {
+      is_forwarded: !!message.forward_origin,
+      forward_origin_type: message.forward_origin?.type,
       forward_from_chat_id: message.forward_from_chat?.id,
+      forward_from_chat_title: message.forward_from_chat?.title,
+      forward_from_chat_type: message.forward_from_chat?.type,
       forward_from_message_id: message.forward_from_message_id,
       forward_date: message.forward_date ? new Date(message.forward_date * 1000).toISOString() : null,
-      // public_url will be set by trigger when file_unique_id is set
-      public_url: null
+      original_chat_id: message.forward_origin?.chat?.id,
+      original_chat_title: message.forward_origin?.chat?.title,
+      original_message_id: message.forward_origin?.message_id,
     };
 
-    let result;
-    if (existingMedia) {
-      // Use dbOperations for updating
-      const { data, error } = await updateMessage(
-        existingMedia.id,
-        messageData,
-        context
-      );
-        
-      if (error) throw error;
-      result = data;
-      
-      logger.info('✅ Updated existing message record', { 
-        messageId: result.id,
-        isForwarded: !!message.forward_from_chat,
-        mediaGroupId: message.media_group_id
-      });
-    } else {
-      // Use dbOperations for creating
-      const { data, error } = await createMessage(
-        messageData,
-        context
-      );
-        
-      if (error) throw error;
-      result = data;
-      
-      logger.info('✅ Created new message record', { 
-        messageId: result.id,
-        isForwarded: !!message.forward_from_chat,
-        mediaGroupId: message.media_group_id
-      });
-    }
+    // Handle media messages (photos, videos, etc.)
+    if (message.photo || message.video) {
+      const media = message.photo ? message.photo[message.photo.length - 1] : message.video;
+      const caption = message.caption;
+      const mediaGroupId = message.media_group_id;
 
-    // Always trigger caption analysis for both new and updated messages with captions
-    if (message.caption) {
-      logger.info('🔄 Triggering caption analysis', { 
-        messageId: result.id,
-        mediaGroupId: message.media_group_id
-      });
-      
-      // Invoke parse-caption-with-ai with all necessary context
-      await supabaseClient.functions.invoke('parse-caption-with-ai', {
-        body: { 
-          messageId: result.id,
-          caption: message.caption,
-          media_group_id: message.media_group_id,
-          correlationId: context.correlationId,
-          is_forward: !!message.forward_from_chat
+      // If this is a forwarded message, try to get the original message's analyzed content
+      let originalAnalyzedContent = null;
+      if (forwardInfo.is_forwarded && forwardInfo.original_chat_id && forwardInfo.original_message_id) {
+        const { data: originalMessage } = await supabaseClient
+          .from('messages')
+          .select('analyzed_content')
+          .eq('chat_id', forwardInfo.original_chat_id)
+          .eq('telegram_message_id', forwardInfo.original_message_id)
+          .single();
+
+        if (originalMessage?.analyzed_content) {
+          originalAnalyzedContent = originalMessage.analyzed_content;
         }
-      });
-    }
+      }
 
-    return { success: true, messageId: result.id };
-  } catch (error) {
-    logger.error('Error handling media message:', error);
-    throw error;
-  }
-}
-
-async function handleTextMessage(
-  message: TelegramMessage,
-  context: MessageHandlerContext
-): Promise<ProcessedMessageResult> {
-  const { logger } = context;
-  
-  try {
-    logger.info('💬 Processing text message', { 
-      messageId: message.message_id,
-      chatId: message.chat.id 
-    });
-
-    const { data, error } = await context.supabaseClient
-      .from('other_messages')
-      .insert({
+      // Prepare the message data
+      const messageData = {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         chat_type: message.chat.type,
         chat_title: message.chat.title,
-        message_text: message.text,
-        processing_state: 'initialized',
-        correlation_id: context.correlationId
-      })
-      .select()
-      .single();
+        media_group_id: mediaGroupId,
+        caption: caption,
+        file_id: media.file_id,
+        file_unique_id: media.file_unique_id,
+        mime_type: message.video ? message.video.mime_type : 'image/jpeg',
+        file_size: media.file_size,
+        width: media.width,
+        height: media.height,
+        duration: message.video?.duration,
+        telegram_data: message,
+        processing_state: originalAnalyzedContent ? 'completed' as ProcessingState : 'pending' as ProcessingState,
+        correlation_id: correlationId,
+        // Forward-specific fields
+        ...forwardInfo,
+        // If we have the original analyzed content, use it
+        analyzed_content: originalAnalyzedContent,
+        processing_completed_at: originalAnalyzedContent ? new Date().toISOString() : null
+      };
 
-    if (error) {
-      logger.error('Failed to insert text message', error);
-      throw error;
+      logger.info('Inserting message with data:', { 
+        messageId: message.message_id, 
+        mediaGroupId, 
+        isForwarded: forwardInfo.is_forwarded,
+        hasOriginalContent: !!originalAnalyzedContent 
+      });
+
+      const { error: insertError } = await supabaseClient
+        .from('messages')
+        .insert(messageData);
+
+      if (insertError) {
+        throw insertError;
+      }
+
+      // If we don't have analyzed content and there's a caption, trigger analysis
+      if (!originalAnalyzedContent && caption) {
+        try {
+          await supabaseClient.functions.invoke('parse-caption-with-ai', {
+            body: { 
+              messageId: message.message_id,
+              caption: caption,
+              media_group_id: mediaGroupId,
+              is_forward: forwardInfo.is_forwarded
+            }
+          });
+        } catch (error) {
+          logger.error('Error triggering caption analysis:', error);
+        }
+      }
+
+      return {
+        status: 'success',
+        message_id: message.message_id,
+        media_group_id: mediaGroupId,
+        is_forwarded: forwardInfo.is_forwarded,
+        has_original_content: !!originalAnalyzedContent
+      };
     }
 
-    logger.info('✅ Text message saved successfully', { messageId: data.id });
-    return { success: true, messageId: data.id };
+    // Handle non-media messages
+    return { status: 'skipped', reason: 'not a media message' };
+
   } catch (error) {
-    logger.error('Error handling text message:', error);
-    throw error;
+    logger.error('Error in handleMessage:', error);
+    return handleError(error);
   }
 }
