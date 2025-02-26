@@ -2,7 +2,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { corsHeaders } from '../_shared/cors.ts'
 import { supabaseClient } from '../_shared/supabase.ts'
-import { handleMediaMessage, handleOtherMessage, handleEditedMessage, handleChatMemberUpdate } from './messageHandlers.ts'
+import { handleMediaMessage, handleOtherMessage } from './messageHandlers.ts'
 import { extractMediaInfo } from './mediaUtils.ts'
 
 serve(async (req) => {
@@ -12,64 +12,54 @@ serve(async (req) => {
   }
 
   try {
-    const { message, edited_message, my_chat_member } = await req.json()
+    const { message, edited_message } = await req.json()
+    const updateMessage = edited_message || message // Use edited_message if available, otherwise use message
     
     const correlationId = crypto.randomUUID()
-    console.log('Received webhook update:', { correlationId, messageType: message?.chat?.type })
+    console.log('Received webhook update:', { 
+      correlationId, 
+      messageType: updateMessage?.chat?.type,
+      isEdit: !!edited_message
+    })
 
     // Log webhook request
     await supabaseClient.from('webhook_logs').insert({
       correlation_id: correlationId,
-      request_body: { message, edited_message, my_chat_member },
+      request_body: { message, edited_message },
       timestamp: new Date().toISOString()
     })
 
-    // Handle chat member updates
-    if (my_chat_member) {
-      console.log('Processing chat member update:', { 
-        chat_id: my_chat_member.chat.id,
-        chat_type: my_chat_member.chat.type
-      })
-      return await handleChatMemberUpdate(my_chat_member, correlationId)
-    }
-
-    // Handle edited messages
-    if (edited_message) {
-      console.log('Processing edited message:', {
-        message_id: edited_message.message_id,
-        chat_id: edited_message.chat.id
-      })
-      return await handleEditedMessage(edited_message, correlationId)
-    }
-
-    // Handle new messages
-    if (message) {
-      const isChannelPost = message.chat.type === 'channel'
-      const isForwarded = message.forward_from || message.forward_from_chat
+    // Process message (whether new or edited)
+    if (updateMessage) {
+      const isChannelPost = updateMessage.chat.type === 'channel'
+      const isForwarded = updateMessage.forward_from || updateMessage.forward_from_chat
       
       console.log('Processing message:', {
-        message_id: message.message_id,
-        chat_id: message.chat.id,
+        message_id: updateMessage.message_id,
+        chat_id: updateMessage.chat.id,
         is_channel_post: isChannelPost,
         is_forwarded: isForwarded,
-        has_media: !!message.photo || !!message.video || !!message.document
+        is_edit: !!edited_message,
+        has_media: !!updateMessage.photo || !!updateMessage.video || !!updateMessage.document
       })
 
       // Extract media info if present
-      const mediaInfo = await extractMediaInfo(message)
+      const mediaInfo = await extractMediaInfo(updateMessage)
 
       if (mediaInfo) {
-        return await handleMediaMessage(message, mediaInfo, {
+        return await handleMediaMessage(updateMessage, mediaInfo, {
           isChannelPost,
           isForwarded,
-          correlationId
+          correlationId,
+          isEdit: !!edited_message
         })
       }
 
-      return await handleOtherMessage(message, {
+      return await handleOtherMessage(updateMessage, {
         isChannelPost,
         isForwarded,
-        correlationId
+        correlationId,
+        isEdit: !!edited_message
       })
     }
 
