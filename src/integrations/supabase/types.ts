@@ -1371,7 +1371,7 @@ export type Database = {
           is_channel_post: string | null
           is_edited: boolean | null
           is_edited_channel_post: boolean | null
-          is_forward: string | null
+          is_forward: boolean | null
           is_forward_from: string | null
           is_forwarded: string | null
           is_forwarded_from: string | null
@@ -1450,7 +1450,7 @@ export type Database = {
           is_channel_post?: string | null
           is_edited?: boolean | null
           is_edited_channel_post?: boolean | null
-          is_forward?: string | null
+          is_forward?: boolean | null
           is_forward_from?: string | null
           is_forwarded?: string | null
           is_forwarded_from?: string | null
@@ -1529,7 +1529,7 @@ export type Database = {
           is_channel_post?: string | null
           is_edited?: boolean | null
           is_edited_channel_post?: boolean | null
-          is_forward?: string | null
+          is_forward?: boolean | null
           is_forward_from?: string | null
           is_forwarded?: string | null
           is_forwarded_from?: string | null
@@ -2325,6 +2325,13 @@ export type Database = {
         }
         Returns: undefined
       }
+      xdelo_sync_forward_media: {
+        Args: {
+          p_original_message_id: string
+          p_forward_message_id: string
+        }
+        Returns: undefined
+      }
       xdelo_sync_media_group_content: {
         Args: {
           p_media_group_id: string
@@ -2351,6 +2358,7 @@ export type Database = {
         | "media_group_synced"
         | "message_edited"
         | "media_group_history_synced"
+        | "forward_media_synced"
       client_type: "Vendor" | "Customer" | "Both"
       processing_state_type:
         | "initialized"

@@ -69,6 +69,13 @@ export const useTelegramOperations = () => {
         });
       }
 
+      // Check for forwards before deletion
+      const { data: forwardCount } = await supabase
+        .from('messages')
+        .select('id', { count: 'exact' })
+        .eq('original_message_id', message.id)
+        .eq('is_forward', true);
+
       // Delete from database
       const { error } = await supabase
         .from('messages')
@@ -86,7 +93,8 @@ export const useTelegramOperations = () => {
       
       // Log successful database deletion
       await logDeletion(message.id, 'database', {
-        operation: 'database_deletion_completed'
+        operation: 'database_deletion_completed',
+        had_forwards: forwardCount && forwardCount.count > 0
       });
 
       toast({
