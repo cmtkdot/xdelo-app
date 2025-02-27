@@ -64,7 +64,6 @@ export function ProductGroup({ group, onEdit, onDelete, onView, isDeleting }: Pr
       <div className="aspect-square overflow-hidden">
         <ImageSwiper
           media={mediaItems}
-          alt={mainMedia.analyzed_content?.product_name || "Product image"}
           onClick={onView}
           className="w-full h-full object-cover cursor-pointer"
         />
