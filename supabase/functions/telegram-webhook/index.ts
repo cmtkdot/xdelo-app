@@ -37,37 +37,11 @@ serve(async (req) => {
 
     // Handle media messages (photos, videos, documents)
     if (message.photo || message.video || message.document) {
-      try {
-        return await handleMediaMessage(message, context);
-      } catch (error) {
-        console.error('Error processing media message:', error)
-        return new Response(JSON.stringify({ 
-          error: error.message,
-          message_id: message.message_id,
-          chat_id: message.chat?.id,
-          correlation_id: correlationId
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 500
-        })
-      }
+      return await handleMediaMessage(message, context);
     }
 
     // Handle other types of messages
-    try {
-      return await handleOtherMessage(message, context)
-    } catch (error) {
-      console.error('Error processing other message:', error)
-      return new Response(JSON.stringify({ 
-        error: error.message,
-        message_id: message.message_id,
-        chat_id: message.chat?.id,
-        correlation_id: correlationId
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
-      })
-    }
+    return await handleOtherMessage(message, context)
 
   } catch (error) {
     console.error('Error processing webhook:', error)
