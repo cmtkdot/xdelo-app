@@ -16,18 +16,18 @@ export const useTelegramOperations = () => {
       setIsProcessing(true);
       
       // Find the caption message if this isn't one
-      const messageToDelete = message.is_original_caption ? 
+      const messageToDelete = message.caption ? 
         message : 
         await supabase
           .from('messages')
           .select('*')
           .eq('media_group_id', message.media_group_id)
-          .eq('is_original_caption', true)
+          .not('caption', 'is', null)
           .single()
           .then(({ data }) => data as Message);
       
       if (!messageToDelete) {
-        throw new Error('Could not find caption message to delete');
+        throw new Error('Could not find message with caption to delete');
       }
 
       // Log deletion intent
