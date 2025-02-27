@@ -279,7 +279,6 @@ export type Database = {
           glide_table_name: string
           id: string
           is_active: boolean
-          last_validation_time: string | null
           max_retries: number | null
           mutation_api_endpoint: string | null
           retry_interval: unknown | null
@@ -289,7 +288,6 @@ export type Database = {
           table_config: Json | null
           table_id: string
           updated_at: string | null
-          validation_error: string | null
         }
         Insert: {
           api_key: string
@@ -299,7 +297,6 @@ export type Database = {
           glide_table_name: string
           id?: string
           is_active?: boolean
-          last_validation_time?: string | null
           max_retries?: number | null
           mutation_api_endpoint?: string | null
           retry_interval?: unknown | null
@@ -309,7 +306,6 @@ export type Database = {
           table_config?: Json | null
           table_id: string
           updated_at?: string | null
-          validation_error?: string | null
         }
         Update: {
           api_key?: string
@@ -319,7 +315,6 @@ export type Database = {
           glide_table_name?: string
           id?: string
           is_active?: boolean
-          last_validation_time?: string | null
           max_retries?: number | null
           mutation_api_endpoint?: string | null
           retry_interval?: unknown | null
@@ -329,7 +324,6 @@ export type Database = {
           table_config?: Json | null
           table_id?: string
           updated_at?: string | null
-          validation_error?: string | null
         }
         Relationships: []
       }
@@ -921,6 +915,7 @@ export type Database = {
           main_purchase_order_uid: string | null
           rowid_accntrowid: string | null
           sb_accounts_id: string | null
+          share_url: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
@@ -938,6 +933,7 @@ export type Database = {
           main_purchase_order_uid?: string | null
           rowid_accntrowid?: string | null
           sb_accounts_id?: string | null
+          share_url?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
@@ -955,6 +951,7 @@ export type Database = {
           main_purchase_order_uid?: string | null
           rowid_accntrowid?: string | null
           sb_accounts_id?: string | null
+          share_url?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }

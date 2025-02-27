@@ -50,11 +50,20 @@ export function ProductGroup({ group, onEdit, onDelete, onView, isDeleting }: Pr
     }
   };
 
+  // Convert Message[] to MediaItem[] for ImageSwiper
+  const mediaItems = group.map(message => ({
+    id: message.id,
+    public_url: message.public_url,
+    mime_type: message.mime_type,
+    created_at: message.created_at || new Date().toISOString(),
+    analyzed_content: message.analyzed_content
+  }));
+
   return (
     <div className="group relative bg-white dark:bg-gray-950 rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden">
       <div className="aspect-square overflow-hidden">
         <ImageSwiper
-          media={group}
+          media={mediaItems}
           alt={mainMedia.analyzed_content?.product_name || "Product image"}
           onClick={onView}
           className="w-full h-full object-cover cursor-pointer"
