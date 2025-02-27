@@ -21,29 +21,20 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-interface MediaItem {
-  id: string;
-  url: string;
-  type: string;
-  caption: string;
-  width: number;
-  height: number;
-  public_url: string;
-  created_at: string;
-}
-
 interface ProductGroupProps {
   group: Message[];
   onEdit: (media: Message) => void;
-  onDelete: (media: Message) => void;
+  onDelete: (media: Message, deleteTelegram: boolean) => Promise<void>;
   onView: () => void;
+  isDeleting?: boolean;
 }
 
 export const ProductGroup: React.FC<ProductGroupProps> = ({
   group,
   onEdit,
   onDelete,
-  onView
+  onView,
+  isDeleting = false
 }) => {
   const mainMedia = group.find(media => media.is_original_caption) || 
                    group.find(media => media.analyzed_content) || 
@@ -86,7 +77,7 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
 
       toast({
         description: "Content reanalysis and media group sync initiated",
-        variant: "success"
+        variant: "default"
       });
     } catch (error) {
       console.error('Reanalysis error:', error);
@@ -96,35 +87,6 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
       });
     } finally {
       setIsReanalyzing(false);
-    }
-  };
-
-  const handleDeleteConfirm = async (deleteTelegram: boolean) => {
-    try {
-      const mediaToDelete = mainMedia;
-      
-      const { error } = await supabase
-        .from('messages')
-        .delete()
-        .eq('id', mediaToDelete.id);
-
-      if (error) throw error;
-
-      await onDelete(mediaToDelete);
-      
-      toast({
-        title: "Success",
-        description: `Product deleted successfully${deleteTelegram ? ' from both Telegram and database' : ' from database'}`,
-      });
-    } catch (error) {
-      console.error('Delete error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete product. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDeleteDialogOpen(false);
     }
   };
 
@@ -311,12 +273,15 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
                           e.stopPropagation();
                           setIsDeleteDialogOpen(true);
                         }}
+                        disabled={isDeleting}
                         className="py-1.5 text-destructive hover:text-destructive/80"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className={`w-4 h-4 ${isDeleting ? 'animate-pulse' : ''}`} />
                       </TabsTrigger>
                     </TooltipTrigger>
-                    <TooltipContent className="px-2 py-1 text-xs">Delete</TooltipContent>
+                    <TooltipContent className="px-2 py-1 text-xs">
+                      {isDeleting ? 'Deleting...' : 'Delete'}
+                    </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </TabsList>
@@ -348,13 +313,15 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => handleDeleteConfirm(false)}
+              onClick={() => onDelete(mainMedia, false)}
+              disabled={isDeleting}
             >
               Delete from Database Only
             </AlertDialogAction>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => handleDeleteConfirm(true)}
+              onClick={() => onDelete(mainMedia, true)}
+              disabled={isDeleting}
             >
               Delete from Both
             </AlertDialogAction>

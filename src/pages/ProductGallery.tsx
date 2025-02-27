@@ -11,6 +11,7 @@ import { useMediaGroups } from "@/hooks/useMediaGroups";
 import { useVendors } from "@/hooks/useVendors";
 import { logMessageOperation } from "@/lib/syncLogger";
 import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
+import { useTelegramOperations } from "@/hooks/useTelegramOperations";
 
 const ITEMS_PER_PAGE = 12;
 
@@ -28,8 +29,8 @@ const ProductGallery = () => {
   const { toast } = useToast();
   const { data: mediaGroups = {}, isLoading } = useMediaGroups();
   const { data: vendors = [] } = useVendors();
+  const { handleDelete, isProcessing } = useTelegramOperations();
 
-  // Set up realtime subscription
   useEffect(() => {
     const channel = supabase
       .channel('media-groups')
@@ -42,7 +43,6 @@ const ProductGallery = () => {
         },
         async (payload: RealtimePostgresChangesPayload<Message>) => {
           const messageData = payload.new as Message;
-          // Only proceed if we have valid message data with file_unique_id
           if (messageData?.file_unique_id && messageData?.id) {
             try {
               await logMessageOperation('sync', messageData.id, {
@@ -56,7 +56,6 @@ const ProductGallery = () => {
               console.error('Error logging sync:', error);
             }
           }
-          // Invalidate and refetch messages
           queryClient.invalidateQueries({ queryKey: ['media-groups'] });
         }
       )
@@ -76,13 +75,11 @@ const ProductGallery = () => {
       setEditItem(media);
     } catch (error) {
       console.error('Error logging edit operation:', error);
-      // Still allow edit even if logging fails
       setEditItem(media);
     }
   };
 
   const handleView = () => {
-    // View logic implementation
     console.log('Viewing media');
   };
 
@@ -100,7 +97,6 @@ const ProductGallery = () => {
         description: "The media has been successfully deleted.",
       });
 
-      // Refetch messages
       queryClient.invalidateQueries({ queryKey: ['media-groups'] });
     } catch (error) {
       toast({
@@ -111,18 +107,15 @@ const ProductGallery = () => {
     }
   };
 
-  // Filter and sort products based on current filters
   const filteredProducts = useMemo(() => {
     let filtered = Object.values(mediaGroups);
     
-    // Filter by search term
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(group => {
         const mainMedia = group.find(m => m.is_original_caption) || group[0];
         if (!mainMedia) return false;
         
-        // Search in product name, vendor, product code, or caption
         return (
           mainMedia.analyzed_content?.product_name?.toLowerCase().includes(searchLower) ||
           mainMedia.analyzed_content?.vendor_uid?.toLowerCase().includes(searchLower) ||
@@ -133,7 +126,6 @@ const ProductGallery = () => {
       });
     }
     
-    // Filter by vendors
     if (filters.vendors && filters.vendors.length > 0) {
       filtered = filtered.filter(group => {
         const mainMedia = group.find(m => m.is_original_caption) || group[0];
@@ -141,7 +133,6 @@ const ProductGallery = () => {
       });
     }
     
-    // Filter by processing state
     if (filters.processingState && filters.processingState.length > 0) {
       filtered = filtered.filter(group => {
         const mainMedia = group.find(m => m.is_original_caption) || group[0];
@@ -149,7 +140,6 @@ const ProductGallery = () => {
       });
     }
     
-    // Sort by date
     filtered.sort((a, b) => {
       const dateA = new Date(a[0]?.created_at || 0).getTime();
       const dateB = new Date(b[0]?.created_at || 0).getTime();
@@ -159,21 +149,18 @@ const ProductGallery = () => {
     return filtered;
   }, [mediaGroups, filters]);
   
-  // Pagination
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
   const paginatedProducts = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     return filteredProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredProducts, currentPage]);
   
-  // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [filters]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-    // Scroll to top of the page
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -198,6 +185,7 @@ const ProductGallery = () => {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onView={handleView}
+            isDeleting={isProcessing}
           />
           
           {totalPages > 1 && (
