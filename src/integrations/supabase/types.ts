@@ -281,7 +281,7 @@ export type Database = {
           is_active: boolean
           last_validation_time: string | null
           max_retries: number | null
-          mutation_api_endpoint: string
+          mutation_api_endpoint: string | null
           retry_interval: unknown | null
           supabase_table_name: string
           supported_operations: string[]
@@ -301,7 +301,7 @@ export type Database = {
           is_active?: boolean
           last_validation_time?: string | null
           max_retries?: number | null
-          mutation_api_endpoint?: string
+          mutation_api_endpoint?: string | null
           retry_interval?: unknown | null
           supabase_table_name: string
           supported_operations?: string[]
@@ -321,7 +321,7 @@ export type Database = {
           is_active?: boolean
           last_validation_time?: string | null
           max_retries?: number | null
-          mutation_api_endpoint?: string
+          mutation_api_endpoint?: string | null
           retry_interval?: unknown | null
           supabase_table_name?: string
           supported_operations?: string[]
