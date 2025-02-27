@@ -117,19 +117,30 @@ const ProductGallery = () => {
       });
     }
     
+    // Sort by created_at date
     filtered.sort((a, b) => {
       const dateA = new Date(a[0]?.created_at || 0).getTime();
       const dateB = new Date(b[0]?.created_at || 0).getTime();
       return filters.sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
     });
-    
+
+    // Log filtered products count
+    console.log('Filtered products count:', filtered.length);
     return filtered;
   }, [mediaGroups, filters]);
   
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
   const paginatedProducts = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const paginated = filteredProducts.slice(startIndex, endIndex);
+    console.log('Paginated products:', {
+      startIndex,
+      endIndex,
+      count: paginated.length,
+      totalProducts: filteredProducts.length
+    });
+    return paginated;
   }, [filteredProducts, currentPage]);
   
   useEffect(() => {
