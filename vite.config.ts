@@ -18,7 +18,7 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  lovable: {
-    allowDirectEdits: true
+  define: {
+    __LOVABLE_DIRECT_EDITS__: true
   }
 });
