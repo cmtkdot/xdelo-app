@@ -1436,7 +1436,6 @@ export type Database = {
           group_caption_synced: boolean | null
           group_first_message_time: string | null
           group_last_message_time: string | null
-          group_message_count: string | null
           height: number | null
           id: string
           is_channel_post: string | null
@@ -1470,10 +1469,7 @@ export type Database = {
           processing_started_at: string | null
           processing_state: Database["public"]["Enums"]["processing_state_type"]
           product_code: string | null
-          product_name: string | null
           product_quantity: number | null
-          product_sku: string | null
-          product_unit: string | null
           public_url: string | null
           purchase_date: string | null
           purchase_order: string | null
@@ -1485,7 +1481,6 @@ export type Database = {
           update_id: string | null
           updated_at: string
           user_id: string | null
-          vendor_name: string | null
           vendor_uid: string | null
           width: number | null
         }
@@ -1517,7 +1512,6 @@ export type Database = {
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
-          group_message_count?: string | null
           height?: number | null
           id?: string
           is_channel_post?: string | null
@@ -1551,10 +1545,7 @@ export type Database = {
           processing_started_at?: string | null
           processing_state?: Database["public"]["Enums"]["processing_state_type"]
           product_code?: string | null
-          product_name?: string | null
           product_quantity?: number | null
-          product_sku?: string | null
-          product_unit?: string | null
           public_url?: string | null
           purchase_date?: string | null
           purchase_order?: string | null
@@ -1566,7 +1557,6 @@ export type Database = {
           update_id?: string | null
           updated_at?: string
           user_id?: string | null
-          vendor_name?: string | null
           vendor_uid?: string | null
           width?: number | null
         }
@@ -1598,7 +1588,6 @@ export type Database = {
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
-          group_message_count?: string | null
           height?: number | null
           id?: string
           is_channel_post?: string | null
@@ -1632,10 +1621,7 @@ export type Database = {
           processing_started_at?: string | null
           processing_state?: Database["public"]["Enums"]["processing_state_type"]
           product_code?: string | null
-          product_name?: string | null
           product_quantity?: number | null
-          product_sku?: string | null
-          product_unit?: string | null
           public_url?: string | null
           purchase_date?: string | null
           purchase_order?: string | null
@@ -1647,7 +1633,6 @@ export type Database = {
           update_id?: string | null
           updated_at?: string
           user_id?: string | null
-          vendor_name?: string | null
           vendor_uid?: string | null
           width?: number | null
         }
@@ -2647,7 +2632,7 @@ export type Database = {
         | "media_group_history_synced"
         | "forward_media_synced"
         | "message_forwarded"
-      client_type: "Vendor" | "Customer" | "Both"
+      client_type: "Vendor" | "Customer" | "Customer & Vendor"
       processing_state_type:
         | "initialized"
         | "pending"

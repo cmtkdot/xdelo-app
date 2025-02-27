@@ -16,18 +16,36 @@ export const useTelegramOperations = () => {
       setIsProcessing(true);
       
       // Find the caption message if this isn't one
-      const messageToDelete = message.caption ? 
-        message : 
-        await supabase
+      let messageToDelete: Message | null = null;
+      
+      if (message.caption) {
+        // This message has a caption, use it directly
+        messageToDelete = message;
+      } else if (message.media_group_id) {
+        // Try to find a caption message in the same media group
+        const { data: captionMessage } = await supabase
           .from('messages')
           .select('*')
           .eq('media_group_id', message.media_group_id)
           .not('caption', 'is', null)
-          .single()
-          .then(({ data }) => data as Message);
+          .maybeSingle();
+        
+        if (captionMessage) {
+          messageToDelete = captionMessage as Message;
+        } else {
+          // No caption found in the group, use the original message as fallback
+          messageToDelete = message;
+          
+          // Log this special case
+          console.log('No caption message found in media group, using original message for deletion');
+        }
+      } else {
+        // Single message without media group
+        messageToDelete = message;
+      }
       
       if (!messageToDelete) {
-        throw new Error('Could not find message with caption to delete');
+        throw new Error('Could not find message to delete');
       }
 
       // Log deletion intent
@@ -48,25 +66,92 @@ export const useTelegramOperations = () => {
 
         if (updateError) throw updateError;
 
-        // Then attempt Telegram deletion
-        const response = await supabase.functions.invoke('delete-telegram-message', {
-          body: {
-            message_id: messageToDelete.telegram_message_id,
-            chat_id: messageToDelete.chat_id,
-            media_group_id: messageToDelete.media_group_id
-          }
-        });
+        try {
+          // Attempt Telegram deletion
+          const response = await supabase.functions.invoke('delete-telegram-message', {
+            body: {
+              message_id: messageToDelete.telegram_message_id,
+              chat_id: messageToDelete.chat_id,
+              media_group_id: messageToDelete.media_group_id
+            }
+          });
 
-        if (response.error) throw response.error;
+          if (response.error) throw response.error;
+        } catch (telegramError) {
+          console.error('Telegram deletion error:', telegramError);
+          
+          // If we fail to delete from Telegram but have a media group, try using another message from the group
+          if (messageToDelete.media_group_id) {
+            try {
+              console.log('Attempting alternative message deletion strategy for media group');
+              
+              // Get another message from the same group that isn't the one we just tried
+              const { data: alternateMessages } = await supabase
+                .from('messages')
+                .select('*')
+                .eq('media_group_id', messageToDelete.media_group_id)
+                .neq('id', messageToDelete.id)
+                .limit(1);
+              
+              if (alternateMessages && alternateMessages.length > 0) {
+                const alternateMessage = alternateMessages[0] as Message;
+                
+                // Try deleting with this other message
+                const retryResponse = await supabase.functions.invoke('delete-telegram-message', {
+                  body: {
+                    message_id: alternateMessage.telegram_message_id,
+                    chat_id: alternateMessage.chat_id,
+                    media_group_id: alternateMessage.media_group_id
+                  }
+                });
+                
+                if (retryResponse.error) {
+                  throw new Error(`Failed retry with alternate message: ${retryResponse.error}`);
+                }
+                
+                console.log('Successfully deleted using alternative message in group');
+              } else {
+                throw new Error('No alternative messages found in media group for retry');
+              }
+            } catch (retryError) {
+              console.error('Alternate deletion strategy failed:', retryError);
+              // Continue with database deletion even if Telegram deletion failed
+              toast({
+                title: "Warning",
+                description: `Could not delete from Telegram, but will proceed with database deletion. ${retryError instanceof Error ? retryError.message : 'Unknown error'}`,
+                variant: "warning",
+              });
+            }
+          } else {
+            // No media group to try alternatives, just warn and continue
+            toast({
+              title: "Warning",
+              description: `Could not delete from Telegram, but will proceed with database deletion. ${telegramError instanceof Error ? telegramError.message : 'Unknown error'}`,
+              variant: "warning",
+            });
+          }
+        }
       }
 
       // Delete from database (will cascade to related media group messages)
-      const { error } = await supabase
-        .from('messages')
-        .delete()
-        .eq('id', messageToDelete.id);
-
-      if (error) throw error;
+      // For media groups without caption, we'll delete all messages in the group
+      if (message.media_group_id && !messageToDelete.caption) {
+        // Special handling for media groups without caption - delete all messages in group
+        const { error } = await supabase
+          .from('messages')
+          .delete()
+          .eq('media_group_id', message.media_group_id);
+        
+        if (error) throw error;
+      } else {
+        // Standard deletion by message ID (will cascade via foreign key constraints)
+        const { error } = await supabase
+          .from('messages')
+          .delete()
+          .eq('id', messageToDelete.id);
+        
+        if (error) throw error;
+      }
 
       toast({
         title: "Success",
