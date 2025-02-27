@@ -47,7 +47,10 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
             // Reset processing state and analyzed content if caption changed
             processing_state: captionChanged ? 'pending' : existingMessage.processing_state,
             analyzed_content: captionChanged ? null : existingMessage.analyzed_content,
-            group_caption_synced: captionChanged ? false : existingMessage.group_caption_synced
+            group_caption_synced: captionChanged ? false : existingMessage.group_caption_synced,
+            // Preserve existing storage path and public URL to prevent deletion
+            storage_path: existingMessage.storage_path,
+            public_url: existingMessage.public_url
           })
           .eq('id', existingMessage.id);
 
@@ -99,7 +102,10 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
         // Reset processing state and analyzed content if caption changed
         processing_state: message.caption !== existingMessage.caption ? 'pending' : existingMessage.processing_state,
         analyzed_content: message.caption !== existingMessage.caption ? null : existingMessage.analyzed_content,
-        group_caption_synced: message.caption !== existingMessage.caption ? false : existingMessage.group_caption_synced
+        group_caption_synced: message.caption !== existingMessage.caption ? false : existingMessage.group_caption_synced,
+        // Preserve existing storage path and public URL to prevent deletion
+        storage_path: existingMessage.storage_path,
+        public_url: existingMessage.public_url
         })
         .eq('id', existingMessage.id);
 

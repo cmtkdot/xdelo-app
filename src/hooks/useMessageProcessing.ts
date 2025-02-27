@@ -34,7 +34,10 @@ export function useMessageProcessing() {
           error_message: null,
           retry_count: (message.retry_count || 0) + 1,
           processing_started_at: new Date().toISOString(),
-          processing_correlation_id: correlationId
+          processing_correlation_id: correlationId,
+          // Preserve existing storage path and public URL to prevent deletion
+          storage_path: message.storage_path,
+          public_url: message.public_url
         })
         .eq('id', message.id);
 
@@ -62,7 +65,10 @@ export function useMessageProcessing() {
           processing_state: 'error' as const,
           error_message: error.message,
           processing_completed_at: new Date().toISOString(),
-          last_error_at: new Date().toISOString()
+          last_error_at: new Date().toISOString(),
+          // Preserve existing storage path and public URL to prevent deletion
+          storage_path: message.storage_path,
+          public_url: message.public_url
         })
         .eq('id', message.id);
 
@@ -80,7 +86,10 @@ export function useMessageProcessing() {
         .from('messages')
         .update({
           caption,
-          processing_state: 'pending' as const
+          processing_state: 'pending' as const,
+          // Preserve existing storage path and public URL to prevent deletion
+          storage_path: message.storage_path,
+          public_url: message.public_url
         })
         .eq('id', message.id);
 

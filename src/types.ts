@@ -43,6 +43,7 @@ export interface Message {
   file_id?: string;
   file_unique_id: string;
   public_url: string;
+  storage_path?: string;
   mime_type?: string;
   file_size?: number;
   width?: number;

@@ -85,12 +85,16 @@ serve(async (req) => {
     };
 
     // Update caption in database
+    // Important: Preserve storage_path and public_url to prevent unwanted deletions
     const { error: updateError } = await supabase
       .from('messages')
       .update({ 
         caption: newCaption,
         telegram_data: updatedTelegramData,
         updated_at: new Date().toISOString(),
+        // Preserve existing storage path and public URL to prevent deletion
+        storage_path: message.storage_path,
+        public_url: message.public_url
       })
       .eq('id', messageId);
 
