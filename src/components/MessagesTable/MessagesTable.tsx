@@ -35,7 +35,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
   const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Message[]>([]);
-  const { handleDelete, handleSave, isProcessing } = useTelegramOperations();
+  const { handleDelete, isProcessing } = useTelegramOperations();
   const { toast } = useToast();
 
   const handleEdit = (id: string) => {
@@ -76,8 +76,6 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     if (!message) return;
 
     try {
-      await handleSave(message, message.caption || '');
-      
       setMessages(prev =>
         prev.map(m =>
           m.id === id
@@ -88,7 +86,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
 
       toast({
         description: "Changes saved successfully",
-        variant: "success"
+        variant: "default"
       });
     } catch (error) {
       toast({

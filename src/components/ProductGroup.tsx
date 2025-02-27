@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import Image from "@/components/ui/image-swiper";
+import { ImageSwiper } from "@/components/ui/image-swiper";
 import { Message } from "@/types";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -53,7 +53,7 @@ export function ProductGroup({ group, onEdit, onDelete, onView, isDeleting }: Pr
   return (
     <div className="group relative bg-white dark:bg-gray-950 rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden">
       <div className="aspect-square overflow-hidden">
-        <Image
+        <ImageSwiper
           media={group}
           alt={mainMedia.analyzed_content?.product_name || "Product image"}
           onClick={onView}
