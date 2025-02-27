@@ -23,7 +23,6 @@ const ProductGallery = () => {
     search: "",
     vendors: [],
     sortOrder: "desc",
-    processingState: ['completed']
   });
   
   const queryClient = useQueryClient();
@@ -87,6 +86,7 @@ const ProductGallery = () => {
   const filteredProducts = useMemo(() => {
     let filtered = Object.values(mediaGroups);
     
+    // Only apply search and vendor filters if they are set
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(group => {
@@ -110,13 +110,6 @@ const ProductGallery = () => {
       });
     }
     
-    if (filters.processingState && filters.processingState.length > 0) {
-      filtered = filtered.filter(group => {
-        const mainMedia = group.find(m => m.caption) || group[0];
-        return mainMedia && filters.processingState?.includes(mainMedia.processing_state);
-      });
-    }
-    
     // Sort by created_at date
     filtered.sort((a, b) => {
       const dateA = new Date(a[0]?.created_at || 0).getTime();
@@ -124,7 +117,6 @@ const ProductGallery = () => {
       return filters.sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
     });
 
-    // Log filtered products count
     console.log('Filtered products count:', filtered.length);
     return filtered;
   }, [mediaGroups, filters]);

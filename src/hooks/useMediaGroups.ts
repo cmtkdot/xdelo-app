@@ -10,7 +10,6 @@ export const useMediaGroups = () => {
       const { data, error } = await supabase
         .from('messages')
         .select('*')
-        .not('deleted_from_telegram', 'eq', true)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
