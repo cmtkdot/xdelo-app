@@ -9,6 +9,36 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      credentials_entity: {
+        Row: {
+          createdAt: string
+          data: string
+          id: number
+          name: string
+          nodesAccess: Json
+          type: string
+          updatedAt: string
+        }
+        Insert: {
+          createdAt?: string
+          data: string
+          id?: number
+          name: string
+          nodesAccess: Json
+          type: string
+          updatedAt?: string
+        }
+        Update: {
+          createdAt?: string
+          data?: string
+          id?: number
+          name?: string
+          nodesAccess?: Json
+          type?: string
+          updatedAt?: string
+        }
+        Relationships: []
+      }
       deleted_messages: {
         Row: {
           analyzed_content: Json | null
@@ -87,6 +117,48 @@ export type Database = {
           embedding?: string | null
           id?: number
           metadata?: Json | null
+        }
+        Relationships: []
+      }
+      execution_entity: {
+        Row: {
+          data: string
+          finished: boolean
+          id: number
+          mode: string
+          retryOf: string | null
+          retrySuccessId: string | null
+          startedAt: string
+          stoppedAt: string | null
+          waitTill: string | null
+          workflowData: Json
+          workflowId: string | null
+        }
+        Insert: {
+          data: string
+          finished: boolean
+          id?: number
+          mode: string
+          retryOf?: string | null
+          retrySuccessId?: string | null
+          startedAt: string
+          stoppedAt?: string | null
+          waitTill?: string | null
+          workflowData: Json
+          workflowId?: string | null
+        }
+        Update: {
+          data?: string
+          finished?: boolean
+          id?: number
+          mode?: string
+          retryOf?: string | null
+          retrySuccessId?: string | null
+          startedAt?: string
+          stoppedAt?: string | null
+          waitTill?: string | null
+          workflowData?: Json
+          workflowId?: string | null
         }
         Relationships: []
       }
@@ -1599,6 +1671,24 @@ export type Database = {
           },
         ]
       }
+      migrations: {
+        Row: {
+          id: number
+          name: string
+          timestamp: number
+        }
+        Insert: {
+          id?: number
+          name: string
+          timestamp: number
+        }
+        Update: {
+          id?: number
+          name?: string
+          timestamp?: number
+        }
+        Relationships: []
+      }
       n8_telegram_message: {
         Row: {
           created_at: string
@@ -1830,6 +1920,27 @@ export type Database = {
         }
         Relationships: []
       }
+      tag_entity: {
+        Row: {
+          createdAt: string
+          id: number
+          name: string
+          updatedAt: string
+        }
+        Insert: {
+          createdAt?: string
+          id?: number
+          name: string
+          updatedAt?: string
+        }
+        Update: {
+          createdAt?: string
+          id?: number
+          name?: string
+          updatedAt?: string
+        }
+        Relationships: []
+      }
       unified_audit_logs: {
         Row: {
           chat_id: number | null
@@ -1877,6 +1988,99 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      webhook_entity: {
+        Row: {
+          method: string
+          node: string
+          pathLength: number | null
+          webhookId: string | null
+          webhookPath: string
+          workflowId: number
+        }
+        Insert: {
+          method: string
+          node: string
+          pathLength?: number | null
+          webhookId?: string | null
+          webhookPath: string
+          workflowId: number
+        }
+        Update: {
+          method?: string
+          node?: string
+          pathLength?: number | null
+          webhookId?: string | null
+          webhookPath?: string
+          workflowId?: number
+        }
+        Relationships: []
+      }
+      workflow_entity: {
+        Row: {
+          active: boolean
+          connections: Json
+          createdAt: string
+          id: number
+          name: string
+          nodes: Json
+          settings: Json | null
+          staticData: Json | null
+          updatedAt: string
+        }
+        Insert: {
+          active: boolean
+          connections: Json
+          createdAt?: string
+          id?: number
+          name: string
+          nodes: Json
+          settings?: Json | null
+          staticData?: Json | null
+          updatedAt?: string
+        }
+        Update: {
+          active?: boolean
+          connections?: Json
+          createdAt?: string
+          id?: number
+          name?: string
+          nodes?: Json
+          settings?: Json | null
+          staticData?: Json | null
+          updatedAt?: string
+        }
+        Relationships: []
+      }
+      workflows_tags: {
+        Row: {
+          tagId: number
+          workflowId: number
+        }
+        Insert: {
+          tagId: number
+          workflowId: number
+        }
+        Update: {
+          tagId?: number
+          workflowId?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "FK_31140eb41f019805b40d0087449"
+            columns: ["workflowId"]
+            isOneToOne: false
+            referencedRelation: "workflow_entity"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "FK_5e29bfe9e22c5d6567f509d4a46"
+            columns: ["tagId"]
+            isOneToOne: false
+            referencedRelation: "tag_entity"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
