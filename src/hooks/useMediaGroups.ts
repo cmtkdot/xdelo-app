@@ -16,7 +16,7 @@ export const useMediaGroups = () => {
 
       // Group messages by media_group_id
       const groupedMessages = (data || []).reduce((groups: { [key: string]: Message[] }, message) => {
-        // Use media_group_id if available, otherwise use message id
+        // Use media_group_id if available, otherwise use message id as the group key
         const groupId = message.media_group_id || message.id;
         if (!groups[groupId]) {
           groups[groupId] = [];
@@ -34,6 +34,7 @@ export const useMediaGroups = () => {
         return groups;
       }, {});
 
+      console.log('Total groups:', Object.keys(groupedMessages).length);
       return groupedMessages;
     },
     staleTime: 1000, // Consider data fresh for 1 second

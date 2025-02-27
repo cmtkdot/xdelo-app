@@ -1,15 +1,15 @@
+
 import { useState } from "react";
-import { Message } from "@/types";
-import { AlertCircle, Pencil, Trash2, Eye, RefreshCw, Check } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageSwiper } from "@/components/ui/image-swiper";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { MediaViewer } from "./MediaViewer/MediaViewer";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/useToast";
-import { messageToMediaItem } from "@/lib/utils";
+import { Message } from "@/types";
+import { buttonVariants } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MoreHorizontal, Pencil, Trash2, ExternalLink } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,347 +20,123 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
-interface MediaItem {
-  id: string;
-  url: string;
-  type: string;
-  caption: string;
-  width: number;
-  height: number;
-  public_url: string;
-  created_at: string;
-}
+import { cn } from "@/lib/utils";
 
 interface ProductGroupProps {
   group: Message[];
   onEdit: (media: Message) => void;
-  onDelete: (media: Message) => void;
+  onDelete: (media: Message, deleteTelegram: boolean) => Promise<void>;
   onView: () => void;
+  isDeleting?: boolean;
 }
 
-export const ProductGroup: React.FC<ProductGroupProps> = ({
-  group,
-  onEdit,
-  onDelete,
-  onView
-}) => {
-  const mainMedia = group.find(media => media.is_original_caption) || 
-                   group.find(media => media.analyzed_content) || 
-                   group[0];
-                   
-  const sortedMedia = [...group].sort((a, b) => {
-    const aIsImage = a.mime_type?.startsWith('image/') || false;
-    const bIsImage = b.mime_type?.startsWith('image/') || false;
-    if (aIsImage && !bIsImage) return -1;
-    if (!aIsImage && bIsImage) return 1;
-    return 0;
-  });
+export function ProductGroup({ group, onEdit, onDelete, onView, isDeleting }: ProductGroupProps) {
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteTelegram, setDeleteTelegram] = useState(false);
+  const [isDeleting_, setIsDeleting_] = useState(false);
 
-  const hasError = mainMedia.processing_state === 'error';
-  const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const [isReanalyzing, setIsReanalyzing] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const { toast } = useToast();
+  if (!group || group.length === 0) return null;
 
-  const isSynced = !!mainMedia.glide_row_id;
-  const isForwarded = mainMedia.is_forward;
+  const mainMedia = group.find((m) => m.caption) || group[0];
+  if (!mainMedia) return null;
 
-  const handleReanalyze = async () => {
-    if (isReanalyzing) return;
-    
-    setIsReanalyzing(true);
+  const handleDeleteClick = async (deleteTelegram: boolean) => {
     try {
-      const messageToReanalyze = group.find(m => m.caption) || mainMedia;
-      
-      const response = await supabase.functions.invoke('reanalyze-low-confidence', {
-        body: {
-          message_id: messageToReanalyze.id,
-          media_group_id: messageToReanalyze.media_group_id,
-          caption: messageToReanalyze.caption,
-          correlation_id: crypto.randomUUID()
-        }
-      });
-
-      if (response.error) throw response.error;
-
-      toast({
-        description: "Content reanalysis and media group sync initiated",
-        variant: "success"
-      });
-    } catch (error) {
-      console.error('Reanalysis error:', error);
-      toast({
-        description: "Failed to start reanalysis. Please try again.",
-        variant: "destructive"
-      });
+      setIsDeleting_(true);
+      await onDelete(mainMedia, deleteTelegram);
     } finally {
-      setIsReanalyzing(false);
+      setIsDeleting_(false);
+      setShowDeleteDialog(false);
     }
   };
 
-  const handleDeleteConfirm = async (deleteTelegram: boolean) => {
-    try {
-      const mediaToDelete = mainMedia;
-      
-      const { error } = await supabase
-        .from('messages')
-        .delete()
-        .eq('id', mediaToDelete.id);
-
-      if (error) throw error;
-
-      await onDelete(mediaToDelete);
-      
-      toast({
-        title: "Success",
-        description: `Product deleted successfully${deleteTelegram ? ' from both Telegram and database' : ' from database'}`,
-      });
-    } catch (error) {
-      console.error('Delete error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete product. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDeleteDialogOpen(false);
-    }
-  };
+  // Convert Message[] to MediaItem[] for ImageSwiper
+  const mediaItems = group.map(message => ({
+    id: message.id,
+    public_url: message.public_url,
+    mime_type: message.mime_type,
+    created_at: message.created_at || new Date().toISOString(),
+    analyzed_content: message.analyzed_content
+  }));
 
   return (
-    <>
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden transition-all hover:shadow-md">
-        <div className="relative h-64" onClick={() => setIsViewerOpen(true)}>
-          <ImageSwiper media={sortedMedia.map(message => messageToMediaItem(message))} />
-          
-          <div className="absolute top-2 right-2 flex gap-2">
-            {isSynced && (
-              <div className="bg-green-100 dark:bg-green-900/20 p-2 rounded-full">
-                <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
-              </div>
-            )}
-            {isForwarded && (
-              <TooltipProvider delayDuration={0}>
-                <Tooltip>
-                  <TooltipTrigger className="bg-blue-100 dark:bg-blue-900/20 p-2 rounded-full">
-                    <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                  </TooltipTrigger>
-                  <TooltipContent className="px-2 py-1">
-                    <p className="text-xs">Forwarded message</p>
-                    {mainMedia.forward_count && (
-                      <p className="text-xs text-muted-foreground">
-                        Forwarded {mainMedia.forward_count} times
-                      </p>
-                    )}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-          </div>
-
-          {hasError && (
-            <Alert variant="destructive" className="absolute bottom-0 left-0 right-0 m-2">
-              <AlertDescription>
-                {mainMedia.error_message || 'Processing error occurred'}
-              </AlertDescription>
-            </Alert>
-          )}
-        </div>
-        
-        <div className="p-3 space-y-2">
-          {mainMedia.purchase_order && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Order ID</span>
-              <span className="text-sm font-medium truncate max-w-[60%] text-right">
-                {mainMedia.purchase_order}
-              </span>
-            </div>
-          )}
-          
-          {mainMedia.analyzed_content?.product_name && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Product</span>
-              <span className="text-sm font-medium truncate max-w-[60%] text-right">
-                {mainMedia.analyzed_content.product_name}
-              </span>
-            </div>
-          )}
-          
-          {mainMedia.analyzed_content?.quantity && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Quantity</span>
-              <span className="text-sm font-medium">
-                {mainMedia.analyzed_content.quantity}
-              </span>
-            </div>
-          )}
-          
-          {mainMedia.analyzed_content?.vendor_uid && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Vendor</span>
-              <span className="text-sm font-medium truncate max-w-[60%] text-right">
-                {mainMedia.analyzed_content.vendor_uid}
-              </span>
-            </div>
-          )}
-          
-          {mainMedia.analyzed_content?.product_code && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Product Code</span>
-              <span className="text-sm font-medium truncate max-w-[60%] text-right">
-                {mainMedia.analyzed_content.product_code}
-              </span>
-            </div>
-          )}
-          
-          {mainMedia.analyzed_content?.purchase_date && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Purchase Date</span>
-              <span className="text-sm font-medium">
-                {new Date(mainMedia.analyzed_content.purchase_date).toLocaleDateString()}
-              </span>
-            </div>
-          )}
-          
-          {mainMedia.analyzed_content?.unit_price && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Unit Price</span>
-              <span className="text-sm font-medium">
-                ${mainMedia.analyzed_content.unit_price.toFixed(2)}
-              </span>
-            </div>
-          )}
-          
-          {mainMedia.analyzed_content?.total_price && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Total Price</span>
-              <span className="text-sm font-medium">
-                ${mainMedia.analyzed_content.total_price.toFixed(2)}
-              </span>
-            </div>
-          )}
-          
-          <div className="flex justify-center pt-2 border-t border-border">
-            <Tabs defaultValue="view" className="w-full">
-              <TabsList className="grid w-full grid-cols-4 gap-2">
-                <TooltipProvider delayDuration={0}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <TabsTrigger 
-                        value="view" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onView();
-                          setIsViewerOpen(true);
-                        }}
-                        className="py-1.5 text-black hover:text-black/80 dark:text-white dark:hover:text-white/80"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </TabsTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent className="px-2 py-1 text-xs">View</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                <TooltipProvider delayDuration={0}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <TabsTrigger 
-                        value="edit" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onEdit(mainMedia);
-                        }}
-                        className="py-1.5 text-black hover:text-black/80 dark:text-white dark:hover:text-white/80"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </TabsTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent className="px-2 py-1 text-xs">Edit</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                <TooltipProvider delayDuration={0}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <TabsTrigger 
-                        value="reanalyze" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleReanalyze();
-                        }}
-                        disabled={isReanalyzing}
-                        className="py-1.5 text-black hover:text-black/80 dark:text-white dark:hover:text-white/80"
-                      >
-                        <RefreshCw className={`w-4 h-4 ${isReanalyzing ? 'animate-spin' : ''}`} />
-                      </TabsTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent className="px-2 py-1 text-xs">
-                      {isReanalyzing ? 'Reanalyzing...' : 'Reanalyze'}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                <TooltipProvider delayDuration={0}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <TabsTrigger 
-                        value="delete" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsDeleteDialogOpen(true);
-                        }}
-                        className="py-1.5 text-destructive hover:text-destructive/80"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </TabsTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent className="px-2 py-1 text-xs">Delete</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </TabsList>
-            </Tabs>
-          </div>
-        </div>
-
-        <MediaViewer
-          isOpen={isViewerOpen}
-          onClose={() => setIsViewerOpen(false)}
-          currentGroup={sortedMedia}
+    <div className="group relative bg-white dark:bg-gray-950 rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+      <div className="aspect-square overflow-hidden">
+        <ImageSwiper
+          media={mediaItems}
+          onClick={onView}
+          className="w-full h-full object-cover cursor-pointer"
         />
       </div>
 
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <div className="p-4">
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="text-sm font-medium leading-none truncate max-w-[80%]">
+            {mainMedia.analyzed_content?.product_name || "Untitled"}
+          </h3>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "icon" }),
+                "h-8 w-8 p-0"
+              )}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+              <span className="sr-only">Open menu</span>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onEdit(mainMedia)}>
+                <Pencil className="mr-2 h-4 w-4" /> Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowDeleteDialog(true)}>
+                <Trash2 className="mr-2 h-4 w-4" /> Delete
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onView}>
+                <ExternalLink className="mr-2 h-4 w-4" /> View
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {mainMedia.analyzed_content?.vendor_uid || "No vendor"}
+          </p>
+          {mainMedia.analyzed_content?.product_code && (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {mainMedia.analyzed_content.product_code}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Product</AlertDialogTitle>
             <AlertDialogDescription>
-              Do you want to delete this product from Telegram as well?
-              {mainMedia.media_group_id && (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Note: This will delete all related media in the group.
-                </p>
-              )}
+              Do you want to delete this product from both Telegram and the database, or just from the database?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => handleDeleteConfirm(false)}
+              onClick={() => handleDeleteClick(true)}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={isDeleting_ || isDeleting}
             >
-              Delete from Database Only
+              {isDeleting_ && deleteTelegram ? "Deleting..." : "Delete from Both"}
             </AlertDialogAction>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => handleDeleteConfirm(true)}
+              onClick={() => handleDeleteClick(false)}
+              className="bg-yellow-600 hover:bg-yellow-700"
+              disabled={isDeleting_ || isDeleting}
             >
-              Delete from Both
+              {isDeleting_ && !deleteTelegram ? "Deleting..." : "Delete from Database Only"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   );
-};
+}

@@ -9,6 +9,36 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      credentials_entity: {
+        Row: {
+          createdAt: string
+          data: string
+          id: number
+          name: string
+          nodesAccess: Json
+          type: string
+          updatedAt: string
+        }
+        Insert: {
+          createdAt?: string
+          data: string
+          id?: number
+          name: string
+          nodesAccess: Json
+          type: string
+          updatedAt?: string
+        }
+        Update: {
+          createdAt?: string
+          data?: string
+          id?: number
+          name?: string
+          nodesAccess?: Json
+          type?: string
+          updatedAt?: string
+        }
+        Relationships: []
+      }
       deleted_messages: {
         Row: {
           analyzed_content: Json | null
@@ -87,6 +117,48 @@ export type Database = {
           embedding?: string | null
           id?: number
           metadata?: Json | null
+        }
+        Relationships: []
+      }
+      execution_entity: {
+        Row: {
+          data: string
+          finished: boolean
+          id: number
+          mode: string
+          retryOf: string | null
+          retrySuccessId: string | null
+          startedAt: string
+          stoppedAt: string | null
+          waitTill: string | null
+          workflowData: Json
+          workflowId: string | null
+        }
+        Insert: {
+          data: string
+          finished: boolean
+          id?: number
+          mode: string
+          retryOf?: string | null
+          retrySuccessId?: string | null
+          startedAt: string
+          stoppedAt?: string | null
+          waitTill?: string | null
+          workflowData: Json
+          workflowId?: string | null
+        }
+        Update: {
+          data?: string
+          finished?: boolean
+          id?: number
+          mode?: string
+          retryOf?: string | null
+          retrySuccessId?: string | null
+          startedAt?: string
+          stoppedAt?: string | null
+          waitTill?: string | null
+          workflowData?: Json
+          workflowId?: string | null
         }
         Relationships: []
       }
@@ -207,9 +279,8 @@ export type Database = {
           glide_table_name: string
           id: string
           is_active: boolean
-          last_validation_time: string | null
           max_retries: number | null
-          mutation_api_endpoint: string
+          mutation_api_endpoint: string | null
           retry_interval: unknown | null
           supabase_table_name: string
           supported_operations: string[]
@@ -217,7 +288,6 @@ export type Database = {
           table_config: Json | null
           table_id: string
           updated_at: string | null
-          validation_error: string | null
         }
         Insert: {
           api_key: string
@@ -227,9 +297,8 @@ export type Database = {
           glide_table_name: string
           id?: string
           is_active?: boolean
-          last_validation_time?: string | null
           max_retries?: number | null
-          mutation_api_endpoint?: string
+          mutation_api_endpoint?: string | null
           retry_interval?: unknown | null
           supabase_table_name: string
           supported_operations?: string[]
@@ -237,7 +306,6 @@ export type Database = {
           table_config?: Json | null
           table_id: string
           updated_at?: string | null
-          validation_error?: string | null
         }
         Update: {
           api_key?: string
@@ -247,9 +315,8 @@ export type Database = {
           glide_table_name?: string
           id?: string
           is_active?: boolean
-          last_validation_time?: string | null
           max_retries?: number | null
-          mutation_api_endpoint?: string
+          mutation_api_endpoint?: string | null
           retry_interval?: unknown | null
           supabase_table_name?: string
           supported_operations?: string[]
@@ -257,7 +324,6 @@ export type Database = {
           table_config?: Json | null
           table_id?: string
           updated_at?: string | null
-          validation_error?: string | null
         }
         Relationships: []
       }
@@ -849,6 +915,7 @@ export type Database = {
           main_purchase_order_uid: string | null
           rowid_accntrowid: string | null
           sb_accounts_id: string | null
+          share_url: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
@@ -866,6 +933,7 @@ export type Database = {
           main_purchase_order_uid?: string | null
           rowid_accntrowid?: string | null
           sb_accounts_id?: string | null
+          share_url?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
@@ -883,6 +951,7 @@ export type Database = {
           main_purchase_order_uid?: string | null
           rowid_accntrowid?: string | null
           sb_accounts_id?: string | null
+          share_url?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
@@ -1367,7 +1436,6 @@ export type Database = {
           group_caption_synced: boolean | null
           group_first_message_time: string | null
           group_last_message_time: string | null
-          group_message_count: string | null
           height: number | null
           id: string
           is_channel_post: string | null
@@ -1401,10 +1469,7 @@ export type Database = {
           processing_started_at: string | null
           processing_state: Database["public"]["Enums"]["processing_state_type"]
           product_code: string | null
-          product_name: string | null
           product_quantity: number | null
-          product_sku: string | null
-          product_unit: string | null
           public_url: string | null
           purchase_date: string | null
           purchase_order: string | null
@@ -1416,7 +1481,6 @@ export type Database = {
           update_id: string | null
           updated_at: string
           user_id: string | null
-          vendor_name: string | null
           vendor_uid: string | null
           width: number | null
         }
@@ -1448,7 +1512,6 @@ export type Database = {
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
-          group_message_count?: string | null
           height?: number | null
           id?: string
           is_channel_post?: string | null
@@ -1482,10 +1545,7 @@ export type Database = {
           processing_started_at?: string | null
           processing_state?: Database["public"]["Enums"]["processing_state_type"]
           product_code?: string | null
-          product_name?: string | null
           product_quantity?: number | null
-          product_sku?: string | null
-          product_unit?: string | null
           public_url?: string | null
           purchase_date?: string | null
           purchase_order?: string | null
@@ -1497,7 +1557,6 @@ export type Database = {
           update_id?: string | null
           updated_at?: string
           user_id?: string | null
-          vendor_name?: string | null
           vendor_uid?: string | null
           width?: number | null
         }
@@ -1529,7 +1588,6 @@ export type Database = {
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
-          group_message_count?: string | null
           height?: number | null
           id?: string
           is_channel_post?: string | null
@@ -1563,10 +1621,7 @@ export type Database = {
           processing_started_at?: string | null
           processing_state?: Database["public"]["Enums"]["processing_state_type"]
           product_code?: string | null
-          product_name?: string | null
           product_quantity?: number | null
-          product_sku?: string | null
-          product_unit?: string | null
           public_url?: string | null
           purchase_date?: string | null
           purchase_order?: string | null
@@ -1578,11 +1633,24 @@ export type Database = {
           update_id?: string | null
           updated_at?: string
           user_id?: string | null
-          vendor_name?: string | null
           vendor_uid?: string | null
           width?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_message_caption"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_message_caption"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_forwards"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "messages_message_caption_id_fkey"
             columns: ["message_caption_id"]
@@ -1598,6 +1666,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      migrations: {
+        Row: {
+          id: number
+          name: string
+          timestamp: number
+        }
+        Insert: {
+          id?: number
+          name: string
+          timestamp: number
+        }
+        Update: {
+          id?: number
+          name?: string
+          timestamp?: number
+        }
+        Relationships: []
       }
       n8_telegram_message: {
         Row: {
@@ -1617,6 +1703,24 @@ export type Database = {
           id?: number
           message?: string | null
           telegram_data?: Json | null
+        }
+        Relationships: []
+      }
+      n8n_chat_histories: {
+        Row: {
+          id: number
+          message: Json
+          session_id: string
+        }
+        Insert: {
+          id?: number
+          message: Json
+          session_id: string
+        }
+        Update: {
+          id?: number
+          message?: Json
+          session_id?: string
         }
         Relationships: []
       }
@@ -1830,6 +1934,27 @@ export type Database = {
         }
         Relationships: []
       }
+      tag_entity: {
+        Row: {
+          createdAt: string
+          id: number
+          name: string
+          updatedAt: string
+        }
+        Insert: {
+          createdAt?: string
+          id?: number
+          name: string
+          updatedAt?: string
+        }
+        Update: {
+          createdAt?: string
+          id?: number
+          name?: string
+          updatedAt?: string
+        }
+        Relationships: []
+      }
       unified_audit_logs: {
         Row: {
           chat_id: number | null
@@ -1877,6 +2002,99 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      webhook_entity: {
+        Row: {
+          method: string
+          node: string
+          pathLength: number | null
+          webhookId: string | null
+          webhookPath: string
+          workflowId: number
+        }
+        Insert: {
+          method: string
+          node: string
+          pathLength?: number | null
+          webhookId?: string | null
+          webhookPath: string
+          workflowId: number
+        }
+        Update: {
+          method?: string
+          node?: string
+          pathLength?: number | null
+          webhookId?: string | null
+          webhookPath?: string
+          workflowId?: number
+        }
+        Relationships: []
+      }
+      workflow_entity: {
+        Row: {
+          active: boolean
+          connections: Json
+          createdAt: string
+          id: number
+          name: string
+          nodes: Json
+          settings: Json | null
+          staticData: Json | null
+          updatedAt: string
+        }
+        Insert: {
+          active: boolean
+          connections: Json
+          createdAt?: string
+          id?: number
+          name: string
+          nodes: Json
+          settings?: Json | null
+          staticData?: Json | null
+          updatedAt?: string
+        }
+        Update: {
+          active?: boolean
+          connections?: Json
+          createdAt?: string
+          id?: number
+          name?: string
+          nodes?: Json
+          settings?: Json | null
+          staticData?: Json | null
+          updatedAt?: string
+        }
+        Relationships: []
+      }
+      workflows_tags: {
+        Row: {
+          tagId: number
+          workflowId: number
+        }
+        Insert: {
+          tagId: number
+          workflowId: number
+        }
+        Update: {
+          tagId?: number
+          workflowId?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "FK_31140eb41f019805b40d0087449"
+            columns: ["workflowId"]
+            isOneToOne: false
+            referencedRelation: "workflow_entity"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "FK_5e29bfe9e22c5d6567f509d4a46"
+            columns: ["tagId"]
+            isOneToOne: false
+            referencedRelation: "tag_entity"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -2100,6 +2318,10 @@ export type Database = {
           "": unknown
         }
         Returns: unknown
+      }
+      invoke_edge_function_for_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       ivfflat_bit_support: {
         Args: {
@@ -2410,7 +2632,7 @@ export type Database = {
         | "media_group_history_synced"
         | "forward_media_synced"
         | "message_forwarded"
-      client_type: "Vendor" | "Customer" | "Both"
+      client_type: "Vendor" | "Customer" | "Customer & Vendor"
       processing_state_type:
         | "initialized"
         | "pending"

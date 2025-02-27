@@ -6,9 +6,10 @@ import { cn } from "@/lib/utils";
 interface ProductGridProps {
   products: Message[][];
   onEdit: (media: Message) => void;
-  onDelete: (media: Message) => void;
+  onDelete: (media: Message, deleteTelegram: boolean) => Promise<void>;
   onView: () => void;
   className?: string;
+  isDeleting?: boolean;
 }
 
 export const ProductGrid = ({
@@ -16,25 +17,26 @@ export const ProductGrid = ({
   onEdit,
   onDelete,
   onView,
-  className
+  className,
+  isDeleting = false
 }: ProductGridProps) => {
   // Guard against undefined products
   if (!Array.isArray(products)) {
     return null;
   }
 
+  console.log('Number of products:', products.length); // Debug log
+
   return (
     <div
       className={cn(
         "grid gap-4 sm:gap-5",
-        // Default to 1 column on mobile, 2 on small tablets
-        "grid-cols-1 sm:grid-cols-2",
+        // Default to 2 columns on mobile
+        "grid-cols-2",
         // 3 columns on medium screens
         "md:grid-cols-3",
-        // Max out at 4 columns on large screens
+        // 4 columns on large screens
         "lg:grid-cols-4",
-        // Optional 5th column on extra large screens
-        "2xl:grid-cols-5",
         className
       )}
     >
@@ -49,6 +51,7 @@ export const ProductGrid = ({
             onEdit={onEdit}
             onDelete={onDelete}
             onView={onView}
+            isDeleting={isDeleting}
           />
         );
       })}
