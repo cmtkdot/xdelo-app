@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -81,30 +82,6 @@ const ProductGallery = () => {
 
   const handleView = () => {
     console.log('Viewing media');
-  };
-
-  const handleDelete = async (media: Message) => {
-    try {
-      const { error } = await supabase
-        .from('messages')
-        .delete()
-        .eq('id', media.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Media deleted",
-        description: "The media has been successfully deleted.",
-      });
-
-      queryClient.invalidateQueries({ queryKey: ['media-groups'] });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete media. Please try again.",
-        variant: "destructive",
-      });
-    }
   };
 
   const filteredProducts = useMemo(() => {

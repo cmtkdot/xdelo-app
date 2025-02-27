@@ -6,9 +6,10 @@ import { cn } from "@/lib/utils";
 interface ProductGridProps {
   products: Message[][];
   onEdit: (media: Message) => void;
-  onDelete: (media: Message) => void;
+  onDelete: (media: Message, deleteTelegram: boolean) => Promise<void>;
   onView: () => void;
   className?: string;
+  isDeleting?: boolean;
 }
 
 export const ProductGrid = ({
@@ -16,7 +17,8 @@ export const ProductGrid = ({
   onEdit,
   onDelete,
   onView,
-  className
+  className,
+  isDeleting = false
 }: ProductGridProps) => {
   // Guard against undefined products
   if (!Array.isArray(products)) {
@@ -49,6 +51,7 @@ export const ProductGrid = ({
             onEdit={onEdit}
             onDelete={onDelete}
             onView={onView}
+            isDeleting={isDeleting}
           />
         );
       })}

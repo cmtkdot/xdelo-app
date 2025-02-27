@@ -1656,6 +1656,20 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_message_caption"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_message_caption"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_forwards"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "messages_message_caption_id_fkey"
             columns: ["message_caption_id"]
             isOneToOne: false
