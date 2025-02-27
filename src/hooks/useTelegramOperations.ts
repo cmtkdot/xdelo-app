@@ -119,7 +119,7 @@ export const useTelegramOperations = () => {
               toast({
                 title: "Warning",
                 description: `Could not delete from Telegram, but will proceed with database deletion. ${retryError instanceof Error ? retryError.message : 'Unknown error'}`,
-                variant: "warning",
+                variant: "destructive",
               });
             }
           } else {
@@ -127,7 +127,7 @@ export const useTelegramOperations = () => {
             toast({
               title: "Warning",
               description: `Could not delete from Telegram, but will proceed with database deletion. ${telegramError instanceof Error ? telegramError.message : 'Unknown error'}`,
-              variant: "warning",
+              variant: "destructive",
             });
           }
         }
