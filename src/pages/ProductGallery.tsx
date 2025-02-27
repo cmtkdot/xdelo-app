@@ -90,7 +90,7 @@ const ProductGallery = () => {
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(group => {
-        const mainMedia = group.find(m => m.is_original_caption) || group[0];
+        const mainMedia = group.find(m => m.caption) || group[0];
         if (!mainMedia) return false;
         
         return (
@@ -105,14 +105,14 @@ const ProductGallery = () => {
     
     if (filters.vendors && filters.vendors.length > 0) {
       filtered = filtered.filter(group => {
-        const mainMedia = group.find(m => m.is_original_caption) || group[0];
+        const mainMedia = group.find(m => m.caption) || group[0];
         return mainMedia && filters.vendors?.includes(mainMedia.analyzed_content?.vendor_uid || '');
       });
     }
     
     if (filters.processingState && filters.processingState.length > 0) {
       filtered = filtered.filter(group => {
-        const mainMedia = group.find(m => m.is_original_caption) || group[0];
+        const mainMedia = group.find(m => m.caption) || group[0];
         return mainMedia && filters.processingState?.includes(mainMedia.processing_state);
       });
     }

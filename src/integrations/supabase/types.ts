@@ -2319,6 +2319,10 @@ export type Database = {
         }
         Returns: unknown
       }
+      invoke_edge_function_for_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       ivfflat_bit_support: {
         Args: {
           "": unknown
