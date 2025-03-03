@@ -1,4 +1,3 @@
-
 import { ParsedContent } from './types.ts';
 
 // Analyze caption using OpenAI

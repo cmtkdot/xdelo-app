@@ -2974,6 +2974,13 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_check_media_group_content: {
+        Args: {
+          p_media_group_id: string
+          p_message_id: string
+        }
+        Returns: Json
+      }
       xdelo_check_webhook_health: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3165,22 +3172,14 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_sync_media_group_content:
-        | {
-            Args: {
-              p_media_group_id: string
-              p_source_message_id: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_source_message_id: string
-              p_media_group_id: string
-              p_correlation_id?: string
-            }
-            Returns: Json
-          }
+      xdelo_sync_media_group_content: {
+        Args: {
+          p_source_message_id: string
+          p_media_group_id: string
+          p_correlation_id?: string
+        }
+        Returns: Json
+      }
       xdelo_update_message_processing_state: {
         Args: {
           p_message_id: string
