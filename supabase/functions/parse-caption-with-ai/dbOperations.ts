@@ -268,7 +268,7 @@ async function syncMediaGroupDirectly(mediaGroupId: string, sourceMessageId: str
   }
 }
 
-// Log the analysis in the audit logs
+// Log the analysis event
 export const logAnalysisEvent = async (
   messageId: string,
   correlationId: string,
