@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -63,35 +64,52 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
           }
         }
 
-        // Update telegram_data with new caption
-        const updatedTelegramData = {
-          ...currentTelegramData,
-          message: {
-            ...(currentTelegramData.message || {}),
-            caption: caption
+        // Use the caption syncing function for media groups
+        if (media.media_group_id) {
+          console.log('Message is part of media group, syncing caption');
+          const { error: syncError } = await supabase.rpc('xdelo_sync_caption_to_media_group', {
+            p_message_id: media.id,
+            p_new_caption: caption,
+            p_update_telegram: false  // Don't update in Telegram since we already did it
+          });
+          
+          if (syncError) {
+            console.error('Error syncing caption to media group:', syncError);
+            // Continue anyway - fallback to direct update
           }
-        };
+        } else {
+          // For non-media group messages, update directly
+          const updatedTelegramData = {
+            ...currentTelegramData,
+            message: {
+              ...(currentTelegramData.message || {}),
+              caption: caption
+            }
+          };
 
-        // First update the message in database
-        const { error: updateError } = await supabase
-          .from('messages')
-          .update({
-            caption: caption,
-            telegram_data: updatedTelegramData,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', media.id);
+          // Update the message in database
+          const { error: updateError } = await supabase
+            .from('messages')
+            .update({
+              caption: caption,
+              telegram_data: updatedTelegramData,
+              updated_at: new Date().toISOString(),
+              processing_state: 'pending',  // Mark for reprocessing
+              analyzed_content: null        // Clear for reanalysis
+            })
+            .eq('id', media.id);
 
-        if (updateError) throw updateError;
+          if (updateError) throw updateError;
+        }
 
         // Trigger reanalysis
         console.log('Triggering reanalysis for updated content');
         const { error: reanalysisError } = await supabase.functions.invoke('parse-caption-with-ai', {
           body: {
-            message_id: media.id,
-            media_group_id: media.media_group_id,
+            messageId: media.id,
             caption: caption,
-            correlation_id: crypto.randomUUID()
+            media_group_id: media.media_group_id,
+            correlationId: crypto.randomUUID()
           }
         });
 

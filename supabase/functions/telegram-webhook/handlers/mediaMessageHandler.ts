@@ -75,6 +75,9 @@ async function handleEditedMediaMessage(
       edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
     });
     
+    // Check if caption changed
+    const captionChanged = message.caption !== existingMessage.caption;
+    
     // Update the message with new caption and edit history
     const { error: updateError } = await supabaseClient
       .from('messages')
@@ -88,14 +91,37 @@ async function handleEditedMediaMessage(
         correlation_id: correlationId,
         updated_at: new Date().toISOString(),
         // Reset processing state if caption changed
-        processing_state: message.caption !== existingMessage.caption ? 'pending' : existingMessage.processing_state
+        processing_state: captionChanged ? 'pending' : existingMessage.processing_state,
+        // Mark as needing group sync if caption changed and part of a group
+        group_caption_synced: captionChanged && message.media_group_id ? false : existingMessage.group_caption_synced
       })
       .eq('id', existingMessage.id);
 
     if (updateError) throw updateError;
 
+    // If caption changed and part of a media group, update group caption sync
+    if (captionChanged && message.media_group_id) {
+      try {
+        // Use the DB function to handle media group caption update
+        const { data: syncResult, error: syncError } = await supabaseClient.rpc(
+          'xdelo_sync_caption_to_media_group',
+          {
+            p_message_id: existingMessage.id,
+            p_new_caption: message.caption,
+            p_update_telegram: false // Don't update Telegram for edits handled by webhook
+          }
+        );
+        
+        if (syncError) {
+          console.error('Error syncing media group caption:', syncError);
+        }
+      } catch (syncError) {
+        console.error('Failed to sync media group caption:', syncError);
+      }
+    }
+
     // If caption changed, trigger parsing
-    if (message.caption !== existingMessage.caption && message.caption) {
+    if (captionChanged && message.caption) {
       try {
         // Call the parse-caption-with-ai function
         await supabaseClient.functions.invoke('parse-caption-with-ai', {
@@ -124,7 +150,7 @@ async function handleEditedMediaMessage(
           chat_id: message.chat.id,
           file_unique_id: mediaInfo.file_unique_id,
           existing_message_id: existingMessage.id,
-          edit_type: message.caption !== existingMessage.caption ? 'caption_changed' : 'other_edit',
+          edit_type: captionChanged ? 'caption_changed' : 'other_edit',
           media_group_id: message.media_group_id
         }
       );
@@ -233,7 +259,7 @@ async function processNewMessage(
     console.log(`Message ${insertedMessage.id} has no caption but is part of media group ${message.media_group_id}, checking for analyzed content in group`);
     
     try {
-      // Call database function to sync with media group
+      // Use the proper function to check and sync with media group
       const { data: syncResult, error: syncError } = await supabaseClient.rpc(
         'xdelo_check_media_group_content',
         {
@@ -244,8 +270,10 @@ async function processNewMessage(
       
       if (syncError) {
         console.error('Error checking media group content:', syncError);
-      } else if (syncResult) {
+      } else if (syncResult && syncResult.success) {
         console.log(`Successfully synced content from media group ${message.media_group_id} to message ${insertedMessage.id}`);
+      } else if (syncResult) {
+        console.log(`No content to sync: ${syncResult.reason}`);
       }
     } catch (syncError) {
       console.error('Failed to sync with media group:', syncError);
