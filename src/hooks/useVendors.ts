@@ -8,7 +8,7 @@ export const useVendors = () => {
     queryKey: ['vendors'],
     queryFn: async () => {
       try {
-        // Use the new compatibility view for consistent field naming
+        // Use the compatibility view for consistent field naming
         const { data, error } = await supabase
           .from("v_messages_compatibility")
           .select('analyzed_content, vendor_name')
@@ -22,9 +22,12 @@ export const useVendors = () => {
           // First check the direct vendor_name field from the view
           if (item.vendor_name) {
             uniqueVendors.add(item.vendor_name);
-          } else if (item.analyzed_content?.vendor_uid) {
-            // Fall back to analyzed_content if needed
-            uniqueVendors.add(item.analyzed_content.vendor_uid);
+          } else if (item.analyzed_content) {
+            // Safely access vendor_uid from analyzed_content
+            const analyzedContent = item.analyzed_content as AnalyzedContent;
+            if (analyzedContent && analyzedContent.vendor_uid) {
+              uniqueVendors.add(analyzedContent.vendor_uid);
+            }
           }
         });
 
