@@ -1,24 +1,26 @@
 
 /**
- * Validates and generates correct storage paths for media files
+ * Validates and normalizes the storage path for a file
  */
 export function validateStoragePath(
-  fileUniqueId: string, 
-  storagePath: string | null, 
-  mimeType: string | null
-): { storagePath: string, needsUpdate: boolean } {
-  // Default extension
-  const extension = mimeType ? mimeType.split('/')[1] : 'jpeg';
+  fileUniqueId: string,
+  storagePath: string,
+  mimeType: string
+): { storagePath: string; needsUpdate: boolean } {
+  // Extract extension from mime_type
+  const extension = mimeType 
+    ? mimeType.split('/')[1] 
+    : 'jpeg';  // Default to jpeg if no mime type
   
-  // Generate the standard storage path format
+  // Standard format for storage path
   const standardPath = `${fileUniqueId}.${extension}`;
   
-  // Check if the storage path needs to be updated
+  // Check if storage path is missing or doesn't match the standard format
   const needsUpdate = !storagePath || 
-                      storagePath.trim() === '' || 
-                      !storagePath.includes(fileUniqueId);
+                      !storagePath.startsWith(fileUniqueId) ||
+                      storagePath !== standardPath;
   
-  return { 
+  return {
     storagePath: standardPath,
     needsUpdate
   };
@@ -27,9 +29,6 @@ export function validateStoragePath(
 /**
  * Constructs a public URL for a file in storage
  */
-export function constructPublicUrl(storagePath: string, baseUrl?: string): string {
-  const storageBaseUrl = baseUrl || 
-    `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/`;
-  
-  return `${storageBaseUrl}${storagePath}`;
+export function constructPublicUrl(storagePath: string): string {
+  return `https://xjhhehxcxkiumnwbirel.supabase.co/storage/v1/object/public/telegram-media/${storagePath}`;
 }

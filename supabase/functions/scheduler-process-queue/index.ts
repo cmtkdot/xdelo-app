@@ -22,12 +22,14 @@ serve(async (req) => {
     console.log('Starting scheduled queue processing');
     
     // Get the pending messages count
-    const { data: pendingCountData } = await supabase
+    const { count: pendingCount, error: countError } = await supabase
       .from('message_processing_queue')
-      .select('count', { count: 'exact', head: true })
+      .select('*', { count: 'exact', head: true })
       .eq('status', 'pending');
     
-    const pendingCount = pendingCountData?.count || 0;
+    if (countError) {
+      throw new Error(`Error getting pending count: ${countError.message}`);
+    }
     
     if (pendingCount === 0) {
       console.log('No pending messages in queue');
@@ -39,42 +41,36 @@ serve(async (req) => {
     
     console.log(`Found ${pendingCount} pending messages, initiating processing`);
     
-    // Process up to 5 messages in parallel
-    const processCount = Math.min(pendingCount, 5);
-    const processingPromises = [];
+    // Process up to 10 messages
+    const processCount = Math.min(pendingCount, 10);
     
-    for (let i = 0; i < processCount; i++) {
-      processingPromises.push(
-        fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/process-message-queue`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-          },
-          body: JSON.stringify({ scheduled: true })
-        })
-      );
-      
-      // Add a small delay between invocations to avoid race conditions
-      if (i < processCount - 1) {
-        await new Promise(resolve => setTimeout(resolve, 200));
+    const processResponse = await fetch(
+      `${Deno.env.get('SUPABASE_URL')}/functions/v1/process-message-queue`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+        },
+        body: JSON.stringify({ limit: processCount })
       }
+    );
+    
+    if (!processResponse.ok) {
+      throw new Error(`Error processing queue: ${processResponse.status} ${processResponse.statusText}`);
     }
     
-    const results = await Promise.allSettled(processingPromises);
+    const processResult = await processResponse.json();
     
-    const successCount = results.filter(r => r.status === 'fulfilled').length;
-    const failureCount = results.filter(r => r.status === 'rejected').length;
-    
-    console.log(`Processing complete: ${successCount} succeeded, ${failureCount} failed`);
+    console.log(`Processing complete: ${processResult.data.success} succeeded, ${processResult.data.failed} failed`);
     
     return new Response(
       JSON.stringify({ 
         success: true, 
         pendingCount,
-        processedCount: processCount,
-        successCount,
-        failureCount
+        processedCount: processResult.data.processed,
+        successCount: processResult.data.success,
+        failureCount: processResult.data.failed
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

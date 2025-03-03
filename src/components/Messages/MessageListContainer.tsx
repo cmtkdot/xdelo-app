@@ -3,13 +3,17 @@ import { useEffect, useState } from 'react';
 import type { Message } from './types';
 import { MessageList } from './MessageList';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/useToast';
+import { useToast } from '@/hooks/useToast';
+import { Button } from '../ui/button';
+import { RefreshCw, PlayCircle, AlertCircle } from 'lucide-react';
 
 export function MessageListContainer() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0 });
+  const { toast } = useToast();
 
   const fetchMessages = async () => {
     try {
@@ -17,9 +21,9 @@ export function MessageListContainer() {
       setError(null);
       
       console.log('Fetching messages...');
-      const { data, error, count } = await supabase
+      const { data, error } = await supabase
         .from('messages')
-        .select('*', { count: 'exact' })
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -28,7 +32,7 @@ export function MessageListContainer() {
         throw error;
       }
 
-      console.log('Fetched messages:', { count, messages: data?.length });
+      console.log('Fetched messages:', { count: data?.length });
       setMessages((data as unknown as Message[]) || []);
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -41,9 +45,7 @@ export function MessageListContainer() {
   const processAllMessages = async () => {
     try {
       setProcessing(true);
-      let processedCount = 0;
-      let errorCount = 0;
-
+      
       const messagesToProcess = messages.filter(msg => 
         msg.caption && 
         (!msg.processing_state || ['pending', 'error', 'initialized'].includes(msg.processing_state))
@@ -57,96 +59,128 @@ export function MessageListContainer() {
         return;
       }
 
+      setProcessingProgress({ current: 0, total: messagesToProcess.length });
+      
       // Show initial toast
       toast({
         title: "Processing Messages",
         description: `Queuing ${messagesToProcess.length} messages with captions...`
       });
 
-      // Process messages in sequence by queueing them
-      for (const message of messagesToProcess) {
+      // Queue all messages first
+      for (const [index, message] of messagesToProcess.entries()) {
         try {
-          console.log('Queueing message for processing:', { 
-            id: message.id, 
-            caption: message.caption,
-            current_state: message.processing_state 
-          });
-          
-          // Generate a correlation ID as string (not UUID)
-          const correlationId = crypto.randomUUID();
-          
-          // Queue the message using the database function - ensuring correlation_id is a string
-          const { data, error: queueError } = await supabase.rpc(
+          // Queue the message using database function
+          await supabase.rpc(
             'xdelo_queue_message_for_processing',
             {
               p_message_id: message.id,
-              p_correlation_id: correlationId
+              p_correlation_id: crypto.randomUUID()
             }
           );
-
-          if (queueError) {
-            console.error('Error queueing message:', queueError);
-            throw queueError;
-          }
-
-          console.log('Message queued successfully:', data);
-          processedCount++;
+          
+          setProcessingProgress({ current: index + 1, total: messagesToProcess.length });
           
           // Update progress every 5 messages
-          if (processedCount % 5 === 0) {
+          if ((index + 1) % 5 === 0 || index === messagesToProcess.length - 1) {
             toast({
               title: "Queueing Progress",
-              description: `Queued ${processedCount} of ${messagesToProcess.length} messages...`
+              description: `Queued ${index + 1} of ${messagesToProcess.length} messages`
             });
           }
-
+          
           // Small delay to prevent overwhelming the database
-          await new Promise(resolve => setTimeout(resolve, 300));
-
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
         } catch (error) {
-          console.error('Error queueing message:', message.id, error);
-          errorCount++;
-          
-          toast({
-            title: "Message Queueing Error",
-            description: `Failed to queue message ${message.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            duration: 5000
-          });
+          console.error(`Error queueing message ${message.id}:`, error);
         }
       }
 
-      // Trigger the queue processor if messages were queued
-      if (processedCount > 0) {
-        try {
-          // Call the scheduler function to process the queue
-          const response = await supabase.functions.invoke('scheduler-process-queue', {
-            body: { trigger: 'manual', count: processedCount }
-          });
-          
-          console.log('Queue processing triggered:', response);
-        } catch (triggerError) {
-          console.error('Error triggering queue processing:', triggerError);
-        }
+      // Now process the queue
+      try {
+        toast({
+          title: "Processing Queue",
+          description: `Starting to process the queue with ${messagesToProcess.length} messages...`
+        });
+        
+        // Call process-message-queue with a higher limit
+        const { data, error } = await supabase.functions.invoke('process-message-queue', {
+          body: { limit: Math.min(messagesToProcess.length, 20) }
+        });
+        
+        if (error) throw error;
+        
+        toast({
+          title: "Processing Complete",
+          description: `Processed ${data?.processed || 0} messages: ${data?.success || 0} succeeded, ${data?.failed || 0} failed.`
+        });
+        
+      } catch (error) {
+        console.error('Error processing queue:', error);
+        toast({
+          title: "Processing Error",
+          description: error instanceof Error ? error.message : 'Failed to process message queue',
+          variant: "destructive"
+        });
       }
 
-      // Show completion toast
-      toast({
-        title: errorCount > 0 ? "Queueing Complete with Errors" : "Queueing Complete",
-        description: `Successfully queued ${processedCount} messages for processing. ${errorCount > 0 ? `Failed: ${errorCount}` : ''}`,
-        duration: 5000
-      });
-
-      // Refresh the list to show updated results
+      // Refresh messages to show updated results
       await fetchMessages();
+      
     } catch (error) {
       console.error('Error in batch processing:', error);
       toast({
         title: "Processing Error",
         description: error instanceof Error ? error.message : 'Failed to process messages',
-        duration: 5000
+        variant: "destructive"
       });
     } finally {
       setProcessing(false);
+      setProcessingProgress({ current: 0, total: 0 });
+    }
+  };
+
+  const handleReanalyze = async (messageId: string) => {
+    try {
+      toast({
+        title: "Reanalyzing Message",
+        description: "Requesting analysis for the selected message..."
+      });
+      
+      // Queue the message
+      const { error: queueError } = await supabase.rpc(
+        'xdelo_queue_message_for_processing',
+        {
+          p_message_id: messageId,
+          p_correlation_id: crypto.randomUUID()
+        }
+      );
+      
+      if (queueError) throw queueError;
+      
+      // Process the queue for this message
+      const { data, error } = await supabase.functions.invoke('process-message-queue', {
+        body: { limit: 1 }
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Analysis Complete",
+        description: "The message has been analyzed."
+      });
+      
+      // Refresh to show updated results
+      await fetchMessages();
+      
+    } catch (error) {
+      console.error('Error reanalyzing message:', error);
+      toast({
+        title: "Analysis Failed",
+        description: error instanceof Error ? error.message : 'Failed to analyze message',
+        variant: "destructive"
+      });
     }
   };
 
@@ -192,24 +226,11 @@ export function MessageListContainer() {
 
   if (loading) {
     return (
-      <div className="bg-white shadow rounded-lg">
-        <div className="border-b border-gray-200 px-4 py-5 sm:px-6">
-          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse"></div>
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin mr-2">
+          <RefreshCw size={24} />
         </div>
-        <div className="px-4 py-6 sm:px-6">
-          <div className="space-y-6">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="flex space-x-4">
-                <div className="w-24 h-24 bg-gray-200 rounded animate-pulse"></div>
-                <div className="flex-1 space-y-3">
-                  <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse"></div>
-                  <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse"></div>
-                  <div className="h-4 w-1/4 bg-gray-200 rounded animate-pulse"></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <p>Loading messages...</p>
       </div>
     );
   }
@@ -219,19 +240,25 @@ export function MessageListContainer() {
       <div className="bg-white shadow sm:rounded-lg">
         <div className="px-4 py-5 sm:p-6">
           <div className="sm:flex sm:items-start sm:justify-between">
-            <div>
-              <h3 className="text-lg font-medium leading-6 text-gray-900">Error Loading Messages</h3>
-              <div className="mt-2 max-w-xl text-sm text-gray-500">
-                <p>{error}</p>
+            <div className="flex items-center">
+              <AlertCircle className="h-6 w-6 text-red-500 mr-2" />
+              <div>
+                <h3 className="text-lg font-medium leading-6 text-gray-900">Error Loading Messages</h3>
+                <div className="mt-2 max-w-xl text-sm text-gray-500">
+                  <p>{error}</p>
+                </div>
               </div>
             </div>
             <div className="mt-5 sm:mt-0 sm:ml-6 sm:flex sm:flex-shrink-0 sm:items-center">
-              <button
+              <Button
                 onClick={fetchMessages}
-                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
+                variant="default"
+                size="sm"
+                className="inline-flex items-center px-4 py-2"
               >
+                <RefreshCw className="h-4 w-4 mr-2" />
                 Try Again
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -248,34 +275,45 @@ export function MessageListContainer() {
             A list of all messages and their processing status.
           </p>
         </div>
-        <div className="flex space-x-3">
-          <button
+        <div className="flex space-x-3 mt-4 sm:mt-0">
+          <Button
             onClick={fetchMessages}
             disabled={processing}
-            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="outline"
+            size="sm"
+            className="inline-flex items-center"
           >
+            <RefreshCw className="h-4 w-4 mr-2" />
             Refresh List
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={processAllMessages}
             disabled={processing || messages.length === 0}
-            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="default"
+            size="sm"
+            className="inline-flex items-center"
           >
             {processing ? (
               <>
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Processing...
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                {processingProgress.current > 0 ? 
+                  `Processing ${processingProgress.current}/${processingProgress.total}...` : 
+                  "Processing..."}
               </>
             ) : (
-              'Process All Messages'
+              <>
+                <PlayCircle className="h-4 w-4 mr-2" />
+                Process All Messages
+              </>
             )}
-          </button>
+          </Button>
         </div>
       </div>
-      <MessageList messages={messages} onRefresh={fetchMessages} />
+      <MessageList 
+        messages={messages} 
+        onRefresh={fetchMessages} 
+        onReanalyze={handleReanalyze} 
+      />
     </div>
   );
 }

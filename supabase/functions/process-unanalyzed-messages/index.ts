@@ -21,112 +21,75 @@ serve(async (req) => {
 
   try {
     console.log('Starting process-unanalyzed-messages function');
+    const { limit = 10 } = await req.json();
     
-    // Find messages with captions that need processing
-    const { data: messages, error: messagesError } = await supabase
-      .from('messages')
-      .select('id, caption, media_group_id')
-      .is('analyzed_content', null)
-      .not('caption', 'is', null)
-      .eq('processing_state', 'pending')
-      .limit(5);  // Process in small batches
+    // First, queue unanalyzed messages
+    const { data: queuedMessages, error: queueError } = await supabase.rpc(
+      'xdelo_queue_unprocessed_messages',
+      { limit_count: limit }
+    );
     
-    if (messagesError) {
-      throw new Error(`Error fetching messages: ${messagesError.message}`);
+    if (queueError) {
+      throw new Error(`Error queueing messages: ${queueError.message}`);
     }
     
-    console.log(`Found ${messages?.length || 0} unanalyzed messages to process`);
+    const queuedCount = queuedMessages?.length || 0;
+    console.log(`Queued ${queuedCount} unanalyzed messages`);
     
-    const results = [];
-    
-    // Process each message
-    for (const message of messages || []) {
-      const correlationId = crypto.randomUUID();
-
-      try {
-        // Request analysis for this message
-        const response = await fetch(
-          `${Deno.env.get('SUPABASE_URL')}/functions/v1/create-analyze-message-caption`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-            },
-            body: JSON.stringify({
-              messageId: message.id,
-              caption: message.caption || "",
-              mediaGroupId: message.media_group_id,
-              correlationId
-            })
-          }
-        );
-        
-        if (!response.ok) {
-          throw new Error(`Analysis request failed: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        results.push({
-          messageId: message.id,
+    if (queuedCount === 0) {
+      return new Response(
+        JSON.stringify({
           success: true,
-          correlationId
-        });
-        
-        // Log successful processing request
-        await supabase
-          .from('unified_audit_logs')
-          .insert({
-            event_type: 'cron_message_processing',
-            entity_id: message.id,
-            metadata: {
-              success: true,
-              correlation_id: correlationId,
-              caption_length: message.caption?.length || 0
-            }
-          });
-      } catch (processError: any) {
-        console.error(`Error processing message ${message.id}:`, processError);
-        
-        results.push({
-          messageId: message.id,
-          success: false,
-          error: processError.message
-        });
-        
-        // Log error
-        await supabase
-          .from('unified_audit_logs')
-          .insert({
-            event_type: 'cron_message_processing',
-            entity_id: message.id,
-            error_message: processError.message,
-            metadata: {
-              success: false,
-              correlation_id: correlationId,
-              error_details: processError.toString()
-            }
-          });
-      }
-      
-      // Pause briefly between requests to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 500));
+          message: 'No unanalyzed messages to process'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
+    
+    // Process the queue
+    const processResponse = await fetch(
+      `${Deno.env.get('SUPABASE_URL')}/functions/v1/process-message-queue`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+        },
+        body: JSON.stringify({ limit: queuedCount })
+      }
+    );
+    
+    if (!processResponse.ok) {
+      throw new Error(`Error processing queue: ${processResponse.status} ${processResponse.statusText}`);
+    }
+    
+    const processResult = await processResponse.json();
+    
+    // Log the operation
+    await supabase
+      .from('unified_audit_logs')
+      .insert({
+        event_type: 'unanalyzed_messages_processed',
+        metadata: {
+          queued_messages: queuedCount,
+          processed_messages: processResult.data.processed,
+          success_count: processResult.data.success,
+          failed_count: processResult.data.failed
+        },
+        event_timestamp: new Date().toISOString()
+      });
     
     return new Response(
       JSON.stringify({
         success: true,
-        processed: results.length,
-        results
+        queued: queuedCount,
+        processed: processResult.data.processed,
+        success: processResult.data.success,
+        failed: processResult.data.failed
       }),
-      { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in process-unanalyzed-messages function:', error);
     
     return new Response(
@@ -136,10 +99,7 @@ serve(async (req) => {
       }),
       { 
         status: 500,
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     );
   }

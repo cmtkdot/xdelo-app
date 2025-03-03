@@ -1,7 +1,32 @@
 
-/**
- * Types for message processing queue
- */
+export interface MessageQueueItem {
+  queue_id: string;
+  message_id: string;
+  correlation_id: string;
+  caption: string;
+  media_group_id?: string;
+  storage_path?: string;
+  mime_type?: string;
+  file_unique_id: string;
+  public_url?: string;
+}
+
+export interface StorageValidationResult {
+  isValid: boolean;
+  storagePath: string;
+  publicUrl: string;
+  needsRedownload: boolean;
+}
+
+export interface MessageData {
+  id: string;
+  caption?: string;
+  media_group_id?: string;
+  file_unique_id: string;
+  storage_path?: string;
+  mime_type?: string;
+  public_url?: string;
+}
 
 export interface ProcessingResults {
   processed: number;
@@ -12,35 +37,6 @@ export interface ProcessingResults {
     queue_id: string;
     status: 'success' | 'error';
     result?: any;
-    error?: string;
+    error_message?: string;
   }>;
-}
-
-export interface MessageQueueItem {
-  queue_id: string;
-  message_id: string;
-  correlation_id: string; // Updated to string to match DB function signature
-  caption: string;
-  media_group_id?: string;
-}
-
-export interface MessageData {
-  id: string;
-  file_unique_id: string;
-  file_id?: string;
-  storage_path: string | null;
-  mime_type: string | null;
-  caption?: string;
-  media_group_id?: string;
-  file_id_expires_at?: string;
-  original_file_id?: string;
-  redownload_strategy?: string;
-  [key: string]: any;
-}
-
-export interface StorageValidationResult {
-  isValid: boolean;
-  storagePath: string;
-  publicUrl: string;
-  needsRedownload: boolean;
 }

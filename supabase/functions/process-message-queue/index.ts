@@ -14,9 +14,12 @@ serve(async (req) => {
   }
   
   try {
-    const { limit = 1 } = await req.json();
+    const { limit = 5 } = await req.json();
     
+    console.log(`Starting message queue processing with limit: ${limit}`);
     const results = await processMessageQueue(limit);
+    
+    console.log(`Queue processing complete: ${results.processed} processed, ${results.success} succeeded, ${results.failed} failed`);
     
     // Return success response
     return new Response(
@@ -27,7 +30,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error in process-message-queue function:', error);
     
     // Return error response
     return new Response(
