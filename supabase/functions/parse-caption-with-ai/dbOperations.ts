@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { ParsedContent, MediaGroupResult } from './types.ts';
 
@@ -74,7 +73,7 @@ export const markQueueItemAsFailed = async (queueId: string, errorMessage: strin
   try {
     const { error } = await supabaseClient.rpc('xdelo_fail_message_processing', {
       p_queue_id: queueId,
-      p_error: errorMessage
+      p_error_message: errorMessage
     });
     
     if (error) {
