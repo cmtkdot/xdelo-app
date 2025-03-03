@@ -2,13 +2,14 @@
 -- This file creates a simplified message queue system
 
 -- First, drop the existing queue and related functions to start fresh
+-- Add CASCADE to drop dependent objects
 DROP FUNCTION IF EXISTS xdelo_queue_message_for_processing CASCADE;
 DROP FUNCTION IF EXISTS xdelo_get_next_message_for_processing CASCADE;
 DROP FUNCTION IF EXISTS xdelo_complete_message_processing CASCADE;
 DROP FUNCTION IF EXISTS xdelo_fail_message_processing CASCADE;
 DROP FUNCTION IF EXISTS xdelo_auto_queue_messages CASCADE;
 DROP TRIGGER IF EXISTS xdelo_auto_queue_messages_trigger ON messages;
-DROP TABLE IF EXISTS message_processing_queue;
+DROP TABLE IF EXISTS message_processing_queue CASCADE;
 
 -- Create a simplified message processing queue table
 CREATE TABLE IF NOT EXISTS message_processing_queue (
@@ -472,3 +473,15 @@ BEGIN
             SQLERRM;
 END;
 $$;
+
+-- Create a view for monitoring the queue status
+CREATE OR REPLACE VIEW v_queue_status AS
+SELECT 
+    status,
+    COUNT(*) as message_count,
+    MIN(created_at) as oldest_message,
+    MAX(created_at) as newest_message,
+    AVG(EXTRACT(EPOCH FROM (NOW() - created_at)))::INTEGER as avg_age_seconds
+FROM message_processing_queue
+GROUP BY status;
+
