@@ -1910,6 +1910,33 @@ export type Database = {
         }
         Relationships: []
       }
+      storage_validations: {
+        Row: {
+          error_message: string | null
+          file_unique_id: string
+          id: string
+          is_valid: boolean | null
+          last_checked_at: string | null
+          storage_path: string
+        }
+        Insert: {
+          error_message?: string | null
+          file_unique_id: string
+          id?: string
+          is_valid?: boolean | null
+          last_checked_at?: string | null
+          storage_path: string
+        }
+        Update: {
+          error_message?: string | null
+          file_unique_id?: string
+          id?: string
+          is_valid?: boolean | null
+          last_checked_at?: string | null
+          storage_path?: string
+        }
+        Relationships: []
+      }
       sync_matches: {
         Row: {
           applied: boolean | null
@@ -2599,6 +2626,24 @@ export type Database = {
         }
         Returns: string
       }
+      xdelo_handle_duplicate_detection: {
+        Args: {
+          p_file_unique_id: string
+          p_telegram_message_id: number
+          p_chat_id: number
+          p_correlation_id?: string
+        }
+        Returns: Json
+      }
+      xdelo_handle_message_update: {
+        Args: {
+          p_message_id: string
+          p_caption: string
+          p_is_edit?: boolean
+          p_correlation_id?: string
+        }
+        Returns: Json
+      }
       xdelo_log_event: {
         Args: {
           p_event_type: Database["public"]["Enums"]["audit_event_type"]
@@ -2625,6 +2670,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      xdelo_repair_storage_paths: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          message_id: string
+          old_path: string
+          new_path: string
+          status: string
+        }[]
+      }
       xdelo_sync_forward_media: {
         Args: {
           p_original_message_id: string
@@ -2632,13 +2686,22 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_sync_media_group_content: {
-        Args: {
-          p_media_group_id: string
-          p_source_message_id: string
-        }
-        Returns: Json
-      }
+      xdelo_sync_media_group_content:
+        | {
+            Args: {
+              p_media_group_id: string
+              p_source_message_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_source_message_id: string
+              p_media_group_id: string
+              p_correlation_id?: string
+            }
+            Returns: Json
+          }
       xdelo_update_message_processing_state: {
         Args: {
           p_message_id: string
@@ -2646,6 +2709,14 @@ export type Database = {
           p_error?: string
         }
         Returns: undefined
+      }
+      xdelo_validate_file_storage: {
+        Args: {
+          p_file_unique_id: string
+          p_storage_path: string
+          p_mime_type?: string
+        }
+        Returns: boolean
       }
     }
     Enums: {

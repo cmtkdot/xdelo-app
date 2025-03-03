@@ -1,5 +1,7 @@
+
 import { createHandler } from '../_shared/baseHandler.ts';
-import { Configuration, OpenAIApi } from "openai";
+// Replace the direct 'openai' import with the proper URL import
+import { Configuration, OpenAIApi } from "https://esm.sh/openai@3.3.0";
 
 export default createHandler(async (req: Request) => {
   const { messageId, caption } = await req.json();
