@@ -23,7 +23,7 @@ export function useMessageProcessing() {
       
       // Queue the message using the database function
       const { data, error: queueError } = await supabase.rpc(
-        'xdelo_queue_message_for_processing',
+        'tg_queue_message',
         {
           p_message_id: message.id,
           p_correlation_id: correlationId
@@ -52,7 +52,7 @@ export function useMessageProcessing() {
       
       toast({
         title: "Processing Initiated",
-        description: "The message has been queued for AI analysis."
+        description: "The message has been queued for analysis."
       });
       
     } catch (error: any) {
@@ -103,9 +103,41 @@ export function useMessageProcessing() {
     }
   };
 
+  // Queue any unprocessed messages with captions
+  const queueUnprocessedMessages = async (limit = 10) => {
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        'process-unanalyzed-messages',
+        {
+          body: { limit }
+        }
+      );
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Messages Queued",
+        description: `Queued ${data?.queued || 0} unprocessed messages.`
+      });
+      
+      return data;
+    } catch (error: any) {
+      console.error('Error queuing unprocessed messages:', error);
+      
+      toast({
+        title: "Queueing Failed",
+        description: error.message || "Failed to queue unprocessed messages",
+        variant: "destructive"
+      });
+      
+      throw error;
+    }
+  };
+
   return {
     handleReanalyze,
     processMessageQueue,
+    queueUnprocessedMessages,
     isProcessing,
     errors
   };

@@ -1,7 +1,28 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { processMessageQueue } from "./utils/queueProcessor.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from "../_shared/cors.ts";
+
+// Create Supabase client
+const supabaseClient = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+);
+
+interface ProcessingDetail {
+  message_id: string;
+  queue_id: string;
+  status: 'success' | 'error';
+  result?: any;
+  error_message?: string;
+}
+
+interface ProcessingResults {
+  processed: number;
+  success: number;
+  failed: number;
+  details: ProcessingDetail[];
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -10,18 +31,112 @@ serve(async (req) => {
   }
 
   try {
-    // Parse the limit parameter
     const { limit = 5 } = await req.json();
-    console.log(`Request to process up to ${limit} messages from the queue`);
+    console.log(`Starting to process up to ${limit} messages from queue`);
     
-    // Process messages from the queue
-    const results = await processMessageQueue(limit);
+    // Get messages from the queue
+    const { data: messagesToProcess, error: queueError } = await supabaseClient.rpc(
+      'tg_get_next_messages',
+      { limit_count: limit }
+    );
     
-    // Return the results
+    if (queueError) {
+      throw new Error(`Failed to get messages from queue: ${queueError.message}`);
+    }
+
+    console.log(`Found ${messagesToProcess?.length || 0} messages to process`);
+    
+    if (!messagesToProcess || messagesToProcess.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            processed: 0,
+            success: 0,
+            failed: 0,
+            details: []
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Process each message
+    const results: ProcessingResults = {
+      processed: messagesToProcess.length,
+      success: 0,
+      failed: 0,
+      details: []
+    };
+
+    for (const message of messagesToProcess) {
+      try {
+        console.log(`Processing message ${message.message_id} (Queue ID: ${message.queue_id})`);
+        
+        // Call the parse-caption-with-ai function
+        const response = await fetch(
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+            },
+            body: JSON.stringify({
+              messageId: message.message_id,
+              caption: message.caption,
+              media_group_id: message.media_group_id,
+              correlationId: message.correlation_id,
+              queue_id: message.queue_id
+            })
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(`Failed to process message: ${errorData.error || response.statusText}`);
+        }
+
+        const result = await response.json();
+        
+        // Record success
+        results.success++;
+        results.details.push({
+          message_id: message.message_id,
+          queue_id: message.queue_id,
+          status: 'success',
+          result: result
+        });
+      } catch (error) {
+        console.error(`Error processing message ${message.message_id}:`, error);
+        
+        // Record failure
+        results.failed++;
+        results.details.push({
+          message_id: message.message_id,
+          queue_id: message.queue_id,
+          status: 'error',
+          error_message: error.message
+        });
+        
+        // Try to mark the queue item as failed
+        try {
+          await supabaseClient.rpc('tg_fail_processing', {
+            p_queue_id: message.queue_id,
+            p_error_message: `Processing error: ${error.message}`
+          });
+        } catch (markError) {
+          console.error(`Failed to mark queue item ${message.queue_id} as failed:`, markError);
+        }
+      }
+    }
+
+    console.log(`Processing completed: ${results.success} succeeded, ${results.failed} failed`);
+    
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        data: results 
+      JSON.stringify({
+        success: true,
+        data: results
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -29,9 +144,9 @@ serve(async (req) => {
     console.error('Error processing message queue:', error);
     
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message 
+      JSON.stringify({
+        success: false,
+        error: error.message
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

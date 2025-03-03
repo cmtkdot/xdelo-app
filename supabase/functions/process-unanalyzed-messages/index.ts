@@ -17,11 +17,11 @@ serve(async (req) => {
 
   try {
     // Parse request parameters
-    const { limit = 10 } = await req.json();
+    const { limit = 10 } = await req.json() || {};
     console.log(`Request to queue up to ${limit} unanalyzed messages`);
     
     // Find and queue unprocessed messages
-    const { data, error } = await supabaseClient.rpc('xdelo_queue_unprocessed_messages', {
+    const { data, error } = await supabaseClient.rpc('tg_queue_unprocessed_messages', {
       limit_count: limit
     });
     
