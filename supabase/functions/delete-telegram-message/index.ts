@@ -1,6 +1,6 @@
 
 import { serve } from "std/http/server.ts";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
 /**
  * Log an event to the unified audit system

@@ -3010,7 +3010,7 @@ export type Database = {
       xdelo_fail_message_processing: {
         Args: {
           p_queue_id: string
-          p_error: string
+          p_error_message: string
         }
         Returns: boolean
       }
@@ -3048,13 +3048,19 @@ export type Database = {
         }[]
       }
       xdelo_get_next_message_for_processing: {
-        Args: Record<PropertyKey, never>
+        Args: {
+          limit_count: number
+        }
         Returns: {
           queue_id: string
           message_id: string
           correlation_id: string
           caption: string
           media_group_id: string
+          storage_path: string
+          mime_type: string
+          file_unique_id: string
+          public_url: string
         }[]
       }
       xdelo_get_or_create_file_url: {
@@ -3121,21 +3127,13 @@ export type Database = {
         }
         Returns: boolean
       }
-      xdelo_queue_message_for_processing:
-        | {
-            Args: {
-              p_message_id: string
-              p_correlation_id?: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_message_id: string
-              p_correlation_id?: string
-            }
-            Returns: string
-          }
+      xdelo_queue_message_for_processing: {
+        Args: {
+          p_message_id: string
+          p_correlation_id: string
+        }
+        Returns: string
+      }
       xdelo_repair_message_relationships: {
         Args: Record<PropertyKey, never>
         Returns: {
