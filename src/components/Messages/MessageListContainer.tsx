@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import type { Message } from './types';
 import { MessageList } from './MessageList';
@@ -43,74 +44,89 @@ export function MessageListContainer() {
       let processedCount = 0;
       let errorCount = 0;
 
-      const messagesToProcess = messages.filter(msg => msg.caption);
+      const messagesToProcess = messages.filter(msg => 
+        msg.caption && 
+        (!msg.processing_state || ['pending', 'error', 'initialized'].includes(msg.processing_state))
+      );
+      
       if (messagesToProcess.length === 0) {
         toast("No Messages to Process", {
-          description: "No messages with captions found."
+          description: "No messages with captions found that need processing."
         });
         return;
       }
 
       // Show initial toast
       toast("Processing Messages", {
-        description: `Starting to process ${messagesToProcess.length} messages with captions...`
+        description: `Queuing ${messagesToProcess.length} messages with captions...`
       });
 
-      // Process messages in sequence
+      // Process messages in sequence by queueing them
       for (const message of messagesToProcess) {
         try {
-          console.log('Processing message:', { 
+          console.log('Queueing message for processing:', { 
             id: message.id, 
             caption: message.caption,
             current_state: message.processing_state 
           });
           
-          const { data, error: functionError } = await supabase.functions.invoke(
-            'parse-caption-with-ai',
+          // Queue the message using the database function
+          const { data, error: queueError } = await supabase.rpc(
+            'xdelo_queue_message_for_processing',
             {
-              body: {
-                messageId: message.id,
-                media_group_id: message.media_group_id || null,
-                caption: message.caption || '',
-                correlation_id: crypto.randomUUID()
-              }
+              p_message_id: message.id,
+              p_correlation_id: crypto.randomUUID()
             }
           );
 
-          if (functionError) {
-            console.error('Edge function error:', functionError);
-            throw functionError;
+          if (queueError) {
+            console.error('Error queueing message:', queueError);
+            throw queueError;
           }
 
-          console.log('Processing result:', data);
+          console.log('Message queued successfully:', data);
           processedCount++;
           
           // Update progress every 5 messages
           if (processedCount % 5 === 0) {
-            toast("Processing Progress", {
-              description: `Processed ${processedCount} of ${messagesToProcess.length} messages...`
+            toast("Queueing Progress", {
+              description: `Queued ${processedCount} of ${messagesToProcess.length} messages...`
             });
           }
 
-          // Small delay to prevent overwhelming the function
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Small delay to prevent overwhelming the database
+          await new Promise(resolve => setTimeout(resolve, 300));
 
         } catch (error) {
-          console.error('Error processing message:', message.id, error);
+          console.error('Error queueing message:', message.id, error);
           errorCount++;
           
-          toast("Message Processing Error", {
-            description: `Failed to process message ${message.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          toast("Message Queueing Error", {
+            description: `Failed to queue message ${message.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
             duration: 5000
           });
         }
       }
 
+      // Trigger the queue processor if messages were queued
+      if (processedCount > 0) {
+        try {
+          // Call the scheduler function to process the queue
+          const response = await supabase.functions.invoke('scheduler-process-queue', {
+            body: { trigger: 'manual', count: processedCount }
+          });
+          
+          console.log('Queue processing triggered:', response);
+        } catch (triggerError) {
+          console.error('Error triggering queue processing:', triggerError);
+        }
+      }
+
       // Show completion toast
       toast(
-        errorCount > 0 ? "Processing Complete with Errors" : "Processing Complete",
+        errorCount > 0 ? "Queueing Complete with Errors" : "Queueing Complete",
         {
-          description: `Successfully processed ${processedCount} messages. ${errorCount > 0 ? `Failed: ${errorCount}` : ''}`,
+          description: `Successfully queued ${processedCount} messages for processing. ${errorCount > 0 ? `Failed: ${errorCount}` : ''}`,
           duration: 5000
         }
       );
@@ -248,7 +264,7 @@ export function MessageListContainer() {
                 Processing...
               </>
             ) : (
-              'Process All with AI'
+              'Process All Messages'
             )}
           </button>
         </div>
