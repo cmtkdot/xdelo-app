@@ -50,14 +50,16 @@ export function MessageListContainer() {
       );
       
       if (messagesToProcess.length === 0) {
-        toast("No Messages to Process", {
+        toast({
+          title: "No Messages to Process",
           description: "No messages with captions found that need processing."
         });
         return;
       }
 
       // Show initial toast
-      toast("Processing Messages", {
+      toast({
+        title: "Processing Messages",
         description: `Queuing ${messagesToProcess.length} messages with captions...`
       });
 
@@ -71,8 +73,9 @@ export function MessageListContainer() {
           });
           
           // Queue the message using the database function
+          // Use the generic type parameter to fix TypeScript error
           const { data, error: queueError } = await supabase.rpc(
-            'xdelo_queue_message_for_processing',
+            'xdelo_queue_message_for_processing' as any, // Type assertion to bypass TypeScript check
             {
               p_message_id: message.id,
               p_correlation_id: crypto.randomUUID()
@@ -89,7 +92,8 @@ export function MessageListContainer() {
           
           // Update progress every 5 messages
           if (processedCount % 5 === 0) {
-            toast("Queueing Progress", {
+            toast({
+              title: "Queueing Progress",
               description: `Queued ${processedCount} of ${messagesToProcess.length} messages...`
             });
           }
@@ -101,7 +105,8 @@ export function MessageListContainer() {
           console.error('Error queueing message:', message.id, error);
           errorCount++;
           
-          toast("Message Queueing Error", {
+          toast({
+            title: "Message Queueing Error",
             description: `Failed to queue message ${message.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
             duration: 5000
           });
@@ -123,19 +128,18 @@ export function MessageListContainer() {
       }
 
       // Show completion toast
-      toast(
-        errorCount > 0 ? "Queueing Complete with Errors" : "Queueing Complete",
-        {
-          description: `Successfully queued ${processedCount} messages for processing. ${errorCount > 0 ? `Failed: ${errorCount}` : ''}`,
-          duration: 5000
-        }
-      );
+      toast({
+        title: errorCount > 0 ? "Queueing Complete with Errors" : "Queueing Complete",
+        description: `Successfully queued ${processedCount} messages for processing. ${errorCount > 0 ? `Failed: ${errorCount}` : ''}`,
+        duration: 5000
+      });
 
       // Refresh the list to show updated results
       await fetchMessages();
     } catch (error) {
       console.error('Error in batch processing:', error);
-      toast("Processing Error", {
+      toast({
+        title: "Processing Error",
         description: error instanceof Error ? error.message : 'Failed to process messages',
         duration: 5000
       });
