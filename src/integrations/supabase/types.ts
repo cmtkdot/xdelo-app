@@ -1533,6 +1533,7 @@ export type Database = {
           processing_started_at: string | null
           processing_state: Database["public"]["Enums"]["processing_state_type"]
           product_code: string | null
+          product_name: string | null
           product_quantity: number | null
           public_url: string | null
           purchase_date: string | null
@@ -1618,6 +1619,7 @@ export type Database = {
           processing_started_at?: string | null
           processing_state?: Database["public"]["Enums"]["processing_state_type"]
           product_code?: string | null
+          product_name?: string | null
           product_quantity?: number | null
           public_url?: string | null
           purchase_date?: string | null
@@ -1703,6 +1705,7 @@ export type Database = {
           processing_started_at?: string | null
           processing_state?: Database["public"]["Enums"]["processing_state_type"]
           product_code?: string | null
+          product_name?: string | null
           product_quantity?: number | null
           public_url?: string | null
           purchase_date?: string | null
