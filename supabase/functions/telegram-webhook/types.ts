@@ -1,5 +1,4 @@
 
-import { SupabaseClient } from "@supabase/supabase-js";
 import { ProcessingState, Message, AnalyzedContent } from "../_shared/types.ts";
 
 export interface TelegramMessage {
@@ -62,14 +61,12 @@ export interface TelegramWebhookPayload {
   edited_channel_post?: TelegramMessage;
 }
 
-export interface MessageHandlerContext {
-  supabaseClient: SupabaseClient;
-  logger: {
-    info: (message: string, data?: any) => void;
-    error: (message: string, error?: any) => void;
-  };
+export interface MessageContext {
+  isChannelPost: boolean;
+  isForwarded: boolean;
   correlationId: string;
-  botToken: string;
+  isEdit: boolean;
+  previousMessage?: TelegramMessage;
 }
 
 export interface ProcessedMessageResult {
@@ -114,4 +111,3 @@ export interface MessageInput {
 }
 
 export { ProcessingState, Message, AnalyzedContent };
-

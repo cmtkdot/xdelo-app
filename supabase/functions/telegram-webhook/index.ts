@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { handleMediaMessage, handleOtherMessage } from './handlers/messageHandler.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { handleMediaMessage, handleOtherMessage } from './messageHandlers.ts';
 
 serve(async (req) => {
   // Handle CORS preflight

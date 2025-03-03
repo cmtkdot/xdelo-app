@@ -1453,6 +1453,7 @@ export type Database = {
           message_caption_id: string | null
           message_url: string | null
           mime_type: string | null
+          needs_redownload: boolean | null
           notes: string | null
           old_analyzed_content: Json[] | null
           original_message_id: string | null
@@ -1473,6 +1474,10 @@ export type Database = {
           public_url: string | null
           purchase_date: string | null
           purchase_order: string | null
+          redownload_attempts: number | null
+          redownload_completed_at: string | null
+          redownload_flagged_at: string | null
+          redownload_reason: string | null
           retry_count: number | null
           storage_path: string | null
           sync_attempt: number | null
@@ -1529,6 +1534,7 @@ export type Database = {
           message_caption_id?: string | null
           message_url?: string | null
           mime_type?: string | null
+          needs_redownload?: boolean | null
           notes?: string | null
           old_analyzed_content?: Json[] | null
           original_message_id?: string | null
@@ -1549,6 +1555,10 @@ export type Database = {
           public_url?: string | null
           purchase_date?: string | null
           purchase_order?: string | null
+          redownload_attempts?: number | null
+          redownload_completed_at?: string | null
+          redownload_flagged_at?: string | null
+          redownload_reason?: string | null
           retry_count?: number | null
           storage_path?: string | null
           sync_attempt?: number | null
@@ -1605,6 +1615,7 @@ export type Database = {
           message_caption_id?: string | null
           message_url?: string | null
           mime_type?: string | null
+          needs_redownload?: boolean | null
           notes?: string | null
           old_analyzed_content?: Json[] | null
           original_message_id?: string | null
@@ -1625,6 +1636,10 @@ export type Database = {
           public_url?: string | null
           purchase_date?: string | null
           purchase_order?: string | null
+          redownload_attempts?: number | null
+          redownload_completed_at?: string | null
+          redownload_flagged_at?: string | null
+          redownload_reason?: string | null
           retry_count?: number | null
           storage_path?: string | null
           sync_attempt?: number | null
@@ -2319,10 +2334,6 @@ export type Database = {
         }
         Returns: unknown
       }
-      invoke_edge_function_for_messages: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
       ivfflat_bit_support: {
         Args: {
           "": unknown
@@ -2528,6 +2539,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      xdelo_analyze_message_caption: {
+        Args: {
+          p_message_id: string
+          p_correlation_id: string
+          p_caption: string
+          p_media_group_id?: string
+        }
+        Returns: Json
+      }
       xdelo_check_webhook_health: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -2546,11 +2566,12 @@ export type Database = {
         }
         Returns: string
       }
-      xdelo_extract_analyzed_at: {
+      xdelo_flag_file_for_redownload: {
         Args: {
-          analyzed_content: Json
+          p_message_id: string
+          p_reason?: string
         }
-        Returns: string
+        Returns: boolean
       }
       xdelo_get_logger: {
         Args: {
@@ -2570,6 +2591,13 @@ export type Database = {
           analyzed_content: Json
           forward_count: number
         }[]
+      }
+      xdelo_get_or_create_file_url: {
+        Args: {
+          p_file_unique_id: string
+          p_mime_type?: string
+        }
+        Returns: string
       }
       xdelo_log_event: {
         Args: {
@@ -2607,9 +2635,9 @@ export type Database = {
       xdelo_sync_media_group_content: {
         Args: {
           p_media_group_id: string
-          p_message_id: string
+          p_source_message_id: string
         }
-        Returns: undefined
+        Returns: Json
       }
       xdelo_update_message_processing_state: {
         Args: {

@@ -1,3 +1,5 @@
 
 project_id = "xjhhehxcxkiumnwbirel"
-verify_jwt = false
+name = "telegram-webhook"
+version = 1
+path = "telegram-webhook"
