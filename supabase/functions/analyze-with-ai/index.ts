@@ -1,6 +1,5 @@
 
 import { createHandler } from '../_shared/baseHandler.ts';
-// Replace the direct 'openai' import with the proper URL import
 import { Configuration, OpenAIApi } from "https://esm.sh/openai@3.3.0";
 
 export default createHandler(async (req: Request) => {

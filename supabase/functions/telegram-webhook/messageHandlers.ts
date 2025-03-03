@@ -34,52 +34,71 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
         .single();
 
       if (existingMessage) {
-        const captionChanged = message.caption !== existingMessage.caption;
+        // Store previous state in edit_history
+        let editHistory = existingMessage.edit_history || [];
+        editHistory.push({
+          timestamp: new Date().toISOString(),
+          previous_caption: existingMessage.caption,
+          new_caption: message.caption,
+          edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+        });
         
-        // If this is an edit, use xdelo_handle_message_update function
-        if (captionChanged) {
-          const { data: updateResult, error: updateError } = await supabaseClient
-            .rpc('xdelo_handle_message_update', {
-              p_message_id: existingMessage.id,
-              p_caption: message.caption,
-              p_is_edit: true,
-              p_correlation_id: correlationId
-            });
-            
-          if (updateError) throw updateError;
-        } else {
-          // Just update telegram data if caption didn't change
-          const { error: updateError } = await supabaseClient
-            .from('messages')
-            .update({
-              telegram_data: message,
-              edit_date: new Date(message.edit_date * 1000).toISOString(),
-              edit_count: (existingMessage.edit_count || 0) + 1,
-              is_edited: true,
-              correlation_id: correlationId,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingMessage.id);
+        // Update the message with new caption and edit history
+        const { error: updateError } = await supabaseClient
+          .from('messages')
+          .update({
+            caption: message.caption,
+            telegram_data: message,
+            edit_date: new Date(message.edit_date * 1000).toISOString(),
+            edit_history: editHistory,
+            edit_count: (existingMessage.edit_count || 0) + 1,
+            is_edited: true,
+            correlation_id: correlationId,
+            updated_at: new Date().toISOString(),
+            // Reset processing state if caption changed
+            processing_state: message.caption !== existingMessage.caption ? 'pending' : existingMessage.processing_state
+          })
+          .eq('id', existingMessage.id);
 
-          if (updateError) throw updateError;
+        if (updateError) throw updateError;
+
+        // If caption changed, trigger parsing
+        if (message.caption !== existingMessage.caption && message.caption) {
+          try {
+            // Call the parse-caption-with-ai function
+            await supabaseClient.functions.invoke('parse-caption-with-ai', {
+              body: {
+                messageId: existingMessage.id,
+                caption: message.caption,
+                media_group_id: message.media_group_id,
+                correlationId,
+                isEdit: true
+              }
+            });
+          } catch (analysisError) {
+            console.error('Failed to trigger caption analysis for edited message:', analysisError);
+            // Continue with the update regardless of analysis success
+          }
         }
 
         // Log the edit event
-        await logMessageOperation(
-          'edit',
-          context.correlationId,
-          {
-            message: `Message ${message.message_id} edited in chat ${message.chat.id}`,
-            telegram_message_id: message.message_id,
-            chat_id: message.chat.id,
-            file_unique_id: mediaInfo.file_unique_id,
-            existing_message_id: existingMessage.id,
-            edit_type: captionChanged ? 'caption_changed' : 'other_edit',
-            media_group_id: message.media_group_id,
-            previous_caption: existingMessage.caption,
-            new_caption: message.caption
-          }
-        );
+        try {
+          await logMessageOperation(
+            'edit',
+            context.correlationId,
+            {
+              message: `Message ${message.message_id} edited in chat ${message.chat.id}`,
+              telegram_message_id: message.message_id,
+              chat_id: message.chat.id,
+              file_unique_id: mediaInfo.file_unique_id,
+              existing_message_id: existingMessage.id,
+              edit_type: message.caption !== existingMessage.caption ? 'caption_changed' : 'other_edit',
+              media_group_id: message.media_group_id
+            }
+          );
+        } catch (logError) {
+          console.error('Error logging edit operation:', logError);
+        }
 
         return new Response(
           JSON.stringify({ success: true }),
@@ -88,22 +107,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       }
     }
 
-    // Check for duplicate files
-    const { data: duplicateCheck, error: duplicateError } = await supabaseClient
-      .rpc('xdelo_handle_duplicate_detection', {
-        p_file_unique_id: mediaInfo.file_unique_id,
-        p_telegram_message_id: message.message_id,
-        p_chat_id: message.chat.id,
-        p_correlation_id: context.correlationId
-      });
-      
-    if (duplicateError) {
-      console.error('Error checking for duplicates:', duplicateError);
-    }
-
-    // If we found this is a duplicate of an existing message, update with forward info
-    const isDuplicate = duplicateCheck?.is_duplicate;
-    const originalMessageId = duplicateCheck?.original_message_id;
+    // Handle new message or untracked edit
     
     // Prepare forward info if message is forwarded
     const forwardInfo: ForwardInfo | undefined = message.forward_origin ? {
@@ -119,7 +123,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       original_message_id: message.forward_origin.message_id
     } : undefined;
 
-    // Create message input with additional fields for duplicates
+    // Create message input
     const messageInput: MessageInput = {
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
@@ -134,9 +138,12 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       forward_info: forwardInfo,
       telegram_data: message,
       edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : undefined,
-      is_forward: isDuplicate,
-      original_message_id: originalMessageId,
-      forward_count: isDuplicate ? 1 : 0
+      is_forward: context.isForwarded,
+      edit_history: isEdit ? [{
+        timestamp: new Date().toISOString(),
+        is_initial_edit: true,
+        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+      }] : []
     };
 
     // Insert the message into the database
@@ -149,21 +156,23 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     if (insertError) throw insertError;
 
     // Log the insert event
-    await logMessageOperation(
-      'success',
-      context.correlationId,
-      {
-        message: `New message ${message.message_id} created in chat ${message.chat.id}`,
-        telegram_message_id: message.message_id,
-        chat_id: message.chat.id,
-        file_unique_id: mediaInfo.file_unique_id,
-        media_group_id: message.media_group_id,
-        is_forwarded: !!forwardInfo || isDuplicate,
-        is_duplicate: isDuplicate,
-        original_message_id: originalMessageId,
-        forward_info: forwardInfo
-      }
-    );
+    try {
+      await logMessageOperation(
+        'success',
+        context.correlationId,
+        {
+          message: `New message ${message.message_id} created in chat ${message.chat.id}`,
+          telegram_message_id: message.message_id,
+          chat_id: message.chat.id,
+          file_unique_id: mediaInfo.file_unique_id,
+          media_group_id: message.media_group_id,
+          is_forwarded: !!forwardInfo,
+          forward_info: forwardInfo
+        }
+      );
+    } catch (logError) {
+      console.error('Error logging message operation:', logError);
+    }
 
     // If message has caption, trigger immediate analysis
     if (message.caption && insertedMessage) {
@@ -171,7 +180,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       
       try {
         // Call the parse-caption-with-ai function directly
-        const analysisResponse = await supabaseClient.functions.invoke('parse-caption-with-ai', {
+        await supabaseClient.functions.invoke('parse-caption-with-ai', {
           body: {
             messageId: insertedMessage.id,
             caption: message.caption,
@@ -180,12 +189,6 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
             file_info: mediaInfo
           }
         });
-        
-        if ('error' in analysisResponse) {
-          console.error('Error from parse-caption-with-ai function:', analysisResponse.error);
-        } else {
-          console.log('Analysis triggered successfully');
-        }
       } catch (analysisError) {
         console.error('Failed to trigger caption analysis:', analysisError);
         // Don't throw here - we already stored the message, so let's continue
@@ -200,18 +203,23 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
   } catch (error) {
     console.error('Error handling media message:', error);
     // Log error event
-    await logMessageOperation(
-      'error',
-      context.correlationId,
-      {
-        message: 'Error handling media message',
-        error: error.message,
-        telegram_message_id: message.message_id,
-        chat_id: message.chat.id,
-        error_code: error.code,
-        processing_stage: 'media_handling'
-      }
-    );
+    try {
+      await logMessageOperation(
+        'error',
+        context.correlationId,
+        {
+          message: 'Error handling media message',
+          error: error.message,
+          telegram_message_id: message.message_id,
+          chat_id: message.chat.id,
+          error_code: error.code,
+          processing_stage: 'media_handling'
+        }
+      );
+    } catch (logError) {
+      console.error('Error logging error operation:', logError);
+    }
+    
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
@@ -248,7 +256,8 @@ export const handleEditedMessage = async (message: TelegramMessage, context: Mes
       editHistory.push({
         timestamp: new Date().toISOString(),
         previous_text: existingMessage.message_text,
-        new_text: messageText
+        new_text: messageText,
+        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
       });
       
       const { error } = await supabaseClient
@@ -260,31 +269,37 @@ export const handleEditedMessage = async (message: TelegramMessage, context: Mes
           updated_at: new Date().toISOString(),
           correlation_id: context.correlationId,
           edit_history: editHistory,
-          edit_date: new Date().toISOString()
+          edit_count: (existingMessage.edit_count || 0) + 1,
+          edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
         })
         .eq('id', existingMessage.id);
 
       if (error) throw error;
 
-      await logMessageOperation(
-        'edit',
-        context.correlationId,
-        {
-          message: `Text message ${message.message_id} edited in chat ${message.chat.id}`,
-          telegram_message_id: message.message_id,
-          chat_id: message.chat.id,
-          existing_message_id: existingMessage.id,
-          edit_type: 'text_edit',
-          previous_text: existingMessage.message_text,
-          new_text: messageText
-        }
-      );
+      try {
+        await logMessageOperation(
+          'edit',
+          context.correlationId,
+          {
+            message: `Text message ${message.message_id} edited in chat ${message.chat.id}`,
+            telegram_message_id: message.message_id,
+            chat_id: message.chat.id,
+            existing_message_id: existingMessage.id,
+            edit_type: 'text_edit'
+          }
+        );
+      } catch (logError) {
+        console.error('Error logging edit operation:', logError);
+      }
 
       return new Response(
         JSON.stringify({ success: true }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    // If we didn't find an existing message, treat it as a new message
+    return await handleOtherMessage(message, context);
   } catch (error) {
     console.error('Error handling edited message:', error);
     return new Response(
@@ -297,9 +312,6 @@ export const handleEditedMessage = async (message: TelegramMessage, context: Mes
 export const handleOtherMessage = async (message: TelegramMessage, context: MessageContext) => {
   try {
     const { isChannelPost, isForwarded, correlationId, isEdit } = context;
-
-    // Check for duplicate message
-    const isDuplicate = false; // TODO: Implement duplicate detection for non-media messages
     
     // Store in other_messages table
     const { error } = await supabaseClient

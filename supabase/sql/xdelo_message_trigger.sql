@@ -15,7 +15,7 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
   -- Queue messages with captions for processing
-  IF (TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND OLD.caption <> NEW.caption)) 
+  IF (TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND (OLD.caption IS NULL OR OLD.caption <> NEW.caption))) 
      AND xdelo_has_valid_caption(NEW.caption) THEN
       
     -- Only if not already in processing or completed state
@@ -39,7 +39,28 @@ BEGIN
       );
     
       -- Queue for processing using DB function
-      PERFORM xdelo_queue_message_for_processing(NEW.id, NEW.correlation_id);
+      BEGIN
+        PERFORM xdelo_queue_message_for_processing(NEW.id, NEW.correlation_id);
+      EXCEPTION WHEN OTHERS THEN
+        -- Log error but don't fail the whole transaction
+        INSERT INTO unified_audit_logs (
+          event_type,
+          entity_id,
+          error_message,
+          metadata,
+          event_timestamp
+        ) VALUES (
+          'trigger_queue_error',
+          NEW.id,
+          SQLERRM,
+          jsonb_build_object(
+            'correlation_id', NEW.correlation_id,
+            'caption', NEW.caption,
+            'error_detail', SQLSTATE
+          ),
+          NOW()
+        );
+      END;
     END IF;
   END IF;
   
