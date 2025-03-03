@@ -1465,6 +1465,27 @@ export type Database = {
             referencedRelation: "v_message_forwards"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "message_processing_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_relationships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_processing_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_compatibility"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_processing_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_with_relationships"
+            referencedColumns: ["id"]
+          },
         ]
       }
       messages: {
@@ -1742,6 +1763,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "fk_message_caption"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_relationships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_message_caption"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_compatibility"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_message_caption"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_with_relationships"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "messages_message_caption_id_fkey"
             columns: ["message_caption_id"]
             isOneToOne: false
@@ -1753,6 +1795,27 @@ export type Database = {
             columns: ["message_caption_id"]
             isOneToOne: false
             referencedRelation: "v_message_forwards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_relationships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_compatibility"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_with_relationships"
             referencedColumns: ["id"]
           },
         ]
@@ -2275,6 +2338,254 @@ export type Database = {
         }
         Relationships: []
       }
+      v_message_relationships: {
+        Row: {
+          caption_references: number | null
+          id: string | null
+          media_group_id: string | null
+          other_messages_references: number | null
+          queue_entries: number | null
+          telegram_message_id: number | null
+          webhook_logs_count: number | null
+        }
+        Insert: {
+          caption_references?: never
+          id?: string | null
+          media_group_id?: string | null
+          other_messages_references?: never
+          queue_entries?: never
+          telegram_message_id?: number | null
+          webhook_logs_count?: never
+        }
+        Update: {
+          caption_references?: never
+          id?: string | null
+          media_group_id?: string | null
+          other_messages_references?: never
+          queue_entries?: never
+          telegram_message_id?: number | null
+          webhook_logs_count?: never
+        }
+        Relationships: []
+      }
+      v_messages_compatibility: {
+        Row: {
+          analyzed_content: Json | null
+          caption: string | null
+          chat_id: number | null
+          chat_title: string | null
+          chat_type: Database["public"]["Enums"]["telegram_chat_type"] | null
+          correlation_id: string | null
+          created_at: string | null
+          duration: number | null
+          edit_date: string | null
+          edit_history: Json | null
+          error_message: string | null
+          file_id: string | null
+          file_size: number | null
+          file_unique_id: string | null
+          glide_row_id: string | null
+          group_caption_synced: boolean | null
+          group_first_message_time: string | null
+          group_last_message_time: string | null
+          group_message_count: number | null
+          height: number | null
+          id: string | null
+          is_edited: boolean | null
+          is_miscellaneous_item: boolean | null
+          is_original_caption: boolean | null
+          last_error_at: string | null
+          media_group_id: string | null
+          message_url: string | null
+          mime_type: string | null
+          processing_completed_at: string | null
+          processing_correlation_id: string | null
+          processing_started_at: string | null
+          processing_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          product_name: string | null
+          product_quantity: number | null
+          product_sku: string | null
+          product_unit: string | null
+          public_url: string | null
+          purchase_date: string | null
+          purchase_order: string | null
+          retry_count: number | null
+          storage_path: string | null
+          sync_attempt: number | null
+          telegram_data: Json | null
+          telegram_message_id: number | null
+          updated_at: string | null
+          user_id: string | null
+          vendor_name: string | null
+          width: number | null
+        }
+        Insert: {
+          analyzed_content?: Json | null
+          caption?: string | null
+          chat_id?: number | null
+          chat_title?: string | null
+          chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
+          correlation_id?: string | null
+          created_at?: string | null
+          duration?: number | null
+          edit_date?: string | null
+          edit_history?: Json | null
+          error_message?: string | null
+          file_id?: string | null
+          file_size?: number | null
+          file_unique_id?: string | null
+          glide_row_id?: string | null
+          group_caption_synced?: boolean | null
+          group_first_message_time?: string | null
+          group_last_message_time?: string | null
+          group_message_count?: never
+          height?: number | null
+          id?: string | null
+          is_edited?: boolean | null
+          is_miscellaneous_item?: boolean | null
+          is_original_caption?: boolean | null
+          last_error_at?: string | null
+          media_group_id?: string | null
+          message_url?: string | null
+          mime_type?: string | null
+          processing_completed_at?: string | null
+          processing_correlation_id?: string | null
+          processing_started_at?: string | null
+          processing_state?:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          product_name?: string | null
+          product_quantity?: number | null
+          product_sku?: string | null
+          product_unit?: never
+          public_url?: string | null
+          purchase_date?: string | null
+          purchase_order?: string | null
+          retry_count?: number | null
+          storage_path?: string | null
+          sync_attempt?: number | null
+          telegram_data?: Json | null
+          telegram_message_id?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          vendor_name?: string | null
+          width?: number | null
+        }
+        Update: {
+          analyzed_content?: Json | null
+          caption?: string | null
+          chat_id?: number | null
+          chat_title?: string | null
+          chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
+          correlation_id?: string | null
+          created_at?: string | null
+          duration?: number | null
+          edit_date?: string | null
+          edit_history?: Json | null
+          error_message?: string | null
+          file_id?: string | null
+          file_size?: number | null
+          file_unique_id?: string | null
+          glide_row_id?: string | null
+          group_caption_synced?: boolean | null
+          group_first_message_time?: string | null
+          group_last_message_time?: string | null
+          group_message_count?: never
+          height?: number | null
+          id?: string | null
+          is_edited?: boolean | null
+          is_miscellaneous_item?: boolean | null
+          is_original_caption?: boolean | null
+          last_error_at?: string | null
+          media_group_id?: string | null
+          message_url?: string | null
+          mime_type?: string | null
+          processing_completed_at?: string | null
+          processing_correlation_id?: string | null
+          processing_started_at?: string | null
+          processing_state?:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          product_name?: string | null
+          product_quantity?: number | null
+          product_sku?: string | null
+          product_unit?: never
+          public_url?: string | null
+          purchase_date?: string | null
+          purchase_order?: string | null
+          retry_count?: number | null
+          storage_path?: string | null
+          sync_attempt?: number | null
+          telegram_data?: Json | null
+          telegram_message_id?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          vendor_name?: string | null
+          width?: number | null
+        }
+        Relationships: []
+      }
+      v_messages_with_relationships: {
+        Row: {
+          analyzed_content: Json | null
+          caption: string | null
+          caption_references: number | null
+          chat_id: number | null
+          chat_title: string | null
+          chat_type: Database["public"]["Enums"]["telegram_chat_type"] | null
+          correlation_id: string | null
+          created_at: string | null
+          duration: number | null
+          edit_date: string | null
+          edit_history: Json | null
+          error_message: string | null
+          file_id: string | null
+          file_size: number | null
+          file_unique_id: string | null
+          glide_row_id: string | null
+          group_caption_synced: boolean | null
+          group_first_message_time: string | null
+          group_last_message_time: string | null
+          group_message_count: number | null
+          height: number | null
+          id: string | null
+          is_edited: boolean | null
+          is_miscellaneous_item: boolean | null
+          is_original_caption: boolean | null
+          last_error_at: string | null
+          media_group_id: string | null
+          message_url: string | null
+          mime_type: string | null
+          other_messages_references: number | null
+          processing_completed_at: string | null
+          processing_correlation_id: string | null
+          processing_started_at: string | null
+          processing_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          product_name: string | null
+          product_quantity: number | null
+          product_sku: string | null
+          product_unit: string | null
+          public_url: string | null
+          purchase_date: string | null
+          purchase_order: string | null
+          queue_entries: number | null
+          retry_count: number | null
+          storage_path: string | null
+          sync_attempt: number | null
+          telegram_data: Json | null
+          telegram_message_id: number | null
+          updated_at: string | null
+          user_id: string | null
+          vendor_name: string | null
+          webhook_logs_count: number | null
+          width: number | null
+        }
+        Relationships: []
+      }
       v_queue_status: {
         Row: {
           avg_age_seconds: number | null
@@ -2688,6 +2999,10 @@ export type Database = {
         }
         Returns: string
       }
+      xdelo_diagnose_queue_issues: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       xdelo_fail_message_processing: {
         Args: {
           p_queue_id: string
@@ -2817,6 +3132,14 @@ export type Database = {
             }
             Returns: string
           }
+      xdelo_repair_message_relationships: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          media_group_id: string
+          caption_message_id: string
+          updated_count: number
+        }[]
+      }
       xdelo_repair_storage_paths: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -2885,6 +3208,7 @@ export type Database = {
         | "media_group_history_synced"
         | "forward_media_synced"
         | "message_forwarded"
+        | "trigger_auto_queue_activated"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
       processing_state_type:
         | "initialized"
