@@ -1,4 +1,3 @@
-
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
@@ -72,6 +71,9 @@ export interface Message {
   updated_at?: string;
   deleted_from_telegram?: boolean;
   edit_history?: AnalyzedContent[];
+  file_id_expires_at?: string; // Timestamp when file_id expires
+  original_file_id?: string;   // The original file_id that created this record
+  redownload_strategy?: 'storage' | 'telegram_api' | 'media_group' | 'manual'; // How to recover the file
 }
 
 // Database interface
@@ -113,6 +115,7 @@ export interface Database {
     };
   };
 }
+
 export interface AIAnalysisResult {
   content: AnalyzedContent;
 }
@@ -196,4 +199,14 @@ export async function syncMediaGroupContent(
     p_media_group_id: mediaGroupId,
     p_correlation_id: correlationId
   });
+}
+
+export interface MediaHandlingResult {
+  success: boolean;
+  file_unique_id: string;
+  storage_path: string;
+  public_url: string;
+  error?: string;
+  needs_redownload?: boolean;
+  redownload_strategy?: 'storage' | 'telegram_api' | 'media_group' | 'manual';
 }

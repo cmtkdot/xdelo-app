@@ -1,110 +1,50 @@
 
-import { corsHeaders } from './cors.ts';
-import { createClient } from "@supabase/supabase-js";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { corsHeaders } from "./cors.ts";
 
-interface ErrorResponse {
-  error: string;
-  status: number;
-  details?: any;
+// Create a Supabase client
+export const supabaseClient = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+);
+
+// Base handler wrapper for consistent error handling and CORS
+export function createHandler(handler: (req: Request, supabase: any) => Promise<Response>) {
+  return async (req: Request) => {
+    // Handle CORS preflight requests
+    if (req.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
+
+    try {
+      // Call the actual handler function
+      return await handler(req, supabaseClient);
+    } catch (error) {
+      console.error('Error handling request:', error);
+      
+      // Return consistent error response
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: error.message || 'Unknown error occurred'
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+  };
 }
 
-export const handleError = (error: any): Response => {
-  console.error('Error:', error);
-
-  let errorResponse: ErrorResponse = {
-    error: 'Internal Server Error',
-    status: 500
-  };
-
-  // Handle known error types
-  if (error instanceof Error) {
-    errorResponse = {
-      error: error.message,
-      status: error.name === 'AuthError' ? 401 : 500,
-      details: Deno.env.get('ENVIRONMENT') === 'development' ? error.stack : undefined
-    };
-  }
-
-  // Handle Supabase errors
-  if (error?.code) {
-    switch (error.code) {
-      case '42P01': // undefined_table
-        errorResponse = {
-          error: 'Database table not found',
-          status: 500,
-          details: error.message
-        };
-        break;
-      case '23505': // unique_violation
-        errorResponse = {
-          error: 'Duplicate record',
-          status: 409,
-          details: error.message
-        };
-        break;
-      case '23503': // foreign_key_violation
-        errorResponse = {
-          error: 'Invalid reference',
-          status: 400,
-          details: error.message
-        };
-        break;
-      default:
-        errorResponse = {
-          error: 'Database error',
-          status: 500,
-          details: error.message
-        };
-    }
-  }
-
-  // Return error response with CORS headers
+// Helper to create JSON response
+export function createJsonResponse(data: any, status = 200) {
   return new Response(
-    JSON.stringify(errorResponse),
-    {
-      status: errorResponse.status,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    JSON.stringify(data),
+    { 
+      status, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     }
   );
-};
-
-export const createHandler = async (req: Request, handler: (supabaseClient: any, body: any) => Promise<any>) => {
-  // Handle CORS
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    // Create Supabase client
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          persistSession: false
-        }
-      }
-    );
-
-    // Parse request body
-    let body;
-    try {
-      body = await req.json();
-    } catch (error) {
-      throw new Error('Invalid JSON payload');
-    }
-
-    // Run the actual handler
-    const result = await handler(supabaseClient, body);
-
-    // Return success response with CORS headers
-    return new Response(
-      JSON.stringify(result),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
-  } catch (error) {
-    return handleError(error);
-  }
-};
+}

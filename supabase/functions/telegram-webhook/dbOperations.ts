@@ -81,10 +81,16 @@ export async function createMessage(
   logger: any
 ): Promise<MessageResponse> {
   try {
+    // Ensure correlation_id is stored as string
+    const correlationId = messageData.correlation_id ? 
+      messageData.correlation_id.toString() : 
+      crypto.randomUUID().toString();
+
     const { data, error } = await supabase
       .from('messages')
       .insert({
         ...messageData,
+        correlation_id: correlationId,
         processing_state: 'pending',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -102,7 +108,7 @@ export async function createMessage(
       metadata: {
         media_group_id: messageData.media_group_id,
         is_forward: !!messageData.forward_info,
-        correlation_id: messageData.correlation_id
+        correlation_id: correlationId
       }
     });
 
@@ -119,10 +125,16 @@ export async function createNonMediaMessage(
   logger: any
 ): Promise<MessageResponse> {
   try {
+    // Ensure correlation_id is stored as string
+    const correlationId = messageData.correlation_id ? 
+      messageData.correlation_id.toString() : 
+      crypto.randomUUID().toString();
+
     const { data, error } = await supabase
       .from('other_messages')
       .insert({
         ...messageData,
+        correlation_id: correlationId,
         processing_state: 'pending',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -139,7 +151,7 @@ export async function createNonMediaMessage(
       new_state: messageData,
       metadata: {
         message_type: messageData.message_type,
-        correlation_id: messageData.correlation_id
+        correlation_id: correlationId
       }
     });
 
@@ -246,6 +258,11 @@ export async function updateMessageProcessingState(
 
     if (updateError) throw updateError;
 
+    // Ensure correlation_id is a string for logging
+    const correlationId = existingMessage?.correlation_id ? 
+      existingMessage.correlation_id.toString() : 
+      null;
+
     await logMessageEvent(supabase, 'processing_state_changed', {
       entity_id: params.messageId,
       telegram_message_id: existingMessage?.telegram_message_id,
@@ -261,7 +278,8 @@ export async function updateMessageProcessingState(
       metadata: {
         error_message: params.error,
         media_group_id: existingMessage?.media_group_id,
-        retry_count: updateData.retry_count
+        retry_count: updateData.retry_count,
+        correlation_id: correlationId
       }
     });
 

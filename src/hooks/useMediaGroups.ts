@@ -8,7 +8,7 @@ export const useMediaGroups = () => {
     queryKey: ['media-groups'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('messages')
+        .from('v_messages_compatibility')
         .select('*')
         .order('created_at', { ascending: false });
 

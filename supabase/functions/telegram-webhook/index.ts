@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { handleMediaMessage, handleOtherMessage, handleEditedMessage } from './handlers/index.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { handleMediaMessage, handleOtherMessage } from './messageHandlers.ts';
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -30,9 +30,15 @@ serve(async (req) => {
     // Determine message context
     const context = {
       isChannelPost: !!update.channel_post || !!update.edited_channel_post,
-      isForwarded: !!message.forward_from || !!message.forward_from_chat,
+      isForwarded: !!message.forward_from || !!message.forward_from_chat || !!message.forward_origin,
       correlationId,
-      isEdit: !!update.edited_message || !!update.edited_channel_post
+      isEdit: !!update.edited_message || !!update.edited_channel_post,
+      previousMessage: update.edited_message || update.edited_channel_post
+    }
+
+    // Handle edited messages
+    if (context.isEdit) {
+      return await handleEditedMessage(message, context);
     }
 
     // Handle media messages (photos, videos, documents)

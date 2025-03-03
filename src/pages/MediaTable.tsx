@@ -36,7 +36,7 @@ const MediaTable = () => {
     queryKey: ['messages'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('messages')
+        .from('v_messages_compatibility')
         .select(`
           id,
           telegram_message_id,
@@ -59,14 +59,6 @@ const MediaTable = () => {
           processing_started_at,
           processing_completed_at,
           analyzed_content,
-          parsed_product_code,
-          parsed_vendor_uid,
-          parsed_purchase_date,
-          parsed_quantity,
-          parsed_unit_price,
-          parsed_total_price,
-          parsed_notes,
-          parsed_caption,
           error_message,
           created_at,
           updated_at,
@@ -83,19 +75,7 @@ const MediaTable = () => {
       
       // Log some sample data to verify parsing
       if (data?.length > 0) {
-        console.log('Sample message data:', {
-          analyzed: data[0].analyzed_content,
-          parsed: {
-            product_code: data[0].parsed_product_code,
-            vendor_uid: data[0].parsed_vendor_uid,
-            purchase_date: data[0].parsed_purchase_date,
-            quantity: data[0].parsed_quantity,
-            unit_price: data[0].parsed_unit_price,
-            total_price: data[0].parsed_total_price,
-            notes: data[0].parsed_notes,
-            caption: data[0].parsed_caption
-          }
-        });
+        console.log('Sample message data:', data[0]);
       }
       
       return data as Message[];

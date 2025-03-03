@@ -1,7 +1,7 @@
 
-import { SupabaseClient } from "@supabase/supabase-js";
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
-type OperationType = 'edit' | 'skip' | 'duplicate' | 'reupload' | 'success' | 'error';
+type OperationType = 'edit' | 'skip' | 'duplicate' | 'reupload' | 'success' | 'error' | 'info';
 
 interface LogMetadata {
   message?: string;
@@ -24,22 +24,25 @@ export const logMessageOperation = async (
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    await supabase.from('unified_audit_logs').insert({
-      event_type: `telegram_webhook_${operation}`,
-      correlation_id: correlationId,
-      metadata: {
-        ...metadata,
-        timestamp: new Date().toISOString()
-      }
-    });
+    // Add timestamp to metadata if not present
+    if (!metadata.timestamp) {
+      metadata.timestamp = new Date().toISOString();
+    }
 
-    // Also log to console for debugging
+    // Log to console first for immediate feedback
     console.log(`[${operation.toUpperCase()}] ${metadata.message || ''}`);
     if (metadata.error) {
       console.error(`Error details: ${metadata.error}`);
     }
+
+    // Try to write to the database
+    await supabase.from('unified_audit_logs').insert({
+      event_type: `telegram_webhook_${operation}`,
+      correlation_id: correlationId,
+      metadata
+    });
   } catch (error) {
-    // Fail silently but log to console
-    console.error('Error logging operation:', error);
+    // Only log to console if database insert fails
+    console.error('Error logging operation to database:', error);
   }
 };

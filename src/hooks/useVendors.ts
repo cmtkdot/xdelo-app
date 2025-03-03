@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { AnalyzedContent } from "@/types";
@@ -8,9 +8,10 @@ export const useVendors = () => {
     queryKey: ['vendors'],
     queryFn: async () => {
       try {
+        // Use the compatibility view for consistent field naming
         const { data, error } = await supabase
-          .from("messages")
-          .select('analyzed_content')
+          .from("v_messages_compatibility")
+          .select('analyzed_content, vendor_name')
           .not('analyzed_content', 'is', null)
           .is('is_original_caption', true);
 
@@ -18,9 +19,15 @@ export const useVendors = () => {
 
         const uniqueVendors = new Set<string>();
         data.forEach((item) => {
-          const content = item.analyzed_content as AnalyzedContent;
-          if (content?.vendor_uid) {
-            uniqueVendors.add(content.vendor_uid);
+          // First check the direct vendor_name field from the view
+          if (item.vendor_name) {
+            uniqueVendors.add(item.vendor_name);
+          } else if (item.analyzed_content) {
+            // Safely access vendor_uid from analyzed_content
+            const analyzedContent = item.analyzed_content as AnalyzedContent;
+            if (analyzedContent && analyzedContent.vendor_uid) {
+              uniqueVendors.add(analyzedContent.vendor_uid);
+            }
           }
         });
 

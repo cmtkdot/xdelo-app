@@ -1,117 +1,144 @@
 
-import { useState, useCallback } from 'react';
-import type { Message } from '@/types';
+import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-
-interface ProcessingState {
-  isProcessing: boolean;
-  error?: string;
-}
+import { useToast } from './useToast';
 
 export function useMessageProcessing() {
-  const [processingState, setProcessingState] = useState<Record<string, ProcessingState>>({});
+  const [isProcessing, setIsProcessing] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const { toast } = useToast();
 
-  const updateProcessingState = useCallback((messageId: string, isProcessing: boolean, error?: string) => {
-    setProcessingState(prev => ({
-      ...prev,
-      [messageId]: { isProcessing, error }
-    }));
-  }, []);
-
-  const handleReanalyze = useCallback(async (message: Message) => {
-    if (processingState[message.id]?.isProcessing) return;
-    
-    updateProcessingState(message.id, true);
+  // Manually trigger reanalysis for a specific message
+  const handleReanalyze = async (message: any) => {
+    if (isProcessing[message.id]) return;
     
     try {
+      setIsProcessing(prev => ({ ...prev, [message.id]: true }));
+      setErrors(prev => ({ ...prev, [message.id]: '' }));
+      
+      console.log('Requesting reanalysis for message:', message.id);
+      
+      // Generate a correlation ID
       const correlationId = crypto.randomUUID();
       
-      // First update message state to pending
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          processing_state: 'pending',
-          error_message: null,
-          retry_count: (message.retry_count || 0) + 1,
-          processing_started_at: new Date().toISOString(),
-          processing_correlation_id: correlationId,
-          // Preserve existing storage path and public URL to prevent deletion
-          storage_path: message.storage_path,
-          public_url: message.public_url
-        })
-        .eq('id', message.id);
-
-      if (updateError) throw updateError;
-
-      // Trigger reanalysis
-      const { error: invokeError } = await supabase.functions.invoke('parse-caption-with-ai', {
-        body: { 
-          messageId: message.id,
-          media_group_id: message.media_group_id,
-          caption: message.caption,
-          correlationId
+      // Use raw SQL call since Supabase's rpc doesn't accept function names from a variable
+      const { data, error: queueError } = await supabase.rpc(
+        'xdelo_queue_message_for_processing',
+        {
+          p_message_id: message.id,
+          p_correlation_id: correlationId
         }
-      });
+      );
 
-      if (invokeError) throw invokeError;
+      if (queueError) {
+        throw queueError;
+      }
 
-      updateProcessingState(message.id, false);
-    } catch (error) {
-      console.error('Error retrying analysis:', error);
+      console.log('Message queued for processing:', data);
       
-      await supabase
-        .from('messages')
-        .update({
-          processing_state: 'error' as const,
-          error_message: error.message,
-          processing_completed_at: new Date().toISOString(),
-          last_error_at: new Date().toISOString(),
-          // Preserve existing storage path and public URL to prevent deletion
-          storage_path: message.storage_path,
-          public_url: message.public_url
-        })
-        .eq('id', message.id);
-
-      updateProcessingState(message.id, false, error.message);
+      // Call the edge function to process the queue
+      const { data: processingData, error: processingError } = await supabase.functions.invoke(
+        'process-message-queue',
+        {
+          body: { limit: 1 }
+        }
+      );
+      
+      if (processingError) {
+        throw processingError;
+      }
+      
+      console.log('Processing result:', processingData);
+      
+      toast({
+        title: "Processing Initiated",
+        description: "The message has been queued for analysis."
+      });
+      
+    } catch (error: any) {
+      console.error('Error reanalyzing message:', error);
+      setErrors(prev => ({ 
+        ...prev, 
+        [message.id]: error.message || 'Failed to process message' 
+      }));
+      
+      toast({
+        title: "Processing Failed",
+        description: error.message || "Failed to process message",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(prev => ({ ...prev, [message.id]: false }));
     }
-  }, [processingState, updateProcessingState]);
+  };
 
-  const handleSave = useCallback(async (message: Message, caption: string) => {
-    if (processingState[message.id]?.isProcessing) return;
-    
-    updateProcessingState(message.id, true);
-    
+  // Process all pending messages in the queue
+  const processMessageQueue = async (limit = 10) => {
     try {
-      const { error } = await supabase
-        .from('messages')
-        .update({
-          caption,
-          processing_state: 'pending' as const,
-          // Preserve existing storage path and public URL to prevent deletion
-          storage_path: message.storage_path,
-          public_url: message.public_url
-        })
-        .eq('id', message.id);
-
+      const { data, error } = await supabase.functions.invoke(
+        'process-message-queue',
+        {
+          body: { limit }
+        }
+      );
+      
       if (error) throw error;
       
-      await handleReanalyze(message);
+      toast({
+        title: "Queue Processing Complete",
+        description: `Processed ${data?.processed || 0} messages from the queue.`
+      });
       
-      updateProcessingState(message.id, false);
-    } catch (error) {
-      console.error('Error saving caption:', error);
-      updateProcessingState(message.id, false, error.message);
+      return data;
+    } catch (error: any) {
+      console.error('Error processing message queue:', error);
+      
+      toast({
+        title: "Queue Processing Failed",
+        description: error.message || "Failed to process message queue",
+        variant: "destructive"
+      });
+      
+      throw error;
     }
-  }, [processingState, updateProcessingState, handleReanalyze]);
+  };
+
+  // Queue any unprocessed messages with captions
+  const queueUnprocessedMessages = async (limit = 10) => {
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        'process-unanalyzed-messages',
+        {
+          body: { limit }
+        }
+      );
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Messages Queued",
+        description: `Queued ${data?.queued || 0} unprocessed messages.`
+      });
+      
+      return data;
+    } catch (error: any) {
+      console.error('Error queuing unprocessed messages:', error);
+      
+      toast({
+        title: "Queueing Failed",
+        description: error.message || "Failed to queue unprocessed messages",
+        variant: "destructive"
+      });
+      
+      throw error;
+    }
+  };
 
   return {
     handleReanalyze,
-    handleSave,
-    isProcessing: Object.fromEntries(
-      Object.entries(processingState).map(([id, state]) => [id, state.isProcessing])
-    ),
-    errors: Object.fromEntries(
-      Object.entries(processingState).map(([id, state]) => [id, state.error])
-    )
+    processMessageQueue,
+    queueUnprocessedMessages,
+    isProcessing,
+    errors
   };
 }

@@ -46,4 +46,4 @@ export function MessageControls({ message, onSuccess }: MessageControlsProps) {
       )}
     </div>
   );
-} 
+}

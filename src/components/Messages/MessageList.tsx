@@ -1,149 +1,193 @@
+
 import React from 'react';
-import type { Message } from './types';
-import { MessageControls } from './MessageControls';
-import { format } from 'date-fns';
+import { Message } from '@/types';
+import { Spinner } from '@/components/ui/spinner';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ArrowRight, CheckCircle, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import { MediaGrid } from "@/components/MediaGrid";
+import { toast } from 'sonner';
 
 interface MessageListProps {
   messages: Message[];
-  onRefresh?: () => void;
+  isLoading: boolean;
+  onRetryProcessing: (messageId: string) => Promise<void>;
+  onProcessAll: () => Promise<void>;
+  processAllLoading?: boolean;
 }
 
-export function MessageList({ messages, onRefresh }: MessageListProps) {
-  // Filter messages to show only those with captions but no analysis
-  const unanalyzedMessages = messages.filter(message => 
-    message.caption && 
-    !message.analyzed_content
-  );
-
-  if (!unanalyzedMessages || unanalyzedMessages.length === 0) {
+export const MessageList: React.FC<MessageListProps> = ({
+  messages,
+  isLoading,
+  onRetryProcessing,
+  onProcessAll,
+  processAllLoading = false
+}) => {
+  if (isLoading) {
     return (
-      <div className="text-center py-12 bg-white rounded-lg shadow">
-        <div className="text-gray-500 text-lg">No unanalyzed messages found</div>
-        <button
-          onClick={onRefresh}
-          className="mt-4 px-4 py-2 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors"
-        >
-          Refresh Messages
-        </button>
+      <div className="flex justify-center items-center h-48">
+        <Spinner size="lg" />
+        <span className="ml-3">Loading messages...</span>
       </div>
     );
   }
 
+  if (messages.length === 0) {
+    return (
+      <div className="text-center p-8">
+        <h3 className="text-xl font-semibold mb-2">No messages found</h3>
+        <p className="text-gray-500">There are no messages to display.</p>
+      </div>
+    );
+  }
+
+  // Count messages by processing state
+  const pendingCount = messages.filter(msg => msg.processing_state === 'pending').length;
+  const processingCount = messages.filter(msg => msg.processing_state === 'processing').length;
+  const errorCount = messages.filter(msg => msg.processing_state === 'error').length;
+  const completedCount = messages.filter(msg => msg.processing_state === 'completed').length;
+
   return (
-    <div className="overflow-hidden bg-white shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-      <table className="min-w-full divide-y divide-gray-300">
-        <thead>
-          <tr className="bg-gray-50">
-            <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Media</th>
-            <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Details</th>
-            <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Analysis</th>
-            <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Status</th>
-            <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-              <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200 bg-white">
-          {unanalyzedMessages.map((message) => (
-            <tr key={message.id} className="hover:bg-gray-50">
-              <td className="py-4 pl-4 pr-3 sm:pl-6 max-w-[200px]">
-                {message.public_url ? (
-                  <div className="relative group">
+    <div className="space-y-6">
+      <div className="bg-white p-4 rounded-lg shadow mb-4">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Message Processing Status</h2>
+          <Button 
+            onClick={onProcessAll} 
+            disabled={processAllLoading || (!pendingCount && !errorCount)}
+            className="flex items-center"
+          >
+            {processAllLoading ? <Spinner size="sm" className="mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+            Process All
+          </Button>
+        </div>
+        <div className="grid grid-cols-4 gap-4">
+          <StatusCard title="Pending" count={pendingCount} icon={<Clock className="text-yellow-500" />} />
+          <StatusCard title="Processing" count={processingCount} icon={<ArrowRight className="text-blue-500" />} />
+          <StatusCard title="Completed" count={completedCount} icon={<CheckCircle className="text-green-500" />} />
+          <StatusCard title="Error" count={errorCount} icon={<AlertCircle className="text-red-500" />} />
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {messages.map((message) => (
+          <Card key={message.id} className="overflow-hidden">
+            <CardContent className="p-0">
+              <div className="p-4">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-500">
+                      Message ID: {message.telegram_message_id} • 
+                      Chat: {message.chat_title || message.chat_id}
+                    </p>
+                    {message.caption && (
+                      <p className="font-medium">Caption: {message.caption}</p>
+                    )}
+                    {message.analyzed_content?.product_name && (
+                      <p className="text-sm">
+                        <span className="font-semibold">Product:</span> {message.analyzed_content.product_name}
+                      </p>
+                    )}
+                    {message.analyzed_content?.vendor_uid && (
+                      <p className="text-sm">
+                        <span className="font-semibold">Vendor:</span> {message.analyzed_content.vendor_uid}
+                      </p>
+                    )}
+                    {message.analyzed_content?.purchase_date && (
+                      <p className="text-sm">
+                        <span className="font-semibold">Date:</span> {message.analyzed_content.purchase_date}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center">
+                    <ProcessingStatus status={message.processing_state} />
+                    {(message.processing_state === 'error' || message.processing_state === 'pending') && (
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="ml-2"
+                        onClick={() => {
+                          toast.promise(onRetryProcessing(message.id), {
+                            loading: 'Processing message...',
+                            success: 'Message processed successfully',
+                            error: 'Failed to process message'
+                          });
+                        }}
+                      >
+                        <RefreshCw className="w-4 h-4 mr-1" />
+                        Analyze
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {message.public_url && (
+                <div className="h-48 bg-gray-100">
+                  {message.mime_type?.startsWith('image/') ? (
                     <img 
                       src={message.public_url} 
-                      alt={message.caption || 'Message media'} 
-                      className="w-full h-auto rounded-lg cursor-pointer transition-transform group-hover:scale-105"
-                      onClick={() => window.open(message.public_url, '_blank')}
+                      alt="Message media" 
+                      className="h-full w-full object-contain"
                     />
-                    {message.media_group_id && (
-                      <span className="absolute top-2 right-2 px-2 py-1 text-xs bg-black bg-opacity-50 text-white rounded">
-                        Group: {message.media_group_id}
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-sm text-gray-500 italic">No media</div>
-                )}
-              </td>
-              <td className="px-3 py-4 text-sm text-gray-500">
-                <div className="space-y-1">
-                  <div className="font-medium text-gray-900">
-                    {message.caption}
-                  </div>
-                  <div>ID: {message.id}</div>
-                  {message.chat_title && (
-                    <div>Chat: {message.chat_title}</div>
-                  )}
-                  {message.created_at && (
-                    <div>Created: {format(new Date(message.created_at), 'MMM d, yyyy HH:mm')}</div>
-                  )}
-                </div>
-              </td>
-              <td className="px-3 py-4 text-sm text-gray-500">
-                {message.analyzed_content ? (
-                  <div className="space-y-1">
-                    {message.analyzed_content.product_name && (
-                      <div className="flex items-center space-x-1">
-                        <span className="font-medium">Product:</span>
-                        <span>{message.analyzed_content.product_name}</span>
-                      </div>
-                    )}
-                    {message.analyzed_content.product_code && (
-                      <div className="flex items-center space-x-1">
-                        <span className="font-medium">Code:</span>
-                        <span>{message.analyzed_content.product_code}</span>
-                      </div>
-                    )}
-                    {message.analyzed_content.quantity && (
-                      <div className="flex items-center space-x-1">
-                        <span className="font-medium">Qty:</span>
-                        <span>{message.analyzed_content.quantity}</span>
-                      </div>
-                    )}
-                    {message.analyzed_content.parsing_metadata?.method && (
-                      <div className="mt-2">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
-                          ${message.analyzed_content.parsing_metadata.method === 'ai' ? 'bg-purple-100 text-purple-800' :
-                            message.analyzed_content.parsing_metadata.method === 'manual' ? 'bg-blue-100 text-blue-800' :
-                            'bg-gray-100 text-gray-800'}`}>
-                          {message.analyzed_content.parsing_metadata.method.toUpperCase()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <span className="text-gray-400 italic">No analysis</span>
-                )}
-              </td>
-              <td className="px-3 py-4 text-sm">
-                <div className="space-y-2">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                    ${message.processing_state === 'completed' ? 'bg-green-100 text-green-800' :
-                      message.processing_state === 'error' ? 'bg-red-100 text-red-800' :
-                      message.processing_state === 'processing' ? 'bg-blue-100 text-blue-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                    {message.processing_state}
-                  </span>
-                  {message.retry_count > 0 && (
-                    <div className="text-xs text-gray-500">
-                      Retries: {message.retry_count}
-                    </div>
-                  )}
-                  {message.error_message && (
-                    <div className="text-xs text-red-600 max-w-xs truncate" title={message.error_message}>
-                      {message.error_message}
+                  ) : message.mime_type?.startsWith('video/') ? (
+                    <video 
+                      src={message.public_url} 
+                      controls 
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <p className="text-gray-500">Media not supported</p>
                     </div>
                   )}
                 </div>
-              </td>
-              <td className="py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                <MessageControls message={message} onSuccess={onRefresh} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              )}
+              {message.error_message && (
+                <div className="p-3 bg-red-50 text-red-800 text-sm">
+                  <p><span className="font-semibold">Error:</span> {message.error_message}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
-} 
+};
+
+interface StatusCardProps {
+  title: string;
+  count: number;
+  icon: React.ReactNode;
+}
+
+const StatusCard: React.FC<StatusCardProps> = ({ title, count, icon }) => (
+  <div className="bg-gray-50 p-4 rounded-lg">
+    <div className="flex justify-between items-center">
+      <div>
+        <p className="text-sm text-gray-500">{title}</p>
+        <p className="text-2xl font-bold">{count}</p>
+      </div>
+      <div className="text-2xl">{icon}</div>
+    </div>
+  </div>
+);
+
+interface ProcessingStatusProps {
+  status?: string;
+}
+
+const ProcessingStatus: React.FC<ProcessingStatusProps> = ({ status }) => {
+  switch (status) {
+    case 'completed':
+      return <span className="flex items-center text-green-600"><CheckCircle className="w-4 h-4 mr-1" /> Completed</span>;
+    case 'processing':
+      return <span className="flex items-center text-blue-600"><Spinner size="sm" className="mr-1" /> Processing</span>;
+    case 'error':
+      return <span className="flex items-center text-red-600"><AlertCircle className="w-4 h-4 mr-1" /> Error</span>;
+    case 'pending':
+      return <span className="flex items-center text-yellow-600"><Clock className="w-4 h-4 mr-1" /> Pending</span>;
+    default:
+      return <span className="text-gray-600">Unknown</span>;
+  }
+};

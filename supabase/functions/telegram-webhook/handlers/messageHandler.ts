@@ -1,23 +1,21 @@
 
-import { supabaseClient } from '../_shared/supabase.ts';
-import { getMediaInfo } from './mediaUtils.ts';
-import { logMessageOperation } from './logger.ts';
-import { corsHeaders } from '../_shared/cors.ts';
-import { 
-  TelegramMessage, 
-  MessageHandlerContext, 
-  ForwardInfo,
-  MessageInput,
-  ProcessedMessageResult,
-} from './types.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { corsHeaders } from '../../_shared/cors.ts';
+import { TelegramMessage, MessageContext, ForwardInfo, MessageInput } from '../types.ts';
+import { getMediaInfo } from '../utils/mediaUtils.ts';
+import { logMessageOperation } from '../utils/logger.ts';
 
-interface MessageContext {
-  isChannelPost: boolean;
-  isForwarded: boolean;
-  correlationId: string;
-  isEdit: boolean;
-  previousMessage?: TelegramMessage;
-}
+// Create Supabase client
+const supabaseClient = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  }
+);
 
 export async function handleMediaMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
@@ -213,71 +211,6 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
   }
 }
 
-export const handleEditedMessage = async (message: TelegramMessage, context: MessageContext) => {
-  try {
-    const { correlationId, previousMessage } = context;
-    
-    if (!previousMessage) {
-      throw new Error('Previous message is required for editing');
-    }
-    
-    // Check if message has media
-    if (message.photo || message.video || message.document) {
-      return await handleMediaMessage(message, { ...context, isEdit: true });
-    }
-    
-    // Handle non-media edited message
-    const { data: existingMessage } = await supabaseClient
-      .from('other_messages')
-      .select('*')
-      .eq('telegram_message_id', previousMessage.message_id)
-      .eq('chat_id', message.chat.id)
-      .single();
-
-    if (existingMessage) {
-      const messageText = message.caption || '';
-      
-      const { error } = await supabaseClient
-        .from('other_messages')
-        .update({
-          message_text: messageText,
-          is_edited: true,
-          telegram_data: message,
-          updated_at: new Date().toISOString(),
-          correlation_id: context.correlationId
-        })
-        .eq('id', existingMessage.id);
-
-      if (error) throw error;
-
-      await logMessageOperation(
-        'edit',
-        context.correlationId,
-        {
-          message: `Text message ${message.message_id} edited in chat ${message.chat.id}`,
-          telegram_message_id: message.message_id,
-          chat_id: message.chat.id,
-          existing_message_id: existingMessage.id,
-          edit_type: 'text_edit',
-          previous_text: existingMessage.message_text,
-          new_text: messageText
-        }
-      );
-
-      return new Response(
-        JSON.stringify({ success: true }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-  } catch (error) {
-    console.error('Error handling edited message:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    );
-  }
-};
-
 export const handleOtherMessage = async (message: TelegramMessage, context: MessageContext) => {
   try {
     const { isChannelPost, isForwarded, correlationId, isEdit } = context;
@@ -293,7 +226,7 @@ export const handleOtherMessage = async (message: TelegramMessage, context: Mess
         telegram_data: message,
         correlation_id: correlationId,
         is_forward: isForwarded,
-        message_text: message.caption || '',
+        message_text: message.text || message.caption || '',
         processing_state: 'completed',
         created_at: new Date().toISOString()
       }]);
