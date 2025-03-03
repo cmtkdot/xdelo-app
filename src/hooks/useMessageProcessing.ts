@@ -1,6 +1,6 @@
 
 import { useState, useCallback } from 'react';
-import { Message } from '@/types';
+import { Message, ProcessingState } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { logMessageOperation } from '@/lib/syncLogger';
 import { useToast } from '@/hooks/useToast';
@@ -31,7 +31,7 @@ export function useMessageProcessing() {
    */
   const updateMessageState = useCallback(async (
     messageId: string, 
-    state: string, 
+    state: ProcessingState, 
     additionalFields: Partial<Message> = {}
   ) => {
     const { error } = await supabase
@@ -65,7 +65,7 @@ export function useMessageProcessing() {
       });
 
       // First update message state to pending
-      const { error: updateError } = await updateMessageState(message.id, 'pending', {
+      const { error: updateError } = await updateMessageState('pending' as ProcessingState, {
         error_message: null,
         retry_count: (message.retry_count || 0) + 1,
         processing_started_at: new Date().toISOString(),
@@ -104,7 +104,7 @@ export function useMessageProcessing() {
       console.error('Error retrying analysis:', error);
       
       // Update message with error state
-      await updateMessageState(message.id, 'error', {
+      await updateMessageState('error' as ProcessingState, {
         error_message: error.message,
         processing_completed_at: new Date().toISOString(),
         last_error_at: new Date().toISOString()
@@ -146,7 +146,7 @@ export function useMessageProcessing() {
       });
 
       // Update the caption directly in the database
-      const { error } = await updateMessageState(message.id, 'pending', {
+      const { error } = await updateMessageState('pending' as ProcessingState, {
         caption
       });
 
@@ -202,7 +202,7 @@ export function useMessageProcessing() {
     
     try {
       // Log operation start
-      await logMessageOperation('file', message.id, {
+      await logMessageOperation('analyze', message.id, {
         correlationId,
         operation: 'redownload_check_started',
         file_unique_id: message.file_unique_id
@@ -219,7 +219,7 @@ export function useMessageProcessing() {
       if (checkError) throw checkError;
 
       // Log result
-      await logMessageOperation('file', message.id, {
+      await logMessageOperation('analyze', message.id, {
         correlationId,
         operation: 'redownload_check_completed',
         result: checkResult
@@ -242,7 +242,7 @@ export function useMessageProcessing() {
       console.error('Error checking/redownloading file:', error);
       
       // Log error
-      await logMessageOperation('file', message.id, {
+      await logMessageOperation('analyze', message.id, {
         correlationId,
         operation: 'redownload_check_failed',
         error: error.message

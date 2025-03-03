@@ -65,10 +65,48 @@ serve(async (req) => {
     // Process each message sequentially
     for (const message of messages) {
       try {
+        // Attempt to redownload the media file
         const result = await redownloadMissingFile(message);
-        results.push(result);
+        
+        // Update message status after successful redownload
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({
+            needs_redownload: false,
+            redownload_attempted_at: new Date().toISOString(),
+            redownload_success: true,
+            error_message: null
+          })
+          .eq('id', message.id);
+          
+        if (updateError) {
+          console.error(`Error updating message ${message.id} status after redownload:`, updateError);
+        }
+        
+        results.push({
+          message_id: message.id,
+          file_unique_id: message.file_unique_id,
+          success: true,
+          public_url: result.public_url
+        });
       } catch (error) {
         console.error(`Error redownloading file for message ${message.id}:`, error);
+        
+        // Update message with error information
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({
+            redownload_attempted_at: new Date().toISOString(),
+            redownload_success: false,
+            redownload_failures: (message.redownload_failures || 0) + 1,
+            error_message: error.message
+          })
+          .eq('id', message.id);
+          
+        if (updateError) {
+          console.error(`Error updating message ${message.id} error status:`, updateError);
+        }
+        
         errors.push({
           message_id: message.id,
           file_unique_id: message.file_unique_id,
