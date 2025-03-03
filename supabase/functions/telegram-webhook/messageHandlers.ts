@@ -209,7 +209,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
         context.correlationId,
         {
           message: 'Error handling media message',
-          error: error.message,
+          error_message: error.message, // Use error_message instead of error
           telegram_message_id: message.message_id,
           chat_id: message.chat.id,
           error_code: error.code,
@@ -221,7 +221,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     }
     
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message }),  // This is fine as it's just for the response
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

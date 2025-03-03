@@ -1,4 +1,3 @@
-
 import { supabaseClient } from "../../_shared/supabase.ts";
 import { validateStoragePath, constructPublicUrl } from "./storageValidator.ts";
 import { MessageQueueItem, ProcessingResults, MessageData, StorageValidationResult } from "../types.ts";
@@ -74,7 +73,7 @@ async function processMessage(queueItem: MessageQueueItem): Promise<{
   queue_id: string;
   status: 'success' | 'error';
   result?: any;
-  error?: string;
+  error_message?: string;
 }> {
   const { queue_id, message_id, correlation_id, caption, media_group_id } = queueItem;
   
@@ -125,7 +124,7 @@ async function processMessage(queueItem: MessageQueueItem): Promise<{
       message_id,
       queue_id,
       status: 'error',
-      error: error.message
+      error_message: error.message
     };
   }
 }
@@ -279,10 +278,10 @@ async function completeProcessing(queueId: string, analyzedContent: any): Promis
 /**
  * Mark message processing as failed
  */
-async function failProcessing(queueId: string, errorMessage: string): Promise<void> {
+async function failProcessing(queue_id: string, error_message: string): Promise<void> {
   const { error } = await supabaseClient.rpc('xdelo_fail_message_processing', {
-    p_queue_id: queueId,
-    p_error: errorMessage
+    p_queue_id: queue_id,
+    p_error: error_message
   });
   
   if (error) {

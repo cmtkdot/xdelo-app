@@ -3209,6 +3209,7 @@ export type Database = {
         | "forward_media_synced"
         | "message_forwarded"
         | "trigger_auto_queue_activated"
+        | "trigger_queue_error"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
       processing_state_type:
         | "initialized"
