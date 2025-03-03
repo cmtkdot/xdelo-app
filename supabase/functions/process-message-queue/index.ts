@@ -73,6 +73,11 @@ serve(async (req) => {
       try {
         console.log(`Processing message ${message.message_id} (Queue ID: ${message.queue_id})`);
         
+        if (!message.caption) {
+          console.error(`Message ${message.message_id} has no caption, skipping`);
+          throw new Error('Message has no caption to analyze');
+        }
+        
         // Call the parse-caption-with-ai function
         const response = await fetch(
           `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
@@ -84,7 +89,7 @@ serve(async (req) => {
             },
             body: JSON.stringify({
               messageId: message.message_id,
-              caption: message.caption,
+              caption: message.caption, // Ensure caption is included
               media_group_id: message.media_group_id,
               correlationId: message.correlation_id,
               queue_id: message.queue_id

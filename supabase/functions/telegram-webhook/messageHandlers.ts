@@ -1,22 +1,15 @@
+
 import { supabaseClient } from '../_shared/supabase.ts';
 import { getMediaInfo } from './mediaUtils.ts';
 import { logMessageOperation } from './logger.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { 
   TelegramMessage, 
-  MessageHandlerContext, 
+  MessageContext, 
   ForwardInfo,
   MessageInput,
   ProcessedMessageResult,
 } from './types.ts';
-
-interface MessageContext {
-  isChannelPost: boolean;
-  isForwarded: boolean;
-  correlationId: string;
-  isEdit: boolean;
-  previousMessage?: TelegramMessage;
-}
 
 export async function handleMediaMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
@@ -70,7 +63,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
                 messageId: existingMessage.id,
                 caption: message.caption,
                 media_group_id: message.media_group_id,
-                correlationId,
+                correlationId: correlationId,
                 isEdit: true
               }
             });
@@ -178,14 +171,13 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       console.log(`Message ${insertedMessage.id} has caption, triggering immediate analysis`);
       
       try {
-        // Call the parse-caption-with-ai function directly
+        // Call the parse-caption-with-ai function directly with required parameters
         await supabaseClient.functions.invoke('parse-caption-with-ai', {
           body: {
             messageId: insertedMessage.id,
-            caption: message.caption,
+            caption: message.caption, // This is the key parameter that was missing
             media_group_id: message.media_group_id,
-            correlationId: context.correlationId,
-            file_info: mediaInfo
+            correlationId: context.correlationId
           }
         });
       } catch (analysisError) {

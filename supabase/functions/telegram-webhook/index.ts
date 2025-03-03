@@ -1,6 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { handleMediaMessage, handleOtherMessage } from './handlers/messageHandler.ts';
+import { handleMediaMessage, handleOtherMessage, handleEditedMessage } from './messageHandlers.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 
 serve(async (req) => {
@@ -33,7 +33,12 @@ serve(async (req) => {
       isForwarded: !!message.forward_from || !!message.forward_from_chat || !!message.forward_origin,
       correlationId,
       isEdit: !!update.edited_message || !!update.edited_channel_post,
-      previousMessage: update.edited_message?.message || update.edited_channel_post?.message
+      previousMessage: update.edited_message || update.edited_channel_post
+    }
+
+    // Handle edited messages
+    if (context.isEdit) {
+      return await handleEditedMessage(message, context);
     }
 
     // Handle media messages (photos, videos, documents)

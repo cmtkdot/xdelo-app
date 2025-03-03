@@ -19,7 +19,15 @@ serve(async (req) => {
     const { messageId, caption, mediaGroupId, correlationId = crypto.randomUUID() } = await req.json();
     console.log(`Processing message analysis for messageId: ${messageId}, correlationId: ${correlationId}`);
 
-    // Call the database function instead of accessing the message directly
+    if (!messageId) {
+      throw new Error('messageId is required');
+    }
+
+    if (!caption) {
+      throw new Error('caption is required');
+    }
+
+    // Call the database function
     const { data: dbResult, error: dbError } = await supabase.rpc('xdelo_analyze_message_caption', {
       p_message_id: messageId,
       p_correlation_id: correlationId,
@@ -57,10 +65,10 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           messageId: messageId,
-          caption: caption,
+          caption: caption, // Make sure caption is included
           media_group_id: mediaGroupId,
           correlationId: correlationId,
-          file_info: dbResult.file_info
+          file_info: dbResult?.file_info
         })
       }
     );

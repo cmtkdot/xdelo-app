@@ -165,7 +165,7 @@ const processCaption = async (
     
     // If we have a queue ID, use the complete processing function
     if (queueId) {
-      await supabaseClient.rpc('tg_complete_processing', {
+      await supabaseClient.rpc('xdelo_complete_processing', {
         p_queue_id: queueId,
         p_analyzed_content: analyzedContent
       });
@@ -202,7 +202,7 @@ const processCaption = async (
     // If we have a queue ID, mark the processing as failed
     if (queueId) {
       try {
-        await supabaseClient.rpc('tg_fail_processing', {
+        await supabaseClient.rpc('xdelo_fail_processing', {
           p_queue_id: queueId,
           p_error_message: error.message
         });
@@ -222,19 +222,26 @@ serve(async (req) => {
   }
 
   try {
-    const payload: RequestPayload = await req.json();
+    const payload = await req.json();
+    console.log('Received payload:', JSON.stringify(payload, null, 2));
+    
     const { messageId, caption, correlationId, queue_id } = payload;
 
-    if (!messageId || !caption) {
-      throw new Error('Missing required fields: messageId or caption');
+    // Validate required fields
+    const missingFields = [];
+    if (!messageId) missingFields.push('messageId');
+    if (!caption) missingFields.push('caption');
+    
+    if (missingFields.length > 0) {
+      throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
     }
 
-    console.log(`Received request to process message ${messageId}`);
+    console.log(`Received request to process message ${messageId} with caption: "${caption.substring(0, 50)}..."`);
     
     const result = await processCaption(
       messageId,
       caption,
-      correlationId,
+      correlationId || crypto.randomUUID(),
       queue_id
     );
 
