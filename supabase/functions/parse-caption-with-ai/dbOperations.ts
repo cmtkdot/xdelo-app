@@ -99,7 +99,7 @@ export const syncMediaGroupContent = async (
   }
   
   try {
-    // Use the proper function to sync content
+    // Use the sync function with clear parameters
     const { data, error } = await supabaseClient.rpc('xdelo_sync_media_group_content', {
       p_media_group_id: mediaGroupId,
       p_source_message_id: messageId

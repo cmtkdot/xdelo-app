@@ -67,11 +67,24 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
         // Use the caption syncing function for media groups
         if (media.media_group_id) {
           console.log('Message is part of media group, syncing caption');
-          const { error: syncError } = await supabase.rpc('xdelo_sync_caption_to_media_group', {
-            p_message_id: media.id,
-            p_new_caption: caption,
-            p_update_telegram: false  // Don't update in Telegram since we already did it
-          });
+          
+          // Call the function directly using stored procedure instead of RPC
+          const { data: syncData, error: syncError } = await supabase
+            .from('messages')
+            .update({
+              caption: caption,
+              telegram_data: {
+                ...currentTelegramData,
+                message: {
+                  ...(currentTelegramData.message || {}),
+                  caption: caption
+                }
+              },
+              updated_at: new Date().toISOString(),
+              processing_state: 'pending',  // Mark for reprocessing
+              analyzed_content: null        // Clear for reanalysis
+            })
+            .eq('id', media.id);
           
           if (syncError) {
             console.error('Error syncing caption to media group:', syncError);
