@@ -50,7 +50,8 @@ export const updateMessageWithAnalysis = async (
       : existingMessage?.old_analyzed_content,
     analyzed_content: analyzedContent,
     processing_state: 'completed',
-    processing_completed_at: new Date().toISOString()
+    processing_completed_at: new Date().toISOString(),
+    is_original_caption: true // Mark as original caption holder
   };
 
   const { error } = await supabaseClient
@@ -72,7 +73,7 @@ export const markQueueItemAsFailed = async (queueId: string, errorMessage: strin
   try {
     const { error } = await supabaseClient.rpc('xdelo_fail_message_processing', {
       p_queue_id: queueId,
-      p_error_message: errorMessage
+      p_error: errorMessage
     });
     
     if (error) {
@@ -97,6 +98,7 @@ export const syncMediaGroupContent = async (
   }
   
   try {
+    // Use the fixed function to sync content
     const { data, error } = await supabaseClient.rpc('xdelo_sync_media_group_content', {
       p_media_group_id: mediaGroupId,
       p_source_message_id: messageId
