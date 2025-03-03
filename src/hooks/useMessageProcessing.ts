@@ -1,15 +1,23 @@
 
 import { useState, useCallback } from 'react';
-import type { Message } from '@/types';
+import type { Message, ProcessingState } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
+import { logMessageOperation } from '@/lib/syncLogger';
+import { useToast } from '@/hooks/useToast';
 
 interface ProcessingState {
   isProcessing: boolean;
   error?: string;
 }
 
+/**
+ * Hook for handling message processing operations
+ * Provides functions for reanalyzing messages and saving captions
+ * with standardized logging and error handling
+ */
 export function useMessageProcessing() {
   const [processingState, setProcessingState] = useState<Record<string, ProcessingState>>({});
+  const { toast } = useToast();
 
   const updateProcessingState = useCallback((messageId: string, isProcessing: boolean, error?: string) => {
     setProcessingState(prev => ({
@@ -18,28 +26,54 @@ export function useMessageProcessing() {
     }));
   }, []);
 
+  /**
+   * Updates a message's processing state in the database
+   */
+  const updateMessageState = useCallback(async (
+    messageId: string, 
+    state: ProcessingState, 
+    additionalFields: Partial<Message> = {}
+  ) => {
+    const { error } = await supabase
+      .from('messages')
+      .update({
+        processing_state: state,
+        ...additionalFields,
+      })
+      .eq('id', messageId);
+    
+    return { error };
+  }, []);
+
+  /**
+   * Triggers reanalysis of a message's caption
+   */
   const handleReanalyze = useCallback(async (message: Message) => {
     if (processingState[message.id]?.isProcessing) return;
     
+    const correlationId = crypto.randomUUID();
     updateProcessingState(message.id, true);
     
     try {
-      const correlationId = crypto.randomUUID();
-      
+      // Log the operation start
+      await logMessageOperation('analyze', message.id, {
+        correlationId,
+        operation: 'reanalyze_started',
+        messageType: message.mime_type || 'unknown',
+        hasCaption: !!message.caption,
+        mediaGroupId: message.media_group_id
+      });
+
       // First update message state to pending
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          processing_state: 'pending',
-          error_message: null,
-          retry_count: (message.retry_count || 0) + 1,
-          processing_started_at: new Date().toISOString(),
-          processing_correlation_id: correlationId,
-          // Preserve existing storage path and public URL to prevent deletion
-          storage_path: message.storage_path,
-          public_url: message.public_url
-        })
-        .eq('id', message.id);
+      const { error: updateError } = await updateMessageState(message.id, 'pending', {
+        error_message: null,
+        retry_count: (message.retry_count || 0) + 1,
+        processing_started_at: new Date().toISOString(),
+        processing_correlation_id: correlationId,
+        // Preserve existing storage path and public URL to prevent deletion
+        storage_path: message.storage_path,
+        public_url: message.public_url
+      });
 
       if (updateError) throw updateError;
 
@@ -55,54 +89,115 @@ export function useMessageProcessing() {
 
       if (invokeError) throw invokeError;
 
+      // Log successful operation
+      await logMessageOperation('analyze', message.id, {
+        correlationId,
+        operation: 'reanalyze_requested',
+        success: true
+      });
+
+      toast({
+        title: "Analysis requested",
+        description: "Message has been submitted for analysis",
+      });
+
       updateProcessingState(message.id, false);
     } catch (error) {
       console.error('Error retrying analysis:', error);
       
-      await supabase
-        .from('messages')
-        .update({
-          processing_state: 'error' as const,
-          error_message: error.message,
-          processing_completed_at: new Date().toISOString(),
-          last_error_at: new Date().toISOString(),
-          // Preserve existing storage path and public URL to prevent deletion
-          storage_path: message.storage_path,
-          public_url: message.public_url
-        })
-        .eq('id', message.id);
+      // Update message with error state
+      await updateMessageState(message.id, 'error', {
+        error_message: error.message,
+        processing_completed_at: new Date().toISOString(),
+        last_error_at: new Date().toISOString(),
+        // Preserve existing storage path and public URL to prevent deletion
+        storage_path: message.storage_path,
+        public_url: message.public_url
+      });
+
+      // Log error
+      await logMessageOperation('analyze', message.id, {
+        correlationId,
+        operation: 'reanalyze_failed',
+        error: error.message
+      });
+
+      toast({
+        title: "Analysis failed",
+        description: error.message,
+        variant: "destructive",
+      });
 
       updateProcessingState(message.id, false, error.message);
     }
-  }, [processingState, updateProcessingState]);
+  }, [processingState, updateProcessingState, updateMessageState, toast]);
 
+  /**
+   * Saves a new caption for a message and triggers reanalysis
+   */
   const handleSave = useCallback(async (message: Message, caption: string) => {
     if (processingState[message.id]?.isProcessing) return;
     
+    const correlationId = crypto.randomUUID();
     updateProcessingState(message.id, true);
     
     try {
-      const { error } = await supabase
-        .from('messages')
-        .update({
-          caption,
-          processing_state: 'pending' as const,
-          // Preserve existing storage path and public URL to prevent deletion
-          storage_path: message.storage_path,
-          public_url: message.public_url
-        })
-        .eq('id', message.id);
+      // Log operation start
+      await logMessageOperation('update', message.id, {
+        correlationId,
+        operation: 'save_caption_started',
+        previousCaption: message.caption,
+        newCaption: caption
+      });
+
+      // Update the caption
+      const { error } = await updateMessageState(message.id, 'pending', {
+        caption,
+        // Preserve existing storage path and public URL to prevent deletion
+        storage_path: message.storage_path,
+        public_url: message.public_url
+      });
 
       if (error) throw error;
       
-      await handleReanalyze(message);
+      // Trigger reanalysis with the new caption
+      await handleReanalyze({
+        ...message,
+        caption // Update with new caption
+      });
+      
+      // Log successful operation
+      await logMessageOperation('update', message.id, {
+        correlationId,
+        operation: 'save_caption_completed',
+        success: true
+      });
+
+      toast({
+        title: "Caption saved",
+        description: "Caption has been updated and analysis triggered",
+      });
       
       updateProcessingState(message.id, false);
     } catch (error) {
       console.error('Error saving caption:', error);
+      
+      // Log error
+      await logMessageOperation('update', message.id, {
+        correlationId,
+        operation: 'save_caption_failed',
+        error: error.message
+      });
+
+      toast({
+        title: "Save failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      
       updateProcessingState(message.id, false, error.message);
     }
-  }, [processingState, updateProcessingState, handleReanalyze]);
+  }, [processingState, updateProcessingState, handleReanalyze, updateMessageState, toast]);
 
   return {
     handleReanalyze,
