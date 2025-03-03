@@ -1,3 +1,5 @@
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
 import { corsHeaders } from "../_shared/cors.ts";
 import { parseCaption } from './captionParser.ts';
@@ -24,8 +26,8 @@ serve(async (req) => {
   }
 
   try {
-    const { messageId, caption, media_group_id, correlationId, queue_id } = await req.json();
-    console.log(`Processing caption for message ${messageId}, correlation_id: ${correlationId}`);
+    const { messageId, caption, media_group_id, correlationId, queue_id, isEdit } = await req.json();
+    console.log(`Processing caption for message ${messageId}, correlation_id: ${correlationId}, isEdit: ${isEdit}`);
 
     if (!messageId || !caption) {
       throw new Error("Required parameters missing: messageId and caption are required");
@@ -50,16 +52,25 @@ serve(async (req) => {
         const aiResult = await analyzeWithAI(caption, parsedContent);
         console.log(`AI analysis complete:`, aiResult);
         
-        // Merge AI results with manual parsing results, AI takes precedence
-        parsedContent = {
-          ...parsedContent,
-          ...aiResult,
-          parsing_metadata: {
-            method: 'ai',
+        if (aiResult.success && aiResult.result) {
+          // Merge AI results with manual parsing results, AI takes precedence
+          parsedContent = {
+            ...parsedContent,
+            ...aiResult.result,
+            parsing_metadata: {
+              method: 'ai',
+              timestamp: new Date().toISOString(),
+              original_manual_parse: parsedContent
+            }
+          };
+        } else {
+          console.error('AI analysis returned no results, using manual parsing');
+          parsedContent.parsing_metadata = {
+            method: 'manual',
             timestamp: new Date().toISOString(),
-            original_manual_parse: parsedContent
-          }
-        };
+            ai_error: aiResult.error || 'No results returned'
+          };
+        }
       } catch (aiError) {
         console.error('AI analysis failed, using manual parsing fallback:', aiError);
         parsedContent.parsing_metadata = {
@@ -84,6 +95,12 @@ serve(async (req) => {
         media_group_id: media_group_id
       };
     }
+    
+    // Add edit flag to metadata if this is from an edit
+    if (isEdit) {
+      parsedContent.parsing_metadata.is_edit = true;
+      parsedContent.parsing_metadata.edit_timestamp = new Date().toISOString();
+    }
 
     // Log the analysis in the audit trail
     await logAnalysisEvent(
@@ -95,13 +112,14 @@ serve(async (req) => {
         source: 'parse-caption-with-ai',
         caption: caption,
         media_group_id: media_group_id,
-        method: needsAIAnalysis ? 'ai' : 'manual'
+        method: needsAIAnalysis ? 'ai' : 'manual',
+        is_edit: isEdit
       }
     );
 
     // Update the message with the analyzed content
     console.log(`Updating message ${messageId} with analyzed content`);
-    await updateMessageWithAnalysis(messageId, parsedContent, existingMessage, queue_id);
+    await updateMessageWithAnalysis(messageId, parsedContent, existingMessage, queue_id, isEdit);
 
     // Always attempt to sync content to media group
     if (media_group_id) {

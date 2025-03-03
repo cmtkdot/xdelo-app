@@ -1,4 +1,3 @@
-
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { getMediaInfo } from '../utils/mediaUtils.ts';
 import { logMessageOperation } from '../utils/logger.ts';
@@ -73,7 +72,8 @@ async function handleEditedMediaMessage(
       timestamp: new Date().toISOString(),
       previous_caption: existingMessage.caption,
       new_caption: message.caption,
-      edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+      edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
+      previous_analyzed_content: existingMessage.analyzed_content
     });
     
     // Check if caption changed
@@ -96,63 +96,104 @@ async function handleEditedMediaMessage(
         // Reset analyzed content if caption changed
         analyzed_content: captionChanged ? null : existingMessage.analyzed_content,
         // Mark as needing group sync if caption changed and part of a group
-        group_caption_synced: captionChanged && message.media_group_id ? false : existingMessage.group_caption_synced
+        group_caption_synced: captionChanged && message.media_group_id ? false : existingMessage.group_caption_synced,
+        // Set is_original_caption to false if caption was removed
+        is_original_caption: captionChanged && !message.caption ? false : existingMessage.is_original_caption
       })
       .eq('id', existingMessage.id);
 
     if (updateError) throw updateError;
 
-    // If caption changed and part of a media group, update group caption sync
-    if (captionChanged && message.media_group_id) {
-      try {
-        console.log(`Syncing edited caption to media group ${message.media_group_id}`);
-        
-        // Call the DB function with parameters in correct order
-        const { data: syncResult, error: syncError } = await supabaseClient.rpc(
-          'xdelo_sync_media_group_content',
-          {
-            p_source_message_id: existingMessage.id,
-            p_media_group_id: message.media_group_id,
-            p_correlation_id: correlationId
-          }
-        );
-        
-        if (syncError) {
-          console.error('Error syncing media group caption:', syncError);
-          
-          // Try fallback method - direct DB updates
-          try {
-            await syncMediaGroupDirectly(message.media_group_id, existingMessage.id, correlationId);
-          } catch (directError) {
-            console.error('Direct media group sync also failed:', directError);
-          }
-        } else {
-          console.log('Media group sync completed successfully:', syncResult);
-        }
-      } catch (syncError) {
-        console.error('Failed to sync media group caption:', syncError);
-      }
-    }
-
-    // If caption changed, trigger parsing
+    // If caption changed and has content, directly trigger caption analysis
     if (captionChanged && message.caption) {
       try {
-        // Queue the message for processing
-        const { data: queueResult, error: queueError } = await supabaseClient.rpc(
-          'xdelo_queue_message_for_processing',
-          {
-            p_message_id: existingMessage.id,
-            p_correlation_id: correlationId
-          }
-        );
+        console.log(`Caption changed, directly triggering analysis for message ${existingMessage.id}`);
         
-        if (queueError) {
-          console.error('Failed to queue message for processing:', queueError);
+        // Directly call the parse-caption-with-ai edge function for immediate processing
+        const analyzeResponse = await supabaseClient.functions.invoke('parse-caption-with-ai', {
+          body: {
+            messageId: existingMessage.id,
+            caption: message.caption,
+            media_group_id: message.media_group_id,
+            correlationId: correlationId,
+            isEdit: true
+          }
+        });
+        
+        if (!analyzeResponse.error) {
+          console.log('Direct caption analysis successful');
         } else {
-          console.log('Message queued for processing:', queueResult);
+          console.error('Direct caption analysis failed:', analyzeResponse.error);
+          
+          // Fallback: queue for processing
+          const { error: queueError } = await supabaseClient.rpc(
+            'xdelo_queue_message_for_processing',
+            {
+              p_message_id: existingMessage.id,
+              p_correlation_id: correlationId,
+              p_priority: 10 // Higher priority for edits
+            }
+          );
+          
+          if (queueError) {
+            console.error('Failed to queue edited message for processing:', queueError);
+          } else {
+            console.log('Edited message queued for processing with high priority');
+          }
         }
       } catch (analysisError) {
-        console.error('Failed to queue edited message for processing:', analysisError);
+        console.error('Failed to process edited caption:', analysisError);
+        
+        // Still try to queue as fallback
+        try {
+          await supabaseClient.rpc(
+            'xdelo_queue_message_for_processing',
+            {
+              p_message_id: existingMessage.id,
+              p_correlation_id: correlationId,
+              p_priority: 10
+            }
+          );
+        } catch (queueError) {
+          console.error('Failed to queue edited message for processing:', queueError);
+        }
+      }
+    } 
+    // If caption was removed, check if this is part of a media group and needs syncing
+    else if (captionChanged && !message.caption && message.media_group_id) {
+      try {
+        console.log(`Caption removed, checking for media group sync from group ${message.media_group_id}`);
+        
+        // Look for another message in the group with a caption
+        const { data: groupMessages } = await supabaseClient
+          .from('messages')
+          .select('id, caption, analyzed_content, is_original_caption')
+          .eq('media_group_id', message.media_group_id)
+          .neq('id', existingMessage.id)
+          .order('created_at', { ascending: true });
+        
+        if (groupMessages && groupMessages.length > 0) {
+          // Find a message with caption and analyzed_content
+          const captionMessage = groupMessages.find(m => m.caption && m.analyzed_content);
+          
+          if (captionMessage) {
+            console.log(`Found another message with caption in group: ${captionMessage.id}`);
+            
+            // Update the group relationships
+            await supabaseClient.rpc(
+              'xdelo_sync_media_group_content',
+              {
+                p_source_message_id: captionMessage.id,
+                p_media_group_id: message.media_group_id,
+                p_correlation_id: correlationId
+              }
+            );
+          } else {
+            console.log('No other message with caption found in the group');
+          }
+        }
+      } catch (syncError) {
+        console.error('Failed to sync from media group after caption removal:', syncError);
       }
     }
 
@@ -332,7 +373,6 @@ async function handleNewMediaMessage(
   );
 }
 
-// Unified message processing for new and duplicate messages
 async function processMessage(
   message: TelegramMessage, 
   dbMessage: { id: string }, 
@@ -348,16 +388,38 @@ async function processMessage(
         'xdelo_check_media_group_content',
         {
           p_media_group_id: message.media_group_id,
-          p_message_id: dbMessage.id
+          p_message_id: dbMessage.id,
+          p_correlation_id: context.correlationId
         }
       );
       
       if (syncError) {
         console.error('Error checking media group content:', syncError);
+        
+        // Fallback: Try to sync directly from the database
+        await syncFromMediaGroupDirect(message.media_group_id, dbMessage.id, context.correlationId);
       } else if (syncResult && syncResult.success) {
         console.log(`Successfully synced content from media group ${message.media_group_id} to message ${dbMessage.id}`);
       } else if (syncResult) {
         console.log(`No content to sync: ${syncResult.reason}`);
+        
+        // If no content to sync, set a delayed re-check
+        console.log(`Scheduling a delayed re-check for media group ${message.media_group_id} after 10 seconds`);
+        setTimeout(async () => {
+          try {
+            console.log(`Performing delayed re-check for message ${dbMessage.id} in group ${message.media_group_id}`);
+            await supabaseClient.rpc(
+              'xdelo_check_media_group_content',
+              {
+                p_media_group_id: message.media_group_id,
+                p_message_id: dbMessage.id,
+                p_correlation_id: context.correlationId
+              }
+            );
+          } catch (delayedError) {
+            console.error('Delayed media group check failed:', delayedError);
+          }
+        }, 10000);
       }
     } catch (syncError) {
       console.error('Failed to sync with media group:', syncError);
@@ -403,105 +465,80 @@ async function processMessage(
   }
 }
 
-// Helper function to sync media group directly when RPC fails
-async function syncMediaGroupDirectly(
+async function syncFromMediaGroupDirect(
   mediaGroupId: string,
-  sourceMessageId: string,
+  targetMessageId: string,
   correlationId: string
-): Promise<void> {
+): Promise<boolean> {
   try {
-    console.log(`Direct sync: Getting source message ${sourceMessageId}`);
+    console.log(`Direct sync check for message ${targetMessageId} in group ${mediaGroupId}`);
     
-    // Get the analyzed content from the source message
-    const { data: sourceMessage, error: sourceError } = await supabaseClient
+    // Find any message in the group with analyzed_content
+    const { data: groupMessages } = await supabaseClient
       .from('messages')
-      .select('analyzed_content')
-      .eq('id', sourceMessageId)
-      .single();
+      .select('id, analyzed_content, is_original_caption')
+      .eq('media_group_id', mediaGroupId)
+      .neq('id', targetMessageId)
+      .order('created_at', { ascending: true });
     
-    if (sourceError || !sourceMessage?.analyzed_content) {
-      console.error('Source message has no analyzed_content:', sourceError);
-      return;
+    if (!groupMessages || groupMessages.length === 0) {
+      console.log(`No other messages found in group ${mediaGroupId}`);
+      return false;
     }
     
-    // Mark this message as the original caption holder
+    // Look for a message with analyzed_content
+    const sourceMessage = groupMessages.find(m => m.analyzed_content && m.is_original_caption);
+    
+    // If no message with is_original_caption, try any with analyzed_content
+    const fallbackSource = !sourceMessage ? 
+      groupMessages.find(m => m.analyzed_content) : null;
+      
+    if (!sourceMessage && !fallbackSource) {
+      console.log(`No messages with analyzed_content found in group ${mediaGroupId}`);
+      return false;
+    }
+    
+    const source = sourceMessage || fallbackSource;
+    
+    // Update the target message with the analyzed_content from the source
     const { error: updateError } = await supabaseClient
       .from('messages')
       .update({
-        is_original_caption: true,
+        analyzed_content: source.analyzed_content,
+        message_caption_id: source.id,
+        is_original_caption: false,
         group_caption_synced: true,
+        processing_state: 'completed',
+        processing_completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
-      .eq('id', sourceMessageId);
-      
+      .eq('id', targetMessageId);
+    
     if (updateError) {
-      console.error('Error updating source message:', updateError);
-    }
-    
-    console.log(`Direct sync: Getting other messages in group ${mediaGroupId}`);
-    
-    // Get all other messages in the group
-    const { data: groupMessages, error: groupError } = await supabaseClient
-      .from('messages')
-      .select('id, analyzed_content')
-      .eq('media_group_id', mediaGroupId)
-      .neq('id', sourceMessageId);
-    
-    if (groupError) {
-      console.error('Error fetching group messages:', groupError);
-      return;
-    }
-    
-    if (!groupMessages?.length) {
-      console.log('No other messages in the group to sync');
-      return;
-    }
-    
-    console.log(`Direct sync: Updating ${groupMessages.length} other messages`);
-    
-    // Update all other messages in the group
-    for (const message of groupMessages) {
-      try {
-        const { error: msgUpdateError } = await supabaseClient
-          .from('messages')
-          .update({
-            analyzed_content: sourceMessage.analyzed_content,
-            message_caption_id: sourceMessageId,
-            is_original_caption: false,
-            group_caption_synced: true,
-            processing_state: 'completed',
-            processing_completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', message.id);
-          
-        if (msgUpdateError) {
-          console.error(`Error updating message ${message.id}:`, msgUpdateError);
-        }
-      } catch (updateError) {
-        console.error(`Exception updating message ${message.id}:`, updateError);
-      }
+      console.error(`Error updating message ${targetMessageId} with group content:`, updateError);
+      return false;
     }
     
     // Log the sync operation
     try {
       await supabaseClient.from('unified_audit_logs').insert({
-        event_type: 'media_group_content_synced',
-        entity_id: sourceMessageId,
+        event_type: 'media_group_content_synced_direct',
+        entity_id: targetMessageId,
         metadata: {
           media_group_id: mediaGroupId,
-          updated_count: groupMessages.length,
-          operation: 'direct_sync',
+          source_message_id: source.id,
           correlation_id: correlationId
         },
         event_timestamp: new Date().toISOString()
       });
     } catch (logError) {
-      console.error('Error logging media group sync:', logError);
+      console.error('Error logging direct media group sync:', logError);
     }
     
-    console.log(`Direct sync: Successfully updated ${groupMessages.length} messages in group ${mediaGroupId}`);
+    console.log(`Successfully synced content from message ${source.id} to message ${targetMessageId}`);
+    return true;
   } catch (error) {
-    console.error('Error in syncMediaGroupDirectly:', error);
+    console.error('Error in syncFromMediaGroupDirect:', error);
+    return false;
   }
 }

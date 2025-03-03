@@ -3180,6 +3180,10 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_sync_pending_media_group_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       xdelo_update_message_processing_state: {
         Args: {
           p_message_id: string
@@ -3211,6 +3215,8 @@ export type Database = {
         | "message_forwarded"
         | "trigger_auto_queue_activated"
         | "trigger_queue_error"
+        | "media_group_content_synced"
+        | "media_group_sync_error"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
       processing_state_type:
         | "initialized"

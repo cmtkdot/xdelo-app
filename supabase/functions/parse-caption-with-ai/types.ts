@@ -7,6 +7,7 @@ export interface RequestPayload {
   correlationId: string;
   queue_id?: string;
   file_info?: any;
+  isEdit?: boolean;
 }
 
 export interface ParsedContent {
@@ -22,6 +23,13 @@ export interface ParsedContent {
     timestamp: string;
     confidence?: number;
     ai_error?: string;
+    is_edit?: boolean;
+    edit_timestamp?: string;
+    original_manual_parse?: ParsedContent;
+  };
+  sync_metadata?: {
+    media_group_id?: string;
+    sync_source_message_id?: string;
   };
 }
 
@@ -34,4 +42,9 @@ export interface MediaGroupResult {
   syncedCount?: number;
   success: boolean;
   source_message_id?: string;
+  reason?: string;
+  method?: string;
+  details?: any;
+  error?: string;
+  fallbackError?: string;
 }

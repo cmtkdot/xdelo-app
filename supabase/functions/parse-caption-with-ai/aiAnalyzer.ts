@@ -1,3 +1,4 @@
+
 import { ParsedContent } from './types.ts';
 
 // Analyze caption using OpenAI
@@ -13,6 +14,7 @@ export const analyzeWithAI = async (
       throw new Error('OpenAI API key not found');
     }
     
+    // Improved prompt with structured output requirements
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -23,12 +25,34 @@ export const analyzeWithAI = async (
         model: "gpt-3.5-turbo",
         messages: [{
           role: "system",
-          content: "You are a product information extractor. Extract product details from the given caption."
+          content: `You are a specialized product information extractor. Extract details from product captions and format them according to specific rules. 
+          
+          RULES:
+          1. Extract product_name - text before "#" symbol, line break, or "x"
+          2. Extract product_code - text following "#" symbol (without the "#")
+          3. Extract vendor_uid - first 1-4 letters of product_code (uppercase)
+          4. Extract purchase_date - parse date from product_code:
+             - For 6 digits (mmDDyy): convert to YYYY-MM-DD
+             - For 5 digits (mDDyy): convert to YYYY-MM-DD with leading zero
+          5. Extract quantity - number following "x" (e.g., "x2" means quantity: 2)
+          6. Extract notes - text in parentheses or remaining unclassified text
+          
+          RESPOND ONLY WITH JSON in this format:
+          {
+            "product_name": "string",
+            "product_code": "string", 
+            "vendor_uid": "string",
+            "purchase_date": "YYYY-MM-DD",
+            "quantity": number or null,
+            "notes": "string",
+            "confidence": number between 0 and 1
+          }`
         }, {
           role: "user",
-          content: `Extract product name, product code, vendor ID, purchase date, and quantity from this caption: ${caption}`
+          content: `Parse this product caption: ${caption}`
         }],
         temperature: 0.3,
+        response_format: { type: "json_object" }
       }),
     });
 
@@ -37,16 +61,43 @@ export const analyzeWithAI = async (
     }
 
     const result = await response.json();
+    
+    if (!result.choices || !result.choices[0] || !result.choices[0].message) {
+      throw new Error('Invalid response format from OpenAI');
+    }
+    
     const aiAnalysis = result.choices[0].message.content;
-    console.log(`AI analysis result: ${aiAnalysis}`);
+    console.log(`AI analysis raw result: ${aiAnalysis}`);
+    
+    // Parse the JSON response
+    let parsedAIResult;
+    try {
+      parsedAIResult = JSON.parse(aiAnalysis);
+      console.log('Parsed AI result:', parsedAIResult);
+    } catch (parseError) {
+      console.error('Failed to parse AI result as JSON:', parseError);
+      throw new Error('Failed to parse AI response as JSON');
+    }
+    
+    // Validate the result has required fields
+    if (!parsedAIResult.product_name) {
+      console.warn('AI analysis missing product_name, using manual result');
+      parsedAIResult.product_name = manualAnalysis.product_name;
+    }
+
+    // Get confidence score
+    const confidence = parsedAIResult.confidence || 0.8;
+    delete parsedAIResult.confidence; // Remove from final result
 
     // Return the enhanced result
     return {
       success: true,
       result: {
         ...manualAnalysis,
+        ...parsedAIResult,
         parsing_metadata: {
           method: 'ai',
+          confidence,
           timestamp: new Date().toISOString()
         }
       }

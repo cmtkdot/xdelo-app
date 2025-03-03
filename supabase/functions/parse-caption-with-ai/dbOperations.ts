@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { ParsedContent, MediaGroupResult } from './types.ts';
 
@@ -12,7 +11,7 @@ const supabaseClient = createClient(
 export const getMessage = async (messageId: string) => {
   const { data, error } = await supabaseClient
     .from('messages')
-    .select('analyzed_content, old_analyzed_content, media_group_id')
+    .select('analyzed_content, old_analyzed_content, media_group_id, processing_state, is_original_caption')
     .eq('id', messageId)
     .single();
 
@@ -23,18 +22,20 @@ export const getMessage = async (messageId: string) => {
   return data;
 };
 
-// Update message with analyzed content
+// Update message with analyzed content with improved handling for edits
 export const updateMessageWithAnalysis = async (
   messageId: string,
   analyzedContent: ParsedContent,
   existingMessage: any,
-  queueId?: string
+  queueId?: string,
+  isEdit?: boolean
 ) => {
   // If we have a queue ID, use the complete processing function
   if (queueId) {
     const { error } = await supabaseClient.rpc('xdelo_complete_message_processing', {
       p_queue_id: queueId,
-      p_analyzed_content: analyzedContent
+      p_analyzed_content: analyzedContent,
+      p_is_edit: isEdit || false
     });
     
     if (error) {
@@ -44,15 +45,25 @@ export const updateMessageWithAnalysis = async (
     return { success: true };
   } 
   
+  // Prepare old_analyzed_content array
+  const oldAnalyzedContent = existingMessage?.analyzed_content 
+    ? [...(existingMessage.old_analyzed_content || []), existingMessage.analyzed_content]
+    : existingMessage?.old_analyzed_content || [];
+  
+  // Set is_original_caption based on current state and whether this is an edit
+  let isOriginalCaption = true;
+  if (isEdit) {
+    // For edits, keep original caption status if it already exists
+    isOriginalCaption = existingMessage?.is_original_caption !== false;
+  }
+  
   // Otherwise, update the message directly
   const updateData = {
-    old_analyzed_content: existingMessage?.analyzed_content 
-      ? [...(existingMessage.old_analyzed_content || []), existingMessage.analyzed_content]
-      : existingMessage?.old_analyzed_content,
+    old_analyzed_content: oldAnalyzedContent,
     analyzed_content: analyzedContent,
     processing_state: 'completed',
     processing_completed_at: new Date().toISOString(),
-    is_original_caption: true // Mark as original caption holder
+    is_original_caption: isOriginalCaption
   };
 
   const { error } = await supabaseClient
@@ -101,6 +112,18 @@ export const syncMediaGroupContent = async (
   
   try {
     console.log(`Starting media group sync for group ${mediaGroupId} from message ${messageId}`);
+    
+    // First check if the message is still eligible to be a source message
+    const { data: sourceMessage } = await supabaseClient
+      .from('messages')
+      .select('analyzed_content, caption, is_original_caption')
+      .eq('id', messageId)
+      .single();
+    
+    if (!sourceMessage?.analyzed_content || !sourceMessage?.caption) {
+      console.log(`Message ${messageId} is no longer eligible as a source message (no analyzed_content or caption)`);
+      return { success: false, reason: 'source_not_eligible' };
+    }
     
     // Log the sync attempt
     await supabaseClient.from('unified_audit_logs').insert({
@@ -180,7 +203,7 @@ async function syncMediaGroupDirectly(
     // Get the analyzed content from the source message
     const { data: sourceMessage, error: sourceError } = await supabaseClient
       .from('messages')
-      .select('analyzed_content')
+      .select('analyzed_content, caption')
       .eq('id', sourceMessageId)
       .single();
     
