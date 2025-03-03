@@ -1,67 +1,58 @@
 
-import { useState, useCallback } from 'react';
-import { Message, ProcessingState } from '@/types';
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from '@/integrations/supabase/client';
-import { logMessageOperation } from '@/lib/syncLogger';
-import { useToast } from '@/hooks/useToast';
+import { Message, ProcessingState } from '@/types';
+import { useToast } from './useToast';
 
-interface MessageProcessingState {
-  isProcessing: boolean;
-  error?: string;
-}
-
-/**
- * Hook for handling message processing operations
- * Provides functions for reanalyzing messages and saving captions
- * with standardized logging and error handling
- */
-export function useMessageProcessing() {
-  const [processingState, setProcessingState] = useState<Record<string, MessageProcessingState>>({});
+export const useMessageProcessing = () => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const updateProcessingState = useCallback((messageId: string, isProcessing: boolean, error?: string) => {
-    setProcessingState(prev => ({
-      ...prev,
-      [messageId]: { isProcessing, error }
-    }));
-  }, []);
-
-  /**
-   * Updates a message's processing state in the database
-   */
-  const updateMessageState = useCallback(async (
-    messageId: string, 
-    state: ProcessingState, 
-    additionalFields: Partial<Message> = {}
+  // Function to update a message's processing state
+  const updateMessageState = async (
+    messageId: string,
+    state: ProcessingState,
+    additionalData: Partial<Message> = {}
   ) => {
-    const { error } = await supabase
-      .from('messages')
-      .update({
-        processing_state: state,
-        ...additionalFields,
-      })
-      .eq('id', messageId);
-    
-    return { error };
-  }, []);
-
-  /**
-   * Triggers reanalysis of a message's caption
-   */
-  const handleReanalyze = useCallback(async (message: Message) => {
-    if (processingState[message.id]?.isProcessing) return;
-    
-    const correlationId = crypto.randomUUID();
-    updateProcessingState(message.id, true);
-    
     try {
-      // Log the operation start
-      await logMessageOperation('analyze', message.id, {
-        correlationId,
-        operation: 'reanalyze_started',
-        messageType: message.mime_type || 'unknown',
-        hasCaption: !!message.caption,
-        mediaGroupId: message.media_group_id
+      const { data, error } = await supabase
+        .from('messages')
+        .update({
+          processing_state: state,
+          ...additionalData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', messageId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error: any) {
+      console.error(`Failed to update message ${messageId} state to ${state}:`, error);
+      return { data: null, error };
+    }
+  };
+
+  // Retry message analysis
+  const retryMessageAnalysis = async (message: Message) => {
+    if (!message || !message.id) {
+      toast({
+        title: "Error",
+        description: "Invalid message data",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+      
+      toast({
+        title: "Processing",
+        description: "Reprocessing message...",
       });
 
       // First update message state to pending
@@ -69,38 +60,40 @@ export function useMessageProcessing() {
         error_message: null,
         retry_count: (message.retry_count || 0) + 1,
         processing_started_at: new Date().toISOString(),
-        processing_correlation_id: correlationId
       });
 
       if (updateError) throw updateError;
 
-      // Call the Edge Function directly instead of using RPC
-      const { data: invokeData, error: invokeError } = await supabase.functions.invoke('create-analyze-message-caption', {
-        body: {
-          messageId: message.id,
-          correlationId,
-          caption: message.caption,
-          mediaGroupId: message.media_group_id
+      // Call the analyze function
+      const response = await fetch(
+        `${supabase.supabaseUrl}/functions/v1/create-analyze-message-caption`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabase.supabaseKey}`
+          },
+          body: JSON.stringify({
+            messageId: message.id,
+            caption: message.caption || "",
+            mediaGroupId: message.media_group_id,
+            correlationId: crypto.randomUUID()
+          })
         }
-      });
+      );
 
-      if (invokeError) throw invokeError;
+      if (!response.ok) {
+        throw new Error(`Failed to analyze message: ${response.statusText}`);
+      }
 
-      // Log successful operation
-      await logMessageOperation('analyze', message.id, {
-        correlationId,
-        operation: 'reanalyze_requested',
-        success: true,
-        result: invokeData
-      });
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
 
       toast({
-        title: "Analysis requested",
-        description: "Message has been submitted for analysis",
+        title: "Success",
+        description: "Message reprocessing started",
       });
-
-      updateProcessingState(message.id, false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error retrying analysis:', error);
       
       // Update message with error state
@@ -110,39 +103,33 @@ export function useMessageProcessing() {
         last_error_at: new Date().toISOString()
       });
 
-      // Log error
-      await logMessageOperation('analyze', message.id, {
-        correlationId,
-        operation: 'reanalyze_failed',
-        error: error.message
-      });
-
       toast({
-        title: "Analysis failed",
-        description: error.message,
-        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to reprocess message",
+        variant: "destructive"
       });
-
-      updateProcessingState(message.id, false, error.message);
+    } finally {
+      setIsProcessing(false);
     }
-  }, [processingState, updateProcessingState, updateMessageState, toast]);
+  };
 
-  /**
-   * Saves a new caption for a message and triggers reanalysis
-   */
-  const handleSave = useCallback(async (message: Message, caption: string) => {
-    if (processingState[message.id]?.isProcessing) return;
-    
-    const correlationId = crypto.randomUUID();
-    updateProcessingState(message.id, true);
-    
+  // Update a message's caption and trigger reprocessing
+  const updateMessageCaption = async (message: Message, caption: string) => {
+    if (!message || !message.id) {
+      toast({
+        title: "Error",
+        description: "Invalid message data",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
-      // Log operation start
-      await logMessageOperation('update', message.id, {
-        correlationId,
-        operation: 'save_caption_started',
-        previousCaption: message.caption,
-        newCaption: caption
+      setIsProcessing(true);
+      
+      toast({
+        title: "Processing",
+        description: "Updating caption...",
       });
 
       // Update the caption directly in the database
@@ -151,123 +138,31 @@ export function useMessageProcessing() {
       });
 
       if (error) throw error;
-      
-      // Trigger reanalysis with the new caption
-      await handleReanalyze({
-        ...message,
-        caption // Update with new caption
-      });
-      
-      // Log successful operation
-      await logMessageOperation('update', message.id, {
-        correlationId,
-        operation: 'save_caption_completed',
-        success: true
-      });
+
+      // Trigger reprocessing with the new caption
+      await retryMessageAnalysis({...message, caption});
 
       toast({
-        title: "Caption saved",
-        description: "Caption has been updated and analysis triggered",
+        title: "Success",
+        description: "Caption updated and reprocessing started",
       });
+    } catch (error: any) {
+      console.error('Error updating caption:', error);
       
-      updateProcessingState(message.id, false);
-    } catch (error) {
-      console.error('Error saving caption:', error);
-      
-      // Log error
-      await logMessageOperation('update', message.id, {
-        correlationId,
-        operation: 'save_caption_failed',
-        error: error.message
-      });
-
       toast({
-        title: "Save failed",
-        description: error.message,
-        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to update caption",
+        variant: "destructive"
       });
-      
-      updateProcessingState(message.id, false, error.message);
+    } finally {
+      setIsProcessing(false);
     }
-  }, [processingState, updateProcessingState, handleReanalyze, updateMessageState, toast]);
-
-  /**
-   * Checks if a file needs redownload and attempts to redownload if necessary
-   */
-  const checkAndRedownloadFile = useCallback(async (message: Message) => {
-    if (processingState[message.id]?.isProcessing) return;
-    
-    const correlationId = crypto.randomUUID();
-    updateProcessingState(message.id, true);
-    
-    try {
-      // Log operation start
-      await logMessageOperation('analyze', message.id, {
-        correlationId,
-        operation: 'redownload_check_started',
-        file_unique_id: message.file_unique_id
-      });
-
-      // Call the function to check file existence
-      const { data: checkResult, error: checkError } = await supabase.functions.invoke('redownload-missing-files', {
-        body: {
-          messageIds: [message.id],
-          limit: 1
-        }
-      });
-
-      if (checkError) throw checkError;
-
-      // Log result
-      await logMessageOperation('analyze', message.id, {
-        correlationId,
-        operation: 'redownload_check_completed',
-        result: checkResult
-      });
-
-      toast({
-        title: checkResult.successful > 0 ? "File redownloaded" : "File check completed",
-        description: checkResult.successful > 0 
-          ? "Missing file was successfully redownloaded" 
-          : checkResult.failed > 0 
-            ? "Failed to redownload file, please try again later" 
-            : "File already exists and is accessible",
-        variant: checkResult.failed > 0 ? "destructive" : "default"
-      });
-      
-      updateProcessingState(message.id, false);
-      
-      return checkResult;
-    } catch (error) {
-      console.error('Error checking/redownloading file:', error);
-      
-      // Log error
-      await logMessageOperation('analyze', message.id, {
-        correlationId,
-        operation: 'redownload_check_failed',
-        error: error.message
-      });
-
-      toast({
-        title: "File check failed",
-        description: error.message,
-        variant: "destructive",
-      });
-      
-      updateProcessingState(message.id, false, error.message);
-      return { success: false, error: error.message };
-    }
-  }, [processingState, updateProcessingState, toast]);
+  };
 
   return {
-    handleReanalyze,
-    handleSave,
-    checkAndRedownloadFile,
-    isProcessing: Object.fromEntries(
-      Object.entries(processingState).map(([id, state]) => [id, state.isProcessing])
-    ),
-    errors: Object.fromEntries(
-      Object.entries(processingState).map(([id, state]) => [id, state.error])
-    )
+    isProcessing,
+    retryMessageAnalysis,
+    updateMessageCaption,
+    updateMessageState
   };
-}
+};

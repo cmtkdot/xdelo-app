@@ -1,112 +1,145 @@
 
-import { serve } from "std/http/server.ts";
-import { createClient } from "@supabase/supabase-js";
-import { corsHeaders } from "../_shared/cors.ts";
+import { serve } from 'https://deno.land/std@0.170.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// Create a Supabase client with the auth context of the function
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+);
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
-
   try {
-    console.log('Starting unanalyzed messages check...');
-
-    // Find messages that need analysis
-    const { data: messages, error: fetchError } = await supabase
+    console.log('Starting process-unanalyzed-messages function');
+    
+    // Find messages with captions that need processing
+    const { data: messages, error: messagesError } = await supabase
       .from('messages')
-      .select('*')
+      .select('id, caption, media_group_id')
       .is('analyzed_content', null)
-      .eq('is_original_caption', true)
-      .eq('group_caption_synced', false)
-      .limit(10); // Process in batches
-
-    if (fetchError) {
-      throw fetchError;
+      .not('caption', 'is', null)
+      .eq('processing_state', 'pending')
+      .limit(5);  // Process in small batches
+    
+    if (messagesError) {
+      throw new Error(`Error fetching messages: ${messagesError.message}`);
     }
-
-    console.log(`Found ${messages?.length || 0} messages to process`);
-
+    
+    console.log(`Found ${messages?.length || 0} unanalyzed messages to process`);
+    
     const results = [];
+    
+    // Process each message
     for (const message of messages || []) {
-      if (!message.caption) {
-        console.log(`Skipping message ${message.id} - no caption`);
-        continue;
-      }
+      const correlationId = crypto.randomUUID();
 
       try {
-        // Trigger analysis for each message
+        // Request analysis for this message
         const response = await fetch(
-          `${supabaseUrl}/functions/v1/parse-caption-with-ai`,
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/create-analyze-message-caption`,
           {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${supabaseKey}`,
               'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
             },
             body: JSON.stringify({
-              message_id: message.id,
-              media_group_id: message.media_group_id,
-              caption: message.caption,
-            }),
+              messageId: message.id,
+              caption: message.caption || "",
+              mediaGroupId: message.media_group_id,
+              correlationId
+            })
           }
         );
-
+        
         if (!response.ok) {
-          throw new Error(`Analysis failed for message ${message.id}: ${response.statusText}`);
+          throw new Error(`Analysis request failed: ${response.statusText}`);
         }
-
+        
         const result = await response.json();
         results.push({
-          message_id: message.id,
-          status: 'success',
-          analyzed_content: result.analyzed_content,
+          messageId: message.id,
+          success: true,
+          correlationId
         });
-
-        console.log(`Successfully processed message ${message.id}`);
-      } catch (error) {
-        console.error(`Error processing message ${message.id}:`, error);
-        results.push({
-          message_id: message.id,
-          status: 'error',
-          error: error.message,
-        });
-
-        // Log the error in the audit log
+        
+        // Log successful processing request
         await supabase
-          .from('analysis_audit_log')
+          .from('unified_audit_logs')
           .insert({
-            message_id: message.id,
-            media_group_id: message.media_group_id,
-            event_type: 'REANALYSIS_ERROR',
-            error_message: error.message,
-            processing_details: {
-              error_time: new Date().toISOString(),
-              retry_source: 'cron-reanalysis',
-            },
+            event_type: 'cron_message_processing',
+            entity_id: message.id,
+            metadata: {
+              success: true,
+              correlation_id: correlationId,
+              caption_length: message.caption?.length || 0
+            }
+          });
+      } catch (processError: any) {
+        console.error(`Error processing message ${message.id}:`, processError);
+        
+        results.push({
+          messageId: message.id,
+          success: false,
+          error: processError.message
+        });
+        
+        // Log error
+        await supabase
+          .from('unified_audit_logs')
+          .insert({
+            event_type: 'cron_message_processing',
+            entity_id: message.id,
+            error_message: processError.message,
+            metadata: {
+              success: false,
+              correlation_id: correlationId,
+              error_details: processError.toString()
+            }
           });
       }
+      
+      // Pause briefly between requests to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
-
+    
     return new Response(
       JSON.stringify({
+        success: true,
         processed: results.length,
-        results,
+        results
       }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
       }
     );
-  } catch (error) {
-    console.error('Error in process-unanalyzed-messages:', error);
+  } catch (error: any) {
+    console.error('Error in process-unanalyzed-messages function:', error);
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
-      {
+      JSON.stringify({
+        success: false,
+        error: error.message
+      }),
+      { 
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
       }
     );
   }
