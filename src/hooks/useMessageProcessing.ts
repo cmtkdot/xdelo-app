@@ -69,20 +69,19 @@ export function useMessageProcessing() {
         error_message: null,
         retry_count: (message.retry_count || 0) + 1,
         processing_started_at: new Date().toISOString(),
-        processing_correlation_id: correlationId,
-        // Preserve existing storage path and public URL to prevent deletion
-        storage_path: message.storage_path,
-        public_url: message.public_url
+        processing_correlation_id: correlationId
       });
 
       if (updateError) throw updateError;
 
-      // Trigger reanalysis directly with database function to avoid cross-db reference error
-      const { data: invokeData, error: invokeError } = await supabase.rpc('xdelo_analyze_message_caption', {
-        p_message_id: message.id,
-        p_correlation_id: correlationId,
-        p_caption: message.caption,
-        p_media_group_id: message.media_group_id
+      // Call the Edge Function directly instead of using RPC
+      const { data: invokeData, error: invokeError } = await supabase.functions.invoke('create-analyze-message-caption', {
+        body: {
+          messageId: message.id,
+          correlationId,
+          caption: message.caption,
+          mediaGroupId: message.media_group_id
+        }
       });
 
       if (invokeError) throw invokeError;
@@ -108,10 +107,7 @@ export function useMessageProcessing() {
       await updateMessageState(message.id, 'error', {
         error_message: error.message,
         processing_completed_at: new Date().toISOString(),
-        last_error_at: new Date().toISOString(),
-        // Preserve existing storage path and public URL to prevent deletion
-        storage_path: message.storage_path,
-        public_url: message.public_url
+        last_error_at: new Date().toISOString()
       });
 
       // Log error
@@ -151,10 +147,7 @@ export function useMessageProcessing() {
 
       // Update the caption directly in the database
       const { error } = await updateMessageState(message.id, 'pending', {
-        caption,
-        // Preserve existing storage path and public URL to prevent deletion
-        storage_path: message.storage_path,
-        public_url: message.public_url
+        caption
       });
 
       if (error) throw error;
@@ -198,9 +191,78 @@ export function useMessageProcessing() {
     }
   }, [processingState, updateProcessingState, handleReanalyze, updateMessageState, toast]);
 
+  /**
+   * Checks if a file needs redownload and attempts to redownload if necessary
+   */
+  const checkAndRedownloadFile = useCallback(async (message: Message) => {
+    if (processingState[message.id]?.isProcessing) return;
+    
+    const correlationId = crypto.randomUUID();
+    updateProcessingState(message.id, true);
+    
+    try {
+      // Log operation start
+      await logMessageOperation('file', message.id, {
+        correlationId,
+        operation: 'redownload_check_started',
+        file_unique_id: message.file_unique_id
+      });
+
+      // Call the function to check file existence
+      const { data: checkResult, error: checkError } = await supabase.functions.invoke('redownload-missing-files', {
+        body: {
+          messageIds: [message.id],
+          limit: 1
+        }
+      });
+
+      if (checkError) throw checkError;
+
+      // Log result
+      await logMessageOperation('file', message.id, {
+        correlationId,
+        operation: 'redownload_check_completed',
+        result: checkResult
+      });
+
+      toast({
+        title: checkResult.successful > 0 ? "File redownloaded" : "File check completed",
+        description: checkResult.successful > 0 
+          ? "Missing file was successfully redownloaded" 
+          : checkResult.failed > 0 
+            ? "Failed to redownload file, please try again later" 
+            : "File already exists and is accessible",
+        variant: checkResult.failed > 0 ? "destructive" : "default"
+      });
+      
+      updateProcessingState(message.id, false);
+      
+      return checkResult;
+    } catch (error) {
+      console.error('Error checking/redownloading file:', error);
+      
+      // Log error
+      await logMessageOperation('file', message.id, {
+        correlationId,
+        operation: 'redownload_check_failed',
+        error: error.message
+      });
+
+      toast({
+        title: "File check failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      
+      updateProcessingState(message.id, false, error.message);
+      return { success: false, error: error.message };
+    }
+  }, [processingState, updateProcessingState, toast]);
+
   return {
     handleReanalyze,
     handleSave,
+    checkAndRedownloadFile,
     isProcessing: Object.fromEntries(
       Object.entries(processingState).map(([id, state]) => [id, state.isProcessing])
     ),

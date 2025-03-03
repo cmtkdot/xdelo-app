@@ -20,43 +20,32 @@ serve(async (req) => {
   }
 
   try {
-    const { messageId, caption, mediaGroupId, correlationId } = await req.json();
+    const { messageId, caption, mediaGroupId, correlationId = crypto.randomUUID() } = await req.json();
     console.log(`Processing message analysis for messageId: ${messageId}, correlationId: ${correlationId}`);
 
-    // First check if the message exists
-    const { data: message, error: messageError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('id', messageId)
-      .single();
+    // Call the database function instead of accessing the message directly
+    const { data: dbResult, error: dbError } = await supabase.rpc('xdelo_analyze_message_caption', {
+      p_message_id: messageId,
+      p_correlation_id: correlationId,
+      p_caption: caption,
+      p_media_group_id: mediaGroupId
+    });
 
-    if (messageError) {
-      throw new Error(`Message fetch error: ${messageError.message}`);
+    if (dbError) {
+      throw new Error(`Database function error: ${dbError.message}`);
     }
 
-    // Update message processing state to 'processing'
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update({
-        processing_state: 'processing',
-        processing_started_at: new Date().toISOString()
-      })
-      .eq('id', messageId);
-
-    if (updateError) {
-      throw new Error(`Message update error: ${updateError.message}`);
-    }
-
-    // Log the operation
+    // Log successful preparation
     await supabase
       .from('unified_audit_logs')
       .insert({
-        event_type: 'analyze_message_started',
+        event_type: 'edge_function_executed',
         entity_id: messageId,
         metadata: {
           correlation_id: correlationId,
-          caption,
-          media_group_id: mediaGroupId
+          function_name: 'create-analyze-message-caption',
+          success: true,
+          result: dbResult
         },
         event_timestamp: new Date().toISOString()
       });
@@ -74,14 +63,22 @@ serve(async (req) => {
           messageId: messageId,
           caption: caption,
           media_group_id: mediaGroupId,
-          correlationId: correlationId
+          correlationId: correlationId,
+          file_info: dbResult.file_info
         })
       }
     );
 
     if (!parseCaptionResponse.ok) {
-      const errorData = await parseCaptionResponse.json();
-      throw new Error(`Parse caption error: ${JSON.stringify(errorData)}`);
+      let errorMessage = 'Parse caption function returned an error';
+      try {
+        const errorData = await parseCaptionResponse.json();
+        errorMessage = `Parse caption error: ${JSON.stringify(errorData)}`;
+      } catch (e) {
+        // If we can't parse the response, use the status text
+        errorMessage = `Parse caption error: ${parseCaptionResponse.status} ${parseCaptionResponse.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
 
     const result = await parseCaptionResponse.json();
@@ -109,7 +106,7 @@ serve(async (req) => {
 
     // Try to log the error
     try {
-      const { message, correlationId, messageId } = await req.json();
+      const { messageId, correlationId } = await req.json();
       await supabase
         .from('unified_audit_logs')
         .insert({
