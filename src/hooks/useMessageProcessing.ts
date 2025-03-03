@@ -26,7 +26,8 @@ export function useMessageProcessing() {
         'tg_queue_message',
         {
           p_message_id: message.id,
-          p_correlation_id: correlationId
+          p_correlation_id: correlationId,
+          p_priority: 10 // Higher priority for manual requests
         }
       );
 

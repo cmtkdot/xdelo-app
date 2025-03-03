@@ -20,7 +20,7 @@ serve(async (req) => {
     const { limit = 10 } = await req.json() || {};
     console.log(`Request to queue up to ${limit} unanalyzed messages`);
     
-    // Find and queue unprocessed messages
+    // Find and queue unprocessed messages using the new function
     const { data, error } = await supabaseClient.rpc('tg_queue_unprocessed_messages', {
       limit_count: limit
     });
