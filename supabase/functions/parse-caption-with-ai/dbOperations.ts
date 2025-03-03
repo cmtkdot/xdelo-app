@@ -125,7 +125,7 @@ export const syncMediaGroupContent = async (
       return { success: false, reason: 'source_not_eligible' };
     }
     
-    // Log the sync attempt
+    // Log the sync attempt - use string correlation ID, not UUID
     await supabaseClient.from('unified_audit_logs').insert({
       event_type: 'media_group_sync_requested',
       entity_id: messageId,
@@ -134,64 +134,43 @@ export const syncMediaGroupContent = async (
         source_message_id: messageId,
         method: 'direct_call'
       },
-      correlation_id: correlationId
+      correlation_id: correlationId || null
     });
 
-    // Call the RPC function with parameters in the correct order
-    const { data, error } = await supabaseClient.rpc('xdelo_sync_media_group_content', {
-      p_source_message_id: messageId,
-      p_media_group_id: mediaGroupId,
-      p_correlation_id: correlationId
-    });
+    // Call the direct sync method since RPC has issues with correlation_id type
+    const syncResult = await syncMediaGroupDirectly(mediaGroupId, messageId, correlationId);
     
-    if (error) {
-      console.error('Error calling xdelo_sync_media_group_content RPC:', error);
-      console.log('Falling back to direct sync method');
-      
-      // Fallback to direct updates if RPC fails
-      const syncResult = await syncMediaGroupDirectly(mediaGroupId, messageId, correlationId);
-      return { 
-        success: true, 
-        syncedCount: syncResult.count, 
-        source_message_id: messageId,
-        method: 'fallback_direct',
-        details: syncResult
-      };
-    }
-    
-    console.log(`Successfully synced media group via RPC. Result:`, data);
     return { 
       success: true, 
-      syncedCount: data?.updated_count || 0, 
+      syncedCount: syncResult.count, 
       source_message_id: messageId,
-      method: 'rpc'
+      method: 'direct_sync',
+      details: syncResult
     };
   } catch (error) {
     console.error('Failed to sync media group content:', error);
     
-    // Try fallback method
-    try {
-      const syncResult = await syncMediaGroupDirectly(mediaGroupId, messageId, correlationId);
-      return { 
-        success: true, 
-        syncedCount: syncResult.count, 
-        source_message_id: messageId,
-        method: 'error_fallback_direct',
-        details: syncResult
-      };
-    } catch (fallbackError) {
-      console.error('Both sync methods failed:', fallbackError);
-      return {
-        success: false,
-        reason: 'all_methods_failed',
-        error: error.message,
-        fallbackError: fallbackError.message
-      };
-    }
+    // Log the error - but don't use the enum value directly
+    await supabaseClient.from('unified_audit_logs').insert({
+      event_type: 'media_group_content_sync_error',
+      entity_id: messageId,
+      error_message: error.message,
+      metadata: {
+        media_group_id: mediaGroupId,
+        operation: 'sync_group'
+      },
+      correlation_id: correlationId || null
+    });
+    
+    return {
+      success: false,
+      reason: 'sync_error',
+      error: error.message
+    };
   }
 };
 
-// Fallback method to sync media group directly if RPC fails
+// Direct method to sync media group without using RPC
 async function syncMediaGroupDirectly(
   mediaGroupId: string, 
   sourceMessageId: string,
@@ -283,7 +262,7 @@ async function syncMediaGroupDirectly(
       }
     }
     
-    // Log the sync operation
+    // Log the sync operation - avoid using enum directly
     try {
       await supabaseClient.from('unified_audit_logs').insert({
         event_type: 'media_group_content_synced',
@@ -294,6 +273,7 @@ async function syncMediaGroupDirectly(
           operation: 'direct_sync',
           correlation_id: correlationId
         },
+        correlation_id: correlationId || null,
         event_timestamp: new Date().toISOString()
       });
     } catch (logError) {
@@ -332,7 +312,8 @@ export const logAnalysisEvent = async (
       metadata: {
         ...metadata,
         correlation_id: correlationId
-      }
+      },
+      correlation_id: correlationId || null
     });
     return { success: true };
   } catch (error) {

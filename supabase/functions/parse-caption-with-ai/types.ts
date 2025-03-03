@@ -26,6 +26,7 @@ export interface ParsedContent {
     is_edit?: boolean;
     edit_timestamp?: string;
     original_manual_parse?: ParsedContent;
+    ai_response?: string;
   };
   sync_metadata?: {
     media_group_id?: string;

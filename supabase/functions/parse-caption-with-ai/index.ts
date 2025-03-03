@@ -105,7 +105,7 @@ serve(async (req) => {
     // Log the analysis in the audit trail
     await logAnalysisEvent(
       messageId,
-      correlationId,
+      correlationId || 'manual-analysis',
       { analyzed_content: existingMessage?.analyzed_content },
       { analyzed_content: parsedContent },
       {
@@ -124,7 +124,7 @@ serve(async (req) => {
     // Always attempt to sync content to media group
     if (media_group_id) {
       console.log(`Starting media group content sync for group ${media_group_id}, message ${messageId}`);
-      const syncResult = await syncMediaGroupContent(media_group_id, messageId, correlationId);
+      const syncResult = await syncMediaGroupContent(media_group_id, messageId, correlationId || 'manual-sync');
       console.log(`Media group sync result:`, syncResult);
     } else {
       console.log(`No media_group_id provided, skipping group sync`);

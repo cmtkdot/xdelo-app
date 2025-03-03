@@ -1,7 +1,7 @@
 
 import { ParsedContent } from './types.ts';
 
-// Manual parsing logic for captions
+// Manual parsing logic for captions with improved handling for edge cases
 export const parseCaption = (caption: string): ParsedContent => {
   // Extract product name (text before #, line break, or x)
   const productNameMatch = caption.match(/^(.*?)(?=[#\nx]|$)/);
@@ -20,34 +20,37 @@ export const parseCaption = (caption: string): ParsedContent => {
   let purchase_date = '';
   if (dateMatch) {
     const dateStr = dateMatch[0];
-    if (dateStr.length === 5) {
-      // Format: mDDyy
-      const month = dateStr[0];
-      const day = dateStr.substring(1, 3);
-      const year = dateStr.substring(3);
-      
-      // Validate day and month
-      const monthNum = parseInt(month, 10);
-      const dayNum = parseInt(day, 10);
-      const yearNum = parseInt(year, 10);
-      
-      if (monthNum > 0 && monthNum <= 12 && dayNum > 0 && dayNum <= 31) {
-        purchase_date = `20${year}-${month.padStart(2, '0')}-${day}`;
+    try {
+      if (dateStr.length === 5) {
+        // Format: mDDyy
+        const month = dateStr[0];
+        const day = dateStr.substring(1, 3);
+        const year = dateStr.substring(3);
+        
+        // Validate day and month
+        const monthNum = parseInt(month, 10);
+        const dayNum = parseInt(day, 10);
+        
+        if (monthNum > 0 && monthNum <= 12 && dayNum > 0 && dayNum <= 31) {
+          purchase_date = `20${year}-${month.padStart(2, '0')}-${day}`;
+        }
+      } else if (dateStr.length === 6) {
+        // Format: mmDDyy
+        const month = dateStr.substring(0, 2);
+        const day = dateStr.substring(2, 4);
+        const year = dateStr.substring(4);
+        
+        // Validate day and month
+        const monthNum = parseInt(month, 10);
+        const dayNum = parseInt(day, 10);
+        
+        if (monthNum > 0 && monthNum <= 12 && dayNum > 0 && dayNum <= 31) {
+          purchase_date = `20${year}-${month}-${day}`;
+        }
       }
-    } else if (dateStr.length === 6) {
-      // Format: mmDDyy
-      const month = dateStr.substring(0, 2);
-      const day = dateStr.substring(2, 4);
-      const year = dateStr.substring(4);
-      
-      // Validate day and month
-      const monthNum = parseInt(month, 10);
-      const dayNum = parseInt(day, 10);
-      const yearNum = parseInt(year, 10);
-      
-      if (monthNum > 0 && monthNum <= 12 && dayNum > 0 && dayNum <= 31) {
-        purchase_date = `20${year}-${month}-${day}`;
-      }
+    } catch (e) {
+      console.error('Error parsing date:', e);
+      purchase_date = '';
     }
   }
 
