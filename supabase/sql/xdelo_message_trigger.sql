@@ -38,9 +38,10 @@ BEGIN
         NOW()
       );
     
-      -- Queue for processing using DB function
+      -- Queue for processing using DB function with text correlation_id
       BEGIN
-        PERFORM xdelo_queue_message_for_processing(NEW.id, NEW.correlation_id);
+        -- Ensure correlation_id is passed as TEXT type
+        PERFORM xdelo_queue_message_for_processing(NEW.id, NEW.correlation_id::TEXT);
       EXCEPTION WHEN OTHERS THEN
         -- Log error but don't fail the whole transaction
         INSERT INTO unified_audit_logs (

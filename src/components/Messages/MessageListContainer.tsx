@@ -72,13 +72,15 @@ export function MessageListContainer() {
             current_state: message.processing_state 
           });
           
-          // Queue the message using the database function
-          // Use the generic type parameter to fix TypeScript error
+          // Generate a correlation ID as string (not UUID)
+          const correlationId = crypto.randomUUID();
+          
+          // Queue the message using the database function - ensuring correlation_id is a string
           const { data, error: queueError } = await supabase.rpc(
-            'xdelo_queue_message_for_processing' as any, // Type assertion to bypass TypeScript check
+            'xdelo_queue_message_for_processing',
             {
               p_message_id: message.id,
-              p_correlation_id: crypto.randomUUID()
+              p_correlation_id: correlationId
             }
           );
 

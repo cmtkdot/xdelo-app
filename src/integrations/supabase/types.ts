@@ -1484,6 +1484,7 @@ export type Database = {
           edited_channel_post: boolean | null
           error_message: string | null
           file_id: string | null
+          file_id_expires_at: string | null
           file_size: number | null
           file_unique_id: string | null
           forward_chain: Json[] | null
@@ -1517,6 +1518,7 @@ export type Database = {
           needs_redownload: boolean | null
           notes: string | null
           old_analyzed_content: Json[] | null
+          original_file_id: string | null
           original_message_id: string | null
           parsed_caption: string | null
           parsed_notes: string | null
@@ -1539,6 +1541,7 @@ export type Database = {
           redownload_completed_at: string | null
           redownload_flagged_at: string | null
           redownload_reason: string | null
+          redownload_strategy: string | null
           retry_count: number | null
           storage_path: string | null
           sync_attempt: number | null
@@ -1566,6 +1569,7 @@ export type Database = {
           edited_channel_post?: boolean | null
           error_message?: string | null
           file_id?: string | null
+          file_id_expires_at?: string | null
           file_size?: number | null
           file_unique_id?: string | null
           forward_chain?: Json[] | null
@@ -1599,6 +1603,7 @@ export type Database = {
           needs_redownload?: boolean | null
           notes?: string | null
           old_analyzed_content?: Json[] | null
+          original_file_id?: string | null
           original_message_id?: string | null
           parsed_caption?: string | null
           parsed_notes?: string | null
@@ -1621,6 +1626,7 @@ export type Database = {
           redownload_completed_at?: string | null
           redownload_flagged_at?: string | null
           redownload_reason?: string | null
+          redownload_strategy?: string | null
           retry_count?: number | null
           storage_path?: string | null
           sync_attempt?: number | null
@@ -1648,6 +1654,7 @@ export type Database = {
           edited_channel_post?: boolean | null
           error_message?: string | null
           file_id?: string | null
+          file_id_expires_at?: string | null
           file_size?: number | null
           file_unique_id?: string | null
           forward_chain?: Json[] | null
@@ -1681,6 +1688,7 @@ export type Database = {
           needs_redownload?: boolean | null
           notes?: string | null
           old_analyzed_content?: Json[] | null
+          original_file_id?: string | null
           original_message_id?: string | null
           parsed_caption?: string | null
           parsed_notes?: string | null
@@ -1703,6 +1711,7 @@ export type Database = {
           redownload_completed_at?: string | null
           redownload_flagged_at?: string | null
           redownload_reason?: string | null
+          redownload_strategy?: string | null
           retry_count?: number | null
           storage_path?: string | null
           sync_attempt?: number | null
@@ -2683,6 +2692,13 @@ export type Database = {
         }
         Returns: boolean
       }
+      xdelo_find_valid_file_id: {
+        Args: {
+          p_media_group_id: string
+          p_file_unique_id: string
+        }
+        Returns: string
+      }
       xdelo_flag_file_for_redownload: {
         Args: {
           p_message_id: string
@@ -2776,6 +2792,13 @@ export type Database = {
         }
         Returns: undefined
       }
+      xdelo_mark_for_redownload: {
+        Args: {
+          p_message_id: string
+          p_reason?: string
+        }
+        Returns: boolean
+      }
       xdelo_queue_message_for_processing: {
         Args: {
           p_message_id: string
@@ -2791,6 +2814,13 @@ export type Database = {
           new_path: string
           status: string
         }[]
+      }
+      xdelo_standardize_storage_path: {
+        Args: {
+          p_file_unique_id: string
+          p_mime_type?: string
+        }
+        Returns: string
       }
       xdelo_sync_forward_media: {
         Args: {

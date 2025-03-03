@@ -19,7 +19,7 @@ export interface ProcessingResults {
 export interface MessageQueueItem {
   queue_id: string;
   message_id: string;
-  correlation_id: string;
+  correlation_id: string; // Updated to string to match DB function signature
   caption: string;
   media_group_id?: string;
 }
