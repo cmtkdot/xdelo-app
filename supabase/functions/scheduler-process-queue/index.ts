@@ -1,11 +1,12 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+);
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -14,36 +15,18 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
     console.log('Starting scheduled queue processing');
     
-    // Get the pending messages count
-    const { count: pendingCount, error: countError } = await supabase
-      .from('message_processing_queue')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending');
+    // First find and queue any unprocessed messages
+    const { data: queuedMessages, error: queueError } = await supabase
+      .rpc('xdelo_queue_unprocessed_messages', {
+        limit_count: 20
+      });
     
-    if (countError) {
-      throw new Error(`Error getting pending count: ${countError.message}`);
-    }
+    if (queueError) throw new Error(`Error queueing messages: ${queueError.message}`);
+    console.log(`Found and queued ${queuedMessages?.length || 0} unprocessed messages`);
     
-    if (pendingCount === 0) {
-      console.log('No pending messages in queue');
-      return new Response(
-        JSON.stringify({ success: true, pendingCount: 0 }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    console.log(`Found ${pendingCount} pending messages, initiating processing`);
-    
-    // Process up to 10 messages
-    const processCount = Math.min(pendingCount, 10);
-    
+    // Process the queue (up to 10 messages at once)
     const processResponse = await fetch(
       `${Deno.env.get('SUPABASE_URL')}/functions/v1/process-message-queue`,
       {
@@ -52,7 +35,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
         },
-        body: JSON.stringify({ limit: processCount })
+        body: JSON.stringify({ limit: 10 })
       }
     );
     
@@ -60,25 +43,38 @@ serve(async (req) => {
       throw new Error(`Error processing queue: ${processResponse.status} ${processResponse.statusText}`);
     }
     
-    const processResult = await processResponse.json();
+    const result = await processResponse.json();
     
-    console.log(`Processing complete: ${processResult.data.success} succeeded, ${processResult.data.failed} failed`);
+    // Log the results
+    await supabase.from('unified_audit_logs').insert({
+      event_type: 'scheduler_processed_queue',
+      metadata: {
+        queued_count: queuedMessages?.length || 0,
+        processed: result.data?.processed || 0,
+        success: result.data?.success || 0,
+        failed: result.data?.failed || 0
+      },
+      event_timestamp: new Date().toISOString()
+    });
     
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        pendingCount,
-        processedCount: processResult.data.processed,
-        successCount: processResult.data.success,
-        failureCount: processResult.data.failed
+      JSON.stringify({
+        success: true,
+        queued: queuedMessages?.length || 0,
+        processed: result.data?.processed || 0,
+        success: result.data?.success || 0,
+        failed: result.data?.failed || 0
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error in scheduler-process-queue function:', error);
+    console.error('Error in scheduler:', error);
     
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({
+        success: false,
+        error: error.message
+      }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

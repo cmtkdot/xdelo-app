@@ -1,149 +1,137 @@
-import React from 'react';
-import type { Message } from './types';
-import { MessageControls } from './MessageControls';
-import { format } from 'date-fns';
 
-interface MessageListProps {
+import React from 'react';
+import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Message } from '@/types';
+import { RefreshCw, RotateCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import MediaGrid from '../MediaGrid';
+
+export interface MessageListProps {
   messages: Message[];
-  onRefresh?: () => void;
+  onRefresh: () => Promise<void>;
+  onReanalyze: (messageId: string) => Promise<void>;
 }
 
-export function MessageList({ messages, onRefresh }: MessageListProps) {
-  // Filter messages to show only those with captions but no analysis
-  const unanalyzedMessages = messages.filter(message => 
-    message.caption && 
-    !message.analyzed_content
-  );
+export const MessageList: React.FC<MessageListProps> = ({ messages, onRefresh, onReanalyze }) => {
+  const [refreshing, setRefreshing] = React.useState(false);
 
-  if (!unanalyzedMessages || unanalyzedMessages.length === 0) {
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  if (!messages || messages.length === 0) {
     return (
-      <div className="text-center py-12 bg-white rounded-lg shadow">
-        <div className="text-gray-500 text-lg">No unanalyzed messages found</div>
-        <button
-          onClick={onRefresh}
-          className="mt-4 px-4 py-2 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors"
-        >
-          Refresh Messages
-        </button>
+      <div className="flex flex-col items-center justify-center py-8 space-y-4">
+        <p className="text-gray-500">No messages found</p>
+        <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
+          {refreshing ? <Spinner size="sm" className="mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+          Refresh
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden bg-white shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-      <table className="min-w-full divide-y divide-gray-300">
-        <thead>
-          <tr className="bg-gray-50">
-            <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Media</th>
-            <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Details</th>
-            <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Analysis</th>
-            <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Status</th>
-            <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-              <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200 bg-white">
-          {unanalyzedMessages.map((message) => (
-            <tr key={message.id} className="hover:bg-gray-50">
-              <td className="py-4 pl-4 pr-3 sm:pl-6 max-w-[200px]">
-                {message.public_url ? (
-                  <div className="relative group">
-                    <img 
-                      src={message.public_url} 
-                      alt={message.caption || 'Message media'} 
-                      className="w-full h-auto rounded-lg cursor-pointer transition-transform group-hover:scale-105"
-                      onClick={() => window.open(message.public_url, '_blank')}
-                    />
-                    {message.media_group_id && (
-                      <span className="absolute top-2 right-2 px-2 py-1 text-xs bg-black bg-opacity-50 text-white rounded">
-                        Group: {message.media_group_id}
-                      </span>
-                    )}
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-semibold">Messages ({messages.length})</h2>
+        <Button variant="outline" onClick={handleRefresh} disabled={refreshing} size="sm">
+          {refreshing ? <Spinner size="sm" className="mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+          Refresh
+        </Button>
+      </div>
+
+      <div className="space-y-6">
+        {messages.map((message) => (
+          <div 
+            key={message.id} 
+            className={cn(
+              "p-4 border rounded-lg shadow-sm",
+              message.processing_state === 'error' && "border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800",
+              message.processing_state === 'pending' && "border-yellow-300 bg-yellow-50 dark:bg-yellow-950 dark:border-yellow-800",
+              message.processing_state === 'processing' && "border-blue-300 bg-blue-50 dark:bg-blue-950 dark:border-blue-800",
+              message.processing_state === 'completed' && "border-green-300 bg-green-50 dark:bg-green-950 dark:border-green-800"
+            )}
+          >
+            <div className="flex justify-between items-start mb-2">
+              <div className="flex items-center">
+                <span className="text-sm font-medium">
+                  {message.processing_state === 'error' && "Error"}
+                  {message.processing_state === 'pending' && "Pending"}
+                  {message.processing_state === 'processing' && "Processing"}
+                  {message.processing_state === 'completed' && "Completed"}
+                  {!message.processing_state && "Unprocessed"}
+                </span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => onReanalyze(message.id)}
+                  className="ml-2"
+                >
+                  <RotateCw className="w-4 h-4 mr-1" />
+                  Reanalyze
+                </Button>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{message.caption}</p>
+            
+            {message.error_message && (
+              <div className="mb-4 p-2 bg-red-100 dark:bg-red-900 rounded text-sm">
+                <p className="font-semibold">Error:</p>
+                <p>{message.error_message}</p>
+              </div>
+            )}
+            
+            {message.analyzed_content && (
+              <div className="space-y-1 mb-4 text-sm">
+                <h3 className="font-semibold">Analyzed Content:</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="font-medium">Product:</span> {message.analyzed_content.product_name}
                   </div>
-                ) : (
-                  <div className="text-sm text-gray-500 italic">No media</div>
-                )}
-              </td>
-              <td className="px-3 py-4 text-sm text-gray-500">
-                <div className="space-y-1">
-                  <div className="font-medium text-gray-900">
-                    {message.caption}
+                  <div>
+                    <span className="font-medium">Code:</span> {message.analyzed_content.product_code}
                   </div>
-                  <div>ID: {message.id}</div>
-                  {message.chat_title && (
-                    <div>Chat: {message.chat_title}</div>
-                  )}
-                  {message.created_at && (
-                    <div>Created: {format(new Date(message.created_at), 'MMM d, yyyy HH:mm')}</div>
-                  )}
-                </div>
-              </td>
-              <td className="px-3 py-4 text-sm text-gray-500">
-                {message.analyzed_content ? (
-                  <div className="space-y-1">
-                    {message.analyzed_content.product_name && (
-                      <div className="flex items-center space-x-1">
-                        <span className="font-medium">Product:</span>
-                        <span>{message.analyzed_content.product_name}</span>
-                      </div>
-                    )}
-                    {message.analyzed_content.product_code && (
-                      <div className="flex items-center space-x-1">
-                        <span className="font-medium">Code:</span>
-                        <span>{message.analyzed_content.product_code}</span>
-                      </div>
-                    )}
-                    {message.analyzed_content.quantity && (
-                      <div className="flex items-center space-x-1">
-                        <span className="font-medium">Qty:</span>
-                        <span>{message.analyzed_content.quantity}</span>
-                      </div>
-                    )}
-                    {message.analyzed_content.parsing_metadata?.method && (
-                      <div className="mt-2">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
-                          ${message.analyzed_content.parsing_metadata.method === 'ai' ? 'bg-purple-100 text-purple-800' :
-                            message.analyzed_content.parsing_metadata.method === 'manual' ? 'bg-blue-100 text-blue-800' :
-                            'bg-gray-100 text-gray-800'}`}>
-                          {message.analyzed_content.parsing_metadata.method.toUpperCase()}
-                        </span>
-                      </div>
-                    )}
+                  <div>
+                    <span className="font-medium">Vendor:</span> {message.analyzed_content.vendor_uid}
                   </div>
-                ) : (
-                  <span className="text-gray-400 italic">No analysis</span>
-                )}
-              </td>
-              <td className="px-3 py-4 text-sm">
-                <div className="space-y-2">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                    ${message.processing_state === 'completed' ? 'bg-green-100 text-green-800' :
-                      message.processing_state === 'error' ? 'bg-red-100 text-red-800' :
-                      message.processing_state === 'processing' ? 'bg-blue-100 text-blue-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                    {message.processing_state}
-                  </span>
-                  {message.retry_count > 0 && (
-                    <div className="text-xs text-gray-500">
-                      Retries: {message.retry_count}
+                  <div>
+                    <span className="font-medium">Date:</span> {message.analyzed_content.purchase_date}
+                  </div>
+                  {message.analyzed_content.quantity && (
+                    <div>
+                      <span className="font-medium">Quantity:</span> {message.analyzed_content.quantity}
                     </div>
                   )}
-                  {message.error_message && (
-                    <div className="text-xs text-red-600 max-w-xs truncate" title={message.error_message}>
-                      {message.error_message}
+                  {message.analyzed_content.notes && (
+                    <div className="col-span-2">
+                      <span className="font-medium">Notes:</span> {message.analyzed_content.notes}
                     </div>
                   )}
                 </div>
-              </td>
-              <td className="py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                <MessageControls message={message} onSuccess={onRefresh} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </div>
+            )}
+            
+            {message.public_url && (
+              <div className="mt-4">
+                <MediaGrid media={[{
+                  id: message.id,
+                  public_url: message.public_url,
+                  mime_type: message.mime_type,
+                  created_at: message.created_at || '',
+                  analyzed_content: message.analyzed_content
+                }]} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
-} 
+};

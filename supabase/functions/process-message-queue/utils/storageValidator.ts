@@ -1,34 +1,44 @@
 
+import { StorageValidationResult } from "../types.ts";
+
 /**
- * Validates and normalizes the storage path for a file
+ * Validates a storage path based on file_unique_id and mime_type
  */
 export function validateStoragePath(
   fileUniqueId: string,
-  storagePath: string,
-  mimeType: string
-): { storagePath: string; needsUpdate: boolean } {
+  storagePath: string = '',
+  mimeType: string = 'image/jpeg'
+): StorageValidationResult {
+  if (!fileUniqueId) {
+    return {
+      isValid: false,
+      storagePath: '',
+      publicUrl: '',
+      needsRedownload: true
+    };
+  }
+  
   // Extract extension from mime_type
-  const extension = mimeType 
-    ? mimeType.split('/')[1] 
-    : 'jpeg';  // Default to jpeg if no mime type
+  const extension = mimeType.split('/')[1] || 'jpeg';
   
-  // Standard format for storage path
-  const standardPath = `${fileUniqueId}.${extension}`;
-  
-  // Check if storage path is missing or doesn't match the standard format
-  const needsUpdate = !storagePath || 
-                      !storagePath.startsWith(fileUniqueId) ||
-                      storagePath !== standardPath;
-  
+  // Use the existing storage path if it exists and matches the file_unique_id pattern
+  let validatedPath = storagePath && storagePath.includes(fileUniqueId)
+    ? storagePath
+    : `${fileUniqueId}.${extension}`;
+    
   return {
-    storagePath: standardPath,
-    needsUpdate
+    isValid: true,
+    storagePath: validatedPath,
+    publicUrl: constructPublicUrl(validatedPath),
+    needsRedownload: !storagePath || storagePath === ''
   };
 }
 
 /**
- * Constructs a public URL for a file in storage
+ * Constructs a public URL for accessing the file
  */
 export function constructPublicUrl(storagePath: string): string {
+  if (!storagePath) return '';
+  
   return `https://xjhhehxcxkiumnwbirel.supabase.co/storage/v1/object/public/telegram-media/${storagePath}`;
 }
