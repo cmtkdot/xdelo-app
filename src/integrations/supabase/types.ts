@@ -1407,6 +1407,66 @@ export type Database = {
         }
         Relationships: []
       }
+      message_processing_queue: {
+        Row: {
+          attempts: number | null
+          correlation_id: string | null
+          created_at: string | null
+          error: string | null
+          id: string
+          last_error_at: string | null
+          max_attempts: number | null
+          message_id: string
+          metadata: Json | null
+          processing_completed_at: string | null
+          processing_started_at: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number | null
+          correlation_id?: string | null
+          created_at?: string | null
+          error?: string | null
+          id?: string
+          last_error_at?: string | null
+          max_attempts?: number | null
+          message_id: string
+          metadata?: Json | null
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          status?: string
+        }
+        Update: {
+          attempts?: number | null
+          correlation_id?: string | null
+          created_at?: string | null
+          error?: string | null
+          id?: string
+          last_error_at?: string | null
+          max_attempts?: number | null
+          message_id?: string
+          metadata?: Json | null
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_processing_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_processing_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_forwards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
@@ -2200,6 +2260,15 @@ export type Database = {
         }
         Relationships: []
       }
+      v_queue_status: {
+        Row: {
+          avg_age_seconds: number | null
+          count: number | null
+          oldest_seconds: number | null
+          status: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       binary_quantize:
@@ -2585,6 +2654,17 @@ export type Database = {
           recent_errors: string[]
         }[]
       }
+      xdelo_cleanup_old_queue_entries: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      xdelo_complete_message_processing: {
+        Args: {
+          p_queue_id: string
+          p_analyzed_content: Json
+        }
+        Returns: boolean
+      }
       xdelo_construct_telegram_message_url: {
         Args: {
           chat_type: Database["public"]["Enums"]["telegram_chat_type"]
@@ -2592,6 +2672,13 @@ export type Database = {
           message_id: number
         }
         Returns: string
+      }
+      xdelo_fail_message_processing: {
+        Args: {
+          p_queue_id: string
+          p_error: string
+        }
+        Returns: boolean
       }
       xdelo_flag_file_for_redownload: {
         Args: {
@@ -2617,6 +2704,16 @@ export type Database = {
           forward_date: string
           analyzed_content: Json
           forward_count: number
+        }[]
+      }
+      xdelo_get_next_message_for_processing: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          queue_id: string
+          message_id: string
+          correlation_id: string
+          caption: string
+          media_group_id: string
         }[]
       }
       xdelo_get_or_create_file_url: {
@@ -2675,6 +2772,13 @@ export type Database = {
           p_raw_data?: Json
         }
         Returns: undefined
+      }
+      xdelo_queue_message_for_processing: {
+        Args: {
+          p_message_id: string
+          p_correlation_id?: string
+        }
+        Returns: string
       }
       xdelo_repair_storage_paths: {
         Args: Record<PropertyKey, never>
