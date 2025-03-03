@@ -1,17 +1,44 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { MessageList } from './MessageList';
 import { Spinner } from '@/components/ui/spinner';
 import { useMessageProcessing } from '@/hooks/useMessageProcessing';
+import { supabase } from '@/integrations/supabase/client';
 
 export const MessageListContainer: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
   const { 
-    processMessageQueue, 
+    handleReanalyze, 
+    processMessageQueue,
     queueUnprocessedMessages,
     isProcessing: processingState
   } = useMessageProcessing();
+  
+  useEffect(() => {
+    fetchMessages();
+  }, [isRefreshing]);
+  
+  const fetchMessages = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20);
+        
+      if (error) throw error;
+      setMessages(data || []);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   const handleProcessQueue = async () => {
     try {
@@ -33,6 +60,13 @@ export const MessageListContainer: React.FC = () => {
     } catch (error) {
       console.error('Failed to queue unprocessed messages:', error);
     }
+  };
+
+  const handleRetryProcessing = async (messageId) => {
+    await handleReanalyze({ id: messageId });
+    // Refresh after processing
+    setIsRefreshing(true);
+    setTimeout(() => setIsRefreshing(false), 1000);
   };
   
   const isProcessingAny = Object.values(processingState).some(state => state) || isRefreshing;
@@ -66,8 +100,14 @@ export const MessageListContainer: React.FC = () => {
           <Spinner size="lg" />
         </div>
       ) : (
-        <MessageList />
+        <MessageList 
+          messages={messages}
+          isLoading={isLoading}
+          onRetryProcessing={handleRetryProcessing}
+          onProcessAll={handleProcessQueue}
+          processAllLoading={isProcessingAny}
+        />
       )}
     </div>
   );
-}
+};
