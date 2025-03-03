@@ -61,7 +61,13 @@ export const MessageListContainer: React.FC = () => {
         </div>
       </div>
       
-      <MessageList key={isRefreshing ? 'refreshing' : 'stable'} />
+      {isRefreshing ? (
+        <div className="flex items-center justify-center p-8">
+          <Spinner size="lg" />
+        </div>
+      ) : (
+        <MessageList />
+      )}
     </div>
   );
-};
+}

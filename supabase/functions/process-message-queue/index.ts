@@ -34,7 +34,7 @@ serve(async (req) => {
     const { limit = 5 } = await req.json();
     console.log(`Starting to process up to ${limit} messages from queue`);
     
-    // Get messages from the queue
+    // Get messages from the queue using the new function
     const { data: messagesToProcess, error: queueError } = await supabaseClient.rpc(
       'tg_get_next_messages',
       { limit_count: limit }
@@ -99,6 +99,12 @@ serve(async (req) => {
 
         const result = await response.json();
         
+        // Mark as complete using the new function
+        await supabaseClient.rpc('tg_complete_processing', {
+          p_queue_id: message.queue_id,
+          p_analyzed_content: result.data
+        });
+        
         // Record success
         results.success++;
         results.details.push({
@@ -119,7 +125,7 @@ serve(async (req) => {
           error_message: error.message
         });
         
-        // Try to mark the queue item as failed
+        // Mark the queue item as failed using the new function
         try {
           await supabaseClient.rpc('tg_fail_processing', {
             p_queue_id: message.queue_id,

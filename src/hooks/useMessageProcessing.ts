@@ -21,7 +21,7 @@ export function useMessageProcessing() {
       // Generate a correlation ID
       const correlationId = crypto.randomUUID();
       
-      // Queue the message using the database function
+      // Queue the message using the new function
       const { data, error: queueError } = await supabase.rpc(
         'tg_queue_message',
         {
