@@ -89,10 +89,11 @@ export const markQueueItemAsFailed = async (queueId: string, errorMessage: strin
   }
 };
 
-// Sync analyzed content to media group
+// Sync analyzed content to media group with improved error handling
 export const syncMediaGroupContent = async (
   mediaGroupId: string | null | undefined,
-  messageId: string
+  messageId: string,
+  correlationId?: string
 ): Promise<MediaGroupResult> => {
   if (!mediaGroupId) {
     return { success: false, reason: 'no_media_group_id' };
@@ -109,13 +110,15 @@ export const syncMediaGroupContent = async (
         media_group_id: mediaGroupId,
         source_message_id: messageId,
         method: 'direct_call'
-      }
+      },
+      correlation_id: correlationId
     });
 
-    // Try to use the RPC function first
+    // Call the RPC function with parameters in the correct order
     const { data, error } = await supabaseClient.rpc('xdelo_sync_media_group_content', {
+      p_source_message_id: messageId,
       p_media_group_id: mediaGroupId,
-      p_source_message_id: messageId
+      p_correlation_id: correlationId
     });
     
     if (error) {
@@ -123,7 +126,7 @@ export const syncMediaGroupContent = async (
       console.log('Falling back to direct sync method');
       
       // Fallback to direct updates if RPC fails
-      const syncResult = await syncMediaGroupDirectly(mediaGroupId, messageId);
+      const syncResult = await syncMediaGroupDirectly(mediaGroupId, messageId, correlationId);
       return { 
         success: true, 
         syncedCount: syncResult.count, 
@@ -136,7 +139,7 @@ export const syncMediaGroupContent = async (
     console.log(`Successfully synced media group via RPC. Result:`, data);
     return { 
       success: true, 
-      syncedCount: data, 
+      syncedCount: data?.updated_count || 0, 
       source_message_id: messageId,
       method: 'rpc'
     };
@@ -145,7 +148,7 @@ export const syncMediaGroupContent = async (
     
     // Try fallback method
     try {
-      const syncResult = await syncMediaGroupDirectly(mediaGroupId, messageId);
+      const syncResult = await syncMediaGroupDirectly(mediaGroupId, messageId, correlationId);
       return { 
         success: true, 
         syncedCount: syncResult.count, 
@@ -166,7 +169,11 @@ export const syncMediaGroupContent = async (
 };
 
 // Fallback method to sync media group directly if RPC fails
-async function syncMediaGroupDirectly(mediaGroupId: string, sourceMessageId: string) {
+async function syncMediaGroupDirectly(
+  mediaGroupId: string, 
+  sourceMessageId: string,
+  correlationId?: string
+) {
   try {
     console.log(`Direct sync: Getting source message ${sourceMessageId}`);
     
@@ -251,6 +258,23 @@ async function syncMediaGroupDirectly(mediaGroupId: string, sourceMessageId: str
           error: updateError.message
         });
       }
+    }
+    
+    // Log the sync operation
+    try {
+      await supabaseClient.from('unified_audit_logs').insert({
+        event_type: 'media_group_content_synced',
+        entity_id: sourceMessageId,
+        metadata: {
+          media_group_id: mediaGroupId,
+          updated_count: updateResults.filter(r => r.success).length,
+          operation: 'direct_sync',
+          correlation_id: correlationId
+        },
+        event_timestamp: new Date().toISOString()
+      });
+    } catch (logError) {
+      console.error('Error logging media group sync:', logError);
     }
     
     const successfulUpdates = updateResults.filter(r => r.success).length;

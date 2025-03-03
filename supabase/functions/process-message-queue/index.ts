@@ -42,18 +42,33 @@ serve(async (req) => {
     const { limit = 5 } = await req.json();
     console.log(`Starting to process up to ${limit} messages from queue`);
     
-    // Get messages from the queue using a fixed function that doesn't use window functions with FOR UPDATE
+    // Get messages from the queue using the new function name
     const { data: messagesToProcess, error: queueError } = await supabaseClient.rpc(
-      'xdelo_get_messages_for_processing',
+      'tg_get_next_messages',
       { limit_count: limit }
     );
     
     if (queueError) {
-      throw new Error(`Failed to get messages from queue: ${queueError.message}`);
+      console.error('Failed to get messages from queue:', queueError);
+      
+      // Try fallback with old function name if the new one fails
+      const { data: fallbackMessages, error: fallbackError } = await supabaseClient.rpc(
+        'xdelo_get_messages_for_processing',
+        { limit_count: limit }
+      );
+      
+      if (fallbackError) {
+        throw new Error(`Failed to get messages from queue (both methods): ${fallbackError.message}`);
+      }
+      
+      console.log(`Successfully retrieved ${fallbackMessages?.length || 0} messages using fallback method`);
+      if (fallbackMessages && fallbackMessages.length > 0) {
+        messagesToProcess = fallbackMessages;
+      }
+    } else {
+      console.log(`Successfully retrieved ${messagesToProcess?.length || 0} messages using new method`);
     }
 
-    console.log(`Found ${messagesToProcess?.length || 0} messages to process`);
-    
     if (!messagesToProcess || messagesToProcess.length === 0) {
       return new Response(
         JSON.stringify({
@@ -83,10 +98,22 @@ serve(async (req) => {
         
         if (!message.caption) {
           console.error(`Message ${message.message_id} has no caption, marking as error`);
-          await supabaseClient.rpc('xdelo_fail_message_processing', {
-            p_queue_id: message.queue_id,
-            p_error_message: 'Message has no caption to analyze'
-          });
+          
+          // Try the new function first
+          try {
+            await supabaseClient.rpc('tg_fail_processing', {
+              p_queue_id: message.queue_id,
+              p_error_message: 'Message has no caption to analyze'
+            });
+          } catch (newFuncError) {
+            console.error('Error with new fail function, trying fallback:', newFuncError);
+            
+            // Fallback to old function
+            await supabaseClient.rpc('xdelo_fail_message_processing', {
+              p_queue_id: message.queue_id,
+              p_error_message: 'Message has no caption to analyze'
+            });
+          }
           
           results.failed++;
           results.details.push({
@@ -124,11 +151,22 @@ serve(async (req) => {
 
         const result = await response.json();
         
-        // Mark as complete using the function with explicit parameter types
-        await supabaseClient.rpc('xdelo_complete_message_processing', {
-          p_queue_id: message.queue_id,
-          p_analyzed_content: result.data
-        });
+        // Mark as complete using the proper function
+        try {
+          // Try new function first
+          await supabaseClient.rpc('tg_complete_processing', {
+            p_queue_id: message.queue_id,
+            p_analyzed_content: result.data
+          });
+        } catch (newFuncError) {
+          console.error('Error with new complete function, trying fallback:', newFuncError);
+          
+          // Fallback to old function
+          await supabaseClient.rpc('xdelo_complete_message_processing', {
+            p_queue_id: message.queue_id,
+            p_analyzed_content: result.data
+          });
+        }
         
         // Record success
         results.success++;
@@ -150,14 +188,25 @@ serve(async (req) => {
           error_message: error.message
         });
         
-        // Mark the queue item as failed using the function with explicit parameter types
+        // Mark the queue item as failed using the proper function
         try {
-          await supabaseClient.rpc('xdelo_fail_message_processing', {
+          // Try new function first
+          await supabaseClient.rpc('tg_fail_processing', {
             p_queue_id: message.queue_id,
             p_error_message: `Processing error: ${error.message}`
           });
-        } catch (markError) {
-          console.error(`Failed to mark queue item ${message.queue_id} as failed:`, markError);
+        } catch (newFuncError) {
+          console.error('Error with new fail function, trying fallback:', newFuncError);
+          
+          // Fallback to old function
+          try {
+            await supabaseClient.rpc('xdelo_fail_message_processing', {
+              p_queue_id: message.queue_id,
+              p_error_message: `Processing error: ${error.message}`
+            });
+          } catch (oldFuncError) {
+            console.error('Both fail functions failed:', oldFuncError);
+          }
         }
       }
     }
