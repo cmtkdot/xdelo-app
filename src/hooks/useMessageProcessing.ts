@@ -65,7 +65,7 @@ export function useMessageProcessing() {
       });
 
       // First update message state to pending
-      const { error: updateError } = await updateMessageState('pending' as ProcessingState, {
+      const { error: updateError } = await updateMessageState(message.id, 'pending' as ProcessingState, {
         error_message: null,
         retry_count: (message.retry_count || 0) + 1,
         processing_started_at: new Date().toISOString(),
@@ -104,7 +104,7 @@ export function useMessageProcessing() {
       console.error('Error retrying analysis:', error);
       
       // Update message with error state
-      await updateMessageState('error' as ProcessingState, {
+      await updateMessageState(message.id, 'error' as ProcessingState, {
         error_message: error.message,
         processing_completed_at: new Date().toISOString(),
         last_error_at: new Date().toISOString()
@@ -146,7 +146,7 @@ export function useMessageProcessing() {
       });
 
       // Update the caption directly in the database
-      const { error } = await updateMessageState('pending' as ProcessingState, {
+      const { error } = await updateMessageState(message.id, 'pending' as ProcessingState, {
         caption
       });
 
