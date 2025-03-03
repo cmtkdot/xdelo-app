@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
@@ -8,6 +9,7 @@ interface AnalysisRequest {
   caption: string;
   media_group_id?: string;
   correlationId?: string;
+  file_info?: Record<string, any>;
 }
 
 serve(async (req) => {
@@ -24,13 +26,14 @@ serve(async (req) => {
 
     // Parse request body and validate required fields
     const body = await req.json() as AnalysisRequest;
-    const { messageId, caption, media_group_id, correlationId } = body;
+    const { messageId, caption, media_group_id, correlationId, file_info } = body;
 
     console.log('Received analysis request:', {
       messageId,
       caption: caption?.substring(0, 50) + '...',
       media_group_id,
-      correlationId
+      correlationId,
+      has_file_info: !!file_info
     });
 
     if (!messageId || !caption) {
@@ -44,6 +47,33 @@ serve(async (req) => {
     const productCode = productCodeMatch ? productCodeMatch[1] : '';
     const vendorUidMatch = productCode.match(/^[A-Za-z]{1,4}/);
     const vendorUid = vendorUidMatch ? vendorUidMatch[0].toUpperCase() : '';
+    
+    // Extract purchase date from the product code
+    let purchaseDate = null;
+    if (productCode) {
+      // Remove vendor UID to get date portion
+      const dateString = productCode.replace(/^[A-Za-z]{1,4}/, '');
+      if (/^\d{5,6}$/.test(dateString)) {
+        try {
+          // Handle both 5 and 6 digit formats
+          const isSixDigits = dateString.length === 6;
+          const monthStr = isSixDigits ? dateString.substring(0, 2) : '0' + dateString.substring(0, 1);
+          const dayStr = isSixDigits ? dateString.substring(2, 4) : dateString.substring(1, 3);
+          const yearStr = isSixDigits ? dateString.substring(4, 6) : dateString.substring(3, 5);
+          
+          const month = parseInt(monthStr);
+          const day = parseInt(dayStr);
+          const year = 2000 + parseInt(yearStr);
+          
+          if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+            purchaseDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+          }
+        } catch (e) {
+          console.error('Error parsing date:', e);
+        }
+      }
+    }
+    
     const quantityMatch = caption.match(/x(\d+)/i);
     const quantity = quantityMatch ? parseInt(quantityMatch[1]) : null;
     const notesMatch = caption.match(/\((.*?)\)/);
@@ -53,6 +83,7 @@ serve(async (req) => {
       productName,
       productCode,
       vendorUid,
+      purchaseDate,
       quantity,
       notes
     });
@@ -61,6 +92,7 @@ serve(async (req) => {
       product_name: productName,
       product_code: productCode,
       vendor_uid: vendorUid,
+      purchase_date: purchaseDate,
       quantity,
       notes,
       caption,
@@ -108,6 +140,9 @@ serve(async (req) => {
         console.log('AI analysis completed:', result.choices[0].message.content);
 
         analyzedContent.parsing_metadata.method = 'ai';
+        
+        // We could further process AI response here to extract structured fields
+        // For now, we just log it and continue with manual parsing
       } catch (error) {
         console.error('AI analysis error:', error);
         // Continue with manual parsing results if AI fails
@@ -154,7 +189,8 @@ serve(async (req) => {
       const { error: syncError } = await supabaseClient
         .rpc('xdelo_sync_media_group_content', {
           p_media_group_id: media_group_id,
-          p_message_id: messageId
+          p_source_message_id: messageId,
+          p_correlation_id: correlationId
         });
 
       if (syncError) {

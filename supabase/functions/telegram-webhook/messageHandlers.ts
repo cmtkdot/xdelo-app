@@ -139,9 +139,12 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       forward_count: isDuplicate ? 1 : 0
     };
 
-    const { error: insertError } = await supabaseClient
+    // Insert the message into the database
+    const { data: insertedMessage, error: insertError } = await supabaseClient
       .from('messages')
-      .insert([messageInput]);
+      .insert([messageInput])
+      .select('id')
+      .single();
 
     if (insertError) throw insertError;
 
@@ -161,6 +164,33 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
         forward_info: forwardInfo
       }
     );
+
+    // If message has caption, trigger immediate analysis
+    if (message.caption && insertedMessage) {
+      console.log(`Message ${insertedMessage.id} has caption, triggering immediate analysis`);
+      
+      try {
+        // Call the parse-caption-with-ai function directly
+        const analysisResponse = await supabaseClient.functions.invoke('parse-caption-with-ai', {
+          body: {
+            messageId: insertedMessage.id,
+            caption: message.caption,
+            media_group_id: message.media_group_id,
+            correlationId: context.correlationId,
+            file_info: mediaInfo
+          }
+        });
+        
+        if ('error' in analysisResponse) {
+          console.error('Error from parse-caption-with-ai function:', analysisResponse.error);
+        } else {
+          console.log('Analysis triggered successfully');
+        }
+      } catch (analysisError) {
+        console.error('Failed to trigger caption analysis:', analysisError);
+        // Don't throw here - we already stored the message, so let's continue
+      }
+    }
 
     return new Response(
       JSON.stringify({ success: true }),
