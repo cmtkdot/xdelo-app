@@ -13,12 +13,12 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-async function validateStoragePath(messageId: string, fileUniqueId: string, storagePath: string | null, mimeType: string | null): Promise<{ isValid: boolean, newPath?: string }> {
+// Simple validation function for storage path - doesn't check file existence
+function validateStoragePath(fileUniqueId: string, storagePath: string | null, mimeType: string | null): { isValid: boolean, newPath?: string } {
   // If storage path is missing, generate one
   if (!storagePath || storagePath.trim() === '') {
     const extension = mimeType ? mimeType.split('/')[1] : 'jpeg';
     const newPath = `${fileUniqueId}.${extension}`;
-    
     return { isValid: false, newPath };
   }
   
@@ -26,7 +26,6 @@ async function validateStoragePath(messageId: string, fileUniqueId: string, stor
   if (!storagePath.includes(fileUniqueId)) {
     const extension = mimeType ? mimeType.split('/')[1] : 'jpeg';
     const newPath = `${fileUniqueId}.${extension}`;
-    
     return { isValid: false, newPath };
   }
   
@@ -73,9 +72,8 @@ async function processMessageQueue(limit: number = 1): Promise<any> {
           
         if (messageError) throw new Error(`Failed to retrieve message: ${messageError.message}`);
         
-        // Validate storage path
-        const storageValidation = await validateStoragePath(
-          message_id, 
+        // Validate storage path without checking file existence
+        const storageValidation = validateStoragePath(
           messageData.file_unique_id, 
           messageData.storage_path, 
           messageData.mime_type

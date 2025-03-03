@@ -2644,6 +2644,12 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_has_valid_caption: {
+        Args: {
+          p_caption: string
+        }
+        Returns: boolean
+      }
       xdelo_log_event: {
         Args: {
           p_event_type: Database["public"]["Enums"]["audit_event_type"]

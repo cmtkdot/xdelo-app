@@ -1,6 +1,5 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { logMessageOperation } from './logger.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')
 if (!TELEGRAM_BOT_TOKEN) throw new Error('Missing TELEGRAM_BOT_TOKEN')
@@ -53,24 +52,38 @@ export const getMediaInfo = async (message: any) => {
 
   try {
     // Get file info from Telegram
-    const fileInfo = await fetch(
+    const fileInfoResponse = await fetch(
       `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${media.file_id}`
-    ).then(res => res.json())
+    );
+    
+    if (!fileInfoResponse.ok) {
+      throw new Error(`Failed to get file info from Telegram: ${await fileInfoResponse.text()}`);
+    }
+    
+    const fileInfo = await fileInfoResponse.json();
 
-    if (!fileInfo.ok) throw new Error('Failed to get file info from Telegram')
+    if (!fileInfo.ok) {
+      throw new Error(`Telegram API error: ${JSON.stringify(fileInfo)}`);
+    }
 
     // Download file from Telegram
-    const fileData = await fetch(
+    const fileDataResponse = await fetch(
       `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`
-    ).then(res => res.blob())
+    );
+    
+    if (!fileDataResponse.ok) {
+      throw new Error(`Failed to download file from Telegram: ${await fileDataResponse.text()}`);
+    }
+    
+    const fileData = await fileDataResponse.blob();
 
     // Get mime type and extension
     const mimeType = video ? (video.mime_type || 'video/mp4') :
                   document ? (document.mime_type || 'application/octet-stream') :
-                  'image/jpeg'
+                  'image/jpeg';
     
-    const extension = mimeType.split('/')[1]
-    const fileName = `${media.file_unique_id}.${extension}`
+    const extension = mimeType.split('/')[1];
+    const fileName = `${media.file_unique_id}.${extension}`;
 
     // Upload to Supabase Storage
     const { error: uploadError } = await supabase
@@ -79,15 +92,15 @@ export const getMediaInfo = async (message: any) => {
       .upload(fileName, fileData, {
         contentType: mimeType,
         upsert: true
-      })
+      });
 
     if (uploadError) {
-      console.error('Storage upload error:', uploadError)
-      throw new Error(`Failed to upload media to storage: ${uploadError.message}`)
+      console.error('Storage upload error:', uploadError);
+      throw new Error(`Failed to upload media to storage: ${uploadError.message}`);
     }
 
-    // Get public URL - matches the trigger-generated URL format
-    const publicUrl = `https://xjhhehxcxkiumnwbirel.supabase.co/storage/v1/object/public/telegram-media/${fileName}`
+    // Generate public URL with correct format
+    const publicUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${fileName}`;
 
     return {
       file_id: media.file_id,
@@ -104,100 +117,77 @@ export const getMediaInfo = async (message: any) => {
   } catch (error) {
     console.error('Error downloading media from Telegram:', error);
     
-    // If download fails but we had the file before, construct a URL based on file_unique_id
-    if (media.file_unique_id) {
-      const mimeType = video ? (video.mime_type || 'video/mp4') : 
-                    document ? (document.mime_type || 'application/octet-stream') : 
-                    'image/jpeg';
-      const extension = mimeType.split('/')[1];
-      const fileName = `${media.file_unique_id}.${extension}`;
-      const publicUrl = `https://xjhhehxcxkiumnwbirel.supabase.co/storage/v1/object/public/telegram-media/${fileName}`;
-      
-      return {
-        file_id: media.file_id,
-        file_unique_id: media.file_unique_id,
-        mime_type: mimeType,
-        file_size: media.file_size,
-        width: media.width,
-        height: media.height,
-        duration: video?.duration,
-        storage_path: fileName,
-        public_url: publicUrl,
-        needs_redownload: true,
-        error: error.message
-      };
-    }
+    // If download fails, construct a URL based on file_unique_id but don't try to check existence
+    const mimeType = video ? (video.mime_type || 'video/mp4') : 
+                  document ? (document.mime_type || 'application/octet-stream') : 
+                  'image/jpeg';
+    const extension = mimeType.split('/')[1];
+    const fileName = `${media.file_unique_id}.${extension}`;
+    const publicUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${fileName}`;
     
-    throw error;
-  }
-}
-
-// New function to check and flag files for redownload
-export const checkAndFlagForRedownload = async (messageId: string, fileUniqueId: string, storageFile: string) => {
-  try {
-    // Check if file exists in storage
-    const { data, error } = await supabase
-      .storage
-      .from('telegram-media')
-      .download(storageFile);
-    
-    // If file exists and has content, it's fine
-    if (data && !error) {
-      return { exists: true, size: data.size };
-    }
-    
-    // File doesn't exist or error occurred, flag for redownload
-    const { data: flagResult, error: flagError } = await supabase
-      .rpc('xdelo_flag_file_for_redownload', {
-        p_message_id: messageId,
-        p_reason: error ? `Storage error: ${error.message}` : 'File not found in storage'
-      });
-      
-    if (flagError) {
-      console.error('Error flagging file for redownload:', flagError);
-    }
-    
-    return { 
-      exists: false, 
-      flagged: !flagError,
-      error: error?.message || 'File not found'
+    // Mark for redownload but don't attempt to check existence
+    return {
+      file_id: media.file_id,
+      file_unique_id: media.file_unique_id,
+      mime_type: mimeType,
+      file_size: media.file_size,
+      width: media.width,
+      height: media.height,
+      duration: video?.duration,
+      storage_path: fileName,
+      public_url: publicUrl,
+      needs_redownload: true,
+      error: error.message
     };
-  } catch (error) {
-    console.error('Error checking file existence:', error);
-    return { exists: false, error: error.message };
   }
 }
 
-// Function to attempt redownload of missing files
+// Simplified redownload function that doesn't check file existence
 export const redownloadMissingFile = async (message: any) => {
   try {
-    console.log('Attempting to redownload missing file for message:', message.id);
+    console.log('Attempting to redownload file for message:', message.id);
     
-    // Get file info from Telegram using the stored file_id
-    const fileInfo = await fetch(
+    if (!message.file_id) {
+      throw new Error('Missing file_id for redownload');
+    }
+    
+    // Get file info from Telegram without checking existence first
+    const fileInfoResponse = await fetch(
       `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${message.file_id}`
-    ).then(res => res.json());
+    );
+    
+    if (!fileInfoResponse.ok) {
+      throw new Error(`Failed to get file info from Telegram: ${await fileInfoResponse.text()}`);
+    }
+    
+    const fileInfo = await fileInfoResponse.json();
 
-    if (!fileInfo.ok) throw new Error(`Failed to get file info from Telegram: ${JSON.stringify(fileInfo)}`);
-
-    // Download file from Telegram
-    const fileData = await fetch(
-      `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`
-    ).then(res => res.blob());
-
-    if (!fileData || fileData.size === 0) {
-      throw new Error('Downloaded empty file from Telegram');
+    if (!fileInfo.ok) {
+      throw new Error(`Telegram API error: ${JSON.stringify(fileInfo)}`);
     }
 
-    // Extract storage path or create from file_unique_id and mime_type
-    const storagePath = message.storage_path || `${message.file_unique_id}.${(message.mime_type || 'image/jpeg').split('/')[1]}`;
+    // Download file from Telegram
+    const fileDataResponse = await fetch(
+      `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`
+    );
+    
+    if (!fileDataResponse.ok) {
+      throw new Error(`Failed to download file from Telegram: ${await fileDataResponse.text()}`);
+    }
+    
+    const fileData = await fileDataResponse.blob();
 
-    // Upload to Supabase Storage
+    // Extract storage path or create from file_unique_id and mime_type
+    const mimeType = message.mime_type || 'image/jpeg';
+    const extension = mimeType.split('/')[1];
+    const storagePath = `${message.file_unique_id}.${extension}`;
+
+    // Upload to Supabase Storage with upsert=true to overwrite
     const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')
       .upload(storagePath, fileData, {
-        contentType: message.mime_type || 'image/jpeg',
+        contentType: mimeType,
         upsert: true
       });
 
@@ -205,12 +195,11 @@ export const redownloadMissingFile = async (message: any) => {
       throw new Error(`Failed to upload media to storage: ${uploadError.message}`);
     }
 
-    // Update the message
+    // Update the message with success status
     const { error: updateError } = await supabase
       .from('messages')
       .update({
         needs_redownload: false,
-        redownload_attempts: (message.redownload_attempts || 0) + 1,
         redownload_completed_at: new Date().toISOString(),
         storage_path: storagePath,
         error_message: null
@@ -221,13 +210,6 @@ export const redownloadMissingFile = async (message: any) => {
       throw new Error(`Failed to update message after redownload: ${updateError.message}`);
     }
 
-    // Log success
-    await logMessageOperation('success', crypto.randomUUID(), {
-      action: 'redownload_completed',
-      file_unique_id: message.file_unique_id,
-      storage_path: storagePath
-    });
-
     return {
       success: true,
       message_id: message.id,
@@ -237,26 +219,19 @@ export const redownloadMissingFile = async (message: any) => {
   } catch (error) {
     console.error('Failed to redownload file:', error);
     
-    // Update the message with failure info
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update({
-        redownload_attempts: (message.redownload_attempts || 0) + 1,
-        error_message: `Redownload failed: ${error.message}`,
-        last_error_at: new Date().toISOString()
-      })
-      .eq('id', message.id);
-      
-    if (updateError) {
-      console.error('Failed to update message after redownload failure:', updateError);
+    // Update the message with failure info but without checking file existence
+    try {
+      await supabase
+        .from('messages')
+        .update({
+          redownload_attempts: (message.redownload_attempts || 0) + 1,
+          error_message: `Redownload failed: ${error.message}`,
+          last_error_at: new Date().toISOString()
+        })
+        .eq('id', message.id);
+    } catch (updateErr) {
+      console.error('Error updating error state:', updateErr);
     }
-    
-    // Log failure
-    await logMessageOperation('error', crypto.randomUUID(), {
-      action: 'redownload_failed',
-      file_unique_id: message.file_unique_id,
-      error: error.message
-    });
     
     return {
       success: false,

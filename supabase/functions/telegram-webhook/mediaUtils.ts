@@ -1,5 +1,5 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
 import { logMessageOperation } from './logger.ts';
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')
@@ -100,8 +100,8 @@ export const getMediaInfo = async (message: any) => {
       throw new Error(`Failed to upload media to storage: ${uploadError.message}`);
     }
 
-    // Get public URL - matches the trigger-generated URL format
-    const publicUrl = `https://xjhhehxcxkiumnwbirel.supabase.co/storage/v1/object/public/telegram-media/${fileName}`;
+    // Generate public URL with correct path
+    const publicUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${fileName}`;
 
     return {
       file_id: media.file_id,
@@ -124,7 +124,7 @@ export const getMediaInfo = async (message: any) => {
                   'image/jpeg';
     const extension = mimeType.split('/')[1];
     const fileName = `${media.file_unique_id}.${extension}`;
-    const publicUrl = `https://xjhhehxcxkiumnwbirel.supabase.co/storage/v1/object/public/telegram-media/${fileName}`;
+    const publicUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${fileName}`;
     
     // Log the error but don't throw - we'll return a placeholder and flag for redownload
     return {
@@ -211,6 +211,13 @@ export const redownloadMissingFile = async (message: any) => {
       throw new Error(`Failed to update message after redownload: ${updateError.message}`);
     }
 
+    // Log success
+    await logMessageOperation('success', crypto.randomUUID(), {
+      action: 'redownload_completed',
+      file_unique_id: message.file_unique_id,
+      storage_path: storagePath
+    });
+
     return {
       success: true,
       message_id: message.id,
@@ -233,6 +240,13 @@ export const redownloadMissingFile = async (message: any) => {
     } catch (updateErr) {
       console.error('Error updating error state:', updateErr);
     }
+    
+    // Log failure
+    await logMessageOperation('error', crypto.randomUUID(), {
+      action: 'redownload_failed',
+      file_unique_id: message.file_unique_id,
+      error: error.message
+    });
     
     return {
       success: false,
