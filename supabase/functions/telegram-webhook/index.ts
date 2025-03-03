@@ -30,9 +30,10 @@ serve(async (req) => {
     // Determine message context
     const context = {
       isChannelPost: !!update.channel_post || !!update.edited_channel_post,
-      isForwarded: !!message.forward_from || !!message.forward_from_chat,
+      isForwarded: !!message.forward_from || !!message.forward_from_chat || !!message.forward_origin,
       correlationId,
-      isEdit: !!update.edited_message || !!update.edited_channel_post
+      isEdit: !!update.edited_message || !!update.edited_channel_post,
+      previousMessage: update.edited_message?.message || update.edited_channel_post?.message
     }
 
     // Handle media messages (photos, videos, documents)

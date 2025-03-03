@@ -1,6 +1,4 @@
 
-import { ProcessingState, Message, AnalyzedContent } from "../_shared/types.ts";
-
 export interface TelegramMessage {
   message_id: number;
   chat: {
@@ -27,6 +25,7 @@ export interface TelegramMessage {
     file_size?: number;
   };
   caption?: string;
+  text?: string;
   document?: {
     file_id: string;
     file_unique_id: string;
@@ -110,4 +109,66 @@ export interface MessageInput {
   processing_state: ProcessingState;
 }
 
-export { ProcessingState, Message, AnalyzedContent };
+export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
+
+export interface AnalyzedContent {
+  product_name?: string;
+  product_code?: string;
+  vendor_uid?: string;
+  purchase_date?: string;
+  quantity?: number;
+  unit_price?: number;
+  total_price?: number;
+  notes?: string;
+  caption?: string;
+  parsing_metadata?: {
+    method: 'manual' | 'ai';
+    timestamp: string;
+  };
+  sync_metadata?: {
+    sync_source_message_id?: string;
+    media_group_id?: string;
+  };
+}
+
+export interface Message {
+  id: string;
+  telegram_message_id?: number;
+  media_group_id?: string;
+  message_caption_id?: string;
+  is_original_caption?: boolean;
+  group_caption_synced?: boolean;
+  caption?: string;
+  file_id?: string;
+  file_unique_id: string;
+  public_url: string;
+  mime_type?: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  user_id?: string;
+  processing_state?: ProcessingState;
+  processing_started_at?: string;
+  processing_completed_at?: string;
+  analyzed_content?: AnalyzedContent;
+  old_analyzed_content?: AnalyzedContent[];
+  telegram_data?: Record<string, unknown>;
+  error_message?: string;
+  retry_count?: number;
+  last_error_at?: string;
+  group_first_message_time?: string;
+  group_last_message_time?: string;
+  chat_id?: number;
+  chat_type?: string;
+  chat_title?: string;
+  message_url?: string;
+  purchase_order?: string;
+  glide_row_id?: string;
+  edit_count?: number;
+  forward_info?: ForwardInfo;
+  created_at?: string;
+  updated_at?: string;
+  deleted_from_telegram?: boolean;
+  edit_history?: AnalyzedContent[];
+}

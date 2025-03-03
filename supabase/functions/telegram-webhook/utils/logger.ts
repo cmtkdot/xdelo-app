@@ -21,7 +21,13 @@ export const logMessageOperation = async (
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false
+        }
+      }
     );
 
     await supabase.from('unified_audit_logs').insert({
@@ -42,24 +48,4 @@ export const logMessageOperation = async (
     // Fail silently but log to console
     console.error('Error logging operation:', error);
   }
-};
-
-export const getLogger = (correlationId: string) => {
-  return {
-    info: (message: string, data?: any) => {
-      console.log(`[INFO] [${correlationId.substring(0, 8)}] ${message}`, data || '');
-      logMessageOperation('success', correlationId, { message, level: 'info', ...data });
-    },
-    error: (message: string, error?: any) => {
-      console.error(`[ERROR] [${correlationId.substring(0, 8)}] ${message}`, error || '');
-      logMessageOperation('error', correlationId, { message, error: error?.message || error, level: 'error' });
-    },
-    warn: (message: string, data?: any) => {
-      console.warn(`[WARN] [${correlationId.substring(0, 8)}] ${message}`, data || '');
-      logMessageOperation('success', correlationId, { message, level: 'warn', ...data });
-    },
-    debug: (message: string, data?: any) => {
-      console.debug(`[DEBUG] [${correlationId.substring(0, 8)}] ${message}`, data || '');
-    }
-  };
 };

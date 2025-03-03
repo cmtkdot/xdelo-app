@@ -132,7 +132,7 @@ export const getMediaInfo = async (message: any) => {
   }
 }
 
-// Function to check and flag files for redownload
+// New function to check and flag files for redownload
 export const checkAndFlagForRedownload = async (messageId: string, fileUniqueId: string, storageFile: string) => {
   try {
     // Check if file exists in storage
@@ -224,7 +224,6 @@ export const redownloadMissingFile = async (message: any) => {
     // Log success
     await logMessageOperation('success', crypto.randomUUID(), {
       action: 'redownload_completed',
-      message_id: message.id,
       file_unique_id: message.file_unique_id,
       storage_path: storagePath
     });
@@ -255,7 +254,6 @@ export const redownloadMissingFile = async (message: any) => {
     // Log failure
     await logMessageOperation('error', crypto.randomUUID(), {
       action: 'redownload_failed',
-      message_id: message.id,
       file_unique_id: message.file_unique_id,
       error: error.message
     });
