@@ -1,4 +1,5 @@
 
+
 -- Add new fields for better file handling
 ALTER TABLE public.messages 
 ADD COLUMN IF NOT EXISTS file_id_expires_at TIMESTAMPTZ,
@@ -54,7 +55,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger for file_id expiration
+-- First drop the trigger if it already exists, then create it
+DROP TRIGGER IF EXISTS trg_set_file_id_expiration ON public.messages;
 CREATE TRIGGER trg_set_file_id_expiration
 BEFORE INSERT OR UPDATE OF file_id ON public.messages
 FOR EACH ROW
@@ -145,3 +147,4 @@ BEGIN
     WHERE id = r.id;
   END LOOP;
 END $$;
+
