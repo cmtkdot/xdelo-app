@@ -2799,13 +2799,21 @@ export type Database = {
         }
         Returns: boolean
       }
-      xdelo_queue_message_for_processing: {
-        Args: {
-          p_message_id: string
-          p_correlation_id?: string
-        }
-        Returns: string
-      }
+      xdelo_queue_message_for_processing:
+        | {
+            Args: {
+              p_message_id: string
+              p_correlation_id?: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_message_id: string
+              p_correlation_id?: string
+            }
+            Returns: string
+          }
       xdelo_repair_storage_paths: {
         Args: Record<PropertyKey, never>
         Returns: {
