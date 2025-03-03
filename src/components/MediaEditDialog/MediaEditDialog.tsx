@@ -48,76 +48,52 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
           messageId: media.telegram_message_id
         });
 
-        // Update caption in Telegram
-        const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
-          body: {
-            messageId: media.id,
-            newCaption: caption
-          }
-        });
-
-        if (captionError) {
-          if (captionError.message?.includes('message is not modified')) {
-            console.log('Caption unchanged in Telegram, proceeding with other updates');
-          } else {
-            throw captionError;
-          }
-        }
-
-        // Use the caption syncing function for media groups
-        if (media.media_group_id) {
-          console.log('Message is part of media group, syncing caption');
-          
-          // Call the function directly using stored procedure instead of RPC
-          const { data: syncData, error: syncError } = await supabase
-            .from('messages')
-            .update({
-              caption: caption,
-              telegram_data: {
-                ...currentTelegramData,
-                message: {
-                  ...(currentTelegramData.message || {}),
-                  caption: caption
-                }
-              },
-              updated_at: new Date().toISOString(),
-              processing_state: 'pending',  // Mark for reprocessing
-              analyzed_content: null        // Clear for reanalysis
-            })
-            .eq('id', media.id);
-          
-          if (syncError) {
-            console.error('Error syncing caption to media group:', syncError);
-            // Continue anyway - fallback to direct update
-          }
-        } else {
-          // For non-media group messages, update directly
-          const updatedTelegramData = {
-            ...currentTelegramData,
-            message: {
-              ...(currentTelegramData.message || {}),
-              caption: caption
+        // Update caption in Telegram if a telegram_message_id exists
+        if (media.telegram_message_id) {
+          const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
+            body: {
+              messageId: media.id,
+              newCaption: caption
             }
-          };
+          });
 
-          // Update the message in database
-          const { error: updateError } = await supabase
-            .from('messages')
-            .update({
-              caption: caption,
-              telegram_data: updatedTelegramData,
-              updated_at: new Date().toISOString(),
-              processing_state: 'pending',  // Mark for reprocessing
-              analyzed_content: null        // Clear for reanalysis
-            })
-            .eq('id', media.id);
-
-          if (updateError) throw updateError;
+          if (captionError) {
+            if (captionError.message?.includes('message is not modified')) {
+              console.log('Caption unchanged in Telegram, proceeding with other updates');
+            } else {
+              console.warn('Telegram update error:', captionError);
+              // Continue with local updates even if Telegram update fails
+            }
+          }
         }
+
+        // Update the message in database
+        const updatedTelegramData = {
+          ...currentTelegramData,
+          message: {
+            ...(currentTelegramData.message || {}),
+            caption: caption
+          }
+        };
+
+        // Update the database record
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({
+            caption: caption,
+            telegram_data: updatedTelegramData,
+            updated_at: new Date().toISOString(),
+            processing_state: 'pending',  // Mark for reprocessing
+            analyzed_content: null,       // Clear for reanalysis
+            group_caption_synced: false   // Mark for resyncing
+          })
+          .eq('id', media.id);
+
+        if (updateError) throw updateError;
 
         // Trigger reanalysis
         console.log('Triggering reanalysis for updated content');
-        const { error: reanalysisError } = await supabase.functions.invoke('parse-caption-with-ai', {
+        const { data: reanalysisData, error: reanalysisError } = await supabase.functions.invoke('parse-caption-with-ai', {
           body: {
             messageId: media.id,
             caption: caption,
@@ -132,6 +108,17 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
             description: "Caption updated but content reanalysis failed. It will be retried automatically.",
             variant: "destructive"
           });
+        } else {
+          console.log('Reanalysis completed successfully:', reanalysisData);
+          
+          // Check if media group sync was successful
+          if (media.media_group_id) {
+            if (reanalysisData?.sync_result?.success) {
+              console.log(`Media group sync completed for ${media.media_group_id}:`, reanalysisData.sync_result);
+            } else {
+              console.warn('Media group sync may not have completed properly');
+            }
+          }
         }
 
         toast({
@@ -162,7 +149,7 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
         <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300">Analyzed Content (Read-only)</h3>
         <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
           {Object.entries(content).map(([key, value]) => (
-            key !== 'parsing_metadata' && (
+            key !== 'parsing_metadata' && key !== 'sync_metadata' && (
               <div key={key} className="flex">
                 <span className="font-medium w-32">{key.replace(/_/g, ' ')}:</span>
                 <span>{String(value)}</span>

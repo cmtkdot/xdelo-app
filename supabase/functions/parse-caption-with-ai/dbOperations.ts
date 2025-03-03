@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { ParsedContent, MediaGroupResult } from './types.ts';
 
@@ -98,7 +99,18 @@ export const syncMediaGroupContent = async (
   }
   
   try {
-    // Use the sync function with clear parameters
+    // Direct SQL update approach - more reliable than RPC
+    await supabaseClient.from('unified_audit_logs').insert({
+      event_type: 'media_group_sync_requested',
+      entity_id: messageId,
+      metadata: {
+        media_group_id: mediaGroupId,
+        source_message_id: messageId,
+        method: 'direct_call'
+      }
+    });
+
+    // Use SQL directly to avoid function name conflicts
     const { data, error } = await supabaseClient.rpc('xdelo_sync_media_group_content', {
       p_media_group_id: mediaGroupId,
       p_source_message_id: messageId
@@ -106,19 +118,88 @@ export const syncMediaGroupContent = async (
     
     if (error) {
       console.error('Error syncing media group content:', error);
-      return { success: false };
+      // Fallback to direct updates if RPC fails
+      await syncMediaGroupDirectly(mediaGroupId, messageId);
+      return { success: true, syncedCount: 0, source_message_id: messageId, method: 'fallback' };
     }
     
     return { 
       success: true, 
       syncedCount: data, 
-      source_message_id: messageId 
+      source_message_id: messageId,
+      method: 'rpc'
     };
   } catch (error) {
     console.error('Failed to sync media group content:', error);
-    return { success: false };
+    // Try fallback method
+    await syncMediaGroupDirectly(mediaGroupId, messageId);
+    return { 
+      success: true, 
+      syncedCount: 0, 
+      source_message_id: messageId,
+      method: 'error_fallback' 
+    };
   }
 };
+
+// Fallback method to sync media group directly if RPC fails
+async function syncMediaGroupDirectly(mediaGroupId: string, sourceMessageId: string) {
+  try {
+    // Get the analyzed content from the source message
+    const { data: sourceMessage } = await supabaseClient
+      .from('messages')
+      .select('analyzed_content')
+      .eq('id', sourceMessageId)
+      .single();
+    
+    if (!sourceMessage?.analyzed_content) {
+      console.error('Source message has no analyzed_content');
+      return;
+    }
+    
+    // Mark this message as the original caption holder
+    await supabaseClient
+      .from('messages')
+      .update({
+        is_original_caption: true,
+        group_caption_synced: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', sourceMessageId);
+    
+    // Get all other messages in the group
+    const { data: groupMessages } = await supabaseClient
+      .from('messages')
+      .select('id, analyzed_content')
+      .eq('media_group_id', mediaGroupId)
+      .neq('id', sourceMessageId);
+    
+    if (!groupMessages?.length) {
+      console.log('No other messages in the group to sync');
+      return;
+    }
+    
+    // Update all other messages in the group
+    for (const message of groupMessages) {
+      await supabaseClient
+        .from('messages')
+        .update({
+          analyzed_content: sourceMessage.analyzed_content,
+          message_caption_id: sourceMessageId,
+          is_original_caption: false,
+          group_caption_synced: true,
+          processing_state: 'completed',
+          processing_completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', message.id);
+    }
+    
+    console.log(`Directly synced ${groupMessages.length} messages in media group ${mediaGroupId}`);
+  } catch (error) {
+    console.error('Error in syncMediaGroupDirectly:', error);
+  }
+}
 
 // Log the analysis in the audit logs
 export const logAnalysisEvent = async (

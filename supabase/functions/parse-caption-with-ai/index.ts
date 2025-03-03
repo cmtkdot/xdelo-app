@@ -83,14 +83,40 @@ async function processCaption(
       }
     }
 
+    // Add media group info to analyzed content if available
+    if (mediaGroupId || existingMessage?.media_group_id) {
+      analyzedContent.sync_metadata = {
+        media_group_id: mediaGroupId || existingMessage?.media_group_id,
+        sync_timestamp: new Date().toISOString()
+      };
+    }
+
     // Update the message with analyzed content
     await updateMessageWithAnalysis(messageId, analyzedContent, existingMessage, queueId);
 
-    // Sync analyzed content to media group if applicable
+    // Always try to sync analyzed content to media group
+    // We do this after message update to ensure the message has been processed
     const groupId = mediaGroupId || existingMessage?.media_group_id;
+    let syncResult = null;
+    
     if (groupId) {
-      console.log(`Syncing analyzed content to media group ${groupId}`);
-      await syncMediaGroupContent(groupId, messageId);
+      console.log(`Syncing analyzed content to media group ${groupId} from message ${messageId}`);
+      try {
+        syncResult = await syncMediaGroupContent(groupId, messageId);
+        console.log('Media group sync result:', syncResult);
+        
+        // Add sync result to analyzed content for tracking
+        analyzedContent.sync_metadata = {
+          ...analyzedContent.sync_metadata,
+          sync_result: syncResult,
+          sync_timestamp: new Date().toISOString()
+        };
+      } catch (syncError) {
+        console.error('Error syncing media group:', syncError);
+        // Continue processing even if sync fails
+      }
+    } else {
+      console.log(`No media group ID found for message ${messageId}`);
     }
 
     // Log the analysis event
@@ -102,13 +128,15 @@ async function processCaption(
       {
         parsing_method: analyzedContent.parsing_metadata.method,
         product_name_length: productName.length,
-        media_group_id: groupId
+        media_group_id: groupId,
+        sync_result: syncResult
       }
     );
 
     return {
       success: true,
-      data: analyzedContent
+      data: analyzedContent,
+      sync_result: syncResult
     };
   } catch (error) {
     console.error('Error in processCaption:', error);
