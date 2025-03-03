@@ -1,5 +1,5 @@
 
-import { serve } from "std/http/server.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
 /**
@@ -79,7 +79,7 @@ serve(async (req) => {
     if (messageError) {
       await logEvent(
         supabase,
-        'telegram_deleted',
+        'message_deleted',
         'unknown',
         message_id,
         chat_id,
@@ -95,7 +95,7 @@ serve(async (req) => {
     // Log the start of the deletion process
     await logEvent(
       supabase,
-      'telegram_deleted',
+      'message_deleted',
       messageId,
       message_id,
       chat_id,
@@ -123,7 +123,7 @@ serve(async (req) => {
       const errorMsg = `Failed to delete Telegram message: ${result.description}`;
       await logEvent(
         supabase,
-        'telegram_deleted',
+        'message_deleted',
         messageId,
         message_id,
         chat_id,
@@ -142,7 +142,7 @@ serve(async (req) => {
     // Log successful deletion from Telegram
     await logEvent(
       supabase,
-      'telegram_deleted',
+      'message_deleted',
       messageId,
       message_id,
       chat_id,
@@ -159,7 +159,7 @@ serve(async (req) => {
       // Log the start of media group deletion
       await logEvent(
         supabase,
-        'telegram_deleted',
+        'media_group_deleted',
         messageId,
         message_id,
         chat_id,
@@ -179,7 +179,7 @@ serve(async (req) => {
       if (fetchError) {
         await logEvent(
           supabase,
-          'telegram_deleted',
+          'media_group_deleted',
           messageId,
           message_id,
           chat_id,
@@ -230,7 +230,7 @@ serve(async (req) => {
             // Log successful group message deletion
             await logEvent(
               supabase,
-              'telegram_deleted',
+              'message_deleted',
               msg.id,
               msg.telegram_message_id,
               msg.chat_id,
@@ -254,7 +254,7 @@ serve(async (req) => {
           // Log failed group message deletion
           await logEvent(
             supabase,
-            'telegram_deleted',
+            'message_deleted',
             msg.id,
             msg.telegram_message_id,
             msg.chat_id,
@@ -273,7 +273,7 @@ serve(async (req) => {
       // Log completion of media group deletion
       await logEvent(
         supabase,
-        'telegram_deleted',
+        'media_group_deleted',
         messageId,
         message_id,
         chat_id,

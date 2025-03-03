@@ -21,12 +21,14 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
   const { toast } = useToast();
   const [caption, setCaption] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
   
   useEffect(() => {
     if (media) {
       // Extract caption from telegram_data
       const telegramData = media.telegram_data as { message?: { caption?: string } } || {};
       setCaption(telegramData.message?.caption || '');
+      setSyncStatus(null);
     }
   }, [media]);
 
@@ -37,6 +39,8 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
     
     try {
       setIsSubmitting(true);
+      setSyncStatus('Updating caption...');
+      
       // Only update if caption has changed
       const currentTelegramData = media.telegram_data as { message?: { caption?: string } } || {};
       const originalCaption = currentTelegramData.message?.caption || '';
@@ -45,11 +49,13 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
         console.log('Updating caption:', {
           old: originalCaption,
           new: caption,
-          messageId: media.telegram_message_id
+          messageId: media.telegram_message_id,
+          mediaGroupId: media.media_group_id
         });
 
         // Update caption in Telegram if a telegram_message_id exists
         if (media.telegram_message_id) {
+          setSyncStatus('Updating in Telegram...');
           const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
             body: {
               messageId: media.id,
@@ -62,6 +68,7 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
               console.log('Caption unchanged in Telegram, proceeding with other updates');
             } else {
               console.warn('Telegram update error:', captionError);
+              setSyncStatus('Telegram update failed, updating database...');
               // Continue with local updates even if Telegram update fails
             }
           }
@@ -76,6 +83,7 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
           }
         };
 
+        setSyncStatus('Updating database...');
         // Update the database record
         const { error: updateError } = await supabase
           .from('messages')
@@ -85,25 +93,33 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
             updated_at: new Date().toISOString(),
             processing_state: 'pending',  // Mark for reprocessing
             analyzed_content: null,       // Clear for reanalysis
-            group_caption_synced: false   // Mark for resyncing
+            is_original_caption: media.media_group_id ? true : null, // Mark as original if in a group
+            group_caption_synced: false   // Always reset this flag for resyncing
           })
           .eq('id', media.id);
 
-        if (updateError) throw updateError;
+        if (updateError) {
+          setSyncStatus('Database update failed!');
+          throw updateError;
+        }
 
         // Trigger reanalysis
+        setSyncStatus('Analyzing content...');
         console.log('Triggering reanalysis for updated content');
+        const correlationId = crypto.randomUUID();
+        
         const { data: reanalysisData, error: reanalysisError } = await supabase.functions.invoke('parse-caption-with-ai', {
           body: {
             messageId: media.id,
             caption: caption,
             media_group_id: media.media_group_id,
-            correlationId: crypto.randomUUID()
+            correlationId: correlationId
           }
         });
 
         if (reanalysisError) {
           console.error('Reanalysis error:', reanalysisError);
+          setSyncStatus('Analysis failed, will retry automatically.');
           toast({
             description: "Caption updated but content reanalysis failed. It will be retried automatically.",
             variant: "destructive"
@@ -114,10 +130,15 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
           // Check if media group sync was successful
           if (media.media_group_id) {
             if (reanalysisData?.sync_result?.success) {
+              const syncCount = reanalysisData.sync_result.syncedCount || 0;
+              setSyncStatus(`Synced with ${syncCount} other messages in group`);
               console.log(`Media group sync completed for ${media.media_group_id}:`, reanalysisData.sync_result);
             } else {
-              console.warn('Media group sync may not have completed properly');
+              setSyncStatus('Media group sync may have failed');
+              console.warn('Media group sync may not have completed properly:', reanalysisData?.sync_result);
             }
+          } else {
+            setSyncStatus('Analysis completed');
           }
         }
 
@@ -126,17 +147,20 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
           variant: "success"
         });
 
-        onClose();
+        // Short delay to show the final status before closing
+        setTimeout(() => {
+          onClose();
+        }, 1500);
       } else {
         onClose();
       }
     } catch (error) {
       console.error('Error updating caption:', error);
+      setSyncStatus('Error: Update failed');
       toast({
         description: "Failed to update caption. Please try again.",
         variant: "destructive"
       });
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -178,6 +202,12 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
 
           {renderAnalyzedContent()}
           
+          {syncStatus && (
+            <div className="text-sm text-blue-600 dark:text-blue-400 animate-pulse">
+              {syncStatus}
+            </div>
+          )}
+          
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
@@ -213,6 +243,12 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
               )}
             </p>
           </div>
+          
+          {media.media_group_id && (
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              Media Group ID: {media.media_group_id}
+            </div>
+          )}
         </form>
       </DialogContent>
     </Dialog>

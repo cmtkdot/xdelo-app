@@ -61,10 +61,12 @@ async function processCaption(
 
     // If product name is longer than 23 characters, use AI analysis
     if (shouldUseAI(productName)) {
+      console.log(`Message ${messageId} has a long product name (${productName.length} chars), using AI analysis`);
       const aiResult = await analyzeWithAI(caption, analyzedContent);
       
       if (aiResult.success && aiResult.result) {
         // Merge AI analysis results
+        console.log(`AI analysis successful for message ${messageId}`);
         analyzedContent = {
           ...analyzedContent,
           ...aiResult.result,
@@ -75,6 +77,7 @@ async function processCaption(
         };
       } else {
         // Continue with manual parsing but record the AI error
+        console.warn(`AI analysis failed for message ${messageId}: ${aiResult.error}`);
         analyzedContent.parsing_metadata = {
           ...analyzedContent.parsing_metadata,
           method: 'hybrid',
@@ -83,27 +86,34 @@ async function processCaption(
       }
     }
 
-    // Add media group info to analyzed content if available
-    if (mediaGroupId || existingMessage?.media_group_id) {
+    // Ensure media group info is added to analyzed content
+    const resolvedMediaGroupId = mediaGroupId || existingMessage?.media_group_id;
+    if (resolvedMediaGroupId) {
+      console.log(`Adding media group info (${resolvedMediaGroupId}) to analyzed content for message ${messageId}`);
       analyzedContent.sync_metadata = {
-        media_group_id: mediaGroupId || existingMessage?.media_group_id,
+        media_group_id: resolvedMediaGroupId,
         sync_timestamp: new Date().toISOString()
       };
     }
 
     // Update the message with analyzed content
+    console.log(`Updating message ${messageId} with analyzed content`);
     await updateMessageWithAnalysis(messageId, analyzedContent, existingMessage, queueId);
 
     // Always try to sync analyzed content to media group
-    // We do this after message update to ensure the message has been processed
-    const groupId = mediaGroupId || existingMessage?.media_group_id;
     let syncResult = null;
     
-    if (groupId) {
-      console.log(`Syncing analyzed content to media group ${groupId} from message ${messageId}`);
+    if (resolvedMediaGroupId) {
+      console.log(`Syncing analyzed content to media group ${resolvedMediaGroupId} from message ${messageId}`);
       try {
-        syncResult = await syncMediaGroupContent(groupId, messageId);
-        console.log('Media group sync result:', syncResult);
+        syncResult = await syncMediaGroupContent(resolvedMediaGroupId, messageId);
+        
+        // Log detailed sync results
+        if (syncResult.success) {
+          console.log(`Media group sync successful: Synced ${syncResult.syncedCount} messages using method ${syncResult.method}`);
+        } else {
+          console.error(`Media group sync failed: ${syncResult.reason}`, syncResult);
+        }
         
         // Add sync result to analyzed content for tracking
         analyzedContent.sync_metadata = {
@@ -112,11 +122,16 @@ async function processCaption(
           sync_timestamp: new Date().toISOString()
         };
       } catch (syncError) {
-        console.error('Error syncing media group:', syncError);
-        // Continue processing even if sync fails
+        console.error(`Error syncing media group ${resolvedMediaGroupId}:`, syncError);
+        // Track the error in the analyzed content
+        analyzedContent.sync_metadata = {
+          ...analyzedContent.sync_metadata,
+          sync_error: syncError.message,
+          sync_timestamp: new Date().toISOString()
+        };
       }
     } else {
-      console.log(`No media group ID found for message ${messageId}`);
+      console.log(`No media group ID found for message ${messageId}, skipping group sync`);
     }
 
     // Log the analysis event
@@ -128,7 +143,7 @@ async function processCaption(
       {
         parsing_method: analyzedContent.parsing_metadata.method,
         product_name_length: productName.length,
-        media_group_id: groupId,
+        media_group_id: resolvedMediaGroupId,
         sync_result: syncResult
       }
     );

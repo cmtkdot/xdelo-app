@@ -95,11 +95,13 @@ export const syncMediaGroupContent = async (
   messageId: string
 ): Promise<MediaGroupResult> => {
   if (!mediaGroupId) {
-    return { success: false };
+    return { success: false, reason: 'no_media_group_id' };
   }
   
   try {
-    // Direct SQL update approach - more reliable than RPC
+    console.log(`Starting media group sync for group ${mediaGroupId} from message ${messageId}`);
+    
+    // Log the sync attempt
     await supabaseClient.from('unified_audit_logs').insert({
       event_type: 'media_group_sync_requested',
       entity_id: messageId,
@@ -110,19 +112,28 @@ export const syncMediaGroupContent = async (
       }
     });
 
-    // Use SQL directly to avoid function name conflicts
+    // Try to use the RPC function first
     const { data, error } = await supabaseClient.rpc('xdelo_sync_media_group_content', {
       p_media_group_id: mediaGroupId,
       p_source_message_id: messageId
     });
     
     if (error) {
-      console.error('Error syncing media group content:', error);
+      console.error('Error calling xdelo_sync_media_group_content RPC:', error);
+      console.log('Falling back to direct sync method');
+      
       // Fallback to direct updates if RPC fails
-      await syncMediaGroupDirectly(mediaGroupId, messageId);
-      return { success: true, syncedCount: 0, source_message_id: messageId, method: 'fallback' };
+      const syncResult = await syncMediaGroupDirectly(mediaGroupId, messageId);
+      return { 
+        success: true, 
+        syncedCount: syncResult.count, 
+        source_message_id: messageId,
+        method: 'fallback_direct',
+        details: syncResult
+      };
     }
     
+    console.log(`Successfully synced media group via RPC. Result:`, data);
     return { 
       success: true, 
       syncedCount: data, 
@@ -131,34 +142,48 @@ export const syncMediaGroupContent = async (
     };
   } catch (error) {
     console.error('Failed to sync media group content:', error);
+    
     // Try fallback method
-    await syncMediaGroupDirectly(mediaGroupId, messageId);
-    return { 
-      success: true, 
-      syncedCount: 0, 
-      source_message_id: messageId,
-      method: 'error_fallback' 
-    };
+    try {
+      const syncResult = await syncMediaGroupDirectly(mediaGroupId, messageId);
+      return { 
+        success: true, 
+        syncedCount: syncResult.count, 
+        source_message_id: messageId,
+        method: 'error_fallback_direct',
+        details: syncResult
+      };
+    } catch (fallbackError) {
+      console.error('Both sync methods failed:', fallbackError);
+      return {
+        success: false,
+        reason: 'all_methods_failed',
+        error: error.message,
+        fallbackError: fallbackError.message
+      };
+    }
   }
 };
 
 // Fallback method to sync media group directly if RPC fails
 async function syncMediaGroupDirectly(mediaGroupId: string, sourceMessageId: string) {
   try {
+    console.log(`Direct sync: Getting source message ${sourceMessageId}`);
+    
     // Get the analyzed content from the source message
-    const { data: sourceMessage } = await supabaseClient
+    const { data: sourceMessage, error: sourceError } = await supabaseClient
       .from('messages')
       .select('analyzed_content')
       .eq('id', sourceMessageId)
       .single();
     
-    if (!sourceMessage?.analyzed_content) {
-      console.error('Source message has no analyzed_content');
-      return;
+    if (sourceError || !sourceMessage?.analyzed_content) {
+      console.error('Source message has no analyzed_content:', sourceError);
+      return { success: false, count: 0, error: sourceError?.message || 'No analyzed content' };
     }
     
     // Mark this message as the original caption holder
-    await supabaseClient
+    const { error: updateError } = await supabaseClient
       .from('messages')
       .update({
         is_original_caption: true,
@@ -166,38 +191,80 @@ async function syncMediaGroupDirectly(mediaGroupId: string, sourceMessageId: str
         updated_at: new Date().toISOString()
       })
       .eq('id', sourceMessageId);
+      
+    if (updateError) {
+      console.error('Error updating source message:', updateError);
+    }
+    
+    console.log(`Direct sync: Getting other messages in group ${mediaGroupId}`);
     
     // Get all other messages in the group
-    const { data: groupMessages } = await supabaseClient
+    const { data: groupMessages, error: groupError } = await supabaseClient
       .from('messages')
       .select('id, analyzed_content')
       .eq('media_group_id', mediaGroupId)
       .neq('id', sourceMessageId);
     
+    if (groupError) {
+      console.error('Error fetching group messages:', groupError);
+      return { success: false, count: 0, error: groupError.message };
+    }
+    
     if (!groupMessages?.length) {
       console.log('No other messages in the group to sync');
-      return;
+      return { success: true, count: 0, message: 'No other messages to sync' };
     }
+    
+    console.log(`Direct sync: Updating ${groupMessages.length} other messages`);
     
     // Update all other messages in the group
+    const updateResults = [];
     for (const message of groupMessages) {
-      await supabaseClient
-        .from('messages')
-        .update({
-          analyzed_content: sourceMessage.analyzed_content,
-          message_caption_id: sourceMessageId,
-          is_original_caption: false,
-          group_caption_synced: true,
-          processing_state: 'completed',
-          processing_completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', message.id);
+      try {
+        const { error: msgUpdateError } = await supabaseClient
+          .from('messages')
+          .update({
+            analyzed_content: sourceMessage.analyzed_content,
+            message_caption_id: sourceMessageId,
+            is_original_caption: false,
+            group_caption_synced: true,
+            processing_state: 'completed',
+            processing_completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', message.id);
+          
+        updateResults.push({
+          id: message.id,
+          success: !msgUpdateError,
+          error: msgUpdateError?.message
+        });
+        
+        if (msgUpdateError) {
+          console.error(`Error updating message ${message.id}:`, msgUpdateError);
+        }
+      } catch (updateError) {
+        console.error(`Exception updating message ${message.id}:`, updateError);
+        updateResults.push({
+          id: message.id,
+          success: false,
+          error: updateError.message
+        });
+      }
     }
     
-    console.log(`Directly synced ${groupMessages.length} messages in media group ${mediaGroupId}`);
+    const successfulUpdates = updateResults.filter(r => r.success).length;
+    console.log(`Direct sync: Successfully updated ${successfulUpdates} of ${groupMessages.length} messages`);
+    
+    return { 
+      success: true, 
+      count: successfulUpdates,
+      total: groupMessages.length,
+      results: updateResults
+    };
   } catch (error) {
     console.error('Error in syncMediaGroupDirectly:', error);
+    return { success: false, count: 0, error: error.message };
   }
 }
 
