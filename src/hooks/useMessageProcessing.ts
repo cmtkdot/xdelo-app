@@ -1,11 +1,11 @@
 
 import { useState, useCallback } from 'react';
-import type { Message, ProcessingState } from '@/types';
+import { Message } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { logMessageOperation } from '@/lib/syncLogger';
 import { useToast } from '@/hooks/useToast';
 
-interface ProcessingState {
+interface MessageProcessingState {
   isProcessing: boolean;
   error?: string;
 }
@@ -16,7 +16,7 @@ interface ProcessingState {
  * with standardized logging and error handling
  */
 export function useMessageProcessing() {
-  const [processingState, setProcessingState] = useState<Record<string, ProcessingState>>({});
+  const [processingState, setProcessingState] = useState<Record<string, MessageProcessingState>>({});
   const { toast } = useToast();
 
   const updateProcessingState = useCallback((messageId: string, isProcessing: boolean, error?: string) => {
@@ -31,7 +31,7 @@ export function useMessageProcessing() {
    */
   const updateMessageState = useCallback(async (
     messageId: string, 
-    state: ProcessingState, 
+    state: string, 
     additionalFields: Partial<Message> = {}
   ) => {
     const { error } = await supabase
@@ -77,14 +77,12 @@ export function useMessageProcessing() {
 
       if (updateError) throw updateError;
 
-      // Trigger reanalysis
-      const { error: invokeError } = await supabase.functions.invoke('parse-caption-with-ai', {
-        body: { 
-          messageId: message.id,
-          media_group_id: message.media_group_id,
-          caption: message.caption,
-          correlationId
-        }
+      // Trigger reanalysis directly with database function to avoid cross-db reference error
+      const { data: invokeData, error: invokeError } = await supabase.rpc('xdelo_analyze_message_caption', {
+        p_message_id: message.id,
+        p_correlation_id: correlationId,
+        p_caption: message.caption,
+        p_media_group_id: message.media_group_id
       });
 
       if (invokeError) throw invokeError;
@@ -93,7 +91,8 @@ export function useMessageProcessing() {
       await logMessageOperation('analyze', message.id, {
         correlationId,
         operation: 'reanalyze_requested',
-        success: true
+        success: true,
+        result: invokeData
       });
 
       toast({
@@ -150,7 +149,7 @@ export function useMessageProcessing() {
         newCaption: caption
       });
 
-      // Update the caption
+      // Update the caption directly in the database
       const { error } = await updateMessageState(message.id, 'pending', {
         caption,
         // Preserve existing storage path and public URL to prevent deletion
