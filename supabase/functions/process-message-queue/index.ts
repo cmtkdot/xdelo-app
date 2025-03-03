@@ -34,7 +34,7 @@ serve(async (req) => {
     const { limit = 5 } = await req.json();
     console.log(`Starting to process up to ${limit} messages from queue`);
     
-    // Get messages from the queue using the new function
+    // Get messages from the queue using the explicitly typed function signature
     const { data: messagesToProcess, error: queueError } = await supabaseClient.rpc(
       'xdelo_get_next_message_for_processing',
       { limit_count: limit }
@@ -99,7 +99,7 @@ serve(async (req) => {
 
         const result = await response.json();
         
-        // Mark as complete using the correct function
+        // Mark as complete using the function with explicit parameter types
         await supabaseClient.rpc('xdelo_complete_message_processing', {
           p_queue_id: message.queue_id,
           p_analyzed_content: result.data
@@ -125,7 +125,7 @@ serve(async (req) => {
           error_message: error.message
         });
         
-        // Mark the queue item as failed using the correct function
+        // Mark the queue item as failed using the function with explicit parameter types
         try {
           await supabaseClient.rpc('xdelo_fail_message_processing', {
             p_queue_id: message.queue_id,
