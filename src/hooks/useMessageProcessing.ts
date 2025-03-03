@@ -23,11 +23,10 @@ export function useMessageProcessing() {
       
       // Use raw SQL call since Supabase's rpc doesn't accept function names from a variable
       const { data, error: queueError } = await supabase.rpc(
-        'tg_queue_message',
+        'xdelo_queue_message_for_processing',
         {
           p_message_id: message.id,
-          p_correlation_id: correlationId,
-          p_priority: 10 // Higher priority for manual requests
+          p_correlation_id: correlationId
         }
       );
 
