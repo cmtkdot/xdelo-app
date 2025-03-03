@@ -2380,6 +2380,7 @@ export type Database = {
           duration: number | null
           edit_date: string | null
           edit_history: Json | null
+          error: string | null
           error_message: string | null
           file_id: string | null
           file_size: number | null
@@ -2432,6 +2433,7 @@ export type Database = {
           duration?: number | null
           edit_date?: string | null
           edit_history?: Json | null
+          error?: string | null
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
@@ -2484,6 +2486,7 @@ export type Database = {
           duration?: number | null
           edit_date?: string | null
           edit_history?: Json | null
+          error?: string | null
           error_message?: string | null
           file_id?: string | null
           file_size?: number | null
@@ -2540,6 +2543,7 @@ export type Database = {
           duration: number | null
           edit_date: string | null
           edit_history: Json | null
+          error: string | null
           error_message: string | null
           file_id: string | null
           file_size: number | null
