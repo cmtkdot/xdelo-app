@@ -166,8 +166,31 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       console.error('Error logging message operation:', logError);
     }
 
+    // Handle media group message with no caption - try to sync content from group
+    if (!message.caption && message.media_group_id && insertedMessage) {
+      console.log(`Message ${insertedMessage.id} has no caption but is part of media group ${message.media_group_id}, checking for analyzed content in group`);
+      
+      try {
+        // Call database function to sync with media group
+        const { data: syncResult, error: syncError } = await supabaseClient.rpc(
+          'xdelo_check_media_group_content',
+          {
+            p_media_group_id: message.media_group_id,
+            p_message_id: insertedMessage.id
+          }
+        );
+        
+        if (syncError) {
+          console.error('Error checking media group content:', syncError);
+        } else if (syncResult) {
+          console.log(`Successfully synced content from media group ${message.media_group_id} to message ${insertedMessage.id}`);
+        }
+      } catch (syncError) {
+        console.error('Failed to sync with media group:', syncError);
+      }
+    }
     // If message has caption, trigger immediate analysis
-    if (message.caption && insertedMessage) {
+    else if (message.caption && insertedMessage) {
       console.log(`Message ${insertedMessage.id} has caption, triggering immediate analysis`);
       
       try {
@@ -175,7 +198,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
         await supabaseClient.functions.invoke('parse-caption-with-ai', {
           body: {
             messageId: insertedMessage.id,
-            caption: message.caption, // This is the key parameter that was missing
+            caption: message.caption,
             media_group_id: message.media_group_id,
             correlationId: context.correlationId
           }
@@ -200,7 +223,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
         context.correlationId,
         {
           message: 'Error handling media message',
-          error_message: error.message, // Use error_message instead of error
+          error_message: error.message,
           telegram_message_id: message.message_id,
           chat_id: message.chat.id,
           error_code: error.code,
@@ -212,7 +235,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     }
     
     return new Response(
-      JSON.stringify({ error: error.message }),  // This is fine as it's just for the response
+      JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

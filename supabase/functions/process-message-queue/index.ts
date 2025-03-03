@@ -9,6 +9,14 @@ const supabaseClient = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
+interface MessageQueueItem {
+  queue_id: string;
+  message_id: string;
+  correlation_id: string;
+  caption: string;
+  media_group_id?: string;
+}
+
 interface ProcessingDetail {
   message_id: string;
   queue_id: string;
@@ -34,9 +42,9 @@ serve(async (req) => {
     const { limit = 5 } = await req.json();
     console.log(`Starting to process up to ${limit} messages from queue`);
     
-    // Get messages from the queue using the explicitly typed function signature
+    // Get messages from the queue using a fixed function that doesn't use window functions with FOR UPDATE
     const { data: messagesToProcess, error: queueError } = await supabaseClient.rpc(
-      'xdelo_get_next_message_for_processing',
+      'xdelo_get_messages_for_processing',
       { limit_count: limit }
     );
     
@@ -74,8 +82,20 @@ serve(async (req) => {
         console.log(`Processing message ${message.message_id} (Queue ID: ${message.queue_id})`);
         
         if (!message.caption) {
-          console.error(`Message ${message.message_id} has no caption, skipping`);
-          throw new Error('Message has no caption to analyze');
+          console.error(`Message ${message.message_id} has no caption, marking as error`);
+          await supabaseClient.rpc('xdelo_fail_message_processing', {
+            p_queue_id: message.queue_id,
+            p_error_message: 'Message has no caption to analyze'
+          });
+          
+          results.failed++;
+          results.details.push({
+            message_id: message.message_id,
+            queue_id: message.queue_id,
+            status: 'error',
+            error_message: 'Message has no caption to analyze'
+          });
+          continue;
         }
         
         // Call the parse-caption-with-ai function
@@ -89,7 +109,7 @@ serve(async (req) => {
             },
             body: JSON.stringify({
               messageId: message.message_id,
-              caption: message.caption, // Ensure caption is included
+              caption: message.caption,
               media_group_id: message.media_group_id,
               correlationId: message.correlation_id,
               queue_id: message.queue_id

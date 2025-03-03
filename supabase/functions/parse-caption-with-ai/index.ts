@@ -17,7 +17,7 @@ const supabaseClient = createClient(
 interface RequestPayload {
   messageId: string;
   media_group_id?: string;
-  caption: string;
+  caption?: string;
   correlationId: string;
   queue_id?: string;
 }
@@ -26,15 +26,20 @@ const processCaption = async (
   messageId: string,
   caption: string,
   correlationId: string,
-  queueId?: string
+  queueId?: string,
+  mediaGroupId?: string
 ) => {
   try {
     console.log(`Processing caption for message ${messageId} with correlation ID ${correlationId}`);
     
+    if (!caption || caption.trim() === '') {
+      throw new Error('Cannot process empty caption');
+    }
+    
     // Get existing message first
     const { data: existingMessage, error: messageError } = await supabaseClient
       .from('messages')
-      .select('analyzed_content, old_analyzed_content')
+      .select('analyzed_content, old_analyzed_content, media_group_id')
       .eq('id', messageId)
       .single();
 
@@ -165,7 +170,7 @@ const processCaption = async (
     
     // If we have a queue ID, use the complete processing function
     if (queueId) {
-      await supabaseClient.rpc('xdelo_complete_processing', {
+      await supabaseClient.rpc('xdelo_complete_message_processing', {
         p_queue_id: queueId,
         p_analyzed_content: analyzedContent
       });
@@ -179,6 +184,21 @@ const processCaption = async (
       if (updateError) throw updateError;
     }
 
+    // Make sure to sync analyzed content to other messages in the group
+    const groupId = mediaGroupId || existingMessage?.media_group_id;
+    if (groupId) {
+      console.log(`Syncing analyzed content to media group ${groupId}`);
+      try {
+        await supabaseClient.rpc('xdelo_sync_media_group_content', {
+          p_media_group_id: groupId,
+          p_source_message_id: messageId
+        });
+      } catch (syncError) {
+        console.error('Error syncing media group content:', syncError);
+        // Continue despite sync error
+      }
+    }
+
     // Log the analysis event
     await supabaseClient.from('unified_audit_logs').insert({
       event_type: 'caption_analyzed',
@@ -188,7 +208,8 @@ const processCaption = async (
       metadata: {
         parsing_method: analyzedContent.parsing_metadata.method,
         product_name_length: productName.length,
-        correlation_id: correlationId
+        correlation_id: correlationId,
+        media_group_id: groupId
       }
     });
 
@@ -202,7 +223,7 @@ const processCaption = async (
     // If we have a queue ID, mark the processing as failed
     if (queueId) {
       try {
-        await supabaseClient.rpc('xdelo_fail_processing', {
+        await supabaseClient.rpc('xdelo_fail_message_processing', {
           p_queue_id: queueId,
           p_error_message: error.message
         });
@@ -225,12 +246,12 @@ serve(async (req) => {
     const payload = await req.json();
     console.log('Received payload:', JSON.stringify(payload, null, 2));
     
-    const { messageId, caption, correlationId, queue_id } = payload;
+    const { messageId, caption, correlationId, queue_id, media_group_id } = payload;
 
     // Validate required fields
     const missingFields = [];
     if (!messageId) missingFields.push('messageId');
-    if (!caption) missingFields.push('caption');
+    if (!caption || caption.trim() === '') missingFields.push('caption');
     
     if (missingFields.length > 0) {
       throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
@@ -242,7 +263,8 @@ serve(async (req) => {
       messageId,
       caption,
       correlationId || crypto.randomUUID(),
-      queue_id
+      queue_id,
+      media_group_id
     );
 
     return new Response(
