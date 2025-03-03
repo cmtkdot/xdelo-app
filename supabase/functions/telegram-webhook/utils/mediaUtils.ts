@@ -16,6 +16,9 @@ const supabase = createClient(
   }
 );
 
+/**
+ * Extract and process media from a Telegram message
+ */
 export const getMediaInfo = async (message: any) => {
   const photo = message.photo ? message.photo[message.photo.length - 1] : null
   const video = message.video
@@ -46,7 +49,10 @@ export const getMediaInfo = async (message: any) => {
       duration: video?.duration,
       storage_path: existingFile[0].storage_path,
       public_url: existingFile[0].public_url,
-      is_duplicate: true
+      is_duplicate: true,
+      // Set expiration for file_id (24 hours from now)
+      file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      original_file_id: media.file_id
     }
   }
 
@@ -96,7 +102,25 @@ export const getMediaInfo = async (message: any) => {
 
     if (uploadError) {
       console.error('Storage upload error:', uploadError);
-      throw new Error(`Failed to upload media to storage: ${uploadError.message}`);
+      
+      // Instead of throwing, we'll return a partial result
+      // and flag for redownload
+      return {
+        file_id: media.file_id,
+        file_unique_id: media.file_unique_id,
+        mime_type: mimeType,
+        file_size: media.file_size,
+        width: media.width,
+        height: media.height,
+        duration: video?.duration,
+        storage_path: fileName,
+        public_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${fileName}`,
+        needs_redownload: true,
+        redownload_strategy: 'telegram_api',
+        file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        original_file_id: media.file_id,
+        error: uploadError.message
+      };
     }
 
     // Generate public URL with correct format
@@ -112,12 +136,15 @@ export const getMediaInfo = async (message: any) => {
       duration: video?.duration,
       storage_path: fileName,
       public_url: publicUrl,
-      is_duplicate: false
+      is_duplicate: false,
+      // Set expiration for file_id (24 hours from now)
+      file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      original_file_id: media.file_id
     }
   } catch (error) {
     console.error('Error downloading media from Telegram:', error);
     
-    // If download fails, construct a URL based on file_unique_id but don't try to check existence
+    // Generate basic info without attempting file checks
     const mimeType = video ? (video.mime_type || 'video/mp4') : 
                   document ? (document.mime_type || 'application/octet-stream') : 
                   'image/jpeg';
@@ -125,7 +152,7 @@ export const getMediaInfo = async (message: any) => {
     const fileName = `${media.file_unique_id}.${extension}`;
     const publicUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${fileName}`;
     
-    // Mark for redownload but don't attempt to check existence
+    // Return basic information with redownload flag
     return {
       file_id: media.file_id,
       file_unique_id: media.file_unique_id,
@@ -137,23 +164,58 @@ export const getMediaInfo = async (message: any) => {
       storage_path: fileName,
       public_url: publicUrl,
       needs_redownload: true,
+      redownload_strategy: 'telegram_api',
+      file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      original_file_id: media.file_id,
       error: error.message
     };
   }
 }
 
-// Simplified redownload function that doesn't check file existence
+/**
+ * Simplified redownload function
+ */
 export const redownloadMissingFile = async (message: any) => {
   try {
     console.log('Attempting to redownload file for message:', message.id);
     
-    if (!message.file_id) {
-      throw new Error('Missing file_id for redownload');
+    // First try to use original file_id if available and not expired
+    let fileId = message.original_file_id || message.file_id;
+    
+    // Check if file_id is likely expired
+    const fileIdExpired = message.file_id_expires_at && 
+                          new Date(message.file_id_expires_at) < new Date();
+    
+    if (fileIdExpired || !fileId) {
+      // If original file_id is expired, try to get a new file_id from another message in the same group
+      if (message.media_group_id) {
+        const { data: groupFiles } = await supabase
+          .from('messages')
+          .select('file_id, file_id_expires_at')
+          .eq('media_group_id', message.media_group_id)
+          .eq('file_unique_id', message.file_unique_id)
+          .neq('id', message.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        if (groupFiles && groupFiles.length > 0 && 
+            groupFiles[0].file_id && 
+            (!groupFiles[0].file_id_expires_at || new Date(groupFiles[0].file_id_expires_at) > new Date())) {
+          fileId = groupFiles[0].file_id;
+          console.log(`Using file_id from another message in the same group: ${fileId}`);
+        } else {
+          console.warn('Could not find valid file_id in media group, using original (may fail)');
+        }
+      }
     }
     
-    // Get file info from Telegram without checking existence first
+    if (!fileId) {
+      throw new Error('No valid file_id available for redownload');
+    }
+    
+    // Get file info from Telegram
     const fileInfoResponse = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${message.file_id}`
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
     );
     
     if (!fileInfoResponse.ok) {
@@ -202,6 +264,8 @@ export const redownloadMissingFile = async (message: any) => {
         needs_redownload: false,
         redownload_completed_at: new Date().toISOString(),
         storage_path: storagePath,
+        file_id: fileInfo.result.file_id,
+        file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         error_message: null
       })
       .eq('id', message.id);

@@ -1,7 +1,7 @@
 
 import { supabaseClient } from "../../_shared/supabase.ts";
-import { validateStoragePath } from "./storageValidator.ts";
-import { MessageQueueItem, ProcessingResults, MessageData } from "../types.ts";
+import { validateStoragePath, constructPublicUrl } from "./storageValidator.ts";
+import { MessageQueueItem, ProcessingResults, MessageData, StorageValidationResult } from "../types.ts";
 
 /**
  * Process the next batch of messages in the queue
@@ -32,7 +32,7 @@ export async function processMessageQueue(limit: number = 1): Promise<Processing
       
       // Update results
       results.processed++;
-      if (processingResult.success) {
+      if (processingResult.status === 'success') {
         results.success++;
       } else {
         results.failed++;
@@ -84,15 +84,25 @@ async function processMessage(queueItem: MessageQueueItem): Promise<{
     // Get full message details
     const messageData = await getMessageData(message_id);
     
-    // Fix storage path if needed
-    await validateAndFixStoragePath(messageData);
+    // Validate storage path and update if needed
+    const storageValidation = await validateAndUpdateStoragePath(messageData);
     
-    // Call the analyze function
+    // If the file needs redownload, flag it but continue with processing
+    if (storageValidation.needsRedownload) {
+      await flagForRedownload(messageData, storageValidation);
+    }
+    
+    // Call the analyze function with updated storage information
     const analyzeResult = await analyzeMessage({
       messageId: message_id,
       caption: caption,
       media_group_id: media_group_id,
-      correlationId: correlation_id
+      correlationId: correlation_id,
+      fileInfo: {
+        file_unique_id: messageData.file_unique_id,
+        public_url: storageValidation.publicUrl,
+        storage_path: storageValidation.storagePath
+      }
     });
     
     // Complete the message processing
@@ -136,31 +146,77 @@ async function getMessageData(messageId: string): Promise<MessageData> {
 }
 
 /**
- * Validate and fix storage path if needed
+ * Validate and update storage path if needed
  */
-async function validateAndFixStoragePath(messageData: MessageData): Promise<void> {
+async function validateAndUpdateStoragePath(messageData: MessageData): Promise<StorageValidationResult> {
   const { id, file_unique_id, storage_path, mime_type } = messageData;
   
-  const storageValidation = validateStoragePath(file_unique_id, storage_path, mime_type);
+  // Validate the storage path
+  const { storagePath, needsUpdate } = validateStoragePath(file_unique_id, storage_path, mime_type);
   
-  // If storage path is invalid, fix it
-  if (!storageValidation.isValid && storageValidation.newPath) {
-    console.log(`Fixing invalid storage path for message ${id}: ${storageValidation.newPath}`);
+  // Generate the public URL
+  const publicUrl = constructPublicUrl(storagePath);
+  
+  // Determine if the file needs redownload - we'll simplify by just checking if storage path needs update
+  // In a more comprehensive implementation, we would try to check if file actually exists
+  const needsRedownload = needsUpdate;
+  
+  // If storage path needs update, update it (but don't flag for redownload yet)
+  if (needsUpdate) {
+    console.log(`Updating storage path for message ${id}: ${storagePath}`);
     
     // Update the message with the correct path
     const { error: updateError } = await supabaseClient
       .from('messages')
       .update({
-        storage_path: storageValidation.newPath,
-        needs_redownload: true,
-        redownload_reason: 'Invalid storage path',
-        redownload_flagged_at: new Date().toISOString()
+        storage_path: storagePath,
+        public_url: publicUrl,
+        updated_at: new Date().toISOString()
       })
       .eq('id', id);
       
     if (updateError) {
       console.error(`Error updating storage path: ${updateError.message}`);
     }
+  }
+  
+  return {
+    isValid: !needsRedownload,
+    storagePath,
+    publicUrl,
+    needsRedownload
+  };
+}
+
+/**
+ * Flag a message for redownload
+ */
+async function flagForRedownload(messageData: MessageData, storageInfo: StorageValidationResult): Promise<void> {
+  const { id, media_group_id } = messageData;
+  
+  // Determine the best redownload strategy
+  let redownloadStrategy = 'telegram_api';
+  
+  // If in a media group, prefer recovering from group
+  if (media_group_id) {
+    redownloadStrategy = 'media_group';
+  }
+  
+  // Update the message with redownload flag
+  const { error: updateError } = await supabaseClient
+    .from('messages')
+    .update({
+      needs_redownload: true,
+      redownload_reason: 'Invalid or missing storage path',
+      redownload_flagged_at: new Date().toISOString(),
+      redownload_strategy,
+      storage_path: storageInfo.storagePath,
+      public_url: storageInfo.publicUrl
+    })
+    .eq('id', id);
+    
+  if (updateError) {
+    console.error(`Error flagging for redownload: ${updateError.message}`);
   }
 }
 
@@ -172,6 +228,11 @@ async function analyzeMessage(params: {
   caption: string;
   media_group_id?: string;
   correlationId: string;
+  fileInfo?: {
+    file_unique_id: string;
+    public_url: string;
+    storage_path: string;
+  };
 }): Promise<any> {
   const analyzeResponse = await fetch(
     `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,

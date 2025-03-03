@@ -1499,6 +1499,7 @@ export type Database = {
           height: number | null
           id: string
           is_channel_post: string | null
+          is_duplicate: boolean | null
           is_edited: boolean | null
           is_edited_channel_post: boolean | null
           is_forward: boolean | null
@@ -1580,6 +1581,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_channel_post?: string | null
+          is_duplicate?: boolean | null
           is_edited?: boolean | null
           is_edited_channel_post?: boolean | null
           is_forward?: boolean | null
@@ -1661,6 +1663,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_channel_post?: string | null
+          is_duplicate?: boolean | null
           is_edited?: boolean | null
           is_edited_channel_post?: boolean | null
           is_forward?: boolean | null
