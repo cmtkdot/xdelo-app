@@ -1,54 +1,85 @@
 
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
 
-interface AnalysisRequest {
+// Create a Supabase client
+const supabaseClient = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+);
+
+interface RequestPayload {
   messageId: string;
-  caption: string;
+  caption?: string;
   media_group_id?: string;
   correlationId?: string;
-  file_info?: Record<string, any>;
+  retrieveFromDb?: boolean;
 }
 
 serve(async (req) => {
-  // Handle CORS
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    // Parse request body and validate required fields
-    const body = await req.json() as AnalysisRequest;
-    const { messageId, caption, media_group_id, correlationId, file_info } = body;
-
-    console.log('Received analysis request:', {
-      messageId,
-      caption: caption?.substring(0, 50) + '...',
-      media_group_id,
-      correlationId,
-      has_file_info: !!file_info
-    });
-
-    if (!messageId || !caption) {
-      throw new Error(`Missing required fields: ${!messageId ? 'messageId' : ''} ${!caption ? 'caption' : ''}`);
+    const { messageId, caption, media_group_id, correlationId = crypto.randomUUID().toString(), retrieveFromDb = false } = await req.json() as RequestPayload;
+    
+    if (!messageId) {
+      throw new Error('Message ID is required');
     }
 
-    // Manual parsing first
-    const productNameMatch = caption.match(/^(.*?)(?=[#\nx]|$)/);
+    console.log(`Processing message: ${messageId}, correlation ID: ${correlationId}`);
+    
+    // Get the message data if we need to retrieve it from the database
+    let captionToAnalyze = caption;
+    let messageGroupId = media_group_id;
+
+    if (retrieveFromDb) {
+      const { data: message, error: messageError } = await supabaseClient
+        .from('messages')
+        .select('caption, media_group_id')
+        .eq('id', messageId)
+        .single();
+      
+      if (messageError) {
+        throw new Error(`Error retrieving message: ${messageError.message}`);
+      }
+      
+      captionToAnalyze = message.caption;
+      messageGroupId = message.media_group_id;
+      
+      if (!captionToAnalyze) {
+        throw new Error('Message has no caption to analyze');
+      }
+    }
+
+    // Get existing message data
+    const { data: existingMessage, error: fetchError } = await supabaseClient
+      .from('messages')
+      .select('analyzed_content, old_analyzed_content')
+      .eq('id', messageId)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching existing message:', fetchError);
+      throw fetchError;
+    }
+
+    // Extract product name (text before #, line break, or x)
+    const productNameMatch = captionToAnalyze.match(/^(.*?)(?=[#\nx]|$)/);
     const productName = productNameMatch ? productNameMatch[0].trim() : '';
-    const productCodeMatch = caption.match(/#([A-Za-z0-9-]+)/);
+
+    // Extract product code (text following #)
+    const productCodeMatch = captionToAnalyze.match(/#([A-Za-z0-9-]+)/);
     const productCode = productCodeMatch ? productCodeMatch[1] : '';
+
+    // Extract vendor UID (first 1-4 letters of product code)
     const vendorUidMatch = productCode.match(/^[A-Za-z]{1,4}/);
     const vendorUid = vendorUidMatch ? vendorUidMatch[0].toUpperCase() : '';
-    
-    // Extract purchase date from the product code
+
+    // Extract purchase date
     let purchaseDate = null;
     if (productCode) {
       // Remove vendor UID to get date portion
@@ -73,20 +104,14 @@ serve(async (req) => {
         }
       }
     }
-    
-    const quantityMatch = caption.match(/x(\d+)/i);
-    const quantity = quantityMatch ? parseInt(quantityMatch[1]) : null;
-    const notesMatch = caption.match(/\((.*?)\)/);
-    const notes = notesMatch ? notesMatch[1].trim() : '';
 
-    console.log('Initial manual parsing results:', {
-      productName,
-      productCode,
-      vendorUid,
-      purchaseDate,
-      quantity,
-      notes
-    });
+    // Extract quantity (number after x)
+    const quantityMatch = captionToAnalyze.match(/x(\d+)/i);
+    const quantity = quantityMatch ? parseInt(quantityMatch[1]) : null;
+
+    // Extract notes (text in parentheses)
+    const notesMatch = captionToAnalyze.match(/\((.*?)\)/);
+    const notes = notesMatch ? notesMatch[1].trim() : '';
 
     let analyzedContent = {
       product_name: productName,
@@ -95,11 +120,10 @@ serve(async (req) => {
       purchase_date: purchaseDate,
       quantity,
       notes,
-      caption,
+      caption: captionToAnalyze,
       parsing_metadata: {
         method: 'manual',
-        timestamp: new Date().toISOString(),
-        correlation_id: correlationId
+        timestamp: new Date().toISOString()
       }
     };
 
@@ -120,13 +144,13 @@ serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'gpt-4o-mini',
+            model: 'gpt-3.5-turbo',
             messages: [{
               role: "system",
               content: "You are a product information extractor. Extract product details from the given caption."
             }, {
               role: "user",
-              content: `Extract product name, product code, vendor ID, purchase date, and quantity from this caption: ${caption}`
+              content: `Extract product name, product code, vendor ID, purchase date, and quantity from this caption: ${captionToAnalyze}`
             }],
             temperature: 0.3,
           }),
@@ -149,18 +173,6 @@ serve(async (req) => {
       }
     }
 
-    // Get existing message first
-    const { data: existingMessage, error: fetchError } = await supabaseClient
-      .from('messages')
-      .select('analyzed_content, processing_state')
-      .eq('id', messageId)
-      .single();
-
-    if (fetchError) {
-      console.error('Error fetching existing message:', fetchError);
-      throw fetchError;
-    }
-
     // Update message with new analyzed content
     const { error: updateError } = await supabaseClient
       .from('messages')
@@ -169,7 +181,7 @@ serve(async (req) => {
         processing_state: 'completed',
         processing_completed_at: new Date().toISOString(),
         old_analyzed_content: existingMessage?.analyzed_content 
-          ? [existingMessage.analyzed_content]
+          ? [...(existingMessage.old_analyzed_content || []), existingMessage.analyzed_content]
           : []
       })
       .eq('id', messageId);
@@ -180,23 +192,23 @@ serve(async (req) => {
     }
 
     // If this is part of a media group, sync the analyzed content
-    if (media_group_id) {
+    if (messageGroupId) {
       console.log('Syncing analyzed content to media group:', {
-        media_group_id,
+        media_group_id: messageGroupId,
         message_id: messageId
       });
       
       const { error: syncError } = await supabaseClient
         .rpc('xdelo_sync_media_group_content', {
-          p_media_group_id: media_group_id,
           p_source_message_id: messageId,
+          p_media_group_id: messageGroupId,
           p_correlation_id: correlationId
         });
 
       if (syncError) {
         console.error('Error syncing media group:', {
           error: syncError,
-          media_group_id,
+          media_group_id: messageGroupId,
           message_id: messageId
         });
         throw syncError;
@@ -206,18 +218,17 @@ serve(async (req) => {
     }
 
     // Log the analysis completion
-    await supabaseClient.rpc('xdelo_log_event', {
-      p_event_type: 'caption_analyzed',
-      p_entity_id: messageId,
-      p_telegram_message_id: null,
-      p_chat_id: null,
-      p_previous_state: existingMessage?.analyzed_content,
-      p_new_state: analyzedContent,
-      p_metadata: {
+    await supabaseClient.from('unified_audit_logs').insert({
+      event_type: 'caption_analyzed',
+      entity_id: messageId,
+      previous_state: existingMessage?.analyzed_content,
+      new_state: analyzedContent,
+      metadata: {
         parsing_method: analyzedContent.parsing_metadata.method,
         product_name_length: productName.length,
         correlation_id: correlationId
-      }
+      },
+      event_timestamp: new Date().toISOString()
     });
 
     console.log('Analysis completed successfully');

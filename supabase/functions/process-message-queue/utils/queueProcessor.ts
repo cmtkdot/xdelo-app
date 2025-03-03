@@ -1,12 +1,11 @@
 
 import { supabaseClient } from "../../_shared/supabase.ts";
-import { validateStoragePath, constructPublicUrl } from "./storageValidator.ts";
 import { MessageQueueItem, ProcessingResults } from "../types.ts";
 
 /**
  * Process the next batch of messages in the queue
  */
-export async function processMessageQueue(limit: number = 1): Promise<ProcessingResults> {
+export async function processMessageQueue(limit: number = 5): Promise<ProcessingResults> {
   try {
     console.log(`Processing message queue with limit ${limit}`);
     
@@ -40,58 +39,24 @@ export async function processMessageQueue(limit: number = 1): Promise<Processing
       try {
         console.log(`Processing message ${item.message_id}, queue ID: ${item.queue_id}`);
         
-        // Validate storage path
-        const storagePath = validateStoragePath(
-          item.file_unique_id, 
-          item.storage_path || '',
-          item.mime_type || 'image/jpeg'
-        ).storagePath;
-        
-        // Generate public URL
-        const publicUrl = constructPublicUrl(storagePath);
-        
-        // Call the analyze function with the message details
-        const analyzeResponse = await fetch(
-          `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-            },
-            body: JSON.stringify({
-              messageId: item.message_id,
-              caption: item.caption,
-              media_group_id: item.media_group_id,
-              correlationId: item.correlation_id,
-              fileInfo: {
-                file_unique_id: item.file_unique_id,
-                public_url: publicUrl,
-                storage_path: storagePath
-              }
-            })
+        // Call the parse-caption-with-ai function
+        const analyzeResponse = await supabaseClient.functions.invoke('parse-caption-with-ai', {
+          body: {
+            messageId: item.message_id,
+            caption: item.caption,
+            media_group_id: item.media_group_id,
+            correlationId: item.correlation_id
           }
-        );
+        });
         
-        if (!analyzeResponse.ok) {
-          let errorMessage = `HTTP error: ${analyzeResponse.status}`;
-          try {
-            const errorData = await analyzeResponse.json();
-            errorMessage = errorData.error || errorMessage;
-          } catch (e) {
-            // Use the HTTP status text if we can't parse the response
-            errorMessage = `${analyzeResponse.status} ${analyzeResponse.statusText}`;
-          }
-          
-          throw new Error(`Failed to analyze message: ${errorMessage}`);
+        if (analyzeResponse.error) {
+          throw new Error(`Failed to analyze message: ${analyzeResponse.error}`);
         }
-        
-        const analyzeResult = await analyzeResponse.json();
         
         // Mark the message as completed in the queue
         await supabaseClient.rpc('xdelo_complete_message_processing', {
           p_queue_id: item.queue_id,
-          p_analyzed_content: analyzeResult.data
+          p_analyzed_content: analyzeResponse.data.data
         });
         
         console.log(`Successfully processed message ${item.message_id}`);
@@ -101,7 +66,7 @@ export async function processMessageQueue(limit: number = 1): Promise<Processing
           message_id: item.message_id,
           queue_id: item.queue_id,
           status: 'success',
-          result: analyzeResult.data
+          result: analyzeResponse.data.data
         });
         
       } catch (error) {

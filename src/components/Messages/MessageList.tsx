@@ -1,137 +1,193 @@
 
 import React from 'react';
-import { Spinner } from '@/components/ui/spinner';
-import { Button } from '@/components/ui/button';
 import { Message } from '@/types';
-import { RefreshCw, RotateCw } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import MediaGrid from '../MediaGrid';
+import { Spinner } from '@/components/ui/spinner';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ArrowRight, CheckCircle, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import { MediaGrid } from "@/components/MediaGrid";
+import { toast } from 'sonner';
 
-export interface MessageListProps {
+interface MessageListProps {
   messages: Message[];
-  onRefresh: () => Promise<void>;
-  onReanalyze: (messageId: string) => Promise<void>;
+  isLoading: boolean;
+  onRetryProcessing: (messageId: string) => Promise<void>;
+  onProcessAll: () => Promise<void>;
+  processAllLoading?: boolean;
 }
 
-export const MessageList: React.FC<MessageListProps> = ({ messages, onRefresh, onReanalyze }) => {
-  const [refreshing, setRefreshing] = React.useState(false);
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await onRefresh();
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  if (!messages || messages.length === 0) {
+export const MessageList: React.FC<MessageListProps> = ({
+  messages,
+  isLoading,
+  onRetryProcessing,
+  onProcessAll,
+  processAllLoading = false
+}) => {
+  if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 space-y-4">
-        <p className="text-gray-500">No messages found</p>
-        <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
-          {refreshing ? <Spinner size="sm" className="mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-          Refresh
-        </Button>
+      <div className="flex justify-center items-center h-48">
+        <Spinner size="lg" />
+        <span className="ml-3">Loading messages...</span>
       </div>
     );
   }
 
+  if (messages.length === 0) {
+    return (
+      <div className="text-center p-8">
+        <h3 className="text-xl font-semibold mb-2">No messages found</h3>
+        <p className="text-gray-500">There are no messages to display.</p>
+      </div>
+    );
+  }
+
+  // Count messages by processing state
+  const pendingCount = messages.filter(msg => msg.processing_state === 'pending').length;
+  const processingCount = messages.filter(msg => msg.processing_state === 'processing').length;
+  const errorCount = messages.filter(msg => msg.processing_state === 'error').length;
+  const completedCount = messages.filter(msg => msg.processing_state === 'completed').length;
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Messages ({messages.length})</h2>
-        <Button variant="outline" onClick={handleRefresh} disabled={refreshing} size="sm">
-          {refreshing ? <Spinner size="sm" className="mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-          Refresh
-        </Button>
+      <div className="bg-white p-4 rounded-lg shadow mb-4">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Message Processing Status</h2>
+          <Button 
+            onClick={onProcessAll} 
+            disabled={processAllLoading || (!pendingCount && !errorCount)}
+            className="flex items-center"
+          >
+            {processAllLoading ? <Spinner size="sm" className="mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+            Process All
+          </Button>
+        </div>
+        <div className="grid grid-cols-4 gap-4">
+          <StatusCard title="Pending" count={pendingCount} icon={<Clock className="text-yellow-500" />} />
+          <StatusCard title="Processing" count={processingCount} icon={<ArrowRight className="text-blue-500" />} />
+          <StatusCard title="Completed" count={completedCount} icon={<CheckCircle className="text-green-500" />} />
+          <StatusCard title="Error" count={errorCount} icon={<AlertCircle className="text-red-500" />} />
+        </div>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {messages.map((message) => (
-          <div 
-            key={message.id} 
-            className={cn(
-              "p-4 border rounded-lg shadow-sm",
-              message.processing_state === 'error' && "border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800",
-              message.processing_state === 'pending' && "border-yellow-300 bg-yellow-50 dark:bg-yellow-950 dark:border-yellow-800",
-              message.processing_state === 'processing' && "border-blue-300 bg-blue-50 dark:bg-blue-950 dark:border-blue-800",
-              message.processing_state === 'completed' && "border-green-300 bg-green-50 dark:bg-green-950 dark:border-green-800"
-            )}
-          >
-            <div className="flex justify-between items-start mb-2">
-              <div className="flex items-center">
-                <span className="text-sm font-medium">
-                  {message.processing_state === 'error' && "Error"}
-                  {message.processing_state === 'pending' && "Pending"}
-                  {message.processing_state === 'processing' && "Processing"}
-                  {message.processing_state === 'completed' && "Completed"}
-                  {!message.processing_state && "Unprocessed"}
-                </span>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => onReanalyze(message.id)}
-                  className="ml-2"
-                >
-                  <RotateCw className="w-4 h-4 mr-1" />
-                  Reanalyze
-                </Button>
+          <Card key={message.id} className="overflow-hidden">
+            <CardContent className="p-0">
+              <div className="p-4">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-500">
+                      Message ID: {message.telegram_message_id} • 
+                      Chat: {message.chat_title || message.chat_id}
+                    </p>
+                    {message.caption && (
+                      <p className="font-medium">Caption: {message.caption}</p>
+                    )}
+                    {message.analyzed_content?.product_name && (
+                      <p className="text-sm">
+                        <span className="font-semibold">Product:</span> {message.analyzed_content.product_name}
+                      </p>
+                    )}
+                    {message.analyzed_content?.vendor_uid && (
+                      <p className="text-sm">
+                        <span className="font-semibold">Vendor:</span> {message.analyzed_content.vendor_uid}
+                      </p>
+                    )}
+                    {message.analyzed_content?.purchase_date && (
+                      <p className="text-sm">
+                        <span className="font-semibold">Date:</span> {message.analyzed_content.purchase_date}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center">
+                    <ProcessingStatus status={message.processing_state} />
+                    {(message.processing_state === 'error' || message.processing_state === 'pending') && (
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="ml-2"
+                        onClick={() => {
+                          toast.promise(onRetryProcessing(message.id), {
+                            loading: 'Processing message...',
+                            success: 'Message processed successfully',
+                            error: 'Failed to process message'
+                          });
+                        }}
+                      >
+                        <RefreshCw className="w-4 h-4 mr-1" />
+                        Analyze
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{message.caption}</p>
-            
-            {message.error_message && (
-              <div className="mb-4 p-2 bg-red-100 dark:bg-red-900 rounded text-sm">
-                <p className="font-semibold">Error:</p>
-                <p>{message.error_message}</p>
-              </div>
-            )}
-            
-            {message.analyzed_content && (
-              <div className="space-y-1 mb-4 text-sm">
-                <h3 className="font-semibold">Analyzed Content:</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <span className="font-medium">Product:</span> {message.analyzed_content.product_name}
-                  </div>
-                  <div>
-                    <span className="font-medium">Code:</span> {message.analyzed_content.product_code}
-                  </div>
-                  <div>
-                    <span className="font-medium">Vendor:</span> {message.analyzed_content.vendor_uid}
-                  </div>
-                  <div>
-                    <span className="font-medium">Date:</span> {message.analyzed_content.purchase_date}
-                  </div>
-                  {message.analyzed_content.quantity && (
-                    <div>
-                      <span className="font-medium">Quantity:</span> {message.analyzed_content.quantity}
-                    </div>
-                  )}
-                  {message.analyzed_content.notes && (
-                    <div className="col-span-2">
-                      <span className="font-medium">Notes:</span> {message.analyzed_content.notes}
+              {message.public_url && (
+                <div className="h-48 bg-gray-100">
+                  {message.mime_type?.startsWith('image/') ? (
+                    <img 
+                      src={message.public_url} 
+                      alt="Message media" 
+                      className="h-full w-full object-contain"
+                    />
+                  ) : message.mime_type?.startsWith('video/') ? (
+                    <video 
+                      src={message.public_url} 
+                      controls 
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <p className="text-gray-500">Media not supported</p>
                     </div>
                   )}
                 </div>
-              </div>
-            )}
-            
-            {message.public_url && (
-              <div className="mt-4">
-                <MediaGrid media={[{
-                  id: message.id,
-                  public_url: message.public_url,
-                  mime_type: message.mime_type,
-                  created_at: message.created_at || '',
-                  analyzed_content: message.analyzed_content
-                }]} />
-              </div>
-            )}
-          </div>
+              )}
+              {message.error_message && (
+                <div className="p-3 bg-red-50 text-red-800 text-sm">
+                  <p><span className="font-semibold">Error:</span> {message.error_message}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         ))}
       </div>
     </div>
   );
+};
+
+interface StatusCardProps {
+  title: string;
+  count: number;
+  icon: React.ReactNode;
+}
+
+const StatusCard: React.FC<StatusCardProps> = ({ title, count, icon }) => (
+  <div className="bg-gray-50 p-4 rounded-lg">
+    <div className="flex justify-between items-center">
+      <div>
+        <p className="text-sm text-gray-500">{title}</p>
+        <p className="text-2xl font-bold">{count}</p>
+      </div>
+      <div className="text-2xl">{icon}</div>
+    </div>
+  </div>
+);
+
+interface ProcessingStatusProps {
+  status?: string;
+}
+
+const ProcessingStatus: React.FC<ProcessingStatusProps> = ({ status }) => {
+  switch (status) {
+    case 'completed':
+      return <span className="flex items-center text-green-600"><CheckCircle className="w-4 h-4 mr-1" /> Completed</span>;
+    case 'processing':
+      return <span className="flex items-center text-blue-600"><Spinner size="sm" className="mr-1" /> Processing</span>;
+    case 'error':
+      return <span className="flex items-center text-red-600"><AlertCircle className="w-4 h-4 mr-1" /> Error</span>;
+    case 'pending':
+      return <span className="flex items-center text-yellow-600"><Clock className="w-4 h-4 mr-1" /> Pending</span>;
+    default:
+      return <span className="text-gray-600">Unknown</span>;
+  }
 };
