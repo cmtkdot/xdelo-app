@@ -7,19 +7,25 @@ const supabaseClient = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-// Get message by ID
+// Get message by ID with improved error handling
 export const getMessage = async (messageId: string) => {
-  const { data, error } = await supabaseClient
-    .from('messages')
-    .select('analyzed_content, old_analyzed_content, media_group_id, processing_state, is_original_caption')
-    .eq('id', messageId)
-    .single();
+  try {
+    console.log(`Getting message details for ID: ${messageId}`);
+    const { data, error } = await supabaseClient
+      .from('messages')
+      .select('analyzed_content, old_analyzed_content, media_group_id, processing_state, is_original_caption, caption')
+      .eq('id', messageId)
+      .single();
 
-  if (error) {
-    throw new Error(`Failed to retrieve message: ${error.message}`);
+    if (error) {
+      throw new Error(`Failed to retrieve message: ${error.message}`);
+    }
+    
+    return data;
+  } catch (error) {
+    console.error(`Error in getMessage: ${error.message}`);
+    throw error; // Re-throw to be handled by caller
   }
-  
-  return data;
 };
 
 // Update message with analyzed content with improved handling for edits
@@ -30,25 +36,62 @@ export const updateMessageWithAnalysis = async (
   queueId?: string,
   isEdit?: boolean
 ) => {
-  // If we have a queue ID, use the complete processing function
-  if (queueId) {
-    const { error } = await supabaseClient.rpc('xdelo_complete_message_processing', {
-      p_queue_id: queueId,
-      p_analyzed_content: analyzedContent,
-      p_is_edit: isEdit || false
-    });
+  try {
+    console.log(`Updating message ${messageId} with analyzed content, isEdit: ${isEdit}`);
     
-    if (error) {
-      throw new Error(`Failed to complete message processing: ${error.message}`);
-    }
+    // If we have a queue ID, use the complete processing function
+    if (queueId) {
+      console.log(`Using queue completion function for queue ID: ${queueId}`);
+      try {
+        const { error } = await supabaseClient.rpc('xdelo_complete_message_processing', {
+          p_queue_id: queueId,
+          p_analyzed_content: analyzedContent,
+          p_is_edit: isEdit || false
+        });
+        
+        if (error) {
+          throw new Error(`Queue completion failed: ${error.message}`);
+        }
+      } catch (queueError) {
+        console.error(`Queue completion error: ${queueError.message}`);
+        // Fall back to direct update if queue completion fails
+        console.log(`Falling back to direct update for message ${messageId}`);
+        return await directUpdateMessage(messageId, analyzedContent, existingMessage, isEdit);
+      }
+      
+      return { success: true };
+    } 
     
-    return { success: true };
-  } 
-  
+    // Otherwise, update the message directly
+    return await directUpdateMessage(messageId, analyzedContent, existingMessage, isEdit);
+  } catch (error) {
+    console.error(`Error in updateMessageWithAnalysis: ${error.message}`);
+    throw error; // Re-throw to be handled by caller
+  }
+};
+
+// Helper function for direct message updates
+async function directUpdateMessage(
+  messageId: string,
+  analyzedContent: ParsedContent,
+  existingMessage: any,
+  isEdit?: boolean
+) {
   // Prepare old_analyzed_content array
-  const oldAnalyzedContent = existingMessage?.analyzed_content 
-    ? [...(existingMessage.old_analyzed_content || []), existingMessage.analyzed_content]
-    : existingMessage?.old_analyzed_content || [];
+  let oldAnalyzedContent = [];
+  
+  if (existingMessage?.old_analyzed_content) {
+    oldAnalyzedContent = [...existingMessage.old_analyzed_content];
+  }
+  
+  if (existingMessage?.analyzed_content) {
+    // Add edit timestamp to the previous content
+    const previousContent = {
+      ...existingMessage.analyzed_content,
+      edit_timestamp: new Date().toISOString()
+    };
+    oldAnalyzedContent.push(previousContent);
+  }
   
   // Set is_original_caption based on current state and whether this is an edit
   let isOriginalCaption = true;
@@ -57,13 +100,16 @@ export const updateMessageWithAnalysis = async (
     isOriginalCaption = existingMessage?.is_original_caption !== false;
   }
   
-  // Otherwise, update the message directly
+  // Update data with explicit log
+  console.log(`Directly updating message ${messageId}, setting is_original_caption: ${isOriginalCaption}`);
+  
   const updateData = {
     old_analyzed_content: oldAnalyzedContent,
     analyzed_content: analyzedContent,
     processing_state: 'completed',
     processing_completed_at: new Date().toISOString(),
-    is_original_caption: isOriginalCaption
+    is_original_caption: isOriginalCaption,
+    group_caption_synced: false // Reset to false to trigger re-sync
   };
 
   const { error } = await supabaseClient
@@ -72,11 +118,11 @@ export const updateMessageWithAnalysis = async (
     .eq('id', messageId);
 
   if (error) {
-    throw new Error(`Failed to update message: ${error.message}`);
+    throw new Error(`Direct message update failed: ${error.message}`);
   }
   
   return { success: true };
-};
+}
 
 // Mark queue processing as failed
 export const markQueueItemAsFailed = async (queueId: string, errorMessage: string) => {
@@ -121,7 +167,7 @@ export const syncMediaGroupContent = async (
       .single();
     
     if (!sourceMessage?.analyzed_content || !sourceMessage?.caption) {
-      console.log(`Message ${messageId} is no longer eligible as a source message (no analyzed_content or caption)`);
+      console.log(`Message ${messageId} is not eligible as a source message (no analyzed_content or caption)`);
       return { success: false, reason: 'source_not_eligible' };
     }
     
@@ -137,7 +183,7 @@ export const syncMediaGroupContent = async (
       correlation_id: correlationId || null
     });
 
-    // Call the direct sync method since RPC has issues with correlation_id type
+    // Call the direct sync method
     const syncResult = await syncMediaGroupDirectly(mediaGroupId, messageId, correlationId);
     
     return { 
@@ -224,16 +270,40 @@ async function syncMediaGroupDirectly(
       return { success: true, count: 0, message: 'No other messages to sync' };
     }
     
-    console.log(`Direct sync: Updating ${groupMessages.length} other messages`);
+    console.log(`Direct sync: Updating ${groupMessages.length} other messages in group ${mediaGroupId}`);
     
-    // Update all other messages in the group
+    // Update all other messages in the group - use a transaction
+    // Since we can't use a transaction with the Supabase JS client, update messages one by one with error handling
     const updateResults = [];
+    let successCount = 0;
+    
     for (const message of groupMessages) {
       try {
+        // First, prepare old_analyzed_content
+        const { data: currentMessage } = await supabaseClient
+          .from('messages')
+          .select('old_analyzed_content, analyzed_content')
+          .eq('id', message.id)
+          .single();
+          
+        let oldAnalyzedContent = [];
+        if (currentMessage?.old_analyzed_content) {
+          oldAnalyzedContent = [...currentMessage.old_analyzed_content];
+        }
+        
+        if (currentMessage?.analyzed_content) {
+          oldAnalyzedContent.push({
+            ...currentMessage.analyzed_content,
+            sync_timestamp: new Date().toISOString()
+          });
+        }
+          
+        // Now update with new analyzed content
         const { error: msgUpdateError } = await supabaseClient
           .from('messages')
           .update({
             analyzed_content: sourceMessage.analyzed_content,
+            old_analyzed_content: oldAnalyzedContent,
             message_caption_id: sourceMessageId,
             is_original_caption: false,
             group_caption_synced: true,
@@ -242,6 +312,10 @@ async function syncMediaGroupDirectly(
             updated_at: new Date().toISOString()
           })
           .eq('id', message.id);
+          
+        if (!msgUpdateError) {
+          successCount++;
+        }
           
         updateResults.push({
           id: message.id,
@@ -262,14 +336,15 @@ async function syncMediaGroupDirectly(
       }
     }
     
-    // Log the sync operation - avoid using enum directly
+    // Log the sync operation
     try {
       await supabaseClient.from('unified_audit_logs').insert({
         event_type: 'media_group_content_synced',
         entity_id: sourceMessageId,
         metadata: {
           media_group_id: mediaGroupId,
-          updated_count: updateResults.filter(r => r.success).length,
+          updated_count: successCount,
+          total_count: groupMessages.length,
           operation: 'direct_sync',
           correlation_id: correlationId
         },
@@ -280,12 +355,11 @@ async function syncMediaGroupDirectly(
       console.error('Error logging media group sync:', logError);
     }
     
-    const successfulUpdates = updateResults.filter(r => r.success).length;
-    console.log(`Direct sync: Successfully updated ${successfulUpdates} of ${groupMessages.length} messages`);
+    console.log(`Direct sync: Successfully updated ${successCount} of ${groupMessages.length} messages in group ${mediaGroupId}`);
     
     return { 
       success: true, 
-      count: successfulUpdates,
+      count: successCount,
       total: groupMessages.length,
       results: updateResults
     };

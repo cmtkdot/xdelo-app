@@ -26,8 +26,15 @@ serve(async (req) => {
   }
 
   try {
-    const { messageId, caption, media_group_id, correlationId, queue_id, isEdit } = await req.json();
-    console.log(`Processing caption for message ${messageId}, correlation_id: ${correlationId}, isEdit: ${isEdit}`);
+    const payload = await req.json();
+    const { messageId, caption, media_group_id, correlationId, queue_id, isEdit } = payload;
+    
+    // Log request details but sanitize caption length for logs
+    const captionForLog = caption ? 
+      (caption.length > 50 ? `${caption.substring(0, 50)}...` : caption) : 
+      '(none)';
+    
+    console.log(`Processing caption for message ${messageId}, correlation_id: ${correlationId}, isEdit: ${isEdit}, caption: ${captionForLog}`);
 
     if (!messageId || !caption) {
       throw new Error("Required parameters missing: messageId and caption are required");
@@ -36,21 +43,21 @@ serve(async (req) => {
     // First, get the current message state
     console.log(`Fetching current state for message ${messageId}`);
     const existingMessage = await getMessage(messageId);
-    console.log(`Current message state:`, existingMessage);
+    console.log(`Current message state: ${JSON.stringify(existingMessage)}`);
 
     // Perform manual parsing
-    console.log(`Performing manual parsing on caption: ${caption.substring(0, 50)}...`);
+    console.log(`Performing manual parsing on caption: ${captionForLog}`);
     let parsedContent: ParsedContent = parseCaption(caption);
-    console.log(`Manual parsing result:`, parsedContent);
+    console.log(`Manual parsing result: ${JSON.stringify(parsedContent)}`);
 
     // Check if the product name is long (complex) and needs AI analysis
     const needsAIAnalysis = parsedContent.product_name && parsedContent.product_name.length > 23;
     
     if (needsAIAnalysis) {
-      console.log(`Product name is complex, performing AI analysis`);
+      console.log(`Product name is complex (${parsedContent.product_name.length} chars), performing AI analysis`);
       try {
         const aiResult = await analyzeWithAI(caption, parsedContent);
-        console.log(`AI analysis complete:`, aiResult);
+        console.log(`AI analysis complete: ${JSON.stringify(aiResult.success)}`);
         
         if (aiResult.success && aiResult.result) {
           // Merge AI results with manual parsing results, AI takes precedence
@@ -98,11 +105,13 @@ serve(async (req) => {
     
     // Add edit flag to metadata if this is from an edit
     if (isEdit) {
+      console.log(`Message ${messageId} is being processed as an edit`);
       parsedContent.parsing_metadata.is_edit = true;
       parsedContent.parsing_metadata.edit_timestamp = new Date().toISOString();
     }
 
     // Log the analysis in the audit trail
+    console.log(`Logging analysis event for message ${messageId}`);
     await logAnalysisEvent(
       messageId,
       correlationId || 'manual-analysis',
@@ -110,7 +119,7 @@ serve(async (req) => {
       { analyzed_content: parsedContent },
       {
         source: 'parse-caption-with-ai',
-        caption: caption,
+        caption: captionForLog,
         media_group_id: media_group_id,
         method: needsAIAnalysis ? 'ai' : 'manual',
         is_edit: isEdit
@@ -118,14 +127,16 @@ serve(async (req) => {
     );
 
     // Update the message with the analyzed content
-    console.log(`Updating message ${messageId} with analyzed content`);
-    await updateMessageWithAnalysis(messageId, parsedContent, existingMessage, queue_id, isEdit);
+    console.log(`Updating message ${messageId} with analyzed content, isEdit: ${isEdit}`);
+    const updateResult = await updateMessageWithAnalysis(messageId, parsedContent, existingMessage, queue_id, isEdit);
+    console.log(`Update result: ${JSON.stringify(updateResult)}`);
 
     // Always attempt to sync content to media group
+    let syncResult = null;
     if (media_group_id) {
       console.log(`Starting media group content sync for group ${media_group_id}, message ${messageId}`);
-      const syncResult = await syncMediaGroupContent(media_group_id, messageId, correlationId || 'manual-sync');
-      console.log(`Media group sync result:`, syncResult);
+      syncResult = await syncMediaGroupContent(media_group_id, messageId, correlationId || 'manual-sync');
+      console.log(`Media group sync result: ${JSON.stringify(syncResult)}`);
     } else {
       console.log(`No media_group_id provided, skipping group sync`);
     }
@@ -134,7 +145,8 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         message: `Caption analyzed successfully for message ${messageId}`,
-        data: parsedContent
+        data: parsedContent,
+        sync_result: syncResult
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
