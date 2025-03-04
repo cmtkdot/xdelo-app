@@ -101,45 +101,56 @@ BEGIN
 END;
 $$;
 
--- Schedule the function to run every 15 minutes
-select cron.schedule(
-  'process-pending-messages',
-  '*/15 * * * *',
-  $$
-  BEGIN
-    PERFORM xdelo_run_scheduled_message_processing();
-  END;
-  $$
-);
+-- Add job to run every 15 minutes (checking first if it already exists)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'process-pending-messages') THEN
+        PERFORM cron.schedule(
+            'process-pending-messages',
+            '*/15 * * * *',
+            $$
+            BEGIN
+                PERFORM xdelo_run_scheduled_message_processing();
+            END;
+            $$
+        );
+    END IF;
+END
+$$;
 
 -- Create a job to perform daily maintenance and cleanup
-select cron.schedule(
-  'xdelo-daily-maintenance',
-  '0 3 * * *', -- Run at 3 AM daily
-  $$
-  BEGIN
-    -- Cleanup old queue entries
-    DELETE FROM message_processing_queue 
-    WHERE processing_completed_at < NOW() - INTERVAL '7 days'
-      OR (status = 'error' AND last_error_at < NOW() - INTERVAL '7 days');
-    
-    -- Vacuum tables to reclaim space
-    VACUUM ANALYZE messages;
-    VACUUM ANALYZE unified_audit_logs;
-    
-    -- Log maintenance completion
-    INSERT INTO unified_audit_logs (
-      event_type,
-      metadata,
-      event_timestamp
-    ) VALUES (
-      'system_maintenance_completed',
-      jsonb_build_object(
-        'maintenance_type', 'scheduled_daily',
-        'tables_vacuumed', jsonb_build_array('messages', 'unified_audit_logs')
-      ),
-      NOW()
-    );
-  END;
-  $$
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'xdelo-daily-maintenance') THEN
+        PERFORM cron.schedule(
+            'xdelo-daily-maintenance',
+            '0 3 * * *', -- Run at 3 AM daily
+            $$
+            BEGIN
+                -- Cleanup old audit logs 
+                DELETE FROM unified_audit_logs 
+                WHERE event_timestamp < NOW() - INTERVAL '30 days';
+                
+                -- Vacuum tables to reclaim space
+                VACUUM ANALYZE messages;
+                VACUUM ANALYZE unified_audit_logs;
+                
+                -- Log maintenance completion
+                INSERT INTO unified_audit_logs (
+                  event_type,
+                  metadata,
+                  event_timestamp
+                ) VALUES (
+                  'system_maintenance_completed',
+                  jsonb_build_object(
+                    'maintenance_type', 'scheduled_daily',
+                    'tables_vacuumed', jsonb_build_array('messages', 'unified_audit_logs')
+                  ),
+                  NOW()
+                );
+            END;
+            $$
+        );
+    END IF;
+END
+$$;

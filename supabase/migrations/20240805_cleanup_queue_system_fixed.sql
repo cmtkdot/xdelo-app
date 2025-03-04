@@ -21,10 +21,29 @@ DROP FUNCTION IF EXISTS public.process_glide_sync_queue();
 DROP FUNCTION IF EXISTS public.schedule_sync_check();
 DROP FUNCTION IF EXISTS public.xdelo_diagnose_queue_issues();
 
--- 4. Clean up scheduler by using safer method that works with restricted privileges
--- Instead of directly deleting from cron.job table, use the cron.unschedule function
-SELECT cron.unschedule('process-message-queue');
-SELECT cron.unschedule('xdelo-daily-maintenance');
+-- 4. Safely unschedule cron jobs with exception handling
+DO $$
+BEGIN
+    -- Try to unschedule jobs, ignoring errors if they don't exist
+    BEGIN
+        PERFORM cron.unschedule('process-message-queue');
+    EXCEPTION WHEN OTHERS THEN
+        -- Job doesn't exist, that's fine
+    END;
+    
+    BEGIN
+        PERFORM cron.unschedule('xdelo-daily-maintenance');
+    EXCEPTION WHEN OTHERS THEN
+        -- Job doesn't exist, that's fine
+    END;
+    
+    BEGIN
+        PERFORM cron.unschedule('process-pending-messages');
+    EXCEPTION WHEN OTHERS THEN
+        -- Job doesn't exist, that's fine
+    END;
+END
+$$;
 
 -- 5. Clean up any remaining old logging entries
 DELETE FROM unified_audit_logs 
@@ -252,46 +271,63 @@ END;
 $$;
 
 -- 8. Create a new cron job to process pending messages regularly
-SELECT cron.schedule(
-  'process-pending-messages',
-  '*/5 * * * *',  -- Every 5 minutes
-  $$
-  SELECT * FROM xdelo_process_pending_messages(20);
-  $$
-);
+-- First check if the job already exists
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'process-pending-messages') THEN
+        PERFORM cron.schedule(
+            'process-pending-messages',
+            '*/5 * * * *',  -- Every 5 minutes
+            $$
+            DO $$
+            BEGIN
+                PERFORM xdelo_process_pending_messages(20);
+            END;
+            $$;
+            $$
+        );
+    END IF;
+END
+$$;
 
 -- 9. Create a maintenance job for daily cleanup
-SELECT cron.schedule(
-  'xdelo-daily-maintenance',
-  '0 3 * * *',  -- Run at 3 AM daily
-  $$
-  BEGIN
-    -- Cleanup old audit logs 
-    DELETE FROM unified_audit_logs 
-    WHERE event_timestamp < NOW() - INTERVAL '30 days';
-    
-    -- Reset any messages stuck in processing state for over 24 hours
-    UPDATE messages
-    SET processing_state = 'pending',
-        error_message = 'Reset by maintenance job after 24h',
-        retry_count = COALESCE(retry_count, 0) + 1
-    WHERE processing_state = 'processing'
-      AND processing_started_at < NOW() - INTERVAL '24 hours';
-    
-    -- Log maintenance completion
-    INSERT INTO unified_audit_logs (
-      event_type,
-      metadata,
-      event_timestamp
-    ) VALUES (
-      'system_maintenance_completed',
-      jsonb_build_object(
-        'maintenance_type', 'scheduled_daily'
-      ),
-      NOW()
-    );
-  END;
-  $$
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'xdelo-daily-maintenance') THEN
+        PERFORM cron.schedule(
+            'xdelo-daily-maintenance',
+            '0 3 * * *',  -- Run at 3 AM daily
+            $$
+            BEGIN
+                -- Cleanup old audit logs 
+                DELETE FROM unified_audit_logs 
+                WHERE event_timestamp < NOW() - INTERVAL '30 days';
+                
+                -- Reset any messages stuck in processing state for over 24 hours
+                UPDATE messages
+                SET processing_state = 'pending',
+                    error_message = 'Reset by maintenance job after 24h',
+                    retry_count = COALESCE(retry_count, 0) + 1
+                WHERE processing_state = 'processing'
+                  AND processing_started_at < NOW() - INTERVAL '24 hours';
+                
+                -- Log maintenance completion
+                INSERT INTO unified_audit_logs (
+                  event_type,
+                  metadata,
+                  event_timestamp
+                ) VALUES (
+                  'system_maintenance_completed',
+                  jsonb_build_object(
+                    'maintenance_type', 'scheduled_daily'
+                  ),
+                  NOW()
+                );
+            END;
+            $$
+        );
+    END IF;
+END
+$$;
 
 COMMIT;
