@@ -27,6 +27,10 @@ export interface ParsedContent {
     edit_timestamp?: string;
     original_manual_parse?: ParsedContent;
     ai_response?: string;
+    quantity_pattern?: string;
+    used_fallback?: boolean;
+    original_caption?: string;
+    error?: string;
   };
   sync_metadata?: {
     media_group_id?: string;

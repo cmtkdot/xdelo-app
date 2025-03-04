@@ -1,3 +1,4 @@
+
 import { Message } from "@/types";
 
 // Common formatters
@@ -43,13 +44,14 @@ export function parseQuantity(caption: string): { value: number; pattern: string
 
   // Look for patterns like "x2", "x 2", "qty: 2", "quantity: 2"
   const patterns = [
-    { regex: /x\s*(\d+)/i, name: 'x-prefix' },                    // x2 or x 2
     { regex: /qty:\s*(\d+)/i, name: 'qty-prefix' },               // qty: 2
     { regex: /quantity:\s*(\d+)/i, name: 'quantity-prefix' },     // quantity: 2
     { regex: /(\d+)\s*(?:pcs|pieces)/i, name: 'pcs-suffix' },     // 2 pcs or 2 pieces
     { regex: /(\d+)\s*(?:units?)/i, name: 'units-suffix' },       // 2 unit or 2 units
     { regex: /^.*?#.*?(?:\s+|$)(\d+)(?:\s|$)/i, name: 'after-code' }, // number after product code
-    { regex: /(\d+)\s*(?=\s|$)/, name: 'standalone' }             // standalone number
+    { regex: /(\d+)\s*(?=\s|$)/, name: 'standalone' },            // standalone number
+    { regex: /x\s*(\d+)/i, name: 'x-prefix' },                    // x2 or x 2 (moved to end)
+    { regex: /(\d+)x/i, name: 'x-suffix' }                        // 18x (new pattern)
   ];
 
   for (const { regex, name } of patterns) {
