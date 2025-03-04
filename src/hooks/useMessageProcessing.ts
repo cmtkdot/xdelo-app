@@ -18,8 +18,8 @@ export function useMessageProcessing() {
       
       console.log('Requesting reanalysis for message:', message.id);
       
-      // Generate a correlation ID
-      const correlationId = crypto.randomUUID();
+      // Generate a correlation ID as string
+      const correlationId = crypto.randomUUID().toString();
       
       // Use raw SQL call since Supabase's rpc doesn't accept function names from a variable
       const { data, error: queueError } = await supabase.rpc(

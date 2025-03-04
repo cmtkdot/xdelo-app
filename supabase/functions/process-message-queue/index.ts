@@ -42,31 +42,35 @@ serve(async (req) => {
     const { limit = 5 } = await req.json();
     console.log(`Starting to process up to ${limit} messages from queue`);
     
-    // Get messages from the queue using the new function name
-    const { data: messagesToProcess, error: queueError } = await supabaseClient.rpc(
-      'tg_get_next_messages',
-      { limit_count: limit }
-    );
-    
-    if (queueError) {
-      console.error('Failed to get messages from queue:', queueError);
-      
-      // Try fallback with old function name if the new one fails
-      const { data: fallbackMessages, error: fallbackError } = await supabaseClient.rpc(
-        'xdelo_get_messages_for_processing',
+    // Get messages from the queue using the function name
+    let messagesToProcess;
+    try {
+      const { data, error } = await supabaseClient.rpc(
+        'tg_get_next_messages',
         { limit_count: limit }
       );
       
-      if (fallbackError) {
+      if (error) throw error;
+      
+      messagesToProcess = data;
+      console.log(`Successfully retrieved ${messagesToProcess?.length || 0} messages from queue`);
+    } catch (firstError) {
+      console.error('Failed to get messages from primary queue function:', firstError);
+      
+      // Try fallback with alternate function name
+      try {
+        const { data, error } = await supabaseClient.rpc(
+          'xdelo_get_messages_for_processing',
+          { limit_count: limit }
+        );
+        
+        if (error) throw error;
+        
+        messagesToProcess = data;
+        console.log(`Successfully retrieved ${messagesToProcess?.length || 0} messages using fallback method`);
+      } catch (fallbackError) {
         throw new Error(`Failed to get messages from queue (both methods): ${fallbackError.message}`);
       }
-      
-      console.log(`Successfully retrieved ${fallbackMessages?.length || 0} messages using fallback method`);
-      if (fallbackMessages && fallbackMessages.length > 0) {
-        messagesToProcess = fallbackMessages;
-      }
-    } else {
-      console.log(`Successfully retrieved ${messagesToProcess?.length || 0} messages using new method`);
     }
 
     if (!messagesToProcess || messagesToProcess.length === 0) {
@@ -85,7 +89,7 @@ serve(async (req) => {
     }
 
     // Process each message
-    const results: ProcessingResults = {
+    const results = {
       processed: messagesToProcess.length,
       success: 0,
       failed: 0,
@@ -99,16 +103,16 @@ serve(async (req) => {
         if (!message.caption) {
           console.error(`Message ${message.message_id} has no caption, marking as error`);
           
-          // Try the new function first
+          // Try the appropriate function to mark as failed
           try {
             await supabaseClient.rpc('tg_fail_processing', {
               p_queue_id: message.queue_id,
               p_error_message: 'Message has no caption to analyze'
             });
           } catch (newFuncError) {
-            console.error('Error with new fail function, trying fallback:', newFuncError);
+            console.error('Error with primary fail function, trying fallback:', newFuncError);
             
-            // Fallback to old function
+            // Fallback to alternate function
             await supabaseClient.rpc('xdelo_fail_message_processing', {
               p_queue_id: message.queue_id,
               p_error_message: 'Message has no caption to analyze'
@@ -138,7 +142,7 @@ serve(async (req) => {
               messageId: message.message_id,
               caption: message.caption,
               media_group_id: message.media_group_id,
-              correlationId: message.correlation_id,
+              correlationId: message.correlation_id.toString(), // Ensure it's a string
               queue_id: message.queue_id
             })
           }
@@ -151,17 +155,17 @@ serve(async (req) => {
 
         const result = await response.json();
         
-        // Mark as complete using the proper function
+        // Mark as complete using the appropriate function
         try {
-          // Try new function first
+          // Try primary function first
           await supabaseClient.rpc('tg_complete_processing', {
             p_queue_id: message.queue_id,
             p_analyzed_content: result.data
           });
-        } catch (newFuncError) {
-          console.error('Error with new complete function, trying fallback:', newFuncError);
+        } catch (primaryFuncError) {
+          console.error('Error with primary complete function, trying fallback:', primaryFuncError);
           
-          // Fallback to old function
+          // Fallback to alternate function
           await supabaseClient.rpc('xdelo_complete_message_processing', {
             p_queue_id: message.queue_id,
             p_analyzed_content: result.data
@@ -188,24 +192,24 @@ serve(async (req) => {
           error_message: error.message
         });
         
-        // Mark the queue item as failed using the proper function
+        // Mark the queue item as failed using the appropriate function
         try {
-          // Try new function first
+          // Try primary function first
           await supabaseClient.rpc('tg_fail_processing', {
             p_queue_id: message.queue_id,
             p_error_message: `Processing error: ${error.message}`
           });
-        } catch (newFuncError) {
-          console.error('Error with new fail function, trying fallback:', newFuncError);
+        } catch (primaryFuncError) {
+          console.error('Error with primary fail function, trying fallback:', primaryFuncError);
           
-          // Fallback to old function
+          // Fallback to alternate function
           try {
             await supabaseClient.rpc('xdelo_fail_message_processing', {
               p_queue_id: message.queue_id,
               p_error_message: `Processing error: ${error.message}`
             });
-          } catch (oldFuncError) {
-            console.error('Both fail functions failed:', oldFuncError);
+          } catch (fallbackError) {
+            console.error('Both fail functions failed:', fallbackError);
           }
         }
       }
