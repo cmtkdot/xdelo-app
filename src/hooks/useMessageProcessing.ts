@@ -54,10 +54,10 @@ export function useMessageProcessing() {
       
       console.log('Analysis result:', analysisData);
       
-      // If this is part of a media group, sync the content to other messages
+      // If this is part of a media group, force sync the content to other messages immediately
       if (message.media_group_id) {
         try {
-          console.log(`Syncing content to media group ${message.media_group_id}`);
+          console.log(`Forcing direct sync for media group ${message.media_group_id}`);
           
           const { data: syncData, error: syncError } = await supabase.functions.invoke(
             'xdelo_sync_media_group',
@@ -66,7 +66,8 @@ export function useMessageProcessing() {
                 mediaGroupId: message.media_group_id,
                 sourceMessageId: message.id,
                 correlationId,
-                forceSync: true
+                forceSync: true,
+                syncEditHistory: true
               }
             }
           );
@@ -193,7 +194,38 @@ export function useMessageProcessing() {
 
   // Repair any issues with the queue system and message relationships
   const repairMessageProcessingSystem = async () => {
-    return processMessageQueue(20, true);
+    try {
+      // First repair media group relationships
+      const { data: repairResult, error: repairError } = await supabase.functions.invoke(
+        'direct-media-group-repair',
+        {
+          body: { 
+            correlation_id: crypto.randomUUID(),
+            repair_type: 'full'
+          }
+        }
+      );
+      
+      if (repairError) throw repairError;
+      
+      toast({
+        title: "Media Group Repair Complete",
+        description: `Fixed ${repairResult?.fixed_count || 0} media group relationships.`
+      });
+      
+      // Then run the standard repair process
+      return processMessageQueue(20, true);
+    } catch (error: any) {
+      console.error('Error repairing system:', error);
+      
+      toast({
+        title: "Repair Failed",
+        description: error.message || "Failed to repair message processing system",
+        variant: "destructive"
+      });
+      
+      throw error;
+    }
   };
 
   return {

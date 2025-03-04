@@ -25,7 +25,7 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
     // Get the message details to check if it has a caption
     const { data: message, error: messageError } = await supabase
       .from('messages')
-      .select('id, caption, media_group_id, processing_state')
+      .select('id, caption, media_group_id, processing_state, is_original_caption, group_caption_synced')
       .eq('id', messageId)
       .single();
     
@@ -34,11 +34,11 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
     }
     
     // Skip processing if no caption or already processed
-    if (!message.caption || message.processing_state === 'completed') {
+    if (!message.caption) {
       return new Response(
         JSON.stringify({
           success: true,
-          message: `Message ${messageId} skipped: ${!message.caption ? 'No caption' : 'Already processed'}`,
+          message: `Message ${messageId} skipped: No caption`,
           correlation_id: correlationId
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -67,6 +67,33 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
     
     console.log(`Successfully processed caption for message ${messageId}`);
     
+    // For media groups, force sync to ensure all messages get updated
+    if (message.media_group_id) {
+      try {
+        console.log(`Forcing media group sync for group ${message.media_group_id}`);
+        
+        const { data: syncResult, error: syncError } = await supabase.functions.invoke(
+          'xdelo_sync_media_group',
+          {
+            body: {
+              mediaGroupId: message.media_group_id,
+              sourceMessageId: messageId,
+              correlationId,
+              forceSync: true
+            }
+          }
+        );
+        
+        if (syncError) {
+          console.warn(`Media group sync warning (non-fatal): ${syncError.message}`);
+        } else {
+          console.log(`Media group sync successful: ${JSON.stringify(syncResult)}`);
+        }
+      } catch (syncError) {
+        console.warn(`Media group sync error (non-fatal): ${syncError.message}`);
+      }
+    }
+    
     // Log the direct processing
     await supabase.from('unified_audit_logs').insert({
       event_type: 'direct_caption_processor_success',
@@ -74,7 +101,9 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
       correlation_id: correlationId,
       metadata: {
         trigger_source,
-        result: analysisResult?.data || 'No data returned'
+        result: analysisResult?.data || 'No data returned',
+        media_group_id: message.media_group_id,
+        forced_sync: true
       },
       event_timestamp: new Date().toISOString()
     });
