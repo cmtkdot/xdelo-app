@@ -33,33 +33,58 @@ export function useMessageProcessing() {
       // Log analysis start
       console.log(`Starting analysis for message ${message.id} with correlation ID ${correlationId}`);
       
-      // Call the parse-caption-with-ai function directly
-      const { data: analysisData, error: analysisError } = await supabase.functions.invoke(
-        'parse-caption-with-ai',
+      // First, try the create-analyze-message-caption function for direct triggering
+      const { data: prepResult, error: prepError } = await supabase.functions.invoke(
+        'create-analyze-message-caption',
         {
           body: { 
             messageId: message.id, 
             caption: message.caption,
-            media_group_id: message.media_group_id,
-            correlationId, // Use the same name
-            isEdit: false // Explicitly set isEdit to false for manual analysis
+            mediaGroupId: message.media_group_id,
+            correlationId
           }
         }
       );
       
-      if (analysisError) {
-        console.error('Analysis error:', analysisError);
-        throw new Error(analysisError.message || 'Analysis failed');
+      if (prepError) {
+        console.warn('Direct trigger failed, falling back to parse-caption-with-ai:', prepError);
+        
+        // Fall back to calling parse-caption-with-ai directly
+        const { data: analysisData, error: analysisError } = await supabase.functions.invoke(
+          'parse-caption-with-ai',
+          {
+            body: { 
+              messageId: message.id, 
+              caption: message.caption,
+              media_group_id: message.media_group_id,
+              correlationId, 
+              isEdit: false
+            }
+          }
+        );
+        
+        if (analysisError) {
+          throw new Error(analysisError.message || 'Analysis failed');
+        }
+        
+        console.log('Analysis result from fallback:', analysisData);
+        toast({
+          title: "Analysis Complete",
+          description: "The message has been analyzed successfully using fallback method."
+        });
+        
+        return analysisData;
       }
       
-      console.log('Analysis result:', analysisData);
+      console.log('Analysis preparation result:', prepResult);
       
+      // Success message
       toast({
         title: "Analysis Complete",
         description: "The message has been analyzed successfully."
       });
       
-      return analysisData;
+      return prepResult?.data;
       
     } catch (error: any) {
       console.error('Error analyzing message:', error);
@@ -101,7 +126,7 @@ export function useMessageProcessing() {
       
       toast({
         title: "Message Processing Complete",
-        description: `Processed ${data?.processed || 0} pending messages.`
+        description: `Processed ${data?.result?.processed_count || 0} pending messages.`
       });
       
       return data;

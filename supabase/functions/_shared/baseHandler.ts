@@ -1,16 +1,12 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { corsHeaders } from "./cors.ts";
+import { corsHeaders } from './cors.ts';
 
-// Create a Supabase client
-export const supabaseClient = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-);
-
-// Base handler wrapper for consistent error handling and CORS
-export function createHandler(handler: (req: Request, supabase: any) => Promise<Response>) {
+/**
+ * Creates a standardized handler function for edge functions
+ */
+export function createHandler(
+  handlerFn: (req: Request) => Promise<Response>
+) {
   return async (req: Request) => {
     // Handle CORS preflight requests
     if (req.method === 'OPTIONS') {
@@ -18,33 +14,52 @@ export function createHandler(handler: (req: Request, supabase: any) => Promise<
     }
 
     try {
-      // Call the actual handler function
-      return await handler(req, supabaseClient);
-    } catch (error) {
-      console.error('Error handling request:', error);
+      const correlationId = crypto.randomUUID();
+      const startTime = Date.now();
       
-      // Return consistent error response
+      // Add correlation ID to the response
+      const response = await handlerFn(req);
+      
+      // Calculate duration
+      const duration = Date.now() - startTime;
+      
+      // Clone the response to add headers
+      const enhancedResponse = new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: new Headers(response.headers)
+      });
+      
+      // Add performance metrics headers
+      enhancedResponse.headers.set('X-Correlation-ID', correlationId);
+      enhancedResponse.headers.set('X-Processing-Time', `${duration}ms`);
+      enhancedResponse.headers.set('X-Function-Version', '1.0');
+      
+      // Ensure CORS headers are applied
+      Object.entries(corsHeaders).forEach(([key, value]) => {
+        enhancedResponse.headers.set(key, value);
+      });
+      
+      return enhancedResponse;
+      
+    } catch (error) {
+      console.error('Error in edge function:', error);
+      
+      // Return standardized error response
       return new Response(
         JSON.stringify({
           success: false,
-          error: error.message || 'Unknown error occurred'
+          error: error.message,
+          errorType: error.name || 'UnknownError',
         }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 500,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
         }
       );
     }
   };
-}
-
-// Helper to create JSON response
-export function createJsonResponse(data: any, status = 200) {
-  return new Response(
-    JSON.stringify(data),
-    { 
-      status, 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-    }
-  );
 }

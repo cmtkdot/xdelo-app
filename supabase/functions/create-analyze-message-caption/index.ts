@@ -55,7 +55,7 @@ serve(async (req) => {
         event_timestamp: new Date().toISOString()
       });
 
-    // Call the parse-caption-with-ai function
+    // Call the parse-caption-with-ai function directly
     const parseCaptionResponse = await fetch(
       `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
       {
@@ -66,7 +66,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           messageId: messageId,
-          caption: caption, // Make sure caption is included
+          caption: caption,
           media_group_id: mediaGroupId,
           correlationId: correlationId,
           file_info: dbResult?.file_info
@@ -121,7 +121,7 @@ serve(async (req) => {
           error_message: error.message,
           metadata: {
             correlation_id: correlationId || crypto.randomUUID().toString(),
-            error_details: JSON.stringify(error)
+            error_details: error.stack
           },
           correlation_id: correlationId || crypto.randomUUID().toString(),
           event_timestamp: new Date().toISOString()

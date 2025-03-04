@@ -3300,6 +3300,10 @@ export type Database = {
           reset_reason: string
         }[]
       }
+      xdelo_run_scheduled_message_processing: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       xdelo_standardize_storage_path: {
         Args: {
           p_file_unique_id: string
