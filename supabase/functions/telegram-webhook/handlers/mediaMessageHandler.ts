@@ -427,16 +427,18 @@ async function processMessage(
   }
   // If message has caption, process it immediately
   else if (message.caption && dbMessage) {
-    console.log(`Message ${dbMessage.id} has caption, calling direct caption processor`);
+    console.log(`Message ${dbMessage.id} has caption, calling manual caption parser`);
     
     try {
-      // First try direct caption processor
+      // First try direct caption processor with our new manual-caption-parser
       try {
         const { data: processorResult, error: processorError } = await supabaseClient.functions.invoke(
-          'direct-caption-processor',
+          'manual-caption-parser',
           {
             body: {
               messageId: dbMessage.id,
+              caption: message.caption,
+              media_group_id: message.media_group_id,
               correlationId: context.correlationId,
               trigger_source: 'webhook_handler'
             }
@@ -444,41 +446,28 @@ async function processMessage(
         );
         
         if (processorError) {
-          throw new Error(`Direct processor error: ${processorError.message}`);
+          throw new Error(`Manual parser error: ${processorError.message}`);
         }
         
-        console.log('Direct caption processing successful:', processorResult);
+        console.log('Manual caption processing successful:', processorResult);
       } catch (directError) {
-        console.error('Direct caption processor failed, falling back to queue:', directError);
+        console.error('Manual caption processor failed, falling back to database function:', directError);
         
-        // Fallback: Queue the message for processing using database function
-        const { data: queueResult, error: queueError } = await supabaseClient.rpc(
-          'xdelo_queue_message_for_processing',
+        // Fallback: Call the database function directly
+        const { data: captionResult, error: captionError } = await supabaseClient.rpc(
+          'xdelo_analyze_message_caption',
           {
             p_message_id: dbMessage.id,
-            p_correlation_id: context.correlationId
+            p_correlation_id: context.correlationId,
+            p_caption: message.caption,
+            p_media_group_id: message.media_group_id
           }
         );
         
-        if (queueError) {
-          console.error('Failed to queue message for processing:', queueError);
-          
-          // Last resort: call the parse-caption-with-ai function directly
-          try {
-            await supabaseClient.functions.invoke('parse-caption-with-ai', {
-              body: {
-                messageId: dbMessage.id,
-                caption: message.caption,
-                media_group_id: message.media_group_id,
-                correlationId: context.correlationId
-              }
-            });
-            console.log('Direct caption analysis triggered as fallback');
-          } catch (analysisError) {
-            console.error('Fallback caption analysis also failed:', analysisError);
-          }
+        if (captionError) {
+          console.error('Database caption processing failed:', captionError);
         } else {
-          console.log('Message successfully queued for processing:', queueResult);
+          console.log('Database caption processing successful:', captionResult);
         }
       }
     } catch (processingError) {

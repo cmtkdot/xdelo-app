@@ -47,9 +47,9 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
 
     console.log(`Processing caption for message ${messageId}, caption length: ${message.caption.length}`);
     
-    // Directly call the parse-caption-with-ai function
+    // Directly call the manual-caption-parser for simplicity and consistency
     const { data: analysisResult, error: analysisError } = await supabase.functions.invoke(
-      'parse-caption-with-ai',
+      'manual-caption-parser',
       {
         body: {
           messageId,

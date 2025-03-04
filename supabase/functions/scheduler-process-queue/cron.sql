@@ -28,9 +28,11 @@ select cron.schedule(
   processed AS (
     SELECT 
       http_post(
-        current_setting('app.settings.supabase_functions_url') || '/functions/v1/direct-caption-processor',
+        current_setting('app.settings.supabase_functions_url') || '/functions/v1/manual-caption-parser',
         jsonb_build_object(
           'messageId', id,
+          'caption', caption,
+          'media_group_id', media_group_id,
           'correlationId', correlation_id,
           'trigger_source', 'cron_retry'
         ),
