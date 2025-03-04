@@ -39,9 +39,9 @@ export const updateMessageWithAnalysis = async (
   try {
     console.log(`Updating message ${messageId} with analyzed content, isEdit: ${isEdit}`);
     
-    // If we have a queue ID, use the complete processing function
+    // If we have a queue ID and the old function still exists, try to use it
     if (queueId) {
-      console.log(`Using queue completion function for queue ID: ${queueId}`);
+      console.log(`Attempting to use queue completion function for queue ID: ${queueId}`);
       try {
         const { error } = await supabaseClient.rpc('xdelo_complete_message_processing', {
           p_queue_id: queueId,
@@ -124,22 +124,48 @@ async function directUpdateMessage(
   return { success: true };
 }
 
-// Mark queue processing as failed
+// Mark queue processing as failed - keep for backward compatibility
 export const markQueueItemAsFailed = async (queueId: string, errorMessage: string) => {
   if (!queueId) return { success: false };
   
   try {
-    const { error } = await supabaseClient.rpc('xdelo_fail_message_processing', {
-      p_queue_id: queueId,
-      p_error_message: errorMessage
-    });
+    // First try the direct message update approach
+    const { data: message } = await supabaseClient
+      .from('message_processing_queue')
+      .select('message_id')
+      .eq('id', queueId)
+      .single();
     
-    if (error) {
+    if (message?.message_id) {
+      // Update the message directly
+      await supabaseClient
+        .from('messages')
+        .update({
+          processing_state: 'error',
+          error_message: errorMessage,
+          last_error_at: new Date().toISOString()
+        })
+        .eq('id', message.message_id);
+      
+      return { success: true };
+    }
+    
+    // Fall back to the old function if it still exists
+    try {
+      const { error } = await supabaseClient.rpc('xdelo_fail_message_processing', {
+        p_queue_id: queueId,
+        p_error_message: errorMessage
+      });
+      
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      
+      return { success: true };
+    } catch (error) {
       console.error('Error marking queue item as failed:', error);
       return { success: false, error: error.message };
     }
-    
-    return { success: true };
   } catch (error) {
     console.error('Error in markQueueItemAsFailed:', error);
     return { success: false, error: error.message };

@@ -110,12 +110,25 @@ serve(async (req) => {
     
     // Extract queue_id from request if available for error handling
     try {
-      const { queue_id } = await req.json();
+      const { queue_id, messageId } = await req.json();
+      
+      if (messageId) {
+        // Update the message directly with error
+        await supabaseClient
+          .from('messages')
+          .update({
+            processing_state: 'error',
+            error_message: error.message,
+            last_error_at: new Date().toISOString()
+          })
+          .eq('id', messageId);
+      }
+      
       if (queue_id) {
         await markQueueItemAsFailed(queue_id, error.message);
       }
     } catch (reqError) {
-      console.error('Error extracting queue_id from request:', reqError);
+      console.error('Error extracting data from request:', reqError);
     }
     
     return new Response(

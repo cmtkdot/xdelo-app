@@ -33,11 +33,11 @@ no_public_access = true
 verify_jwt = false
 no_public_access = true
 
-[functions.process-message-queue]
+[functions.process-unanalyzed-messages]
 verify_jwt = false
 no_public_access = true
 
-[functions.process-unanalyzed-messages]
+[functions.scheduler-process-queue]
 verify_jwt = false
 no_public_access = true
 

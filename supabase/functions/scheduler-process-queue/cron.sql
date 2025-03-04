@@ -5,13 +5,26 @@ create extension if not exists pg_net;
 
 -- Schedule the function to run every 15 minutes
 select cron.schedule(
-  'process-message-queue',
+  'process-pending-messages',
   '*/15 * * * *',
   $$
-  select net.http_post(
-    url:='{{SUPABASE_URL}}/functions/v1/process-message-queue',
-    headers:='{"Content-Type": "application/json", "Authorization": "Bearer {{SUPABASE_SERVICE_ROLE_KEY}}"}'::jsonb,
-    body:='{"limit": 10}'::jsonb
-  ) as request_id;
+  begin
+    -- Process any pending messages directly
+    perform xdelo_process_pending_messages(20);
+    
+    -- Log the scheduled run
+    insert into unified_audit_logs (
+      event_type,
+      metadata,
+      event_timestamp
+    ) values (
+      'scheduler_processed_pending',
+      jsonb_build_object(
+        'run_time', now(),
+        'type', 'direct_processing'
+      ),
+      now()
+    );
+  end;
   $$
 );

@@ -15,44 +15,28 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Starting scheduled queue processing');
+    console.log('Starting scheduled direct message processing');
     
-    // First find and queue any unprocessed messages
-    const { data: queuedMessages, error: queueError } = await supabase
-      .rpc('xdelo_queue_unprocessed_messages', {
+    // Process pending messages directly
+    const { data: processedMessages, error: processError } = await supabase
+      .rpc('xdelo_process_pending_messages', {
         limit_count: 20
       });
     
-    if (queueError) throw new Error(`Error queueing messages: ${queueError.message}`);
-    console.log(`Found and queued ${queuedMessages?.length || 0} unprocessed messages`);
+    if (processError) throw new Error(`Error processing messages: ${processError.message}`);
+    console.log(`Processed ${processedMessages?.length || 0} pending messages`);
     
-    // Process the queue (up to 10 messages at once)
-    const processResponse = await fetch(
-      `${Deno.env.get('SUPABASE_URL')}/functions/v1/process-message-queue`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-        },
-        body: JSON.stringify({ limit: 10 })
-      }
-    );
-    
-    if (!processResponse.ok) {
-      throw new Error(`Error processing queue: ${processResponse.status} ${processResponse.statusText}`);
-    }
-    
-    const result = await processResponse.json();
+    // Count success and failures
+    const successCount = processedMessages?.filter(item => item.processed).length || 0;
+    const failedCount = processedMessages?.filter(item => !item.processed).length || 0;
     
     // Log the results
     await supabase.from('unified_audit_logs').insert({
-      event_type: 'scheduler_processed_queue',
+      event_type: 'scheduler_processed_pending',
       metadata: {
-        queued_count: queuedMessages?.length || 0,
-        processed: result.data?.processed || 0,
-        success: result.data?.success || 0,
-        failed: result.data?.failed || 0
+        processed: processedMessages?.length || 0,
+        success: successCount,
+        failed: failedCount
       },
       event_timestamp: new Date().toISOString()
     });
@@ -60,10 +44,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        queued: queuedMessages?.length || 0,
-        processed: result.data?.processed || 0,
-        success: result.data?.success || 0,
-        failed: result.data?.failed || 0
+        processed: processedMessages?.length || 0,
+        success_count: successCount,
+        failed_count: failedCount
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
