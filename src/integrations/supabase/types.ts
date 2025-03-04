@@ -2181,7 +2181,43 @@ export type Database = {
           telegram_message_id?: number | null
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_forwards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_relationships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_compatibility"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_with_relationships"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       webhook_entity: {
         Row: {
@@ -2315,7 +2351,43 @@ export type Database = {
           previous_state?: Json | null
           telegram_message_id?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_forwards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_relationships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_compatibility"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_with_relationships"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_message_forwards: {
         Row: {
@@ -2974,13 +3046,22 @@ export type Database = {
         }
         Returns: Json
       }
-      xdelo_check_media_group_content: {
-        Args: {
-          p_media_group_id: string
-          p_message_id: string
-        }
-        Returns: Json
-      }
+      xdelo_check_media_group_content:
+        | {
+            Args: {
+              p_media_group_id: string
+              p_message_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_media_group_id: string
+              p_message_id: string
+              p_correlation_id?: string
+            }
+            Returns: Json
+          }
       xdelo_check_webhook_health: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -2991,9 +3072,24 @@ export type Database = {
           recent_errors: string[]
         }[]
       }
-      xdelo_cleanup_old_queue_entries: {
+      xdelo_cleanup_old_queue_entries:
+        | {
+            Args: Record<PropertyKey, never>
+            Returns: number
+          }
+        | {
+            Args: {
+              days_old?: number
+            }
+            Returns: {
+              deleted_count: number
+            }[]
+          }
+      xdelo_cleanup_orphaned_audit_logs: {
         Args: Record<PropertyKey, never>
-        Returns: number
+        Returns: {
+          deleted_count: number
+        }[]
       }
       xdelo_complete_message_processing: {
         Args: {
@@ -3241,6 +3337,7 @@ export type Database = {
         | "trigger_queue_error"
         | "media_group_content_synced"
         | "media_group_sync_error"
+        | "message_queued_for_processing"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
       processing_state_type:
         | "initialized"
