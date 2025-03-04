@@ -9,7 +9,7 @@ const supabase = createClient(
 );
 
 // AI analysis function with improved error handling and fallbacks
-export const aiAnalyzeCaption = async (caption: string, manualParsing: ParsedContent) => {
+export const analyzeWithAI = async (caption: string, manualParsing: ParsedContent) => {
   try {
     console.log('Sending caption to AI analyzer');
     
@@ -101,7 +101,7 @@ export const aiAnalyzeCaption = async (caption: string, manualParsing: ParsedCon
       errorType: error.name 
     };
   }
-};
+}
 
 // Helper to merge AI and manual parsing results with improved quantity handling
 export const mergeParsingResults = (aiResult: ParsedContent, manualResult: ParsedContent): ParsedContent => {
@@ -128,4 +128,4 @@ export const mergeParsingResults = (aiResult: ParsedContent, manualResult: Parse
       ai_response: typeof aiResult === 'string' ? aiResult : JSON.stringify(aiResult)
     }
   };
-};
+}

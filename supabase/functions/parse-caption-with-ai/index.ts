@@ -1,104 +1,172 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
-import { parseCaption, shouldUseAI } from "./captionParser.ts";
-import { aiAnalyzeCaption } from "./aiAnalyzer.ts";
-import { updateMessageWithAnalyzedContent, syncMediaGroup } from "./dbOperations.ts";
+import { parseCaption } from './captionParser.ts';
+import { analyzeWithAI } from './aiAnalyzer.ts';
+import { 
+  getMessage, 
+  updateMessageWithAnalysis, 
+  markQueueItemAsFailed,
+  syncMediaGroupContent,
+  logAnalysisEvent
+} from './dbOperations.ts';
+import { ParsedContent } from './types.ts';
+
+// Create Supabase client for any additional operations
+const supabaseClient = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+);
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
-  
+
   try {
-    const { messageId, caption, media_group_id, correlationId = crypto.randomUUID().toString(), queue_id } = await req.json();
-    console.log(`Processing caption for messageId: ${messageId}, correlation: ${correlationId}`);
+    const payload = await req.json();
+    const { messageId, caption, media_group_id, correlationId, queue_id, isEdit } = payload;
+    
+    // Log request details but sanitize caption length for logs
+    const captionForLog = caption ? 
+      (caption.length > 50 ? `${caption.substring(0, 50)}...` : caption) : 
+      '(none)';
+    
+    console.log(`Processing caption for message ${messageId}, correlation_id: ${correlationId}, isEdit: ${isEdit}, caption: ${captionForLog}`);
 
-    if (!messageId) {
-      throw new Error('messageId is required');
+    if (!messageId || !caption) {
+      throw new Error("Required parameters missing: messageId and caption are required");
     }
 
-    if (!caption) {
-      throw new Error('caption is required for analysis');
-    }
+    // First, get the current message state
+    console.log(`Fetching current state for message ${messageId}`);
+    const existingMessage = await getMessage(messageId);
+    console.log(`Current message state: ${JSON.stringify(existingMessage)}`);
 
-    // Step 1: Perform initial manual parsing
-    console.log('Performing manual parsing...');
-    const manualResult = parseCaption(caption);
-    
-    let finalResult = manualResult;
-    let usedAI = false;
+    // Perform manual parsing
+    console.log(`Performing manual parsing on caption: ${captionForLog}`);
+    let parsedContent: ParsedContent = parseCaption(caption);
+    console.log(`Manual parsing result: ${JSON.stringify(parsedContent)}`);
 
-    // Step 2: Check if AI analysis is needed
-    const needsAI = shouldUseAI(manualResult.product_name);
+    // Check if the product name is long (complex) and needs AI analysis
+    const needsAIAnalysis = parsedContent.product_name && parsedContent.product_name.length > 23;
     
-    if (needsAI) {
+    if (needsAIAnalysis) {
+      console.log(`Product name is complex (${parsedContent.product_name.length} chars), performing AI analysis`);
       try {
-        console.log('Caption complexity requires AI analysis...');
-        const aiResult = await aiAnalyzeCaption(caption, manualResult);
+        const aiResult = await analyzeWithAI(caption, parsedContent);
+        console.log(`AI analysis complete: ${JSON.stringify(aiResult.success)}`);
         
-        if (aiResult && aiResult.success && aiResult.result) {
-          console.log('AI analysis successful, merging results');
-          
-          // Use AI result if available
-          finalResult = {
+        if (aiResult.success && aiResult.result) {
+          // Merge AI results with manual parsing results, AI takes precedence
+          parsedContent = {
+            ...parsedContent,
             ...aiResult.result,
             parsing_metadata: {
-              ...aiResult.result.parsing_metadata,
-              method: 'hybrid',
-              timestamp: new Date().toISOString()
+              method: 'ai',
+              timestamp: new Date().toISOString(),
+              original_manual_parse: parsedContent
             }
           };
-          usedAI = true;
         } else {
-          console.log('AI analysis returned no results or failed, using manual parsing');
-          console.log('AI error:', aiResult?.error || 'No specific error');
+          console.error('AI analysis returned no results, using manual parsing');
+          parsedContent.parsing_metadata = {
+            method: 'manual',
+            timestamp: new Date().toISOString(),
+            ai_error: aiResult.error || 'No results returned'
+          };
         }
-      } catch (error) {
-        console.error('Error during AI analysis:', error);
-        // Continue with manual results if AI fails
+      } catch (aiError) {
+        console.error('AI analysis failed, using manual parsing fallback:', aiError);
+        parsedContent.parsing_metadata = {
+          method: 'manual',
+          timestamp: new Date().toISOString(),
+          ai_error: aiError.message
+        };
       }
+    } else {
+      // Set parsing metadata for manual method
+      parsedContent.parsing_metadata = {
+        method: 'manual',
+        timestamp: new Date().toISOString()
+      };
     }
 
-    // Step 3: Update the message with analyzed content
-    console.log('Updating message with analyzed content...');
+    // Save additional metadata
+    parsedContent.caption = caption;
     
-    const updateResult = await updateMessageWithAnalyzedContent(
+    if (media_group_id) {
+      parsedContent.sync_metadata = {
+        media_group_id: media_group_id
+      };
+    }
+    
+    // Add edit flag to metadata if this is from an edit
+    if (isEdit) {
+      console.log(`Message ${messageId} is being processed as an edit`);
+      parsedContent.parsing_metadata.is_edit = true;
+      parsedContent.parsing_metadata.edit_timestamp = new Date().toISOString();
+    }
+
+    // Log the analysis in the audit trail
+    console.log(`Logging analysis event for message ${messageId}`);
+    await logAnalysisEvent(
       messageId,
-      finalResult,
-      correlationId,
-      queue_id
+      correlationId || 'manual-analysis',
+      { analyzed_content: existingMessage?.analyzed_content },
+      { analyzed_content: parsedContent },
+      {
+        source: 'parse-caption-with-ai',
+        caption: captionForLog,
+        media_group_id: media_group_id,
+        method: needsAIAnalysis ? 'ai' : 'manual',
+        is_edit: isEdit
+      }
     );
 
-    // Step 4: If this is part of a media group, sync the content to other messages
+    // Update the message with the analyzed content
+    console.log(`Updating message ${messageId} with analyzed content, isEdit: ${isEdit}`);
+    const updateResult = await updateMessageWithAnalysis(messageId, parsedContent, existingMessage, queue_id, isEdit);
+    console.log(`Update result: ${JSON.stringify(updateResult)}`);
+
+    // Always attempt to sync content to media group
     let syncResult = null;
-    if (media_group_id && updateResult.success) {
-      console.log(`Syncing content to media group ${media_group_id}...`);
-      syncResult = await syncMediaGroup(messageId, media_group_id, correlationId);
+    if (media_group_id) {
+      console.log(`Starting media group content sync for group ${media_group_id}, message ${messageId}`);
+      syncResult = await syncMediaGroupContent(media_group_id, messageId, correlationId || 'manual-sync');
+      console.log(`Media group sync result: ${JSON.stringify(syncResult)}`);
+    } else {
+      console.log(`No media_group_id provided, skipping group sync`);
     }
 
-    // Return the parsed result
     return new Response(
       JSON.stringify({
         success: true,
-        data: finalResult,
-        usedAI,
-        messageId,
-        media_group_id,
-        correlationId,
-        queue_id,
+        message: `Caption analyzed successfully for message ${messageId}`,
+        data: parsedContent,
         sync_result: syncResult
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error processing caption:', error);
+    console.error('Error in parse-caption-with-ai:', error);
+    
+    // Extract queue_id from request if available for error handling
+    try {
+      const { queue_id } = await req.json();
+      if (queue_id) {
+        await markQueueItemAsFailed(queue_id, error.message);
+      }
+    } catch (reqError) {
+      console.error('Error extracting queue_id from request:', reqError);
+    }
     
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message
+        error: `Error processing caption: ${error.message}`,
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

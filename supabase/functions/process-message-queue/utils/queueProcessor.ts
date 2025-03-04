@@ -39,25 +39,25 @@ export async function processMessageQueue(limit: number = 5): Promise<Processing
       try {
         console.log(`Processing message ${item.message_id}, queue ID: ${item.queue_id}`);
         
-        // Ensure correlation_id is a string
-        const safeCorrelationId = item.correlation_id ? 
-          String(item.correlation_id) : 
-          crypto.randomUUID().toString();
-        
         // Call the parse-caption-with-ai function
         const analyzeResponse = await supabaseClient.functions.invoke('parse-caption-with-ai', {
           body: {
             messageId: item.message_id,
             caption: item.caption,
             media_group_id: item.media_group_id,
-            correlationId: safeCorrelationId,
-            queue_id: item.queue_id
+            correlationId: item.correlation_id
           }
         });
         
         if (analyzeResponse.error) {
           throw new Error(`Failed to analyze message: ${analyzeResponse.error}`);
         }
+        
+        // Mark the message as completed in the queue
+        await supabaseClient.rpc('xdelo_complete_message_processing', {
+          p_queue_id: item.queue_id,
+          p_analyzed_content: analyzeResponse.data.data
+        });
         
         console.log(`Successfully processed message ${item.message_id}`);
         
@@ -75,7 +75,7 @@ export async function processMessageQueue(limit: number = 5): Promise<Processing
         // Mark the processing as failed
         await supabaseClient.rpc('xdelo_fail_message_processing', {
           p_queue_id: item.queue_id,
-          p_error_message: error instanceof Error ? error.message : String(error)
+          p_error_message: error.message
         });
         
         results.failed++;
@@ -83,7 +83,7 @@ export async function processMessageQueue(limit: number = 5): Promise<Processing
           message_id: item.message_id,
           queue_id: item.queue_id,
           status: 'error',
-          error_message: error instanceof Error ? error.message : String(error)
+          error_message: error.message
         });
       }
       

@@ -2,13 +2,35 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from "../_shared/cors.ts";
-import { MessageQueueItem, ProcessingResults, ProcessingDetail } from "./types.ts";
 
 // Create Supabase client
 const supabaseClient = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
+
+interface MessageQueueItem {
+  queue_id: string;
+  message_id: string;
+  correlation_id: string;
+  caption: string;
+  media_group_id?: string;
+}
+
+interface ProcessingDetail {
+  message_id: string;
+  queue_id: string;
+  status: 'success' | 'error';
+  result?: any;
+  error_message?: string;
+}
+
+interface ProcessingResults {
+  processed: number;
+  success: number;
+  failed: number;
+  details: ProcessingDetail[];
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -20,10 +42,34 @@ serve(async (req) => {
     const { limit = 5 } = await req.json();
     console.log(`Starting to process up to ${limit} messages from queue`);
     
-    // Get messages from the queue
-    const messagesToProcess = await getMessagesFromQueue(limit);
+    // Get messages from the queue using the new function name
+    const { data: messagesToProcess, error: queueError } = await supabaseClient.rpc(
+      'tg_get_next_messages',
+      { limit_count: limit }
+    );
+    
+    if (queueError) {
+      console.error('Failed to get messages from queue:', queueError);
+      
+      // Try fallback with old function name if the new one fails
+      const { data: fallbackMessages, error: fallbackError } = await supabaseClient.rpc(
+        'xdelo_get_messages_for_processing',
+        { limit_count: limit }
+      );
+      
+      if (fallbackError) {
+        throw new Error(`Failed to get messages from queue (both methods): ${fallbackError.message}`);
+      }
+      
+      console.log(`Successfully retrieved ${fallbackMessages?.length || 0} messages using fallback method`);
+      if (fallbackMessages && fallbackMessages.length > 0) {
+        messagesToProcess = fallbackMessages;
+      }
+    } else {
+      console.log(`Successfully retrieved ${messagesToProcess?.length || 0} messages using new method`);
+    }
 
-    if (!messagesToProcess.length) {
+    if (!messagesToProcess || messagesToProcess.length === 0) {
       return new Response(
         JSON.stringify({
           success: true,
@@ -39,7 +85,131 @@ serve(async (req) => {
     }
 
     // Process each message
-    const results = await processMessages(messagesToProcess);
+    const results: ProcessingResults = {
+      processed: messagesToProcess.length,
+      success: 0,
+      failed: 0,
+      details: []
+    };
+
+    for (const message of messagesToProcess) {
+      try {
+        console.log(`Processing message ${message.message_id} (Queue ID: ${message.queue_id})`);
+        
+        if (!message.caption) {
+          console.error(`Message ${message.message_id} has no caption, marking as error`);
+          
+          // Try the new function first
+          try {
+            await supabaseClient.rpc('tg_fail_processing', {
+              p_queue_id: message.queue_id,
+              p_error_message: 'Message has no caption to analyze'
+            });
+          } catch (newFuncError) {
+            console.error('Error with new fail function, trying fallback:', newFuncError);
+            
+            // Fallback to old function
+            await supabaseClient.rpc('xdelo_fail_message_processing', {
+              p_queue_id: message.queue_id,
+              p_error_message: 'Message has no caption to analyze'
+            });
+          }
+          
+          results.failed++;
+          results.details.push({
+            message_id: message.message_id,
+            queue_id: message.queue_id,
+            status: 'error',
+            error_message: 'Message has no caption to analyze'
+          });
+          continue;
+        }
+        
+        // Call the parse-caption-with-ai function
+        const response = await fetch(
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+            },
+            body: JSON.stringify({
+              messageId: message.message_id,
+              caption: message.caption,
+              media_group_id: message.media_group_id,
+              correlationId: message.correlation_id,
+              queue_id: message.queue_id
+            })
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(`Failed to process message: ${errorData.error || response.statusText}`);
+        }
+
+        const result = await response.json();
+        
+        // Mark as complete using the proper function
+        try {
+          // Try new function first
+          await supabaseClient.rpc('tg_complete_processing', {
+            p_queue_id: message.queue_id,
+            p_analyzed_content: result.data
+          });
+        } catch (newFuncError) {
+          console.error('Error with new complete function, trying fallback:', newFuncError);
+          
+          // Fallback to old function
+          await supabaseClient.rpc('xdelo_complete_message_processing', {
+            p_queue_id: message.queue_id,
+            p_analyzed_content: result.data
+          });
+        }
+        
+        // Record success
+        results.success++;
+        results.details.push({
+          message_id: message.message_id,
+          queue_id: message.queue_id,
+          status: 'success',
+          result: result
+        });
+      } catch (error) {
+        console.error(`Error processing message ${message.message_id}:`, error);
+        
+        // Record failure
+        results.failed++;
+        results.details.push({
+          message_id: message.message_id,
+          queue_id: message.queue_id,
+          status: 'error',
+          error_message: error.message
+        });
+        
+        // Mark the queue item as failed using the proper function
+        try {
+          // Try new function first
+          await supabaseClient.rpc('tg_fail_processing', {
+            p_queue_id: message.queue_id,
+            p_error_message: `Processing error: ${error.message}`
+          });
+        } catch (newFuncError) {
+          console.error('Error with new fail function, trying fallback:', newFuncError);
+          
+          // Fallback to old function
+          try {
+            await supabaseClient.rpc('xdelo_fail_message_processing', {
+              p_queue_id: message.queue_id,
+              p_error_message: `Processing error: ${error.message}`
+            });
+          } catch (oldFuncError) {
+            console.error('Both fail functions failed:', oldFuncError);
+          }
+        }
+      }
+    }
 
     console.log(`Processing completed: ${results.success} succeeded, ${results.failed} failed`);
     
@@ -62,141 +232,3 @@ serve(async (req) => {
     );
   }
 });
-
-// Get messages from queue with consistent error handling
-async function getMessagesFromQueue(limit: number): Promise<MessageQueueItem[]> {
-  try {
-    console.log(`Fetching up to ${limit} messages for processing using xdelo_get_next_message_for_processing`);
-    
-    // Use the correct function name with xdelo_ prefix
-    const { data, error } = await supabaseClient.rpc(
-      'xdelo_get_next_message_for_processing',
-      { limit_count: limit }
-    );
-    
-    if (error) {
-      console.error('Error getting messages from queue:', error);
-      return [];
-    }
-    
-    console.log(`Retrieved ${data?.length || 0} messages from queue`);
-    return data || [];
-  } catch (error) {
-    console.error('Error in getMessagesFromQueue:', error);
-    return [];
-  }
-}
-
-// Mark queue item as failed with proper error handling
-async function markQueueItemAsFailed(queueId: string, errorMessage: string): Promise<boolean> {
-  try {
-    console.log(`Marking queue item ${queueId} as failed: ${errorMessage}`);
-    const { error } = await supabaseClient.rpc('xdelo_fail_message_processing', {
-      p_queue_id: queueId,
-      p_error_message: errorMessage
-    });
-    
-    if (error) {
-      console.error('Error marking queue item as failed:', error);
-      return false;
-    }
-    
-    return true;
-  } catch (error) {
-    console.error('Exception marking queue item as failed:', error);
-    return false;
-  }
-}
-
-// Process a batch of messages
-async function processMessages(messages: MessageQueueItem[]): Promise<ProcessingResults> {
-  const results: ProcessingResults = {
-    processed: messages.length,
-    success: 0,
-    failed: 0,
-    details: []
-  };
-
-  for (const message of messages) {
-    try {
-      console.log(`Processing message ${message.message_id} (Queue ID: ${message.queue_id})`);
-      
-      if (!message.caption) {
-        console.error(`Message ${message.message_id} has no caption, marking as error`);
-        
-        await markQueueItemAsFailed(
-          message.queue_id, 
-          'Message has no caption to analyze'
-        );
-        
-        results.failed++;
-        results.details.push({
-          message_id: message.message_id,
-          queue_id: message.queue_id,
-          status: 'error',
-          error_message: 'Message has no caption to analyze'
-        });
-        continue;
-      }
-      
-      // Ensure correlation_id is a string
-      const safeCorrelationId = message.correlation_id ? 
-        String(message.correlation_id) : 
-        crypto.randomUUID().toString();
-      
-      // Call the parse-caption-with-ai function
-      const response = await fetch(
-        `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-          },
-          body: JSON.stringify({
-            messageId: message.message_id,
-            caption: message.caption,
-            media_group_id: message.media_group_id,
-            correlationId: safeCorrelationId,
-            queue_id: message.queue_id
-          })
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to process message (${response.status}): ${errorText}`);
-      }
-
-      const result = await response.json();
-      
-      // Record success - the queue item was already marked complete by the parsing function
-      results.success++;
-      results.details.push({
-        message_id: message.message_id,
-        queue_id: message.queue_id,
-        status: 'success',
-        result: result
-      });
-    } catch (error) {
-      console.error(`Error processing message ${message.message_id}:`, error);
-      
-      // Record failure
-      results.failed++;
-      results.details.push({
-        message_id: message.message_id,
-        queue_id: message.queue_id,
-        status: 'error',
-        error_message: error instanceof Error ? error.message : String(error)
-      });
-      
-      // Mark the queue item as failed
-      await markQueueItemAsFailed(
-        message.queue_id,
-        error instanceof Error ? error.message : String(error)
-      );
-    }
-  }
-
-  return results;
-}
