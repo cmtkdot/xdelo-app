@@ -39,110 +39,55 @@ export const updateMessageWithAnalysis = async (
   try {
     console.log(`Updating message ${messageId} with analyzed content, isEdit: ${isEdit}`);
     
-    // If we have a queue ID, use the complete processing function
-    if (queueId) {
-      console.log(`Using queue completion function for queue ID: ${queueId}`);
-      try {
-        const { error } = await supabaseClient.rpc('xdelo_complete_message_processing', {
-          p_queue_id: queueId,
-          p_analyzed_content: analyzedContent,
-          p_is_edit: isEdit || false
-        });
-        
-        if (error) {
-          throw new Error(`Queue completion failed: ${error.message}`);
-        }
-      } catch (queueError) {
-        console.error(`Queue completion error: ${queueError.message}`);
-        // Fall back to direct update if queue completion fails
-        console.log(`Falling back to direct update for message ${messageId}`);
-        return await directUpdateMessage(messageId, analyzedContent, existingMessage, isEdit);
-      }
-      
-      return { success: true };
-    } 
+    // Prepare old_analyzed_content array
+    let oldAnalyzedContent = [];
     
-    // Otherwise, update the message directly
-    return await directUpdateMessage(messageId, analyzedContent, existingMessage, isEdit);
-  } catch (error) {
-    console.error(`Error in updateMessageWithAnalysis: ${error.message}`);
-    throw error; // Re-throw to be handled by caller
-  }
-};
-
-// Helper function for direct message updates
-async function directUpdateMessage(
-  messageId: string,
-  analyzedContent: ParsedContent,
-  existingMessage: any,
-  isEdit?: boolean
-) {
-  // Prepare old_analyzed_content array
-  let oldAnalyzedContent = [];
-  
-  if (existingMessage?.old_analyzed_content) {
-    oldAnalyzedContent = [...existingMessage.old_analyzed_content];
-  }
-  
-  if (existingMessage?.analyzed_content) {
-    // Add edit timestamp to the previous content
-    const previousContent = {
-      ...existingMessage.analyzed_content,
-      edit_timestamp: new Date().toISOString()
+    if (existingMessage?.old_analyzed_content) {
+      oldAnalyzedContent = [...existingMessage.old_analyzed_content];
+    }
+    
+    if (existingMessage?.analyzed_content) {
+      // Add edit timestamp to the previous content
+      const previousContent = {
+        ...existingMessage.analyzed_content,
+        edit_timestamp: new Date().toISOString()
+      };
+      oldAnalyzedContent.push(previousContent);
+    }
+    
+    // Set is_original_caption based on current state and whether this is an edit
+    let isOriginalCaption = true;
+    if (isEdit) {
+      // For edits, keep original caption status if it already exists
+      isOriginalCaption = existingMessage?.is_original_caption !== false;
+    }
+    
+    // Update data with explicit log
+    console.log(`Directly updating message ${messageId}, setting is_original_caption: ${isOriginalCaption}`);
+    
+    const updateData = {
+      old_analyzed_content: oldAnalyzedContent,
+      analyzed_content: analyzedContent,
+      processing_state: 'completed',
+      processing_completed_at: new Date().toISOString(),
+      is_original_caption: isOriginalCaption,
+      group_caption_synced: false, // Reset to false to trigger re-sync
+      last_processing_attempt: new Date().toISOString()
     };
-    oldAnalyzedContent.push(previousContent);
-  }
-  
-  // Set is_original_caption based on current state and whether this is an edit
-  let isOriginalCaption = true;
-  if (isEdit) {
-    // For edits, keep original caption status if it already exists
-    isOriginalCaption = existingMessage?.is_original_caption !== false;
-  }
-  
-  // Update data with explicit log
-  console.log(`Directly updating message ${messageId}, setting is_original_caption: ${isOriginalCaption}`);
-  
-  const updateData = {
-    old_analyzed_content: oldAnalyzedContent,
-    analyzed_content: analyzedContent,
-    processing_state: 'completed',
-    processing_completed_at: new Date().toISOString(),
-    is_original_caption: isOriginalCaption,
-    group_caption_synced: false // Reset to false to trigger re-sync
-  };
 
-  const { error } = await supabaseClient
-    .from('messages')
-    .update(updateData)
-    .eq('id', messageId);
+    const { error } = await supabaseClient
+      .from('messages')
+      .update(updateData)
+      .eq('id', messageId);
 
-  if (error) {
-    throw new Error(`Direct message update failed: ${error.message}`);
-  }
-  
-  return { success: true };
-}
-
-// Mark queue processing as failed
-export const markQueueItemAsFailed = async (queueId: string, errorMessage: string) => {
-  if (!queueId) return { success: false };
-  
-  try {
-    const { error } = await supabaseClient.rpc('xdelo_fail_message_processing', {
-      p_queue_id: queueId,
-      p_error_message: errorMessage
-    });
-    
     if (error) {
-      console.error('Error marking queue item as failed:', error);
-      return { success: false, error: error.message };
+      throw new Error(`Direct message update failed: ${error.message}`);
     }
     
     return { success: true };
   } catch (error) {
-    console.error('Error in markQueueItemAsFailed:', error);
-    return { success: false, error: error.message };
+    console.error(`Error in updateMessageWithAnalysis: ${error.message}`);
+    throw error; // Re-throw to be handled by caller
   }
 };
 
@@ -183,7 +128,7 @@ export const syncMediaGroupContent = async (
       correlation_id: correlationId || null
     });
 
-    // Call the new sync edge function for better handling
+    // Call the sync edge function for better handling
     try {
       const response = await fetch(
         `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,

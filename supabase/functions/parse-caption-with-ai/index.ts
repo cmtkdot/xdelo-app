@@ -6,11 +6,10 @@ import { parseCaption } from './captionParser.ts';
 import { 
   getMessage, 
   updateMessageWithAnalysis, 
-  markQueueItemAsFailed,
   syncMediaGroupContent,
   logAnalysisEvent
 } from './dbOperations.ts';
-import { ParsedContent } from './types.ts';
+import { ParsedContent, RequestPayload } from './types.ts';
 
 // Create Supabase client for any additional operations
 const supabaseClient = createClient(
@@ -25,8 +24,8 @@ serve(async (req) => {
   }
 
   try {
-    const payload = await req.json();
-    const { messageId, caption, media_group_id, correlationId, queue_id, isEdit } = payload;
+    const payload = await req.json() as RequestPayload;
+    const { messageId, caption, media_group_id, correlationId, isEdit } = payload;
     
     // Log request details but sanitize caption length for logs
     const captionForLog = caption ? 
@@ -35,14 +34,56 @@ serve(async (req) => {
     
     console.log(`Processing caption for message ${messageId}, correlation_id: ${correlationId}, isEdit: ${isEdit}, caption: ${captionForLog}`);
 
-    if (!messageId || !caption) {
-      throw new Error("Required parameters missing: messageId and caption are required");
+    if (!messageId) {
+      throw new Error("Required parameter missing: messageId is required");
     }
 
     // First, get the current message state
     console.log(`Fetching current state for message ${messageId}`);
     const existingMessage = await getMessage(messageId);
     console.log(`Current message state: ${JSON.stringify(existingMessage)}`);
+
+    // If no caption but has media_group_id, check if we can sync from group
+    if ((!caption || caption.trim() === '') && media_group_id) {
+      console.log(`No caption provided for message ${messageId}, checking media group ${media_group_id}`);
+      
+      // Check if message is already processed (race condition)
+      if (existingMessage?.analyzed_content) {
+        console.log(`Message ${messageId} already has analyzed content, no further processing needed`);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Message ${messageId} already analyzed`,
+            data: existingMessage.analyzed_content
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      // Try to sync from media group
+      console.log(`Attempting to sync content from media group ${media_group_id}`);
+      const syncResult = await syncMediaGroupContent(media_group_id, messageId, correlationId || 'direct-sync');
+      
+      if (syncResult.success) {
+        console.log(`Successfully synced from media group: ${JSON.stringify(syncResult)}`);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Content synced from media group for message ${messageId}`,
+            sync_result: syncResult
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } else {
+        console.log(`Failed to sync from media group: ${JSON.stringify(syncResult)}`);
+        throw new Error(`No caption available and failed to sync from media group: ${syncResult.error || syncResult.reason}`);
+      }
+    }
+
+    // If we got here and still don't have a caption, we can't proceed
+    if (!caption || caption.trim() === '') {
+      throw new Error("Required parameter missing: caption is required");
+    }
 
     // Perform manual parsing
     console.log(`Performing manual parsing on caption: ${captionForLog}`);
@@ -83,7 +124,7 @@ serve(async (req) => {
 
     // Update the message with the analyzed content
     console.log(`Updating message ${messageId} with analyzed content, isEdit: ${isEdit}`);
-    const updateResult = await updateMessageWithAnalysis(messageId, parsedContent, existingMessage, queue_id, isEdit);
+    const updateResult = await updateMessageWithAnalysis(messageId, parsedContent, existingMessage, undefined, isEdit);
     console.log(`Update result: ${JSON.stringify(updateResult)}`);
 
     // Always attempt to sync content to media group
@@ -107,16 +148,6 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error('Error in parse-caption-with-ai:', error);
-    
-    // Extract queue_id from request if available for error handling
-    try {
-      const { queue_id } = await req.json();
-      if (queue_id) {
-        await markQueueItemAsFailed(queue_id, error.message);
-      }
-    } catch (reqError) {
-      console.error('Error extracting queue_id from request:', reqError);
-    }
     
     return new Response(
       JSON.stringify({

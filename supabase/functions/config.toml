@@ -32,10 +32,7 @@ no_public_access = true
 [functions.parse-caption-with-ai]
 verify_jwt = false
 no_public_access = true
-
-[functions.process-message-queue]
-verify_jwt = false
-no_public_access = true
+enabled = true
 
 [functions.process-unanalyzed-messages]
 verify_jwt = false
@@ -48,3 +45,8 @@ no_public_access = false
 [functions.xdelo_sync_media_group]
 verify_jwt = false
 no_public_access = true
+
+[functions.scheduler-process-queue]
+verify_jwt = false
+no_public_access = true
+enabled = true

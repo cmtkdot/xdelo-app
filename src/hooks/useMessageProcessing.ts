@@ -21,38 +21,28 @@ export function useMessageProcessing() {
       // Generate a correlation ID as a string (not a UUID object)
       const correlationId = crypto.randomUUID();
       
-      // Use raw SQL call since Supabase's rpc doesn't accept function names from a variable
-      const { data, error: queueError } = await supabase.rpc(
-        'xdelo_queue_message_for_processing',
+      // Call the parse-caption-with-ai function directly
+      const { data, error } = await supabase.functions.invoke(
+        'parse-caption-with-ai',
         {
-          p_message_id: message.id,
-          p_correlation_id: correlationId // Always passing as a string
-        }
-      );
-
-      if (queueError) {
-        throw queueError;
-      }
-
-      console.log('Message queued for processing:', data);
-      
-      // Call the edge function to process the queue
-      const { data: processingData, error: processingError } = await supabase.functions.invoke(
-        'process-message-queue',
-        {
-          body: { limit: 1 }
+          body: {
+            messageId: message.id,
+            caption: message.caption,
+            media_group_id: message.media_group_id,
+            correlationId: correlationId
+          }
         }
       );
       
-      if (processingError) {
-        throw processingError;
+      if (error) {
+        throw error;
       }
       
-      console.log('Processing result:', processingData);
+      console.log('Caption analysis result:', data);
       
       toast({
-        title: "Processing Initiated",
-        description: "The message has been queued for analysis."
+        title: "Analysis Complete",
+        description: "The message caption has been analyzed successfully."
       });
       
     } catch (error: any) {
@@ -72,61 +62,27 @@ export function useMessageProcessing() {
     }
   };
 
-  // Process all pending messages in the queue
-  const processMessageQueue = async (limit = 10) => {
+  // Process pending messages
+  const processPendingMessages = async (limit = 10) => {
     try {
-      const { data, error } = await supabase.functions.invoke(
-        'process-message-queue',
-        {
-          body: { limit }
-        }
+      const { data, error } = await supabase.rpc(
+        'xdelo_schedule_caption_processing'
       );
       
       if (error) throw error;
       
       toast({
-        title: "Queue Processing Complete",
-        description: `Processed ${data?.processed || 0} messages from the queue.`
+        title: "Processing Complete",
+        description: `Processed ${data?.processed_count || 0} pending messages.`
       });
       
       return data;
     } catch (error: any) {
-      console.error('Error processing message queue:', error);
+      console.error('Error processing pending messages:', error);
       
       toast({
-        title: "Queue Processing Failed",
-        description: error.message || "Failed to process message queue",
-        variant: "destructive"
-      });
-      
-      throw error;
-    }
-  };
-
-  // Queue any unprocessed messages with captions
-  const queueUnprocessedMessages = async (limit = 10) => {
-    try {
-      const { data, error } = await supabase.functions.invoke(
-        'process-unanalyzed-messages',
-        {
-          body: { limit }
-        }
-      );
-      
-      if (error) throw error;
-      
-      toast({
-        title: "Messages Queued",
-        description: `Queued ${data?.queued || 0} unprocessed messages.`
-      });
-      
-      return data;
-    } catch (error: any) {
-      console.error('Error queuing unprocessed messages:', error);
-      
-      toast({
-        title: "Queueing Failed",
-        description: error.message || "Failed to queue unprocessed messages",
+        title: "Processing Failed",
+        description: error.message || "Failed to process pending messages",
         variant: "destructive"
       });
       
@@ -136,8 +92,7 @@ export function useMessageProcessing() {
 
   return {
     handleReanalyze,
-    processMessageQueue,
-    queueUnprocessedMessages,
+    processPendingMessages,
     isProcessing,
     errors
   };

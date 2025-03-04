@@ -15,44 +15,21 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Starting scheduled queue processing');
+    console.log('Starting scheduled caption processing');
     
-    // First find and queue any unprocessed messages
-    const { data: queuedMessages, error: queueError } = await supabase
-      .rpc('xdelo_queue_unprocessed_messages', {
-        limit_count: 20
-      });
+    // Call the new direct processing function
+    const { data: processingResult, error: processError } = await supabase
+      .rpc('xdelo_schedule_caption_processing');
     
-    if (queueError) throw new Error(`Error queueing messages: ${queueError.message}`);
-    console.log(`Found and queued ${queuedMessages?.length || 0} unprocessed messages`);
-    
-    // Process the queue (up to 10 messages at once)
-    const processResponse = await fetch(
-      `${Deno.env.get('SUPABASE_URL')}/functions/v1/process-message-queue`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-        },
-        body: JSON.stringify({ limit: 10 })
-      }
-    );
-    
-    if (!processResponse.ok) {
-      throw new Error(`Error processing queue: ${processResponse.status} ${processResponse.statusText}`);
-    }
-    
-    const result = await processResponse.json();
+    if (processError) throw new Error(`Error processing captions: ${processError.message}`);
+    console.log(`Processed ${processingResult?.processed_count || 0} messages with captions`);
     
     // Log the results
     await supabase.from('unified_audit_logs').insert({
-      event_type: 'scheduler_processed_queue',
+      event_type: 'scheduler_processed_captions',
+      entity_id: '00000000-0000-0000-0000-000000000000', // System ID
       metadata: {
-        queued_count: queuedMessages?.length || 0,
-        processed: result.data?.processed || 0,
-        success: result.data?.success || 0,
-        failed: result.data?.failed || 0
+        processed_count: processingResult?.processed_count || 0
       },
       event_timestamp: new Date().toISOString()
     });
@@ -60,10 +37,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        queued: queuedMessages?.length || 0,
-        processed: result.data?.processed || 0,
-        success: result.data?.success || 0,
-        failed: result.data?.failed || 0
+        processed: processingResult?.processed_count || 0
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
