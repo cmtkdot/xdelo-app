@@ -21,38 +21,94 @@ export function useMessageProcessing() {
       // Generate a correlation ID as string
       const correlationId = crypto.randomUUID().toString();
       
-      // Use raw SQL call since Supabase's rpc doesn't accept function names from a variable
-      const { data, error: queueError } = await supabase.rpc(
-        'xdelo_queue_message_for_processing',
-        {
-          p_message_id: message.id,
-          p_correlation_id: correlationId
-        }
-      );
-
-      if (queueError) {
-        throw queueError;
-      }
-
-      console.log('Message queued for processing:', data);
-      
-      // Call the edge function to process the queue
-      const { data: processingData, error: processingError } = await supabase.functions.invoke(
-        'process-message-queue',
-        {
-          body: { limit: 1 }
-        }
-      );
-      
-      if (processingError) {
-        throw processingError;
+      // First, mark the message for reprocessing in the database
+      const { error: updateError } = await supabase
+        .from('messages')
+        .update({
+          processing_state: 'pending',
+          analyzed_content: null, // Clear existing analysis to force reanalysis
+          updated_at: new Date().toISOString(),
+          correlation_id: correlationId
+        })
+        .eq('id', message.id);
+        
+      if (updateError) {
+        throw updateError;
       }
       
-      console.log('Processing result:', processingData);
+      // Use direct function invocation for immediate processing
+      const { data: parseData, error: parseError } = await supabase.functions.invoke(
+        'parse-caption-with-ai',
+        {
+          body: { 
+            messageId: message.id,
+            caption: message.caption,
+            media_group_id: message.media_group_id,
+            correlationId: correlationId
+          }
+        }
+      );
+      
+      if (parseError) {
+        console.error('Direct parsing failed, falling back to queue:', parseError);
+        
+        // Fall back to queue if direct invoke fails
+        const { data, error: queueError } = await supabase.rpc(
+          'xdelo_queue_message_for_processing',
+          {
+            p_message_id: message.id,
+            p_correlation_id: correlationId
+          }
+        );
+
+        if (queueError) {
+          throw queueError;
+        }
+
+        console.log('Message queued for processing:', data);
+        
+        // Process the queue immediately
+        const { data: processingData, error: processingError } = await supabase.functions.invoke(
+          'process-message-queue',
+          {
+            body: { limit: 1 }
+          }
+        );
+        
+        if (processingError) {
+          throw processingError;
+        }
+        
+        console.log('Queue processing result:', processingData);
+      } else {
+        console.log('Direct parsing succeeded:', parseData);
+        
+        // If this is a media group, trigger sync as well
+        if (message.media_group_id) {
+          try {
+            const { data: syncData, error: syncError } = await supabase.rpc(
+              'xdelo_sync_media_group_content',
+              {
+                p_source_message_id: message.id,
+                p_media_group_id: message.media_group_id,
+                p_correlation_id: correlationId
+              }
+            );
+            
+            if (syncError) {
+              console.warn('Media group sync error:', syncError);
+            } else {
+              console.log('Media group sync result:', syncData);
+            }
+          } catch (syncErr) {
+            console.error('Error in media group sync:', syncErr);
+          }
+        }
+      }
       
       toast({
         title: "Processing Initiated",
-        description: "The message has been queued for analysis."
+        description: "The message has been processed or queued for analysis."
       });
       
     } catch (error: any) {

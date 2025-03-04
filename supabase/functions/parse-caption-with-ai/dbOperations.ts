@@ -21,7 +21,7 @@ export const updateMessageWithAnalyzedContent = async (
     // Get current message state first
     const { data: message, error: getError } = await supabaseClient
       .from('messages')
-      .select('analyzed_content, old_analyzed_content, is_original_caption')
+      .select('analyzed_content, old_analyzed_content, is_original_caption, media_group_id')
       .eq('id', messageId)
       .single();
     
@@ -94,7 +94,10 @@ export const updateMessageWithAnalyzedContent = async (
       method: 'direct_update'
     });
     
-    return { success: true };
+    return { 
+      success: true,
+      media_group_id: message?.media_group_id
+    };
   } catch (error) {
     console.error(`Error in updateMessageWithAnalyzedContent: ${error.message}`);
     return { success: false, error: error.message };

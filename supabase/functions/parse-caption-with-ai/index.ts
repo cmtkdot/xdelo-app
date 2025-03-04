@@ -72,9 +72,10 @@ serve(async (req) => {
     );
 
     // Step 4: If this is part of a media group, sync the content to other messages
+    let syncResult = null;
     if (media_group_id && updateResult.success) {
       console.log(`Syncing content to media group ${media_group_id}...`);
-      await syncMediaGroup(messageId, media_group_id, correlationId);
+      syncResult = await syncMediaGroup(messageId, media_group_id, correlationId);
     }
 
     // Return the parsed result
@@ -86,7 +87,8 @@ serve(async (req) => {
         messageId,
         media_group_id,
         correlationId,
-        queue_id
+        queue_id,
+        sync_result: syncResult
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

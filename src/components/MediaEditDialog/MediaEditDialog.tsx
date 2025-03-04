@@ -84,6 +84,7 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
         };
 
         setSyncStatus('Updating database...');
+        
         // Update the database record
         const { error: updateError } = await supabase
           .from('messages')
@@ -103,11 +104,12 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
           throw updateError;
         }
 
-        // Trigger reanalysis
+        // Trigger immediate reanalysis
         setSyncStatus('Analyzing content...');
-        console.log('Triggering reanalysis for updated content');
+        console.log('Triggering immediate reanalysis for updated content');
         const correlationId = crypto.randomUUID();
         
+        // Direct approach to trigger immediate analysis
         const { data: reanalysisData, error: reanalysisError } = await supabase.functions.invoke('parse-caption-with-ai', {
           body: {
             messageId: media.id,
@@ -136,6 +138,24 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
             } else {
               setSyncStatus('Media group sync may have failed');
               console.warn('Media group sync may not have completed properly:', reanalysisData?.sync_result);
+              
+              // Explicitly trigger media group sync as a backup
+              try {
+                const { data: syncData, error: syncError } = await supabase.rpc('xdelo_sync_media_group_content', {
+                  p_source_message_id: media.id,
+                  p_media_group_id: media.media_group_id,
+                  p_correlation_id: correlationId
+                });
+                
+                if (syncError) {
+                  console.error('Explicit media group sync failed:', syncError);
+                } else {
+                  console.log('Explicit media group sync succeeded:', syncData);
+                  setSyncStatus(`Explicitly synced with ${syncData?.updated_count || 0} messages in group`);
+                }
+              } catch (syncErr) {
+                console.error('Error in explicit media group sync:', syncErr);
+              }
             }
           } else {
             setSyncStatus('Analysis completed');

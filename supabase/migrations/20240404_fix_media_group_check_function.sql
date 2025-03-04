@@ -1,4 +1,3 @@
-
 -- Update the media group check function to handle correlation_id properly
 CREATE OR REPLACE FUNCTION public.xdelo_check_media_group_content(
   p_media_group_id text, 
@@ -281,5 +280,106 @@ EXCEPTION
       'media_group_id', p_media_group_id,
       'source_message_id', p_source_message_id
     );
+END;
+$function$;
+
+-- Add index to improve performance on media_group_id lookups and syncing
+CREATE INDEX IF NOT EXISTS idx_messages_media_group_sync ON messages (media_group_id, group_caption_synced, is_original_caption);
+
+-- Create function to find suitable caption message in a media group
+CREATE OR REPLACE FUNCTION public.xdelo_find_caption_message(p_media_group_id text)
+RETURNS uuid
+LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_message_id uuid;
+BEGIN
+  -- First try to find a message that already has caption and analyzed content
+  SELECT id INTO v_message_id
+  FROM messages
+  WHERE media_group_id = p_media_group_id
+    AND caption IS NOT NULL
+    AND caption != ''
+    AND analyzed_content IS NOT NULL
+    AND is_original_caption = true
+  ORDER BY created_at ASC
+  LIMIT 1;
+  
+  IF v_message_id IS NOT NULL THEN
+    RETURN v_message_id;
+  END IF;
+  
+  -- If not found, try to find a message with caption but no analyzed content
+  SELECT id INTO v_message_id
+  FROM messages
+  WHERE media_group_id = p_media_group_id
+    AND caption IS NOT NULL
+    AND caption != ''
+  ORDER BY created_at ASC
+  LIMIT 1;
+  
+  IF v_message_id IS NOT NULL THEN
+    RETURN v_message_id;
+  END IF;
+  
+  -- If still not found, return NULL
+  RETURN NULL;
+END;
+$function$;
+
+-- Create a repair function for media groups with broken sync
+CREATE OR REPLACE FUNCTION public.xdelo_repair_media_group_syncs()
+RETURNS TABLE(media_group_id text, source_message_id uuid, updated_count integer)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$
+DECLARE
+  v_group record;
+  v_source_message_id uuid;
+  v_result jsonb;
+BEGIN
+  -- Find media groups that have sync issues
+  FOR v_group IN 
+    SELECT 
+      mg.media_group_id
+    FROM (
+      SELECT 
+        media_group_id,
+        COUNT(*) as total_count,
+        COUNT(*) FILTER (WHERE analyzed_content IS NULL) as missing_content_count,
+        COUNT(*) FILTER (WHERE group_caption_synced = false) as unsynced_count
+      FROM 
+        messages
+      WHERE 
+        media_group_id IS NOT NULL
+        AND deleted_from_telegram = false
+      GROUP BY 
+        media_group_id
+    ) mg
+    WHERE 
+      mg.missing_content_count > 0
+      OR mg.unsynced_count > 0
+    LIMIT 100
+  LOOP
+    -- Find a suitable caption message
+    v_source_message_id := xdelo_find_caption_message(v_group.media_group_id);
+    
+    IF v_source_message_id IS NOT NULL THEN
+      -- Sync the group using our new function
+      v_result := xdelo_sync_media_group_content(
+        v_source_message_id,
+        v_group.media_group_id,
+        'repair_' || gen_random_uuid()::text,
+        true
+      );
+      
+      IF (v_result->>'success')::boolean THEN
+        media_group_id := v_group.media_group_id;
+        source_message_id := v_source_message_id;
+        updated_count := (v_result->>'updated_count')::integer;
+        RETURN NEXT;
+      END IF;
+    END IF;
+  END LOOP;
 END;
 $function$;
