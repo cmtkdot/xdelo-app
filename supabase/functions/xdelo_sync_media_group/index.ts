@@ -93,7 +93,7 @@ const syncMediaGroupHandler = async (req: Request, correlationId: string) => {
 
   // Log the successful sync
   await supabase.from('unified_audit_logs').insert({
-    event_type: 'media_group_sync_completed',
+    event_type: 'media_group_synced',
     entity_id: sourceMessageId,
     correlation_id: correlationId,
     metadata: {
