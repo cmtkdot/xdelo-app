@@ -1,117 +1,162 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from "../_shared/cors.ts";
-import { withErrorHandling } from "../_shared/errorHandler.ts";
 
-const supabase = createClient(
+// Create Supabase client
+const supabaseClient = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-const repairProcessingFlow = async (req: Request, correlationId: string) => {
+// Main handler
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   try {
-    // Parse optional parameters
-    const { fix_media_groups = true, fix_stuck_messages = true, fix_orphaned = true } = 
-      await req.json().catch(() => ({}));
+    const { limit = 10 } = await req.json();
+    console.log(`Starting to repair processing flow for up to ${limit} messages`);
     
-    const repairs = [];
+    // Find messages that are in a 'pending' state without analyzed content
+    const { data: pendingMessages, error: queryError } = await supabaseClient
+      .from('messages')
+      .select('id, caption, media_group_id, correlation_id')
+      .eq('processing_state', 'pending')
+      .is('analyzed_content', null)
+      .not('caption', 'is', null)
+      .not('caption', 'eq', '')
+      .limit(limit);
     
-    // 1. Fix media group content sync issues
-    if (fix_media_groups) {
-      const { data: mediaGroupResult, error: mediaGroupError } = await supabase.rpc(
-        'xdelo_repair_media_group_syncs'
-      );
-      
-      if (mediaGroupError) throw new Error(`Error repairing media groups: ${mediaGroupError.message}`);
-      
-      repairs.push({
-        type: 'media_groups',
-        fixed: mediaGroupResult?.length || 0,
-        details: mediaGroupResult
-      });
+    if (queryError) {
+      throw new Error(`Error finding pending messages: ${queryError.message}`);
     }
     
-    // 2. Fix stuck messages in processing state
-    if (fix_stuck_messages) {
-      const { data: stuckResult, error: stuckError } = await supabase.rpc(
-        'xdelo_reset_stalled_messages'
+    if (!pendingMessages || pendingMessages.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'No pending messages found that need repair',
+          data: { processed: 0 }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-      
-      if (stuckError) throw new Error(`Error resetting stalled messages: ${stuckError.message}`);
-      
-      repairs.push({
-        type: 'stuck_messages',
-        fixed: stuckResult?.length || 0,
-        details: stuckResult
-      });
     }
     
-    // 3. Fix orphaned relationships
-    if (fix_orphaned) {
-      const { data: relationshipResult, error: relationshipError } = await supabase.rpc(
-        'xdelo_repair_message_relationships'
-      );
-      
-      if (relationshipError) throw new Error(`Error repairing relationships: ${relationshipError.message}`);
-      
-      repairs.push({
-        type: 'relationships',
-        fixed: relationshipResult?.length || 0,
-        details: relationshipResult
-      });
+    console.log(`Found ${pendingMessages.length} messages to repair`);
+    
+    // Process each message directly
+    const results = [];
+    for (const message of pendingMessages) {
+      try {
+        // First try to sync from media group
+        if (message.media_group_id) {
+          const { data: syncResult, error: syncError } = await supabaseClient.rpc(
+            'xdelo_check_media_group_content',
+            {
+              p_media_group_id: message.media_group_id,
+              p_message_id: message.id,
+              p_correlation_id: message.correlation_id || crypto.randomUUID()
+            }
+          );
+          
+          if (!syncError && syncResult.success) {
+            results.push({
+              message_id: message.id,
+              status: 'synced',
+              result: syncResult
+            });
+            continue;
+          }
+        }
+        
+        // If media group sync didn't work or no media group, analyze directly
+        // Call the parse-caption-with-ai endpoint
+        const response = await fetch(
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+            },
+            body: JSON.stringify({
+              messageId: message.id,
+              caption: message.caption,
+              media_group_id: message.media_group_id,
+              correlationId: message.correlation_id || crypto.randomUUID()
+            })
+          }
+        );
+        
+        if (!response.ok) {
+          throw new Error(`Error calling parse-caption-with-ai: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        
+        // Update the message directly
+        const { error: updateError } = await supabaseClient
+          .from('messages')
+          .update({
+            analyzed_content: result.data,
+            processing_state: 'completed',
+            processing_completed_at: new Date().toISOString()
+          })
+          .eq('id', message.id);
+        
+        if (updateError) {
+          throw new Error(`Error updating message: ${updateError.message}`);
+        }
+        
+        results.push({
+          message_id: message.id,
+          status: 'analyzed',
+          result: result
+        });
+        
+      } catch (error) {
+        console.error(`Error processing message ${message.id}:`, error);
+        
+        // Update error state
+        await supabaseClient
+          .from('messages')
+          .update({
+            processing_state: 'error',
+            error_message: error.message,
+            last_error_at: new Date().toISOString(),
+            retry_count: supabaseClient.rpc('increment', { row_id: message.id, table: 'messages', column: 'retry_count' })
+          })
+          .eq('id', message.id);
+        
+        results.push({
+          message_id: message.id,
+          status: 'error',
+          error: error.message
+        });
+      }
     }
-    
-    // 4. Run diagnostics
-    const { data: diagnosticsResult, error: diagnosticsError } = await supabase.rpc(
-      'xdelo_diagnose_queue_issues'
-    );
-    
-    if (diagnosticsError) throw new Error(`Error running diagnostics: ${diagnosticsError.message}`);
-    
-    // Log the repair operation
-    await supabase.from('unified_audit_logs').insert({
-      event_type: 'system_repair_performed',
-      correlation_id: correlationId,
-      metadata: {
-        repairs,
-        diagnostics: diagnosticsResult
-      },
-      event_timestamp: new Date().toISOString()
-    });
     
     return new Response(
       JSON.stringify({
         success: true,
-        repairs,
-        diagnostics: diagnosticsResult,
-        correlation_id: correlationId
+        message: `Processed ${results.length} messages`,
+        data: { processed: results.length, results }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
-    console.error('Error in repair flow:', error);
     
-    // Log the error
-    await supabase.from('unified_audit_logs').insert({
-      event_type: 'system_repair_error',
-      error_message: error.message,
-      correlation_id: correlationId,
-      event_timestamp: new Date().toISOString()
-    });
+  } catch (error) {
+    console.error('Error in repair-processing-flow:', error);
     
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
-        correlation_id: correlationId
+        error: error.message
       }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-};
-
-serve(withErrorHandling('repair-processing-flow', repairProcessingFlow));
+});

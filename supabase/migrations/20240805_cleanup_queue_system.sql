@@ -14,7 +14,8 @@ DROP FUNCTION IF EXISTS public.schedule_sync_check();
 DROP FUNCTION IF EXISTS public.xdelo_diagnose_queue_issues();
 
 -- 2. Drop the queue table if it exists
-DROP TABLE IF EXISTS public.message_processing_queue;
+-- Adding CASCADE to handle dependent objects (views)
+DROP TABLE IF EXISTS public.message_processing_queue CASCADE;
 
 -- 3. Clean up scheduler if it exists
 DELETE FROM cron.job WHERE jobname = 'process-message-queue';
@@ -128,4 +129,3 @@ END;
 $$;
 
 COMMIT;
-
