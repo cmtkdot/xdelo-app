@@ -3216,6 +3216,21 @@ export type Database = {
         }
         Returns: undefined
       }
+      xdelo_log_event_flexible: {
+        Args: {
+          p_event_type: string
+          p_entity_id: string
+          p_telegram_message_id?: number
+          p_chat_id?: number
+          p_previous_state?: Json
+          p_new_state?: Json
+          p_metadata?: Json
+          p_correlation_id?: string
+          p_user_id?: string
+          p_error_message?: string
+        }
+        Returns: undefined
+      }
       xdelo_log_webhook_event: {
         Args: {
           p_event_type: string
@@ -3355,6 +3370,20 @@ export type Database = {
         | "media_group_content_synced"
         | "media_group_sync_error"
         | "message_queued_for_processing"
+        | "direct_caption_analysis_triggered"
+        | "caption_analysis_retry"
+        | "direct_processing_error"
+        | "analyze_message_started"
+        | "analyze_message_failed"
+        | "message_processing_completed"
+        | "message_processing_failed"
+        | "message_processing_retry"
+        | "media_group_content_synced_direct"
+        | "forward_status_changed"
+        | "duplicate_detected"
+        | "file_redownload_flagged"
+        | "health_check_performed"
+        | "edge_function_error"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
       processing_state_type:
         | "initialized"
