@@ -3384,6 +3384,8 @@ export type Database = {
         | "file_redownload_flagged"
         | "health_check_performed"
         | "edge_function_error"
+        | "queue_processing_started"
+        | "queue_processing_completed"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
       processing_state_type:
         | "initialized"
