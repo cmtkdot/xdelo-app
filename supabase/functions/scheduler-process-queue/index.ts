@@ -14,17 +14,47 @@ const handleQueueProcessing = async (req: Request, correlationId: string) => {
   console.log('Starting message processing with correlation ID:', correlationId);
   
   // Parse request body safely
-  const { limit = 20, trigger_source = 'scheduler' } = await req.json().catch(() => ({}));
+  const { limit = 20, trigger_source = 'scheduler', repair = false } = await req.json().catch(() => ({}));
   
-  console.log(`Processing with limit ${limit}, triggered by ${trigger_source}`);
+  console.log(`Processing with limit ${limit}, triggered by ${trigger_source}, repair mode: ${repair}`);
   
   try {
-    // Run the scheduled processing function
-    const { data: result, error } = await supabase
-      .rpc('xdelo_run_scheduled_message_processing');
+    let result;
     
-    if (error) {
-      throw new Error(`Error in scheduled processing: ${error.message}`);
+    if (repair) {
+      // Run diagnostics and repair operations
+      console.log('Running repair mode...');
+      
+      // Call the new diagnostic function we created
+      const { data: diagResult, error: diagError } = await supabase
+        .rpc('xdelo_diagnose_queue_issues');
+      
+      if (diagError) {
+        throw new Error(`Error in diagnostic process: ${diagError.message}`);
+      }
+      
+      result = {
+        repair_mode: true,
+        diagnostics: diagResult
+      };
+      
+      // Additionally, repair any message relationships
+      const { data: repairResult, error: repairError } = await supabase
+        .rpc('xdelo_repair_message_relationships');
+        
+      if (!repairError) {
+        result.relationship_repairs = repairResult;
+      }
+    } else {
+      // Regular processing - run the scheduled processing function
+      const { data: scheduleResult, error: scheduleError } = await supabase
+        .rpc('xdelo_run_scheduled_message_processing');
+      
+      if (scheduleError) {
+        throw new Error(`Error in scheduled processing: ${scheduleError.message}`);
+      }
+      
+      result = scheduleResult;
     }
     
     // Return the results

@@ -18,21 +18,67 @@ const syncMediaGroupHandler = async (req: Request, correlationId: string) => {
     throw new Error("Media group ID and source message ID are required");
   }
 
-  console.log(`Syncing media group ${mediaGroupId} from message ${sourceMessageId}`);
+  console.log(`Syncing media group ${mediaGroupId} from message ${sourceMessageId}, correlation ID: ${correlationId}`);
 
-  // Call the database function to sync media group content
-  const { data, error } = await supabase.rpc(
-    'xdelo_sync_media_group_content',
-    {
-      p_source_message_id: sourceMessageId,
-      p_media_group_id: mediaGroupId,
-      p_correlation_id: correlationId,
-      p_force_sync: forceSync
+  let result;
+  
+  try {
+    // First try to use the improved database function with advisory locks
+    const { data, error } = await supabase.rpc(
+      'xdelo_sync_media_group_content',
+      {
+        p_source_message_id: sourceMessageId,
+        p_media_group_id: mediaGroupId,
+        p_correlation_id: correlationId,
+        p_force_sync: forceSync
+      }
+    );
+
+    if (error) {
+      throw new Error(`Error syncing media group: ${error.message}`);
     }
-  );
-
-  if (error) {
-    throw new Error(`Error syncing media group: ${error.message}`);
+    
+    result = data;
+    console.log(`Successfully synced media group ${mediaGroupId}:`, result);
+  } catch (error) {
+    console.error(`Database sync error, trying fallback: ${error.message}`);
+    
+    // Fallback: direct update if database function fails
+    const { data: sourceMessage, error: sourceError } = await supabase
+      .from('messages')
+      .select('id, analyzed_content')
+      .eq('id', sourceMessageId)
+      .single();
+      
+    if (sourceError || !sourceMessage?.analyzed_content) {
+      throw new Error(`Error fetching source message: ${sourceError?.message || "No analyzed content"}`);
+    }
+    
+    // Update all other messages in the group
+    const { data: updateResult, error: updateError } = await supabase
+      .from('messages')
+      .update({
+        analyzed_content: sourceMessage.analyzed_content,
+        message_caption_id: sourceMessageId,
+        is_original_caption: false,
+        group_caption_synced: true,
+        processing_state: 'completed',
+        processing_completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('media_group_id', mediaGroupId)
+      .neq('id', sourceMessageId);
+      
+    if (updateError) {
+      throw new Error(`Error updating media group: ${updateError.message}`);
+    }
+    
+    result = {
+      success: true,
+      message: 'Media group content synced (fallback method)',
+      updated_count: updateResult.length,
+      source_message_id: sourceMessageId
+    };
   }
 
   // Log the successful sync
@@ -41,9 +87,10 @@ const syncMediaGroupHandler = async (req: Request, correlationId: string) => {
     entity_id: sourceMessageId,
     correlation_id: correlationId,
     metadata: {
-      ...data,
+      ...result,
       media_group_id: mediaGroupId,
-      sync_method: 'edge_function'
+      sync_method: 'edge_function',
+      forced: forceSync
     },
     event_timestamp: new Date().toISOString()
   });
@@ -51,7 +98,7 @@ const syncMediaGroupHandler = async (req: Request, correlationId: string) => {
   return new Response(
     JSON.stringify({
       success: true,
-      data,
+      data: result,
       correlation_id: correlationId
     }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

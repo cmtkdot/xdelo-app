@@ -33,58 +33,59 @@ export function useMessageProcessing() {
       // Log analysis start
       console.log(`Starting analysis for message ${message.id} with correlation ID ${correlationId}`);
       
-      // First, try the create-analyze-message-caption function for direct triggering
-      const { data: prepResult, error: prepError } = await supabase.functions.invoke(
-        'create-analyze-message-caption',
+      // Call parse-caption-with-ai directly for immediate processing
+      const { data: analysisData, error: analysisError } = await supabase.functions.invoke(
+        'parse-caption-with-ai',
         {
           body: { 
             messageId: message.id, 
             caption: message.caption,
-            mediaGroupId: message.media_group_id,
-            correlationId
+            media_group_id: message.media_group_id,
+            correlationId, 
+            isEdit: false,
+            retryCount: 0
           }
         }
       );
       
-      if (prepError) {
-        console.warn('Direct trigger failed, falling back to parse-caption-with-ai:', prepError);
-        
-        // Fall back to calling parse-caption-with-ai directly
-        const { data: analysisData, error: analysisError } = await supabase.functions.invoke(
-          'parse-caption-with-ai',
-          {
-            body: { 
-              messageId: message.id, 
-              caption: message.caption,
-              media_group_id: message.media_group_id,
-              correlationId, 
-              isEdit: false
-            }
-          }
-        );
-        
-        if (analysisError) {
-          throw new Error(analysisError.message || 'Analysis failed');
-        }
-        
-        console.log('Analysis result from fallback:', analysisData);
-        toast({
-          title: "Analysis Complete",
-          description: "The message has been analyzed successfully using fallback method."
-        });
-        
-        return analysisData;
+      if (analysisError) {
+        throw new Error(analysisError.message || 'Analysis failed');
       }
       
-      console.log('Analysis preparation result:', prepResult);
+      console.log('Analysis result:', analysisData);
       
-      // Success message
+      // If this is part of a media group, sync the content to other messages
+      if (message.media_group_id) {
+        try {
+          console.log(`Syncing content to media group ${message.media_group_id}`);
+          
+          const { data: syncData, error: syncError } = await supabase.functions.invoke(
+            'xdelo_sync_media_group',
+            {
+              body: {
+                mediaGroupId: message.media_group_id,
+                sourceMessageId: message.id,
+                correlationId
+              }
+            }
+          );
+          
+          if (syncError) {
+            console.warn('Media group sync warning:', syncError);
+          } else {
+            console.log('Media group sync result:', syncData);
+          }
+        } catch (syncError) {
+          console.warn('Media group sync error (non-fatal):', syncError);
+        }
+      }
+      
       toast({
         title: "Analysis Complete",
         description: "The message has been analyzed successfully."
       });
       
-      return prepResult?.data;
+      return analysisData?.data;
       
     } catch (error: any) {
       console.error('Error analyzing message:', error);
@@ -109,7 +110,7 @@ export function useMessageProcessing() {
   };
 
   // Process all pending messages
-  const processMessageQueue = async (limit = 10) => {
+  const processMessageQueue = async (limit = 10, repair = false) => {
     try {
       // Call the scheduler function to process pending messages
       const { data, error } = await supabase.functions.invoke(
@@ -117,17 +118,25 @@ export function useMessageProcessing() {
         {
           body: { 
             limit,
-            trigger_source: 'manual'
+            trigger_source: 'manual',
+            repair
           }
         }
       );
       
       if (error) throw error;
       
-      toast({
-        title: "Message Processing Complete",
-        description: `Processed ${data?.result?.processed_count || 0} pending messages.`
-      });
+      if (repair) {
+        toast({
+          title: "System Repair Complete",
+          description: `Diagnostics and repairs completed successfully.`
+        });
+      } else {
+        toast({
+          title: "Message Processing Complete",
+          description: `Processed ${data?.result?.processed_count || 0} pending messages.`
+        });
+      }
       
       return data;
     } catch (error: any) {
@@ -164,6 +173,9 @@ export function useMessageProcessing() {
         description: `Queued ${data?.length || 0} unprocessed messages.`
       });
       
+      // Immediately run the processor after queueing
+      await processMessageQueue(limit);
+      
       return { queued: data?.length || 0 };
     } catch (error: any) {
       console.error('Error queueing unprocessed messages:', error);
@@ -178,10 +190,16 @@ export function useMessageProcessing() {
     }
   };
 
+  // Repair any issues with the queue system and message relationships
+  const repairMessageProcessingSystem = async () => {
+    return processMessageQueue(20, true);
+  };
+
   return {
     handleReanalyze,
     processMessageQueue,
     queueUnprocessedMessages,
+    repairMessageProcessingSystem,
     isProcessing,
     errors
   };

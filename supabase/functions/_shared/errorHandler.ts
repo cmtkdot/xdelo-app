@@ -105,14 +105,16 @@ export async function logErrorToDatabase(
 export async function updateMessageWithError(
   supabaseClient: any,
   messageId: string,
-  errorMessage: string
+  errorMessage: string,
+  correlationId?: string
 ) {
   try {
     await supabaseClient.from('messages').update({
       processing_state: 'error',
       error_message: errorMessage,
       last_error_at: new Date().toISOString(),
-      retry_count: supabaseClient.sql`COALESCE(retry_count, 0) + 1`
+      retry_count: supabaseClient.sql`COALESCE(retry_count, 0) + 1`,
+      processing_correlation_id: correlationId
     }).eq('id', messageId);
   } catch (updateError) {
     console.error('Failed to update message with error state:', updateError);
