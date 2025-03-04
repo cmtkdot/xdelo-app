@@ -56,20 +56,28 @@ export const parseCaption = (caption: string): ParsedContent => {
 
   // Extract quantity with improved pattern matching
   let quantity: number | null = null;
-  // Check for 'x' followed by number
-  const xQuantityMatch = caption.match(/x(\d+)/i);
-  if (xQuantityMatch) {
-    quantity = parseInt(xQuantityMatch[1], 10);
-  } else {
-    // Check for other quantity patterns
-    const qtyMatch = caption.match(/qty:?\s*(\d+)/i) || 
-                    caption.match(/quantity:?\s*(\d+)/i) ||
-                    caption.match(/(\d+)\s*pcs/i) ||
-                    caption.match(/(\d+)\s*pieces/i) ||
-                    caption.match(/(\d+)\s*units/i);
-    
-    if (qtyMatch) {
-      quantity = parseInt(qtyMatch[1], 10);
+  
+  // Check for multiple quantity patterns in order of specificity
+  const patterns = [
+    { regex: /x\s*(\d+)/i, name: 'x-prefix' },                    // x2 or x 2
+    { regex: /qty:\s*(\d+)/i, name: 'qty-prefix' },               // qty: 2
+    { regex: /quantity:\s*(\d+)/i, name: 'quantity-prefix' },     // quantity: 2
+    { regex: /(\d+)\s*(?:pcs|pieces)/i, name: 'pcs-suffix' },     // 2 pcs or 2 pieces
+    { regex: /(\d+)\s*(?:units?)/i, name: 'units-suffix' },       // 2 unit or 2 units
+    { regex: /^.*?#.*?(?:\s+|$)(\d+)(?:\s|$)/i, name: 'after-code' }, // number after product code
+    { regex: /(\d+)\s*(?=\s|$)/, name: 'standalone' }             // standalone number
+  ];
+
+  let quantityPattern = '';
+  for (const { regex, name } of patterns) {
+    const match = caption.match(regex);
+    if (match && match[1]) {
+      const parsedQuantity = parseInt(match[1], 10);
+      if (!isNaN(parsedQuantity) && parsedQuantity > 0 && parsedQuantity < 10000) {
+        quantity = parsedQuantity;
+        quantityPattern = name;
+        break;
+      }
     }
   }
 
@@ -99,7 +107,8 @@ export const parseCaption = (caption: string): ParsedContent => {
     caption,
     parsing_metadata: {
       method: 'manual',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      quantity_pattern: quantityPattern || undefined
     }
   };
 };

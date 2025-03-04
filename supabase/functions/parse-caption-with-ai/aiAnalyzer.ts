@@ -51,19 +51,26 @@ export const analyzeWithAI = async (caption: string, manualParsing: ParsedConten
       // Extract the AI results - should be structured JSON already
       const aiResults = data.data;
       
+      // Determine the better quantity value - prefer AI unless confidence is low
+      let final_quantity = manualParsing.quantity;
+      if (aiResults.quantity !== null && 
+          aiResults.extraction_confidence?.quantity > 0.7) {
+        final_quantity = aiResults.quantity;
+      }
+      
       // Prepare final result with metadata
       const enhancedResult: ParsedContent = {
         product_name: aiResults.product_name || manualParsing.product_name,
         product_code: aiResults.product_code || manualParsing.product_code,
         vendor_uid: aiResults.vendor_uid || manualParsing.vendor_uid,
         purchase_date: aiResults.purchase_date || manualParsing.purchase_date,
-        quantity: aiResults.quantity ?? manualParsing.quantity,
+        quantity: final_quantity,
         notes: aiResults.notes || manualParsing.notes,
         caption: manualParsing.caption,
         parsing_metadata: {
           method: 'ai',
           timestamp: new Date().toISOString(),
-          confidence: 0.9, // Higher confidence for structured output
+          confidence: aiResults.extraction_confidence?.overall || 0.9,
           ai_response: JSON.stringify(aiResults)
         }
       };
@@ -96,14 +103,22 @@ export const analyzeWithAI = async (caption: string, manualParsing: ParsedConten
   }
 }
 
-// Helper to merge AI and manual parsing results
+// Helper to merge AI and manual parsing results with improved quantity handling
 export const mergeParsingResults = (aiResult: ParsedContent, manualResult: ParsedContent): ParsedContent => {
+  // Determine which quantity to use
+  let finalQuantity = manualResult.quantity;
+  if (aiResult.parsing_metadata?.confidence && 
+      aiResult.parsing_metadata.confidence > 0.7 && 
+      aiResult.quantity !== null) {
+    finalQuantity = aiResult.quantity;
+  }
+
   return {
     product_name: aiResult.product_name || manualResult.product_name,
     product_code: aiResult.product_code || manualResult.product_code,
     vendor_uid: aiResult.vendor_uid || manualResult.vendor_uid,
     purchase_date: aiResult.purchase_date || manualResult.purchase_date,
-    quantity: aiResult.quantity ?? manualResult.quantity,
+    quantity: finalQuantity,
     notes: aiResult.notes || manualResult.notes,
     caption: manualResult.caption,
     parsing_metadata: {

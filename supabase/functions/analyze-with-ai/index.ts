@@ -43,6 +43,14 @@ export default createHandler(async (req: Request) => {
             { 
               role: "system", 
               content: `You are a product information extraction assistant. Extract structured data from the given caption.
+                
+                Here are specific instructions for extracting product quantity:
+                1. Look for explicit quantity markers like "x2", "x 2", "qty: 2", "quantity: 2"
+                2. Check for quantity terms like "2 pcs", "2 pieces", "2 units"
+                3. Look for numbers that appear after product codes (after # symbol)
+                4. Check for standalone numbers that might indicate quantity
+                5. Default to 1 if no quantity is specified but product clearly exists
+                
                 Please return only JSON in this exact format:
                 {
                   "product_name": "Full product name",
@@ -50,7 +58,11 @@ export default createHandler(async (req: Request) => {
                   "vendor_uid": "1-4 letter vendor code (usually first part of product_code)",
                   "purchase_date": "Date in YYYY-MM-DD format",
                   "quantity": number or null,
-                  "notes": "Any additional details"
+                  "notes": "Any additional details",
+                  "extraction_confidence": {
+                    "quantity": number between 0-1,
+                    "overall": number between 0-1
+                  }
                 }` 
             },
             { 

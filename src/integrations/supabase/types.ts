@@ -3021,6 +3021,12 @@ export type Database = {
         }
         Returns: boolean
       }
+      xdelo_find_caption_message: {
+        Args: {
+          p_media_group_id: string
+        }
+        Returns: string
+      }
       xdelo_find_valid_file_id: {
         Args: {
           p_media_group_id: string
@@ -3141,6 +3147,14 @@ export type Database = {
         }
         Returns: string
       }
+      xdelo_repair_media_group_syncs: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          media_group_id: string
+          source_message_id: string
+          updated_count: number
+        }[]
+      }
       xdelo_repair_message_relationships: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3172,14 +3186,24 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_sync_media_group_content: {
-        Args: {
-          p_source_message_id: string
-          p_media_group_id: string
-          p_correlation_id?: string
-        }
-        Returns: Json
-      }
+      xdelo_sync_media_group_content:
+        | {
+            Args: {
+              p_source_message_id: string
+              p_media_group_id: string
+              p_correlation_id?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_source_message_id: string
+              p_media_group_id: string
+              p_correlation_id?: string
+              p_force_sync?: boolean
+            }
+            Returns: Json
+          }
       xdelo_sync_pending_media_group_messages: {
         Args: Record<PropertyKey, never>
         Returns: Json
