@@ -277,43 +277,38 @@ export const syncMediaGroupContent = async (
       error_message: error.message,
       metadata: {
         media_group_id: mediaGroupId,
-        operation: 'sync_group'
+        method: 'sync_attempt_failed'
       },
       correlation_id: correlationId || null
     });
     
     return {
       success: false,
-      reason: 'sync_error',
       error: error.message,
-      fallbackError: error.cause?.message
+      reason: 'sync_error'
     };
   }
 };
 
-// Log the analysis event
+// Log analysis events
 export const logAnalysisEvent = async (
   messageId: string,
-  correlationId: string,
+  correlationId: string | null,
   previousState: any,
   newState: any,
   metadata: any
 ) => {
   try {
     await supabaseClient.from('unified_audit_logs').insert({
-      event_type: 'caption_analyzed',
+      event_type: 'caption_analysis_completed',
       entity_id: messageId,
+      correlation_id: correlationId,
       previous_state: previousState,
       new_state: newState,
-      metadata: {
-        ...metadata,
-        correlation_id: correlationId
-      },
-      correlation_id: correlationId || null
+      metadata,
+      event_timestamp: new Date().toISOString()
     });
-    return { success: true };
   } catch (error) {
-    console.error('Error logging analysis event:', error);
-    return { success: false, error: error.message };
+    console.error('Failed to log analysis event:', error);
   }
 };

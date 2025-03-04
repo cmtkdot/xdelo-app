@@ -71,3 +71,50 @@ export function withErrorHandling(
     }
   };
 }
+
+// Log error to database
+export async function logErrorToDatabase(
+  supabaseClient: any,
+  errorInfo: {
+    messageId: string,
+    errorMessage: string,
+    correlationId: string,
+    errorType?: string,
+    functionName?: string
+  }
+) {
+  try {
+    await supabaseClient.from('unified_audit_logs').insert({
+      event_type: 'function_error',
+      entity_id: errorInfo.messageId,
+      error_message: errorInfo.errorMessage,
+      correlation_id: errorInfo.correlationId,
+      metadata: {
+        error_type: errorInfo.errorType || 'UnknownError',
+        function_name: errorInfo.functionName || 'unspecified',
+        timestamp: new Date().toISOString()
+      },
+      event_timestamp: new Date().toISOString()
+    });
+  } catch (logError) {
+    console.error('Failed to log error to database:', logError);
+  }
+}
+
+// Update message with error state
+export async function updateMessageWithError(
+  supabaseClient: any,
+  messageId: string,
+  errorMessage: string
+) {
+  try {
+    await supabaseClient.from('messages').update({
+      processing_state: 'error',
+      error_message: errorMessage,
+      last_error_at: new Date().toISOString(),
+      retry_count: supabaseClient.sql`COALESCE(retry_count, 0) + 1`
+    }).eq('id', messageId);
+  } catch (updateError) {
+    console.error('Failed to update message with error state:', updateError);
+  }
+}

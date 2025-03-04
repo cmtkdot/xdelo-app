@@ -3390,6 +3390,9 @@ export type Database = {
         | "edge_function_error"
         | "queue_processing_started"
         | "queue_processing_completed"
+        | "caption_analysis_directly_triggered"
+        | "caption_analysis_prepared"
+        | "caption_analysis_error"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
       processing_state_type:
         | "initialized"
