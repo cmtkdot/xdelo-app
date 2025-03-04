@@ -3393,6 +3393,7 @@ export type Database = {
         | "caption_analysis_directly_triggered"
         | "caption_analysis_prepared"
         | "caption_analysis_error"
+        | "edge_function_fallback"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
       processing_state_type:
         | "initialized"

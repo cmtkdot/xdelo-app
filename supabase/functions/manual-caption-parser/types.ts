@@ -14,6 +14,10 @@ export interface ParsedContent {
     quantity_pattern?: string;
     used_fallback?: boolean;
     original_caption?: string;
+    is_edit?: boolean;
+    edit_timestamp?: string;
+    retry_count?: number;
+    retry_timestamp?: string;
     error?: string;
   };
   sync_metadata?: {

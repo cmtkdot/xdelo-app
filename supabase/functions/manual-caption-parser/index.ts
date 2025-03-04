@@ -15,23 +15,24 @@ const supabase = createClient(
 const manualCaptionParser = async (req: Request, correlationId: string) => {
   // Parse request body
   const body = await req.json();
-  const { messageId, caption, media_group_id, trigger_source = 'database_trigger' } = body;
+  const { messageId, caption, media_group_id, trigger_source = 'database_trigger', isEdit = false } = body;
   
   if (!messageId) {
     throw new Error("Message ID is required");
   }
 
-  console.log(`Manual caption parser triggered for message ${messageId}, correlation ID: ${correlationId}`);
+  console.log(`Manual caption parser triggered for message ${messageId}, correlation ID: ${correlationId}, isEdit: ${isEdit}`);
   
   try {
     // Get the message details if caption wasn't provided
     let messageCaption = caption;
     let messageGroupId = media_group_id;
+    let existingMessage = null;
 
     if (!messageCaption) {
       const { data: message, error: messageError } = await supabase
         .from('messages')
-        .select('id, caption, media_group_id, processing_state')
+        .select('id, caption, media_group_id, processing_state, analyzed_content, old_analyzed_content')
         .eq('id', messageId)
         .single();
       
@@ -39,8 +40,8 @@ const manualCaptionParser = async (req: Request, correlationId: string) => {
         throw new Error(`Message not found: ${messageError?.message || 'Unknown error'}`);
       }
       
-      // Skip processing if no caption or already processed
-      if (!message.caption || message.processing_state === 'completed') {
+      // Skip processing if no caption or already processed (and not an edit)
+      if (!message.caption || (message.processing_state === 'completed' && !isEdit)) {
         return new Response(
           JSON.stringify({
             success: true,
@@ -53,25 +54,73 @@ const manualCaptionParser = async (req: Request, correlationId: string) => {
 
       messageCaption = message.caption;
       messageGroupId = message.media_group_id;
+      existingMessage = message;
+    } else {
+      // If caption was provided but we need existing message data for edit handling
+      if (isEdit) {
+        const { data: message, error: messageError } = await supabase
+          .from('messages')
+          .select('analyzed_content, old_analyzed_content')
+          .eq('id', messageId)
+          .single();
+          
+        if (!messageError && message) {
+          existingMessage = message;
+        }
+      }
     }
 
-    console.log(`Processing caption for message ${messageId}, caption length: ${messageCaption.length}`);
+    console.log(`Processing caption for message ${messageId}, caption length: ${messageCaption.length}, isEdit: ${isEdit}`);
     
     // Use our manual caption parser
     const parsedContent = parseCaption(messageCaption);
     
     console.log(`Caption parsed successfully for message ${messageId}:`, parsedContent);
     
+    // Prepare update data
+    const updateData: any = {
+      analyzed_content: parsedContent,
+      processing_state: 'completed',
+      processing_completed_at: new Date().toISOString(),
+      is_original_caption: true,
+      updated_at: new Date().toISOString()
+    };
+    
+    // Handle edit history properly
+    if (isEdit && existingMessage?.analyzed_content) {
+      // Prepare old_analyzed_content array
+      let oldAnalyzedContent = [];
+      
+      if (existingMessage.old_analyzed_content) {
+        oldAnalyzedContent = Array.isArray(existingMessage.old_analyzed_content) ? 
+          [...existingMessage.old_analyzed_content] : 
+          [existingMessage.old_analyzed_content];
+      }
+      
+      // Add timestamp to the previous content before storing it
+      const previousContent = {
+        ...existingMessage.analyzed_content,
+        edit_timestamp: new Date().toISOString()
+      };
+      
+      oldAnalyzedContent.push(previousContent);
+      updateData.old_analyzed_content = oldAnalyzedContent;
+      
+      // Add edit metadata to the new parsed content
+      parsedContent.parsing_metadata = {
+        ...parsedContent.parsing_metadata,
+        is_edit: true,
+        edit_timestamp: new Date().toISOString()
+      };
+      
+      updateData.analyzed_content = parsedContent;
+      console.log(`Storing edit history for message ${messageId}, previous edits: ${oldAnalyzedContent.length}`);
+    }
+    
     // Update the message with the analyzed content
     const { error: updateError } = await supabase
       .from('messages')
-      .update({
-        analyzed_content: parsedContent,
-        processing_state: 'completed',
-        processing_completed_at: new Date().toISOString(),
-        is_original_caption: true,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', messageId);
     
     if (updateError) {
@@ -88,21 +137,22 @@ const manualCaptionParser = async (req: Request, correlationId: string) => {
             p_source_message_id: messageId,
             p_media_group_id: messageGroupId,
             p_correlation_id: correlationId,
-            p_force_sync: true
+            p_force_sync: true,
+            p_sync_edit_history: isEdit
           }
         );
         
         if (error) {
           console.warn(`Warning: Media group sync via RPC failed: ${error.message}`);
           // Fallback to direct update
-          await syncMediaGroupFallback(messageId, messageGroupId, parsedContent);
+          await syncMediaGroupFallback(messageId, messageGroupId, parsedContent, isEdit);
         } else {
           syncResult = data;
         }
       } catch (syncError) {
         console.error(`Media group sync error: ${syncError.message}`);
         // Attempt fallback sync
-        await syncMediaGroupFallback(messageId, messageGroupId, parsedContent);
+        await syncMediaGroupFallback(messageId, messageGroupId, parsedContent, isEdit);
       }
     }
     
@@ -113,6 +163,7 @@ const manualCaptionParser = async (req: Request, correlationId: string) => {
       correlation_id: correlationId,
       metadata: {
         trigger_source,
+        is_edit: isEdit,
         caption_length: messageCaption.length,
         media_group_id: messageGroupId,
         has_sync_result: !!syncResult
@@ -126,7 +177,8 @@ const manualCaptionParser = async (req: Request, correlationId: string) => {
         message: `Caption processed for message ${messageId}`,
         data: parsedContent,
         sync_result: syncResult,
-        correlation_id: correlationId
+        correlation_id: correlationId,
+        is_edit: isEdit
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -141,6 +193,7 @@ const manualCaptionParser = async (req: Request, correlationId: string) => {
       correlation_id: correlationId,
       metadata: {
         trigger_source,
+        is_edit: isEdit,
         error_stack: error.stack
       },
       event_timestamp: new Date().toISOString()
@@ -165,13 +218,14 @@ const manualCaptionParser = async (req: Request, correlationId: string) => {
 async function syncMediaGroupFallback(
   sourceMessageId: string, 
   mediaGroupId: string,
-  analyzedContent: ParsedContent
+  analyzedContent: ParsedContent,
+  isEdit: boolean = false
 ): Promise<void> {
   try {
     // Get the current source message to ensure it has analyzed_content
     const { data: sourceMessage } = await supabase
       .from('messages')
-      .select('analyzed_content')
+      .select('analyzed_content, old_analyzed_content')
       .eq('id', sourceMessageId)
       .single();
     
@@ -180,22 +234,30 @@ async function syncMediaGroupFallback(
       return;
     }
     
+    // Basic update data for all messages in the group
+    const updateData: any = {
+      analyzed_content: analyzedContent,
+      message_caption_id: sourceMessageId,
+      is_original_caption: false,
+      group_caption_synced: true,
+      processing_state: 'completed',
+      processing_completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    // If this is an edit and we need to sync edit history
+    if (isEdit && sourceMessage.old_analyzed_content) {
+      updateData.old_analyzed_content = sourceMessage.old_analyzed_content;
+    }
+    
     // Update all other messages in the group
     await supabase
       .from('messages')
-      .update({
-        analyzed_content: analyzedContent,
-        message_caption_id: sourceMessageId,
-        is_original_caption: false,
-        group_caption_synced: true,
-        processing_state: 'completed',
-        processing_completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('media_group_id', mediaGroupId)
       .neq('id', sourceMessageId);
     
-    console.log(`Fallback sync completed for media group ${mediaGroupId}`);
+    console.log(`Fallback sync completed for media group ${mediaGroupId}, isEdit: ${isEdit}`);
   } catch (error) {
     console.error(`Fallback sync error: ${error.message}`);
   }

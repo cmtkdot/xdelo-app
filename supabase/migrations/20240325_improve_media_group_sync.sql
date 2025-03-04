@@ -4,7 +4,8 @@ CREATE OR REPLACE FUNCTION public.xdelo_sync_media_group_content(
   p_source_message_id uuid, 
   p_media_group_id text, 
   p_correlation_id text DEFAULT NULL,
-  p_force_sync boolean DEFAULT false
+  p_force_sync boolean DEFAULT false,
+  p_sync_edit_history boolean DEFAULT false
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -86,7 +87,13 @@ BEGIN
       message_caption_id = p_source_message_id,
       is_original_caption = false,
       processing_completed_at = COALESCE(processing_completed_at, NOW()),
-      updated_at = NOW()
+      updated_at = NOW(),
+      -- Only sync edit history if specifically requested
+      old_analyzed_content = CASE 
+        WHEN p_sync_edit_history AND v_source_message.old_analyzed_content IS NOT NULL 
+        THEN v_source_message.old_analyzed_content
+        ELSE old_analyzed_content
+      END
     WHERE 
       media_group_id = p_media_group_id 
       AND id != p_source_message_id
@@ -128,7 +135,8 @@ BEGIN
       'source_message_id', p_source_message_id,
       'updated_messages_count', v_updated_count,
       'operation', 'sync_group',
-      'force_sync', p_force_sync
+      'force_sync', p_force_sync,
+      'sync_edit_history', p_sync_edit_history
     ),
     p_correlation_id,
     NOW()
@@ -140,7 +148,8 @@ BEGIN
     'source_message_id', p_source_message_id, 
     'updated_count', v_updated_count,
     'correlation_id', p_correlation_id,
-    'force_sync', p_force_sync
+    'force_sync', p_force_sync,
+    'sync_edit_history', p_sync_edit_history
   );
 EXCEPTION
   WHEN OTHERS THEN
@@ -161,7 +170,8 @@ EXCEPTION
       jsonb_build_object(
         'media_group_id', p_media_group_id,
         'operation', 'sync_group',
-        'force_sync', p_force_sync
+        'force_sync', p_force_sync,
+        'sync_edit_history', p_sync_edit_history
       ),
       p_correlation_id,
       NOW()
@@ -263,7 +273,8 @@ BEGIN
         v_source_message_id,
         v_group.media_group_id,
         'repair_' || gen_random_uuid()::text,
-        true
+        true,
+        true  -- Always sync edit history during repairs
       );
       
       IF (v_result->>'success')::boolean THEN

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -97,38 +98,41 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
         }
 
         setSyncStatus('Analyzing content...');
-        console.log('Triggering reanalysis for updated content');
+        console.log('Triggering manual parser for updated content');
         const correlationId = crypto.randomUUID();
         
-        const { data: reanalysisData, error: reanalysisError } = await supabase.functions.invoke('parse-caption-with-ai', {
+        // Use manual-caption-parser instead of parse-caption-with-ai
+        const { data: parsingData, error: parsingError } = await supabase.functions.invoke('manual-caption-parser', {
           body: {
             messageId: media.id,
             caption: caption,
             media_group_id: media.media_group_id,
-            correlationId: correlationId
+            correlationId: correlationId,
+            isEdit: true,
+            trigger_source: 'user_edit'
           }
         });
 
-        if (reanalysisError) {
-          console.error('Reanalysis error:', reanalysisError);
+        if (parsingError) {
+          console.error('Caption parsing error:', parsingError);
           setSyncStatus('Analysis failed, will retry automatically.');
           toast({
-            description: "Caption updated but content reanalysis failed. It will be retried automatically.",
+            description: "Caption updated but content analysis failed. It will be retried automatically.",
             variant: "destructive"
           });
         } else {
-          console.log('Reanalysis completed successfully:', reanalysisData);
+          console.log('Caption parsed successfully:', parsingData);
           
           if (media.media_group_id) {
-            const syncResult = reanalysisData?.sync_result as { success: boolean; syncedCount?: number } | undefined;
+            const syncResult = parsingData?.sync_result as { success: boolean; updated_count?: number } | undefined;
             
             if (syncResult?.success) {
-              const syncCount = syncResult.syncedCount || 0;
+              const syncCount = syncResult.updated_count || 0;
               setSyncStatus(`Synced with ${syncCount} other messages in group`);
               console.log(`Media group sync completed for ${media.media_group_id}:`, syncResult);
             } else {
               setSyncStatus('Media group sync may have failed');
-              console.warn('Media group sync may not have completed properly:', reanalysisData?.sync_result);
+              console.warn('Media group sync may not have completed properly:', parsingData?.sync_result);
             }
           } else {
             setSyncStatus('Analysis completed');

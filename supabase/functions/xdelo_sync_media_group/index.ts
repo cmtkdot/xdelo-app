@@ -12,13 +12,13 @@ const supabase = createClient(
 
 const syncMediaGroupHandler = async (req: Request, correlationId: string) => {
   // Safely parse the request body
-  const { mediaGroupId, sourceMessageId, forceSync = false } = await req.json();
+  const { mediaGroupId, sourceMessageId, forceSync = false, syncEditHistory = false } = await req.json();
   
   if (!mediaGroupId || !sourceMessageId) {
     throw new Error("Media group ID and source message ID are required");
   }
 
-  console.log(`Syncing media group ${mediaGroupId} from message ${sourceMessageId}, correlation ID: ${correlationId}`);
+  console.log(`Syncing media group ${mediaGroupId} from message ${sourceMessageId}, correlation ID: ${correlationId}, syncEditHistory: ${syncEditHistory}`);
 
   let result;
   
@@ -30,7 +30,8 @@ const syncMediaGroupHandler = async (req: Request, correlationId: string) => {
         p_source_message_id: sourceMessageId,
         p_media_group_id: mediaGroupId,
         p_correlation_id: correlationId,
-        p_force_sync: forceSync
+        p_force_sync: forceSync,
+        p_sync_edit_history: syncEditHistory
       }
     );
 
@@ -46,7 +47,7 @@ const syncMediaGroupHandler = async (req: Request, correlationId: string) => {
     // Fallback: direct update if database function fails
     const { data: sourceMessage, error: sourceError } = await supabase
       .from('messages')
-      .select('id, analyzed_content')
+      .select('id, analyzed_content, old_analyzed_content')
       .eq('id', sourceMessageId)
       .single();
       
@@ -54,18 +55,26 @@ const syncMediaGroupHandler = async (req: Request, correlationId: string) => {
       throw new Error(`Error fetching source message: ${sourceError?.message || "No analyzed content"}`);
     }
     
+    // Update data with optional edit history
+    const updateData: any = {
+      analyzed_content: sourceMessage.analyzed_content,
+      message_caption_id: sourceMessageId,
+      is_original_caption: false,
+      group_caption_synced: true,
+      processing_state: 'completed',
+      processing_completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    // Include edit history if requested
+    if (syncEditHistory && sourceMessage.old_analyzed_content) {
+      updateData.old_analyzed_content = sourceMessage.old_analyzed_content;
+    }
+    
     // Update all other messages in the group
     const { data: updateResult, error: updateError } = await supabase
       .from('messages')
-      .update({
-        analyzed_content: sourceMessage.analyzed_content,
-        message_caption_id: sourceMessageId,
-        is_original_caption: false,
-        group_caption_synced: true,
-        processing_state: 'completed',
-        processing_completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('media_group_id', mediaGroupId)
       .neq('id', sourceMessageId);
       
@@ -77,7 +86,8 @@ const syncMediaGroupHandler = async (req: Request, correlationId: string) => {
       success: true,
       message: 'Media group content synced (fallback method)',
       updated_count: updateResult.length,
-      source_message_id: sourceMessageId
+      source_message_id: sourceMessageId,
+      sync_edit_history: syncEditHistory
     };
   }
 
@@ -90,7 +100,8 @@ const syncMediaGroupHandler = async (req: Request, correlationId: string) => {
       ...result,
       media_group_id: mediaGroupId,
       sync_method: 'edge_function',
-      forced: forceSync
+      forced: forceSync,
+      sync_edit_history: syncEditHistory
     },
     event_timestamp: new Date().toISOString()
   });

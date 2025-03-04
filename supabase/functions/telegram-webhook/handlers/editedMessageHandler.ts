@@ -91,11 +91,11 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         console.error('Error logging edit operation:', logError);
       }
       
-      // Directly trigger caption analysis without using the queue
-      console.log(`Directly triggering analysis for edited message ${existingMessage.id}`);
+      // Directly trigger manual caption parser instead of parse-caption-with-ai
+      console.log(`Directly triggering manual parser for edited message ${existingMessage.id}`);
       try {
         const parseCaptionResponse = await fetch(
-          `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/manual-caption-parser`,
           {
             method: 'POST',
             headers: {
@@ -107,7 +107,8 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
               caption: message.caption || '',
               media_group_id: existingMessage.media_group_id,
               correlationId: correlationId,
-              isEdit: true
+              isEdit: true,
+              trigger_source: 'edit_handler'
             })
           }
         );
