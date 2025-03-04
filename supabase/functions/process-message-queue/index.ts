@@ -66,15 +66,23 @@ serve(async (req) => {
 // Get messages from queue with consistent error handling
 async function getMessagesFromQueue(limit: number): Promise<MessageQueueItem[]> {
   try {
+    console.log(`Fetching up to ${limit} messages for processing using xdelo_get_next_message_for_processing`);
+    
+    // Use the correct function name with xdelo_ prefix
     const { data, error } = await supabaseClient.rpc(
-      'xdelo_get_messages_for_processing',
+      'xdelo_get_next_message_for_processing',
       { limit_count: limit }
     );
     
-    if (error) throw error;
+    if (error) {
+      console.error('Error getting messages from queue:', error);
+      return [];
+    }
+    
+    console.log(`Retrieved ${data?.length || 0} messages from queue`);
     return data || [];
   } catch (error) {
-    console.error('Error getting messages from queue:', error);
+    console.error('Error in getMessagesFromQueue:', error);
     return [];
   }
 }
@@ -82,6 +90,7 @@ async function getMessagesFromQueue(limit: number): Promise<MessageQueueItem[]> 
 // Mark queue item as failed with proper error handling
 async function markQueueItemAsFailed(queueId: string, errorMessage: string): Promise<boolean> {
   try {
+    console.log(`Marking queue item ${queueId} as failed: ${errorMessage}`);
     const { error } = await supabaseClient.rpc('xdelo_fail_message_processing', {
       p_queue_id: queueId,
       p_error_message: errorMessage
@@ -130,6 +139,11 @@ async function processMessages(messages: MessageQueueItem[]): Promise<Processing
         continue;
       }
       
+      // Ensure correlation_id is a string
+      const safeCorrelationId = message.correlation_id ? 
+        String(message.correlation_id) : 
+        crypto.randomUUID().toString();
+      
       // Call the parse-caption-with-ai function
       const response = await fetch(
         `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
@@ -143,7 +157,7 @@ async function processMessages(messages: MessageQueueItem[]): Promise<Processing
             messageId: message.message_id,
             caption: message.caption,
             media_group_id: message.media_group_id,
-            correlationId: String(message.correlation_id || ''), // Ensure it's a string
+            correlationId: safeCorrelationId,
             queue_id: message.queue_id
           })
         }
@@ -151,7 +165,7 @@ async function processMessages(messages: MessageQueueItem[]): Promise<Processing
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Failed to process message: ${errorText}`);
+        throw new Error(`Failed to process message (${response.status}): ${errorText}`);
       }
 
       const result = await response.json();
@@ -173,13 +187,13 @@ async function processMessages(messages: MessageQueueItem[]): Promise<Processing
         message_id: message.message_id,
         queue_id: message.queue_id,
         status: 'error',
-        error_message: error.message
+        error_message: error instanceof Error ? error.message : String(error)
       });
       
       // Mark the queue item as failed
       await markQueueItemAsFailed(
         message.queue_id,
-        `Processing error: ${error.message}`
+        error instanceof Error ? error.message : String(error)
       );
     }
   }

@@ -3,6 +3,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { parseCaption, shouldUseAI } from "./captionParser.ts";
 import { aiAnalyzeCaption } from "./aiAnalyzer.ts";
+import { updateMessageWithAnalyzedContent } from "./dbOperations.ts";
+import { syncMediaGroup } from "./dbOperations.ts"; 
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -62,9 +64,6 @@ serve(async (req) => {
 
     // Step 3: Update the message with analyzed content
     console.log('Updating message with analyzed content...');
-    
-    // Get DB operations
-    const { updateMessageWithAnalyzedContent, syncMediaGroup } = await import("./dbOperations.ts");
     
     const updateResult = await updateMessageWithAnalyzedContent(
       messageId,
