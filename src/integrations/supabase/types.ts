@@ -3336,6 +3336,16 @@ export type Database = {
             }
             Returns: Json
           }
+        | {
+            Args: {
+              p_source_message_id: string
+              p_media_group_id: string
+              p_correlation_id?: string
+              p_force_sync?: boolean
+              p_sync_edit_history?: boolean
+            }
+            Returns: Json
+          }
       xdelo_sync_pending_media_group_messages: {
         Args: Record<PropertyKey, never>
         Returns: Json
