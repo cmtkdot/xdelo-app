@@ -1,3 +1,4 @@
+
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { getMediaInfo } from '../utils/mediaUtils.ts';
 import { logMessageOperation } from '../utils/logger.ts';
@@ -384,12 +385,12 @@ async function processMessage(
     
     try {
       // Use the proper function to check and sync with media group
+      // This call was causing the parameter mismatch error
       const { data: syncResult, error: syncError } = await supabaseClient.rpc(
         'xdelo_check_media_group_content',
         {
           p_media_group_id: message.media_group_id,
-          p_message_id: dbMessage.id,
-          p_correlation_id: context.correlationId
+          p_message_id: dbMessage.id
         }
       );
       
@@ -412,8 +413,7 @@ async function processMessage(
               'xdelo_check_media_group_content',
               {
                 p_media_group_id: message.media_group_id,
-                p_message_id: dbMessage.id,
-                p_correlation_id: context.correlationId
+                p_message_id: dbMessage.id
               }
             );
           } catch (delayedError) {
