@@ -3,14 +3,15 @@
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
--- Remove old cron job
-select cron.unschedule('process-message-queue');
-
 -- Schedule the function to run every 15 minutes
 select cron.schedule(
-  'process-captions',
+  'process-message-queue',
   '*/15 * * * *',
   $$
-  select xdelo_schedule_caption_processing();
+  select net.http_post(
+    url:='{{SUPABASE_URL}}/functions/v1/process-message-queue',
+    headers:='{"Content-Type": "application/json", "Authorization": "Bearer {{SUPABASE_SERVICE_ROLE_KEY}}"}'::jsonb,
+    body:='{"limit": 10}'::jsonb
+  ) as request_id;
   $$
 );

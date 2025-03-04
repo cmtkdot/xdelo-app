@@ -5,6 +5,7 @@ export interface RequestPayload {
   media_group_id?: string;
   caption?: string;
   correlationId: string; // Always expecting a string
+  queue_id?: string;
   file_info?: any;
   isEdit?: boolean;
 }
