@@ -12,6 +12,9 @@ select cron.schedule(
     -- Process any pending messages directly
     perform xdelo_process_pending_messages(20);
     
+    -- Reset any stalled messages
+    perform xdelo_reset_stalled_messages();
+    
     -- Log the scheduled run
     insert into unified_audit_logs (
       event_type,

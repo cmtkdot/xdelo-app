@@ -1531,6 +1531,7 @@ export type Database = {
           is_miscellaneous_item: boolean | null
           is_original_caption: boolean | null
           last_error_at: string | null
+          last_processing_attempt: string | null
           media_group_id: string | null
           media_type: string | null
           message_caption_id: string | null
@@ -1549,6 +1550,7 @@ export type Database = {
           parsed_total_price: number | null
           parsed_unit_price: number | null
           parsed_vendor_uid: string | null
+          processing_attempts: number | null
           processing_completed_at: string | null
           processing_correlation_id: string | null
           processing_started_at: string | null
@@ -1617,6 +1619,7 @@ export type Database = {
           is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
+          last_processing_attempt?: string | null
           media_group_id?: string | null
           media_type?: string | null
           message_caption_id?: string | null
@@ -1635,6 +1638,7 @@ export type Database = {
           parsed_total_price?: number | null
           parsed_unit_price?: number | null
           parsed_vendor_uid?: string | null
+          processing_attempts?: number | null
           processing_completed_at?: string | null
           processing_correlation_id?: string | null
           processing_started_at?: string | null
@@ -1703,6 +1707,7 @@ export type Database = {
           is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
+          last_processing_attempt?: string | null
           media_group_id?: string | null
           media_type?: string | null
           message_caption_id?: string | null
@@ -1721,6 +1726,7 @@ export type Database = {
           parsed_total_price?: number | null
           parsed_unit_price?: number | null
           parsed_vendor_uid?: string | null
+          processing_attempts?: number | null
           processing_completed_at?: string | null
           processing_correlation_id?: string | null
           processing_started_at?: string | null
@@ -3228,6 +3234,17 @@ export type Database = {
         }
         Returns: boolean
       }
+      xdelo_process_pending_messages: {
+        Args: {
+          limit_count?: number
+        }
+        Returns: {
+          message_id: string
+          caption: string
+          media_group_id: string
+          processed: boolean
+        }[]
+      }
       xdelo_queue_message_for_processing: {
         Args: {
           p_message_id: string
@@ -3258,6 +3275,14 @@ export type Database = {
           old_path: string
           new_path: string
           status: string
+        }[]
+      }
+      xdelo_reset_stalled_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          message_id: string
+          previous_state: string
+          reset_reason: string
         }[]
       }
       xdelo_standardize_storage_path: {

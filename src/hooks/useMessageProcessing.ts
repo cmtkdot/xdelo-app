@@ -94,7 +94,7 @@ export function useMessageProcessing() {
     }
   };
 
-  // Find unprocessed messages with captions
+  // Find unprocessed messages with captions and queue them for processing
   const queueUnprocessedMessages = async (limit = 10) => {
     try {
       const { data, error } = await supabase.from('messages')

@@ -26,6 +26,13 @@ serve(async (req) => {
     if (processError) throw new Error(`Error processing messages: ${processError.message}`);
     console.log(`Processed ${processedMessages?.length || 0} pending messages`);
     
+    // Reset stalled messages
+    const { data: resetMessages, error: resetError } = await supabase
+      .rpc('xdelo_reset_stalled_messages');
+      
+    if (resetError) console.error(`Error resetting stalled messages: ${resetError.message}`);
+    console.log(`Reset ${resetMessages?.length || 0} stalled messages`);
+    
     // Count success and failures
     const successCount = processedMessages?.filter(item => item.processed).length || 0;
     const failedCount = processedMessages?.filter(item => !item.processed).length || 0;
@@ -36,7 +43,8 @@ serve(async (req) => {
       metadata: {
         processed: processedMessages?.length || 0,
         success: successCount,
-        failed: failedCount
+        failed: failedCount,
+        stalled_reset: resetMessages?.length || 0
       },
       event_timestamp: new Date().toISOString()
     });
@@ -46,7 +54,8 @@ serve(async (req) => {
         success: true,
         processed: processedMessages?.length || 0,
         success_count: successCount,
-        failed_count: failedCount
+        failed_count: failedCount,
+        stalled_reset: resetMessages?.length || 0
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
