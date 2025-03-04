@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
-import { Message } from '@/types';
+import { Message, AnalyzedContent } from '@/types';
 
 export function useCaptionSync() {
   const [isSyncing, setIsSyncing] = useState<Record<string, boolean>>({});
@@ -22,7 +22,7 @@ export function useCaptionSync() {
       console.log(`Syncing media group content for message ${message.id}`, {
         media_group_id: message.media_group_id,
         has_caption: !!message.caption,
-        is_edited: message.is_edited_message || message.is_edited_channel_post
+        is_edited: message.is_edited // Use the correct property
       });
       
       if (!message.media_group_id) {
@@ -121,10 +121,13 @@ export function useCaptionSync() {
       
       // Finally sync to media group if applicable
       if (message.media_group_id) {
-        await syncMediaGroupContent({
+        // Create a new message object with the updated caption
+        const updatedMessage: Message = {
           ...message,
           caption: newCaption
-        });
+        };
+        
+        await syncMediaGroupContent(updatedMessage);
       }
       
       toast({
@@ -174,7 +177,7 @@ export function useCaptionSync() {
       }
       
       // Then trigger a forced sync
-      return await syncMediaGroupContent(message);
+      return await syncMediaGroupContent(message as Message);
       
     } catch (error: any) {
       console.error('Error in force sync:', error);
