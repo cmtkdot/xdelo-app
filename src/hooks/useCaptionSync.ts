@@ -22,7 +22,8 @@ export function useCaptionSync() {
       console.log(`Syncing media group content for message ${message.id}`, {
         media_group_id: message.media_group_id,
         has_caption: !!message.caption,
-        is_edited: message.is_edited // Use the correct property
+        // Check if the message has been edited (if the property exists in the type)
+        edited: message.edit_date ? true : false
       });
       
       if (!message.media_group_id) {
