@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from "../_shared/cors.ts";
@@ -125,7 +124,7 @@ serve(async (req) => {
           continue;
         }
         
-        // Call the parse-caption-with-ai function
+        // Call the parse-caption-with-ai function - ensure correlationId is a string
         const response = await fetch(
           `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
           {
@@ -138,7 +137,7 @@ serve(async (req) => {
               messageId: message.message_id,
               caption: message.caption,
               media_group_id: message.media_group_id,
-              correlationId: message.correlation_id,
+              correlationId: String(message.correlation_id),
               queue_id: message.queue_id
             })
           }

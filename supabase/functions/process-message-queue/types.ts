@@ -2,7 +2,7 @@
 export interface MessageQueueItem {
   queue_id: string;
   message_id: string;
-  correlation_id: string;
+  correlation_id: string; // Explicitly defined as string 
   caption: string;
   media_group_id?: string;
   storage_path?: string;

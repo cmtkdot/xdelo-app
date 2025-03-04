@@ -18,7 +18,7 @@ export function useMessageProcessing() {
       
       console.log('Requesting reanalysis for message:', message.id);
       
-      // Generate a correlation ID
+      // Generate a correlation ID as a string (not a UUID object)
       const correlationId = crypto.randomUUID();
       
       // Use raw SQL call since Supabase's rpc doesn't accept function names from a variable
@@ -26,7 +26,7 @@ export function useMessageProcessing() {
         'xdelo_queue_message_for_processing',
         {
           p_message_id: message.id,
-          p_correlation_id: correlationId
+          p_correlation_id: correlationId // Always passing as a string
         }
       );
 
