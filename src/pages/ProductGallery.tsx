@@ -182,6 +182,9 @@ const ProductGallery = () => {
         <MediaEditDialog
           media={editItem}
           open={!!editItem}
+          onOpenChange={(open) => {
+            if (!open) setEditItem(null);
+          }}
           onClose={() => setEditItem(null)}
         />
       )}

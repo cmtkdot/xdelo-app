@@ -24,7 +24,6 @@ const PublicGallery = () => {
       
       if (error) throw error;
       
-      // Group messages by media_group_id
       const groupedMessages = (data as Message[]).reduce((groups: { [key: string]: Message[] }, message) => {
         const groupId = message.media_group_id || message.id;
         if (!groups[groupId]) {
@@ -38,7 +37,6 @@ const PublicGallery = () => {
     }
   });
 
-  // Set up realtime subscription
   useEffect(() => {
     const channel = supabase
       .channel('public-messages')
@@ -50,7 +48,6 @@ const PublicGallery = () => {
           table: 'messages'
         },
         () => {
-          // Invalidate and refetch messages
           queryClient.invalidateQueries({ queryKey: ['public-messages'] });
         }
       )
@@ -74,7 +71,6 @@ const PublicGallery = () => {
   };
 
   const handleView = () => {
-    // View logic implementation
     console.log('Viewing media');
   };
 
@@ -101,7 +97,6 @@ const PublicGallery = () => {
         description: "The media has been successfully deleted.",
       });
 
-      // Refetch messages
       queryClient.invalidateQueries({ queryKey: ['public-messages'] });
     } catch (error) {
       toast({
@@ -129,6 +124,9 @@ const PublicGallery = () => {
         <MediaEditDialog
           media={editItem}
           open={!!editItem}
+          onOpenChange={(open) => {
+            if (!open) setEditItem(null);
+          }}
           onClose={() => setEditItem(null)}
         />
       )}
