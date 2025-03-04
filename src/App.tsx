@@ -21,12 +21,10 @@ import { ThemeProvider } from "./components/Theme/ThemeProvider";
 import { Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { AppSidebar } from "./components/Layout/AppSidebar";
-
 interface ApiError {
   status?: number;
   message?: string;
 }
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -46,7 +44,6 @@ const queryClient = new QueryClient({
     }
   }
 });
-
 const ProtectedRoute = ({
   children
 }: {
@@ -55,7 +52,6 @@ const ProtectedRoute = ({
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-
   useEffect(() => {
     supabase.auth.getSession().then(({
       data: {
@@ -68,7 +64,6 @@ const ProtectedRoute = ({
         navigate('/auth');
       }
     });
-
     const {
       data: {
         subscription
@@ -82,45 +77,35 @@ const ProtectedRoute = ({
       }
       setLoading(false);
     });
-
     return () => {
       subscription.unsubscribe();
     };
   }, [navigate]);
-
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">
         <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
       </div>;
   }
-
   if (!session) {
     return null;
   }
-
   return children;
 };
-
-const App = () => (
-  <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
+const App = () => <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Router>
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/p/:id" element={<PublicGallery />} />
-            <Route element={
-              <ProtectedRoute>
+            <Route element={<ProtectedRoute>
                 <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
                   <AppSidebar />
                   <main className="transition-all duration-300 ease-in-out pl-16 min-h-screen">
-                    <div className="container py-6 px-4 mx-auto">
-                      <Outlet />
-                    </div>
+                    
                   </main>
                 </div>
-              </ProtectedRoute>
-            }>
+              </ProtectedRoute>}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/messages" element={<MessagesPage />} />
               <Route path="/gallery" element={<ProductGallery />} />
@@ -135,7 +120,5 @@ const App = () => (
         </Router>
       </TooltipProvider>
     </QueryClientProvider>
-  </ThemeProvider>
-);
-
+  </ThemeProvider>;
 export default App;
