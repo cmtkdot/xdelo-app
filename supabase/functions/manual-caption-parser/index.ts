@@ -4,7 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
 import { withErrorHandling } from "../_shared/errorHandler.ts";
 import { parseCaption } from "./captionParser.ts";
-import { ParsedContent } from "./types.ts";
+import { ParsedContent, MediaGroupResult } from "./types.ts";
 
 // Create Supabase client
 const supabase = createClient(
@@ -83,6 +83,7 @@ const manualCaptionParser = async (req: Request, correlationId: string) => {
       processing_state: 'completed',
       processing_completed_at: new Date().toISOString(),
       is_original_caption: true,
+      group_caption_synced: false, // Always set to false to ensure sync is triggered
       updated_at: new Date().toISOString()
     };
     
@@ -131,23 +132,58 @@ const manualCaptionParser = async (req: Request, correlationId: string) => {
     let syncResult = null;
     if (messageGroupId) {
       try {
-        const { data, error } = await supabase.rpc(
-          'xdelo_sync_media_group_content',
-          {
-            p_source_message_id: messageId,
-            p_media_group_id: messageGroupId,
-            p_correlation_id: correlationId,
-            p_force_sync: true,
-            p_sync_edit_history: isEdit
-          }
-        );
+        console.log(`Triggering sync for media group ${messageGroupId} from message ${messageId}, isEdit: ${isEdit}`);
         
-        if (error) {
-          console.warn(`Warning: Media group sync via RPC failed: ${error.message}`);
-          // Fallback to direct update
-          await syncMediaGroupFallback(messageId, messageGroupId, parsedContent, isEdit);
-        } else {
-          syncResult = data;
+        // First try the edge function for more robust handling, especially for edits
+        try {
+          const syncResponse = await fetch(
+            `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+              },
+              body: JSON.stringify({
+                mediaGroupId: messageGroupId,
+                sourceMessageId: messageId,
+                correlationId: correlationId,
+                forceSync: true,
+                syncEditHistory: isEdit
+              })
+            }
+          );
+          
+          if (!syncResponse.ok) {
+            const errorText = await syncResponse.text();
+            console.error(`Media group sync via edge function failed: ${errorText}`);
+            throw new Error(`Edge function sync failed: ${errorText}`);
+          }
+          
+          syncResult = await syncResponse.json();
+          console.log(`Media group sync via edge function succeeded:`, syncResult);
+        } catch (edgeFunctionError) {
+          console.error(`Edge function sync error, falling back to RPC: ${edgeFunctionError.message}`);
+          
+          // Fall back to the RPC function
+          const { data, error } = await supabase.rpc(
+            'xdelo_sync_media_group_content',
+            {
+              p_source_message_id: messageId,
+              p_media_group_id: messageGroupId,
+              p_correlation_id: correlationId,
+              p_force_sync: true,
+              p_sync_edit_history: isEdit
+            }
+          );
+          
+          if (error) {
+            console.warn(`Warning: Media group sync via RPC failed: ${error.message}`);
+            // Fallback to direct update
+            await syncMediaGroupFallback(messageId, messageGroupId, parsedContent, isEdit);
+          } else {
+            syncResult = data;
+          }
         }
       } catch (syncError) {
         console.error(`Media group sync error: ${syncError.message}`);
@@ -222,6 +258,8 @@ async function syncMediaGroupFallback(
   isEdit: boolean = false
 ): Promise<void> {
   try {
+    console.log(`Using fallback sync for media group ${mediaGroupId} from message ${sourceMessageId}, isEdit: ${isEdit}`);
+    
     // Get the current source message to ensure it has analyzed_content
     const { data: sourceMessage } = await supabase
       .from('messages')
@@ -251,13 +289,32 @@ async function syncMediaGroupFallback(
     }
     
     // Update all other messages in the group
-    await supabase
+    const { data: updatedMessages, error: updateError } = await supabase
       .from('messages')
       .update(updateData)
       .eq('media_group_id', mediaGroupId)
-      .neq('id', sourceMessageId);
+      .neq('id', sourceMessageId)
+      .select('id');
     
-    console.log(`Fallback sync completed for media group ${mediaGroupId}, isEdit: ${isEdit}`);
+    if (updateError) {
+      console.error(`Error in fallback sync: ${updateError.message}`);
+      return;
+    }
+    
+    // Log the fallback sync
+    await supabase.from('unified_audit_logs').insert({
+      event_type: 'media_group_content_synced_direct',
+      entity_id: sourceMessageId,
+      metadata: {
+        media_group_id: mediaGroupId,
+        sync_method: 'fallback_direct',
+        is_edit: isEdit,
+        updated_message_count: updatedMessages?.length || 0
+      },
+      event_timestamp: new Date().toISOString()
+    });
+    
+    console.log(`Fallback sync completed for media group ${mediaGroupId}, updated ${updatedMessages?.length || 0} messages`);
   } catch (error) {
     console.error(`Fallback sync error: ${error.message}`);
   }

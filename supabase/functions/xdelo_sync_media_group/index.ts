@@ -76,7 +76,8 @@ const syncMediaGroupHandler = async (req: Request, correlationId: string) => {
       .from('messages')
       .update(updateData)
       .eq('media_group_id', mediaGroupId)
-      .neq('id', sourceMessageId);
+      .neq('id', sourceMessageId)
+      .select('id');
       
     if (updateError) {
       throw new Error(`Error updating media group: ${updateError.message}`);
@@ -85,7 +86,7 @@ const syncMediaGroupHandler = async (req: Request, correlationId: string) => {
     result = {
       success: true,
       message: 'Media group content synced (fallback method)',
-      updated_count: updateResult.length,
+      updated_count: updateResult?.length || 0,
       source_message_id: sourceMessageId,
       sync_edit_history: syncEditHistory
     };

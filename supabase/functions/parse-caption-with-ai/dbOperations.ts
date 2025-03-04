@@ -81,10 +81,12 @@ async function directUpdateMessage(
   let oldAnalyzedContent = [];
   
   if (existingMessage?.old_analyzed_content) {
-    oldAnalyzedContent = [...existingMessage.old_analyzed_content];
+    oldAnalyzedContent = Array.isArray(existingMessage.old_analyzed_content) ? 
+      [...existingMessage.old_analyzed_content] : 
+      [existingMessage.old_analyzed_content];
   }
   
-  if (existingMessage?.analyzed_content) {
+  if (existingMessage?.analyzed_content && isEdit) {
     // Add edit timestamp to the previous content
     const previousContent = {
       ...existingMessage.analyzed_content,
@@ -176,14 +178,15 @@ export const markQueueItemAsFailed = async (queueId: string, errorMessage: strin
 export const syncMediaGroupContent = async (
   mediaGroupId: string | null | undefined,
   messageId: string,
-  correlationId?: string
+  correlationId?: string,
+  isEdit: boolean = false
 ): Promise<MediaGroupResult> => {
   if (!mediaGroupId) {
     return { success: false, reason: 'no_media_group_id' };
   }
   
   try {
-    console.log(`Starting media group sync for group ${mediaGroupId} from message ${messageId}`);
+    console.log(`Starting media group sync for group ${mediaGroupId} from message ${messageId}, isEdit: ${isEdit}`);
     
     // First check if the message is still eligible to be a source message
     const { data: sourceMessage } = await supabaseClient
@@ -204,12 +207,13 @@ export const syncMediaGroupContent = async (
       metadata: {
         media_group_id: mediaGroupId,
         source_message_id: messageId,
-        method: 'from_caption_analysis'
+        method: 'from_caption_analysis',
+        is_edit: isEdit
       },
       correlation_id: correlationId || null
     });
 
-    // Call the new sync edge function for better handling
+    // Call the edge function for better handling
     try {
       const response = await fetch(
         `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
@@ -222,7 +226,9 @@ export const syncMediaGroupContent = async (
           body: JSON.stringify({
             mediaGroupId,
             sourceMessageId: messageId,
-            correlationId
+            correlationId,
+            forceSync: true,
+            syncEditHistory: isEdit
           })
         }
       );
@@ -251,7 +257,8 @@ export const syncMediaGroupContent = async (
           p_source_message_id: messageId,
           p_media_group_id: mediaGroupId,
           p_correlation_id: correlationId,
-          p_force_sync: false
+          p_force_sync: true,
+          p_sync_edit_history: isEdit
         }
       );
       
@@ -272,12 +279,13 @@ export const syncMediaGroupContent = async (
     
     // Log the error
     await supabaseClient.from('unified_audit_logs').insert({
-      event_type: 'media_group_content_sync_error',
+      event_type: 'media_group_sync_error',
       entity_id: messageId,
       error_message: error.message,
       metadata: {
         media_group_id: mediaGroupId,
-        method: 'sync_attempt_failed'
+        method: 'sync_attempt_failed',
+        is_edit: isEdit
       },
       correlation_id: correlationId || null
     });

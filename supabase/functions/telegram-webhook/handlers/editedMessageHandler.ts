@@ -120,6 +120,41 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         } else {
           const result = await parseCaptionResponse.json();
           console.log(`Analysis completed successfully for edited message: ${JSON.stringify(result)}`);
+          
+          // Explicitly trigger media group sync to ensure all edits propagate
+          if (existingMessage.media_group_id) {
+            console.log(`Explicitly triggering media group sync for edited message ${existingMessage.id} in group ${existingMessage.media_group_id}`);
+            
+            try {
+              const syncResponse = await fetch(
+                `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+                  },
+                  body: JSON.stringify({
+                    mediaGroupId: existingMessage.media_group_id,
+                    sourceMessageId: existingMessage.id,
+                    correlationId: correlationId,
+                    forceSync: true,
+                    syncEditHistory: true
+                  })
+                }
+              );
+              
+              if (!syncResponse.ok) {
+                const syncErrorText = await syncResponse.text();
+                console.error(`Media group sync failed: ${syncErrorText}`);
+              } else {
+                const syncResult = await syncResponse.json();
+                console.log(`Media group sync completed successfully: ${JSON.stringify(syncResult)}`);
+              }
+            } catch (syncError) {
+              console.error(`Error triggering media group sync: ${syncError.message}`);
+            }
+          }
         }
       } catch (analysisError) {
         console.error(`Error during direct analysis: ${analysisError.message}`);
