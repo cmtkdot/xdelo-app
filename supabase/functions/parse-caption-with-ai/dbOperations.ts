@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { ParsedContent, MediaGroupResult } from './types.ts';
 
@@ -7,260 +8,139 @@ const supabaseClient = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-// Get message by ID with improved error handling
-export const getMessage = async (messageId: string) => {
-  try {
-    console.log(`Getting message details for ID: ${messageId}`);
-    const { data, error } = await supabaseClient
-      .from('messages')
-      .select('analyzed_content, old_analyzed_content, media_group_id, processing_state, is_original_caption, caption')
-      .eq('id', messageId)
-      .single();
-
-    if (error) {
-      throw new Error(`Failed to retrieve message: ${error.message}`);
-    }
-    
-    return data;
-  } catch (error) {
-    console.error(`Error in getMessage: ${error.message}`);
-    throw error; // Re-throw to be handled by caller
-  }
-};
-
-// Update message with analyzed content with improved handling for edits
-export const updateMessageWithAnalysis = async (
+// Update message with analyzed content with proper queue tracking
+export const updateMessageWithAnalyzedContent = async (
   messageId: string,
   analyzedContent: ParsedContent,
-  existingMessage: any,
-  queueId?: string,
-  isEdit?: boolean
+  correlationId: string, 
+  queueId?: string
 ) => {
   try {
-    console.log(`Updating message ${messageId} with analyzed content, isEdit: ${isEdit}`);
+    console.log(`Updating message ${messageId} with analyzed content`);
     
-    // If we have a queue ID, use the complete processing function
+    // Get current message state first
+    const { data: message, error: getError } = await supabaseClient
+      .from('messages')
+      .select('analyzed_content, old_analyzed_content, is_original_caption')
+      .eq('id', messageId)
+      .single();
+    
+    if (getError) {
+      console.error(`Error getting message ${messageId}:`, getError);
+      return { success: false, error: getError.message };
+    }
+    
+    // Prepare old_analyzed_content array for version history
+    let oldAnalyzedContent = [];
+    if (message?.old_analyzed_content) {
+      oldAnalyzedContent = [...message.old_analyzed_content];
+    }
+    
+    if (message?.analyzed_content) {
+      oldAnalyzedContent.push({
+        ...message.analyzed_content,
+        archived_at: new Date().toISOString()
+      });
+    }
+    
+    // If we have a queue ID, use queue completion function
     if (queueId) {
-      console.log(`Using queue completion function for queue ID: ${queueId}`);
+      console.log(`Using queue completion for queue ID ${queueId}`);
       try {
-        const { error } = await supabaseClient.rpc('xdelo_complete_message_processing', {
+        const { error: queueError } = await supabaseClient.rpc('xdelo_complete_message_processing', {
           p_queue_id: queueId,
-          p_analyzed_content: analyzedContent,
-          p_is_edit: isEdit || false
+          p_analyzed_content: analyzedContent
         });
         
-        if (error) {
-          throw new Error(`Queue completion failed: ${error.message}`);
+        if (queueError) {
+          throw new Error(`Queue completion failed: ${queueError.message}`);
         }
+        
+        // Log success
+        await logAnalysisEvent(messageId, correlationId, message?.analyzed_content, analyzedContent, {
+          method: 'queue_completion',
+          queue_id: queueId
+        });
+        
+        return { success: true };
       } catch (queueError) {
         console.error(`Queue completion error: ${queueError.message}`);
-        // Fall back to direct update if queue completion fails
-        console.log(`Falling back to direct update for message ${messageId}`);
-        return await directUpdateMessage(messageId, analyzedContent, existingMessage, isEdit);
+        // Fall back to direct update
       }
-      
-      return { success: true };
-    } 
-    
-    // Otherwise, update the message directly
-    return await directUpdateMessage(messageId, analyzedContent, existingMessage, isEdit);
-  } catch (error) {
-    console.error(`Error in updateMessageWithAnalysis: ${error.message}`);
-    throw error; // Re-throw to be handled by caller
-  }
-};
-
-// Helper function for direct message updates
-async function directUpdateMessage(
-  messageId: string,
-  analyzedContent: ParsedContent,
-  existingMessage: any,
-  isEdit?: boolean
-) {
-  // Prepare old_analyzed_content array
-  let oldAnalyzedContent = [];
-  
-  if (existingMessage?.old_analyzed_content) {
-    oldAnalyzedContent = [...existingMessage.old_analyzed_content];
-  }
-  
-  if (existingMessage?.analyzed_content) {
-    // Add edit timestamp to the previous content
-    const previousContent = {
-      ...existingMessage.analyzed_content,
-      edit_timestamp: new Date().toISOString()
-    };
-    oldAnalyzedContent.push(previousContent);
-  }
-  
-  // Set is_original_caption based on current state and whether this is an edit
-  let isOriginalCaption = true;
-  if (isEdit) {
-    // For edits, keep original caption status if it already exists
-    isOriginalCaption = existingMessage?.is_original_caption !== false;
-  }
-  
-  // Update data with explicit log
-  console.log(`Directly updating message ${messageId}, setting is_original_caption: ${isOriginalCaption}`);
-  
-  const updateData = {
-    old_analyzed_content: oldAnalyzedContent,
-    analyzed_content: analyzedContent,
-    processing_state: 'completed',
-    processing_completed_at: new Date().toISOString(),
-    is_original_caption: isOriginalCaption,
-    group_caption_synced: false // Reset to false to trigger re-sync
-  };
-
-  const { error } = await supabaseClient
-    .from('messages')
-    .update(updateData)
-    .eq('id', messageId);
-
-  if (error) {
-    throw new Error(`Direct message update failed: ${error.message}`);
-  }
-  
-  return { success: true };
-}
-
-// Mark queue processing as failed
-export const markQueueItemAsFailed = async (queueId: string, errorMessage: string) => {
-  if (!queueId) return { success: false };
-  
-  try {
-    const { error } = await supabaseClient.rpc('xdelo_fail_message_processing', {
-      p_queue_id: queueId,
-      p_error_message: errorMessage
-    });
-    
-    if (error) {
-      console.error('Error marking queue item as failed:', error);
-      return { success: false, error: error.message };
     }
+    
+    // Direct update if queue completion fails or no queue ID
+    const updateData = {
+      old_analyzed_content: oldAnalyzedContent,
+      analyzed_content: analyzedContent,
+      processing_state: 'completed',
+      processing_completed_at: new Date().toISOString(),
+      is_original_caption: message?.is_original_caption !== false, // Preserve existing value or default to true
+      group_caption_synced: false // Reset to trigger sync
+    };
+    
+    const { error: updateError } = await supabaseClient
+      .from('messages')
+      .update(updateData)
+      .eq('id', messageId);
+    
+    if (updateError) {
+      console.error(`Error updating message ${messageId}:`, updateError);
+      return { success: false, error: updateError.message };
+    }
+    
+    // Log the successful analysis
+    await logAnalysisEvent(messageId, correlationId, message?.analyzed_content, analyzedContent, {
+      method: 'direct_update'
+    });
     
     return { success: true };
   } catch (error) {
-    console.error('Error in markQueueItemAsFailed:', error);
+    console.error(`Error in updateMessageWithAnalyzedContent: ${error.message}`);
     return { success: false, error: error.message };
   }
 };
 
-// Sync analyzed content to media group with improved error handling
-export const syncMediaGroupContent = async (
-  mediaGroupId: string | null | undefined,
+// Sync media group content
+export const syncMediaGroup = async (
   messageId: string,
-  correlationId?: string
+  mediaGroupId: string,
+  correlationId: string
 ): Promise<MediaGroupResult> => {
   if (!mediaGroupId) {
     return { success: false, reason: 'no_media_group_id' };
   }
   
   try {
-    console.log(`Starting media group sync for group ${mediaGroupId} from message ${messageId}`);
+    console.log(`Syncing analyzed content to media group ${mediaGroupId} from message ${messageId}`);
     
-    // First check if the message is still eligible to be a source message
-    const { data: sourceMessage } = await supabaseClient
-      .from('messages')
-      .select('analyzed_content, caption, is_original_caption')
-      .eq('id', messageId)
-      .single();
+    // Call the sync function
+    const { data: syncResult, error: syncError } = await supabaseClient.rpc(
+      'xdelo_sync_media_group_content',
+      {
+        p_source_message_id: messageId,
+        p_media_group_id: mediaGroupId,
+        p_correlation_id: correlationId
+      }
+    );
     
-    if (!sourceMessage?.analyzed_content || !sourceMessage?.caption) {
-      console.log(`Message ${messageId} is not eligible as a source message (no analyzed_content or caption)`);
-      return { success: false, reason: 'source_not_eligible' };
+    if (syncError) {
+      throw new Error(`Media group sync failed: ${syncError.message}`);
     }
     
-    // Log the sync attempt - use string correlation ID, not UUID
-    await supabaseClient.from('unified_audit_logs').insert({
-      event_type: 'media_group_sync_requested',
-      entity_id: messageId,
-      metadata: {
-        media_group_id: mediaGroupId,
-        source_message_id: messageId,
-        method: 'from_caption_analysis'
-      },
-      correlation_id: correlationId || null
-    });
-
-    // Call the new sync edge function for better handling
-    try {
-      const response = await fetch(
-        `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-          },
-          body: JSON.stringify({
-            mediaGroupId,
-            sourceMessageId: messageId,
-            correlationId
-          })
-        }
-      );
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Sync function error: ${errorText}`);
-      }
-      
-      const result = await response.json();
-      
-      return { 
-        success: true, 
-        syncedCount: result.data.updated_count, 
-        source_message_id: messageId,
-        method: 'edge_function',
-        details: result.data
-      };
-    } catch (edgeFunctionError) {
-      console.error('Error calling sync edge function, falling back to direct method:', edgeFunctionError);
-      
-      // Fall back to direct SQL function call
-      const { data: syncResult, error: syncError } = await supabaseClient.rpc(
-        'xdelo_sync_media_group_content',
-        {
-          p_source_message_id: messageId,
-          p_media_group_id: mediaGroupId,
-          p_correlation_id: correlationId,
-          p_force_sync: false
-        }
-      );
-      
-      if (syncError) {
-        throw new Error(`Direct sync failed: ${syncError.message}`);
-      }
-      
-      return { 
-        success: true, 
-        syncedCount: syncResult.updated_count, 
-        source_message_id: messageId,
-        method: 'direct_rpc',
-        details: syncResult
-      };
-    }
+    console.log(`Successfully synced to ${syncResult?.updated_count || 0} messages in group`);
+    
+    return {
+      success: true,
+      syncedCount: syncResult?.updated_count || 0,
+      source_message_id: messageId
+    };
   } catch (error) {
-    console.error('Failed to sync media group content:', error);
-    
-    // Log the error
-    await supabaseClient.from('unified_audit_logs').insert({
-      event_type: 'media_group_content_sync_error',
-      entity_id: messageId,
-      error_message: error.message,
-      metadata: {
-        media_group_id: mediaGroupId,
-        operation: 'sync_group'
-      },
-      correlation_id: correlationId || null
-    });
-    
+    console.error(`Error syncing media group: ${error.message}`);
     return {
       success: false,
       reason: 'sync_error',
-      error: error.message,
-      fallbackError: error.cause?.message
+      error: error.message
     };
   }
 };
@@ -283,7 +163,7 @@ export const logAnalysisEvent = async (
         ...metadata,
         correlation_id: correlationId
       },
-      correlation_id: correlationId || null
+      correlation_id: correlationId
     });
     return { success: true };
   } catch (error) {

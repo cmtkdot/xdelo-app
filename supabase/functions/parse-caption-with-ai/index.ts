@@ -3,8 +3,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { parseCaption, shouldUseAI } from "./captionParser.ts";
 import { aiAnalyzeCaption } from "./aiAnalyzer.ts";
-import { updateMessageWithAnalyzedContent, syncMediaGroup } from "./dbOperations.ts";
-import { ParsedContent } from "./types.ts";
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -28,7 +26,7 @@ serve(async (req) => {
     console.log('Performing manual parsing...');
     const manualResult = parseCaption(caption);
     
-    let finalResult: ParsedContent = manualResult;
+    let finalResult = manualResult;
     let usedAI = false;
 
     // Step 2: Check if AI analysis is needed
@@ -37,24 +35,24 @@ serve(async (req) => {
     if (needsAI) {
       try {
         console.log('Caption complexity requires AI analysis...');
-        const aiResult = await aiAnalyzeCaption(messageId, caption);
+        const aiResult = await aiAnalyzeCaption(caption, manualResult);
         
-        if (aiResult) {
+        if (aiResult && aiResult.success && aiResult.result) {
           console.log('AI analysis successful, merging results');
-          // Merge AI results with manual results, preferring AI for complex fields
+          
+          // Use AI result if available
           finalResult = {
-            ...manualResult,
-            ...aiResult,
+            ...aiResult.result,
             parsing_metadata: {
-              ...manualResult.parsing_metadata,
+              ...aiResult.result.parsing_metadata,
               method: 'hybrid',
-              ai_confidence: aiResult.parsing_metadata?.ai_confidence || 0.7,
               timestamp: new Date().toISOString()
             }
           };
           usedAI = true;
         } else {
-          console.log('AI analysis returned no results, using manual parsing');
+          console.log('AI analysis returned no results or failed, using manual parsing');
+          console.log('AI error:', aiResult?.error || 'No specific error');
         }
       } catch (error) {
         console.error('Error during AI analysis:', error);
@@ -64,10 +62,15 @@ serve(async (req) => {
 
     // Step 3: Update the message with analyzed content
     console.log('Updating message with analyzed content...');
+    
+    // Get DB operations
+    const { updateMessageWithAnalyzedContent, syncMediaGroup } = await import("./dbOperations.ts");
+    
     const updateResult = await updateMessageWithAnalyzedContent(
       messageId,
       finalResult,
-      correlationId
+      correlationId,
+      queue_id
     );
 
     // Step 4: If this is part of a media group, sync the content to other messages
@@ -84,7 +87,8 @@ serve(async (req) => {
         usedAI,
         messageId,
         media_group_id,
-        correlationId
+        correlationId,
+        queue_id
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

@@ -3241,6 +3241,7 @@ export type Database = {
         | "trigger_queue_error"
         | "media_group_content_synced"
         | "media_group_sync_error"
+        | "message_queued_for_processing"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
       processing_state_type:
         | "initialized"
