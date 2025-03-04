@@ -1,0 +1,48 @@
+
+# A string used as a project reference when generating edge functions locally
+project_id = "xjhhehxcxkiumnwbirel"
+
+# This value is not used in self-hosted Supabase, but required by the Edge Functions interface
+# The value is derived from your project's REST URL
+# If you're creating a project locally using the CLI, it will be localhost:54321
+base_url = "https://xjhhehxcxkiumnwbirel.supabase.co"
+
+[functions.analyze-with-ai]
+verify_jwt = false
+no_public_access = true
+
+[functions.create-analyze-message-caption]
+verify_jwt = false
+no_public_access = true
+
+[functions.delete-telegram-message]
+verify_jwt = false
+no_public_access = true
+
+[functions.generic-webhook]
+verify_jwt = false
+no_public_access = false
+
+[functions.openai-request]
+verify_jwt = false
+no_public_access = true
+
+[functions.parse-caption-with-ai]
+verify_jwt = false
+no_public_access = true
+
+[functions.process-message-queue]
+verify_jwt = false
+no_public_access = true
+
+[functions.process-unanalyzed-messages]
+verify_jwt = false
+no_public_access = true
+
+[functions.telegram-webhook]
+verify_jwt = false
+no_public_access = false
+
+[functions.xdelo_sync_media_group]
+verify_jwt = false
+no_public_access = true

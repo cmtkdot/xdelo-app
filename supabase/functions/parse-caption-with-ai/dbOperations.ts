@@ -178,25 +178,73 @@ export const syncMediaGroupContent = async (
       metadata: {
         media_group_id: mediaGroupId,
         source_message_id: messageId,
-        method: 'direct_call'
+        method: 'from_caption_analysis'
       },
       correlation_id: correlationId || null
     });
 
-    // Call the direct sync method
-    const syncResult = await syncMediaGroupDirectly(mediaGroupId, messageId, correlationId);
-    
-    return { 
-      success: true, 
-      syncedCount: syncResult.count, 
-      source_message_id: messageId,
-      method: 'direct_sync',
-      details: syncResult
-    };
+    // Call the new sync edge function for better handling
+    try {
+      const response = await fetch(
+        `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+          },
+          body: JSON.stringify({
+            mediaGroupId,
+            sourceMessageId: messageId,
+            correlationId
+          })
+        }
+      );
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Sync function error: ${errorText}`);
+      }
+      
+      const result = await response.json();
+      
+      return { 
+        success: true, 
+        syncedCount: result.data.updated_count, 
+        source_message_id: messageId,
+        method: 'edge_function',
+        details: result.data
+      };
+    } catch (edgeFunctionError) {
+      console.error('Error calling sync edge function, falling back to direct method:', edgeFunctionError);
+      
+      // Fall back to direct SQL function call
+      const { data: syncResult, error: syncError } = await supabaseClient.rpc(
+        'xdelo_sync_media_group_content',
+        {
+          p_source_message_id: messageId,
+          p_media_group_id: mediaGroupId,
+          p_correlation_id: correlationId,
+          p_force_sync: false
+        }
+      );
+      
+      if (syncError) {
+        throw new Error(`Direct sync failed: ${syncError.message}`);
+      }
+      
+      return { 
+        success: true, 
+        syncedCount: syncResult.updated_count, 
+        source_message_id: messageId,
+        method: 'direct_rpc',
+        details: syncResult
+      };
+    }
   } catch (error) {
     console.error('Failed to sync media group content:', error);
     
-    // Log the error - but don't use the enum value directly
+    // Log the error
     await supabaseClient.from('unified_audit_logs').insert({
       event_type: 'media_group_content_sync_error',
       entity_id: messageId,
@@ -211,163 +259,11 @@ export const syncMediaGroupContent = async (
     return {
       success: false,
       reason: 'sync_error',
-      error: error.message
+      error: error.message,
+      fallbackError: error.cause?.message
     };
   }
 };
-
-// Direct method to sync media group without using RPC
-async function syncMediaGroupDirectly(
-  mediaGroupId: string, 
-  sourceMessageId: string,
-  correlationId?: string
-) {
-  try {
-    console.log(`Direct sync: Getting source message ${sourceMessageId}`);
-    
-    // Get the analyzed content from the source message
-    const { data: sourceMessage, error: sourceError } = await supabaseClient
-      .from('messages')
-      .select('analyzed_content, caption')
-      .eq('id', sourceMessageId)
-      .single();
-    
-    if (sourceError || !sourceMessage?.analyzed_content) {
-      console.error('Source message has no analyzed_content:', sourceError);
-      return { success: false, count: 0, error: sourceError?.message || 'No analyzed content' };
-    }
-    
-    // Mark this message as the original caption holder
-    const { error: updateError } = await supabaseClient
-      .from('messages')
-      .update({
-        is_original_caption: true,
-        group_caption_synced: true,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', sourceMessageId);
-      
-    if (updateError) {
-      console.error('Error updating source message:', updateError);
-    }
-    
-    console.log(`Direct sync: Getting other messages in group ${mediaGroupId}`);
-    
-    // Get all other messages in the group
-    const { data: groupMessages, error: groupError } = await supabaseClient
-      .from('messages')
-      .select('id, analyzed_content')
-      .eq('media_group_id', mediaGroupId)
-      .neq('id', sourceMessageId);
-    
-    if (groupError) {
-      console.error('Error fetching group messages:', groupError);
-      return { success: false, count: 0, error: groupError.message };
-    }
-    
-    if (!groupMessages?.length) {
-      console.log('No other messages in the group to sync');
-      return { success: true, count: 0, message: 'No other messages to sync' };
-    }
-    
-    console.log(`Direct sync: Updating ${groupMessages.length} other messages in group ${mediaGroupId}`);
-    
-    // Update all other messages in the group - use a transaction
-    // Since we can't use a transaction with the Supabase JS client, update messages one by one with error handling
-    const updateResults = [];
-    let successCount = 0;
-    
-    for (const message of groupMessages) {
-      try {
-        // First, prepare old_analyzed_content
-        const { data: currentMessage } = await supabaseClient
-          .from('messages')
-          .select('old_analyzed_content, analyzed_content')
-          .eq('id', message.id)
-          .single();
-          
-        let oldAnalyzedContent = [];
-        if (currentMessage?.old_analyzed_content) {
-          oldAnalyzedContent = [...currentMessage.old_analyzed_content];
-        }
-        
-        if (currentMessage?.analyzed_content) {
-          oldAnalyzedContent.push({
-            ...currentMessage.analyzed_content,
-            sync_timestamp: new Date().toISOString()
-          });
-        }
-          
-        // Now update with new analyzed content
-        const { error: msgUpdateError } = await supabaseClient
-          .from('messages')
-          .update({
-            analyzed_content: sourceMessage.analyzed_content,
-            old_analyzed_content: oldAnalyzedContent,
-            message_caption_id: sourceMessageId,
-            is_original_caption: false,
-            group_caption_synced: true,
-            processing_state: 'completed',
-            processing_completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', message.id);
-          
-        if (!msgUpdateError) {
-          successCount++;
-        }
-          
-        updateResults.push({
-          id: message.id,
-          success: !msgUpdateError,
-          error: msgUpdateError?.message
-        });
-        
-        if (msgUpdateError) {
-          console.error(`Error updating message ${message.id}:`, msgUpdateError);
-        }
-      } catch (updateError) {
-        console.error(`Exception updating message ${message.id}:`, updateError);
-        updateResults.push({
-          id: message.id,
-          success: false,
-          error: updateError.message
-        });
-      }
-    }
-    
-    // Log the sync operation
-    try {
-      await supabaseClient.from('unified_audit_logs').insert({
-        event_type: 'media_group_content_synced',
-        entity_id: sourceMessageId,
-        metadata: {
-          media_group_id: mediaGroupId,
-          updated_count: successCount,
-          total_count: groupMessages.length,
-          operation: 'direct_sync',
-          correlation_id: correlationId
-        },
-        correlation_id: correlationId || null,
-        event_timestamp: new Date().toISOString()
-      });
-    } catch (logError) {
-      console.error('Error logging media group sync:', logError);
-    }
-    
-    console.log(`Direct sync: Successfully updated ${successCount} of ${groupMessages.length} messages in group ${mediaGroupId}`);
-    
-    return { 
-      success: true, 
-      count: successCount,
-      total: groupMessages.length,
-      results: updateResults
-    };
-  } catch (error) {
-    console.error('Error in syncMediaGroupDirectly:', error);
-    return { success: false, count: 0, error: error.message };
-  }
-}
 
 // Log the analysis event
 export const logAnalysisEvent = async (
