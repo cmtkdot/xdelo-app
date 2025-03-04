@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -128,6 +129,9 @@ const PublicGallery = () => {
             if (!open) setEditItem(null);
           }}
           onClose={() => setEditItem(null)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['public-messages'] });
+          }}
         />
       )}
     </div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   AlertDialog,
@@ -16,6 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/useToast"
 import { supabase } from '@/integrations/supabase/client';
+import { useCaptionSync } from '@/hooks/useCaptionSync';
 
 interface MediaEditDialogProps {
   media: { id: string; caption?: string; media_group_id?: string };
@@ -41,7 +43,8 @@ export function MediaEditDialog({
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const { toast } = useToast()
+  const { toast } = useToast();
+  const { processCaptionUpdate } = useCaptionSync();
 
   const handleOpenChange = (isOpen: boolean) => {
     onOpenChange(isOpen);
@@ -64,68 +67,18 @@ export function MediaEditDialog({
     try {
       if (!media) throw new Error("No media found");
       
-      const correlationId = crypto.randomUUID();
+      setSyncStatus('Updating and analyzing caption...');
       
-      console.log(`Updating media ${media.id} with new caption: "${newCaption}", correlation ID: ${correlationId}`);
+      // Use the new caption sync hook to handle the update and sync
+      const result = await processCaptionUpdate(media as any, newCaption);
       
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({ 
-          caption: newCaption,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', media.id);
-      
-      if (updateError) throw new Error(`Failed to update caption: ${updateError.message}`);
-      
-      setSyncStatus('Analyzing caption...');
-      const { data: parsingData, error: parsingError } = await supabase.functions.invoke(
-        'parse-caption-with-ai',
-        {
-          body: {
-            messageId: media.id,
-            caption: newCaption,
-            media_group_id: media.media_group_id,
-            correlationId,
-            isEdit: true
-          }
-        }
-      );
-      
-      if (parsingError) {
-        throw new Error(`Failed to analyze caption: ${parsingError.message}`);
+      if (!result?.success) {
+        throw new Error(result?.error || 'Failed to process caption update');
       }
       
-      console.log('Caption parsed successfully:', parsingData);
+      setSyncStatus('Caption updated and synced');
       
-      if (media.media_group_id) {
-        setSyncStatus('Syncing with media group...');
-        
-        const { data: syncResult, error: syncError } = await supabase.functions.invoke(
-          'xdelo_sync_media_group',
-          {
-            body: {
-              mediaGroupId: media.media_group_id,
-              sourceMessageId: media.id,
-              correlationId: correlationId,
-              forceSync: true,
-              syncEditHistory: true
-            }
-          }
-        );
-        
-        if (syncError) {
-          console.error('Media group sync error:', syncError);
-          setSyncStatus('Media group sync failed!');
-        } else {
-          const updatedCount = syncResult?.data?.updated_count || 0;
-          setSyncStatus(`Synced with ${updatedCount} other messages in group`);
-          console.log(`Media group sync completed for ${media.media_group_id}:`, syncResult);
-        }
-      } else {
-        setSyncStatus('Analysis completed');
-      }
-      
+      // Call the onSave callback if provided
       onSave && onSave(newCaption);
       onSuccess && onSuccess();
       

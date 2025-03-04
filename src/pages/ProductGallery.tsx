@@ -186,6 +186,9 @@ const ProductGallery = () => {
             if (!open) setEditItem(null);
           }}
           onClose={() => setEditItem(null)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['media-groups'] });
+          }}
         />
       )}
     </div>
