@@ -4,6 +4,7 @@ CREATE OR REPLACE FUNCTION xdelo_trigger_caption_analysis()
 RETURNS TRIGGER AS $$
 DECLARE
   v_correlation_id TEXT;
+  http_response JSONB;
 BEGIN
   -- Skip if no caption or already analyzed
   IF NEW.caption IS NULL OR NEW.caption = '' OR NEW.analyzed_content IS NOT NULL THEN
@@ -39,6 +40,69 @@ BEGIN
     ),
     NOW()
   );
+
+  -- Try to trigger the Edge Function directly if pg_net extension is available
+  BEGIN
+    -- Call the direct-caption-processor Edge Function using pg_net
+    SELECT content::jsonb INTO http_response
+    FROM net.http_post(
+      url := current_setting('app.settings.supabase_functions_url') || '/functions/v1/direct-caption-processor',
+      headers := jsonb_build_object(
+        'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key'),
+        'Content-Type', 'application/json'
+      ),
+      body := jsonb_build_object(
+        'messageId', NEW.id,
+        'correlationId', v_correlation_id,
+        'trigger_source', 'database_trigger'
+      )
+    );
+    
+    -- Log success if Edge Function was called
+    INSERT INTO unified_audit_logs (
+      event_type,
+      entity_id,
+      correlation_id,
+      metadata,
+      event_timestamp
+    ) VALUES (
+      'edge_function_triggered',
+      NEW.id,
+      v_correlation_id,
+      jsonb_build_object(
+        'function', 'direct-caption-processor',
+        'response', http_response
+      ),
+      NOW()
+    );
+  EXCEPTION 
+    WHEN OTHERS THEN
+      -- Fall back to database function if Edge Function call fails
+      PERFORM xdelo_analyze_message_caption(
+        NEW.id,
+        v_correlation_id::uuid,
+        NEW.caption,
+        NEW.media_group_id
+      );
+      
+      -- Log fallback
+      INSERT INTO unified_audit_logs (
+        event_type,
+        entity_id,
+        correlation_id,
+        metadata,
+        event_timestamp
+      ) VALUES (
+        'edge_function_fallback',
+        NEW.id,
+        v_correlation_id,
+        jsonb_build_object(
+          'error', SQLERRM,
+          'fallback', 'xdelo_analyze_message_caption'
+        ),
+        NOW()
+      );
+  END;
 
   RETURN NEW;
 END;
@@ -104,18 +168,41 @@ BEGIN
         END IF;
       END IF;
       
-      -- If no sync was possible, prepare for direct analysis
-      PERFORM xdelo_analyze_message_caption(
-        v_message.id,
-        v_message.correlation_id::uuid,
-        v_message.caption,
-        v_message.media_group_id
-      );
-      
-      message_id := v_message.id;
-      caption := v_message.caption;
-      media_group_id := v_message.media_group_id;
-      processed := true;
+      -- Attempt to call the Edge Function directly
+      BEGIN
+        PERFORM net.http_post(
+          url := current_setting('app.settings.supabase_functions_url') || '/functions/v1/direct-caption-processor',
+          headers := jsonb_build_object(
+            'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key'),
+            'Content-Type', 'application/json'
+          ),
+          body := jsonb_build_object(
+            'messageId', v_message.id,
+            'correlationId', v_message.correlation_id,
+            'trigger_source', 'scheduled_processor'
+          )
+        );
+        
+        -- If we get here, the Edge Function was called successfully
+        message_id := v_message.id;
+        caption := v_message.caption;
+        media_group_id := v_message.media_group_id;
+        processed := true;
+      EXCEPTION 
+        WHEN OTHERS THEN
+          -- If no sync was possible and Edge Function failed, prepare for direct analysis with DB function
+          PERFORM xdelo_analyze_message_caption(
+            v_message.id,
+            v_message.correlation_id::uuid,
+            v_message.caption,
+            v_message.media_group_id
+          );
+          
+          message_id := v_message.id;
+          caption := v_message.caption;
+          media_group_id := v_message.media_group_id;
+          processed := true;
+      END;
       
     EXCEPTION WHEN OTHERS THEN
       -- Log error
