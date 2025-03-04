@@ -3046,22 +3046,14 @@ export type Database = {
         }
         Returns: Json
       }
-      xdelo_check_media_group_content:
-        | {
-            Args: {
-              p_media_group_id: string
-              p_message_id: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_media_group_id: string
-              p_message_id: string
-              p_correlation_id?: string
-            }
-            Returns: Json
-          }
+      xdelo_check_media_group_content: {
+        Args: {
+          p_media_group_id: string
+          p_message_id: string
+          p_correlation_id?: string
+        }
+        Returns: Json
+      }
       xdelo_check_webhook_health: {
         Args: Record<PropertyKey, never>
         Returns: {
