@@ -24,9 +24,22 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Clone the request body so we can use it multiple times if needed
+  const clonedReq = req.clone();
+  let payload;
+  let messageId;
+  let caption;
+  let media_group_id;
+  let correlationId;
+  let queue_id;
+  let isEdit;
+
   try {
-    const payload = await req.json();
-    const { messageId, caption, media_group_id, correlationId, queue_id, isEdit } = payload;
+    // Parse the request payload
+    payload = await req.json();
+    
+    // Extract parameters from payload
+    ({ messageId, caption, media_group_id, correlationId, queue_id, isEdit } = payload);
     
     // Log request details but sanitize caption length for logs
     const captionForLog = caption ? 
@@ -35,6 +48,7 @@ serve(async (req) => {
     
     console.log(`Processing caption for message ${messageId}, correlation_id: ${correlationId}, isEdit: ${isEdit}, caption: ${captionForLog}`);
 
+    // Validate required parameters
     if (!messageId || !caption) {
       throw new Error("Required parameters missing: messageId and caption are required");
     }
@@ -108,9 +122,11 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in parse-caption-with-ai:', error);
     
-    // Extract queue_id from request if available for error handling
+    // Since we already consumed the request body, use the extracted variables
+    // instead of trying to parse the body again
     try {
-      const { queue_id, messageId } = await req.json();
+      // We already have messageId and queue_id from above, so use those
+      // instead of trying to parse the request body again
       
       if (messageId) {
         // Update the message directly with error
@@ -128,7 +144,7 @@ serve(async (req) => {
         await markQueueItemAsFailed(queue_id, error.message);
       }
     } catch (reqError) {
-      console.error('Error extracting data from request:', reqError);
+      console.error('Error processing error handling:', reqError);
     }
     
     return new Response(

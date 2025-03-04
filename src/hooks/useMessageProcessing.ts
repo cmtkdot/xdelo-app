@@ -18,6 +18,11 @@ export function useMessageProcessing() {
       
       console.log('Requesting direct analysis for message:', message.id);
       
+      // Validate required fields
+      if (!message.id || !message.caption) {
+        throw new Error('Message ID and caption are required for analysis');
+      }
+      
       // Generate a correlation ID as a string
       const correlationId = crypto.randomUUID();
       
@@ -29,7 +34,8 @@ export function useMessageProcessing() {
             messageId: message.id, 
             caption: message.caption,
             media_group_id: message.media_group_id,
-            correlationId: correlationId
+            correlationId: correlationId,
+            isEdit: false // Explicitly set isEdit to false for manual analysis
           }
         }
       );
