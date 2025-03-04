@@ -19,12 +19,19 @@ export function useMessageProcessing() {
       console.log('Requesting direct analysis for message:', message.id);
       
       // Validate required fields
-      if (!message.id || !message.caption) {
-        throw new Error('Message ID and caption are required for analysis');
+      if (!message.id) {
+        throw new Error('Message ID is required for analysis');
+      }
+      
+      if (!message.caption) {
+        throw new Error('Message caption is required for analysis');
       }
       
       // Generate a correlation ID as a string
       const correlationId = crypto.randomUUID();
+      
+      // Log analysis start
+      console.log(`Starting analysis for message ${message.id} with correlation ID ${correlationId}`);
       
       // Call the parse-caption-with-ai function directly
       const { data: analysisData, error: analysisError } = await supabase.functions.invoke(
@@ -34,14 +41,15 @@ export function useMessageProcessing() {
             messageId: message.id, 
             caption: message.caption,
             media_group_id: message.media_group_id,
-            correlationId: correlationId,
+            correlationId, // Use the same name
             isEdit: false // Explicitly set isEdit to false for manual analysis
           }
         }
       );
       
       if (analysisError) {
-        throw analysisError;
+        console.error('Analysis error:', analysisError);
+        throw new Error(analysisError.message || 'Analysis failed');
       }
       
       console.log('Analysis result:', analysisData);
@@ -51,18 +59,25 @@ export function useMessageProcessing() {
         description: "The message has been analyzed successfully."
       });
       
+      return analysisData;
+      
     } catch (error: any) {
       console.error('Error analyzing message:', error);
+      
+      // Set detailed error message
+      const errorMessage = error.message || 'Failed to analyze message';
       setErrors(prev => ({ 
         ...prev, 
-        [message.id]: error.message || 'Failed to analyze message' 
+        [message.id]: errorMessage
       }));
       
       toast({
         title: "Analysis Failed",
-        description: error.message || "Failed to analyze message",
+        description: errorMessage,
         variant: "destructive"
       });
+      
+      throw error;
     } finally {
       setIsProcessing(prev => ({ ...prev, [message.id]: false }));
     }
@@ -75,7 +90,10 @@ export function useMessageProcessing() {
       const { data, error } = await supabase.functions.invoke(
         'scheduler-process-queue',
         {
-          body: { limit }
+          body: { 
+            limit,
+            trigger_source: 'manual'
+          }
         }
       );
       
