@@ -65,7 +65,8 @@ export function useMessageProcessing() {
               body: {
                 mediaGroupId: message.media_group_id,
                 sourceMessageId: message.id,
-                correlationId
+                correlationId,
+                forceSync: true
               }
             }
           );

@@ -124,15 +124,26 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
           console.log('Caption parsed successfully:', parsingData);
           
           if (media.media_group_id) {
-            const syncResult = parsingData?.sync_result as { success: boolean; updated_count?: number } | undefined;
+            setSyncStatus('Syncing with media group...');
             
-            if (syncResult?.success) {
-              const syncCount = syncResult.updated_count || 0;
-              setSyncStatus(`Synced with ${syncCount} other messages in group`);
-              console.log(`Media group sync completed for ${media.media_group_id}:`, syncResult);
+            // Explicitly trigger media group sync
+            const { data: syncResult, error: syncError } = await supabase.functions.invoke('xdelo_sync_media_group', {
+              body: {
+                mediaGroupId: media.media_group_id,
+                sourceMessageId: media.id,
+                correlationId: correlationId,
+                forceSync: true,
+                syncEditHistory: true
+              }
+            });
+            
+            if (syncError) {
+              console.error('Media group sync error:', syncError);
+              setSyncStatus('Media group sync failed!');
             } else {
-              setSyncStatus('Media group sync may have failed');
-              console.warn('Media group sync may not have completed properly:', parsingData?.sync_result);
+              const updatedCount = syncResult?.data?.updated_count || 0;
+              setSyncStatus(`Synced with ${updatedCount} other messages in group`);
+              console.log(`Media group sync completed for ${media.media_group_id}:`, syncResult);
             }
           } else {
             setSyncStatus('Analysis completed');
