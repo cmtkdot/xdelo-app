@@ -3,7 +3,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
 import { parseCaption } from './captionParser.ts';
-import { analyzeWithAI } from './aiAnalyzer.ts';
 import { 
   getMessage, 
   updateMessageWithAnalysis, 
@@ -50,50 +49,6 @@ serve(async (req) => {
     let parsedContent: ParsedContent = parseCaption(caption);
     console.log(`Manual parsing result: ${JSON.stringify(parsedContent)}`);
 
-    // Check if the product name is long (complex) and needs AI analysis
-    const needsAIAnalysis = parsedContent.product_name && parsedContent.product_name.length > 23;
-    
-    if (needsAIAnalysis) {
-      console.log(`Product name is complex (${parsedContent.product_name.length} chars), performing AI analysis`);
-      try {
-        const aiResult = await analyzeWithAI(caption, parsedContent);
-        console.log(`AI analysis complete: ${JSON.stringify(aiResult.success)}`);
-        
-        if (aiResult.success && aiResult.result) {
-          // Merge AI results with manual parsing results, AI takes precedence
-          parsedContent = {
-            ...parsedContent,
-            ...aiResult.result,
-            parsing_metadata: {
-              method: 'ai',
-              timestamp: new Date().toISOString(),
-              original_manual_parse: parsedContent
-            }
-          };
-        } else {
-          console.error('AI analysis returned no results, using manual parsing');
-          parsedContent.parsing_metadata = {
-            method: 'manual',
-            timestamp: new Date().toISOString(),
-            ai_error: aiResult.error || 'No results returned'
-          };
-        }
-      } catch (aiError) {
-        console.error('AI analysis failed, using manual parsing fallback:', aiError);
-        parsedContent.parsing_metadata = {
-          method: 'manual',
-          timestamp: new Date().toISOString(),
-          ai_error: aiError.message
-        };
-      }
-    } else {
-      // Set parsing metadata for manual method
-      parsedContent.parsing_metadata = {
-        method: 'manual',
-        timestamp: new Date().toISOString()
-      };
-    }
-
     // Save additional metadata
     parsedContent.caption = caption;
     
@@ -121,7 +76,7 @@ serve(async (req) => {
         source: 'parse-caption-with-ai',
         caption: captionForLog,
         media_group_id: media_group_id,
-        method: needsAIAnalysis ? 'ai' : 'manual',
+        method: 'manual',
         is_edit: isEdit
       }
     );

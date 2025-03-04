@@ -19,17 +19,13 @@ export interface ParsedContent {
   notes: string;
   caption: string;
   parsing_metadata: {
-    method: 'manual' | 'ai' | 'hybrid';
+    method: 'manual';
     timestamp: string;
-    confidence?: number;
-    ai_error?: string;
-    is_edit?: boolean;
-    edit_timestamp?: string;
-    original_manual_parse?: ParsedContent;
-    ai_response?: string;
     quantity_pattern?: string;
     used_fallback?: boolean;
     original_caption?: string;
+    is_edit?: boolean;
+    edit_timestamp?: string;
     error?: string;
   };
   sync_metadata?: {

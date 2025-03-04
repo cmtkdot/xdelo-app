@@ -10,6 +10,8 @@ base_url = "https://xjhhehxcxkiumnwbirel.supabase.co"
 [functions.analyze-with-ai]
 verify_jwt = false
 no_public_access = true
+# Disabled due to timeout and reliability issues
+enabled = false
 
 [functions.create-analyze-message-caption]
 verify_jwt = false

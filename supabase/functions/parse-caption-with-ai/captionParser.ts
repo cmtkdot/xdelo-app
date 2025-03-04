@@ -157,8 +157,3 @@ function createEmptyResult(caption: string): ParsedContent {
     }
   };
 }
-
-// Check if a product name should be analyzed by AI
-export const shouldUseAI = (productName: string): boolean => {
-  return productName.length > 23;
-};
