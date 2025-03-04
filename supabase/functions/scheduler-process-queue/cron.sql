@@ -34,10 +34,7 @@ BEGIN
   );
 
   BEGIN
-    -- First drop the existing function if it exists
-    DROP FUNCTION IF EXISTS xdelo_process_pending_messages(integer);
-    
-    -- Create the new function with proper signature
+    -- Function to process pending messages
     CREATE OR REPLACE FUNCTION xdelo_process_pending_messages(limit_count integer DEFAULT 20)
     RETURNS TABLE(message_id uuid, processed boolean, error_message text)
     LANGUAGE plpgsql
@@ -128,9 +125,6 @@ BEGIN
       END LOOP;
     END;
     $func$;
-    
-    -- First drop the existing function if it exists
-    DROP FUNCTION IF EXISTS xdelo_reset_stalled_messages();
     
     -- Function to reset stalled messages
     CREATE OR REPLACE FUNCTION xdelo_reset_stalled_messages()

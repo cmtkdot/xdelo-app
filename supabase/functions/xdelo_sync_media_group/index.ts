@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
+import { createHandler } from "../_shared/baseHandler.ts";
 
 // Create Supabase client
 const supabase = createClient(
@@ -9,12 +10,7 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
+const syncMediaGroupHandler = async (req: Request) => {
   try {
     const { mediaGroupId, sourceMessageId, correlationId = crypto.randomUUID().toString(), forceSync = false } = await req.json();
     
@@ -72,4 +68,6 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+};
+
+serve(createHandler(syncMediaGroupHandler));
