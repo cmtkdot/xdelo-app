@@ -13,6 +13,7 @@ import { useVendors } from "@/hooks/useVendors";
 import { logMessageOperation } from "@/lib/syncLogger";
 import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
+import { isSameDay, isWithinInterval, parseISO } from "date-fns";
 
 const ITEMS_PER_PAGE = 12;
 
@@ -23,6 +24,7 @@ const ProductGallery = () => {
     search: "",
     vendors: [],
     sortOrder: "desc",
+    sortField: "created_at"
   });
   
   const queryClient = useQueryClient();
@@ -86,7 +88,7 @@ const ProductGallery = () => {
   const filteredProducts = useMemo(() => {
     let filtered = Object.values(mediaGroups);
     
-    // Only apply search and vendor filters if they are set
+    // Apply search filter
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(group => {
@@ -103,6 +105,7 @@ const ProductGallery = () => {
       });
     }
     
+    // Apply vendor filter
     if (filters.vendors && filters.vendors.length > 0) {
       filtered = filtered.filter(group => {
         const mainMedia = group.find(m => m.caption) || group[0];
@@ -110,11 +113,68 @@ const ProductGallery = () => {
       });
     }
     
-    // Sort by created_at date
+    // Apply date range filter
+    if (filters.dateRange && filters.dateRange.from && filters.dateRange.to) {
+      filtered = filtered.filter(group => {
+        const mainMedia = group.find(m => m.caption) || group[0];
+        if (!mainMedia) return false;
+        
+        // Get purchase date from either the field or analyzed_content
+        let purchaseDate: Date | null = null;
+        
+        if (mainMedia.purchase_date) {
+          purchaseDate = new Date(mainMedia.purchase_date);
+        } else if (mainMedia.analyzed_content?.purchase_date) {
+          purchaseDate = parseISO(mainMedia.analyzed_content.purchase_date);
+        }
+        
+        if (!purchaseDate) return false;
+        
+        // Check if the purchase date is within the selected range
+        return isWithinInterval(purchaseDate, {
+          start: filters.dateRange!.from,
+          end: filters.dateRange!.to
+        });
+      });
+    }
+    
+    // Sort by the selected field and order
     filtered.sort((a, b) => {
-      const dateA = new Date(a[0]?.created_at || 0).getTime();
-      const dateB = new Date(b[0]?.created_at || 0).getTime();
-      return filters.sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+      const mainMediaA = a.find(m => m.caption) || a[0];
+      const mainMediaB = b.find(m => m.caption) || b[0];
+      
+      if (!mainMediaA || !mainMediaB) return 0;
+      
+      if (filters.sortField === 'purchase_date') {
+        // Get purchase dates for comparison
+        let dateA: Date | null = null;
+        let dateB: Date | null = null;
+        
+        if (mainMediaA.purchase_date) {
+          dateA = new Date(mainMediaA.purchase_date);
+        } else if (mainMediaA.analyzed_content?.purchase_date) {
+          dateA = parseISO(mainMediaA.analyzed_content.purchase_date);
+        }
+        
+        if (mainMediaB.purchase_date) {
+          dateB = new Date(mainMediaB.purchase_date);
+        } else if (mainMediaB.analyzed_content?.purchase_date) {
+          dateB = parseISO(mainMediaB.analyzed_content.purchase_date);
+        }
+        
+        // If we don't have a purchase date for one or both, fall back to created_at
+        if (!dateA) dateA = new Date(mainMediaA.created_at || 0);
+        if (!dateB) dateB = new Date(mainMediaB.created_at || 0);
+        
+        return filters.sortOrder === 'asc' ? 
+          dateA.getTime() - dateB.getTime() : 
+          dateB.getTime() - dateA.getTime();
+      } else {
+        // Default sort by created_at
+        const dateA = new Date(mainMediaA.created_at || 0).getTime();
+        const dateB = new Date(mainMediaB.created_at || 0).getTime();
+        return filters.sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+      }
     });
 
     console.log('Filtered products count:', filtered.length);

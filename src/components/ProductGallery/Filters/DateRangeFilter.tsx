@@ -1,52 +1,67 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+
+import { useState, useEffect } from "react";
+import { CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
-import { CalendarRange, ArrowUpDown } from "lucide-react";
 
 interface DateRangeFilterProps {
-  dateField: 'purchase_date' | 'created_at';
-  sortOrder: "asc" | "desc";
-  onDateFieldChange: (field: 'purchase_date' | 'created_at') => void;
-  onSortOrderChange: (order: "asc" | "desc") => void;
+  value: { from: Date; to: Date } | null;
+  onChange: (value: { from: Date; to: Date } | null) => void;
 }
 
-export const DateRangeFilter = ({ 
-  dateField,
-  sortOrder,
-  onDateFieldChange,
-  onSortOrderChange
-}: DateRangeFilterProps) => {
+export function DateRangeFilter({ value, onChange }: DateRangeFilterProps) {
+  const [date, setDate] = useState<{ from: Date; to: Date } | null>(value);
+
+  useEffect(() => {
+    setDate(value);
+  }, [value]);
+
+  // When a date is selected, update both the local state and call the onChange handler
+  const handleSelect = (newDate: { from: Date; to: Date } | null) => {
+    setDate(newDate);
+    onChange(newDate);
+  };
+
   return (
-    <div className="flex items-end gap-4">
-      <div className="space-y-2 min-w-[160px]">
-        <Label className="text-xs font-medium flex items-center gap-1 pl-1">
-          <CalendarRange className="w-3 h-3" />
-          Sort by Date
-        </Label>
-        <Select value={dateField} onValueChange={onDateFieldChange}>
-          <SelectTrigger className="h-8 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="purchase_date">Purchase Date</SelectItem>
-            <SelectItem value="created_at">Created Date</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-2">
-        <Label className="text-xs font-medium flex items-center gap-1 pl-1">
-          <ArrowUpDown className="w-3 h-3" />
-          Order
-        </Label>
-        <div className="flex items-center space-x-2">
-          <Switch
-            id="sort-order"
-            checked={sortOrder === "asc"}
-            onCheckedChange={(checked) => onSortOrderChange(checked ? "asc" : "desc")}
+    <div className="space-y-2">
+      <Label className="text-sm font-medium">Purchase Date Range</Label>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className={cn(
+              "w-full justify-start text-left font-normal",
+              !date && "text-muted-foreground"
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {date?.from ? (
+              date.to ? (
+                <>
+                  {format(date.from, "MMM d, yyyy")} - {format(date.to, "MMM d, yyyy")}
+                </>
+              ) : (
+                format(date.from, "MMM d, yyyy")
+              )
+            ) : (
+              <span>Pick a date range</span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="range"
+            selected={date || undefined}
+            onSelect={handleSelect}
+            initialFocus
+            className={cn("p-3 pointer-events-auto")}
           />
-          <Label htmlFor="sort-order" className="text-xs">Ascending</Label>
-        </div>
-      </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
-};
+}
