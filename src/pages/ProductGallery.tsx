@@ -119,12 +119,10 @@ const ProductGallery = () => {
         const mainMedia = group.find(m => m.caption) || group[0];
         if (!mainMedia) return false;
         
-        // Get purchase date from either the field or analyzed_content
+        // Get purchase date from analyzed_content
         let purchaseDate: Date | null = null;
         
-        if (mainMedia.purchase_date) {
-          purchaseDate = new Date(mainMedia.purchase_date);
-        } else if (mainMedia.analyzed_content?.purchase_date) {
+        if (mainMedia.analyzed_content?.purchase_date) {
           purchaseDate = parseISO(mainMedia.analyzed_content.purchase_date);
         }
         
@@ -150,15 +148,11 @@ const ProductGallery = () => {
         let dateA: Date | null = null;
         let dateB: Date | null = null;
         
-        if (mainMediaA.purchase_date) {
-          dateA = new Date(mainMediaA.purchase_date);
-        } else if (mainMediaA.analyzed_content?.purchase_date) {
+        if (mainMediaA.analyzed_content?.purchase_date) {
           dateA = parseISO(mainMediaA.analyzed_content.purchase_date);
         }
         
-        if (mainMediaB.purchase_date) {
-          dateB = new Date(mainMediaB.purchase_date);
-        } else if (mainMediaB.analyzed_content?.purchase_date) {
+        if (mainMediaB.analyzed_content?.purchase_date) {
           dateB = parseISO(mainMediaB.analyzed_content.purchase_date);
         }
         
