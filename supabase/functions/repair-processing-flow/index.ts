@@ -20,117 +20,74 @@ serve(async (req) => {
     const { limit = 10 } = await req.json();
     console.log(`Starting to repair processing flow for up to ${limit} messages`);
     
-    // Find messages that are in a 'pending' state without analyzed content
-    const { data: pendingMessages, error: queryError } = await supabaseClient
+    // Find messages that are stuck in a 'processing' state
+    const { data: stuckMessages, error: queryError } = await supabaseClient
       .from('messages')
-      .select('id, caption, media_group_id, correlation_id')
-      .eq('processing_state', 'pending')
+      .select('id, caption, media_group_id, correlation_id, processing_started_at')
+      .eq('processing_state', 'processing')
       .is('analyzed_content', null)
-      .not('caption', 'is', null)
-      .not('caption', 'eq', '')
+      .order('processing_started_at', { ascending: true })
       .limit(limit);
     
     if (queryError) {
-      throw new Error(`Error finding pending messages: ${queryError.message}`);
+      throw new Error(`Error finding stuck messages: ${queryError.message}`);
     }
     
-    if (!pendingMessages || pendingMessages.length === 0) {
+    if (!stuckMessages || stuckMessages.length === 0) {
       return new Response(
         JSON.stringify({
           success: true,
-          message: 'No pending messages found that need repair',
+          message: 'No stuck messages found in processing state',
           data: { processed: 0 }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    console.log(`Found ${pendingMessages.length} messages to repair`);
+    console.log(`Found ${stuckMessages.length} stuck messages to repair`);
     
-    // Process each message directly
+    // Process each stuck message
     const results = [];
-    for (const message of pendingMessages) {
+    for (const message of stuckMessages) {
       try {
-        // First try to sync from media group
-        if (message.media_group_id) {
-          const { data: syncResult, error: syncError } = await supabaseClient.rpc(
-            'xdelo_check_media_group_content',
-            {
-              p_media_group_id: message.media_group_id,
-              p_message_id: message.id,
-              p_correlation_id: message.correlation_id || crypto.randomUUID()
-            }
-          );
-          
-          if (!syncError && syncResult.success) {
-            results.push({
-              message_id: message.id,
-              status: 'synced',
-              result: syncResult
-            });
-            continue;
-          }
-        }
-        
-        // If media group sync didn't work or no media group, analyze directly
-        // Call the parse-caption-with-ai endpoint
-        const response = await fetch(
-          `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-            },
-            body: JSON.stringify({
-              messageId: message.id,
-              caption: message.caption,
-              media_group_id: message.media_group_id,
-              correlationId: message.correlation_id || crypto.randomUUID()
-            })
-          }
-        );
-        
-        if (!response.ok) {
-          throw new Error(`Error calling parse-caption-with-ai: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        
-        // Update the message directly
-        const { error: updateError } = await supabaseClient
+        // Reset the message to 'pending' state
+        const { error: resetError } = await supabaseClient
           .from('messages')
           .update({
-            analyzed_content: result.data,
-            processing_state: 'completed',
-            processing_completed_at: new Date().toISOString()
+            processing_state: 'pending',
+            processing_started_at: null,
+            error_message: 'Reset from stuck processing state',
+            retry_count: supabaseClient.rpc('increment', { row_id: message.id, table: 'messages', column: 'retry_count' }),
+            updated_at: new Date().toISOString()
           })
           .eq('id', message.id);
         
-        if (updateError) {
-          throw new Error(`Error updating message: ${updateError.message}`);
+        if (resetError) {
+          throw new Error(`Error resetting message: ${resetError.message}`);
         }
+        
+        // Log the reset
+        await supabaseClient.from('unified_audit_logs').insert({
+          event_type: 'message_processing_reset',
+          entity_id: message.id,
+          correlation_id: message.correlation_id || crypto.randomUUID(),
+          metadata: {
+            reset_reason: 'stuck_in_processing',
+            stuck_since: message.processing_started_at,
+            has_caption: message.caption ? true : false,
+            media_group_id: message.media_group_id
+          },
+          event_timestamp: new Date().toISOString()
+        });
         
         results.push({
           message_id: message.id,
-          status: 'analyzed',
-          result: result
+          status: 'reset_to_pending',
+          stuck_since: message.processing_started_at
         });
         
       } catch (error) {
         console.error(`Error processing message ${message.id}:`, error);
-        
-        // Update error state
-        await supabaseClient
-          .from('messages')
-          .update({
-            processing_state: 'error',
-            error_message: error.message,
-            last_error_at: new Date().toISOString(),
-            retry_count: supabaseClient.rpc('increment', { row_id: message.id, table: 'messages', column: 'retry_count' })
-          })
-          .eq('id', message.id);
-        
         results.push({
           message_id: message.id,
           status: 'error',
@@ -142,7 +99,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Processed ${results.length} messages`,
+        message: `Reset ${results.length} stuck messages to pending state`,
         data: { processed: results.length, results }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

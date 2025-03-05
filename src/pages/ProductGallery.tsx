@@ -8,12 +8,13 @@ import { useToast } from "@/hooks/useToast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
 import { ProductPagination } from "@/components/ProductGallery/ProductPagination";
 import ProductFilters from "@/components/ProductGallery/ProductFilters";
+import { ProcessingRepairButton } from "@/components/ProductGallery/ProcessingRepairButton";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
 import { useVendors } from "@/hooks/useVendors";
 import { logMessageOperation } from "@/lib/syncLogger";
 import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
-import { useTelegramOperations } from "@/hooks/useTelegramOperations";
 import { isSameDay, isWithinInterval, parseISO } from "date-fns";
+import { useTelegramOperations } from "@/hooks/useTelegramOperations";
 
 const ITEMS_PER_PAGE = 12;
 
@@ -201,6 +202,8 @@ const ProductGallery = () => {
   return (
     <div className="container mx-auto py-6 space-y-6">
       <h1 className="text-2xl font-bold">Product Gallery</h1>
+      
+      <ProcessingRepairButton />
       
       <ProductFilters 
         vendors={vendors}

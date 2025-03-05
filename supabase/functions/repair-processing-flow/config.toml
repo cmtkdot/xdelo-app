@@ -1,3 +1,12 @@
 
+# This is the configuration file for the repair-processing-flow function
+
+# Function name and version
 project_id = "xjhhehxcxkiumnwbirel"
+template = "typescript"
+memory = 256 # MB
 verify_jwt = false
+entrypoint = "/index.ts"
+
+# Function will timeout after 15 seconds
+timeout_seconds = 15
