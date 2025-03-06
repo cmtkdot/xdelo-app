@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { useProcessingSystemRepair } from '@/hooks/useProcessingSystemRepair';
+import { Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 export function ProcessingRepairButton() {
   const [showDetail, setShowDetail] = useState(false);
@@ -30,44 +31,64 @@ export function ProcessingRepairButton() {
   return (
     <div className="mb-4">
       {showDetail && stats && (
-        <div className="mb-2 p-3 bg-gray-50 rounded text-sm">
-          <div className="flex justify-between items-center">
-            <div>
-              <span className="font-medium">Processing Status:</span>
-              <span className={`ml-2 ${stats.stuck_count > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                {stats.stuck_count > 0 ? `${stats.stuck_count} stuck messages` : 'System healthy'}
-              </span>
-              {stats.pending_count > 0 && (
-                <span className="ml-2 text-blue-600">
-                  {stats.pending_count} pending
-                </span>
-              )}
+        <div className="mb-2 p-3 bg-gray-50 dark:bg-gray-800 rounded text-sm shadow-sm">
+          <div className="flex flex-col space-y-2">
+            <div className="flex justify-between items-center">
+              <h4 className="font-medium text-sm">Processing System Status</h4>
+              <Button 
+                variant="ghost" 
+                className="p-0 h-auto text-xs"
+                onClick={() => setShowDetail(false)}
+              >
+                Hide
+              </Button>
             </div>
-            <Button 
-              variant="link" 
-              className="p-0 h-auto text-xs"
-              onClick={() => setShowDetail(false)}
-            >
-              Hide
-            </Button>
+            
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center gap-1.5">
+                {stats.stuck_count > 0 ? (
+                  <AlertTriangle className="h-4 w-4 text-orange-500" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                )}
+                <span className="text-sm">
+                  {stats.stuck_count > 0 ? `${stats.stuck_count} stuck messages` : 'No stuck messages'}
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {stats.pending_count || 0} pending
+                </span>
+              </div>
+            </div>
+            
+            {stats.stuck_count > 0 && (
+              <div className="text-xs text-gray-500 mt-1 italic">
+                Stuck messages have been in 'processing' state for too long and need to be reset.
+              </div>
+            )}
           </div>
         </div>
       )}
       
       <Button 
-        variant="outline" 
+        variant={stats?.stuck_count > 0 ? "secondary" : "outline"}
         size="sm"
         onClick={handleCheckAndRepair}
         disabled={isRepairing}
-        className="text-xs"
+        className="text-xs flex items-center gap-1"
       >
         {isRepairing ? (
           <>
-            <span className="animate-spin mr-1">⟳</span>
-            Fixing stuck messages...
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>Fixing stuck messages...</span>
           </>
         ) : (
-          "Check for stuck messages"
+          <>
+            {stats?.stuck_count > 0 ? <AlertTriangle className="h-3 w-3" /> : null}
+            <span>Check processing status</span>
+          </>
         )}
       </Button>
     </div>

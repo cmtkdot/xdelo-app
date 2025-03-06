@@ -19,7 +19,8 @@ export function useProcessingSystemRepair() {
         'repair-processing-flow',
         { 
           body: { 
-            limit: 20 
+            limit: 20,
+            repair_enums: true
           } 
         }
       );
@@ -98,12 +99,20 @@ export function useProcessingSystemRepair() {
       
       if (pendingError) throw pendingError;
       
-      const { data: queueEntries, error: queueError } = await supabase
-        .from('message_processing_queue')
-        .select('count');
-      
-      // This may fail if the queue table is already deleted, which is fine
-      const queueCount = queueError ? 0 : queueEntries?.[0]?.count || 0;
+      // We'll try to check if the legacy queue table exists, but handle it gracefully if not
+      let queueCount = 0;
+      try {
+        const { data: queueEntries, error: queueError } = await supabase
+          .from('message_processing_queue')
+          .select('count');
+        
+        if (!queueError) {
+          queueCount = queueEntries?.[0]?.count || 0;
+        }
+      } catch (e) {
+        // Queue table might not exist anymore, which is fine
+        console.log('Queue table may not exist (expected):', e);
+      }
       
       return {
         stuck_messages: stuckMessages || [],

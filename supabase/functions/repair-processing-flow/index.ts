@@ -17,8 +17,19 @@ serve(async (req) => {
   }
 
   try {
-    const { limit = 10 } = await req.json();
+    const { limit = 10, repair_enums = true } = await req.json();
     console.log(`Starting to repair processing flow for up to ${limit} messages`);
+    
+    // Check if we need to repair enum values first
+    if (repair_enums) {
+      try {
+        // Try to add missing enum values first
+        await supabaseClient.rpc('xdelo_ensure_event_types_exist');
+        console.log('Enum values checked/repaired');
+      } catch (enumError) {
+        console.warn('Could not repair enums, proceeding with message repair only:', enumError);
+      }
+    }
     
     // Find messages that are stuck in a 'processing' state
     const { data: stuckMessages, error: queryError } = await supabaseClient
@@ -66,19 +77,23 @@ serve(async (req) => {
           throw new Error(`Error resetting message: ${resetError.message}`);
         }
         
-        // Log the reset
-        await supabaseClient.from('unified_audit_logs').insert({
-          event_type: 'message_processing_reset',
-          entity_id: message.id,
-          correlation_id: message.correlation_id || crypto.randomUUID(),
-          metadata: {
-            reset_reason: 'stuck_in_processing',
-            stuck_since: message.processing_started_at,
-            has_caption: message.caption ? true : false,
-            media_group_id: message.media_group_id
-          },
-          event_timestamp: new Date().toISOString()
-        });
+        // Log the reset - use a try/catch to handle potential enum issues
+        try {
+          await supabaseClient.from('unified_audit_logs').insert({
+            event_type: 'message_processing_reset',
+            entity_id: message.id,
+            correlation_id: message.correlation_id || crypto.randomUUID(),
+            metadata: {
+              reset_reason: 'stuck_in_processing',
+              stuck_since: message.processing_started_at,
+              has_caption: message.caption ? true : false,
+              media_group_id: message.media_group_id
+            },
+            event_timestamp: new Date().toISOString()
+          });
+        } catch (logError) {
+          console.warn(`Could not log reset operation, continuing: ${logError.message}`);
+        }
         
         results.push({
           message_id: message.id,
@@ -94,6 +109,14 @@ serve(async (req) => {
           error: error.message
         });
       }
+    }
+    
+    // Attempt to clean up the legacy queue table if it exists
+    try {
+      await supabaseClient.rpc('xdelo_cleanup_legacy_queue');
+      console.log('Legacy queue cleanup attempted');
+    } catch (cleanupError) {
+      console.warn('Legacy queue cleanup skipped (table might not exist):', cleanupError);
     }
     
     return new Response(
