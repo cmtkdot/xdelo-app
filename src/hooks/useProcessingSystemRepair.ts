@@ -77,6 +77,93 @@ export function useProcessingSystemRepair() {
       setIsRepairing(false);
     }
   };
+  
+  /**
+   * Specifically targets and resets stuck messages, then processes unprocessed messages with captions
+   */
+  const repairStuckMessages = async () => {
+    try {
+      setIsRepairing(true);
+      
+      // First, find and reset all stuck messages
+      const { data: resetData, error: resetError } = await supabase
+        .from('messages')
+        .update({
+          processing_state: 'pending',
+          processing_started_at: null,
+          error_message: 'Reset from stuck processing state',
+          updated_at: new Date().toISOString()
+        })
+        .eq('processing_state', 'processing')
+        .is('analyzed_content', null)
+        .not('caption', 'is', null)
+        .select('id, caption');
+      
+      if (resetError) throw resetError;
+      
+      // Then find "initialized" messages with captions and set them to pending
+      const { data: initializedData, error: initializedError } = await supabase
+        .from('messages')
+        .update({
+          processing_state: 'pending',
+          updated_at: new Date().toISOString()
+        })
+        .eq('processing_state', 'initialized')
+        .not('caption', 'is', null)
+        .select('id, caption');
+      
+      if (initializedError) throw initializedError;
+      
+      // Direct processing of specific messages with captions
+      const messagesToProcess = [...(resetData || []), ...(initializedData || [])];
+      let processedCount = 0;
+      
+      if (messagesToProcess.length > 0) {
+        for (const message of messagesToProcess) {
+          try {
+            // Only process messages with actual captions
+            if (message.caption) {
+              // Use direct-caption-processor for immediate processing
+              await supabase.functions.invoke('direct-caption-processor', {
+                body: { 
+                  messageId: message.id,
+                  trigger_source: 'manual_repair'
+                }
+              });
+              processedCount++;
+            }
+          } catch (processError) {
+            console.error(`Error processing message ${message.id}:`, processError);
+          }
+        }
+      }
+      
+      toast({
+        title: "Stuck Messages Repaired",
+        description: `Reset ${resetData?.length || 0} stuck messages and ${initializedData?.length || 0} initialized messages. Processed ${processedCount} messages.`,
+      });
+      
+      return { 
+        success: true,
+        reset: resetData?.length || 0,
+        initialized: initializedData?.length || 0,
+        processed: processedCount
+      };
+      
+    } catch (error: any) {
+      console.error('Error repairing stuck messages:', error);
+      
+      toast({
+        title: "Repair Failed",
+        description: error.message || "Failed to repair stuck messages",
+        variant: "destructive"
+      });
+      
+      throw error;
+    } finally {
+      setIsRepairing(false);
+    }
+  };
 
   /**
    * Get statistics about the current processing system state
@@ -99,6 +186,15 @@ export function useProcessingSystemRepair() {
       
       if (pendingError) throw pendingError;
       
+      // Count unprocessed messages with captions
+      const { data: unprocessedMessages, error: unprocessedError } = await supabase
+        .from('messages')
+        .select('count')
+        .is('analyzed_content', null)
+        .not('caption', 'is', null);
+      
+      if (unprocessedError) throw unprocessedError;
+      
       // We'll try to check if the legacy queue table exists, but handle it gracefully if not
       let queueCount = 0;
       try {
@@ -118,6 +214,7 @@ export function useProcessingSystemRepair() {
         stuck_messages: stuckMessages || [],
         stuck_count: stuckMessages?.length || 0,
         pending_count: pendingMessages?.[0]?.count || 0,
+        unprocessed_count: unprocessedMessages?.[0]?.count || 0,
         queue_count: queueCount
       };
       
@@ -137,6 +234,7 @@ export function useProcessingSystemRepair() {
   return {
     repairProcessingSystem,
     getProcessingStats,
+    repairStuckMessages,
     isRepairing
   };
 }

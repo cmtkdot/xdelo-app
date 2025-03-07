@@ -2,11 +2,16 @@
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { useProcessingSystemRepair } from '@/hooks/useProcessingSystemRepair';
-import { Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
 
 export function ProcessingRepairButton() {
   const [showDetail, setShowDetail] = useState(false);
-  const { repairProcessingSystem, getProcessingStats, isRepairing } = useProcessingSystemRepair();
+  const { 
+    repairProcessingSystem, 
+    getProcessingStats, 
+    isRepairing,
+    repairStuckMessages
+  } = useProcessingSystemRepair();
   const [stats, setStats] = useState<any>(null);
 
   const handleCheckAndRepair = async () => {
@@ -25,6 +30,17 @@ export function ProcessingRepairButton() {
       }
     } catch (error) {
       console.error('Error checking processing system:', error);
+    }
+  };
+  
+  const handleRepairStuckMessages = async () => {
+    try {
+      await repairStuckMessages();
+      // Get updated stats after repair
+      const updatedStats = await getProcessingStats();
+      setStats(updatedStats);
+    } catch (error) {
+      console.error('Error repairing stuck messages:', error);
     }
   };
   
@@ -61,11 +77,38 @@ export function ProcessingRepairButton() {
                   {stats.pending_count || 0} pending
                 </span>
               </div>
+              
+              <div className="flex items-center gap-1.5 col-span-2">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {stats.unprocessed_count || 0} unprocessed with captions
+                </span>
+              </div>
             </div>
             
             {stats.stuck_count > 0 && (
               <div className="text-xs text-gray-500 mt-1 italic">
                 Stuck messages have been in 'processing' state for too long and need to be reset.
+              </div>
+            )}
+            
+            {(stats.stuck_count > 0 || stats.unprocessed_count > 0) && (
+              <div className="flex gap-2 mt-2">
+                {stats.stuck_count > 0 && (
+                  <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    onClick={handleRepairStuckMessages}
+                    disabled={isRepairing}
+                    className="text-xs"
+                  >
+                    {isRepairing ? (
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                    )}
+                    Reset stuck messages
+                  </Button>
+                )}
               </div>
             )}
           </div>

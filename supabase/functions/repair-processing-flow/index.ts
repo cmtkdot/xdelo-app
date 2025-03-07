@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from "../_shared/cors.ts";
@@ -17,8 +16,8 @@ serve(async (req) => {
   }
 
   try {
-    const { limit = 10, repair_enums = true } = await req.json();
-    console.log(`Starting to repair processing flow for up to ${limit} messages`);
+    const { limit = 10, repair_enums = true, reset_all = false } = await req.json();
+    console.log(`Starting to repair processing flow for up to ${limit} messages, reset_all: ${reset_all}`);
     
     // Check if we need to repair enum values first
     if (repair_enums) {
@@ -31,7 +30,41 @@ serve(async (req) => {
       }
     }
     
-    // Find messages that are stuck in a 'processing' state
+    // If reset_all is true, use the function to reset all stuck messages
+    if (reset_all) {
+      try {
+        const { data: resetAllData, error: resetAllError } = await supabaseClient.rpc('xdelo_reset_all_stuck_messages');
+        
+        if (resetAllError) {
+          throw new Error(`Error resetting all stuck messages: ${resetAllError.message}`);
+        }
+        
+        // Also repair orphaned media group messages
+        const { data: orphanedData, error: orphanedError } = await supabaseClient.rpc('xdelo_repair_orphaned_media_group_messages');
+        
+        if (orphanedError) {
+          console.warn(`Warning: Could not repair orphaned media group messages: ${orphanedError.message}`);
+        }
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: 'Reset all stuck messages and repaired orphaned media group messages',
+            data: { 
+              processed: resetAllData?.length || 0, 
+              orphaned_fixed: orphanedData?.length || 0,
+              results: resetAllData
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (resetAllError) {
+        console.error('Error in batch reset operation:', resetAllError);
+        throw resetAllError;
+      }
+    }
+    
+    // Otherwise, find messages that are stuck in a 'processing' state
     const { data: stuckMessages, error: queryError } = await supabaseClient
       .from('messages')
       .select('id, caption, media_group_id, correlation_id, processing_started_at')
@@ -44,22 +77,37 @@ serve(async (req) => {
       throw new Error(`Error finding stuck messages: ${queryError.message}`);
     }
     
-    if (!stuckMessages || stuckMessages.length === 0) {
+    // Also check for initialized messages with captions
+    const { data: initializedMessages, error: initializedError } = await supabaseClient
+      .from('messages')
+      .select('id, caption, media_group_id, correlation_id')
+      .eq('processing_state', 'initialized')
+      .not('caption', 'is', null)
+      .order('created_at', { ascending: true })
+      .limit(limit);
+    
+    if (initializedError) {
+      throw new Error(`Error finding initialized messages: ${initializedError.message}`);
+    }
+    
+    const allMessagesToReset = [...(stuckMessages || []), ...(initializedMessages || [])];
+    
+    if (!allMessagesToReset || allMessagesToReset.length === 0) {
       return new Response(
         JSON.stringify({
           success: true,
-          message: 'No stuck messages found in processing state',
+          message: 'No stuck or initialized messages found that need repair',
           data: { processed: 0 }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    console.log(`Found ${stuckMessages.length} stuck messages to repair`);
+    console.log(`Found ${allMessagesToReset.length} messages to repair (${stuckMessages?.length || 0} stuck, ${initializedMessages?.length || 0} initialized)`);
     
-    // Process each stuck message
+    // Process each message
     const results = [];
-    for (const message of stuckMessages) {
+    for (const message of allMessagesToReset) {
       try {
         // Reset the message to 'pending' state
         const { error: resetError } = await supabaseClient
@@ -75,6 +123,28 @@ serve(async (req) => {
         
         if (resetError) {
           throw new Error(`Error resetting message: ${resetError.message}`);
+        }
+        
+        // If the message has a caption, process it immediately
+        if (message.caption) {
+          try {
+            // Use direct-caption-processor for immediate processing
+            const { error: processingError } = await supabaseClient.functions.invoke(
+              'direct-caption-processor',
+              {
+                body: { 
+                  messageId: message.id,
+                  trigger_source: 'repair_operation'
+                }
+              }
+            );
+            
+            if (processingError) {
+              console.warn(`Warning: Could not directly process message ${message.id}: ${processingError.message}`);
+            }
+          } catch (processingError) {
+            console.warn(`Processing error (non-fatal) for message ${message.id}: ${processingError.message}`);
+          }
         }
         
         // Log the reset - use a try/catch to handle potential enum issues
@@ -98,6 +168,7 @@ serve(async (req) => {
         results.push({
           message_id: message.id,
           status: 'reset_to_pending',
+          has_caption: !!message.caption,
           stuck_since: message.processing_started_at
         });
         
@@ -123,7 +194,12 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         message: `Reset ${results.length} stuck messages to pending state`,
-        data: { processed: results.length, results }
+        data: { 
+          processed: results.length, 
+          stuck_count: stuckMessages?.length || 0,
+          initialized_count: initializedMessages?.length || 0,
+          results 
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

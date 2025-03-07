@@ -33,12 +33,22 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
       throw new Error(`Message not found: ${messageError?.message || 'Unknown error'}`);
     }
     
-    // Skip processing if no caption or already processed
+    // Skip processing if no caption
     if (!message.caption) {
+      // Instead of just skipping, set the message to error state if there's no caption
+      await supabase
+        .from('messages')
+        .update({
+          processing_state: 'error',
+          error_message: 'No caption to process',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', messageId);
+        
       return new Response(
         JSON.stringify({
-          success: true,
-          message: `Message ${messageId} skipped: No caption`,
+          success: false,
+          message: `Message ${messageId} failed: No caption to process`,
           correlation_id: correlationId
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -46,6 +56,16 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
     }
 
     console.log(`Processing caption for message ${messageId}, caption length: ${message.caption.length}`);
+    
+    // First update the message to processing state
+    await supabase
+      .from('messages')
+      .update({
+        processing_state: 'processing',
+        processing_started_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', messageId);
     
     // Directly call the manual-caption-parser for simplicity and consistency
     const { data: analysisResult, error: analysisError } = await supabase.functions.invoke(
@@ -119,6 +139,17 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
     );
   } catch (error) {
     console.error(`Error in direct caption processor: ${error.message}`);
+    
+    // Update the message to error state
+    await supabase
+      .from('messages')
+      .update({
+        processing_state: 'error',
+        error_message: error.message,
+        last_error_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', messageId);
     
     // Log the error
     await supabase.from('unified_audit_logs').insert({
