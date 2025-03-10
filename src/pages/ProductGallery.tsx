@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +14,7 @@ import { logMessageOperation } from "@/lib/syncLogger";
 import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { isSameDay, isWithinInterval, parseISO } from "date-fns";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
+import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
 
 const ITEMS_PER_PAGE = 12;
 
@@ -27,6 +27,10 @@ const ProductGallery = () => {
     sortOrder: "desc",
     sortField: "created_at"
   });
+  
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
+  const [currentViewGroup, setCurrentViewGroup] = useState<Message[]>([]);
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -82,14 +86,40 @@ const ProductGallery = () => {
     }
   };
 
-  const handleView = () => {
-    console.log('Viewing media');
+  const handleView = (group: Message[]) => {
+    if (!group || group.length === 0) return;
+    
+    setCurrentViewGroup(group);
+    setViewerOpen(true);
+    
+    const groupIndex = paginatedProducts.findIndex(g => {
+      return g[0]?.id === group[0]?.id;
+    });
+    
+    if (groupIndex !== -1) {
+      setCurrentGroupIndex(groupIndex);
+    }
+  };
+
+  const handlePreviousGroup = () => {
+    if (currentGroupIndex > 0) {
+      const prevIndex = currentGroupIndex - 1;
+      setCurrentGroupIndex(prevIndex);
+      setCurrentViewGroup(paginatedProducts[prevIndex]);
+    }
+  };
+
+  const handleNextGroup = () => {
+    if (currentGroupIndex < paginatedProducts.length - 1) {
+      const nextIndex = currentGroupIndex + 1;
+      setCurrentGroupIndex(nextIndex);
+      setCurrentViewGroup(paginatedProducts[nextIndex]);
+    }
   };
 
   const filteredProducts = useMemo(() => {
     let filtered = Object.values(mediaGroups);
     
-    // Apply search filter
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(group => {
@@ -106,7 +136,6 @@ const ProductGallery = () => {
       });
     }
     
-    // Apply vendor filter
     if (filters.vendors && filters.vendors.length > 0) {
       filtered = filtered.filter(group => {
         const mainMedia = group.find(m => m.caption) || group[0];
@@ -114,13 +143,11 @@ const ProductGallery = () => {
       });
     }
     
-    // Apply date range filter
     if (filters.dateRange && filters.dateRange.from && filters.dateRange.to) {
       filtered = filtered.filter(group => {
         const mainMedia = group.find(m => m.caption) || group[0];
         if (!mainMedia) return false;
         
-        // Get purchase date from analyzed_content
         let purchaseDate: Date | null = null;
         
         if (mainMedia.analyzed_content?.purchase_date) {
@@ -129,7 +156,6 @@ const ProductGallery = () => {
         
         if (!purchaseDate) return false;
         
-        // Check if the purchase date is within the selected range
         return isWithinInterval(purchaseDate, {
           start: filters.dateRange!.from,
           end: filters.dateRange!.to
@@ -137,7 +163,6 @@ const ProductGallery = () => {
       });
     }
     
-    // Sort by the selected field and order
     filtered.sort((a, b) => {
       const mainMediaA = a.find(m => m.caption) || a[0];
       const mainMediaB = b.find(m => m.caption) || b[0];
@@ -145,7 +170,6 @@ const ProductGallery = () => {
       if (!mainMediaA || !mainMediaB) return 0;
       
       if (filters.sortField === 'purchase_date') {
-        // Get purchase dates for comparison
         let dateA: Date | null = null;
         let dateB: Date | null = null;
         
@@ -157,7 +181,6 @@ const ProductGallery = () => {
           dateB = parseISO(mainMediaB.analyzed_content.purchase_date);
         }
         
-        // If we don't have a purchase date for one or both, fall back to created_at
         if (!dateA) dateA = new Date(mainMediaA.created_at || 0);
         if (!dateB) dateB = new Date(mainMediaB.created_at || 0);
         
@@ -165,7 +188,6 @@ const ProductGallery = () => {
           dateA.getTime() - dateB.getTime() : 
           dateB.getTime() - dateA.getTime();
       } else {
-        // Default sort by created_at
         const dateA = new Date(mainMediaA.created_at || 0).getTime();
         const dateB = new Date(mainMediaB.created_at || 0).getTime();
         return filters.sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
@@ -248,6 +270,16 @@ const ProductGallery = () => {
           }}
         />
       )}
+      
+      <MediaViewer
+        isOpen={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        currentGroup={currentViewGroup}
+        onPrevious={handlePreviousGroup}
+        onNext={handleNextGroup}
+        hasPrevious={currentGroupIndex > 0}
+        hasNext={currentGroupIndex < paginatedProducts.length - 1}
+      />
     </div>
   );
 };

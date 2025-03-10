@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import ProductFilters from "@/components/ProductGallery/ProductFilters";
 import { ProductPagination } from "@/components/ProductGallery/ProductPagination";
 import { parseISO, isWithinInterval } from "date-fns";
+import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
 
 const ITEMS_PER_PAGE = 12;
 
@@ -23,6 +23,10 @@ const PublicGallery = () => {
     sortField: "created_at"
   });
   
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
+  const [currentViewGroup, setCurrentViewGroup] = useState<Message[]>([]);
+  
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -35,7 +39,6 @@ const PublicGallery = () => {
         .select('*')
         .eq('processing_state', 'completed');
       
-      // Order by the appropriate field
       query.order(filters.sortField || 'created_at', { ascending: filters.sortOrder === 'asc' });
       
       const { data, error } = await query;
@@ -88,8 +91,35 @@ const PublicGallery = () => {
     setEditItem(media);
   };
 
-  const handleView = () => {
-    console.log('Viewing media');
+  const handleView = (group: Message[]) => {
+    if (!group || group.length === 0) return;
+    
+    setCurrentViewGroup(group);
+    setViewerOpen(true);
+    
+    const groupIndex = paginatedProducts.findIndex(g => {
+      return g[0]?.id === group[0]?.id;
+    });
+    
+    if (groupIndex !== -1) {
+      setCurrentGroupIndex(groupIndex);
+    }
+  };
+
+  const handlePreviousGroup = () => {
+    if (currentGroupIndex > 0) {
+      const prevIndex = currentGroupIndex - 1;
+      setCurrentGroupIndex(prevIndex);
+      setCurrentViewGroup(paginatedProducts[prevIndex]);
+    }
+  };
+  
+  const handleNextGroup = () => {
+    if (currentGroupIndex < paginatedProducts.length - 1) {
+      const nextIndex = currentGroupIndex + 1;
+      setCurrentGroupIndex(nextIndex);
+      setCurrentViewGroup(paginatedProducts[nextIndex]);
+    }
   };
 
   const handleDelete = async (media: Message) => {
@@ -130,7 +160,6 @@ const PublicGallery = () => {
     
     let filtered = Object.values(mediaGroups);
     
-    // Apply search filter
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(group => {
@@ -147,7 +176,6 @@ const PublicGallery = () => {
       });
     }
     
-    // Apply vendor filter
     if (filters.vendors && filters.vendors.length > 0) {
       filtered = filtered.filter(group => {
         const mainMedia = group.find(m => m.caption) || group[0];
@@ -155,13 +183,11 @@ const PublicGallery = () => {
       });
     }
     
-    // Apply date range filter
     if (filters.dateRange && filters.dateRange.from && filters.dateRange.to) {
       filtered = filtered.filter(group => {
         const mainMedia = group.find(m => m.caption) || group[0];
         if (!mainMedia) return false;
         
-        // Get purchase date from analyzed_content
         let purchaseDate: Date | null = null;
         
         if (mainMedia.analyzed_content?.purchase_date) {
@@ -170,7 +196,6 @@ const PublicGallery = () => {
         
         if (!purchaseDate) return false;
         
-        // Check if the purchase date is within the selected range
         return isWithinInterval(purchaseDate, {
           start: filters.dateRange!.from,
           end: filters.dateRange!.to
@@ -259,6 +284,16 @@ const PublicGallery = () => {
           }}
         />
       )}
+      
+      <MediaViewer
+        isOpen={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        currentGroup={currentViewGroup}
+        onPrevious={handlePreviousGroup}
+        onNext={handleNextGroup}
+        hasPrevious={currentGroupIndex > 0}
+        hasNext={currentGroupIndex < paginatedProducts.length - 1}
+      />
     </div>
   );
 };

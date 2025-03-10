@@ -7,7 +7,7 @@ interface ProductGridProps {
   products: Message[][];
   onEdit: (media: Message) => void;
   onDelete: ((media: Message, deleteTelegram?: boolean) => Promise<void>) | undefined;
-  onView: () => void;
+  onView: (group: Message[]) => void;
   className?: string;
   isDeleting?: boolean;
 }
