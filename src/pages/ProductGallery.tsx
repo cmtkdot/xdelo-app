@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +16,8 @@ import { isSameDay, isWithinInterval, parseISO } from "date-fns";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
 import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
 import { MediaFixButton } from "@/components/ProductGallery/MediaFixButton";
+import { xdelo_checkFileExistsInStorage } from "@/lib/telegramMediaUtils";
+import { useMediaUpload } from "@/hooks/useMediaUpload";
 
 const ITEMS_PER_PAGE = 12;
 
@@ -38,6 +41,7 @@ const ProductGallery = () => {
   const { data: mediaGroups = {}, isLoading } = useMediaGroups();
   const { data: vendors = [] } = useVendors();
   const { handleDelete, isProcessing } = useTelegramOperations();
+  const { checkMediaExists } = useMediaUpload();
 
   useEffect(() => {
     const channel = supabase
@@ -87,8 +91,21 @@ const ProductGallery = () => {
     }
   };
 
-  const handleView = (group: Message[]) => {
+  const handleView = async (group: Message[]) => {
     if (!group || group.length === 0) return;
+    
+    // Check if media exists in storage before viewing
+    if (group[0]?.file_unique_id && group[0]?.mime_type) {
+      const exists = await checkMediaExists(group[0].file_unique_id, group[0].mime_type);
+      if (!exists) {
+        toast({
+          title: "Media file missing",
+          description: "The media file could not be found in storage. Try repairing media files.",
+          variant: "destructive"
+        });
+        // Still allow viewing in case there's another version available
+      }
+    }
     
     setCurrentViewGroup(group);
     setViewerOpen(true);

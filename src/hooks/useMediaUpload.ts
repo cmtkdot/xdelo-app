@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { 
   xdelo_uploadTelegramMedia, 
   xdelo_validateStorageFile,
-  xdelo_repairContentDisposition
+  xdelo_repairContentDisposition,
+  xdelo_checkFileExistsInStorage
 } from '@/lib/telegramMediaUtils';
 import { useToast } from './useToast';
 
@@ -11,6 +12,18 @@ export function useMediaUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const [lastUploadedUrl, setLastUploadedUrl] = useState<string | null>(null);
   const { toast } = useToast();
+
+  /**
+   * Check if media already exists in storage
+   */
+  const checkMediaExists = async (fileUniqueId: string, mimeType: string): Promise<boolean> => {
+    try {
+      return await xdelo_checkFileExistsInStorage(fileUniqueId, mimeType);
+    } catch (error) {
+      console.error('Error checking media existence:', error);
+      return false;
+    }
+  };
 
   /**
    * Upload media to storage
@@ -24,7 +37,12 @@ export function useMediaUpload() {
   ) => {
     setIsUploading(true);
     try {
-      const { publicUrl, storagePath } = await xdelo_uploadTelegramMedia(
+      // Check if media exists first (just for logging/debugging)
+      const exists = await checkMediaExists(fileUniqueId, mimeType || '');
+      console.log(`Media ${fileUniqueId} exists in storage: ${exists}`);
+      
+      // Always upload/re-upload regardless of existence
+      const { publicUrl, storagePath, mimeType: detectedMimeType } = await xdelo_uploadTelegramMedia(
         fileUrl, 
         fileUniqueId, 
         mediaType, 
@@ -33,11 +51,11 @@ export function useMediaUpload() {
       
       setLastUploadedUrl(publicUrl);
       toast({
-        title: "Upload successful",
-        description: "Media file has been uploaded and replaced if it existed."
+        title: exists ? "Media updated" : "Upload successful",
+        description: exists ? "Media file has been re-uploaded and replaced." : "Media file has been uploaded."
       });
       
-      return { publicUrl, storagePath };
+      return { publicUrl, storagePath, mimeType: detectedMimeType };
     } catch (error) {
       console.error('Upload failed:', error);
       toast({
@@ -97,6 +115,7 @@ export function useMediaUpload() {
     uploadMedia,
     validateStorageFile,
     repairFile,
+    checkMediaExists,
     isUploading,
     lastUploadedUrl
   };

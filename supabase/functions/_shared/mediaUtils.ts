@@ -3,8 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client (will use env vars from edge function context)
 const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  Deno.env.get('SUPABASE_URL') || '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 );
 
 // Enhanced detection of MIME type from Telegram media object
@@ -34,6 +34,14 @@ export function xdelo_constructStoragePath(fileUniqueId: string, mimeType: strin
   return `${fileUniqueId}.${ext}`;
 }
 
+// Get upload options including correct content type
+export function xdelo_getUploadOptions(mimeType: string): any {
+  return {
+    contentType: mimeType,
+    upsert: true // Always replace existing files
+  };
+}
+
 // Upload media to Supabase Storage
 export async function xdelo_uploadMediaToStorage(
   fileData: Blob,
@@ -41,13 +49,12 @@ export async function xdelo_uploadMediaToStorage(
   mimeType: string
 ): Promise<boolean> {
   try {
+    const uploadOptions = xdelo_getUploadOptions(mimeType);
+    
     const { error } = await supabase
       .storage
       .from('telegram-media')
-      .upload(storagePath, fileData, {
-        contentType: mimeType,
-        upsert: true
-      });
+      .upload(storagePath, fileData, uploadOptions);
       
     return !error;
   } catch (error) {
@@ -69,14 +76,69 @@ export async function xdelo_validateStoragePath(path: string): Promise<boolean> 
   try {
     const { data, error } = await supabase.storage
       .from(bucket)
-      .list(filePath.split('/').slice(0, -1).join('/'), {
-        limit: 1,
-        search: filePath.split('/').pop() || ''
-      });
+      .download(filePath, { range: { offset: 0, length: 1 } });
       
-    return !error && data && data.length > 0;
+    return !error && !!data;
   } catch (err) {
     console.error('Error validating storage path:', err);
     return false;
   }
+}
+
+// Check if a file exists directly in the storage bucket
+export async function xdelo_checkFileExistsInStorage(fileUniqueId: string, mimeType: string): Promise<boolean> {
+  try {
+    // Generate the standardized path
+    const storagePath = xdelo_constructStoragePath(fileUniqueId, mimeType);
+    
+    // Try to download a single byte of the file to check its existence
+    const { data, error } = await supabase
+      .storage
+      .from('telegram-media')
+      .download(storagePath, { range: { offset: 0, length: 1 } });
+    
+    return !error && !!data;
+  } catch (error) {
+    console.error('Error checking file existence in storage:', error);
+    return false;
+  }
+}
+
+// Repair content disposition for a file (re-upload with correct content type)
+export async function xdelo_repairContentDisposition(storagePath: string, mimeType?: string): Promise<boolean> {
+  try {
+    // Extract bucket and path
+    const [bucket, ...pathParts] = storagePath.split('/');
+    const path = pathParts.join('/');
+    
+    if (!bucket || !path) return false;
+    
+    // Download the existing file
+    const { data, error } = await supabase
+      .storage
+      .from(bucket)
+      .download(path);
+      
+    if (error || !data) return false;
+    
+    // If no mime type provided, try to infer from path
+    const actualMimeType = mimeType || `image/${path.split('.').pop()}`;
+    
+    // Re-upload with correct content type
+    const uploadOptions = xdelo_getUploadOptions(actualMimeType);
+    const { error: uploadError } = await supabase
+      .storage
+      .from(bucket)
+      .upload(path, data, uploadOptions);
+      
+    return !uploadError;
+  } catch (error) {
+    console.error('Error repairing content disposition:', error);
+    return false;
+  }
+}
+
+// Determine if a MIME type is viewable in browser
+export function xdelo_isViewableMimeType(mimeType: string): boolean {
+  return /^(image\/|video\/|audio\/|text\/|application\/pdf)/.test(mimeType);
 }

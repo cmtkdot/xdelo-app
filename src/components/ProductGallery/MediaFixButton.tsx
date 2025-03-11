@@ -1,70 +1,39 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { useMediaUpload } from '@/hooks/useMediaUpload';
-import { useToast } from '@/hooks/useToast';
-import { Wrench, Loader2 } from 'lucide-react';
+import { Loader2, UploadCloud, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/useToast';
 
-export function MediaFixButton() {
+export const MediaFixButton = () => {
   const [isRepairing, setIsRepairing] = useState(false);
-  const [progress, setProgress] = useState({ fixed: 0, total: 0 });
-  const { validateStorageFile, repairFile } = useMediaUpload();
+  const [repairResults, setRepairResults] = useState<any>(null);
   const { toast } = useToast();
 
-  const handleFixMedia = async () => {
-    setIsRepairing(true);
-    setProgress({ fixed: 0, total: 0 });
+  const handleRepairMedia = async () => {
+    if (isRepairing) return;
     
+    setIsRepairing(true);
     try {
-      // Get messages with media
-      const { data: messages, error } = await supabase
-        .from('messages')
-        .select('id, storage_path, mime_type, public_url')
-        .is('deleted_from_telegram', false)
-        .not('storage_path', 'is', null)
-        .not('mime_type', 'is', null)
-        .limit(100);
-        
-      if (error) throw error;
-      
-      if (!messages || messages.length === 0) {
-        toast({
-          title: "No media to fix",
-          description: "No media files need content type fixing."
-        });
-        return;
-      }
-      
-      setProgress({ fixed: 0, total: messages.length });
-      
-      let fixedCount = 0;
-      
-      // Process each message sequentially
-      for (const message of messages) {
-        try {
-          // Skip if file doesn't exist
-          const exists = await validateStorageFile(message.storage_path);
-          if (!exists) continue;
-          
-          // Re-upload with correct content type
-          const fixed = await repairFile(message.storage_path, message.mime_type);
-          if (fixed) fixedCount++;
-          
-          setProgress({ fixed: fixedCount, total: messages.length });
-        } catch (err) {
-          console.error(`Error processing message ${message.id}:`, err);
+      // Call the repair-storage-paths edge function
+      const { data, error } = await supabase.functions.invoke('repair-storage-paths', {
+        body: { 
+          fixContentDisposition: true 
         }
-      }
+      });
+      
+      if (error) throw new Error(error.message);
+      
+      setRepairResults(data);
       
       toast({
-        title: "Media fix completed",
-        description: `Fixed content type for ${fixedCount} out of ${messages.length} files.`
+        title: "Media repair completed",
+        description: `Processed ${data.data.processed} files, repaired ${data.data.repaired} storage paths, fixed ${data.data.contentDispositionFixed} content types.`,
       });
     } catch (error) {
-      console.error('Error in fix process:', error);
+      console.error('Media repair failed:', error);
       toast({
-        title: "Fix process error",
+        title: "Media repair failed",
         description: error instanceof Error ? error.message : "An unknown error occurred",
         variant: "destructive"
       });
@@ -75,21 +44,27 @@ export function MediaFixButton() {
 
   return (
     <Button 
-      variant="outline" 
-      onClick={handleFixMedia}
+      onClick={handleRepairMedia} 
       disabled={isRepairing}
+      className="mb-4"
+      variant="outline"
     >
       {isRepairing ? (
         <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Fixing ({progress.fixed}/{progress.total})
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          Repairing media...
+        </>
+      ) : repairResults ? (
+        <>
+          <CheckCircle className="h-4 w-4 mr-2" />
+          Media repaired
         </>
       ) : (
         <>
-          <Wrench className="mr-2 h-4 w-4" />
-          Fix Media Files
+          <UploadCloud className="h-4 w-4 mr-2" />
+          Repair media files
         </>
       )}
     </Button>
   );
-}
+};
