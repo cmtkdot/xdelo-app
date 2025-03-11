@@ -3162,6 +3162,19 @@ export type Database = {
         }
         Returns: boolean
       }
+      xdelo_get_incomplete_media_groups: {
+        Args: {
+          limit_param?: number
+        }
+        Returns: {
+          media_group_id: string
+          total_messages: number
+          processed_messages: number
+          unprocessed_messages: number
+          oldest_message_id: string
+          oldest_message_created_at: string
+        }[]
+      }
       xdelo_get_logger: {
         Args: {
           p_correlation_id: string
@@ -3180,6 +3193,10 @@ export type Database = {
           analyzed_content: Json
           forward_count: number
         }[]
+      }
+      xdelo_get_message_processing_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       xdelo_get_next_message_for_processing: {
         Args: {
