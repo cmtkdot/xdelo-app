@@ -46,7 +46,7 @@ export function useProcessingHealth() {
       setIsLoading(true);
       
       // Get processing stats
-      const { data: statsCounts, error: stateError } = await supabase.rpc(
+      const { data: statsData, error: stateError } = await supabase.rpc(
         'xdelo_get_message_processing_stats'
       );
       
@@ -62,8 +62,11 @@ export function useProcessingHealth() {
 
       // Combine everything into a health report
       const healthReport: ProcessingStats = {
-        ...(statsCounts as ProcessingStats),
-        mixed_media_groups: mixedMediaGroups as MediaGroupStatus[] || []
+        state_counts: statsData.state_counts,
+        media_group_stats: statsData.media_group_stats,
+        timing_stats: statsData.timing_stats,
+        timestamp: statsData.timestamp,
+        mixed_media_groups: mixedMediaGroups as MediaGroupStatus[]
       };
       
       setProcessingStats(healthReport);

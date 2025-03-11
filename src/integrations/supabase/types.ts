@@ -3058,6 +3058,31 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      xan_handle_circular_references: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          relationship_type: string
+          records_updated: number
+        }[]
+      }
+      xan_perform_maintenance: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      xan_recalculate_entity_totals: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          entity_type: string
+          records_updated: number
+        }[]
+      }
+      xan_repair_entity_relationships: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          table_name: string
+          records_updated: number
+        }[]
+      }
       xan_sync_glide_configuration: {
         Args: {
           table_name: string
@@ -3069,6 +3094,13 @@ export type Database = {
           po_id: string
         }
         Returns: undefined
+      }
+      xan_validate_entity_references: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          entity_type: string
+          invalid_references: number
+        }[]
       }
       xdelo_analyze_message_caption: {
         Args: {
