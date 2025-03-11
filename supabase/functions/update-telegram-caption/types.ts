@@ -1,5 +1,6 @@
+
 export type TelegramChatType = 'private' | 'group' | 'supergroup' | 'channel';
-export type ProcessingStateType = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
+export type ProcessingStateType = 'initialized' | 'pending' | 'processing' | 'completed' | 'partial_success' | 'error' | 'no_caption';
 export type TelegramOtherMessageType = 
   | 'text'
   | 'command'
