@@ -1,4 +1,4 @@
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
+export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'partial_success' | 'error';
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
 export interface FilterValues {
@@ -22,9 +22,12 @@ export interface AnalyzedContent {
   notes?: string;
   caption?: string;
   parsing_metadata?: {
-    method: 'manual' | 'ai' ;
+    method: 'manual' | 'ai' | 'fallback';
     confidence: number;
     timestamp: string;
+    partial_success?: boolean;
+    error?: string;
+    missing_fields?: string[];
   };
   sync_metadata?: {
     sync_source_message_id?: string;

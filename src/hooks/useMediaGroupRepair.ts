@@ -1,13 +1,17 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
+import { useState } from 'react';
 
 export function useMediaGroupRepair() {
   const { toast } = useToast();
+  const [isRepairing, setIsRepairing] = useState(false);
 
-  // Repair any issues with the queue system and message relationships
+  // Repair any issues with the media group relationships
   const repairMessageProcessingSystem = async () => {
     try {
+      setIsRepairing(true);
+      
       // First repair media group relationships
       const { data: repairResult, error: repairError } = await supabase.functions.invoke(
         'direct-media-group-repair',
@@ -26,7 +30,7 @@ export function useMediaGroupRepair() {
         description: `Fixed ${repairResult?.fixed_count || 0} media group relationships.`
       });
       
-      // Then run the standard repair process using the process message queue function
+      // Then run the standard repair process using the scheduler process
       const { data: processResult, error: processError } = await supabase.functions.invoke(
         'scheduler-process-queue',
         {
@@ -55,10 +59,13 @@ export function useMediaGroupRepair() {
       });
       
       throw error;
+    } finally {
+      setIsRepairing(false);
     }
   };
 
   return {
-    repairMessageProcessingSystem
+    repairMessageProcessingSystem,
+    isRepairing
   };
 }

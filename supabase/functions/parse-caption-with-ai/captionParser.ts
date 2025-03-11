@@ -1,159 +1,163 @@
 
-import { ParsedContent } from './types.ts';
-
-// Manual parsing logic for captions with improved handling for edge cases
-export const parseCaption = (caption: string): ParsedContent => {
-  if (!caption || caption.trim() === '') {
-    return createEmptyResult(caption);
-  }
-
-  // Revised approach - extract quantity first
-  let quantity: number | null = null;
-  let quantityPattern = '';
-  
-  // Check for quantity patterns in order of specificity
-  const patterns = [
-    { regex: /qty:\s*(\d+)/i, name: 'qty-prefix' },               // qty: 2
-    { regex: /quantity:\s*(\d+)/i, name: 'quantity-prefix' },     // quantity: 2
-    { regex: /(\d+)\s*(?:pcs|pieces)/i, name: 'pcs-suffix' },     // 2 pcs or 2 pieces
-    { regex: /(\d+)\s*(?:units?)/i, name: 'units-suffix' },       // 2 unit or 2 units
-    { regex: /^.*?#.*?(?:\s+|$)(\d+)(?:\s|$)/i, name: 'after-code' }, // number after product code
-    { regex: /(\d+)\s*(?=\s|$)/, name: 'standalone' },            // standalone number
-    { regex: /x\s*(\d+)/i, name: 'x-prefix' },                    // x2 or x 2 (moved to end to avoid product name extraction issues)
-    { regex: /(\d+)x/i, name: 'x-suffix' }                        // 18x (new pattern)
-  ];
-
-  for (const { regex, name } of patterns) {
-    const match = caption.match(regex);
-    if (match && match[1]) {
-      const parsedQuantity = parseInt(match[1], 10);
-      if (!isNaN(parsedQuantity) && parsedQuantity > 0 && parsedQuantity < 10000) {
-        quantity = parsedQuantity;
-        quantityPattern = name;
-        break;
-      }
-    }
-  }
-
-  // Extract product name (text before #, line break, or x)
-  // Modified to avoid stopping at every 'x'
-  let productNameRegex = /^(.*?)(?=[#\n]|$)/;
-  let productNameMatch = caption.match(productNameRegex);
-  let product_name = productNameMatch ? productNameMatch[0].trim() : '';
-
-  // Special handling for captions like "Bubba 18x" or "14x"
-  if (!product_name && quantity !== null) {
-    // If product name is empty but we found a quantity, use the caption as product name
-    product_name = caption.trim();
-    
-    // Try to remove the quantity pattern from product name
-    if (quantityPattern === 'x-suffix') {
-      product_name = product_name.replace(/\s*\d+x\s*$/i, '').trim();
-    } else if (quantityPattern === 'x-prefix') {
-      product_name = product_name.replace(/\s*x\s*\d+\s*$/i, '').trim();
-    }
-  }
-
-  // Fallback: If product name is still empty after processing, use the full caption
-  if (!product_name) {
-    product_name = caption.trim();
-  }
-
-  // Extract product code (text following #)
-  const productCodeMatch = caption.match(/#([A-Za-z0-9-]+)/);
-  const product_code = productCodeMatch ? productCodeMatch[1] : '';
-
-  // Extract vendor UID (first 1-4 letters of product code)
-  const vendorUidMatch = product_code.match(/^[A-Za-z]{1,4}/);
-  const vendor_uid = vendorUidMatch ? vendorUidMatch[0].toUpperCase() : '';
-
-  // Extract purchase date with improved handling
-  const dateMatch = product_code.match(/\d{5,6}/);
-  let purchase_date = '';
-  if (dateMatch) {
-    const dateStr = dateMatch[0];
-    try {
-      if (dateStr.length === 5) {
-        // Format: mDDyy
-        const month = dateStr[0];
-        const day = dateStr.substring(1, 3);
-        const year = dateStr.substring(3);
-        
-        // Validate day and month
-        const monthNum = parseInt(month, 10);
-        const dayNum = parseInt(day, 10);
-        
-        if (monthNum > 0 && monthNum <= 12 && dayNum > 0 && dayNum <= 31) {
-          purchase_date = `20${year}-${month.padStart(2, '0')}-${day}`;
-        }
-      } else if (dateStr.length === 6) {
-        // Format: mmDDyy
-        const month = dateStr.substring(0, 2);
-        const day = dateStr.substring(2, 4);
-        const year = dateStr.substring(4);
-        
-        // Validate day and month
-        const monthNum = parseInt(month, 10);
-        const dayNum = parseInt(day, 10);
-        
-        if (monthNum > 0 && monthNum <= 12 && dayNum > 0 && dayNum <= 31) {
-          purchase_date = `20${year}-${month}-${day}`;
-        }
-      }
-    } catch (e) {
-      console.error('Error parsing date:', e);
-      purchase_date = '';
-    }
-  }
-
-  // Extract notes (text in parentheses or remaining unclassified text)
-  let notes = '';
-  const notesMatch = caption.match(/\((.*?)\)/);
-  if (notesMatch) {
-    notes = notesMatch[1].trim();
-  } else {
-    // If no parentheses, try to extract any remaining text after product info
-    const remainingText = caption.replace(/^.*?(?:[#\nx]|$)/, '')  // Remove product name
-                               .replace(/#[A-Za-z0-9-]+/, '')       // Remove product code
-                               .replace(/x\d+/i, '')               // Remove quantity
-                               .trim();
-    if (remainingText && remainingText !== caption) {
-      notes = remainingText;
-    }
-  }
-
-  return {
-    product_name,
-    product_code,
-    vendor_uid,
-    purchase_date,
-    quantity,
-    notes,
-    caption,
-    parsing_metadata: {
-      method: 'manual',
-      timestamp: new Date().toISOString(),
-      quantity_pattern: quantityPattern || undefined,
-      used_fallback: !productNameMatch || productNameMatch[0].trim() === '',
-      original_caption: caption
-    }
+export interface ParsedContent {
+  product_name: string;
+  product_code: string;
+  vendor_uid: string | null; // Make vendor_uid optional
+  purchase_date: string | null; // Make purchase_date optional
+  quantity: number | null;
+  notes: string;
+  caption: string;
+  parsing_metadata: {
+    method: 'manual';
+    timestamp: string;
+    partial_success?: boolean; // New flag for partial success
+    missing_fields?: string[]; // Track which fields couldn't be parsed
+    quantity_pattern?: string;
+    used_fallback?: boolean;
+    original_caption?: string;
+    is_edit?: boolean;
+    edit_timestamp?: string;
+    error?: string;
   };
-};
+  sync_metadata?: {
+    media_group_id?: string;
+    sync_source_message_id?: string;
+  };
+}
 
-// Helper function to create an empty result
-function createEmptyResult(caption: string): ParsedContent {
-  return {
+export function parseCaption(caption: string): ParsedContent {
+  const trimmedCaption = caption.trim();
+  const currentTimestamp = new Date().toISOString();
+  
+  // Initialize with default values
+  const parsedContent: ParsedContent = {
     product_name: '',
     product_code: '',
-    vendor_uid: '',
-    purchase_date: '',
+    vendor_uid: null,
+    purchase_date: null,
     quantity: null,
     notes: '',
-    caption,
+    caption: trimmedCaption,
     parsing_metadata: {
       method: 'manual',
-      timestamp: new Date().toISOString(),
-      error: 'Empty caption'
+      timestamp: currentTimestamp,
+      partial_success: false,
+      missing_fields: []
     }
   };
+  
+  try {
+    // Track missing fields for partial success
+    const missingFields: string[] = [];
+    
+    // Extract product name (text before '#')
+    const productNameMatch = trimmedCaption.match(/^(.*?)(?=#|\n|$)/);
+    if (productNameMatch && productNameMatch[1].trim()) {
+      parsedContent.product_name = productNameMatch[1].trim();
+    } else {
+      missingFields.push('product_name');
+    }
+    
+    // Extract product code (text following '#')
+    const productCodeMatch = trimmedCaption.match(/#([A-Za-z0-9-]+)/);
+    if (productCodeMatch) {
+      parsedContent.product_code = productCodeMatch[1];
+      
+      // Extract vendor UID (first 1-4 letters of product code)
+      const vendorMatch = productCodeMatch[1].match(/^([A-Za-z]{1,4})/);
+      if (vendorMatch) {
+        parsedContent.vendor_uid = vendorMatch[1].toUpperCase();
+      } else {
+        missingFields.push('vendor_uid');
+      }
+      
+      // Extract purchase date (digits after vendor letters)
+      const dateMatch = productCodeMatch[1].match(/^[A-Za-z]{1,4}(\d{5,6})/);
+      if (dateMatch) {
+        const dateDigits = dateMatch[1];
+        try {
+          parsedContent.purchase_date = formatPurchaseDate(dateDigits);
+        } catch (dateError) {
+          console.log('Date parsing error:', dateError);
+          missingFields.push('purchase_date');
+        }
+      } else {
+        missingFields.push('purchase_date');
+      }
+    } else {
+      missingFields.push('product_code', 'vendor_uid', 'purchase_date');
+    }
+    
+    // Extract quantity (number following 'x')
+    const quantityMatch = trimmedCaption.match(/x\s*(\d+)/i);
+    if (quantityMatch) {
+      parsedContent.quantity = parseInt(quantityMatch[1], 10);
+      parsedContent.parsing_metadata.quantity_pattern = `x${quantityMatch[1]}`;
+    } else {
+      // Try alternative quantity patterns
+      const altQuantityMatch = trimmedCaption.match(/(?:qty|quantity):\s*(\d+)/i) || 
+                               trimmedCaption.match(/(\d+)\s*(?:pcs|pieces|units)/i);
+      
+      if (altQuantityMatch) {
+        parsedContent.quantity = parseInt(altQuantityMatch[1], 10);
+        parsedContent.parsing_metadata.quantity_pattern = altQuantityMatch[0];
+      } else {
+        missingFields.push('quantity');
+      }
+    }
+    
+    // Extract notes (text in parentheses or remaining text)
+    const notesMatch = trimmedCaption.match(/\(([^)]+)\)/);
+    if (notesMatch) {
+      parsedContent.notes = notesMatch[1].trim();
+    } else {
+      // Use any text after the product code as notes
+      const afterCodeMatch = trimmedCaption.match(/#[A-Za-z0-9-]+(.+)/);
+      if (afterCodeMatch && afterCodeMatch[1].trim()) {
+        // Remove quantity pattern from notes if present
+        let notes = afterCodeMatch[1].trim();
+        if (parsedContent.parsing_metadata.quantity_pattern) {
+          notes = notes.replace(parsedContent.parsing_metadata.quantity_pattern, '').trim();
+        }
+        parsedContent.notes = notes;
+      }
+    }
+    
+    // Check if we have at least a product name - this means partial success
+    if (parsedContent.product_name) {
+      parsedContent.parsing_metadata.partial_success = missingFields.length > 0;
+      parsedContent.parsing_metadata.missing_fields = missingFields.length > 0 ? missingFields : undefined;
+    }
+    
+    return parsedContent;
+  } catch (error) {
+    console.error('Error parsing caption:', error);
+    parsedContent.parsing_metadata.error = error.message;
+    return parsedContent;
+  }
+}
+
+function formatPurchaseDate(dateDigits: string): string {
+  // Add leading zero for 5-digit dates (missing leading zero in month)
+  const normalizedDigits = dateDigits.length === 5 ? '0' + dateDigits : dateDigits;
+  
+  if (normalizedDigits.length !== 6) {
+    throw new Error(`Invalid date format: ${dateDigits}`);
+  }
+  
+  // Format is mmDDyy
+  const month = normalizedDigits.substring(0, 2);
+  const day = normalizedDigits.substring(2, 4);
+  const year = normalizedDigits.substring(4, 6);
+  
+  // Convert to YYYY-MM-DD
+  const fullYear = '20' + year; // Assuming 20xx year
+  
+  // Validate date
+  const dateObj = new Date(`${fullYear}-${month}-${day}`);
+  if (isNaN(dateObj.getTime())) {
+    throw new Error(`Invalid date: ${month}/${day}/${fullYear}`);
+  }
+  
+  return `${fullYear}-${month}-${day}`;
 }
