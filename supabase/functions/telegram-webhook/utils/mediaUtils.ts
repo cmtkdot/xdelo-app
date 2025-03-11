@@ -1,3 +1,4 @@
+
 /**
  * Media Utilities for Telegram Webhook
  * 
@@ -43,7 +44,8 @@ export const redownloadMissingFile = async (message: any) => {
           storage_path: result.storage_path,
           public_url: result.public_url,
           error_message: null,
-          redownload_attempts: (message.redownload_attempts || 0) + 1
+          redownload_attempts: (message.redownload_attempts || 0) + 1,
+          file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
         })
         .eq('id', message.id);
 

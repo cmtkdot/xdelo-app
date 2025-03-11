@@ -8,7 +8,8 @@ import { getTelegramApiUrl, getTelegramFileUrl, getStoragePublicUrl } from "./ur
 import { xdelo_detectMimeType } from "./mimeUtils.ts";
 import { 
   xdelo_constructStoragePath, 
-  xdelo_uploadMediaToStorage 
+  xdelo_uploadMediaToStorage,
+  xdelo_checkFileExistsInStorage 
 } from "./storageUtils.ts";
 import { xdelo_logMediaRedownload } from "./messageLogger.ts";
 
@@ -28,13 +29,13 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
   // Generate standardized storage path
   const fileName = xdelo_constructStoragePath(media.file_unique_id, mimeType);
   
-  // Check for existing file using file_unique_id
-  const { data: existingFile } = await supabase
-    .from('messages')
-    .select('id, file_unique_id, storage_path, public_url, mime_type, file_id_expires_at, original_file_id')
-    .eq('file_unique_id', media.file_unique_id)
-    .eq('deleted_from_telegram', false)
-    .limit(1);
+  // Check if the file already exists in storage - for logging purposes only
+  // We'll always re-upload to ensure we have the latest version
+  const existsInStorage = await xdelo_checkFileExistsInStorage(media.file_unique_id, mimeType);
+  
+  if (existsInStorage) {
+    console.log(`File ${media.file_unique_id} already exists in storage, will replace it`);
+  }
 
   // Always download from Telegram and upload to ensure we have the latest version
   try {
@@ -58,7 +59,7 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
     
     const fileData = await fileDataResponse.blob();
 
-    // Upload to Supabase Storage with correct content type
+    // Upload to Supabase Storage with correct content type, always replacing existing files
     const { success, publicUrl } = await xdelo_uploadMediaToStorage(
       fileData,
       fileName,
@@ -69,7 +70,7 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
       throw new Error('Failed to upload media to storage');
     }
 
-    // Return full info including duplicate status and file expiration
+    // Return full info, setting file expiration and tracking original file ID
     return {
       file_id: media.file_id,
       file_unique_id: media.file_unique_id,
@@ -80,8 +81,6 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
       duration: video?.duration,
       storage_path: fileName,
       public_url: publicUrl,
-      is_duplicate: existingFile && existingFile.length > 0,
-      original_message_id: existingFile && existingFile.length > 0 ? existingFile[0].id : undefined,
       file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours from now
       original_file_id: media.file_id // Store the original file_id for reference
     };
