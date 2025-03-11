@@ -7,9 +7,10 @@ import { Spinner } from '@/components/ui/spinner';
 import { AlertCircle, ArrowUpCircle, CheckCircle, Clock, RefreshCw } from 'lucide-react';
 import { useProcessingHealth } from '@/hooks/useProcessingHealth';
 import { useStuckMessageRepair } from '@/hooks/useStuckMessageRepair';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export function MessageHealth() {
-  const { processingStats, diagnoseProcessingHealth, isLoading } = useProcessingHealth();
+  const { processingStats, diagnoseProcessingHealth, isLoading, error } = useProcessingHealth();
   const { repairStuckMessages, isRepairing } = useStuckMessageRepair();
   
   // Get health metrics on initial load
@@ -51,6 +52,22 @@ export function MessageHealth() {
         </div>
       </CardHeader>
       <CardContent>
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>
+              {error}
+              <Button 
+                variant="link" 
+                className="p-0 h-auto text-xs ml-2" 
+                onClick={() => diagnoseProcessingHealth()}>
+                Try again
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+        
         {isLoading ? (
           <div className="flex justify-center p-4">
             <Spinner size="lg" />
@@ -58,6 +75,12 @@ export function MessageHealth() {
         ) : !processingStats ? (
           <div className="text-center py-4">
             <p className="text-gray-500">No health stats available</p>
+            <Button 
+              variant="link" 
+              onClick={() => diagnoseProcessingHealth()}
+              className="mt-2">
+              Refresh data
+            </Button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

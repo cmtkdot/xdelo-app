@@ -9,8 +9,9 @@ import {
   CardDescription,
   CardFooter
 } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useProcessingSystemRepair } from '@/hooks/useProcessingSystemRepair';
-import { useProcessingHealth } from '@/hooks/useProcessingHealth';
+import { useMessageProcessingStats } from '@/hooks/useMessageProcessingStats';
 import { 
   Loader2, 
   AlertTriangle, 
@@ -31,21 +32,23 @@ export function ProcessingRepairButton() {
     repairStuckMessages
   } = useProcessingSystemRepair();
   const {
-    diagnoseProcessingHealth,
+    fetchProcessingStats,
     processingStats,
-    isLoading
-  } = useProcessingHealth();
+    isLoading,
+    error,
+    clearError
+  } = useMessageProcessingStats();
 
   // Auto-check health on first render
   useEffect(() => {
     if (!processingStats) {
-      diagnoseProcessingHealth().catch(console.error);
+      fetchProcessingStats().catch(console.error);
     }
-  }, []);
+  }, [processingStats, fetchProcessingStats]);
 
   const handleRefreshStats = async () => {
     try {
-      await diagnoseProcessingHealth();
+      await fetchProcessingStats();
       setShowDetail(true);
     } catch (error) {
       console.error('Error refreshing processing health stats:', error);
@@ -56,7 +59,7 @@ export function ProcessingRepairButton() {
     try {
       await repairStuckMessages();
       // Get updated stats after repair
-      await diagnoseProcessingHealth();
+      await fetchProcessingStats();
     } catch (error) {
       console.error('Error repairing stuck messages:', error);
     }
@@ -66,7 +69,7 @@ export function ProcessingRepairButton() {
     try {
       await repairProcessingSystem();
       // Get updated stats after repair
-      await diagnoseProcessingHealth();
+      await fetchProcessingStats();
     } catch (error) {
       console.error('Error repairing processing system:', error);
     }
@@ -75,7 +78,7 @@ export function ProcessingRepairButton() {
   const hasIssues = processingStats?.media_group_stats?.stuck_in_processing > 0 || 
                    processingStats?.media_group_stats?.unprocessed_with_caption > 0;
   
-  const formatTimestamp = (timestamp) => {
+  const formatTimestamp = (timestamp: string) => {
     if (!timestamp) return 'Unknown';
     try {
       return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
@@ -86,6 +89,24 @@ export function ProcessingRepairButton() {
   
   return (
     <div className="mb-4">
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            {error}
+            <Button 
+              variant="link" 
+              className="p-0 h-auto text-xs ml-2" 
+              onClick={() => {
+                clearError();
+                fetchProcessingStats();
+              }}>
+              Try again
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      
       {showDetail && processingStats && (
         <Card className="mb-4 bg-gray-50 dark:bg-gray-800">
           <CardHeader className="pb-2">

@@ -2,39 +2,45 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
+import { useMessageProcessingStats } from './useMessageProcessingStats';
 
 export function useProcessingHealth() {
   const [isLoading, setIsLoading] = useState(false);
-  const [processingStats, setProcessingStats] = useState<any>(null);
   const { toast } = useToast();
+  const { 
+    fetchProcessingStats, 
+    processingStats, 
+    isLoading: statsLoading,
+    error: statsError
+  } = useMessageProcessingStats();
 
   const diagnoseProcessingHealth = useCallback(async () => {
     try {
       setIsLoading(true);
       
-      // Call the function to get processing stats
-      const { data, error } = await supabase.rpc('xdelo_get_message_processing_stats');
+      // Use the new hook to get stats
+      const stats = await fetchProcessingStats();
       
-      if (error) throw error;
-      
-      setProcessingStats(data);
-      return data;
+      return stats;
     } catch (error: any) {
-      console.error('Error getting processing health stats:', error);
+      console.error('Error in diagnoseProcessingHealth:', error);
       
       toast({
         title: "Failed to Get Health Stats",
         description: error.message || "Could not retrieve processing health statistics",
         variant: "destructive"
       });
+      
+      return null;
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [fetchProcessingStats, toast]);
 
   return {
     diagnoseProcessingHealth,
     processingStats,
-    isLoading
+    isLoading: isLoading || statsLoading,
+    error: statsError
   };
 }
