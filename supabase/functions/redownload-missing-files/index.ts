@@ -13,6 +13,32 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
+// Helper to determine if the MIME type is viewable in browser
+function isViewableMimeType(mimeType: string): boolean {
+  return mimeType.startsWith('image/') || 
+         mimeType.startsWith('video/') || 
+         mimeType === 'application/pdf';
+}
+
+// Helper to get proper upload options based on MIME type
+function getUploadOptions(mimeType: string): any {
+  // Default options for all uploads
+  const options = {
+    contentType: mimeType || 'application/octet-stream',
+    upsert: true
+  };
+  
+  // Add inline content disposition for viewable types
+  if (isViewableMimeType(mimeType)) {
+    return {
+      ...options,
+      contentDisposition: 'inline'
+    };
+  }
+  
+  return options;
+}
+
 // Function to validate if a file exists based on its public URL
 async function fileExists(publicURL: string): Promise<boolean> {
   try {
@@ -176,13 +202,11 @@ async function downloadFromTelegram(message: any): Promise<string | null> {
       throw new Error(`Failed to get standardized path: ${pathError.message}`);
     }
 
-    // Upload to Supabase storage
+    // Upload to Supabase storage with proper content disposition
+    const uploadOptions = getUploadOptions(message.mime_type);
     const { error: uploadError } = await supabase.storage
       .from('telegram-media')
-      .upload(storagePath, fileBlob, {
-        contentType: message.mime_type || 'application/octet-stream',
-        upsert: true
-      });
+      .upload(storagePath, fileBlob, uploadOptions);
 
     if (uploadError) {
       throw new Error(`Failed to upload to storage: ${uploadError.message}`);

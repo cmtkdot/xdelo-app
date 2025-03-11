@@ -14,6 +14,7 @@ import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { isSameDay, isWithinInterval, parseISO } from "date-fns";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
 import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
+import { MediaFixButton } from "@/components/ProductGallery/MediaFixButton";
 
 const ITEMS_PER_PAGE = 12;
 
@@ -246,6 +247,10 @@ const ProductGallery = () => {
         </div>
       ) : (
         <>
+          <div className="flex space-x-4">
+            <MediaFixButton />
+          </div>
+        
           <ProductGrid
             products={paginatedProducts}
             onEdit={handleEdit}

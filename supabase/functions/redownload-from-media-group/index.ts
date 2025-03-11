@@ -26,6 +26,32 @@ interface RequestBody {
   correlationId?: string;
 }
 
+// Helper to determine if the MIME type is viewable in browser
+function isViewableMimeType(mimeType: string): boolean {
+  return mimeType.startsWith('image/') || 
+         mimeType.startsWith('video/') || 
+         mimeType === 'application/pdf';
+}
+
+// Helper to get proper upload options based on MIME type
+function getUploadOptions(mimeType: string): any {
+  // Default options for all uploads
+  const options = {
+    contentType: mimeType || 'application/octet-stream',
+    upsert: true
+  };
+  
+  // Add inline content disposition for viewable types
+  if (isViewableMimeType(mimeType)) {
+    return {
+      ...options,
+      contentDisposition: 'inline'
+    };
+  }
+  
+  return options;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -121,14 +147,12 @@ serve(async (req) => {
       throw new Error(`Failed to get standardized storage path: ${storagePathError.message}`);
     }
 
-    // Upload to Supabase Storage
+    // Upload to Supabase Storage with enhanced options
+    const uploadOptions = getUploadOptions(message.mime_type);
     const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')
-      .upload(storagePath, fileData, {
-        contentType: message.mime_type || 'application/octet-stream',
-        upsert: true
-      });
+      .upload(storagePath, fileData, uploadOptions);
 
     if (uploadError) {
       throw new Error(`Failed to upload media to storage: ${uploadError.message}`);
