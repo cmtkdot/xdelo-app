@@ -84,13 +84,52 @@ export interface MessageInput {
 /**
  * Main handler for all media messages
  */
-export async function handleMediaMessage(
-  message: TelegramMessage, 
-  context: MessageContext
-): Promise<Response> {
+export async function handleMediaMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
-    // Get media info from Telegram using enhanced utilities that properly handle MIME types
-    const mediaInfo = await xdelo_getTelegramMediaInfo(message, context.correlationId);
+    const { correlationId } = context;
+    
+    // First check if this file already exists in our system
+    const { data: existingMessage } = await supabaseClient
+      .from('messages')
+      .select('*')
+      .eq('file_unique_id', message.photo?.[0]?.file_unique_id || 
+                           message.video?.file_unique_id || 
+                           message.document?.file_unique_id)
+      .eq('deleted_from_telegram', false)
+      .maybeSingle();
+
+    // If file exists and not an edit, update existing record
+    if (existingMessage && !context.isEdit) {
+      console.log(`File already exists with ID ${existingMessage.id}, updating record`);
+      
+      const { error: updateError } = await supabaseClient
+        .from('messages')
+        .update({
+          telegram_message_id: message.message_id,
+          chat_id: message.chat.id,
+          chat_type: message.chat.type,
+          chat_title: message.chat.title,
+          caption: message.caption,
+          media_group_id: message.media_group_id,
+          correlation_id: correlationId,
+          updated_at: new Date().toISOString(),
+          telegram_data: message,
+          // Don't overwrite storage_path or public_url
+          processing_state: message.caption !== existingMessage.caption ? 'pending' : existingMessage.processing_state,
+          analyzed_content: message.caption !== existingMessage.caption ? null : existingMessage.analyzed_content
+        })
+        .eq('id', existingMessage.id);
+
+      if (updateError) throw updateError;
+
+      return new Response(
+        JSON.stringify({ success: true, updated: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // If it's a new file or an edit, proceed with media download and upload
+    const mediaInfo = await xdelo_getTelegramMediaInfo(message, correlationId);
     
     // Validate and repair the media to ensure proper content type
     if (mediaInfo.storage_path) {

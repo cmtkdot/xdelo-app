@@ -1,8 +1,8 @@
-
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Message } from '@/types/MessagesTypes';
-import StatusBadge from './StatusBadge';
+import { StatusBadge } from './StatusBadge';
 import { formatDistanceToNow } from 'date-fns';
 import { MessageControlPanel } from './MessageControlPanel';
 import { MediaViewer } from '@/components/MediaViewer/MediaViewer';
@@ -45,15 +45,16 @@ const MessageCard: React.FC<MessageCardProps> = ({ message, onRetryProcessing, o
         {hasMedia && (
           <div className="mb-4 relative rounded-md overflow-hidden">
             <MediaViewer 
-              url={message.public_url} 
-              mimeType={message.mime_type} 
-              caption={message.caption}
+              publicUrl={message.public_url}
+              mimeType={message.mime_type || ''}
+              caption={message.caption || ''}
               className="max-h-[300px] w-full object-contain"
             />
             
             <div className="absolute bottom-2 right-2">
               <MediaFixButton 
-                storagePath={message.storage_path} 
+                storagePath={message.storage_path}
+                messageId={message.id}
                 onFix={() => onFixMedia(message.id, message.storage_path)}
               />
             </div>
@@ -80,7 +81,10 @@ const MessageCard: React.FC<MessageCardProps> = ({ message, onRetryProcessing, o
       </CardContent>
       
       <CardFooter className="bg-muted/30 flex justify-between items-center">
-        <MessageControlPanel message={message} />
+        <MessageControlPanel 
+          messageData={message}
+          onRetry={() => onRetryProcessing(message.id)}
+        />
         
         {message.processing_state === 'error' && (
           <Button 

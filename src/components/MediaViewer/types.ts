@@ -1,4 +1,3 @@
-
 import { Message, AnalyzedContent } from "@/types";
 
 export interface MediaItem {
@@ -17,4 +16,11 @@ export function messageToMediaItem(message: Message): MediaItem {
     created_at: message.created_at || new Date().toISOString(),
     analyzed_content: message.analyzed_content,
   };
+}
+
+export interface MediaViewerProps {
+  publicUrl: string;
+  mimeType: string;
+  caption?: string;
+  className?: string;
 }

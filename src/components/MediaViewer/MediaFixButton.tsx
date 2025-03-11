@@ -3,16 +3,18 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Wrench } from 'lucide-react';
 
-interface MediaFixButtonProps {
+export interface MediaFixButtonProps {
   storagePath: string;
   onFix: () => Promise<void>;
   isRepairing?: boolean;
+  messageId?: string; // Added for individual message fixes
 }
 
 export const MediaFixButton: React.FC<MediaFixButtonProps> = ({ 
   storagePath, 
   onFix, 
-  isRepairing = false 
+  isRepairing = false,
+  messageId 
 }) => {
   if (!storagePath) return null;
 
@@ -24,6 +26,7 @@ export const MediaFixButton: React.FC<MediaFixButtonProps> = ({
       onClick={onFix}
       disabled={isRepairing}
       title="Fix media content type"
+      data-message-id={messageId}
     >
       <Wrench className="h-4 w-4" />
     </Button>
