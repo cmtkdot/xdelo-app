@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { 
   xdelo_isViewableMimeType, 
+  xdelo_getUploadOptions,
   xdelo_validateStoragePath,
   xdelo_repairContentDisposition
 } from "../_shared/mediaUtils.ts";

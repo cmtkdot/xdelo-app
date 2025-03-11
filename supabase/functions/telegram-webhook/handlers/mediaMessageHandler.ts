@@ -1,3 +1,4 @@
+
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { getMediaInfo } from '../utils/mediaUtils.ts';
 import { logMessageOperation } from '../utils/logger.ts';
@@ -25,7 +26,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       return await handleEditedMediaMessage(message, context, mediaInfo, previousMessage);
     }
 
-    // Handle new message - we no longer check for duplicates by file_unique_id in messages table
+    // Handle new message by checking for duplicates first
     return await handleNewMediaMessage(message, context, mediaInfo);
 
   } catch (error) {
@@ -130,10 +131,7 @@ async function handleEditedMediaMessage(
         // Mark as needing group sync if caption or media changed and part of a group
         group_caption_synced: (captionChanged || mediaChanged) && message.media_group_id ? false : existingMessage.group_caption_synced,
         // Set is_original_caption to true if caption was changed (new source of truth)
-        is_original_caption: captionChanged ? true : existingMessage.is_original_caption,
-        // Update file expiration info
-        file_id_expires_at: mediaInfo.file_id_expires_at,
-        original_file_id: mediaInfo.original_file_id
+        is_original_caption: captionChanged ? true : existingMessage.is_original_caption
       })
       .eq('id', existingMessage.id);
 
@@ -170,7 +168,7 @@ async function handleEditedMediaMessage(
           telegram_message_id: message.message_id,
           chat_id: message.chat.id,
           file_unique_id: mediaInfo.file_unique_id,
-          sourceMessageId: existingMessage.id,
+          sourceMessageId: existingMessage.id, // Fixed: changed from existing_message_id to sourceMessageId
           edit_type: captionChanged ? 'caption_changed' : (mediaChanged ? 'media_changed' : 'other_edit'),
           media_group_id: message.media_group_id
         }
@@ -301,6 +299,113 @@ async function handleNewMediaMessage(
 ): Promise<Response> {
   const { correlationId } = context;
 
+  // Check for duplicate message by file_unique_id before creating new record
+  // But we'll still update it with the new media info since we always re-upload
+  const { data: existingMedia } = await supabaseClient
+    .from('messages')
+    .select('*')
+    .eq('file_unique_id', mediaInfo.file_unique_id)
+    .eq('deleted_from_telegram', false)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  // If file already exists, update instead of creating new record
+  if (existingMedia && existingMedia.length > 0) {
+    const existingMessage = existingMedia[0];
+    console.log(`Duplicate message detected with file_unique_id ${mediaInfo.file_unique_id}, updating existing record`);
+    
+    // Check if caption changed
+    const captionChanged = message.caption !== existingMessage.caption;
+    
+    // Create history entry for this update
+    let editHistory = existingMessage.edit_history || [];
+    editHistory.push({
+      timestamp: new Date().toISOString(),
+      previous_caption: existingMessage.caption,
+      new_caption: message.caption,
+      duplicate_update: true,
+      previous_media_info: {
+        storage_path: existingMessage.storage_path,
+        public_url: existingMessage.public_url,
+        mime_type: existingMessage.mime_type
+      },
+      new_media_info: {
+        storage_path: mediaInfo.storage_path,
+        public_url: mediaInfo.public_url,
+        mime_type: mediaInfo.mime_type
+      }
+    });
+    
+    // Update the existing message with new media info
+    const { error: updateError } = await supabaseClient
+      .from('messages')
+      .update({
+        caption: message.caption,
+        chat_id: message.chat.id,
+        chat_title: message.chat.title,
+        chat_type: message.chat.type,
+        telegram_message_id: message.message_id,
+        telegram_data: message,
+        correlation_id: correlationId,
+        media_group_id: message.media_group_id,
+        // Update with new storage path and public URL from the re-upload
+        storage_path: mediaInfo.storage_path,
+        public_url: mediaInfo.public_url,
+        mime_type: mediaInfo.mime_type,
+        file_id: mediaInfo.file_id, // Update with new file_id
+        // Reset processing if caption changed
+        processing_state: captionChanged ? 'pending' : existingMessage.processing_state,
+        analyzed_content: captionChanged ? null : existingMessage.analyzed_content,
+        updated_at: new Date().toISOString(),
+        is_duplicate: true,
+        edit_history: editHistory
+      })
+      .eq('id', existingMessage.id);
+
+    if (updateError) throw updateError;
+
+    // Log the duplicate detection using new logging
+    const editType = captionChanged ? 'caption_change' : 'message_update';
+    await xdelo_logMessageEdit(
+      existingMessage.id,
+      message.message_id,
+      message.chat.id,
+      correlationId,
+      editType,
+      {
+        file_unique_id: mediaInfo.file_unique_id,
+        update_type: 'duplicate_update',
+        media_group_id: message.media_group_id,
+        caption_changed: captionChanged,
+        previous_caption: existingMessage.caption,
+        new_caption: message.caption
+      }
+    );
+    
+    // Keep legacy logging for backward compatibility
+    await logMessageOperation(
+      'success',
+      context.correlationId,
+      {
+        message: `Duplicate message detected with file_unique_id ${mediaInfo.file_unique_id}, media re-uploaded`,
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        file_unique_id: mediaInfo.file_unique_id,
+        sourceMessageId: existingMessage.id, // Fixed: changed from existing_message_id to sourceMessageId
+        update_type: 'duplicate_update',
+        media_group_id: message.media_group_id
+      }
+    );
+
+    // Process the updated message for caption analysis or media group syncing
+    await processMessage(message, existingMessage, context);
+
+    return new Response(
+      JSON.stringify({ success: true, duplicate: true }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
   // Prepare forward info if message is forwarded
   const forwardInfo: ForwardInfo | undefined = message.forward_origin ? {
     is_forwarded: true,
@@ -335,9 +440,7 @@ async function handleNewMediaMessage(
       timestamp: new Date().toISOString(),
       is_initial_edit: true,
       edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
-    }] : [],
-    file_id_expires_at: mediaInfo.file_id_expires_at,
-    original_file_id: mediaInfo.original_file_id
+    }] : []
   };
 
   // Insert the message into the database
@@ -592,4 +695,3 @@ async function syncFromMediaGroupDirect(
     return false;
   }
 }
-

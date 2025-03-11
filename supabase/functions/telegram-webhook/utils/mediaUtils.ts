@@ -1,4 +1,3 @@
-
 /**
  * Media Utilities for Telegram Webhook
  * 
@@ -11,11 +10,11 @@ import { logMessageOperation } from './logger.ts';
 import { 
   xdelo_getMediaInfoFromTelegram,
   xdelo_redownloadMissingFile,
-  xdelo_detectMimeType,
+  xdelo_getExtensionFromMedia,
   xdelo_constructStoragePath,
   xdelo_uploadMediaToStorage,
   xdelo_checkFileExistsInStorage,
-  xdelo_getDefaultMimeType
+  xdelo_getFileExtension
 } from '../../_shared/mediaUtils.ts';
 import { xdelo_logMediaRedownload } from '../../_shared/messageLogger.ts';
 
@@ -44,8 +43,7 @@ export const redownloadMissingFile = async (message: any) => {
           storage_path: result.storage_path,
           public_url: result.public_url,
           error_message: null,
-          redownload_attempts: (message.redownload_attempts || 0) + 1,
-          file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          redownload_attempts: (message.redownload_attempts || 0) + 1
         })
         .eq('id', message.id);
 
@@ -114,9 +112,9 @@ export const redownloadMissingFile = async (message: any) => {
 
 // Also re-export other utilities that might be used directly
 export {
-  xdelo_detectMimeType as detectMimeType,
+  xdelo_getExtensionFromMedia as getExtensionFromMedia,
   xdelo_constructStoragePath as constructStoragePath,
   xdelo_uploadMediaToStorage as uploadMediaToStorage,
   xdelo_checkFileExistsInStorage as checkFileExistsInStorage,
-  xdelo_getDefaultMimeType as getDefaultMimeType
+  xdelo_getFileExtension as getFileExtension
 };

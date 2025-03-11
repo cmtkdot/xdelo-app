@@ -2,45 +2,45 @@
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * Determines if a MIME type is viewable in browser
+ * Determines if a file extension is viewable in browser
  */
-export function xdelo_isViewableMimeType(mimeType: string): boolean {
-  return /^(image\/|video\/|text\/|application\/pdf)/.test(mimeType);
+export function xdelo_isViewableExtension(extension: string): boolean {
+  const viewableExtensions = ['jpeg', 'jpg', 'png', 'gif', 'webp', 'mp4', 'mov', 'webm', 'pdf'];
+  return viewableExtensions.includes(extension.toLowerCase());
 }
 
 /**
- * Get default MIME type based on media type
+ * Get file extension based on media type
  */
-export function xdelo_getDefaultMimeType(mediaType: string): string {
+export function xdelo_getFileExtension(mediaType: string): string {
   switch (mediaType) {
     case 'photo':
-      return 'image/jpeg';
+      return 'jpeg';
     case 'video':
-      return 'video/mp4';
+      return 'mp4';
     case 'audio':
-      return 'audio/mpeg';
+      return 'mp3';
     case 'voice':
-      return 'audio/ogg';
+      return 'ogg';
     case 'document':
     default:
-      return 'application/octet-stream';
+      return 'bin';
   }
 }
 
 /**
  * Construct standardized storage path for a media file
  */
-export function xdelo_constructStoragePath(fileUniqueId: string, mimeType: string): string {
-  const ext = mimeType.split('/')[1] || 'bin';
-  return `${fileUniqueId}.${ext}`;
+export function xdelo_constructStoragePath(fileUniqueId: string, extension: string): string {
+  return `${fileUniqueId}.${extension}`;
 }
 
 /**
  * Directly check if a file exists in storage by fileUniqueId
  */
-export async function xdelo_checkFileExistsInStorage(fileUniqueId: string, mimeType: string): Promise<boolean> {
+export async function xdelo_checkFileExistsInStorage(fileUniqueId: string, extension: string): Promise<boolean> {
   try {
-    const storagePath = xdelo_constructStoragePath(fileUniqueId, mimeType);
+    const storagePath = xdelo_constructStoragePath(fileUniqueId, extension);
     
     // Try to get file metadata to check existence
     const { data, error } = await supabase
@@ -63,9 +63,13 @@ export async function xdelo_checkFileExistsInStorage(fileUniqueId: string, mimeT
  */
 export async function xdelo_uploadTelegramMedia(
   fileUrl: string, 
-  fileUniqueId: string
-): Promise<{publicUrl: string, storagePath: string}> {
-  console.log('📤 Uploading media to storage:', { fileUniqueId });
+  fileUniqueId: string, 
+  mediaType: string, 
+  explicitMimeType?: string
+): Promise<{publicUrl: string, storagePath: string, mimeType: string}> {
+  // Get extension from explicit MIME type or fallback to media type extension
+  const extension = explicitMimeType ? explicitMimeType.split('/')[1] || 'bin' : xdelo_getFileExtension(mediaType);
+  console.log('📤 Uploading media to storage:', { fileUniqueId, mediaType, extension });
   
   // Call the media-management edge function to handle the upload
   try {
@@ -74,7 +78,8 @@ export async function xdelo_uploadTelegramMedia(
         action: 'upload',
         fileUrl,
         fileUniqueId,
-        upsert: true
+        mediaType,
+        extension
       }
     });
     
@@ -84,7 +89,8 @@ export async function xdelo_uploadTelegramMedia(
     console.log('✅ Media uploaded successfully:', data.publicUrl);
     return { 
       publicUrl: data.publicUrl, 
-      storagePath: data.storagePath
+      storagePath: data.storagePath,
+      mimeType: data.mimeType
     };
   } catch (error) {
     console.error('❌ Error uploading media:', error);
@@ -108,6 +114,26 @@ export async function xdelo_validateStorageFile(storagePath: string): Promise<bo
     return data.success && data.exists;
   } catch (error) {
     console.error('Error validating storage file:', error);
+    return false;
+  }
+}
+
+/**
+ * Repairs content disposition for an existing file by re-uploading with inline content disposition
+ */
+export async function xdelo_repairContentDisposition(storagePath: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.functions.invoke('media-management', {
+      body: { 
+        action: 'repair',
+        storagePath
+      }
+    });
+    
+    if (error) throw new Error(error.message);
+    return data.success;
+  } catch (error) {
+    console.error('Error updating file content type:', error);
     return false;
   }
 }

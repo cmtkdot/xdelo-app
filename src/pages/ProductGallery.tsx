@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +16,7 @@ import { isSameDay, isWithinInterval, parseISO } from "date-fns";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
 import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
 import { MediaFixButton } from "@/components/ProductGallery/MediaFixButton";
+import { xdelo_checkFileExistsInStorage } from "@/lib/telegramMediaUtils";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 
 const ITEMS_PER_PAGE = 12;
@@ -26,7 +28,7 @@ const ProductGallery = () => {
     search: "",
     vendors: [],
     sortOrder: "desc",
-    sortField: "purchase_date",
+    sortField: "created_at",
     showUntitled: false
   });
   
@@ -36,10 +38,10 @@ const ProductGallery = () => {
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: mediaGroups = {}, isLoading, refetch } = useMediaGroups();
+  const { data: mediaGroups = {}, isLoading } = useMediaGroups();
   const { data: vendors = [] } = useVendors();
   const { handleDelete, isProcessing } = useTelegramOperations();
-  const { checkMediaExists, uploadMedia } = useMediaUpload();
+  const { checkMediaExists } = useMediaUpload();
 
   useEffect(() => {
     const channel = supabase
@@ -92,6 +94,7 @@ const ProductGallery = () => {
   const handleView = async (group: Message[]) => {
     if (!group || group.length === 0) return;
     
+    // Check if media exists in storage before viewing
     if (group[0]?.file_unique_id && group[0]?.mime_type) {
       const exists = await checkMediaExists(group[0].file_unique_id, group[0].mime_type);
       if (!exists) {
@@ -100,6 +103,7 @@ const ProductGallery = () => {
           description: "The media file could not be found in storage. Try repairing media files.",
           variant: "destructive"
         });
+        // Still allow viewing in case there's another version available
       }
     }
     
@@ -128,15 +132,6 @@ const ProductGallery = () => {
       const nextIndex = currentGroupIndex + 1;
       setCurrentGroupIndex(nextIndex);
       setCurrentViewGroup(paginatedProducts[nextIndex]);
-    }
-  };
-
-  const handleMediaRepair = async (fileUrl: string, fileUniqueId: string) => {
-    try {
-      await uploadMedia(fileUrl, fileUniqueId);
-      refetch();
-    } catch (error) {
-      console.error('Media repair failed:', error);
     }
   };
 
@@ -219,10 +214,6 @@ const ProductGallery = () => {
         return filters.sortOrder === 'asc' ? 
           dateA.getTime() - dateB.getTime() : 
           dateB.getTime() - dateA.getTime();
-      } else if (filters.sortField === 'updated_at') {
-        const dateA = new Date(mainMediaA.updated_at || mainMediaA.created_at || 0).getTime();
-        const dateB = new Date(mainMediaB.updated_at || mainMediaB.created_at || 0).getTime();
-        return filters.sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
       } else {
         const dateA = new Date(mainMediaA.created_at || 0).getTime();
         const dateB = new Date(mainMediaB.created_at || 0).getTime();
