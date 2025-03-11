@@ -1,3 +1,4 @@
+
 // @ts-ignore - Allow Deno global
 declare const Deno: any;
 
@@ -481,17 +482,6 @@ export async function xdelo_redownloadMissingFile(message: any, correlationId: s
       error: error.message
     };
   }
-}
-
-// Determine if an extension is viewable in browser
-export function xdelo_isViewableExtension(extension: string): boolean {
-  const viewableExtensions = [
-    'jpeg', 'jpg', 'png', 'gif', 'webp', 'svg',
-    'mp4', 'mov', 'webm',
-    'mp3', 'ogg', 'wav',
-    'pdf'
-  ];
-  return viewableExtensions.includes(extension.toLowerCase());
 }
 
 // For backward compatibility - will be removed in future update
