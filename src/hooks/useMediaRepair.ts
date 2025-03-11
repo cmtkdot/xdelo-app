@@ -1,4 +1,3 @@
-
 import { useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
@@ -35,7 +34,6 @@ export function useMediaRepair() {
   const { toast } = useToast();
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Filter messages based on criteria for repair
   const filterMessages = async (filter: RepairFilter): Promise<Message[]> => {
     try {
       let query = supabase
@@ -43,38 +41,30 @@ export function useMediaRepair() {
         .select('*')
         .eq('deleted_from_telegram', false);
 
-      // Apply processing state filter
       if (filter.processingState && filter.processingState.length > 0) {
-        // Cast the array to string[] for the database query
-        const stateStrings = filter.processingState as unknown as string[];
-        query = query.in('processing_state', stateStrings);
+        query = query.in('processing_state', filter.processingState as ProcessingState[]);
       }
 
-      // Apply MIME type filter
       if (filter.mimeType && filter.mimeType.length > 0) {
         query = query.in('mime_type', filter.mimeType);
       }
 
-      // Filter for missing storage paths
       if (filter.hasMissingStoragePath) {
         query = query.or('storage_path.is.null,storage_path.eq.');
       }
 
-      // Add a limit
       if (filter.limit) {
         query = query.limit(filter.limit);
       } else {
-        query = query.limit(100); // Default limit
+        query = query.limit(100);
       }
-      
-      // Order by created_at to get newest first
+
       query = query.order('created_at', { ascending: false });
 
       const { data, error } = await query;
 
       if (error) throw error;
       
-      // Cast the database response to the Message type
       return (data || []) as Message[];
     } catch (error) {
       console.error('Error filtering messages:', error);
@@ -87,17 +77,14 @@ export function useMediaRepair() {
     }
   };
 
-  // Select messages for repair
   const selectMessages = (messages: Message[]) => {
     setSelectedMessages(messages);
   };
 
-  // Clear selected messages
   const clearSelection = () => {
     setSelectedMessages([]);
   };
 
-  // Cancel ongoing repair process
   const cancelRepair = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -110,14 +97,12 @@ export function useMediaRepair() {
     }
   };
 
-  // Repair selected messages with specified options
   const repairMessages = async (options: RepairOption, onlySelected: boolean = true): Promise<RepairStats> => {
     try {
       setIsProcessing(true);
       setProgress(0);
       setResults(null);
 
-      // Create a new AbortController for this operation
       abortControllerRef.current = new AbortController();
 
       if (onlySelected && (!selectedMessages || selectedMessages.length === 0)) {
@@ -132,7 +117,6 @@ export function useMediaRepair() {
         throw new Error("No messages available to repair");
       }
 
-      // Call the repair-media function
       const { data, error } = await supabase.functions.invoke('repair-media', {
         body: { 
           action: options,
@@ -186,7 +170,6 @@ export function useMediaRepair() {
     }
   };
 
-  // Validate messages to check their health status
   const validateMessages = async (messageIds?: string[]): Promise<any> => {
     try {
       setIsProcessing(true);

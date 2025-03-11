@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { MessageList } from './MessageList';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,7 +12,7 @@ import { ProcessingState } from '@/types';
 export const MessageListContainer: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState<MessageFilterValues>({
-    processingState: undefined,
+    processingState: [],
     sortBy: 'updated_at',
     sortOrder: 'desc',
     showForwarded: false,
@@ -30,7 +29,7 @@ export const MessageListContainer: React.FC = () => {
     handleRefresh
   } = useRealTimeMessages({ 
     filter: searchTerm,
-    processingState: filters.processingState as ProcessingState[] | undefined,
+    processingState: filters.processingState as ProcessingState[],
     sortBy: filters.sortBy,
     sortOrder: filters.sortOrder,
     showForwarded: filters.showForwarded,
@@ -41,7 +40,7 @@ export const MessageListContainer: React.FC = () => {
     processMessageById,
     isProcessing 
   } = useMessageQueue();
-  
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
   };

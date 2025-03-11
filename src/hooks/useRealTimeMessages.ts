@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -27,7 +26,6 @@ export function useRealTimeMessages({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
-  // Main query to fetch messages
   const {
     data: messages = [],
     isLoading,
@@ -43,24 +41,18 @@ export function useRealTimeMessages({
           .order(sortBy || 'updated_at', { ascending: sortOrder === 'asc' })
           .limit(limit);
           
-        // Add text search filter
         if (filter) {
           query = query.or(`caption.ilike.%${filter}%,analyzed_content->product_name.ilike.%${filter}%,analyzed_content->vendor_uid.ilike.%${filter}%,telegram_message_id.eq.${!isNaN(parseInt(filter)) ? filter : 0},chat_title.ilike.%${filter}%`);
         }
         
-        // Add processing state filter
         if (processingState && processingState.length > 0) {
-          // Cast to string[] for database compatibility
-          const stateStrings = processingState.map(state => state.toString());
-          query = query.in('processing_state', stateStrings);
+          query = query.in('processing_state', processingState);
         }
         
-        // Add forwarded messages filter
         if (showForwarded) {
           query = query.eq('is_forward', true);
         }
         
-        // Add edited messages filter
         if (showEdited) {
           query = query.not('old_analyzed_content', 'is', null);
         }
@@ -74,10 +66,9 @@ export function useRealTimeMessages({
         throw error;
       }
     },
-    staleTime: 5000, // Consider data fresh for 5 seconds
+    staleTime: 5000,
   });
 
-  // Set up real-time subscription
   useEffect(() => {
     const channel = supabase
       .channel('messages-changes')
@@ -100,7 +91,6 @@ export function useRealTimeMessages({
     };
   }, [refetch]);
 
-  // Manual refresh function
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
