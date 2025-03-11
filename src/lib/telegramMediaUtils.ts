@@ -42,13 +42,15 @@ export async function xdelo_checkFileExistsInStorage(fileUniqueId: string, mimeT
   try {
     const storagePath = xdelo_constructStoragePath(fileUniqueId, mimeType);
     
-    // Try to download just 1 byte to check existence
+    // Try to get file metadata to check existence
     const { data, error } = await supabase
       .storage
       .from('telegram-media')
-      .download(storagePath, { range: { offset: 0, length: 1 } });
+      .list('', {
+        search: storagePath
+      });
       
-    return !error && !!data;
+    return !error && data && data.length > 0;
   } catch (error) {
     console.error('Error checking file in storage:', error);
     return false;

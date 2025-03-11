@@ -1,5 +1,4 @@
-
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
 // Initialize Supabase client (will use env vars from edge function context)
 const supabase = createClient(
