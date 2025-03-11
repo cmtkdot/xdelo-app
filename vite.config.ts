@@ -4,6 +4,12 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
+// Explicitly set peer dependency overrides for compatibility
+const peerDepsOverride = {
+  react: "^18.2.0",
+  "react-dom": "^18.2.0"
+};
+
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
@@ -20,6 +26,8 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    // Add dedupe to prevent multiple instances of React
+    dedupe: ['react', 'react-dom']
   },
   build: {
     sourcemap: true,
@@ -38,5 +46,11 @@ export default defineConfig(({ mode }) => ({
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom'],
+    // Force specific versions to resolve compatibility issues
+    esbuildOptions: {
+      define: {
+        'process.env.npm_package_json': JSON.stringify(peerDepsOverride)
+      }
+    }
   },
 }));
