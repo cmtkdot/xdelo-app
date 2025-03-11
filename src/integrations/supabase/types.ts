@@ -911,11 +911,19 @@ export type Database = {
           last_sync_time: string | null
           main_balance_due: number | null
           main_po_date: string | null
+          main_po_date_used_for_uid: string | null
           main_po_total: number | null
           main_purchase_order_uid: string | null
+          main_purchase_order_uid_from_product: string | null
           rowid_accntrowid: string | null
           sb_accounts_id: string | null
+          sb_pdf_updated_at: string | null
+          sb_pdf_url: string | null
+          secure_share_id: string | null
+          share_last_viewed_at: string | null
+          share_pin_code: string | null
           share_url: string | null
+          share_view_count: number | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
@@ -929,11 +937,19 @@ export type Database = {
           last_sync_time?: string | null
           main_balance_due?: number | null
           main_po_date?: string | null
+          main_po_date_used_for_uid?: string | null
           main_po_total?: number | null
           main_purchase_order_uid?: string | null
+          main_purchase_order_uid_from_product?: string | null
           rowid_accntrowid?: string | null
           sb_accounts_id?: string | null
+          sb_pdf_updated_at?: string | null
+          sb_pdf_url?: string | null
+          secure_share_id?: string | null
+          share_last_viewed_at?: string | null
+          share_pin_code?: string | null
           share_url?: string | null
+          share_view_count?: number | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
@@ -947,11 +963,19 @@ export type Database = {
           last_sync_time?: string | null
           main_balance_due?: number | null
           main_po_date?: string | null
+          main_po_date_used_for_uid?: string | null
           main_po_total?: number | null
           main_purchase_order_uid?: string | null
+          main_purchase_order_uid_from_product?: string | null
           rowid_accntrowid?: string | null
           sb_accounts_id?: string | null
+          sb_pdf_updated_at?: string | null
+          sb_pdf_url?: string | null
+          secure_share_id?: string | null
+          share_last_viewed_at?: string | null
+          share_pin_code?: string | null
           share_url?: string | null
+          share_view_count?: number | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
@@ -2736,10 +2760,6 @@ export type Database = {
           purchase_date: string
         }[]
       }
-      generate_share_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
       get_accounts_aging_report: {
         Args: Record<PropertyKey, never>
         Returns: Json
@@ -2983,12 +3003,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      update_share_view_stats: {
-        Args: {
-          po_id: string
-        }
-        Returns: undefined
-      }
       vector_avg: {
         Args: {
           "": number[]
@@ -3040,9 +3054,19 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      xan_generate_share_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       xan_sync_glide_configuration: {
         Args: {
           table_name: string
+        }
+        Returns: undefined
+      }
+      xan_update_share_view_stats: {
+        Args: {
+          po_id: string
         }
         Returns: undefined
       }

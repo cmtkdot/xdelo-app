@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { MessageList } from './MessageList';
@@ -28,7 +27,6 @@ export const MessageListContainer: React.FC = () => {
     isProcessing: processingState
   } = useMessageProcessing();
   
-  // Refactored fetch messages function with better error handling
   const fetchMessages = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -59,7 +57,6 @@ export const MessageListContainer: React.FC = () => {
     fetchMessages();
   }, [fetchMessages]);
   
-  // Search function
   const filterMessages = useCallback((term: string) => {
     if (!term.trim()) {
       setFilteredMessages(messages);
@@ -81,7 +78,6 @@ export const MessageListContainer: React.FC = () => {
     setFilteredMessages(filtered);
   }, [messages]);
   
-  // Debounced search handler
   const debouncedSearch = useCallback(
     debounce((term: string) => {
       filterMessages(term);
@@ -89,14 +85,12 @@ export const MessageListContainer: React.FC = () => {
     [filterMessages]
   );
   
-  // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchTerm(value);
     debouncedSearch(value);
   };
   
-  // Refresh function for manual refresh
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     fetchMessages();
@@ -105,7 +99,6 @@ export const MessageListContainer: React.FC = () => {
   const handleProcessQueue = async () => {
     try {
       await processMessageQueue(10);
-      // Refresh the list after processing
       handleRefresh();
     } catch (error) {
       console.error('Failed to process queue:', error);
@@ -115,7 +108,6 @@ export const MessageListContainer: React.FC = () => {
   const handleQueueUnprocessed = async () => {
     try {
       await queueUnprocessedMessages(20);
-      // Refresh the list after queueing
       handleRefresh();
     } catch (error) {
       console.error('Failed to queue unprocessed messages:', error);
@@ -124,7 +116,6 @@ export const MessageListContainer: React.FC = () => {
 
   const handleRetryProcessing = async (messageId) => {
     try {
-      // Get the message details for reanalysis
       const { data: messageData } = await supabase
         .from('messages')
         .select('*')
@@ -136,7 +127,6 @@ export const MessageListContainer: React.FC = () => {
       }
       
       await handleReanalyze(messageData);
-      // Refresh after processing
       handleRefresh();
     } catch (error) {
       console.error('Error retrying message processing:', error);
