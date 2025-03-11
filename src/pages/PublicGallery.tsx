@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,6 +11,7 @@ import ProductFilters from "@/components/ProductGallery/ProductFilters";
 import { ProductPagination } from "@/components/ProductGallery/ProductPagination";
 import { parseISO, isWithinInterval } from "date-fns";
 import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
+import { ProcessingRepairButton } from "@/components/ProductGallery/ProcessingRepairButton";
 
 const ITEMS_PER_PAGE = 12;
 
@@ -122,7 +124,7 @@ const PublicGallery = () => {
     }
   };
 
-  const handleDelete = async (media: Message) => {
+  const handleDelete = async (media: Message, deleteTelegram = false) => {
     if (!user) {
       toast({
         title: "Authentication required",
@@ -254,6 +256,8 @@ const PublicGallery = () => {
         </div>
       ) : (
         <>
+          {user && <ProcessingRepairButton />}
+          
           <ProductGrid
             products={paginatedProducts}
             onEdit={user ? handleEdit : undefined}
