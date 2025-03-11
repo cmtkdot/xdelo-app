@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/generalUtils';
 import { messageToMediaItem } from './types';
 import { MediaFixButton } from './MediaFixButton';
+
 interface MediaViewerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -18,6 +19,7 @@ interface MediaViewerProps {
   hasNext?: boolean;
   editMode?: boolean;
 }
+
 export const MediaViewer = ({
   isOpen,
   onClose,
@@ -29,8 +31,10 @@ export const MediaViewer = ({
   editMode = false
 }: MediaViewerProps) => {
   const [showTools, setShowTools] = useState(false);
+
   const mainMedia = currentGroup?.find(media => media?.is_original_caption) || currentGroup?.[0];
   const analyzedContent = mainMedia?.analyzed_content;
+
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
     try {
@@ -39,27 +43,30 @@ export const MediaViewer = ({
       return '';
     }
   };
+
   const handlePrevious = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (onPrevious && hasPrevious) onPrevious();
   };
+
   const handleNext = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (onNext && hasNext) onNext();
   };
+
   const handleToolsComplete = () => {
-    // Optionally refresh data or close tools panel
     setShowTools(false);
   };
 
-  // Guard against undefined currentGroup
   if (!currentGroup || currentGroup.length === 0) {
     return null;
   }
+
   const mediaItems = currentGroup.map(message => messageToMediaItem(message));
   const messageIds = currentGroup.map(message => message.id);
+
   return <Dialog open={isOpen} onOpenChange={() => onClose()}>
       <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] h-auto p-0 overflow-y-auto">
         <DialogTitle className="sr-only">Media Viewer</DialogTitle>
@@ -94,6 +101,10 @@ export const MediaViewer = ({
             </div>}
 
           <div className="p-6 space-y-4">
+            {mainMedia?.caption && <div className="p-4 bg-secondary/5 rounded-lg mb-4">
+                <p className="text-muted-foreground whitespace-pre-wrap text-lg font-semibold text-center">{mainMedia.caption}</p>
+              </div>}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {mainMedia?.purchase_order && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
                   <Tag className="w-5 h-5 text-primary" />
@@ -165,10 +176,6 @@ export const MediaViewer = ({
                   </div>
                 </div>}
             </div>
-
-            {mainMedia?.caption && <div className="mt-4 p-4 bg-secondary/5 rounded-lg">
-                <p className="text-muted-foreground whitespace-pre-wrap text-lg font-semibold text-center">{mainMedia.caption}</p>
-              </div>}
           </div>
         </div>
       </DialogContent>
