@@ -1,9 +1,10 @@
+
 import React, { useState } from 'react';
 import { Message } from '@/types';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ImageSwiper } from "@/components/ui/image-swiper";
-import { ChevronLeft, ChevronRight, Tag, Package, Calendar, Settings } from "lucide-react";
+import { ChevronLeft, ChevronRight, Tag, Package, Calendar, Settings, ExternalLink, FileText } from "lucide-react";
 import { format } from 'date-fns';
 import { cn } from '@/lib/generalUtils';
 import { messageToMediaItem } from './types';
@@ -31,9 +32,11 @@ export const MediaViewer = ({
   editMode = false
 }: MediaViewerProps) => {
   const [showTools, setShowTools] = useState(false);
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
   const mainMedia = currentGroup?.find(media => media?.is_original_caption) || currentGroup?.[0];
   const analyzedContent = mainMedia?.analyzed_content;
+  const currentMedia = currentGroup?.[activeMediaIndex] || mainMedia;
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
@@ -60,12 +63,26 @@ export const MediaViewer = ({
     setShowTools(false);
   };
 
+  const handleMediaChange = (index: number) => {
+    setActiveMediaIndex(index);
+  };
+
+  // Generate Telegram message URL
+  const getTelegramMessageUrl = (message: Message) => {
+    if (!message || !message.chat_id || !message.telegram_message_id) return null;
+    
+    // Standard format for Telegram URLs
+    return `https://t.me/c/${message.chat_id.toString().replace("-100", "")}/${message.telegram_message_id}`;
+  };
+
   if (!currentGroup || currentGroup.length === 0) {
     return null;
   }
 
   const mediaItems = currentGroup.map(message => messageToMediaItem(message));
   const messageIds = currentGroup.map(message => message.id);
+  const telegramUrl = getTelegramMessageUrl(currentMedia);
+  const publicUrl = currentMedia?.public_url || null;
 
   return <Dialog open={isOpen} onOpenChange={() => onClose()}>
       <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] h-auto p-0 overflow-y-auto">
@@ -74,7 +91,11 @@ export const MediaViewer = ({
         <div className="relative flex flex-col bg-background dark:bg-background">
           <div className="relative flex-1 min-h-0 bg-black/90">
             <div className="aspect-video w-full relative">
-              <ImageSwiper media={mediaItems} />
+              <ImageSwiper 
+                media={mediaItems} 
+                showNavigation 
+                onIndexChange={handleMediaChange}
+              />
               
               <div className="absolute inset-0 flex items-center justify-between px-4 pointer-events-none">
                 <Button variant="outline" size="icon" onClick={handlePrevious} disabled={!hasPrevious} className={cn("pointer-events-auto rounded-full bg-background/80 hover:bg-background/90 backdrop-blur", !hasPrevious && "opacity-0")}>
@@ -92,13 +113,32 @@ export const MediaViewer = ({
             </div>
           </div>
           
-          {/* Media tools panel */}
-          {showTools && <div className="p-4 bg-muted/20 border-b">
-              <div className="flex justify-between items-center">
-                <h3 className="text-sm font-medium">Media Tools</h3>
-                <MediaFixButton messageIds={messageIds} onComplete={handleToolsComplete} />
-              </div>
-            </div>}
+          {/* External links and tools */}
+          <div className="p-4 bg-muted/10 border-b flex justify-between">
+            <div className="flex gap-2">
+              {publicUrl && (
+                <a href={publicUrl} target="_blank" rel="noopener noreferrer">
+                  <Button variant="outline" size="sm" className="flex gap-2 items-center">
+                    <FileText className="h-4 w-4" />
+                    <span>View Original File</span>
+                  </Button>
+                </a>
+              )}
+              
+              {telegramUrl && (
+                <a href={telegramUrl} target="_blank" rel="noopener noreferrer">
+                  <Button variant="outline" size="sm" className="flex gap-2 items-center">
+                    <ExternalLink className="h-4 w-4" />
+                    <span>Open in Telegram</span>
+                  </Button>
+                </a>
+              )}
+            </div>
+            
+            {showTools && (
+              <MediaFixButton messageIds={messageIds} onComplete={handleToolsComplete} />
+            )}
+          </div>
 
           <div className="p-6 space-y-4">
             {mainMedia?.caption && <div className="p-4 bg-secondary/5 rounded-lg mb-4">

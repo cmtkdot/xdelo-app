@@ -13,9 +13,16 @@ interface ImageSwiperProps extends React.HTMLAttributes<HTMLDivElement> {
   media: MediaItem[];
   showNavigation?: boolean;
   className?: string;
+  onIndexChange?: (index: number) => void;
 }
 
-export function ImageSwiper({ media, className, showNavigation, ...props }: ImageSwiperProps) {
+export function ImageSwiper({ 
+  media, 
+  className, 
+  showNavigation, 
+  onIndexChange,
+  ...props 
+}: ImageSwiperProps) {
   const [mediaIndex, setMediaIndex] = React.useState(0);
   const [isHovered, setIsHovered] = React.useState(false);
   const [lastNonVideoIndex, setLastNonVideoIndex] = React.useState(0);
@@ -36,6 +43,13 @@ export function ImageSwiper({ media, className, showNavigation, ...props }: Imag
 
   const currentMedia = sortedMedia[mediaIndex];
   const isVideo = currentMedia?.mime_type?.startsWith("video/");
+
+  // Notify parent of index changes
+  React.useEffect(() => {
+    if (onIndexChange) {
+      onIndexChange(mediaIndex);
+    }
+  }, [mediaIndex, onIndexChange]);
 
   // Store the last non-video index when changing media
   React.useEffect(() => {

@@ -50,7 +50,9 @@ export function useRealTimeMessages({
         
         // Add processing state filter
         if (processingState && processingState.length > 0) {
-          query = query.in('processing_state', processingState);
+          // Convert ProcessingState[] to string[] for the database query
+          const stateValues = processingState as unknown as string[];
+          query = query.in('processing_state', stateValues);
         }
         
         // Add forwarded messages filter
