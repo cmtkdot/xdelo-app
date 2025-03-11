@@ -5,6 +5,48 @@ import { supabaseClient as supabase } from "./supabase.ts";
 import { getStoragePublicUrl, getTelegramApiUrl, getTelegramFileUrl } from "./urls.ts";
 
 /**
+ * Get extension from MIME type with proper defaults
+ */
+function xdelo_getExtensionFromMimeType(mimeType: string): string {
+  switch (mimeType.toLowerCase()) {
+    // Images
+    case 'image/jpeg':
+    case 'image/jpg':
+      return 'jpeg';
+    case 'image/png':
+      return 'png';
+    case 'image/gif':
+      return 'gif';
+    case 'image/webp':
+      return 'webp';
+    // Videos
+    case 'video/mp4':
+      return 'mp4';
+    case 'video/quicktime':
+      return 'mov';
+    // Audio
+    case 'audio/mpeg':
+      return 'mp3';
+    case 'audio/mp4':
+      return 'm4a';
+    case 'audio/ogg':
+      return 'ogg';
+    // Documents
+    case 'application/pdf':
+      return 'pdf';
+    case 'application/x-tgsticker':
+      return 'tgs';
+    default:
+      // Handle generic types
+      const parts = mimeType.split('/');
+      if (parts.length === 2 && parts[1] !== 'octet-stream') {
+        return parts[1];
+      }
+      return 'bin'; // Default fallback
+  }
+}
+
+/**
  * Get default MIME type based on media type string
  */
 export function xdelo_getDefaultMimeType(mediaType: string): string {
@@ -17,6 +59,8 @@ export function xdelo_getDefaultMimeType(mediaType: string): string {
       return 'audio/mpeg';
     case 'voice':
       return 'audio/ogg';
+    case 'animation':
+      return 'video/mp4';
     case 'document':
     default:
       return 'application/octet-stream';
@@ -43,10 +87,9 @@ export function xdelo_detectMimeType(media: any): string {
   return 'application/octet-stream';
 }
 
-// Construct standardized storage path
+// Construct standardized storage path with proper extension handling
 export function xdelo_constructStoragePath(fileUniqueId: string, mimeType: string): string {
-  // Get file extension from MIME type
-  const ext = mimeType.split('/')[1] || 'bin';
+  const ext = xdelo_getExtensionFromMimeType(mimeType);
   return `${fileUniqueId}.${ext}`;
 }
 
