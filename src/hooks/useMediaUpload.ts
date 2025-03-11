@@ -1,12 +1,28 @@
 
 import { useState } from 'react';
 import { useToast } from './useToast';
+import { xdelo_checkFileExistsInStorage } from '@/lib/telegramMediaUtils';
 
 export function useMediaUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const [lastUploadedUrl, setLastUploadedUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
+  /**
+   * Check if media exists in storage
+   */
+  const checkMediaExists = async (fileUniqueId: string, mimeType: string): Promise<boolean> => {
+    try {
+      return await xdelo_checkFileExistsInStorage(fileUniqueId, mimeType);
+    } catch (error) {
+      console.error('Error checking file existence:', error);
+      return false;
+    }
+  };
+
+  /**
+   * Upload media to storage
+   */
   const uploadMedia = async (fileUrl: string, fileUniqueId: string) => {
     setIsUploading(true);
     try {
@@ -55,6 +71,7 @@ export function useMediaUpload() {
 
   return {
     uploadMedia,
+    checkMediaExists,
     isUploading,
     lastUploadedUrl
   };

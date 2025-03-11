@@ -104,25 +104,16 @@ serve(async (req) => {
     
     const fileData = await fileDataResponse.blob();
 
-    // Get correct storage path
-    const { data: storagePath, error: storagePathError } = await supabase.rpc(
-      'xdelo_standardize_storage_path',
-      {
-        p_file_unique_id: message.file_unique_id,
-        p_mime_type: message.mime_type
-      }
-    );
+    // Get correct storage path based on file_unique_id
+    const storagePath = `${message.file_unique_id}.${fileData.type.split('/')[1] || 'bin'}`;
 
-    if (storagePathError) {
-      throw new Error(`Failed to get standardized storage path: ${storagePathError.message}`);
-    }
-
-    // Upload to Supabase Storage with proper options
-    const uploadOptions = xdelo_getUploadOptions(message.mime_type);
+    // Upload to Supabase Storage with upsert always true
     const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')
-      .upload(storagePath, fileData, uploadOptions);
+      .upload(storagePath, fileData, {
+        upsert: true
+      });
 
     if (uploadError) {
       throw new Error(`Failed to upload media to storage: ${uploadError.message}`);

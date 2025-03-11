@@ -9,7 +9,7 @@ serve(async (req) => {
   }
 
   try {
-    const { action, fileData, storagePath } = await req.json();
+    const { action, fileData, storagePath, upsert = true } = await req.json();
     const correlationId = crypto.randomUUID();
     
     console.log(`Handling ${action} request:`, { storagePath, correlationId });
@@ -21,7 +21,7 @@ serve(async (req) => {
           .storage
           .from('telegram-media')
           .upload(storagePath, fileData, {
-            upsert: true // Enable overwriting existing files
+            upsert: true // Always enable overwriting existing files
           });
           
         if (uploadError) throw uploadError;
@@ -38,6 +38,25 @@ serve(async (req) => {
         
         return new Response(
           JSON.stringify({ success: true, publicUrl }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+        
+      case 'validate':
+        // Check if a file exists in storage
+        const { storagePath: pathToValidate } = await req.json();
+        const [bucket, ...pathParts] = pathToValidate.split('/');
+        const filePath = pathParts.join('/');
+        
+        const { data: validateData, error: validateError } = await supabaseClient
+          .storage
+          .from(bucket || 'telegram-media')
+          .download(filePath, { range: { offset: 0, length: 1 } });
+          
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            exists: !validateError && !!validateData 
+          }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
         

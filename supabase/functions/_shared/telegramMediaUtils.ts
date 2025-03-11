@@ -34,6 +34,7 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
     }
     
     const fileData = await fileDataResponse.blob();
+    // Let Supabase determine extension from the blob
     const extension = fileData.type.split('/')[1] || 'bin';
     const fileName = `${media.file_unique_id}.${extension}`;
 
@@ -104,6 +105,7 @@ export async function xdelo_redownloadMissingFile(message: any, correlationId: s
     }
     
     const fileData = await fileDataResponse.blob();
+    // Let Supabase determine extension from the blob
     const extension = fileData.type.split('/')[1] || 'bin';
     const fileName = `${message.file_unique_id}.${extension}`;
 

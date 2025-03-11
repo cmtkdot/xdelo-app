@@ -15,7 +15,6 @@ import { isSameDay, isWithinInterval, parseISO } from "date-fns";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
 import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
 import { MediaFixButton } from "@/components/ProductGallery/MediaFixButton";
-import { xdelo_checkFileExistsInStorage } from "@/lib/telegramMediaUtils";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 
 const ITEMS_PER_PAGE = 12;
@@ -37,7 +36,7 @@ const ProductGallery = () => {
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: mediaGroups = {}, isLoading } = useMediaGroups();
+  const { data: mediaGroups = {}, isLoading, refetch } = useMediaGroups();
   const { data: vendors = [] } = useVendors();
   const { handleDelete, isProcessing } = useTelegramOperations();
   const { checkMediaExists, uploadMedia } = useMediaUpload();
@@ -134,9 +133,9 @@ const ProductGallery = () => {
     }
   };
 
-  const handleMediaRepair = async (fileUrl: string, fileUniqueId: string, extension: string) => {
+  const handleMediaRepair = async (fileUrl: string, fileUniqueId: string) => {
     try {
-      await uploadMedia(fileUrl, fileUniqueId, extension);
+      await uploadMedia(fileUrl, fileUniqueId);
       refetch(); // Refresh data after repair
     } catch (error) {
       console.error('Media repair failed:', error);

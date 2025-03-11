@@ -1,118 +1,184 @@
-import { useState, useEffect, useCallback } from 'react';
+
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Message } from '@/types';
-import { toast } from 'sonner';
+import { Message, FilterOptions, ProcessingStateType } from '@/types';
 
-// Define a more restricted processing state type that matches the backend
-type ProcessingStateType = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'partial_success';
-
-interface UseRealTimeMessagesOptions {
-  limit?: number;
-  filter?: string;
-  processingState?: ProcessingStateType[];
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-  showForwarded?: boolean;
-  showEdited?: boolean;
-}
-
-export function useRealTimeMessages({ 
-  limit = 20, 
-  filter = '',
-  processingState,
-  sortBy = 'updated_at',
-  sortOrder = 'desc',
-  showForwarded = false,
-  showEdited = false
-}: UseRealTimeMessagesOptions = {}) {
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
-
+export function useRealTimeMessages(options: FilterOptions = {}) {
+  const [messages, setMessages] = useState<Message[]>([]);
+  
   const {
-    data: messages = [],
-    isLoading,
-    refetch,
-    error
-  } = useQuery({
-    queryKey: ['messages', limit, filter, processingState, sortBy, sortOrder, showForwarded, showEdited],
+    limit = 30,
+    offset = 0,
+    search = '',
+    sort = 'desc',
+    sortField = 'created_at',
+    chatId,
+    vendorId,
+    mediaGroupId,
+    processingStates,
+    startDate,
+    endDate,
+    hasCaption,
+    excludeForwarded,
+    excludeEdited,
+    hasError,
+    hasMediaGroup,
+    needsRedownload,
+    fileUniqueId,
+    ...otherOptions
+  } = options;
+  
+  // Define the query key based on all filter parameters
+  const queryKey = [
+    'messages', 
+    limit, 
+    offset, 
+    search, 
+    sort, 
+    sortField,
+    chatId,
+    vendorId,
+    mediaGroupId,
+    processingStates,
+    startDate,
+    endDate,
+    hasCaption,
+    excludeForwarded,
+    excludeEdited,
+    hasError,
+    hasMediaGroup,
+    needsRedownload,
+    fileUniqueId,
+    ...Object.values(otherOptions)
+  ];
+
+  // Include the actual processing states in the filter
+  const stateFilterParam = processingStates || ['initialized', 'pending', 'processing', 'completed', 'error', 'partial_success'] as ProcessingStateType[];
+
+  // Query to fetch messages
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey,
     queryFn: async () => {
-      try {
-        let query = supabase
-          .from('messages')
-          .select('*')
-          .order(sortBy || 'updated_at', { ascending: sortOrder === 'asc' })
-          .limit(limit);
-          
-        if (filter) {
-          query = query.or(`caption.ilike.%${filter}%,analyzed_content->product_name.ilike.%${filter}%,analyzed_content->vendor_uid.ilike.%${filter}%,telegram_message_id.eq.${!isNaN(parseInt(filter)) ? filter : 0},chat_title.ilike.%${filter}%`);
+      let query = supabase
+        .from('messages')
+        .select('*');
+      
+      // Apply all filters
+      if (search) {
+        query = query.or(`caption.ilike.%${search}%,analyzed_content->vendor_uid.ilike.%${search}%,analyzed_content->product_name.ilike.%${search}%,analyzed_content->product_code.ilike.%${search}%`);
+      }
+      
+      if (chatId) {
+        query = query.eq('chat_id', chatId);
+      }
+      
+      if (vendorId) {
+        query = query.eq('analyzed_content->vendor_uid', vendorId);
+      }
+      
+      if (mediaGroupId) {
+        query = query.eq('media_group_id', mediaGroupId);
+      }
+      
+      if (stateFilterParam.length > 0 && stateFilterParam.length < 6) {
+        query = query.in('processing_state', stateFilterParam);
+      }
+      
+      if (hasCaption !== undefined) {
+        if (hasCaption) {
+          query = query.not('caption', 'is', null);
+        } else {
+          query = query.is('caption', null);
         }
-        
-        if (processingState && processingState.length > 0) {
-          query = query.in('processing_state', processingState);
+      }
+      
+      if (excludeForwarded) {
+        query = query.eq('is_forward', false);
+      }
+      
+      if (excludeEdited) {
+        query = query.eq('is_edited', false);
+      }
+      
+      if (hasError !== undefined) {
+        if (hasError) {
+          query = query.not('error_message', 'is', null);
+        } else {
+          query = query.is('error_message', null);
         }
-        
-        if (showForwarded) {
-          query = query.eq('is_forward', true);
+      }
+      
+      if (hasMediaGroup !== undefined) {
+        if (hasMediaGroup) {
+          query = query.not('media_group_id', 'is', null);
+        } else {
+          query = query.is('media_group_id', null);
         }
-        
-        if (showEdited) {
-          query = query.not('old_analyzed_content', 'is', null);
-        }
-        
-        const { data, error } = await query;
-          
-        if (error) throw error;
-        return data as Message[];
-      } catch (error) {
+      }
+      
+      if (needsRedownload !== undefined) {
+        query = query.eq('needs_redownload', needsRedownload);
+      }
+      
+      if (fileUniqueId) {
+        query = query.eq('file_unique_id', fileUniqueId);
+      }
+      
+      if (startDate && endDate) {
+        query = query.gte('created_at', startDate).lte('created_at', endDate);
+      } else if (startDate) {
+        query = query.gte('created_at', startDate);
+      } else if (endDate) {
+        query = query.lte('created_at', endDate);
+      }
+      
+      // Add sorting and pagination
+      query = query.order(sortField, { ascending: sort === 'asc' }).limit(limit).range(offset, offset + limit - 1);
+      
+      const { data, error } = await query;
+      
+      if (error) {
         console.error('Error fetching messages:', error);
         throw error;
       }
-    },
-    staleTime: 5000,
+      
+      return data || [];
+    }
   });
 
   useEffect(() => {
+    if (data) {
+      setMessages(data);
+    }
+  }, [data]);
+
+  // Set up real-time channel
+  useEffect(() => {
     const channel = supabase
       .channel('messages-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messages'
-        },
-        (payload) => {
-          console.log('Real-time update received:', payload);
-          refetch();
-        }
-      )
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'messages'
+      }, (payload) => {
+        console.log('Realtime update received:', payload);
+        
+        // Only refetch when a message that matches our criteria changes
+        // This is a simplified approach; for production you might want to update the cache directly
+        refetch();
+      })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [refetch]);
-
-  const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    try {
-      await refetch();
-      setLastRefresh(new Date());
-    } catch (error) {
-      console.error('Error refreshing messages:', error);
-      toast.error("Failed to refresh messages");
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [refetch]);
+  }, [refetch, queryKey.join()]);
 
   return {
     messages,
     isLoading,
-    isRefreshing,
-    lastRefresh,
-    handleRefresh,
-    error
+    error,
+    refetch
   };
 }

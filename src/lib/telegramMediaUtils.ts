@@ -63,13 +63,9 @@ export async function xdelo_checkFileExistsInStorage(fileUniqueId: string, mimeT
  */
 export async function xdelo_uploadTelegramMedia(
   fileUrl: string, 
-  fileUniqueId: string, 
-  mediaType: string, 
-  explicitMimeType?: string
-): Promise<{publicUrl: string, storagePath: string, mimeType: string}> {
-  // Determine MIME type with fallback to default based on media type
-  const mimeType = explicitMimeType || xdelo_getDefaultMimeType(mediaType);
-  console.log('📤 Uploading media to storage:', { fileUniqueId, mediaType, mimeType });
+  fileUniqueId: string
+): Promise<{publicUrl: string, storagePath: string}> {
+  console.log('📤 Uploading media to storage:', { fileUniqueId });
   
   // Call the media-management edge function to handle the upload
   try {
@@ -78,8 +74,7 @@ export async function xdelo_uploadTelegramMedia(
         action: 'upload',
         fileUrl,
         fileUniqueId,
-        mediaType,
-        mimeType
+        upsert: true
       }
     });
     
@@ -89,8 +84,7 @@ export async function xdelo_uploadTelegramMedia(
     console.log('✅ Media uploaded successfully:', data.publicUrl);
     return { 
       publicUrl: data.publicUrl, 
-      storagePath: data.storagePath,
-      mimeType: data.mimeType
+      storagePath: data.storagePath
     };
   } catch (error) {
     console.error('❌ Error uploading media:', error);
@@ -114,27 +108,6 @@ export async function xdelo_validateStorageFile(storagePath: string): Promise<bo
     return data.success && data.exists;
   } catch (error) {
     console.error('Error validating storage file:', error);
-    return false;
-  }
-}
-
-/**
- * Repairs content disposition for an existing file by re-uploading with correct content type
- */
-export async function xdelo_repairContentDisposition(storagePath: string, mimeType: string): Promise<boolean> {
-  try {
-    const { data, error } = await supabase.functions.invoke('media-management', {
-      body: { 
-        action: 'repair',
-        storagePath,
-        mimeType
-      }
-    });
-    
-    if (error) throw new Error(error.message);
-    return data.success;
-  } catch (error) {
-    console.error('Error updating file content type:', error);
     return false;
   }
 }

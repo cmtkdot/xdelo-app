@@ -21,7 +21,6 @@ export {
   xdelo_uploadMediaToStorage,
   xdelo_validateStoragePath,
   xdelo_checkFileExistsInStorage,
-  xdelo_repairContentDisposition,
   xdelo_urlExists
 } from './storageUtils.ts';
 
