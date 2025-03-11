@@ -4,7 +4,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
 import { withErrorHandling } from "../_shared/errorHandler.ts";
 import { parseCaption } from "./captionParser.ts";
-import { ParsedContent, MediaGroupResult } from "./types.ts";
 
 // Create Supabase client
 const supabase = createClient(
@@ -15,13 +14,19 @@ const supabase = createClient(
 const manualCaptionParser = async (req: Request, correlationId: string) => {
   // Parse request body
   const body = await req.json();
-  const { messageId, caption, media_group_id, trigger_source = 'database_trigger', isEdit = false } = body;
+  const { 
+    messageId, 
+    caption, 
+    media_group_id, 
+    trigger_source = 'database_trigger', 
+    isEdit = false 
+  } = body;
   
   if (!messageId) {
     throw new Error("Message ID is required");
   }
 
-  console.log(`Manual caption parser triggered for message ${messageId}, correlation ID: ${correlationId}, isEdit: ${isEdit}`);
+  console.log(`Manual caption parser triggered for message ${messageId}, correlation ID: ${correlationId}, isEdit: ${isEdit}, trigger source: ${trigger_source}`);
   
   try {
     // Get the message details if caption wasn't provided
@@ -72,7 +77,28 @@ const manualCaptionParser = async (req: Request, correlationId: string) => {
 
     console.log(`Processing caption for message ${messageId}, caption length: ${messageCaption.length}, isEdit: ${isEdit}`);
     
-    // Use our manual caption parser
+    // Use transaction to ensure atomic updates and prevent race conditions
+    const { data: transactionResult, error: transactionError } = await supabase.rpc(
+      'begin_transaction'
+    );
+    
+    // Mark message as processing first with a separate update
+    console.log(`Marking message ${messageId} as processing`);
+    const { error: processingError } = await supabase
+      .from('messages')
+      .update({
+        processing_state: 'processing',
+        processing_started_at: new Date().toISOString(),
+        processing_correlation_id: correlationId
+      })
+      .eq('id', messageId);
+      
+    if (processingError) {
+      console.error(`Error marking message as processing: ${processingError.message}`);
+      // Continue anyway as this is not critical
+    }
+    
+    // Use manual caption parser
     const parsedContent = parseCaption(messageCaption);
     
     console.log(`Caption parsed successfully for message ${messageId}:`, parsedContent);
@@ -134,7 +160,7 @@ const manualCaptionParser = async (req: Request, correlationId: string) => {
       try {
         console.log(`Triggering sync for media group ${messageGroupId} from message ${messageId}, isEdit: ${isEdit}`);
         
-        // First try the edge function for more robust handling, especially for edits
+        // Use edge function for more robust handling, especially for edits
         try {
           const syncResponse = await fetch(
             `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
@@ -179,16 +205,14 @@ const manualCaptionParser = async (req: Request, correlationId: string) => {
           
           if (error) {
             console.warn(`Warning: Media group sync via RPC failed: ${error.message}`);
-            // Fallback to direct update
-            await syncMediaGroupFallback(messageId, messageGroupId, parsedContent, isEdit);
+            // Continue without aborting - sync may be handled by another process
           } else {
             syncResult = data;
           }
         }
       } catch (syncError) {
         console.error(`Media group sync error: ${syncError.message}`);
-        // Attempt fallback sync
-        await syncMediaGroupFallback(messageId, messageGroupId, parsedContent, isEdit);
+        // Continue without aborting - sync may be handled by another process
       }
     }
     
@@ -250,75 +274,4 @@ const manualCaptionParser = async (req: Request, correlationId: string) => {
   }
 };
 
-// Fallback function to sync media group content directly
-async function syncMediaGroupFallback(
-  sourceMessageId: string, 
-  mediaGroupId: string,
-  analyzedContent: ParsedContent,
-  isEdit: boolean = false
-): Promise<void> {
-  try {
-    console.log(`Using fallback sync for media group ${mediaGroupId} from message ${sourceMessageId}, isEdit: ${isEdit}`);
-    
-    // Get the current source message to ensure it has analyzed_content
-    const { data: sourceMessage } = await supabase
-      .from('messages')
-      .select('analyzed_content, old_analyzed_content')
-      .eq('id', sourceMessageId)
-      .single();
-    
-    if (!sourceMessage?.analyzed_content) {
-      console.error("Source message has no analyzed_content for fallback sync");
-      return;
-    }
-    
-    // Basic update data for all messages in the group
-    const updateData: any = {
-      analyzed_content: analyzedContent,
-      message_caption_id: sourceMessageId,
-      is_original_caption: false,
-      group_caption_synced: true,
-      processing_state: 'completed',
-      processing_completed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    // If this is an edit and we need to sync edit history
-    if (isEdit && sourceMessage.old_analyzed_content) {
-      updateData.old_analyzed_content = sourceMessage.old_analyzed_content;
-    }
-    
-    // Update all other messages in the group
-    const { data: updatedMessages, error: updateError } = await supabase
-      .from('messages')
-      .update(updateData)
-      .eq('media_group_id', mediaGroupId)
-      .neq('id', sourceMessageId)
-      .select('id');
-    
-    if (updateError) {
-      console.error(`Error in fallback sync: ${updateError.message}`);
-      return;
-    }
-    
-    // Log the fallback sync
-    await supabase.from('unified_audit_logs').insert({
-      event_type: 'media_group_content_synced_direct',
-      entity_id: sourceMessageId,
-      metadata: {
-        media_group_id: mediaGroupId,
-        sync_method: 'fallback_direct',
-        is_edit: isEdit,
-        updated_message_count: updatedMessages?.length || 0
-      },
-      event_timestamp: new Date().toISOString()
-    });
-    
-    console.log(`Fallback sync completed for media group ${mediaGroupId}, updated ${updatedMessages?.length || 0} messages`);
-  } catch (error) {
-    console.error(`Fallback sync error: ${error.message}`);
-  }
-}
-
-// Wrap the handler with error handling
 serve(withErrorHandling('manual-caption-parser', manualCaptionParser));

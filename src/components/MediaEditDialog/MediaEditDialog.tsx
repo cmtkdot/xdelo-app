@@ -69,7 +69,7 @@ export function MediaEditDialog({
       
       setSyncStatus('Updating and analyzing caption...');
       
-      // Use the new caption sync hook to handle the update and sync
+      // Use the updated caption sync hook to handle the update and sync
       const result = await processCaptionUpdate(media as any, newCaption);
       
       if (!result?.success) {
@@ -80,7 +80,11 @@ export function MediaEditDialog({
       
       // Call the onSave callback if provided
       onSave && onSave(newCaption);
-      onSuccess && onSuccess();
+      
+      // Allow parent to refresh data after successful save
+      setTimeout(() => {
+        onSuccess && onSuccess();
+      }, 1500); // Small delay to ensure sync completes
       
     } catch (err: any) {
       console.error('Error updating caption:', err);

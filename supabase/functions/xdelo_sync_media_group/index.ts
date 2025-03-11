@@ -21,6 +21,71 @@ const syncMediaGroupHandler = async (req: Request, correlationId: string) => {
   console.log(`Syncing media group ${mediaGroupId} from message ${sourceMessageId}, correlation ID: ${correlationId}, syncEditHistory: ${syncEditHistory}, forceSync: ${forceSync}`);
 
   try {
+    // Get the source message to verify it has analyzed content
+    const { data: sourceMessage, error: sourceError } = await supabase
+      .from('messages')
+      .select('id, caption, analyzed_content, old_analyzed_content, is_original_caption')
+      .eq('id', sourceMessageId)
+      .single();
+      
+    if (sourceError || !sourceMessage) {
+      throw new Error(`Error retrieving source message: ${sourceError?.message || "Message not found"}`);
+    }
+    
+    // Verify the source message has analyzed content (or throw error if not)
+    if (!sourceMessage.analyzed_content) {
+      // If the message has a caption but no analyzed content, try to analyze it first
+      if (sourceMessage.caption) {
+        console.log(`Source message has caption but no analyzed content. Triggering analysis first.`);
+        
+        // Mark message as processing
+        await supabase.from('messages')
+          .update({
+            processing_state: 'processing',
+            is_original_caption: true
+          })
+          .eq('id', sourceMessageId);
+        
+        // Use manual caption parser to analyze
+        const parserResponse = await fetch(
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/manual-caption-parser`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+            },
+            body: JSON.stringify({
+              messageId: sourceMessageId,
+              caption: sourceMessage.caption,
+              media_group_id: mediaGroupId,
+              correlationId,
+              trigger_source: 'sync_media_group',
+              isEdit: false
+            })
+          }
+        );
+        
+        if (!parserResponse.ok) {
+          const errorText = await parserResponse.text();
+          throw new Error(`Failed to analyze caption: ${errorText}`);
+        }
+        
+        // Refresh the source message data now that it's been analyzed
+        const { data: updatedSource, error: refreshError } = await supabase
+          .from('messages')
+          .select('id, analyzed_content')
+          .eq('id', sourceMessageId)
+          .single();
+          
+        if (refreshError || !updatedSource?.analyzed_content) {
+          throw new Error(`Source message still has no analyzed content after processing`);
+        }
+      } else {
+        throw new Error(`Source message has no caption or analyzed content`);
+      }
+    }
+
     // First try to use the improved database function with advisory locks
     console.log('Using database function with advisory locks for sync operation');
     
@@ -74,7 +139,7 @@ const syncMediaGroupHandler = async (req: Request, correlationId: string) => {
       // 1. Get the source message
       const { data: sourceMessage, error: sourceError } = await supabase
         .from('messages')
-        .select('id, analyzed_content, old_analyzed_content')
+        .select('id, caption, analyzed_content, old_analyzed_content')
         .eq('id', sourceMessageId)
         .single();
         
