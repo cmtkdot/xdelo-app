@@ -2,9 +2,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { componentTagger } from "lovable-tagger";
 
-export default defineConfig({
-  plugins: [react()],
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    react(),
+    mode === 'development' && componentTagger(),
+  ].filter(Boolean),
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -35,18 +39,15 @@ export default defineConfig({
   },
   server: {
     port: 8080,
-    host: true, // This enables listening on all addresses including network
-    cors: true, // Enable CORS for all origins
+    host: '::',
+    cors: true, 
     hmr: {
-      // Enable HMR over HTTPS
       protocol: 'wss',
       clientPort: 443
     },
     allowedHosts: [
-      // Allow the specific Lovable project domain
       '79512fb5-8301-4d61-9349-6769d5c8295b.lovableproject.com',
-      // Allow all Lovable domains as a fallback
       '*.lovableproject.com'
     ]
   }
-});
+}));
