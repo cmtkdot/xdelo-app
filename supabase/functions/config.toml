@@ -2,11 +2,6 @@
 # A string used as a project reference when generating edge functions locally
 project_id = "xjhhehxcxkiumnwbirel"
 
-# This value is not used in self-hosted Supabase, but required by the Edge Functions interface
-# The value is derived from your project's REST URL
-# If you're creating a project locally using the CLI, it will be localhost:54321
-base_url = "https://xjhhehxcxkiumnwbirel.supabase.co"
-
 [functions.analyze-with-ai]
 verify_jwt = false
 # Disabled due to timeout and reliability issues
@@ -30,6 +25,12 @@ verify_jwt = false
 [functions.process-unanalyzed-messages]
 verify_jwt = false
 
+[functions.repair-storage-paths]
+verify_jwt = false
+
+[functions.redownload-from-media-group]
+verify_jwt = false
+
 [functions.scheduler-process-queue]
 verify_jwt = false
 
@@ -41,4 +42,3 @@ verify_jwt = false
 
 [functions.user-data]
 verify_jwt = false
-

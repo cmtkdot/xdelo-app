@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 /**
  * Redownload a file from its media group
  */
-export async function redownloadMediaFile(messageId: string, mediaGroupId?: string) {
+export async function xdelo_redownloadMediaFile(messageId: string, mediaGroupId?: string) {
   try {
     const { data, error } = await supabase.functions.invoke('redownload-from-media-group', {
       body: { 
