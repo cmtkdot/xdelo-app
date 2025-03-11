@@ -2,13 +2,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Message, ProcessingState } from '@/types';
+import { Message } from '@/types';
 import { toast } from 'sonner';
+
+// Define a more restricted processing state type that matches the backend
+type ProcessingStateType = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'partial_success';
 
 interface UseRealTimeMessagesOptions {
   limit?: number;
   filter?: string;
-  processingState?: ProcessingState[];
+  processingState?: ProcessingStateType[];
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
   showForwarded?: boolean;
@@ -47,8 +50,8 @@ export function useRealTimeMessages({
         }
         
         if (processingState && processingState.length > 0) {
-          // Explicitly cast the array to avoid TypeScript errors
-          query = query.in('processing_state', processingState as unknown as readonly ProcessingState[]);
+          // Explicitly cast the array to handle the type issue
+          query = query.in('processing_state', processingState as unknown as string[]);
         }
         
         if (showForwarded) {
