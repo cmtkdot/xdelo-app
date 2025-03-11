@@ -1,3 +1,4 @@
+
 # Simplified Media Handling in Xdelo
 
 This document outlines the simplified media handling approach implemented to improve reliability and reduce complexity in the media processing flow.
@@ -75,3 +76,5 @@ const uploadOptions = {
 ## Migration Notes
 
 The system will continue to work with existing media records that include MIME type information. New records will be created using the simplified approach. The repair functionality can be used to update existing records to use the new approach if needed.
+
+```
