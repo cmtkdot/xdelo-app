@@ -2,13 +2,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Message } from '@/types';
+import { Message, ProcessingState } from '@/types';
 import { toast } from 'sonner';
 
 interface UseRealTimeMessagesOptions {
   limit?: number;
   filter?: string;
-  processingState?: string[];
+  processingState?: ProcessingState[];
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
   showForwarded?: boolean;
