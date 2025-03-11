@@ -62,7 +62,7 @@ export function useProcessingHealth() {
 
       // Combine everything into a health report
       const healthReport: ProcessingStats = {
-        ...statsData as Omit<ProcessingStats, 'mixed_media_groups'>,
+        ...(statsData as Omit<ProcessingStats, 'mixed_media_groups'>),
         mixed_media_groups: mixedMediaGroups as MediaGroupStatus[]
       };
       
