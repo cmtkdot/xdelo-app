@@ -13,7 +13,7 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-async function repairStoragePaths(specificMessageIds?: string[]): Promise<any> {
+async function repairStoragePaths(specificMessageIds?: string[], fixContentDisposition = false): Promise<any> {
   try {
     console.log(`Repairing storage paths for ${specificMessageIds ? specificMessageIds.length : 'all'} messages`);
     
@@ -51,6 +51,67 @@ async function repairStoragePaths(specificMessageIds?: string[]): Promise<any> {
       }
     }
     
+    // If requested, fix content disposition for viewable media types
+    if (fixContentDisposition) {
+      // Get files that should have inline content disposition
+      const { data: mediaFiles, error: mediaError } = await supabase
+        .from('messages')
+        .select('id, file_unique_id, mime_type, storage_path')
+        .or('mime_type.ilike.image/%,mime_type.ilike.video/%,mime_type.eq.application/pdf')
+        .is('storage_path', 'not.null');
+      
+      if (mediaError) throw mediaError;
+      
+      console.log(`Found ${mediaFiles?.length || 0} media files to fix content disposition`);
+      
+      let repaired = 0;
+      
+      // Process each file to set inline content disposition
+      for (const file of mediaFiles || []) {
+        if (!file.storage_path) continue;
+        
+        try {
+          // Get the file metadata
+          const { data: fileData, error: fileError } = await supabase
+            .storage
+            .from('telegram-media')
+            .download(file.storage_path);
+          
+          if (fileError || !fileData) {
+            console.warn(`Could not download file ${file.storage_path}: ${fileError?.message}`);
+            continue;
+          }
+          
+          // Re-upload with inline content disposition
+          const { error: uploadError } = await supabase
+            .storage
+            .from('telegram-media')
+            .upload(file.storage_path, fileData, {
+              contentType: file.mime_type || 'application/octet-stream',
+              upsert: true,
+              contentDisposition: 'inline'
+            });
+          
+          if (uploadError) {
+            console.error(`Error fixing content disposition for ${file.storage_path}: ${uploadError.message}`);
+          } else {
+            repaired++;
+          }
+        } catch (error) {
+          console.error(`Error processing file ${file.storage_path}: ${error.message}`);
+        }
+      }
+      
+      console.log(`Fixed content disposition for ${repaired} files`);
+      
+      return {
+        success: true,
+        repaired: data?.length || 0,
+        contentDispositionFixed: repaired,
+        details: data
+      };
+    }
+    
     return {
       success: true,
       repaired: data?.length || 0,
@@ -69,9 +130,9 @@ serve(async (req) => {
   }
   
   try {
-    const { messageIds } = await req.json();
+    const { messageIds, fixContentDisposition = false } = await req.json();
     
-    const results = await repairStoragePaths(messageIds);
+    const results = await repairStoragePaths(messageIds, fixContentDisposition);
     
     // Return success response
     return new Response(
