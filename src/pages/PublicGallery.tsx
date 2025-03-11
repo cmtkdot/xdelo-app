@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,7 +11,6 @@ import ProductFilters from "@/components/ProductGallery/ProductFilters";
 import { ProductPagination } from "@/components/ProductGallery/ProductPagination";
 import { parseISO, isWithinInterval } from "date-fns";
 import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
-import { ProcessingRepairButton } from "@/components/ProductGallery/ProcessingRepairButton";
 import { MediaFixButton } from "@/components/ProductGallery/MediaFixButton";
 
 const ITEMS_PER_PAGE = 12;
@@ -269,7 +269,6 @@ const PublicGallery = () => {
         <>
           {user && (
             <div className="flex space-x-4">
-              <ProcessingRepairButton />
               <MediaFixButton />
             </div>
           )}

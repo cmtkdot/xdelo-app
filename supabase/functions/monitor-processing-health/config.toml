@@ -1,9 +1,0 @@
-
-project_id = "xjhhehxcxkiumnwbirel"
-template = "typescript"
-memory = 256 # MB
-verify_jwt = false
-entrypoint = "/index.ts"
-
-# Function will timeout after 10 seconds
-timeout_seconds = 10
