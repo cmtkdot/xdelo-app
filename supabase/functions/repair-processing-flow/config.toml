@@ -10,3 +10,4 @@ entrypoint = "/index.ts"
 
 # Function will timeout after 15 seconds
 timeout_seconds = 15
+

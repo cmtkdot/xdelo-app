@@ -1,3 +1,4 @@
 
 project_id = "xjhhehxcxkiumnwbirel"
-verify_jwt = true
+verify_jwt = false
+

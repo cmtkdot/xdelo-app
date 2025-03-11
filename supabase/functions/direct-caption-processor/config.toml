@@ -13,3 +13,4 @@ create = "ALTER TYPE audit_event_type ADD VALUE IF NOT EXISTS 'direct_caption_pr
 [triggers]
 database_messages_insert = "INSERT ON messages WHERE caption IS NOT NULL AND caption != ''"
 database_messages_update = "UPDATE OF caption ON messages WHERE caption IS NOT NULL AND caption != ''"
+
