@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Message } from '@/types';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -9,7 +8,6 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/generalUtils';
 import { messageToMediaItem } from './types';
 import { MediaFixButton } from './MediaFixButton';
-
 interface MediaViewerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -20,7 +18,6 @@ interface MediaViewerProps {
   hasNext?: boolean;
   editMode?: boolean;
 }
-
 export const MediaViewer = ({
   isOpen,
   onClose,
@@ -34,7 +31,6 @@ export const MediaViewer = ({
   const [showTools, setShowTools] = useState(false);
   const mainMedia = currentGroup?.find(media => media?.is_original_caption) || currentGroup?.[0];
   const analyzedContent = mainMedia?.analyzed_content;
-
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
     try {
@@ -43,19 +39,16 @@ export const MediaViewer = ({
       return '';
     }
   };
-
   const handlePrevious = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (onPrevious && hasPrevious) onPrevious();
   };
-
   const handleNext = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (onNext && hasNext) onNext();
   };
-
   const handleToolsComplete = () => {
     // Optionally refresh data or close tools panel
     setShowTools(false);
@@ -65,12 +58,9 @@ export const MediaViewer = ({
   if (!currentGroup || currentGroup.length === 0) {
     return null;
   }
-
   const mediaItems = currentGroup.map(message => messageToMediaItem(message));
   const messageIds = currentGroup.map(message => message.id);
-
-  return (
-    <Dialog open={isOpen} onOpenChange={() => onClose()}>
+  return <Dialog open={isOpen} onOpenChange={() => onClose()}>
       <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] h-auto p-0 overflow-y-auto">
         <DialogTitle className="sr-only">Media Viewer</DialogTitle>
         
@@ -80,108 +70,72 @@ export const MediaViewer = ({
               <ImageSwiper media={mediaItems} />
               
               <div className="absolute inset-0 flex items-center justify-between px-4 pointer-events-none">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handlePrevious}
-                  disabled={!hasPrevious}
-                  className={cn(
-                    "pointer-events-auto rounded-full bg-background/80 hover:bg-background/90 backdrop-blur",
-                    !hasPrevious && "opacity-0"
-                  )}
-                >
+                <Button variant="outline" size="icon" onClick={handlePrevious} disabled={!hasPrevious} className={cn("pointer-events-auto rounded-full bg-background/80 hover:bg-background/90 backdrop-blur", !hasPrevious && "opacity-0")}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleNext}
-                  disabled={!hasNext}
-                  className={cn(
-                    "pointer-events-auto rounded-full bg-background/80 hover:bg-background/90 backdrop-blur",
-                    !hasNext && "opacity-0"
-                  )}
-                >
+                <Button variant="outline" size="icon" onClick={handleNext} disabled={!hasNext} className={cn("pointer-events-auto rounded-full bg-background/80 hover:bg-background/90 backdrop-blur", !hasNext && "opacity-0")}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
               
               {/* Media tools toggle button */}
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setShowTools(!showTools)}
-                className="absolute top-4 right-4 rounded-full bg-background/80 hover:bg-background/90 backdrop-blur"
-              >
+              <Button variant="outline" size="icon" onClick={() => setShowTools(!showTools)} className="absolute top-4 right-4 rounded-full bg-background/80 hover:bg-background/90 backdrop-blur">
                 <Settings className="h-4 w-4" />
               </Button>
             </div>
           </div>
           
           {/* Media tools panel */}
-          {showTools && (
-            <div className="p-4 bg-muted/20 border-b">
+          {showTools && <div className="p-4 bg-muted/20 border-b">
               <div className="flex justify-between items-center">
                 <h3 className="text-sm font-medium">Media Tools</h3>
                 <MediaFixButton messageIds={messageIds} onComplete={handleToolsComplete} />
               </div>
-            </div>
-          )}
+            </div>}
 
           <div className="p-6 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {mainMedia?.purchase_order && (
-                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+              {mainMedia?.purchase_order && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
                   <Tag className="w-5 h-5 text-primary" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-muted-foreground">Order ID</p>
                     <p className="text-base font-medium truncate">{mainMedia.purchase_order}</p>
                   </div>
-                </div>
-              )}
+                </div>}
               
-              {analyzedContent?.product_name && (
-                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+              {analyzedContent?.product_name && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
                   <Tag className="w-5 h-5 text-primary" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-muted-foreground">Product</p>
                     <p className="text-base font-medium truncate">{analyzedContent.product_name}</p>
                   </div>
-                </div>
-              )}
+                </div>}
               
-              {analyzedContent?.quantity && (
-                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+              {analyzedContent?.quantity && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
                   <Package className="w-5 h-5 text-primary" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-muted-foreground">Quantity</p>
                     <p className="text-base font-medium truncate">{analyzedContent.quantity}</p>
                   </div>
-                </div>
-              )}
+                </div>}
 
-              {analyzedContent?.vendor_uid && (
-                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+              {analyzedContent?.vendor_uid && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
                   <Tag className="w-5 h-5 text-primary" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-muted-foreground">Vendor</p>
                     <p className="text-base font-medium truncate">{analyzedContent.vendor_uid}</p>
                   </div>
-                </div>
-              )}
+                </div>}
               
-              {analyzedContent?.product_code && (
-                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+              {analyzedContent?.product_code && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
                   <Tag className="w-5 h-5 text-primary" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-muted-foreground">Product Code</p>
                     <p className="text-base font-medium truncate">{analyzedContent.product_code}</p>
                   </div>
-                </div>
-              )}
+                </div>}
 
-              {analyzedContent?.purchase_date && (
-                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+              {analyzedContent?.purchase_date && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
                   <Calendar className="w-5 h-5 text-primary" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-muted-foreground">Purchase Date</p>
@@ -189,11 +143,9 @@ export const MediaViewer = ({
                       {formatDate(analyzedContent.purchase_date)}
                     </p>
                   </div>
-                </div>
-              )}
+                </div>}
               
-              {analyzedContent?.unit_price && (
-                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+              {analyzedContent?.unit_price && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
                   <Tag className="w-5 h-5 text-primary" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-muted-foreground">Unit Price</p>
@@ -201,11 +153,9 @@ export const MediaViewer = ({
                       ${analyzedContent.unit_price.toFixed(2)}
                     </p>
                   </div>
-                </div>
-              )}
+                </div>}
               
-              {analyzedContent?.total_price && (
-                <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+              {analyzedContent?.total_price && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
                   <Tag className="w-5 h-5 text-primary" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-muted-foreground">Total Price</p>
@@ -213,18 +163,14 @@ export const MediaViewer = ({
                       ${analyzedContent.total_price.toFixed(2)}
                     </p>
                   </div>
-                </div>
-              )}
+                </div>}
             </div>
 
-            {mainMedia?.caption && (
-              <div className="mt-4 p-4 bg-secondary/5 rounded-lg">
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{mainMedia.caption}</p>
-              </div>
-            )}
+            {mainMedia?.caption && <div className="mt-4 p-4 bg-secondary/5 rounded-lg">
+                <p className="text-muted-foreground whitespace-pre-wrap text-lg font-semibold text-center">{mainMedia.caption}</p>
+              </div>}
           </div>
         </div>
       </DialogContent>
-    </Dialog>
-  );
-}
+    </Dialog>;
+};
