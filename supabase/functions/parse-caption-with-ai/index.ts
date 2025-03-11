@@ -16,6 +16,7 @@ import {
   logErrorToDatabase,
   updateMessageWithError
 } from '../_shared/errorHandler.ts';
+import { SecurityLevel } from '../_shared/jwt-verification.ts';
 
 const supabaseClient = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -194,4 +195,13 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
   }
 };
 
-serve(withErrorHandling('parse-caption-with-ai', handleCaptionAnalysis));
+// Use the withErrorHandling wrapper with the SecurityLevel.PUBLIC for backward compatibility
+// We could change this to AUTHENTICATED if we want to restrict access
+serve(withErrorHandling(
+  'parse-caption-with-ai', 
+  handleCaptionAnalysis, 
+  { 
+    securityLevel: SecurityLevel.PUBLIC,  // Keep backward compatibility
+    bypassForServiceRole: true            // Allow service role tokens to bypass
+  }
+));

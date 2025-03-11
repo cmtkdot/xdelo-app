@@ -1,5 +1,6 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { SecurityLevel, JwtVerificationOptions, verifyJWT } from './jwt-verification.ts';
 
 export interface ErrorLoggingOptions {
   messageId?: string;
@@ -67,7 +68,11 @@ export async function updateMessageWithError(
 }
 
 // Error handling wrapper for edge functions
-export function withErrorHandling(functionName: string, handler: Function) {
+export function withErrorHandling(
+  functionName: string, 
+  handler: Function, 
+  jwtOptions?: Partial<JwtVerificationOptions>
+) {
   return async (req: Request) => {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
@@ -82,6 +87,51 @@ export function withErrorHandling(functionName: string, handler: Function) {
     
     const correlationId = crypto.randomUUID();
     
+    // If JWT verification is enabled, perform it
+    if (jwtOptions) {
+      const { isAuthorized, error } = await verifyJWT(req, jwtOptions);
+      
+      if (!isAuthorized) {
+        console.error(`Unauthorized access attempt to ${functionName}:`, error);
+        
+        // Create Supabase client for error logging
+        const supabaseClient = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+        
+        // Log the unauthorized access attempt
+        try {
+          await supabaseClient.from('unified_audit_logs').insert({
+            event_type: 'unauthorized_access_attempt',
+            error_message: error,
+            correlation_id: correlationId,
+            metadata: {
+              function_name: functionName,
+              request_method: req.method,
+              request_url: req.url
+            },
+            event_timestamp: new Date().toISOString()
+          });
+        } catch (logError) {
+          console.error('Failed to log unauthorized access:', logError);
+        }
+        
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Unauthorized',
+            message: error,
+            correlation_id: correlationId
+          }),
+          { 
+            status: 401, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
+      }
+    }
+    
     try {
       return await handler(req, correlationId);
     } catch (error) {
@@ -94,16 +144,21 @@ export function withErrorHandling(functionName: string, handler: Function) {
       );
       
       // Log the error to database
-      await logErrorToDatabase(supabaseClient, {
-        errorMessage: error.message,
-        correlationId,
-        functionName,
-        metadata: {
-          error_stack: error.stack,
-          request_method: req.method,
-          request_url: req.url
-        }
-      });
+      try {
+        await supabaseClient.from('unified_audit_logs').insert({
+          event_type: `${functionName}_error`,
+          error_message: error.message,
+          correlation_id: correlationId,
+          metadata: {
+            error_stack: error.stack,
+            request_method: req.method,
+            request_url: req.url
+          },
+          event_timestamp: new Date().toISOString()
+        });
+      } catch (logError) {
+        console.error('Failed to log error:', logError);
+      }
       
       // Return error response
       return new Response(

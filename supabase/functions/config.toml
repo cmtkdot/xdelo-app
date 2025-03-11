@@ -18,7 +18,7 @@ verify_jwt = false
 no_public_access = true
 
 [functions.delete-telegram-message]
-verify_jwt = false
+verify_jwt = true
 no_public_access = true
 
 [functions.generic-webhook]
@@ -26,7 +26,7 @@ verify_jwt = false
 no_public_access = false
 
 [functions.openai-request]
-verify_jwt = false
+verify_jwt = true
 no_public_access = true
 
 [functions.parse-caption-with-ai]
@@ -48,3 +48,7 @@ no_public_access = false
 [functions.xdelo_sync_media_group]
 verify_jwt = false
 no_public_access = true
+
+[functions.user-data]
+verify_jwt = true
+no_public_access = false

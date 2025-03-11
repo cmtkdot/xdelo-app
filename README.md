@@ -286,6 +286,41 @@ The system uses:
    - Database migrations for schema changes
    - Scheduled job configuration via SQL
 
+## Security and Authentication
+
+The system implements a flexible JWT verification model:
+
+1. **Security Levels**:
+   - `PUBLIC`: No JWT verification required
+   - `AUTHENTICATED`: Requires a valid user JWT
+   - `SERVICE_ROLE`: Requires a service role JWT
+
+2. **JWT Verification Options**:
+   - `fallbackToPublic`: Optional fallback to public access when JWT verification fails
+   - `bypassForServiceRole`: Allows service role tokens to bypass regular security checks
+
+3. **Implementation**:
+   - Shared JWT verification utility across all edge functions
+   - Integration with error handling middleware
+   - Configuration via function's `config.toml` and code-level options
+
+4. **Usage**:
+   ```typescript
+   // Example of using the secure handler with AUTHENTICATED level:
+   serve(withErrorHandling(
+     'function-name', 
+     handlerFunction, 
+     { 
+       securityLevel: SecurityLevel.AUTHENTICATED,
+       fallbackToPublic: false
+     }
+   ));
+   ```
+
+5. **Function Configuration**:
+   - Function-specific security in `config.toml` using `verify_jwt` flag
+   - Granular control over which functions require authentication
+
 ## Recent Improvements
 
 Recent system enhancements include:
@@ -300,7 +335,13 @@ Recent system enhancements include:
    - Optimized database indexes for faster queries
    - Reduced latency in media group synchronization
 
-3. **Maintenance Features**:
+3. **Security Enhancements**:
+   - Flexible JWT authentication system
+   - Multiple security levels with fallback options
+   - Comprehensive error logging
+   - Access control based on token roles
+
+4. **Maintenance Features**:
    - Automated health checks
    - Self-healing capabilities
    - Comprehensive audit logging
