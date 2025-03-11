@@ -3465,6 +3465,12 @@ export type Database = {
         }
         Returns: boolean
       }
+      xdelo_parse_caption: {
+        Args: {
+          p_caption: string
+        }
+        Returns: Json
+      }
       xdelo_process_pending_messages: {
         Args: {
           limit_count?: number
