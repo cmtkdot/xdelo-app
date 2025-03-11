@@ -2,6 +2,9 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '../types';
 
+/**
+ * Logs a single sync operation to the sync_logs table
+ */
 export async function logSyncOperation(
   supabase: SupabaseClient<Database>,
   operation: string,
@@ -22,6 +25,9 @@ export async function logSyncOperation(
   }
 }
 
+/**
+ * Logs multiple sync operations in a single batch insert
+ */
 export async function logSyncOperationBatch(
   supabase: SupabaseClient<Database>,
   operations: Array<{
@@ -46,6 +52,9 @@ export async function logSyncOperationBatch(
   }
 }
 
+/**
+ * Logs a warning message to the sync_logs table
+ */
 export async function logSyncWarning(
   supabase: SupabaseClient<Database>,
   message: string,

@@ -3111,6 +3111,10 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_begin_transaction: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       xdelo_check_media_group_content: {
         Args: {
           p_media_group_id: string
@@ -3147,6 +3151,14 @@ export type Database = {
         Returns: {
           deleted_count: number
         }[]
+      }
+      xdelo_commit_transaction_with_sync: {
+        Args: {
+          p_message_id: string
+          p_media_group_id: string
+          p_correlation_id: string
+        }
+        Returns: Json
       }
       xdelo_complete_message_processing: {
         Args: {
@@ -3258,6 +3270,14 @@ export type Database = {
           p_file_unique_id: string
           p_telegram_message_id: number
           p_chat_id: number
+          p_correlation_id?: string
+        }
+        Returns: Json
+      }
+      xdelo_handle_failed_caption_analysis: {
+        Args: {
+          p_message_id: string
+          p_error_message: string
           p_correlation_id?: string
         }
         Returns: Json
@@ -3433,6 +3453,14 @@ export type Database = {
           p_error?: string
         }
         Returns: undefined
+      }
+      xdelo_update_message_with_analyzed_content: {
+        Args: {
+          p_message_id: string
+          p_analyzed_content: Json
+          p_correlation_id?: string
+        }
+        Returns: Json
       }
       xdelo_validate_file_storage: {
         Args: {

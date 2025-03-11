@@ -1,122 +1,66 @@
 
-import { corsHeaders } from './cors.ts';
-
-type ErrorHandlerFunction = (
-  req: Request, 
-  correlationId: string
-) => Promise<Response>;
-
-/**
- * Wraps a handler function with standardized error handling
- */
-export function withErrorHandling(
-  functionName: string,
-  handlerFn: ErrorHandlerFunction
-) {
+// This handles wrapping edge functions with standardized error handling
+export const withErrorHandling = (funcName: string, handler: (req: Request, correlationId: string) => Promise<Response>) => {
   return async (req: Request) => {
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    };
+
     // Handle CORS preflight requests
     if (req.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
+      return new Response('ok', { headers: corsHeaders });
     }
 
+    // Generate a correlation ID for tracking this request
     const correlationId = crypto.randomUUID();
-    const startTime = Date.now();
+    const startTime = performance.now();
 
     try {
-      console.log(`Starting ${functionName} with correlation ID: ${correlationId}`);
+      console.log(`${funcName} started with correlation ID: ${correlationId}`);
+      const response = await handler(req, correlationId);
       
-      // Call the handler with correlation ID
-      const response = await handlerFn(req, correlationId);
+      // Add correlation ID and timing headers
+      const headers = new Headers(response.headers);
+      headers.set('X-Correlation-ID', correlationId);
+      headers.set('X-Processing-Time', `${(performance.now() - startTime).toFixed(2)}ms`);
       
-      // Add performance metrics headers
-      const enhancedResponse = new Response(response.body, {
+      // Add CORS headers
+      Object.entries(corsHeaders).forEach(([key, value]) => {
+        headers.set(key, value);
+      });
+      
+      console.log(`${funcName} completed successfully in ${(performance.now() - startTime).toFixed(2)}ms`);
+      
+      return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
-        headers: new Headers(response.headers)
+        headers
       });
-      
-      enhancedResponse.headers.set('X-Correlation-ID', correlationId);
-      enhancedResponse.headers.set('X-Processing-Time', `${Date.now() - startTime}ms`);
-      enhancedResponse.headers.set('X-Function-Name', functionName);
-      
-      // Ensure CORS headers are applied
-      Object.entries(corsHeaders).forEach(([key, value]) => {
-        enhancedResponse.headers.set(key, value);
-      });
-      
-      return enhancedResponse;
     } catch (error) {
-      console.error(`Error in ${functionName}:`, error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const stackTrace = error instanceof Error ? error.stack : 'No stack trace';
       
-      // Create a standardized error response
+      console.error(`${funcName} error: ${errorMessage}`);
+      console.error(`Stack trace: ${stackTrace}`);
+      
+      // Create an error response with CORS headers and correlation ID
+      const errorHeaders = new Headers(corsHeaders);
+      errorHeaders.set('X-Correlation-ID', correlationId);
+      errorHeaders.set('X-Processing-Time', `${(performance.now() - startTime).toFixed(2)}ms`);
+      
       return new Response(
         JSON.stringify({
-          success: false,
-          error: error.message,
-          errorType: error.name || 'UnknownError',
+          error: errorMessage,
           correlation_id: correlationId,
-          function: functionName
+          function: funcName,
+          timestamp: new Date().toISOString()
         }),
         {
           status: 500,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json',
-            'X-Correlation-ID': correlationId,
-            'X-Processing-Time': `${Date.now() - startTime}ms`,
-            'X-Function-Name': functionName
-          }
+          headers: errorHeaders
         }
       );
     }
   };
-}
-
-// Log error to database
-export async function logErrorToDatabase(
-  supabaseClient: any,
-  errorInfo: {
-    messageId: string,
-    errorMessage: string,
-    correlationId: string,
-    errorType?: string,
-    functionName?: string
-  }
-) {
-  try {
-    await supabaseClient.from('unified_audit_logs').insert({
-      event_type: 'function_error',
-      entity_id: errorInfo.messageId,
-      error_message: errorInfo.errorMessage,
-      correlation_id: errorInfo.correlationId,
-      metadata: {
-        error_type: errorInfo.errorType || 'UnknownError',
-        function_name: errorInfo.functionName || 'unspecified',
-        timestamp: new Date().toISOString()
-      },
-      event_timestamp: new Date().toISOString()
-    });
-  } catch (logError) {
-    console.error('Failed to log error to database:', logError);
-  }
-}
-
-// Update message with error state
-export async function updateMessageWithError(
-  supabaseClient: any,
-  messageId: string,
-  errorMessage: string,
-  correlationId?: string
-) {
-  try {
-    await supabaseClient.from('messages').update({
-      processing_state: 'error',
-      error_message: errorMessage,
-      last_error_at: new Date().toISOString(),
-      retry_count: supabaseClient.sql`COALESCE(retry_count, 0) + 1`,
-      processing_correlation_id: correlationId
-    }).eq('id', messageId);
-  } catch (updateError) {
-    console.error('Failed to update message with error state:', updateError);
-  }
-}
+};

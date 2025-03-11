@@ -93,7 +93,12 @@ export function useCaptionSync() {
         .from('messages')
         .update({ 
           caption: newCaption,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          // Reset these fields to ensure they get properly processed
+          analyzed_content: null,
+          processing_state: 'pending',
+          group_caption_synced: false,
+          is_original_caption: true
         })
         .eq('id', message.id);
       
@@ -104,15 +109,17 @@ export function useCaptionSync() {
       // Then trigger analysis and sync
       const correlationId = crypto.randomUUID();
       
+      // Directly invoke the manual-caption-parser for immediate processing
       const { data: parsingData, error: parsingError } = await supabase.functions.invoke(
-        'parse-caption-with-ai',
+        'manual-caption-parser',
         {
           body: {
             messageId: message.id,
             caption: newCaption,
             media_group_id: message.media_group_id,
             correlationId,
-            isEdit: true
+            isEdit: true,
+            trigger_source: 'caption_edit_ui'
           }
         }
       );
@@ -121,15 +128,25 @@ export function useCaptionSync() {
         throw new Error(`Failed to analyze caption: ${parsingError.message}`);
       }
       
-      // Finally sync to media group if applicable
+      // Create a new message object with the updated caption
+      const updatedMessage = {
+        ...message,
+        caption: newCaption,
+        is_original_caption: true,
+        processing_state: 'completed'
+      };
+      
+      // Explicitly sync to media group with a small delay 
+      // to ensure the analysis has completed
       if (message.media_group_id) {
-        // Create a new message object with the updated caption
-        const updatedMessage: Message = {
-          ...message,
-          caption: newCaption
-        };
-        
-        await syncMediaGroupContent(updatedMessage);
+        // Short timeout to ensure analysis is complete
+        setTimeout(async () => {
+          try {
+            await syncMediaGroupContent(updatedMessage as Message);
+          } catch (syncError) {
+            console.error('Delayed sync error:', syncError);
+          }
+        }, 1000);
       }
       
       toast({

@@ -13,13 +13,20 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [
-    react(),
+    react({
+      // Explicitly enable SWC plugins
+      jsxImportSource: undefined,
+      tsDecorators: false,
+      plugins: [['@swc/plugin-styled-components', {}]],
+    }),
     mode === 'development' && componentTagger(),
   ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    // Prevent multiple instances of React
+    dedupe: ['react', 'react-dom']
   },
   build: {
     sourcemap: true,
@@ -37,6 +44,6 @@ export default defineConfig(({ mode }) => ({
     },
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom'],
+    include: ['react', 'react-dom', 'react-router-dom']
   },
 }));
