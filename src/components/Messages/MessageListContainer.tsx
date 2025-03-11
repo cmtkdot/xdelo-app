@@ -29,12 +29,12 @@ export const MessageListContainer: React.FC = () => {
     lastRefresh,
     handleRefresh
   } = useRealTimeMessages({ 
-    filter: searchTerm,
-    processingState: filters.processingState as ProcessingState[] | undefined,
-    sortBy: filters.sortBy,
-    sortOrder: filters.sortOrder,
-    showForwarded: filters.showForwarded,
-    showEdited: filters.showEdited
+    search: searchTerm,
+    processingStates: filters.processingState as ProcessingState[] | undefined,
+    sortField: filters.sortBy,
+    sort: filters.sortOrder,
+    excludeForwarded: !filters.showForwarded,
+    excludeEdited: !filters.showEdited
   });
   
   const { 
@@ -54,7 +54,7 @@ export const MessageListContainer: React.FC = () => {
     setShowFilters(!showFilters);
   };
 
-  const handleRetryProcessing = async (messageId) => {
+  const handleRetryProcessing = async (messageId: string) => {
     try {
       await processMessageById(messageId);
       handleRefresh();

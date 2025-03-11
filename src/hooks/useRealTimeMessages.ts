@@ -2,10 +2,35 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Message, FilterOptions, ProcessingStateType } from '@/types';
+import { Message, ProcessingState } from '@/types';
+
+// Define the FilterOptions interface since it's missing from types.ts
+interface FilterOptions {
+  limit?: number;
+  offset?: number;
+  search?: string;
+  sort?: 'asc' | 'desc';
+  sortField?: string;
+  chatId?: number;
+  vendorId?: string;
+  mediaGroupId?: string;
+  processingStates?: ProcessingState[];
+  startDate?: string;
+  endDate?: string;
+  hasCaption?: boolean;
+  excludeForwarded?: boolean;
+  excludeEdited?: boolean;
+  hasError?: boolean;
+  hasMediaGroup?: boolean;
+  needsRedownload?: boolean;
+  fileUniqueId?: string;
+  [key: string]: any;
+}
 
 export function useRealTimeMessages(options: FilterOptions = {}) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const {
     limit = 30,
@@ -40,7 +65,7 @@ export function useRealTimeMessages(options: FilterOptions = {}) {
     chatId,
     vendorId,
     mediaGroupId,
-    processingStates,
+    processingStates ? processingStates.join(',') : null,
     startDate,
     endDate,
     hasCaption,
@@ -50,11 +75,14 @@ export function useRealTimeMessages(options: FilterOptions = {}) {
     hasMediaGroup,
     needsRedownload,
     fileUniqueId,
-    ...Object.values(otherOptions)
-  ];
+    // Only include non-undefined values from otherOptions
+    ...Object.entries(otherOptions)
+      .filter(([_, value]) => value !== undefined)
+      .map(([key, value]) => `${key}:${value}`)
+  ].filter(Boolean); // Filter out null and undefined values
 
   // Include the actual processing states in the filter
-  const stateFilterParam = processingStates || ['initialized', 'pending', 'processing', 'completed', 'error', 'partial_success'] as ProcessingStateType[];
+  const stateFilterParam = processingStates || ['initialized', 'pending', 'processing', 'completed', 'error', 'partial_success'] as ProcessingState[];
 
   // Query to fetch messages
   const { data, isLoading, error, refetch } = useQuery({
@@ -143,10 +171,11 @@ export function useRealTimeMessages(options: FilterOptions = {}) {
         throw error;
       }
       
-      return data || [];
+      return data as Message[];
     }
   });
 
+  // Handle data update when query data changes
   useEffect(() => {
     if (data) {
       setMessages(data);
@@ -165,7 +194,6 @@ export function useRealTimeMessages(options: FilterOptions = {}) {
         console.log('Realtime update received:', payload);
         
         // Only refetch when a message that matches our criteria changes
-        // This is a simplified approach; for production you might want to update the cache directly
         refetch();
       })
       .subscribe();
@@ -175,10 +203,26 @@ export function useRealTimeMessages(options: FilterOptions = {}) {
     };
   }, [refetch, queryKey.join()]);
 
+  // Add a function to manually refresh data
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+      setLastRefresh(new Date());
+    } catch (error) {
+      console.error('Error refreshing messages:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return {
     messages,
     isLoading,
     error,
-    refetch
+    refetch,
+    isRefreshing,
+    lastRefresh,
+    handleRefresh
   };
 }
