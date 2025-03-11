@@ -48,8 +48,7 @@ export function useRealTimeMessages({
       
       // Apply processing state filter if provided
       if (processingState && processingState.length > 0) {
-        // Cast to string[] to satisfy TypeScript
-        query = query.in('processing_state', processingState as string[]);
+        query = query.in('processing_state', processingState as ProcessingState[]);
       }
       
       // Only show forwarded messages if requested
@@ -68,7 +67,7 @@ export function useRealTimeMessages({
         throw error;
       }
       
-      setMessages(data || []);
+      setMessages(data as Message[]);
       setLastRefresh(new Date());
     } catch (error) {
       console.error('Error fetching messages:', error);

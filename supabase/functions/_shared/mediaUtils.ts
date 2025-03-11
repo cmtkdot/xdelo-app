@@ -1,4 +1,3 @@
-
 // @ts-ignore - Allow Deno global
 declare const Deno: any;
 
@@ -261,7 +260,9 @@ export async function xdelo_repairContentDisposition(storagePath: string): Promi
   }
 }
 
-// Determine if an extension is viewable in browser
+/**
+ * Determine if an extension is viewable in browser
+ */
 export function xdelo_isViewableExtension(extension: string): boolean {
   const viewableExtensions = [
     'jpeg', 'jpg', 'png', 'gif', 'webp', 'svg',
