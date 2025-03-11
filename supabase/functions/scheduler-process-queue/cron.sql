@@ -87,6 +87,56 @@ select cron.schedule(
   $$
 );
 
+-- Add health monitoring job to run every hour
+select cron.schedule(
+  'monitor-processing-health',
+  '0 * * * *',
+  $$
+  -- Get system health metrics
+  WITH health_metrics AS (
+    SELECT xdelo_get_message_processing_stats() AS metrics
+  ),
+  -- If there are stuck processes, try to repair them
+  repair_action AS (
+    SELECT 
+      CASE 
+        WHEN (metrics->'media_group_stats'->>'stuck_in_processing')::int > 0 
+             OR (metrics->'media_group_stats'->>'orphaned_media_group_messages')::int > 0
+        THEN 
+          http_post(
+            current_setting('app.settings.supabase_functions_url') || '/functions/v1/repair-processing-flow',
+            jsonb_build_object(
+              'limit', 20,
+              'repair_enums', true,
+              'force_reset_stalled', true
+            ),
+            jsonb_build_object(
+              'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key'),
+              'Content-Type', 'application/json'
+            )
+          )
+        ELSE NULL
+      END as repair_result
+    FROM health_metrics
+  )
+  -- Log the health check
+  INSERT INTO unified_audit_logs (
+    event_type,
+    metadata,
+    event_timestamp
+  )
+  SELECT 
+    'processing_health_monitoring',
+    jsonb_build_object(
+      'metrics', metrics,
+      'repair_triggered', repair_result IS NOT NULL,
+      'timestamp', NOW()
+    ),
+    NOW()
+  FROM health_metrics, repair_action;
+  $$
+);
+
 -- Add a new job to cleanup old logs and maintenance tasks weekly
 select cron.schedule(
   'maintenance-cleanup',

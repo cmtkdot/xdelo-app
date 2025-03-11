@@ -668,7 +668,7 @@ export type Database = {
           last_modified_at: string | null
           last_sync_time: string | null
           main_date_of_sale: string | null
-          main_line_total: number | null
+          main_line_total: string | null
           main_product_sale_note: string | null
           main_qty_sold: number | null
           main_renamed_product_name: string | null
@@ -690,7 +690,7 @@ export type Database = {
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_sale?: string | null
-          main_line_total?: number | null
+          main_line_total?: string | null
           main_product_sale_note?: string | null
           main_qty_sold?: number | null
           main_renamed_product_name?: string | null
@@ -712,7 +712,7 @@ export type Database = {
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_sale?: string | null
-          main_line_total?: number | null
+          main_line_total?: string | null
           main_product_sale_note?: string | null
           main_qty_sold?: number | null
           main_renamed_product_name?: string | null
@@ -743,7 +743,7 @@ export type Database = {
           main_invoice_total: number | null
           main_invoice_uid: string | null
           main_notes: string | null
-          main_processed: boolean | null
+          main_processed: string | null
           main_submitted_timestamp: string | null
           main_user_email: string | null
           rowids_accountsid_new: string | null
@@ -765,7 +765,7 @@ export type Database = {
           main_invoice_total?: number | null
           main_invoice_uid?: string | null
           main_notes?: string | null
-          main_processed?: boolean | null
+          main_processed?: string | null
           main_submitted_timestamp?: string | null
           main_user_email?: string | null
           rowids_accountsid_new?: string | null
@@ -787,7 +787,7 @@ export type Database = {
           main_invoice_total?: number | null
           main_invoice_uid?: string | null
           main_notes?: string | null
-          main_processed?: boolean | null
+          main_processed?: string | null
           main_submitted_timestamp?: string | null
           main_user_email?: string | null
           rowids_accountsid_new?: string | null

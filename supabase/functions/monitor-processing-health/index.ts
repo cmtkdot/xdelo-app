@@ -1,89 +1,118 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from "../_shared/cors.ts";
-import { withErrorHandling } from "../_shared/errorHandler.ts";
 
-const supabase = createClient(
+// Create Supabase client
+const supabaseClient = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-const getMessageProcessingHealth = async (req: Request, correlationId: string) => {
+// Main handler
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   try {
-    // Get counts of messages by processing state
-    const { data: stateData, error: stateError } = await supabase.rpc(
-      'xdelo_get_processing_state_stats'
+    const { trigger_repair = false } = await req.json().catch(() => ({}));
+    const correlationId = crypto.randomUUID();
+    
+    console.log(`Starting processing health monitoring, correlation ID: ${correlationId}`);
+    
+    // Get system health metrics
+    const { data: healthMetrics, error: healthError } = await supabaseClient.rpc(
+      'xdelo_get_message_processing_stats'
     );
     
-    if (stateError) throw new Error(`Error getting state stats: ${stateError.message}`);
+    if (healthError) {
+      throw new Error(`Error getting processing health metrics: ${healthError.message}`);
+    }
     
-    // Get stats on error rates
-    const { data: errorData, error: errorStatsError } = await supabase.rpc(
-      'xdelo_get_error_stats'
-    );
+    console.log(`Processing health metrics:`, healthMetrics);
     
-    if (errorStatsError) throw new Error(`Error getting error stats: ${errorStatsError.message}`);
+    // Check if repair is needed or requested
+    const stuckProcessing = healthMetrics?.media_group_stats?.stuck_in_processing || 0;
+    const orphanedMessages = healthMetrics?.media_group_stats?.orphaned_media_group_messages || 0;
+    const needsRepair = stuckProcessing > 0 || orphanedMessages > 0;
     
-    // Get media group health stats
-    const { data: mediaGroupData, error: mediaGroupError } = await supabase.rpc(
-      'xdelo_get_media_group_health'
-    );
+    let repairResult = null;
     
-    if (mediaGroupError) throw new Error(`Error getting media group health: ${mediaGroupError.message}`);
-    
-    // Get processing times
-    const { data: timingData, error: timingError } = await supabase.rpc(
-      'xdelo_get_processing_time_stats'
-    );
-    
-    if (timingError) throw new Error(`Error getting timing stats: ${timingError.message}`);
-    
-    // Combined health report
-    const healthReport = {
-      states: stateData,
-      errors: errorData,
-      mediaGroups: mediaGroupData,
-      timing: timingData,
-      timestamp: new Date().toISOString(),
-      correlation_id: correlationId
-    };
+    // Trigger repair if needed and requested
+    if ((needsRepair || trigger_repair) && !req.headers.get('x-prevent-repair')) {
+      console.log(`Triggering processing system repair due to: stuck=${stuckProcessing}, orphaned=${orphanedMessages}`);
+      
+      const { data, error } = await supabaseClient.functions.invoke(
+        'repair-processing-flow',
+        {
+          body: { 
+            limit: 20,
+            repair_enums: true,
+            force_reset_stalled: true,
+            trigger_source: 'health_monitor'
+          }
+        }
+      );
+      
+      if (error) {
+        console.error(`Error during repair: ${error.message}`);
+      } else {
+        repairResult = data;
+        console.log(`Repair completed:`, repairResult);
+      }
+    }
     
     // Log the health check
-    await supabase.from('unified_audit_logs').insert({
-      event_type: 'health_check_performed',
+    await supabaseClient.from('unified_audit_logs').insert({
+      event_type: 'processing_health_monitoring',
       correlation_id: correlationId,
-      metadata: healthReport,
+      metadata: {
+        health_metrics: healthMetrics,
+        needs_repair: needsRepair,
+        repair_triggered: repairResult !== null,
+        repair_result: repairResult,
+        trigger_repair_requested: trigger_repair
+      },
       event_timestamp: new Date().toISOString()
     });
     
     return new Response(
       JSON.stringify({
         success: true,
-        data: healthReport
+        correlation_id: correlationId,
+        health_metrics: healthMetrics,
+        needs_repair: needsRepair,
+        repair_triggered: repairResult !== null,
+        repair_result: repairResult
       }),
-      { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache'
-        }
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error in health check:', error);
+    console.error('Error in monitor-processing-health:', error);
+    
+    // Log the error
+    try {
+      await supabaseClient.from('unified_audit_logs').insert({
+        event_type: 'health_monitoring_error',
+        error_message: error.message,
+        metadata: {
+          error_stack: error.stack,
+          timestamp: new Date().toISOString()
+        },
+        event_timestamp: new Date().toISOString()
+      });
+    } catch (logError) {
+      console.warn('Failed to log monitoring error:', logError);
+    }
     
     return new Response(
       JSON.stringify({
         success: false,
         error: error.message
       }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-};
-
-serve(withErrorHandling('monitor-processing-health', getMessageProcessingHealth));
+});

@@ -3,6 +3,7 @@ import { useMessageAnalysis } from './useMessageAnalysis';
 import { useMessageQueue } from './useMessageQueue';
 import { useMediaGroupRepair } from './useMediaGroupRepair';
 import { useProcessingSystemRepair } from './useProcessingSystemRepair';
+import { useProcessingHealth } from './useProcessingHealth';
 
 /**
  * Unified hook that combines all message processing functionality
@@ -16,9 +17,13 @@ export function useMessageProcessing() {
   const { 
     repairProcessingSystem, 
     repairStuckMessages, 
-    getProcessingStats, 
     isRepairing 
   } = useProcessingSystemRepair();
+  const {
+    diagnoseProcessingHealth,
+    processingStats,
+    isLoading: isHealthCheckLoading
+  } = useProcessingHealth();
 
   return {
     // Message analysis
@@ -35,8 +40,12 @@ export function useMessageProcessing() {
     repairProcessingSystem,
     repairStuckMessages,
     
+    // Health monitoring
+    diagnoseProcessingHealth,
+    processingStats,
+    
     // System status
-    getProcessingStats,
-    isRepairing
+    isRepairing,
+    isHealthCheckLoading
   };
 }
