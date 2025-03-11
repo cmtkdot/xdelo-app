@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AccountCard } from "@/components/Settings/AccountCard";
 import { TelegramCard } from "@/components/Settings/TelegramCard";
 import { SyncCard } from "@/components/Settings/SyncCard";
+import { DangerZoneCard } from "@/components/Settings/DangerZoneCard";
 
 const Settings = () => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -43,6 +44,7 @@ const Settings = () => {
         onUpdate={loadSettings}
       />
       <SyncCard />
+      <DangerZoneCard />
     </div>
   );
 };
