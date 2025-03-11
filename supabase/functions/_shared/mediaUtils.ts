@@ -8,42 +8,36 @@ import { getStoragePublicUrl, getTelegramApiUrl, getTelegramFileUrl } from "./ur
  * Get extension from MIME type with proper defaults
  */
 function xdelo_getExtensionFromMimeType(mimeType: string): string {
-  switch (mimeType.toLowerCase()) {
-    // Images
-    case 'image/jpeg':
-    case 'image/jpg':
-      return 'jpeg';
-    case 'image/png':
-      return 'png';
-    case 'image/gif':
-      return 'gif';
-    case 'image/webp':
-      return 'webp';
-    // Videos
-    case 'video/mp4':
-      return 'mp4';
-    case 'video/quicktime':
-      return 'mov';
-    // Audio
-    case 'audio/mpeg':
-      return 'mp3';
-    case 'audio/mp4':
-      return 'm4a';
-    case 'audio/ogg':
-      return 'ogg';
-    // Documents
-    case 'application/pdf':
-      return 'pdf';
-    case 'application/x-tgsticker':
-      return 'tgs';
-    default:
-      // Handle generic types
-      const parts = mimeType.split('/');
-      if (parts.length === 2 && parts[1] !== 'octet-stream') {
-        return parts[1];
-      }
-      return 'bin'; // Default fallback
+  // Standardize mime type to lowercase for comparison
+  const normalizedMime = mimeType.toLowerCase();
+  
+  // Handle common image types first
+  if (normalizedMime === 'image/jpeg' || normalizedMime === 'image/jpg') return 'jpeg';
+  if (normalizedMime === 'image/png') return 'png';
+  if (normalizedMime === 'image/gif') return 'gif';
+  if (normalizedMime === 'image/webp') return 'webp';
+  
+  // Handle video types
+  if (normalizedMime === 'video/mp4') return 'mp4';
+  if (normalizedMime === 'video/quicktime') return 'mov';
+  
+  // Handle audio types
+  if (normalizedMime === 'audio/mpeg') return 'mp3';
+  if (normalizedMime === 'audio/mp4') return 'm4a';
+  if (normalizedMime === 'audio/ogg') return 'ogg';
+  
+  // Handle document types
+  if (normalizedMime === 'application/pdf') return 'pdf';
+  if (normalizedMime === 'application/x-tgsticker') return 'tgs';
+  
+  // Extract extension from mime type if possible
+  const parts = normalizedMime.split('/');
+  if (parts.length === 2 && parts[1] !== 'octet-stream') {
+    return parts[1];
   }
+  
+  // Default to bin for unknown types
+  return 'bin';
 }
 
 /**
@@ -228,23 +222,23 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
   const media = photo || video || document;
   if (!media) throw new Error('No media found in message');
 
-  // First, determine the MIME type
+  // Determine the MIME type
   const mediaObj = { photo, video, document };
   const mimeType = xdelo_detectMimeType(mediaObj);
   
   // Generate standardized storage path
   const fileName = xdelo_constructStoragePath(media.file_unique_id, mimeType);
   
-  // Check if we have a record of this file in the database (for duplicate tracking)
+  // Check for existing file using file_unique_id
   const { data: existingFile } = await supabase
     .from('messages')
-    .select('id, file_unique_id, storage_path, public_url, mime_type')
+    .select('id, file_unique_id, storage_path, public_url, mime_type, file_id_expires_at, original_file_id')
     .eq('file_unique_id', media.file_unique_id)
+    .eq('deleted_from_telegram', false)
     .limit(1);
 
-  // Always download from Telegram and upload (regardless if it exists)
+  // Always download from Telegram and upload to ensure we have the latest version
   try {
-    // Get file info from Telegram
     const fileInfoResponse = await fetch(getTelegramApiUrl(`getFile?file_id=${media.file_id}`));
     
     if (!fileInfoResponse.ok) {
@@ -257,7 +251,6 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
       throw new Error(`Telegram API error: ${JSON.stringify(fileInfo)}`);
     }
 
-    // Download file from Telegram
     const fileDataResponse = await fetch(getTelegramFileUrl(fileInfo.result.file_path));
     
     if (!fileDataResponse.ok) {
@@ -266,7 +259,7 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
     
     const fileData = await fileDataResponse.blob();
 
-    // Upload to Supabase Storage with correct content disposition
+    // Upload to Supabase Storage with correct content type
     const { success, publicUrl } = await xdelo_uploadMediaToStorage(
       fileData,
       fileName,
@@ -277,7 +270,7 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
       throw new Error('Failed to upload media to storage');
     }
 
-    // Return full info including duplicate status
+    // Return full info including duplicate status and file expiration
     return {
       file_id: media.file_id,
       file_unique_id: media.file_unique_id,
@@ -289,12 +282,14 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
       storage_path: fileName,
       public_url: publicUrl,
       is_duplicate: existingFile && existingFile.length > 0,
-      existing_message_id: existingFile && existingFile.length > 0 ? existingFile[0].id : undefined
+      original_message_id: existingFile && existingFile.length > 0 ? existingFile[0].id : undefined,
+      file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours from now
+      original_file_id: media.file_id // Store the original file_id for reference
     };
   } catch (error) {
     console.error('Error downloading media from Telegram:', error);
     
-    // If download fails but we know the file info, return placeholder data and mark for redownload
+    // If download fails but we have file info, return placeholder data
     return {
       file_id: media.file_id,
       file_unique_id: media.file_unique_id,
@@ -306,6 +301,8 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
       storage_path: fileName,
       public_url: getStoragePublicUrl(fileName),
       needs_redownload: true,
+      file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      original_file_id: media.file_id,
       error: error.message
     };
   }
@@ -380,3 +377,4 @@ export async function xdelo_redownloadMissingFile(message: any, correlationId: s
     };
   }
 }
+
