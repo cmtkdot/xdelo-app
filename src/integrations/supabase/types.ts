@@ -1284,6 +1284,80 @@ export type Database = {
         }
         Relationships: []
       }
+      gl_sync_queue: {
+        Row: {
+          created_at: string | null
+          id: string
+          max_retries: number | null
+          processing_completed_at: string | null
+          retry_count: number | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          max_retries?: number | null
+          processing_completed_at?: string | null
+          retry_count?: number | null
+          status: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          max_retries?: number | null
+          processing_completed_at?: string | null
+          retry_count?: number | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      gl_sync_queue_attempts: {
+        Row: {
+          api_response: Json | null
+          attempt_number: number
+          attempted_at: string
+          error_category: string | null
+          error_message: string | null
+          id: string
+          processing_duration_ms: number | null
+          queue_item_id: string
+          status: string
+        }
+        Insert: {
+          api_response?: Json | null
+          attempt_number: number
+          attempted_at?: string
+          error_category?: string | null
+          error_message?: string | null
+          id?: string
+          processing_duration_ms?: number | null
+          queue_item_id: string
+          status: string
+        }
+        Update: {
+          api_response?: Json | null
+          attempt_number?: number
+          attempted_at?: string
+          error_category?: string | null
+          error_message?: string | null
+          id?: string
+          processing_duration_ms?: number | null
+          queue_item_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gl_sync_queue_attempts_queue_item_id_fkey"
+            columns: ["queue_item_id"]
+            isOneToOne: false
+            referencedRelation: "gl_sync_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gl_table_mappings: {
         Row: {
           description: string
@@ -3046,6 +3120,16 @@ export type Database = {
         }
         Returns: number
       }
+      xan_categorize_sync_error: {
+        Args: {
+          error_message: string
+        }
+        Returns: string
+      }
+      xan_cleanup_sync_queue: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       xan_fetch_glide_products: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -3057,6 +3141,18 @@ export type Database = {
       xan_generate_share_id: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      xan_get_error_stats_by_category: {
+        Args: {
+          p_start_date?: string
+          p_end_date?: string
+        }
+        Returns: {
+          error_category: string
+          count: number
+          latest_error_message: string
+          latest_error_time: string
+        }[]
       }
       xan_handle_circular_references: {
         Args: Record<PropertyKey, never>

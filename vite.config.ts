@@ -1,49 +1,53 @@
 
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
-import path from "path";
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
 import { componentTagger } from "lovable-tagger";
 
 export default defineConfig(({ mode }) => ({
-  server: {
-    host: "::",
-    port: 8080,
-    watch: {
-      usePolling: false,
-    },
-  },
   plugins: [
-    react({
-      // Explicitly enable SWC plugins
-      jsxImportSource: undefined,
-      tsDecorators: false,
-      plugins: [['@swc/plugin-styled-components', {}]],
-    }),
+    react(),
     mode === 'development' && componentTagger(),
   ].filter(Boolean),
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      '@': path.resolve(__dirname, './src'),
     },
-    // Prevent multiple instances of React
-    dedupe: ['react', 'react-dom']
   },
   build: {
+    outDir: 'dist',
     sourcemap: true,
-    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks: {
-          react: ['react', 'react-dom'],
-          router: ['react-router-dom'],
-          ui: ['@radix-ui/react-dialog', '@radix-ui/react-popover', '@radix-ui/react-tabs'],
-          charts: ['recharts'],
-          utils: ['date-fns', 'clsx', 'tailwind-merge'],
-        },
-      },
+          'vendor': [
+            'react',
+            'react-dom',
+            'react-router-dom',
+            '@supabase/supabase-js',
+            '@tanstack/react-query',
+          ],
+          'ui': [
+            '@radix-ui',
+            'class-variance-authority',
+            'clsx',
+            'tailwind-merge',
+          ]
+        }
+      }
+    }
+  },
+  server: {
+    port: 8080,
+    host: '::',
+    cors: true, 
+    hmr: {
+      protocol: 'wss',
+      clientPort: 443
     },
-  },
-  optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom']
-  },
+    allowedHosts: [
+      '79512fb5-8301-4d61-9349-6769d5c8295b.lovableproject.com',
+      '*.lovableproject.com'
+    ]
+  }
 }));

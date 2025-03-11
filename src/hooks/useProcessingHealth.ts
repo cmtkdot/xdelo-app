@@ -24,10 +24,10 @@ interface ProcessingStats {
     oldest_stuck_processing_hours: number | null;
   };
   timestamp: string;
-  mixed_media_groups?: MediaGroupStatus[];
+  mixed_media_groups: MediaGroupStatus[];
 }
 
-interface MediaGroupStatus {
+export interface MediaGroupStatus {
   media_group_id: string;
   total_messages: number;
   processed_messages: number;
@@ -60,15 +60,9 @@ export function useProcessingHealth() {
       
       if (mixedError) throw mixedError;
 
-      // Cast the data to the expected type
-      const typedStatsData = statsData as ProcessingStats;
-
       // Combine everything into a health report
       const healthReport: ProcessingStats = {
-        state_counts: typedStatsData.state_counts,
-        media_group_stats: typedStatsData.media_group_stats,
-        timing_stats: typedStatsData.timing_stats,
-        timestamp: typedStatsData.timestamp,
+        ...(statsData as Omit<ProcessingStats, 'mixed_media_groups'>),
         mixed_media_groups: mixedMediaGroups as MediaGroupStatus[]
       };
       
