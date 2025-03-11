@@ -25,16 +25,16 @@ export function useProcessingStats() {
       
       if (error) throw error;
       
-      // Convert the returned JSON data to the expected ProcessingStats type
+      // Handle the response data safely
       const processedStats: ProcessingStats = {
-        pending_count: data.pending_count || 0,
-        processing_count: data.processing_count || 0,
-        error_count: data.error_count || 0,
-        completed_count: data.completed_count || 0,
-        total_messages: data.total_messages || 0,
-        oldest_pending_age: data.oldest_pending_age,
-        oldest_processing_age: data.oldest_processing_age,
-        stalled_messages: data.stalled_messages || 0
+        pending_count: typeof data.pending_count === 'number' ? data.pending_count : 0,
+        processing_count: typeof data.processing_count === 'number' ? data.processing_count : 0,
+        error_count: typeof data.error_count === 'number' ? data.error_count : 0,
+        completed_count: typeof data.completed_count === 'number' ? data.completed_count : 0,
+        total_messages: typeof data.total_messages === 'number' ? data.total_messages : 0,
+        oldest_pending_age: typeof data.oldest_pending_age === 'number' ? data.oldest_pending_age : null,
+        oldest_processing_age: typeof data.oldest_processing_age === 'number' ? data.oldest_processing_age : null,
+        stalled_messages: typeof data.stalled_messages === 'number' ? data.stalled_messages : 0
       };
       
       setStats(processedStats);
