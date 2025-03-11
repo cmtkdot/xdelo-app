@@ -2,6 +2,9 @@
 import React from 'react';
 import { MessageListContainer } from '../components/Messages/MessageListContainer';
 import { Helmet } from 'react-helmet';
+import { Button } from '@/components/ui/button';
+import { MessageHealth } from '@/components/Messages/MessageHealth';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function MessagesPage() {
   return (
@@ -12,7 +15,11 @@ export default function MessagesPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Message Processing Queue</h1>
       </div>
-      <MessageListContainer />
+      
+      <div className="space-y-6">
+        <MessageHealth />
+        <MessageListContainer />
+      </div>
     </div>
   );
 } 

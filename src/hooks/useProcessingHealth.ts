@@ -36,14 +36,14 @@ export function useProcessingHealth() {
   /**
    * Get processing health metrics
    */
-  const diagnoseProcessingHealth = useCallback(async () => {
+  const diagnoseProcessingHealth = useCallback(async (options = { trigger_repair: false }) => {
     try {
       setIsLoading(true);
       
       const { data, error } = await supabase.functions.invoke(
         'monitor-processing-health',
         {
-          body: { trigger_repair: false }
+          body: { trigger_repair: options.trigger_repair }
         }
       );
       
