@@ -1,12 +1,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-
-// CORS headers
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders } from "../_shared/cors.ts";
+import { xdelo_getUploadOptions } from "../_shared/mediaUtils.ts";
 
 // Create a Supabase client
 const supabase = createClient(
@@ -24,32 +20,6 @@ interface RequestBody {
   messageId: string;
   mediaGroupId?: string;
   correlationId?: string;
-}
-
-// Helper to determine if the MIME type is viewable in browser
-function isViewableMimeType(mimeType: string): boolean {
-  return mimeType.startsWith('image/') || 
-         mimeType.startsWith('video/') || 
-         mimeType === 'application/pdf';
-}
-
-// Helper to get proper upload options based on MIME type
-function getUploadOptions(mimeType: string): any {
-  // Default options for all uploads
-  const options = {
-    contentType: mimeType || 'application/octet-stream',
-    upsert: true
-  };
-  
-  // Add inline content disposition for viewable types
-  if (isViewableMimeType(mimeType)) {
-    return {
-      ...options,
-      contentDisposition: 'inline'
-    };
-  }
-  
-  return options;
 }
 
 serve(async (req) => {
@@ -147,8 +117,8 @@ serve(async (req) => {
       throw new Error(`Failed to get standardized storage path: ${storagePathError.message}`);
     }
 
-    // Upload to Supabase Storage with enhanced options
-    const uploadOptions = getUploadOptions(message.mime_type);
+    // Upload to Supabase Storage with proper options
+    const uploadOptions = xdelo_getUploadOptions(message.mime_type);
     const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')

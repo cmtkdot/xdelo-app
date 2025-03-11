@@ -26,21 +26,11 @@ export function useMediaReprocessing() {
       
       if (error) throw error;
       
-      toast({
-        title: "Content Disposition Fixed",
-        description: `Successfully updated ${data?.data?.contentDispositionFixed || 0} files to display inline.`
-      });
+      console.log("Content disposition fixed result:", data);
       
       return data;
     } catch (error: any) {
       console.error('Error fixing content disposition:', error);
-      
-      toast({
-        title: "Fix Failed",
-        description: error.message || "Failed to fix content disposition",
-        variant: "destructive"
-      });
-      
       throw error;
     } finally {
       setIsProcessing(false);
@@ -62,21 +52,11 @@ export function useMediaReprocessing() {
       
       if (error) throw error;
       
-      toast({
-        title: "Storage Paths Repaired",
-        description: `Fixed ${data?.data?.repaired || 0} storage paths.`
-      });
+      console.log("Storage paths repair result:", data);
       
       return data;
     } catch (error: any) {
       console.error('Error repairing storage paths:', error);
-      
-      toast({
-        title: "Repair Failed",
-        description: error.message || "Failed to repair storage paths",
-        variant: "destructive"
-      });
-      
       throw error;
     } finally {
       setIsProcessing(false);
@@ -99,21 +79,11 @@ export function useMediaReprocessing() {
       
       if (error) throw error;
       
-      toast({
-        title: "File Redownloaded",
-        description: `Successfully redownloaded file for message ${messageId}.`
-      });
+      console.log("Redownload result:", data);
       
       return data;
     } catch (error: any) {
       console.error('Error redownloading file:', error);
-      
-      toast({
-        title: "Redownload Failed",
-        description: error.message || "Failed to redownload file",
-        variant: "destructive"
-      });
-      
       throw error;
     } finally {
       setIsProcessing(false);

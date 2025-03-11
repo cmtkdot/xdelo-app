@@ -1,19 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
+import { xdelo_isViewableMimeType, xdelo_getUploadOptions } from "../_shared/mediaUtils.ts";
 
 // Create Supabase client
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
-
-// Helper to determine if the MIME type is viewable in browser
-function isViewableMimeType(mimeType: string): boolean {
-  return mimeType.startsWith('image/') || 
-         mimeType.startsWith('video/') || 
-         mimeType === 'application/pdf';
-}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -89,7 +83,7 @@ serve(async (req) => {
         }
         
         // Fix content disposition if requested
-        if (fixContentDisposition && isViewableMimeType(message.mime_type)) {
+        if (fixContentDisposition && xdelo_isViewableMimeType(message.mime_type)) {
           // Check if file exists
           const { data: fileExists } = await supabase
             .storage
@@ -108,15 +102,14 @@ serve(async (req) => {
                 .download(storagePath);
                 
               if (fileData) {
+                // Get proper upload options
+                const uploadOptions = xdelo_getUploadOptions(message.mime_type);
+                
                 // Re-upload with inline content disposition
                 const { error: uploadError } = await supabase
                   .storage
                   .from('telegram-media')
-                  .upload(storagePath, fileData, {
-                    contentType: message.mime_type,
-                    contentDisposition: 'inline',
-                    upsert: true
-                  });
+                  .upload(storagePath, fileData, uploadOptions);
                   
                 if (!uploadError) {
                   contentDispositionFixed++;

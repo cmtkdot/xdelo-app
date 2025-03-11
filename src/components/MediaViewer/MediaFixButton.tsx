@@ -2,7 +2,6 @@
 import { Button } from "@/components/ui/button";
 import { useMediaReprocessing } from "@/hooks/useMediaReprocessing";
 import { Wrench } from "lucide-react";
-import { useState } from "react";
 import { useToast } from "@/hooks/useToast";
 
 interface MediaFixButtonProps {
@@ -26,6 +25,11 @@ export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) 
       if (onComplete) onComplete();
     } catch (error) {
       console.error("Failed to fix media display:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fix media display. See console for details.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -41,6 +45,11 @@ export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) 
       if (onComplete) onComplete();
     } catch (error) {
       console.error("Failed to repair storage paths:", error);
+      toast({
+        title: "Error",
+        description: "Failed to repair storage paths. See console for details.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -69,6 +78,11 @@ export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) 
       if (onComplete) onComplete();
     } catch (error) {
       console.error("Failed to redownload media:", error);
+      toast({
+        title: "Error",
+        description: "Failed to redownload media. See console for details.",
+        variant: "destructive"
+      });
     }
   };
 
