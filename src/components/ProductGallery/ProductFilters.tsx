@@ -22,7 +22,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   const [search, setSearch] = useState(filters.search);
   const [selectedVendors, setSelectedVendors] = useState<string[]>(filters.vendors || []);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder || "desc");
-  const [sortField, setSortField] = useState<"created_at" | "purchase_date">(filters.sortField || "created_at");
+  const [sortField, setSortField] = useState<"purchase_date" | "updated_at">(filters.sortField as any || "purchase_date");
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | null>(filters.dateRange || null);
   const [showUntitled, setShowUntitled] = useState<boolean>(filters.showUntitled || false);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
@@ -32,7 +32,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     if (search) count++;
     if (selectedVendors.length > 0) count++;
     if (dateRange) count++;
-    if (sortField !== "created_at") count++;
+    if (sortField !== "purchase_date") count++;
     if (showUntitled) count++;
     setActiveFiltersCount(count);
   }, [search, selectedVendors, dateRange, sortField, showUntitled]);
@@ -57,7 +57,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     setSearch("");
     setSelectedVendors([]);
     setSortOrder("desc");
-    setSortField("created_at");
+    setSortField("purchase_date");
     setDateRange(null);
     setShowUntitled(false);
   };
@@ -67,7 +67,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   };
 
   const handleSortFieldChange = (value: string) => {
-    setSortField(value as "created_at" | "purchase_date");
+    setSortField(value as "purchase_date" | "updated_at");
   };
 
   const FilterContent = () => (
@@ -97,8 +97,8 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="created_at">Upload Date</SelectItem>
               <SelectItem value="purchase_date">Purchase Date</SelectItem>
+              <SelectItem value="updated_at">Updated At</SelectItem>
             </SelectContent>
           </Select>
         </div>

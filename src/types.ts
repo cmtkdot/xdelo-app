@@ -2,13 +2,13 @@ export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'comple
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
 export interface FilterValues {
-  search: string;
-  vendors: string[];
-  sortOrder: "asc" | "desc";
-  sortField: "created_at" | "purchase_date";
+  search?: string;
+  vendors?: string[];
+  sortOrder?: 'asc' | 'desc';
+  sortField?: 'purchase_date' | 'updated_at';
   dateRange?: { from: Date; to: Date } | null;
-  processingState?: string[];
   showUntitled?: boolean;
+  processingState?: ProcessingState[];
 }
 
 export interface AnalyzedContent {

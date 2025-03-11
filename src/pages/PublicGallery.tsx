@@ -21,7 +21,7 @@ const PublicGallery = () => {
     search: "",
     vendors: [],
     sortOrder: "desc",
-    sortField: "created_at",
+    sortField: "purchase_date",
     showUntitled: false
   });
   
@@ -41,7 +41,7 @@ const PublicGallery = () => {
         .select('*')
         .eq('processing_state', 'completed');
       
-      query.order(filters.sortField || 'created_at', { ascending: filters.sortOrder === 'asc' });
+      query.order(filters.sortField || 'purchase_date', { ascending: filters.sortOrder === 'asc' });
       
       const { data, error } = await query;
       

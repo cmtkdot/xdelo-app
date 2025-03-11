@@ -26,7 +26,7 @@ const ProductGallery = () => {
     search: "",
     vendors: [],
     sortOrder: "desc",
-    sortField: "created_at",
+    sortField: "purchase_date",
     showUntitled: false
   });
   
@@ -92,7 +92,6 @@ const ProductGallery = () => {
   const handleView = async (group: Message[]) => {
     if (!group || group.length === 0) return;
     
-    // Check if media exists in storage before viewing
     if (group[0]?.file_unique_id && group[0]?.mime_type) {
       const exists = await checkMediaExists(group[0].file_unique_id, group[0].mime_type);
       if (!exists) {
@@ -101,7 +100,6 @@ const ProductGallery = () => {
           description: "The media file could not be found in storage. Try repairing media files.",
           variant: "destructive"
         });
-        // Still allow viewing in case there's another version available
       }
     }
     
@@ -136,7 +134,7 @@ const ProductGallery = () => {
   const handleMediaRepair = async (fileUrl: string, fileUniqueId: string) => {
     try {
       await uploadMedia(fileUrl, fileUniqueId);
-      refetch(); // Refresh data after repair
+      refetch();
     } catch (error) {
       console.error('Media repair failed:', error);
     }
@@ -221,6 +219,10 @@ const ProductGallery = () => {
         return filters.sortOrder === 'asc' ? 
           dateA.getTime() - dateB.getTime() : 
           dateB.getTime() - dateA.getTime();
+      } else if (filters.sortField === 'updated_at') {
+        const dateA = new Date(mainMediaA.updated_at || mainMediaA.created_at || 0).getTime();
+        const dateB = new Date(mainMediaB.updated_at || mainMediaB.created_at || 0).getTime();
+        return filters.sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
       } else {
         const dateA = new Date(mainMediaA.created_at || 0).getTime();
         const dateB = new Date(mainMediaB.created_at || 0).getTime();
