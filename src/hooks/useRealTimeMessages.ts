@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -46,7 +47,8 @@ export function useRealTimeMessages({
         }
         
         if (processingState && processingState.length > 0) {
-          query = query.in('processing_state', processingState);
+          // Cast the array to string[] to satisfy the Supabase type requirements
+          query = query.in('processing_state', processingState as unknown as string[]);
         }
         
         if (showForwarded) {
