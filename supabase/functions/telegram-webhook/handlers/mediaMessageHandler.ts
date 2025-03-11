@@ -431,6 +431,7 @@ async function processMessage(
     
     try {
       // First try direct caption processor with our new manual-caption-parser
+      // Note the addition of the force_reprocess: true flag to ensure we always process
       try {
         const { data: processorResult, error: processorError } = await supabaseClient.functions.invoke(
           'manual-caption-parser',
@@ -440,7 +441,8 @@ async function processMessage(
               caption: message.caption,
               media_group_id: message.media_group_id,
               correlationId: context.correlationId,
-              trigger_source: 'webhook_handler'
+              trigger_source: 'webhook_handler',
+              force_reprocess: true // Force reprocessing always for new messages
             }
           }
         );
@@ -460,7 +462,8 @@ async function processMessage(
             p_message_id: dbMessage.id,
             p_correlation_id: context.correlationId,
             p_caption: message.caption,
-            p_media_group_id: message.media_group_id
+            p_media_group_id: message.media_group_id,
+            p_force_reprocess: true // Add force reprocess parameter
           }
         );
         

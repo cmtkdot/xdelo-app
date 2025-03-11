@@ -11,7 +11,7 @@ const supabaseClient = createClient(
 export async function getMessage(messageId: string) {
   const { data, error } = await supabaseClient
     .from('messages')
-    .select('id, caption, analyzed_content, processing_state, media_group_id, is_original_caption')
+    .select('id, caption, analyzed_content, processing_state, media_group_id, is_original_caption, old_analyzed_content, edit_history')
     .eq('id', messageId)
     .single();
     
@@ -27,20 +27,41 @@ export async function updateMessageWithAnalysis(
   parsedContent: ParsedContent,
   existingMessage: any,
   queueId?: string,
-  isEdit: boolean = false
+  isForceUpdate: boolean = false
 ) {
   // Determine if we need to save old content for edit history
   let oldAnalyzedContent = [];
   
-  if (isEdit && existingMessage?.analyzed_content) {
-    const { data: oldVersions } = await supabaseClient
-      .from('messages')
-      .select('old_analyzed_content')
-      .eq('id', messageId)
-      .single();
+  if (isForceUpdate && existingMessage?.analyzed_content) {
+    // Get existing old_analyzed_content array
+    oldAnalyzedContent = existingMessage?.old_analyzed_content || [];
+    
+    // Add current content to history with archive reason
+    const archiveReason = parsedContent.parsing_metadata.is_edit ? 
+      'edit' : 
+      'forced_reprocess';
       
-    oldAnalyzedContent = oldVersions?.old_analyzed_content || [];
-    oldAnalyzedContent.push(existingMessage.analyzed_content);
+    oldAnalyzedContent.push({
+      ...existingMessage.analyzed_content,
+      archived_timestamp: new Date().toISOString(),
+      archived_reason: archiveReason
+    });
+  }
+  
+  // Update edit history
+  let editHistory = existingMessage?.edit_history || [];
+  if (isForceUpdate) {
+    // Determine edit type
+    const editType = parsedContent.parsing_metadata.is_edit ? 
+      'edit' : 
+      'forced_reprocess';
+      
+    // Add to edit history
+    editHistory.push({
+      timestamp: new Date().toISOString(),
+      type: editType,
+      previous_analyzed_content: existingMessage?.analyzed_content || null
+    });
   }
   
   // Determine processing state based on partial success flag
@@ -57,7 +78,9 @@ export async function updateMessageWithAnalysis(
       processing_completed_at: new Date().toISOString(),
       is_original_caption: existingMessage?.media_group_id ? true : undefined,
       group_caption_synced: true,
-      old_analyzed_content: isEdit ? oldAnalyzedContent : undefined,
+      old_analyzed_content: oldAnalyzedContent.length > 0 ? oldAnalyzedContent : undefined,
+      edit_history: editHistory.length > 0 ? editHistory : undefined,
+      edit_count: isForceUpdate ? (existingMessage?.edit_count || 0) + 1 : existingMessage?.edit_count,
       updated_at: new Date().toISOString()
     })
     .eq('id', messageId);

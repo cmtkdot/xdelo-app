@@ -32,7 +32,8 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     media_group_id, 
     queue_id, 
     isEdit = false,
-    retryCount = 0
+    retryCount = 0,
+    force_reprocess = false
   } = body;
   
   const requestCorrelationId = body.correlationId || correlationId;
@@ -41,7 +42,7 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     (caption.length > 50 ? `${caption.substring(0, 50)}...` : caption) : 
     '(none)';
   
-  console.log(`Processing caption for message ${messageId}, correlation_id: ${requestCorrelationId}, isEdit: ${isEdit}, retry: ${retryCount}, caption: ${captionForLog}`);
+  console.log(`Processing caption for message ${messageId}, correlation_id: ${requestCorrelationId}, isEdit: ${isEdit}, retry: ${retryCount}, force_reprocess: ${force_reprocess}, caption: ${captionForLog}`);
 
   if (!messageId || !caption) {
     throw new Error("Required parameters missing: messageId and caption are required");
@@ -51,8 +52,9 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     console.log(`Fetching current state for message ${messageId}`);
     const existingMessage = await getMessage(messageId);
     
-    if (existingMessage?.analyzed_content && !isEdit) {
-      console.log(`Message ${messageId} already has analyzed content, skipping`);
+    // If message has analyzed content, and we're not editing or force reprocessing, skip
+    if (existingMessage?.analyzed_content && !isEdit && !force_reprocess) {
+      console.log(`Message ${messageId} already has analyzed content and force_reprocess is not enabled, skipping`);
       return new Response(
         JSON.stringify({
           success: true,
@@ -68,7 +70,8 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
       id: existingMessage?.id,
       processing_state: existingMessage?.processing_state,
       has_analyzed_content: !!existingMessage?.analyzed_content,
-      media_group_id: existingMessage?.media_group_id
+      media_group_id: existingMessage?.media_group_id,
+      force_reprocess: force_reprocess
     })}`);
 
     console.log(`Performing manual parsing on caption: ${captionForLog}`);
@@ -90,6 +93,12 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
       parsedContent.parsing_metadata.edit_timestamp = new Date().toISOString();
     }
     
+    if (force_reprocess) {
+      console.log(`Message ${messageId} is being force reprocessed`);
+      parsedContent.parsing_metadata.force_reprocess = true;
+      parsedContent.parsing_metadata.reprocess_timestamp = new Date().toISOString();
+    }
+    
     if (retryCount > 0) {
       parsedContent.parsing_metadata.retry_count = retryCount;
       parsedContent.parsing_metadata.retry_timestamp = new Date().toISOString();
@@ -107,24 +116,25 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
         media_group_id: media_group_id,
         method: 'manual',
         is_edit: isEdit,
+        force_reprocess: force_reprocess,
         retry_count: retryCount
       }
     );
 
-    console.log(`Updating message ${messageId} with analyzed content, isEdit: ${isEdit}`);
+    console.log(`Updating message ${messageId} with analyzed content, isEdit: ${isEdit}, force_reprocess: ${force_reprocess}`);
     const updateResult = await updateMessageWithAnalysis(
       messageId, 
       parsedContent, 
       existingMessage, 
       queue_id, 
-      isEdit
+      isEdit || force_reprocess
     );
     console.log(`Update result: ${JSON.stringify(updateResult)}`);
 
     let syncResult = null;
     if (media_group_id) {
       try {
-        console.log(`Starting media group content sync for group ${media_group_id}, message ${messageId}, isEdit: ${isEdit}`);
+        console.log(`Starting media group content sync for group ${media_group_id}, message ${messageId}, isEdit: ${isEdit}, force_reprocess: ${force_reprocess}`);
         
         const syncResponse = await fetch(
           `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
@@ -139,7 +149,7 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
               sourceMessageId: messageId,
               correlationId: requestCorrelationId,
               forceSync: true,
-              syncEditHistory: isEdit
+              syncEditHistory: isEdit || force_reprocess
             })
           }
         );
@@ -149,7 +159,7 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
           console.log(`Media group sync result from edge function: ${JSON.stringify(syncResult)}`);
         } else {
           console.warn(`Edge function sync failed with ${syncResponse.status}, trying direct sync`);
-          syncResult = await syncMediaGroupContent(media_group_id, messageId, requestCorrelationId, isEdit);
+          syncResult = await syncMediaGroupContent(media_group_id, messageId, requestCorrelationId, isEdit || force_reprocess);
           console.log(`Media group sync result from direct function: ${JSON.stringify(syncResult)}`);
         }
       } catch (syncError) {
@@ -171,7 +181,9 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
         message: `Caption analyzed successfully for message ${messageId}`,
         data: parsedContent,
         sync_result: syncResult,
-        correlation_id: requestCorrelationId
+        correlation_id: requestCorrelationId,
+        is_edit: isEdit,
+        force_reprocess: force_reprocess
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

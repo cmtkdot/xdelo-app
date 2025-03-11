@@ -13,19 +13,23 @@ const supabase = createClient(
 const directCaptionProcessor = async (req: Request, correlationId: string) => {
   // Parse the request body
   const body = await req.json();
-  const { messageId, trigger_source = 'database_trigger' } = body;
+  const { 
+    messageId, 
+    trigger_source = 'database_trigger',
+    force_reprocess = false
+  } = body;
   
   if (!messageId) {
     throw new Error("Message ID is required");
   }
 
-  console.log(`Direct caption processor triggered for message ${messageId}, correlation ID: ${correlationId}`);
+  console.log(`Direct caption processor triggered for message ${messageId}, correlation ID: ${correlationId}, force_reprocess: ${force_reprocess}`);
   
   try {
     // Get the message details to check if it has a caption
     const { data: message, error: messageError } = await supabase
       .from('messages')
-      .select('id, caption, media_group_id, processing_state, is_original_caption, group_caption_synced')
+      .select('id, caption, media_group_id, processing_state, is_original_caption, group_caption_synced, analyzed_content')
       .eq('id', messageId)
       .single();
     
@@ -50,6 +54,20 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
           success: false,
           message: `Message ${messageId} failed: No caption to process`,
           correlation_id: correlationId
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // If not forcing reprocess and already has analyzed content, we can skip
+    if (!force_reprocess && message.analyzed_content) {
+      console.log(`Message ${messageId} already has analyzed content and force_reprocess is not enabled, skipping reprocessing.`);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `Message ${messageId} already has analyzed content`,
+          correlation_id: correlationId,
+          skipped: true
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -82,7 +100,8 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
           caption: message.caption,
           media_group_id: message.media_group_id,
           correlationId,
-          trigger_source
+          trigger_source,
+          force_reprocess // Pass the force_reprocess flag
         }
       }
     );
@@ -99,7 +118,8 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
             caption: message.caption,
             media_group_id: message.media_group_id,
             correlationId,
-            trigger_source: 'direct_fallback'
+            trigger_source: 'direct_fallback',
+            force_reprocess // Pass the force_reprocess flag
           }
         }
       );
@@ -177,7 +197,8 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
         trigger_source,
         result: analysisResult?.data || 'No data returned',
         media_group_id: message.media_group_id,
-        forced_sync: true
+        forced_sync: true,
+        force_reprocess: force_reprocess
       },
       event_timestamp: new Date().toISOString()
     });
@@ -187,7 +208,8 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
         success: true,
         message: `Caption processed for message ${messageId}`,
         data: analysisResult,
-        correlation_id: correlationId
+        correlation_id: correlationId,
+        force_reprocess: force_reprocess
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -213,7 +235,8 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
       correlation_id: correlationId,
       metadata: {
         trigger_source,
-        error_stack: error.stack
+        error_stack: error.stack,
+        force_reprocess: force_reprocess
       },
       event_timestamp: new Date().toISOString()
     });

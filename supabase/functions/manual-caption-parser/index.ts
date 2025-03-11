@@ -18,9 +18,16 @@ const handleCaptionParsing = async (req: Request, correlationId: string) => {
   }
 
   try {
-    const { messageId, caption, media_group_id, is_edit = false } = await req.json();
+    const { 
+      messageId, 
+      caption, 
+      media_group_id, 
+      is_edit = false, 
+      force_reprocess = false,
+      trigger_source = 'manual'
+    } = await req.json();
     
-    console.log(`Manual caption parsing for message ${messageId}, correlation ID: ${correlationId}`);
+    console.log(`Manual caption parsing for message ${messageId}, correlation ID: ${correlationId}, force_reprocess: ${force_reprocess}`);
     
     if (!messageId || !caption) {
       throw new Error('Missing required parameters: messageId and caption are required');
@@ -45,12 +52,15 @@ const handleCaptionParsing = async (req: Request, correlationId: string) => {
       parsedContent.parsing_metadata.edit_timestamp = new Date().toISOString();
     }
     
+    // Add source of the trigger
+    parsedContent.parsing_metadata.trigger_source = trigger_source;
+    
     console.log(`Parsed content: ${JSON.stringify(parsedContent)}`);
     
     // Update the message with the analyzed content
     const { data: message, error: messageError } = await supabaseClient
       .from('messages')
-      .select('id, analyzed_content, processing_state, media_group_id')
+      .select('id, analyzed_content, processing_state, media_group_id, old_analyzed_content, edit_history')
       .eq('id', messageId)
       .single();
     
@@ -62,8 +72,10 @@ const handleCaptionParsing = async (req: Request, correlationId: string) => {
       throw new Error(`Message not found: ${messageId}`);
     }
     
-    // If not an edit and message already has analyzed content, return it without changes
-    if (!is_edit && message.analyzed_content) {
+    // If not an edit, not forced reprocess, and message already has analyzed content, 
+    // return it without changes - however, we now check force_reprocess flag
+    if (!is_edit && !force_reprocess && message.analyzed_content) {
+      console.log(`Message already has analyzed content and force_reprocess is not enabled, skipping reprocessing.`);
       return new Response(
         JSON.stringify({
           success: true,
@@ -75,19 +87,35 @@ const handleCaptionParsing = async (req: Request, correlationId: string) => {
       );
     }
     
-    // Create old_analyzed_content array if editing
+    // Create old_analyzed_content array if editing or force_reprocess enabled
     let oldAnalyzedContent = [];
-    if (is_edit && message.analyzed_content) {
+    
+    if ((is_edit || force_reprocess) && message.analyzed_content) {
       // Get current old_analyzed_content array if it exists
-      const { data: oldVersions } = await supabaseClient
-        .from('messages')
-        .select('old_analyzed_content')
-        .eq('id', messageId)
-        .single();
+      oldAnalyzedContent = message.old_analyzed_content || [];
       
-      // Build new array with current content added
-      oldAnalyzedContent = oldVersions?.old_analyzed_content || [];
-      oldAnalyzedContent.push(message.analyzed_content);
+      // Create an entry for the current analyzed content
+      const archiveReason = is_edit ? 'edit' : 'forced_reprocess';
+      
+      // Push current content to history
+      oldAnalyzedContent.push({
+        ...message.analyzed_content,
+        archived_timestamp: new Date().toISOString(),
+        archived_reason: archiveReason,
+        trigger_source: trigger_source
+      });
+    }
+    
+    // Update edit history if necessary
+    let editHistory = message.edit_history || [];
+    if (is_edit || force_reprocess) {
+      editHistory.push({
+        timestamp: new Date().toISOString(),
+        type: is_edit ? 'edit' : 'forced_reprocess',
+        previous_caption: message.analyzed_content?.caption || null,
+        new_caption: caption,
+        trigger_source: trigger_source
+      });
     }
     
     // Update the message
@@ -99,8 +127,10 @@ const handleCaptionParsing = async (req: Request, correlationId: string) => {
         processing_completed_at: new Date().toISOString(),
         is_original_caption: message.media_group_id ? true : undefined,
         group_caption_synced: true,
-        old_analyzed_content: is_edit ? oldAnalyzedContent : undefined,
-        updated_at: new Date().toISOString()
+        old_analyzed_content: oldAnalyzedContent.length > 0 ? oldAnalyzedContent : undefined,
+        edit_history: editHistory.length > 0 ? editHistory : undefined,
+        updated_at: new Date().toISOString(),
+        edit_count: is_edit || force_reprocess ? (message.edit_count || 0) + 1 : message.edit_count
       })
       .eq('id', messageId);
     
@@ -118,7 +148,9 @@ const handleCaptionParsing = async (req: Request, correlationId: string) => {
         caption_length: caption.length,
         media_group_id: message.media_group_id,
         is_edit: is_edit,
-        partial_success: parsedContent.parsing_metadata.partial_success
+        force_reprocess: force_reprocess,
+        partial_success: parsedContent.parsing_metadata.partial_success,
+        trigger_source: trigger_source
       },
       event_timestamp: new Date().toISOString()
     });
@@ -141,7 +173,7 @@ const handleCaptionParsing = async (req: Request, correlationId: string) => {
               sourceMessageId: messageId,
               correlationId: correlationId,
               forceSync: true,
-              syncEditHistory: is_edit
+              syncEditHistory: is_edit || force_reprocess
             })
           }
         );
@@ -160,7 +192,7 @@ const handleCaptionParsing = async (req: Request, correlationId: string) => {
               p_media_group_id: message.media_group_id,
               p_correlation_id: correlationId,
               p_force_sync: true,
-              p_sync_edit_history: is_edit
+              p_sync_edit_history: is_edit || force_reprocess
             }
           );
           
@@ -182,7 +214,9 @@ const handleCaptionParsing = async (req: Request, correlationId: string) => {
           error_message: `Media group sync error: ${syncError.message}`,
           metadata: {
             media_group_id: message.media_group_id,
-            error_detail: syncError.stack
+            error_detail: syncError.stack,
+            is_edit: is_edit,
+            force_reprocess: force_reprocess
           },
           event_timestamp: new Date().toISOString()
         });
@@ -200,7 +234,9 @@ const handleCaptionParsing = async (req: Request, correlationId: string) => {
         message: `Caption parsed successfully for message ${messageId}`,
         parsed_content: parsedContent,
         sync_result: syncResult,
-        correlation_id: correlationId
+        correlation_id: correlationId,
+        is_edit: is_edit,
+        force_reprocess: force_reprocess
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
