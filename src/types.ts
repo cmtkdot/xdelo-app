@@ -1,4 +1,3 @@
-
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'partial_success' | 'error';
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
