@@ -1,11 +1,11 @@
 
 import { logMessageOperation } from './logger.ts';
-import { supabaseClient as supabase } from '../_shared/supabase.ts';
+import { supabaseClient as supabase } from '../../_shared/supabase.ts';
 import { 
   xdelo_detectMimeType,
   xdelo_constructStoragePath,
   xdelo_uploadMediaToStorage
-} from '../_shared/mediaUtils.ts';
+} from '../../_shared/mediaUtils.ts';
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')
 if (!TELEGRAM_BOT_TOKEN) throw new Error('Missing TELEGRAM_BOT_TOKEN')

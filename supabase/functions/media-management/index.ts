@@ -242,12 +242,12 @@ async function handleRepair(storagePath: string, mimeType: string, correlationId
       throw new Error('Invalid storage path format');
     }
     
-    // Download existing file
+    // Download the existing file
     const { data, error } = await supabaseClient
       .storage
       .from(bucket)
       .download(path);
-    
+      
     if (error || !data) {
       throw new Error(`Failed to download file: ${error?.message || 'File not found'}`);
     }
