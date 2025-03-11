@@ -2,7 +2,7 @@
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { xdelo_logMessageEdit, xdelo_logMessageError } from '../../_shared/messageLogger.ts';
-import { TelegramMessage, MessageContext } from './mediaHandler.ts';
+import { TelegramMessage, MessageContext } from './updateHandler.ts';
 import { handleMediaMessage } from './mediaHandler.ts';
 import { handleTextMessage } from './textHandler.ts';
 

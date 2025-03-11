@@ -1,120 +1,122 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from './useToast';
-import { Message, ProcessingState } from '@/types';
+import { Message } from '@/types';
+import { ProcessingState } from '@/types';
 
-// Export for other components to use
-export type ProcessingStateType = ProcessingState;
-
-interface UseRealTimeMessagesParams {
-  filter?: string;
-  processingState?: ProcessingStateType[] | undefined;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-  showForwarded?: boolean;
-  showEdited?: boolean;
+interface RealTimeMessagesOptions {
   limit?: number;
+  states?: ProcessingState[];
+  chatId?: number;
 }
 
-export function useRealTimeMessages({
-  filter = '',
-  processingState,
-  sortBy = 'updated_at',
-  sortOrder = 'desc',
-  showForwarded = false,
-  showEdited = false,
-  limit = 100
-}: UseRealTimeMessagesParams) {
+export default function useRealTimeMessages({ 
+  limit = 20, 
+  states = ["initialized", "pending", "processing", "completed", "error", "partial_success"] as ProcessingState[], 
+  chatId 
+}: RealTimeMessagesOptions) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
 
-  // Function to fetch messages with filters
-  const fetchMessages = useCallback(async () => {
+  useEffect(() => {
+    setMessages([]);
+    setOffset(0);
+    setHasMore(true);
+    fetchMessages(0);
+  }, [limit, states, chatId]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('public:messages')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'messages' },
+        (payload) => {
+          console.log('Change received!', payload)
+          if (payload.eventType === 'INSERT') {
+            const newMessage = payload.new as Message;
+            if (states.includes(newMessage.processing_state)) {
+              setMessages((prevMessages) => [newMessage, ...prevMessages]);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedMessage = payload.new as Message;
+            setMessages((prevMessages) =>
+              prevMessages.map((message) =>
+                message.id === updatedMessage.id ? updatedMessage : message
+              )
+            );
+          } else if (payload.eventType === 'DELETE') {
+            const deletedMessageId = payload.old.id;
+            setMessages((prevMessages) =>
+              prevMessages.filter((message) => message.id !== deletedMessageId)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const fetchMessages = useCallback(async (newOffset?: number) => {
+    setLoading(true);
+    setError(null);
+    
     try {
       let query = supabase
         .from('messages')
-        .select('*')
-        .order(sortBy, { ascending: sortOrder === 'asc' })
+        .select('*, other_messages(*)')
+        .in('processing_state', states as readonly ProcessingState[])
+        .order('created_at', { ascending: false })
         .limit(limit);
       
-      // Apply search filter if provided
-      if (filter) {
-        query = query.or(`caption.ilike.%${filter}%,analyzed_content->product_name.ilike.%${filter}%,analyzed_content->product_code.ilike.%${filter}%`);
+      if (chatId) {
+        query = query.eq('chat_id', chatId);
       }
-      
-      // Apply processing state filter if provided
-      if (processingState && processingState.length > 0) {
-        query = query.in('processing_state', processingState as ProcessingState[]);
+
+      if (newOffset !== undefined) {
+        query = query.range(newOffset, newOffset + limit - 1);
+      } else {
+        query = query.range(offset, offset + limit - 1);
       }
-      
-      // Only show forwarded messages if requested
-      if (!showForwarded) {
-        query = query.is('is_forward', false);
-      }
-      
-      // Only show edited messages if requested
-      if (showEdited) {
-        query = query.gt('edit_count', 0);
-      }
-      
+
       const { data, error } = await query;
-      
+
       if (error) {
         throw error;
       }
-      
-      setMessages(data as Message[]);
-      setLastRefresh(new Date());
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-      toast({
-        title: "Failed to load messages",
-        description: error instanceof Error ? error.message : "Unknown error",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [filter, processingState, sortBy, sortOrder, showForwarded, showEdited, limit, toast]);
-  
-  // Function to manually refresh messages
-  const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    await fetchMessages();
-  }, [fetchMessages]);
-  
-  // Initial fetch and setup realtime subscription
-  useEffect(() => {
-    setIsLoading(true);
-    fetchMessages();
-    
-    // Set up realtime subscription
-    const subscription = supabase
-      .channel('message-changes')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'messages' 
-      }, () => {
-        fetchMessages();
-      })
-      .subscribe();
-    
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [fetchMessages]);
 
-  return {
-    messages,
-    isLoading,
-    isRefreshing,
-    lastRefresh,
-    handleRefresh
+      const fetchedMessages = data as Message[];
+
+      if (newOffset !== undefined) {
+        setMessages((prevMessages) => [...prevMessages, ...fetchedMessages]);
+        setOffset(newOffset + limit);
+      } else {
+        setMessages((prevMessages) => (offset === 0 ? fetchedMessages : [...prevMessages, ...fetchedMessages]));
+        setOffset(offset + limit);
+      }
+
+      if (fetchedMessages.length < limit) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
+    } catch (error: any) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [limit, states, chatId]);
+
+  const loadMore = () => {
+    if (hasMore && !loading) {
+      fetchMessages(offset);
+    }
   };
+
+  return { messages, loading, error, loadMore, hasMore };
 }
