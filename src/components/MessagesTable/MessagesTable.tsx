@@ -147,14 +147,8 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
 
     if (message.mime_type?.startsWith('video/')) {
       return (
-        <div 
-          className="relative w-16 h-16 cursor-pointer"
-          onClick={() => handleMediaClick(message)}
-        >
-          <video 
-            src={message.public_url}
-            className="w-16 h-16 object-cover rounded-md"
-          />
+        <div className="relative w-16 h-16 cursor-pointer" onClick={() => handleMediaClick(message)}>
+          <video src={message.public_url} className="w-16 h-16 object-cover rounded-md" />
         </div>
       );
     }
@@ -162,7 +156,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     return (
       <img 
         src={message.public_url} 
-        alt={message.caption || 'Product image'} 
+        alt={message.caption || 'Preview'} 
         className="w-16 h-16 object-cover rounded-md cursor-pointer"
         onClick={() => handleMediaClick(message)}
       />
@@ -176,11 +170,12 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
           <TableHeader>
             <TableRow>
               <TableHead>Media</TableHead>
-              <TableHead>Purchase Date</TableHead>
-              <TableHead>Caption</TableHead>
               <TableHead>Product Name</TableHead>
-              <TableHead>Vendor</TableHead>
+              <TableHead>Vendor UID</TableHead>
+              <TableHead>Purchase Date</TableHead>
               <TableHead>Quantity</TableHead>
+              <TableHead>Notes</TableHead>
+              <TableHead>Original Caption</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -189,21 +184,6 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
               <TableRow key={message.id}>
                 <TableCell>
                   {renderMediaPreview(message)}
-                </TableCell>
-                <TableCell>
-                  {message.analyzed_content?.purchase_date ? 
-                    format(new Date(message.analyzed_content.purchase_date), 'MM/dd/yyyy') : 
-                    '-'}
-                </TableCell>
-                <TableCell>
-                  {message.isEditing ? (
-                    <Input
-                      value={message.caption || ''}
-                      onChange={(e) => handleCaptionChange(message.id, e.target.value)}
-                    />
-                  ) : (
-                    message.caption || '-'
-                  )}
                 </TableCell>
                 <TableCell>
                   {message.isEditing ? (
@@ -226,6 +206,11 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
                   )}
                 </TableCell>
                 <TableCell>
+                  {message.analyzed_content?.purchase_date ? 
+                    format(new Date(message.analyzed_content.purchase_date), 'MM/dd/yyyy') : 
+                    '-'}
+                </TableCell>
+                <TableCell>
                   {message.isEditing ? (
                     <Input
                       type="number"
@@ -234,6 +219,26 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
                     />
                   ) : (
                     message.analyzed_content?.quantity || '-'
+                  )}
+                </TableCell>
+                <TableCell>
+                  {message.isEditing ? (
+                    <Input
+                      value={message.analyzed_content?.notes || ''}
+                      onChange={(e) => handleAnalyzedContentChange(message.id, 'notes', e.target.value)}
+                    />
+                  ) : (
+                    message.analyzed_content?.notes || '-'
+                  )}
+                </TableCell>
+                <TableCell>
+                  {message.isEditing ? (
+                    <Input
+                      value={message.caption || ''}
+                      onChange={(e) => handleCaptionChange(message.id, e.target.value)}
+                    />
+                  ) : (
+                    message.caption || '-'
                   )}
                 </TableCell>
                 <TableCell>
