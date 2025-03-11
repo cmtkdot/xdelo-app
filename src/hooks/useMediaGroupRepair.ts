@@ -1,60 +1,33 @@
 
+import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
-import { useState } from 'react';
 
 export function useMediaGroupRepair() {
-  const { toast } = useToast();
   const [isRepairing, setIsRepairing] = useState(false);
+  const { toast } = useToast();
 
-  // Repair any issues with the media group relationships
   const repairMessageProcessingSystem = async () => {
     try {
       setIsRepairing(true);
       
-      // First repair media group relationships
-      const { data: repairResult, error: repairError } = await supabase.functions.invoke(
-        'direct-media-group-repair',
-        {
-          body: { 
-            correlation_id: crypto.randomUUID(),
-            repair_type: 'full'
-          }
-        }
-      );
+      // Call the repair function
+      const { data, error } = await supabase.rpc('xdelo_repair_media_group_syncs', {});
       
-      if (repairError) throw repairError;
+      if (error) throw error;
       
       toast({
         title: "Media Group Repair Complete",
-        description: `Fixed ${repairResult?.fixed_count || 0} media group relationships.`
+        description: `Fixed ${data.length || 0} media groups with sync issues.`
       });
       
-      // Then run the standard repair process using the scheduler process
-      const { data: processResult, error: processError } = await supabase.functions.invoke(
-        'scheduler-process-queue',
-        {
-          body: { 
-            limit: 20,
-            trigger_source: 'manual',
-            repair: true
-          }
-        }
-      );
-      
-      if (processError) throw processError;
-      
-      return { 
-        success: true, 
-        media_group_fix: repairResult?.fixed_count || 0,
-        process_result: processResult
-      };
+      return data;
     } catch (error: any) {
-      console.error('Error repairing system:', error);
+      console.error('Error running system maintenance:', error);
       
       toast({
         title: "Repair Failed",
-        description: error.message || "Failed to repair message processing system",
+        description: error.message || "Failed to repair media groups",
         variant: "destructive"
       });
       

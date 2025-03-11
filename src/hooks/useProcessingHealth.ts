@@ -1,63 +1,36 @@
 
 import { useState, useCallback } from 'react';
-import { supabase } from '../integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from './useToast';
 
-// Define a type for the processing health stats
-interface ProcessingStats {
-  state_counts?: {
-    initialized?: number;
-    pending?: number;
-    processing?: number;
-    completed?: number;
-    error?: number;
-    total_messages?: number;
-  };
-  media_group_stats?: {
-    unprocessed_with_caption?: number;
-    stuck_in_processing?: number;
-    stalled_no_media_group?: number;
-    orphaned_media_group_messages?: number;
-  };
-  timing_stats?: {
-    avg_processing_time_seconds?: number;
-    oldest_unprocessed_caption_age_hours?: number;
-    oldest_stuck_processing_hours?: number;
-  };
-  timestamp?: string;
-}
-
-/**
- * Custom hook for monitoring processing health
- */
 export function useProcessingHealth() {
   const [isLoading, setIsLoading] = useState(false);
-  const [processingStats, setProcessingStats] = useState<ProcessingStats | null>(null);
+  const [processingStats, setProcessingStats] = useState<any>(null);
+  const { toast } = useToast();
 
-  /**
-   * Get processing health metrics
-   */
-  const diagnoseProcessingHealth = useCallback(async (options = { trigger_repair: false }) => {
+  const diagnoseProcessingHealth = useCallback(async () => {
     try {
       setIsLoading(true);
       
-      const { data, error } = await supabase.functions.invoke(
-        'monitor-processing-health',
-        {
-          body: { trigger_repair: options.trigger_repair }
-        }
-      );
+      // Call the function to get processing stats
+      const { data, error } = await supabase.rpc('xdelo_get_message_processing_stats');
       
       if (error) throw error;
       
-      setProcessingStats(data.health_metrics);
-      return data.health_metrics;
-    } catch (error) {
-      console.error('Failed to get processing health metrics:', error);
-      return null;
+      setProcessingStats(data);
+      return data;
+    } catch (error: any) {
+      console.error('Error getting processing health stats:', error);
+      
+      toast({
+        title: "Failed to Get Health Stats",
+        description: error.message || "Could not retrieve processing health statistics",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   return {
     diagnoseProcessingHealth,

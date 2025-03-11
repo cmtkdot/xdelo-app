@@ -6,7 +6,7 @@ import { debounce } from 'lodash';
 import { MessageHeader } from './MessageHeader';
 import { MessageControlPanel } from './MessageControlPanel';
 import { useRealTimeMessages } from '@/hooks/useRealTimeMessages';
-import { useMessageProcessing } from '@/hooks/useMessageProcessing';
+import { useMessageQueue } from '@/hooks/useMessageQueue';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/useToast';
 
@@ -23,11 +23,11 @@ export const MessageListContainer: React.FC = () => {
   } = useRealTimeMessages({ filter: searchTerm });
   
   const { 
-    handleReanalyze, 
     processMessageQueue,
     queueUnprocessedMessages,
-    isProcessing: processingState
-  } = useMessageProcessing();
+    processMessageById,
+    isProcessing 
+  } = useMessageQueue();
   
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
@@ -53,29 +53,14 @@ export const MessageListContainer: React.FC = () => {
 
   const handleRetryProcessing = async (messageId) => {
     try {
-      const { data: messageData } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('id', messageId)
-        .single();
-      
-      if (!messageData) {
-        throw new Error('Message not found');
-      }
-      
-      await handleReanalyze(messageData);
+      await processMessageById(messageId);
       handleRefresh();
     } catch (error) {
       console.error('Error retrying message processing:', error);
-      toast({
-        title: "Retry Failed",
-        description: error.message || "Failed to retry processing",
-        variant: "destructive"
-      });
     }
   };
   
-  const isProcessingAny = Object.values(processingState).some(state => state) || isRefreshing;
+  const isProcessingAny = isProcessing || isRefreshing;
 
   return (
     <div className="flex flex-col gap-4">

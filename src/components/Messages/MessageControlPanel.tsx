@@ -1,20 +1,21 @@
 
 import React from 'react';
-import { SearchBar } from './SearchBar';
-import { ActionButtons } from './ActionButtons';
-import { ProcessingRepairButton } from '@/components/ProductGallery/ProcessingRepairButton';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { RefreshCw, Search, Play, List } from 'lucide-react';
+import { Spinner } from '@/components/ui/spinner';
 
 interface MessageControlPanelProps {
   searchTerm: string;
   onSearchChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRefresh: () => void;
-  onQueueUnprocessed: () => Promise<void>;
-  onProcessQueue: () => Promise<void>;
+  onQueueUnprocessed: () => void;
+  onProcessQueue: () => void;
   isProcessingAny: boolean;
   isRefreshing: boolean;
 }
 
-export const MessageControlPanel: React.FC<MessageControlPanelProps> = ({
+export function MessageControlPanel({
   searchTerm,
   onSearchChange,
   onRefresh,
@@ -22,25 +23,59 @@ export const MessageControlPanel: React.FC<MessageControlPanelProps> = ({
   onProcessQueue,
   isProcessingAny,
   isRefreshing
-}) => {
+}: MessageControlPanelProps) {
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <SearchBar 
-          searchTerm={searchTerm} 
-          onChange={onSearchChange} 
-        />
+    <div className="flex flex-col space-y-4">
+      <div className="flex items-center space-x-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Search messages..."
+            className="pl-8"
+            value={searchTerm}
+            onChange={onSearchChange}
+          />
+        </div>
         
-        <ActionButtons 
-          onRefresh={onRefresh}
-          onQueueUnprocessed={onQueueUnprocessed}
-          onProcessQueue={onProcessQueue}
-          isProcessingAny={isProcessingAny}
-          isRefreshing={isRefreshing}
-        />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onRefresh}
+          disabled={isRefreshing}
+        >
+          {isRefreshing ? (
+            <Spinner size="sm" className="mr-2" />
+          ) : (
+            <RefreshCw className="h-4 w-4 mr-2" />
+          )}
+          Refresh
+        </Button>
       </div>
       
-      <ProcessingRepairButton />
+      <div className="flex items-center space-x-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onQueueUnprocessed}
+          disabled={isProcessingAny}
+          className="flex-1"
+        >
+          <List className="h-4 w-4 mr-2" />
+          Find Unprocessed
+        </Button>
+        
+        <Button
+          variant="default"
+          size="sm" 
+          onClick={onProcessQueue}
+          disabled={isProcessingAny}
+          className="flex-1"
+        >
+          <Play className="h-4 w-4 mr-2" />
+          Process Queue
+        </Button>
+      </div>
     </div>
   );
-};
+}

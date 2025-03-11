@@ -1,24 +1,58 @@
 
-import { useProcessingStats } from './useProcessingStats';
-import { useSystemRepair } from './useSystemRepair';
+import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from './useToast';
 import { useStuckMessageRepair } from './useStuckMessageRepair';
+import { useMediaGroupRepair } from './useMediaGroupRepair';
 
-/**
- * Unified hook that combines all processing system repair functionality
- */
 export function useProcessingSystemRepair() {
-  // Use the individual hooks
-  const { getProcessingStats } = useProcessingStats();
-  const { repairProcessingSystem, isRepairing: isSystemRepairing } = useSystemRepair();
-  const { repairStuckMessages, isRepairing: isStuckRepairing } = useStuckMessageRepair();
-  
-  // Combine the isRepairing states
-  const isRepairing = isSystemRepairing || isStuckRepairing;
+  const [isRepairing, setIsRepairing] = useState(false);
+  const { toast } = useToast();
+  const { repairStuckMessages } = useStuckMessageRepair();
+  const { repairMessageProcessingSystem } = useMediaGroupRepair();
+
+  const repairProcessingSystem = async () => {
+    try {
+      setIsRepairing(true);
+      
+      // Call the scheduler with repair mode enabled
+      const { data, error } = await supabase.functions.invoke(
+        'scheduler-process-queue',
+        {
+          body: { 
+            repair: true,
+            trigger_source: 'manual_repair'
+          }
+        }
+      );
+      
+      if (error) throw error;
+      
+      toast({
+        title: "System Repair Complete",
+        description: `System diagnostics and repairs completed successfully.`
+      });
+      
+      return data;
+    } catch (error: any) {
+      console.error('Error repairing processing system:', error);
+      
+      toast({
+        title: "Repair Failed",
+        description: error.message || "Failed to repair processing system",
+        variant: "destructive"
+      });
+      
+      throw error;
+    } finally {
+      setIsRepairing(false);
+    }
+  };
 
   return {
     repairProcessingSystem,
-    getProcessingStats,
-    isRepairing,
-    repairStuckMessages
+    repairStuckMessages,
+    repairMediaGroups: repairMessageProcessingSystem,
+    isRepairing
   };
 }
