@@ -4,12 +4,21 @@ import { MessageList } from './MessageList';
 import { Card, CardContent } from '@/components/ui/card';
 import { MessageHeader } from './MessageHeader';
 import { MessageControlPanel } from './MessageControlPanel';
+import { MessagesFilter, MessageFilterValues } from './MessagesFilter';
 import { useRealTimeMessages } from '@/hooks/useRealTimeMessages';
 import { useMessageQueue } from '@/hooks/useMessageQueue';
 import { useToast } from '@/hooks/useToast';
 
 export const MessageListContainer: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState<MessageFilterValues>({
+    processingState: undefined,
+    sortBy: 'updated_at',
+    sortOrder: 'desc',
+    showForwarded: false,
+    showEdited: false
+  });
+  const [showFilters, setShowFilters] = useState(false);
   const { toast } = useToast();
   
   const { 
@@ -18,7 +27,14 @@ export const MessageListContainer: React.FC = () => {
     isRefreshing,
     lastRefresh,
     handleRefresh
-  } = useRealTimeMessages({ filter: searchTerm });
+  } = useRealTimeMessages({ 
+    filter: searchTerm,
+    processingState: filters.processingState,
+    sortBy: filters.sortBy,
+    sortOrder: filters.sortOrder,
+    showForwarded: filters.showForwarded,
+    showEdited: filters.showEdited
+  });
   
   const { 
     processMessageById,
@@ -27,6 +43,14 @@ export const MessageListContainer: React.FC = () => {
   
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
+  };
+
+  const handleFilterChange = (newFilters: MessageFilterValues) => {
+    setFilters(newFilters);
+  };
+
+  const handleToggleFilters = () => {
+    setShowFilters(!showFilters);
   };
 
   const handleRetryProcessing = async (messageId) => {
@@ -50,7 +74,18 @@ export const MessageListContainer: React.FC = () => {
             onSearchChange={handleSearchChange}
             onRefresh={handleRefresh}
             isRefreshing={isRefreshing}
+            onToggleFilters={handleToggleFilters}
+            showFilters={showFilters}
           />
+          
+          {showFilters && (
+            <div className="mt-4 pt-4 border-t">
+              <MessagesFilter 
+                filters={filters}
+                onFilterChange={handleFilterChange}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
       

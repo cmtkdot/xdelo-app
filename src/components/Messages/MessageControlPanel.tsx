@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { RefreshCw, Search } from 'lucide-react';
+import { RefreshCw, Search, Filter } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
 
 interface MessageControlPanelProps {
@@ -10,13 +10,17 @@ interface MessageControlPanelProps {
   onSearchChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRefresh: () => void;
   isRefreshing: boolean;
+  onToggleFilters: () => void;
+  showFilters: boolean;
 }
 
 export function MessageControlPanel({
   searchTerm,
   onSearchChange,
   onRefresh,
-  isRefreshing
+  isRefreshing,
+  onToggleFilters,
+  showFilters
 }: MessageControlPanelProps) {
   return (
     <div className="flex items-center space-x-2">
@@ -30,6 +34,15 @@ export function MessageControlPanel({
           onChange={onSearchChange}
         />
       </div>
+      
+      <Button
+        variant={showFilters ? "default" : "outline"}
+        size="sm"
+        onClick={onToggleFilters}
+      >
+        <Filter className="h-4 w-4 mr-2" />
+        Filters
+      </Button>
       
       <Button
         variant="outline"

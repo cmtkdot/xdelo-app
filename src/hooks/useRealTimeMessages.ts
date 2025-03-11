@@ -8,9 +8,22 @@ import { toast } from 'sonner';
 interface UseRealTimeMessagesOptions {
   limit?: number;
   filter?: string;
+  processingState?: string[];
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  showForwarded?: boolean;
+  showEdited?: boolean;
 }
 
-export function useRealTimeMessages({ limit = 20, filter = '' }: UseRealTimeMessagesOptions = {}) {
+export function useRealTimeMessages({ 
+  limit = 20, 
+  filter = '',
+  processingState,
+  sortBy = 'updated_at',
+  sortOrder = 'desc',
+  showForwarded = false,
+  showEdited = false
+}: UseRealTimeMessagesOptions = {}) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
@@ -21,17 +34,33 @@ export function useRealTimeMessages({ limit = 20, filter = '' }: UseRealTimeMess
     refetch,
     error
   } = useQuery({
-    queryKey: ['messages', limit, filter],
+    queryKey: ['messages', limit, filter, processingState, sortBy, sortOrder, showForwarded, showEdited],
     queryFn: async () => {
       try {
         let query = supabase
           .from('messages')
           .select('*')
-          .order('created_at', { ascending: false })
+          .order(sortBy || 'updated_at', { ascending: sortOrder === 'asc' })
           .limit(limit);
           
+        // Add text search filter
         if (filter) {
           query = query.or(`caption.ilike.%${filter}%,analyzed_content->product_name.ilike.%${filter}%,analyzed_content->vendor_uid.ilike.%${filter}%,telegram_message_id.eq.${!isNaN(parseInt(filter)) ? filter : 0},chat_title.ilike.%${filter}%`);
+        }
+        
+        // Add processing state filter
+        if (processingState && processingState.length > 0) {
+          query = query.in('processing_state', processingState);
+        }
+        
+        // Add forwarded messages filter
+        if (showForwarded) {
+          query = query.eq('is_forward', true);
+        }
+        
+        // Add edited messages filter
+        if (showEdited) {
+          query = query.not('old_analyzed_content', 'is', null);
         }
         
         const { data, error } = await query;

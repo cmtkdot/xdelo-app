@@ -2,7 +2,6 @@
 import React from 'react';
 import { MessageListContainer } from '../components/Messages/MessageListContainer';
 import { Helmet } from 'react-helmet';
-import { Card } from '@/components/ui/card';
 
 export default function MessagesPage() {
   return (
