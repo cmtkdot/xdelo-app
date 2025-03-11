@@ -1,66 +1,48 @@
 
-import { supabase } from '@/integrations/supabase/client';
-import { useProcessingRepair } from './useProcessingRepair';
+import { useState, useCallback } from 'react';
+import { supabase } from '../integrations/supabase/client';
+import { toast } from 'sonner';
 
+/**
+ * Custom hook for repairing the system
+ */
 export function useSystemRepair() {
-  const { runRepairOperation, isRepairing } = useProcessingRepair();
+  const [isRepairing, setIsRepairing] = useState(false);
 
   /**
-   * Reset stuck messages in the processing state and clean up legacy queue entries
+   * Repair the processing system by invoking the edge function
    */
-  const repairProcessingSystem = async () => {
-    return runRepairOperation(
-      'processing_system_repair',
-      async () => {
-        // Step 1: Call the repair system edge function
-        const { data, error } = await supabase.functions.invoke(
-          'repair-processing-flow',
-          { 
-            body: { 
-              limit: 20,
-              repair_enums: true
-            } 
+  const repairProcessingSystem = useCallback(async () => {
+    try {
+      setIsRepairing(true);
+      
+      const { data, error } = await supabase.functions.invoke(
+        'repair-processing-flow',
+        {
+          body: { 
+            limit: 20,
+            repair_enums: true,
+            force_reset_stalled: true,
+            trigger_source: 'manual_ui'
           }
-        );
-        
-        if (error) throw error;
-        
-        // Step 2: Force direct processing on pending messages
-        const { data: schedulerData, error: schedulerError } = await supabase.functions.invoke(
-          'scheduler-process-queue',
-          {
-            body: { 
-              limit: 20,
-              trigger_source: 'manual',
-              repair: true
-            }
-          }
-        );
-        
-        if (schedulerError) throw schedulerError;
-        
-        // Step 3: Direct database update for any remaining stuck messages
-        const { error: updateError } = await supabase.rpc('xdelo_reset_stalled_messages');
-        
-        if (updateError) {
-          // Non-fatal error, log but continue
-          console.warn('Warning during stalled message reset:', updateError);
         }
-        
-        const processedCount = data?.data?.processed || 0;
-        const schedulerResults = schedulerData?.result || {};
-        
-        return { 
-          processed: processedCount,
-          scheduler_results: schedulerResults
-        };
-      },
-      "Processing System Repaired"
-    );
-  };
+      );
+      
+      if (error) throw error;
+      
+      const resetCount = data?.results?.stuck_reset || 0;
+      const mediaGroupsFixed = data?.results?.media_groups_fixed || 0;
+      
+      toast.success(`System repair completed: Reset ${resetCount} stuck messages and fixed ${mediaGroupsFixed} media groups`);
+      return data;
+    } catch (error) {
+      console.error('Failed to repair processing system:', error);
+      toast.error('Failed to repair processing system');
+      return null;
+    } finally {
+      setIsRepairing(false);
+    }
+  }, []);
 
-  return {
-    repairProcessingSystem,
-    isRepairing
-  };
+  return { repairProcessingSystem, isRepairing };
 }

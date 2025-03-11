@@ -13,11 +13,14 @@ export async function logSyncOperation(
   error?: string
 ) {
   try {
-    await supabase.rpc('xdelo_log_sync_operation', {
-      p_operation_type: operation,
-      p_status: success ? 'success' : 'error',
-      p_details: details,
-      p_error_message: error || null
+    // Insert directly to the sync_logs table instead of using RPC function
+    await supabase.from('gl_sync_logs').insert({
+      operation: operation,
+      status: success ? 'success' : 'error',
+      record_id: details.id || 'system',
+      table_name: details.table_name || 'system',
+      error_message: error || null,
+      glide_id: details.glide_id || null
     });
   } catch (err) {
     console.error('Failed to log sync operation:', err);
@@ -37,17 +40,17 @@ export async function logSyncOperationBatch(
   }>
 ) {
   try {
-    // Use individual calls to the RPC function since we can't batch them
-    const promises = operations.map(op => 
-      supabase.rpc('xdelo_log_sync_operation', {
-        p_operation_type: op.operation,
-        p_status: op.success ? 'success' : 'error',
-        p_details: op.details,
-        p_error_message: op.error || null
-      })
-    );
+    // Use batch insert for multiple operations
+    const syncLogs = operations.map(op => ({
+      operation: op.operation,
+      status: op.success ? 'success' : 'error',
+      record_id: op.details.id || 'system',
+      table_name: op.details.table_name || 'system',
+      error_message: op.error || null,
+      glide_id: op.details.glide_id || null
+    }));
     
-    await Promise.all(promises);
+    await supabase.from('gl_sync_logs').insert(syncLogs);
   } catch (err) {
     console.error('Failed to log sync operations batch:', err);
   }

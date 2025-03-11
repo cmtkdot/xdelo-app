@@ -1,88 +1,39 @@
 
-import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from './useToast';
+import { useState, useCallback } from 'react';
+import { supabase } from '../integrations/supabase/client';
 
-interface ProcessingStats {
-  state_counts: {
-    initialized: number;
-    pending: number;
-    processing: number;
-    completed: number;
-    error: number;
-    total_messages: number;
-  };
-  media_group_stats: {
-    unprocessed_with_caption: number;
-    stuck_in_processing: number;
-    stalled_no_media_group: number;
-    orphaned_media_group_messages: number;
-  };
-  timing_stats: {
-    avg_processing_time_seconds: number | null;
-    oldest_unprocessed_caption_age_hours: number | null;
-    oldest_stuck_processing_hours: number | null;
-  };
-  timestamp: string;
-  mixed_media_groups: MediaGroupStatus[];
-}
-
-export interface MediaGroupStatus {
-  media_group_id: string;
-  total_messages: number;
-  processed_messages: number;
-  unprocessed_messages: number;
-  oldest_message_id: string;
-  oldest_message_created_at: string;
-}
-
+/**
+ * Custom hook for monitoring processing health
+ */
 export function useProcessingHealth() {
   const [isLoading, setIsLoading] = useState(false);
-  const [processingStats, setProcessingStats] = useState<ProcessingStats | null>(null);
-  const { toast } = useToast();
+  const [processingStats, setProcessingStats] = useState(null);
 
-  const diagnoseProcessingHealth = async () => {
+  /**
+   * Get processing health metrics
+   */
+  const diagnoseProcessingHealth = useCallback(async () => {
     try {
       setIsLoading(true);
       
-      // Get processing stats
-      const { data: statsData, error: stateError } = await supabase.rpc(
-        'xdelo_get_message_processing_stats'
+      const { data, error } = await supabase.functions.invoke(
+        'monitor-processing-health',
+        {
+          body: { trigger_repair: false }
+        }
       );
       
-      if (stateError) throw stateError;
+      if (error) throw error;
       
-      // Get details about media groups with mixed processing states
-      const { data: mixedMediaGroups, error: mixedError } = await supabase.rpc(
-        'xdelo_get_incomplete_media_groups',
-        { limit_param: 5 }
-      );
-      
-      if (mixedError) throw mixedError;
-
-      // Combine everything into a health report
-      const healthReport: ProcessingStats = {
-        ...(statsData as Omit<ProcessingStats, 'mixed_media_groups'>),
-        mixed_media_groups: mixedMediaGroups as MediaGroupStatus[]
-      };
-      
-      setProcessingStats(healthReport);
-      return healthReport;
-
-    } catch (error: any) {
-      console.error('Error diagnosing processing health:', error);
-      
-      toast({
-        title: "Diagnostic Failed",
-        description: error.message || "Failed to diagnose processing health",
-        variant: "destructive"
-      });
-      
-      throw error;
+      setProcessingStats(data.health_metrics);
+      return data.health_metrics;
+    } catch (error) {
+      console.error('Failed to get processing health metrics:', error);
+      return null;
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   return {
     diagnoseProcessingHealth,
