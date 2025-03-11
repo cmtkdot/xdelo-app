@@ -1,3 +1,4 @@
+
 // @ts-ignore - Allow Deno global
 declare const Deno: any;
 
@@ -5,23 +6,8 @@ import { supabaseClient as supabase } from "./supabase.ts";
 import { getStoragePublicUrl, getTelegramApiUrl, getTelegramFileUrl } from "./urls.ts";
 
 /**
- * Get file extension from MIME type or filename
- * Simplified to just extract extension part from MIME type
- */
-function xdelo_getExtensionFromMimeType(mimeType: string): string {
-  if (!mimeType) return 'bin';
-  
-  // Simply extract the part after the slash
-  const parts = mimeType.split('/');
-  if (parts.length === 2 && parts[1] !== 'octet-stream') {
-    return parts[1];
-  }
-  return 'bin'; // Default fallback
-}
-
-/**
  * Get file extension based on media type or filename
- * This is used as fallback when no explicit MIME type is available
+ * This is used when no explicit extension is available
  */
 export function xdelo_getFileExtension(mediaType: string): string {
   switch (mediaType) {
@@ -43,18 +29,30 @@ export function xdelo_getFileExtension(mediaType: string): string {
 
 // Extract file extension from Telegram media object
 export function xdelo_getExtensionFromMedia(media: any): string {
-  // Check if MIME type is available and extract extension
+  // Try to extract extension from mime_type if available
   if (media.document?.mime_type) {
-    return xdelo_getExtensionFromMimeType(media.document.mime_type);
+    const parts = media.document.mime_type.split('/');
+    if (parts.length === 2 && parts[1] !== 'octet-stream') {
+      return parts[1];
+    }
   }
   if (media.video?.mime_type) {
-    return xdelo_getExtensionFromMimeType(media.video.mime_type);
+    const parts = media.video.mime_type.split('/');
+    if (parts.length === 2 && parts[1] !== 'octet-stream') {
+      return parts[1];
+    }
   }
   if (media.audio?.mime_type) {
-    return xdelo_getExtensionFromMimeType(media.audio.mime_type);
+    const parts = media.audio.mime_type.split('/');
+    if (parts.length === 2 && parts[1] !== 'octet-stream') {
+      return parts[1];
+    }
   }
   if (media.voice?.mime_type) {
-    return xdelo_getExtensionFromMimeType(media.voice.mime_type);
+    const parts = media.voice.mime_type.split('/');
+    if (parts.length === 2 && parts[1] !== 'octet-stream') {
+      return parts[1];
+    }
   }
   
   // Fallback to media type detection
@@ -74,7 +72,7 @@ export function xdelo_constructStoragePath(fileUniqueId: string, extension: stri
   return `${fileUniqueId}.${extension}`;
 }
 
-// Get upload options
+// Get upload options - simplified to remove MIME type handling
 export function xdelo_getUploadOptions(): any {
   return {
     contentDisposition: 'inline', // Always set to inline for better browser viewing
@@ -82,7 +80,7 @@ export function xdelo_getUploadOptions(): any {
   };
 }
 
-// Upload media to Supabase Storage
+// Upload media to Supabase Storage - simplified to rely on file extension
 export async function xdelo_uploadMediaToStorage(
   fileData: Blob,
   storagePath: string
@@ -179,9 +177,10 @@ export async function xdelo_repairContentDisposition(storagePath: string): Promi
   }
 }
 
-// Determine if a MIME type is viewable in browser
-export function xdelo_isViewableMimeType(mimeType: string): boolean {
-  return /^(image\/|video\/|audio\/|text\/|application\/pdf)/.test(mimeType);
+// Determine if an extension is viewable in browser
+export function xdelo_isViewableExtension(extension: string): boolean {
+  const viewableExtensions = ['jpeg', 'jpg', 'png', 'gif', 'webp', 'mp4', 'mov', 'webm', 'pdf'];
+  return viewableExtensions.includes(extension.toLowerCase());
 }
 
 // Check if a URL exists (returns non-404)
@@ -195,7 +194,7 @@ export async function xdelo_urlExists(url: string): Promise<boolean> {
   }
 }
 
-// Get media info from a Telegram message
+// Get media info from a Telegram message - simplified to only use extensions
 export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId: string = crypto.randomUUID()): Promise<any> {
   const photo = message.photo ? message.photo[message.photo.length - 1] : null;
   const video = message.video;
@@ -209,15 +208,8 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
   const extension = xdelo_getExtensionFromMedia(mediaObj);
   
   // Generate standardized storage path using just the extension
-  const fileName = xdelo_constructStoragePath(media.file_unique_id, extension);
+  const storagePath = xdelo_constructStoragePath(media.file_unique_id, extension);
   
-  // Check if we have a record of this file in the database (for duplicate tracking)
-  const { data: existingFile } = await supabase
-    .from('messages')
-    .select('id, file_unique_id, storage_path, public_url')
-    .eq('file_unique_id', media.file_unique_id)
-    .limit(1);
-
   // Always download from Telegram and upload (regardless if it exists)
   try {
     // Get file info from Telegram
@@ -245,14 +237,14 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
     // Upload to Supabase Storage with inline content disposition
     const { success, publicUrl } = await xdelo_uploadMediaToStorage(
       fileData,
-      fileName
+      storagePath
     );
 
     if (!success || !publicUrl) {
       throw new Error('Failed to upload media to storage');
     }
 
-    // Return full info including duplicate status
+    // Return full info
     return {
       file_id: media.file_id,
       file_unique_id: media.file_unique_id,
@@ -260,10 +252,8 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
       width: media.width,
       height: media.height,
       duration: video?.duration,
-      storage_path: fileName,
-      public_url: publicUrl,
-      is_duplicate: existingFile && existingFile.length > 0,
-      existing_message_id: existingFile && existingFile.length > 0 ? existingFile[0].id : undefined
+      storage_path: storagePath,
+      public_url: publicUrl
     };
   } catch (error) {
     console.error('Error downloading media from Telegram:', error);
@@ -276,8 +266,8 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
       width: media.width,
       height: media.height,
       duration: video?.duration,
-      storage_path: fileName,
-      public_url: getStoragePublicUrl(fileName),
+      storage_path: storagePath,
+      public_url: getStoragePublicUrl(storagePath),
       needs_redownload: true,
       error: error.message
     };
@@ -319,12 +309,12 @@ export async function xdelo_redownloadMissingFile(message: any, correlationId: s
     const extension = message.storage_path.split('.').pop() || 'bin';
     
     // Generate standardized storage path
-    const fileName = xdelo_constructStoragePath(message.file_unique_id, extension);
+    const storagePath = xdelo_constructStoragePath(message.file_unique_id, extension);
 
     // Upload to storage with inline content disposition
     const { success, publicUrl } = await xdelo_uploadMediaToStorage(
       fileData,
-      fileName
+      storagePath
     );
 
     if (!success || !publicUrl) {
@@ -336,7 +326,7 @@ export async function xdelo_redownloadMissingFile(message: any, correlationId: s
       success: true,
       message_id: message.id,
       file_unique_id: message.file_unique_id,
-      storage_path: fileName,
+      storage_path: storagePath,
       public_url: publicUrl,
       method: 'telegram_api'
     };

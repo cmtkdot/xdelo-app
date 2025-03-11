@@ -4,7 +4,8 @@ import {
   xdelo_uploadTelegramMedia, 
   xdelo_validateStorageFile,
   xdelo_repairContentDisposition,
-  xdelo_checkFileExistsInStorage
+  xdelo_checkFileExistsInStorage,
+  xdelo_getFileExtension
 } from '@/lib/telegramMediaUtils';
 import { useToast } from './useToast';
 
@@ -33,20 +34,23 @@ export function useMediaUpload() {
     fileUrl: string, 
     fileUniqueId: string, 
     mediaType: string, 
-    mimeType?: string
+    explicitExtension?: string
   ) => {
     setIsUploading(true);
     try {
+      // Determine the extension to use
+      const extension = explicitExtension || xdelo_getFileExtension(mediaType);
+      
       // Check if media exists first (just for logging/debugging)
-      const exists = await checkMediaExists(fileUniqueId, mimeType || '');
+      const exists = await checkMediaExists(fileUniqueId, extension);
       console.log(`Media ${fileUniqueId} exists in storage: ${exists}`);
       
       // Always upload/re-upload regardless of existence
-      const { publicUrl, storagePath, mimeType: detectedMimeType } = await xdelo_uploadTelegramMedia(
+      const { publicUrl, storagePath, mimeType } = await xdelo_uploadTelegramMedia(
         fileUrl, 
         fileUniqueId, 
         mediaType, 
-        mimeType
+        extension
       );
       
       setLastUploadedUrl(publicUrl);
@@ -55,7 +59,7 @@ export function useMediaUpload() {
         description: exists ? "Media file has been re-uploaded and replaced." : "Media file has been uploaded."
       });
       
-      return { publicUrl, storagePath, mimeType: detectedMimeType };
+      return { publicUrl, storagePath, mimeType };
     } catch (error) {
       console.error('Upload failed:', error);
       toast({

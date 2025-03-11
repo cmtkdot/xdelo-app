@@ -58,17 +58,17 @@ export async function xdelo_checkFileExistsInStorage(fileUniqueId: string, exten
 }
 
 /**
- * Uploads media to storage with proper MIME type handling and standardized paths
+ * Uploads media to storage with proper extension handling and standardized paths
  * Always re-uploads media to replace existing files
  */
 export async function xdelo_uploadTelegramMedia(
   fileUrl: string, 
   fileUniqueId: string, 
   mediaType: string, 
-  explicitMimeType?: string
+  explicitExtension?: string
 ): Promise<{publicUrl: string, storagePath: string, mimeType: string}> {
-  // Get extension from explicit MIME type or fallback to media type extension
-  const extension = explicitMimeType ? explicitMimeType.split('/')[1] || 'bin' : xdelo_getFileExtension(mediaType);
+  // Get extension from explicit param or fallback to media type extension
+  const extension = explicitExtension || xdelo_getFileExtension(mediaType);
   console.log('📤 Uploading media to storage:', { fileUniqueId, mediaType, extension });
   
   // Call the media-management edge function to handle the upload
@@ -90,7 +90,7 @@ export async function xdelo_uploadTelegramMedia(
     return { 
       publicUrl: data.publicUrl, 
       storagePath: data.storagePath,
-      mimeType: data.mimeType
+      mimeType: data.mimeType || `application/${extension}` // Fallback MIME type based on extension
     };
   } catch (error) {
     console.error('❌ Error uploading media:', error);

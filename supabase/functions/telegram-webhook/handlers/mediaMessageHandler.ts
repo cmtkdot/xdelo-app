@@ -1,4 +1,3 @@
-
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { getMediaInfo } from '../utils/mediaUtils.ts';
 import { logMessageOperation } from '../utils/logger.ts';
@@ -326,13 +325,11 @@ async function handleNewMediaMessage(
       duplicate_update: true,
       previous_media_info: {
         storage_path: existingMessage.storage_path,
-        public_url: existingMessage.public_url,
-        mime_type: existingMessage.mime_type
+        public_url: existingMessage.public_url
       },
       new_media_info: {
         storage_path: mediaInfo.storage_path,
-        public_url: mediaInfo.public_url,
-        mime_type: mediaInfo.mime_type
+        public_url: mediaInfo.public_url
       }
     });
     
@@ -351,7 +348,6 @@ async function handleNewMediaMessage(
         // Update with new storage path and public URL from the re-upload
         storage_path: mediaInfo.storage_path,
         public_url: mediaInfo.public_url,
-        mime_type: mediaInfo.mime_type,
         file_id: mediaInfo.file_id, // Update with new file_id
         // Reset processing if caption changed
         processing_state: captionChanged ? 'pending' : existingMessage.processing_state,
@@ -391,7 +387,7 @@ async function handleNewMediaMessage(
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         file_unique_id: mediaInfo.file_unique_id,
-        sourceMessageId: existingMessage.id, // Fixed: changed from existing_message_id to sourceMessageId
+        source_message_id: existingMessage.id, // Changed from existing_message_id to source_message_id
         update_type: 'duplicate_update',
         media_group_id: message.media_group_id
       }
@@ -428,7 +424,10 @@ async function handleNewMediaMessage(
     chat_title: message.chat.title,
     caption: message.caption,
     media_group_id: message.media_group_id,
-    ...mediaInfo,
+    file_id: mediaInfo.file_id,
+    file_unique_id: mediaInfo.file_unique_id,
+    storage_path: mediaInfo.storage_path,
+    public_url: mediaInfo.public_url,
     correlation_id: context.correlationId,
     processing_state: message.caption ? 'pending' : 'initialized',
     is_edited_channel_post: context.isChannelPost,

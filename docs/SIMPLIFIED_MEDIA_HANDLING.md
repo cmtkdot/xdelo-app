@@ -1,3 +1,4 @@
+
 # Simplified Media Handling in Xdelo
 
 This document outlines the simplified media handling approach implemented to improve reliability and reduce complexity in the media processing flow.
@@ -62,7 +63,7 @@ const uploadOptions = {
 
 - `xdelo_getFileExtension(mediaType)` - Get standard extension for media type
 - `xdelo_isViewableExtension(extension)` - Check if extension is browser-viewable
-- `xdelo_uploadTelegramMedia(fileUrl, fileUniqueId, mediaType, explicitMimeType?)` - Full upload flow
+- `xdelo_uploadTelegramMedia(fileUrl, fileUniqueId, mediaType, explicitExtension?)` - Full upload flow
 
 ## Benefits
 

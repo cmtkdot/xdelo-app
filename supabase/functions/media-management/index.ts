@@ -6,15 +6,16 @@ import {
   xdelo_getFileExtension,
   xdelo_uploadMediaToStorage,
   xdelo_validateStoragePath,
-  xdelo_repairContentDisposition
+  xdelo_repairContentDisposition,
+  xdelo_constructStoragePath
 } from "../_shared/mediaUtils.ts";
 import { getStoragePublicUrl } from "../_shared/urls.ts";
 
-// Helper to detect MIME type from file extension
-function getMimeTypeFromExt(filename: string): string {
-  const ext = filename.split('.').pop()?.toLowerCase();
+// Helper to get MIME type from file extension
+function getMimeTypeFromExtension(extension: string): string {
+  extension = extension.toLowerCase();
   
-  switch (ext) {
+  switch (extension) {
     case 'jpg':
     case 'jpeg': 
       return 'image/jpeg';
@@ -53,16 +54,16 @@ serve(async (req) => {
 
   try {
     // Parse request body
-    const { action, fileUrl, fileUniqueId, mediaType, mimeType, storagePath } = await req.json();
+    const { action, fileUrl, fileUniqueId, mediaType, extension, storagePath } = await req.json();
     const correlationId = crypto.randomUUID();
     
     // Log the request
-    console.log(`Handling ${action} request:`, { fileUniqueId, mediaType, correlationId });
+    console.log(`Handling ${action} request:`, { fileUniqueId, mediaType, extension, correlationId });
     
     // Handle different actions
     switch (action) {
       case 'upload':
-        return await handleUpload(fileUrl, fileUniqueId, mediaType, mimeType, correlationId);
+        return await handleUpload(fileUrl, fileUniqueId, mediaType, extension, correlationId);
         
       case 'validate':
         return await handleValidate(storagePath, correlationId);
@@ -94,17 +95,17 @@ async function handleUpload(
   fileUrl: string, 
   fileUniqueId: string, 
   mediaType: string, 
-  explicitMimeType: string | undefined,
+  requestedExtension: string | undefined,
   correlationId: string
 ): Promise<Response> {
   try {
-    // Determine MIME type
-    const mimeType = explicitMimeType || getMimeTypeFromExt(fileUrl) || 'application/octet-stream';
+    // Determine extension
+    const extension = requestedExtension || xdelo_getFileExtension(mediaType);
     
     // Generate storage path using the shared utility
-    const storagePath = `${fileUniqueId}.${mimeType.split('/')[1] || 'bin'}`;
+    const storagePath = xdelo_constructStoragePath(fileUniqueId, extension);
     
-    console.log(`Downloading media from ${fileUrl} with MIME type ${mimeType}`);
+    console.log(`Downloading media from ${fileUrl} with extension ${extension}`);
     
     // Download media from URL
     const mediaResponse = await fetch(fileUrl);
@@ -134,16 +135,20 @@ async function handleUpload(
       metadata: {
         file_unique_id: fileUniqueId,
         storage_path: storagePath,
-        mime_type: mimeType
+        extension
       }
     });
+
+    // Get MIME type from extension for client info
+    const mimeType = getMimeTypeFromExtension(extension);
     
     return new Response(
       JSON.stringify({ 
         success: true, 
         publicUrl, 
-        storagePath: `telegram-media/${storagePath}`,
-        mimeType
+        storagePath,
+        mimeType,
+        extension
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
