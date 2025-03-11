@@ -71,7 +71,7 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     })}`);
 
     console.log(`Performing manual parsing on caption: ${captionForLog}`);
-    // Use the new shared parser function
+    // Use the shared parser function
     let parsedContent: ParsedContent = xdelo_parseCaption(caption);
     console.log(`Manual parsing result: ${JSON.stringify(parsedContent)}`);
 
