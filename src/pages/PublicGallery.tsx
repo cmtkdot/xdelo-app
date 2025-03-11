@@ -22,7 +22,8 @@ const PublicGallery = () => {
     search: "",
     vendors: [],
     sortOrder: "desc",
-    sortField: "created_at"
+    sortField: "created_at",
+    showUntitled: false
   });
   
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -202,6 +203,16 @@ const PublicGallery = () => {
           start: filters.dateRange!.from,
           end: filters.dateRange!.to
         });
+      });
+    }
+    
+    // Filter out untitled products if showUntitled is false
+    if (!filters.showUntitled) {
+      filtered = filtered.filter(group => {
+        const mainMedia = group.find(m => m.caption) || group[0];
+        return mainMedia && 
+               mainMedia.analyzed_content?.product_name && 
+               mainMedia.analyzed_content.product_name.toLowerCase() !== "untitled";
       });
     }
     

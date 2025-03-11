@@ -79,6 +79,9 @@ export function ProductGroup({ group, onEdit, onDelete, onView, isDeleting }: Pr
     return mainMedia.analyzed_content?.product_name || "Untitled";
   };
 
+  // Check if product is untitled
+  const isUntitled = getProductName() === "Untitled";
+
   return (
     <div className="group relative bg-white dark:bg-gray-950 rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden">
       <div className="aspect-square overflow-hidden">
@@ -125,6 +128,11 @@ export function ProductGroup({ group, onEdit, onDelete, onView, isDeleting }: Pr
           {mainMedia.analyzed_content?.product_code && (
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {mainMedia.analyzed_content.product_code}
+            </p>
+          )}
+          {isUntitled && mainMedia.caption && (
+            <p className="text-sm italic text-gray-500 dark:text-gray-400 mt-2 line-clamp-2">
+              "{mainMedia.caption}"
             </p>
           )}
         </div>

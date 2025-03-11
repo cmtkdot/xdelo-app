@@ -1518,6 +1518,7 @@ export type Database = {
           group_caption_synced: boolean | null
           group_first_message_time: string | null
           group_last_message_time: string | null
+          group_message_count: string | null
           height: number | null
           id: string
           is_channel_post: string | null
@@ -1606,6 +1607,7 @@ export type Database = {
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
+          group_message_count?: string | null
           height?: number | null
           id?: string
           is_channel_post?: string | null
@@ -1694,6 +1696,7 @@ export type Database = {
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
+          group_message_count?: string | null
           height?: number | null
           id?: string
           is_channel_post?: string | null
