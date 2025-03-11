@@ -3,5 +3,4 @@ project_id = "xjhhehxcxkiumnwbirel"
 name = "redownload-missing-files"
 description = "Redownloads missing or corrupted files from Telegram"
 version = 1
-verify_jwt = false
 

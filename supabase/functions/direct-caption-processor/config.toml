@@ -3,7 +3,6 @@
 project_id = "xjhhehxcxkiumnwbirel"
 template = "typescript"
 memory = 1024 # Higher memory (1 GB) since we're doing multiple operations
-verify_jwt = false # Not requiring JWT as this is triggered directly from database
 entrypoint = "/index.ts"
 # This function should be triggered directly from database events
 

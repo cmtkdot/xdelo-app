@@ -1,7 +1,6 @@
 # Config for the log-operation function
 
 # Allow this function to be called from the browser
-verify_jwt = false
 
 # Allow this function to make network requests
 # This is needed for logging operations
