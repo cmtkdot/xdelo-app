@@ -3,9 +3,7 @@
 select cron.schedule(
   'process-pending-messages',
   '*/5 * * * *',
-  $$
-  SELECT * FROM xdelo_run_scheduled_message_processing();
-  $$
+  'SELECT * FROM xdelo_run_scheduled_message_processing();'
 );
 
 -- Add a new hourly job to look for missing captions
@@ -63,9 +61,7 @@ select cron.schedule(
 select cron.schedule(
   'check-orphaned-media-groups',
   '15 * * * *',
-  $$
-  SELECT * FROM xdelo_sync_pending_media_group_messages();
-  $$
+  'SELECT * FROM xdelo_sync_pending_media_group_messages();'
 );
 
 -- Add a new job to reset stalled messages every 15 minutes
