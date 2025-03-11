@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Message, ProcessingState } from '@/types';
 
-// Define the FilterOptions interface since it's missing from types.ts
+// Define FilterOptions interface here since it's not in types.ts
 interface FilterOptions {
   limit?: number;
   offset?: number;
@@ -54,35 +54,36 @@ export function useRealTimeMessages(options: FilterOptions = {}) {
     ...otherOptions
   } = options;
   
-  // Define the query key based on all filter parameters
+  // Simplify the query key to avoid excessive depth
   const queryKey = [
-    'messages', 
-    limit, 
-    offset, 
-    search, 
-    sort, 
-    sortField,
-    chatId,
-    vendorId,
-    mediaGroupId,
-    processingStates ? processingStates.join(',') : null,
-    startDate,
-    endDate,
-    hasCaption,
-    excludeForwarded,
-    excludeEdited,
-    hasError,
-    hasMediaGroup,
-    needsRedownload,
-    fileUniqueId,
-    // Only include non-undefined values from otherOptions
-    ...Object.entries(otherOptions)
-      .filter(([_, value]) => value !== undefined)
-      .map(([key, value]) => `${key}:${value}`)
-  ].filter(Boolean); // Filter out null and undefined values
+    'messages',
+    JSON.stringify({
+      limit,
+      offset,
+      search,
+      sort,
+      sortField,
+      chatId,
+      vendorId,
+      mediaGroupId,
+      processingStates: processingStates ? processingStates.join(',') : null,
+      startDate,
+      endDate,
+      hasCaption,
+      excludeForwarded,
+      excludeEdited,
+      hasError,
+      hasMediaGroup,
+      needsRedownload,
+      fileUniqueId,
+      ...otherOptions
+    })
+  ];
 
   // Include the actual processing states in the filter
-  const stateFilterParam = processingStates || ['initialized', 'pending', 'processing', 'completed', 'error', 'partial_success'] as ProcessingState[];
+  // Use 'as const' to make it a readonly tuple to match the expected type
+  const validProcessingStates = ['initialized', 'pending', 'processing', 'completed', 'error', 'partial_success'] as const;
+  const stateFilterParam = processingStates || validProcessingStates;
 
   // Query to fetch messages
   const { data, isLoading, error, refetch } = useQuery({
