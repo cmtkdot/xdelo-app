@@ -11,17 +11,24 @@ export function useMediaGroupRepair() {
     try {
       setIsRepairing(true);
       
-      // Call the repair function
-      const { data, error } = await supabase.rpc('xdelo_repair_media_group_syncs', {});
+      // Call the repair function through the unified endpoint
+      const { data, error } = await supabase.functions.invoke('media-management', {
+        body: { 
+          action: 'repair-media-groups',
+          options: {
+            fullRepair: false
+          }
+        }
+      });
       
       if (error) throw error;
       
       toast({
         title: "Media Group Repair Complete",
-        description: `Fixed ${data.length || 0} media groups with sync issues.`
+        description: `Fixed ${data?.data?.fixed_count || 0} media groups with sync issues.`
       });
       
-      return data;
+      return data?.data;
     } catch (error: any) {
       console.error('Error running system maintenance:', error);
       
@@ -37,8 +44,47 @@ export function useMediaGroupRepair() {
     }
   };
 
+  const repairSpecificMediaGroup = async (groupId: string, sourceMessageId?: string) => {
+    try {
+      setIsRepairing(true);
+      
+      const { data, error } = await supabase.functions.invoke('media-management', {
+        body: { 
+          action: 'repair-media-groups',
+          mediaGroupId: groupId,
+          messageIds: sourceMessageId ? [sourceMessageId] : undefined,
+          options: {
+            sourceMessageId
+          }
+        }
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Media Group Repair Complete",
+        description: `Fixed media group ${groupId} successfully.`
+      });
+      
+      return data?.data;
+    } catch (error: any) {
+      console.error('Error repairing media group:', error);
+      
+      toast({
+        title: "Repair Failed",
+        description: error.message || "Failed to repair media group",
+        variant: "destructive"
+      });
+      
+      throw error;
+    } finally {
+      setIsRepairing(false);
+    }
+  };
+
   return {
     repairMessageProcessingSystem,
+    repairSpecificMediaGroup,
     isRepairing
   };
 }

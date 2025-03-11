@@ -14,20 +14,25 @@ export function useStuckMessageRepair() {
     try {
       setIsRepairing(true);
       
-      // Call the dedicated repair function via edge function
-      const { data, error } = await supabase.functions.invoke('repair-processing-flow', {
+      // Call the repair function through the unified endpoint
+      const { data, error } = await supabase.functions.invoke('media-management', {
         body: { 
+          action: 'repair-processing-flow',
           limit: 50, 
-          repair_enums: true,
-          repair_stalled: true
+          options: {
+            repairEnums: true,
+            forceResetStalled: true
+          }
         }
       });
       
       if (error) throw error;
       
+      const results = data?.data?.results || {};
+      
       toast({
         title: "Recovery Process Complete",
-        description: `Reset ${data?.data?.processed || 0} stalled messages and fixed ${data?.data?.media_groups_fixed?.mixed_groups_fixed || 0} media groups.`
+        description: `Reset ${results.stuck_reset || 0} stalled messages and fixed ${results.media_groups_fixed || 0} media groups.`
       });
       
       return data;
