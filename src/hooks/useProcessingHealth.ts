@@ -24,6 +24,7 @@ interface ProcessingStats {
     oldest_stuck_processing_hours: number | null;
   };
   timestamp: string;
+  mixed_media_groups?: MediaGroupStatus[];
 }
 
 interface MediaGroupStatus {
@@ -45,7 +46,7 @@ export function useProcessingHealth() {
       setIsLoading(true);
       
       // Get processing stats
-      const { data: stateCounts, error: stateError } = await supabase.rpc(
+      const { data: statsCounts, error: stateError } = await supabase.rpc(
         'xdelo_get_message_processing_stats'
       );
       
@@ -61,8 +62,8 @@ export function useProcessingHealth() {
 
       // Combine everything into a health report
       const healthReport: ProcessingStats = {
-        ...(stateCounts as ProcessingStats),
-        mixed_media_groups: mixedMediaGroups || []
+        ...(statsCounts as ProcessingStats),
+        mixed_media_groups: mixedMediaGroups as MediaGroupStatus[] || []
       };
       
       setProcessingStats(healthReport);

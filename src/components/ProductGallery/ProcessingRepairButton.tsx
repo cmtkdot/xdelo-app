@@ -72,8 +72,8 @@ export function ProcessingRepairButton() {
     }
   };
   
-  const hasIssues = processingStats?.state_counts?.stuck_processing > 0 || 
-                   processingStats?.state_counts?.unprocessed_with_caption > 0;
+  const hasIssues = processingStats?.media_group_stats?.stuck_in_processing > 0 || 
+                   processingStats?.media_group_stats?.unprocessed_with_caption > 0;
   
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return 'Unknown';
