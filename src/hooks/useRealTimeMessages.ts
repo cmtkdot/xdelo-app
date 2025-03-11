@@ -37,7 +37,7 @@ export function useRealTimeMessages({ limit = 20, filter = '' }: UseRealTimeMess
         const { data, error } = await query;
           
         if (error) throw error;
-        return data || [];
+        return data as Message[];
       } catch (error) {
         console.error('Error fetching messages:', error);
         throw error;
@@ -77,11 +77,7 @@ export function useRealTimeMessages({ limit = 20, filter = '' }: UseRealTimeMess
       setLastRefresh(new Date());
     } catch (error) {
       console.error('Error refreshing messages:', error);
-      toast({
-        title: "Refresh Failed",
-        description: "Failed to refresh messages",
-        variant: "destructive"
-      });
+      toast.error("Failed to refresh messages");
     } finally {
       setIsRefreshing(false);
     }
