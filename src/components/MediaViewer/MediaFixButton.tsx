@@ -11,7 +11,7 @@ interface MediaFixButtonProps {
 }
 
 export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) {
-  const { fixContentDisposition, repairStoragePaths, isProcessing } = useMediaReprocessing();
+  const { fixContentDisposition, repairStoragePaths, redownloadFromMediaGroup, isProcessing } = useMediaReprocessing();
   const { toast } = useToast();
 
   const handleFixMediaDisplay = async () => {
@@ -26,11 +26,6 @@ export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) 
       if (onComplete) onComplete();
     } catch (error) {
       console.error("Failed to fix media display:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fix media display",
-        variant: "destructive"
-      });
     }
   };
 
@@ -46,11 +41,6 @@ export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) 
       if (onComplete) onComplete();
     } catch (error) {
       console.error("Failed to repair storage paths:", error);
-      toast({
-        title: "Error",
-        description: "Failed to repair storage paths",
-        variant: "destructive"
-      });
     }
   };
 
@@ -67,11 +57,7 @@ export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) 
     try {
       // Invoke the redownload-from-media-group function for each selected message
       const promises = messageIds.map(messageId => 
-        fetch('/api/redownload-media', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messageId })
-        }).then(res => res.json())
+        redownloadFromMediaGroup(messageId)
       );
 
       await Promise.all(promises);
@@ -83,11 +69,6 @@ export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) 
       if (onComplete) onComplete();
     } catch (error) {
       console.error("Failed to redownload media:", error);
-      toast({
-        title: "Error",
-        description: "Failed to redownload media",
-        variant: "destructive"
-      });
     }
   };
 
