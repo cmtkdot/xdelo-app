@@ -1,8 +1,9 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { FileDown, Wrench } from "lucide-react";
+import { Wrench } from "lucide-react";
 import { MediaRepairDialog } from "@/components/MediaViewer/MediaRepairDialog";
+import { Message } from "@/types";
 
 interface MediaFixButtonProps {
   messageIds?: string[];
@@ -42,6 +43,7 @@ export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) 
             handleComplete();
           }
         }}
+        initialMessageIds={messageIds}
       />
     </>
   );

@@ -28,3 +28,5 @@ verify_jwt = false
 verify_jwt = false
 [functions.user-data]
 verify_jwt = false
+[functions.xdelo_reprocess_message]
+verify_jwt = false

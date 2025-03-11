@@ -2,13 +2,14 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, ExternalLink } from 'lucide-react';
+import { RefreshCw, ExternalLink, Sync } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { Message } from '@/types';
 import { StatusBadge } from './StatusBadge';
+import { MediaFixButton } from '@/components/ProductGallery/MediaFixButton';
 
 interface MessageCardProps {
   message: Message;
@@ -21,6 +22,26 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, onRetryProces
   const hasMediaGroup = !!message.media_group_id;
   const hasCaption = !!message.caption;
   const timeSinceCreation = message.created_at ? formatDistanceToNow(new Date(message.created_at), { addSuffix: true }) : 'unknown time';
+  
+  const canReanalyze = hasCaption && 
+    (message.processing_state === 'error' || 
+     message.processing_state === 'pending' || 
+     message.processing_state === 'processing' || 
+     message.processing_state === 'completed');
+  
+  const getButtonText = () => {
+    if (message.processing_state === 'completed') return 'Reanalyze';
+    if (message.processing_state === 'processing') return 'Retry Analysis';
+    return 'Analyze';
+  };
+
+  const handleReanalyze = () => {
+    toast.promise(onRetryProcessing(message.id), {
+      loading: message.processing_state === 'completed' ? 'Reanalyzing message...' : 'Processing message...',
+      success: message.processing_state === 'completed' ? 'Message reanalyzed successfully' : 'Message processed successfully',
+      error: 'Failed to process message'
+    });
+  };
   
   return (
     <Card className="overflow-hidden">
@@ -82,22 +103,61 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, onRetryProces
             </div>
             
             <div className="flex items-center gap-2">
-              {(message.processing_state === 'error' || message.processing_state === 'pending') && (
+              {canReanalyze && (
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={handleReanalyze}
+                >
+                  <RefreshCw className="w-4 h-4 mr-1" />
+                  {getButtonText()}
+                </Button>
+              )}
+              
+              {hasMediaGroup && (
                 <Button 
                   size="sm" 
                   variant="outline" 
                   onClick={() => {
-                    toast.promise(onRetryProcessing(message.id), {
-                      loading: 'Processing message...',
-                      success: 'Message processed successfully',
-                      error: 'Failed to process message'
-                    });
+                    toast.promise(
+                      fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/xdelo_sync_media_group`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+                        },
+                        body: JSON.stringify({
+                          mediaGroupId: message.media_group_id,
+                          sourceMessageId: message.id,
+                          forceSync: true
+                        })
+                      }).then(res => {
+                        if (!res.ok) throw new Error('Failed to sync media group');
+                        return res.json();
+                      }),
+                      {
+                        loading: 'Syncing media group...',
+                        success: 'Media group synced successfully',
+                        error: 'Failed to sync media group'
+                      }
+                    );
                   }}
+                  title="Sync content with all messages in this media group"
                 >
-                  <RefreshCw className="w-4 h-4 mr-1" />
-                  Analyze
+                  <Sync className="w-4 h-4 mr-1" />
+                  Sync Group
                 </Button>
               )}
+              
+              {(isImage || isVideo) && message.public_url && (
+                <MediaFixButton 
+                  messageIds={[message.id]} 
+                  onComplete={() => {
+                    toast.success('Media repair completed');
+                  }} 
+                />
+              )}
+              
               {message.message_url && (
                 <Button 
                   size="sm" 
