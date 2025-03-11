@@ -9,6 +9,7 @@ export function ProcessingSystemStatus() {
   const [stats, setStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
   const { 
     getProcessingStats, 
     repairProcessingSystem, 

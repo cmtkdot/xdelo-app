@@ -1,126 +1,138 @@
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { ProcessingState } from '@/types';
+import { useToast } from './useToast';
 
-interface ProcessingStats {
-  total: number;
-  byState: Record<ProcessingState, number>;
-  pendingCount: number;
-  processingCount: number;
-  errorCount: number;
-  completedCount: number;
-  initializedCount: number;
-  partialSuccessCount: number;
-  stalledCount: number;
+export interface ProcessingSystemStatus {
+  queue_health: 'healthy' | 'warning' | 'error';
+  queued_count: number;
+  active_workers: number;
+  last_worker_activity: string;
+  recent_errors?: Array<{
+    component: string;
+    message: string;
+    timestamp: string;
+  }>;
 }
 
-interface ProcessingSystemStatus {
-  isLoading: boolean;
-  stats: ProcessingStats;
-  lastUpdated: Date | null;
-  error: string | null;
-}
+export function useProcessingSystem() {
+  const [isRepairing, setIsRepairing] = useState(false);
+  const { toast } = useToast();
 
-const defaultStats: ProcessingStats = {
-  total: 0,
-  byState: {
-    'initialized': 0,
-    'pending': 0,
-    'processing': 0,
-    'completed': 0,
-    'error': 0,
-    'partial_success': 0
-  },
-  pendingCount: 0,
-  processingCount: 0,
-  errorCount: 0,
-  completedCount: 0,
-  initializedCount: 0,
-  partialSuccessCount: 0,
-  stalledCount: 0
-};
+  const getProcessingStats = async (): Promise<ProcessingSystemStatus> => {
+    try {
+      const { data, error } = await supabase
+        .from('system_health')
+        .select('*')
+        .single();
 
-export function useProcessingSystem(): ProcessingSystemStatus {
-  const [status, setStatus] = useState<ProcessingSystemStatus>({
-    isLoading: true,
-    stats: defaultStats,
-    lastUpdated: null,
-    error: null
-  });
+      if (error) throw error;
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setStatus(prev => ({ ...prev, isLoading: true }));
-        
-        // Get counts by state
-        const { data: stateCounts, error: stateError } = await supabase
-          .from('messages')
-          .select('processing_state, count')
-          .group('processing_state');
-          
-        if (stateError) throw stateError;
-        
-        // Get stalled message count (messages stuck in processing for over 5 minutes)
-        const { data: stalledData, error: stalledError } = await supabase
-          .from('messages')
-          .select('count')
-          .eq('processing_state', 'processing')
-          .lt('processing_started_at', new Date(Date.now() - 5 * 60 * 1000).toISOString());
-          
-        if (stalledError) throw stalledError;
-        
-        // Build stats object
-        const stats: ProcessingStats = {
-          ...defaultStats,
-          stalledCount: stalledData[0]?.count || 0
+      // If we don't have data, return a default status
+      if (!data) {
+        return {
+          queue_health: 'warning',
+          queued_count: 0,
+          active_workers: 0,
+          last_worker_activity: 'Unknown',
+          recent_errors: []
         };
-        
-        let total = 0;
-        
-        // Process state counts
-        stateCounts.forEach(item => {
-          const state = item.processing_state as ProcessingState;
-          const count = parseInt(item.count as string);
-          
-          stats.byState[state] = count;
-          total += count;
-          
-          // Update individual counters
-          if (state === 'pending') stats.pendingCount = count;
-          if (state === 'processing') stats.processingCount = count;
-          if (state === 'error') stats.errorCount = count;
-          if (state === 'completed') stats.completedCount = count;
-          if (state === 'initialized') stats.initializedCount = count;
-          if (state === 'partial_success') stats.partialSuccessCount = count;
-        });
-        
-        stats.total = total;
-        
-        setStatus({
-          isLoading: false,
-          stats,
-          lastUpdated: new Date(),
-          error: null
-        });
-      } catch (error) {
-        console.error('Error fetching processing system stats:', error);
-        setStatus(prev => ({
-          ...prev,
-          isLoading: false,
-          error: error.message || 'Failed to fetch processing system stats'
-        }));
       }
-    };
-    
-    fetchStats();
-    
-    // Set up refresh interval
-    const intervalId = setInterval(fetchStats, 30000); // Update every 30 seconds
-    
-    return () => clearInterval(intervalId);
-  }, []);
-  
-  return status;
+
+      // Get recent errors
+      const { data: recentErrors } = await supabase
+        .from('unified_audit_logs')
+        .select('event_type, metadata, created_at')
+        .in('event_type', ['processing_error', 'system_error', 'queue_error'])
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      return {
+        ...data,
+        recent_errors: recentErrors?.map(err => ({
+          component: err.event_type,
+          message: err.metadata?.message || 'Unknown error',
+          timestamp: err.created_at
+        })) || []
+      };
+    } catch (error) {
+      console.error('Error fetching processing stats:', error);
+      return {
+        queue_health: 'error',
+        queued_count: 0,
+        active_workers: 0,
+        last_worker_activity: 'Error fetching data',
+        recent_errors: [{
+          component: 'system',
+          message: error instanceof Error ? error.message : 'Unknown error',
+          timestamp: new Date().toISOString()
+        }]
+      };
+    }
+  };
+
+  const repairProcessingSystem = async () => {
+    setIsRepairing(true);
+    try {
+      const { data, error } = await supabase
+        .functions.invoke('repair-processing-flow', {
+          body: { repair_limit: 100, repair_enums: true }
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Processing System Repair',
+        description: `Repair completed successfully. ${data?.processed || 0} messages reset.`,
+      });
+
+      return data;
+    } catch (error) {
+      console.error('Error repairing processing system:', error);
+      toast({
+        title: 'Repair Failed',
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+        variant: 'destructive',
+      });
+      throw error;
+    } finally {
+      setIsRepairing(false);
+    }
+  };
+
+  const repairStuckMessages = async () => {
+    setIsRepairing(true);
+    try {
+      const { data, error } = await supabase
+        .functions.invoke('repair-processing-flow', {
+          body: { repair_limit: 50, repair_enums: false }
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Stuck Messages Reset',
+        description: `Successfully reset ${data?.processed || 0} stuck messages.`,
+      });
+
+      return data;
+    } catch (error) {
+      console.error('Error resetting stuck messages:', error);
+      toast({
+        title: 'Reset Failed',
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+        variant: 'destructive',
+      });
+      throw error;
+    } finally {
+      setIsRepairing(false);
+    }
+  };
+
+  return {
+    getProcessingStats,
+    repairProcessingSystem,
+    repairStuckMessages,
+    isRepairing
+  };
 }
