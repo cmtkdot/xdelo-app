@@ -5,8 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types';
 import { toast } from 'sonner';
 
-// Define a more restricted processing state type that matches the backend
-type ProcessingStateType = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'partial_success';
+export type ProcessingStateType = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'partial_success';
 
 interface UseRealTimeMessagesOptions {
   limit?: number;
@@ -30,6 +29,35 @@ export function useRealTimeMessages({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
+  const fetchMessages = async () => {
+    let query = supabase
+      .from('messages')
+      .select('*')
+      .order(sortBy, { ascending: sortOrder === 'asc' })
+      .limit(limit);
+      
+    if (filter) {
+      query = query.or(`caption.ilike.%${filter}%,analyzed_content->product_name.ilike.%${filter}%,analyzed_content->vendor_uid.ilike.%${filter}%,telegram_message_id.eq.${!isNaN(parseInt(filter)) ? filter : 0},chat_title.ilike.%${filter}%`);
+    }
+    
+    if (processingState && processingState.length > 0) {
+      query = query.in('processing_state', processingState);
+    }
+    
+    if (showForwarded) {
+      query = query.eq('is_forward', true);
+    }
+    
+    if (showEdited) {
+      query = query.not('old_analyzed_content', 'is', null);
+    }
+    
+    const { data, error } = await query;
+      
+    if (error) throw error;
+    return data as Message[];
+  };
+
   const {
     data: messages = [],
     isLoading,
@@ -37,40 +65,7 @@ export function useRealTimeMessages({
     error
   } = useQuery({
     queryKey: ['messages', limit, filter, processingState, sortBy, sortOrder, showForwarded, showEdited],
-    queryFn: async () => {
-      try {
-        let query = supabase
-          .from('messages')
-          .select('*')
-          .order(sortBy || 'updated_at', { ascending: sortOrder === 'asc' })
-          .limit(limit);
-          
-        if (filter) {
-          query = query.or(`caption.ilike.%${filter}%,analyzed_content->product_name.ilike.%${filter}%,analyzed_content->vendor_uid.ilike.%${filter}%,telegram_message_id.eq.${!isNaN(parseInt(filter)) ? filter : 0},chat_title.ilike.%${filter}%`);
-        }
-        
-        if (processingState && processingState.length > 0) {
-          // Explicitly cast the array to handle the type issue
-          query = query.in('processing_state', processingState as unknown as string[]);
-        }
-        
-        if (showForwarded) {
-          query = query.eq('is_forward', true);
-        }
-        
-        if (showEdited) {
-          query = query.not('old_analyzed_content', 'is', null);
-        }
-        
-        const { data, error } = await query;
-          
-        if (error) throw error;
-        return data as Message[];
-      } catch (error) {
-        console.error('Error fetching messages:', error);
-        throw error;
-      }
-    },
+    queryFn: fetchMessages,
     staleTime: 5000,
   });
 
