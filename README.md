@@ -1,3 +1,4 @@
+
 # Telegram Webhook Flow
 
 ## Overview
@@ -14,7 +15,7 @@ flowchart TD
     C -->|Edited| F[Process Edit]
     
     D --> G{Has Caption?}
-    G -->|Yes| H[Queue for Analysis]
+    G -->|Yes| H[Direct Caption Processor]
     G -->|No| I[Check Media Group]
     
     H --> J[Parse Caption]
@@ -38,6 +39,7 @@ flowchart TD
 - Receives webhook requests from Telegram
 - Identifies message type (media, text, edited, forwarded)
 - Routes to appropriate handlers
+- Generates a unique correlation ID for tracking the message through the system
 
 ### 2. Message Handlers
 
@@ -49,15 +51,17 @@ Processes messages containing photos, videos or documents:
    - Downloads media from Telegram
    - Uploads to Supabase storage
    - Generates public URLs for access
+   - Handles different file types including photos, videos, and documents
 
-2. **Caption Analysis**:
-   - If caption exists, queues for processing
-   - Caption processing is two-stage:
-      - Manual parsing for standard patterns
-      - AI analysis for complex descriptions
+2. **Direct Caption Processing**:
+   - If caption exists, triggers immediate processing
+   - No queueing system is used; processing happens in real-time
+   - Uses database transactions to ensure consistency
+   - Maintains correlation ID throughout the process
 
 3. **Media Group Handling**:
    - For media groups, first message with caption becomes authoritative
+   - Advisory locks prevent concurrent media group updates
    - Analyzed content is synchronized to all messages in the group
    - Messages without captions inherit analysis from the group
 
@@ -66,67 +70,35 @@ Processes messages containing photos, videos or documents:
 Handles edited messages from Telegram:
 
 1. **Edit Tracking**:
-   - Tracks edit history in edit_history field
+   - Tracks edit history in edit_history array
    - Preserves previous analyzed_content in old_analyzed_content
+   - Maintains chronological order of edits
 
 2. **Caption Changes**:
    - If caption changes, resets analyzed_content
-   - Triggers re-analysis of caption
+   - Triggers direct re-analysis of caption
    - For media groups, resets analysis of entire group
+   - Ensures edit history consistency across media groups
+
+#### Forward Message Handler
+
+Processes forwarded messages:
+
+1. **Forward Detection**:
+   - Identifies forwards by matching file_unique_id
+   - Tracks original message reference
+   - Maintains forward count and chain
+
+2. **Content Handling**:
+   - Preserves original analyzed content in history
+   - Re-analyzes caption for contextual changes
+   - Links back to original message for tracking
 
 #### Text Message Handler
 
 Processes text-only messages, commands, and other non-media content.
 
-### 3. Database Functions
-
-#### Content Analysis
-
-- `xdelo_analyze_message_caption`: Prepares message for analysis
-- `xdelo_queue_message_for_processing`: Queues messages for processing
-- `xdelo_complete_message_processing`: Finalizes processing results
-
-#### Media Group Synchronization
-
-- `xdelo_sync_media_group_content`: Syncs analyzed content to all messages in a group
-- `xdelo_find_caption_message`: Locates the source caption in a media group
-- `xdelo_check_media_group_content`: Checks and applies media group content
-
-#### Message State Management
-
-- `xdelo_handle_message_update`: Handles message updates
-- `xdelo_handle_message_forward`: Processes forwarded messages
-- `xdelo_extract_analyzed_content`: Extracts structured data
-
-### 4. Edge Functions
-
-#### Analysis Pipeline
-
-- `parse-caption-with-ai`: Analyzes captions using manual and AI methods
-- `analyze-with-ai`: Performs AI analysis on complex captions
-- `process-message-queue`: Processes the analysis queue
-
-#### Media Management
-
-- `redownload-from-media-group`: Recovers media files from media groups
-- `validate-storage-files`: Validates storage integrity
-- `repair-storage-paths`: Repairs invalid storage paths
-
-#### Admin and Maintenance
-
-- `process-unanalyzed-messages`: Retroactively processes messages
-- `xdelo_sync_media_group`: Syncs media groups on demand
-- `update-telegram-caption`: Updates captions in Telegram
-
-### 5. Database Triggers
-
-- `xdelo_trg_message_update`: Handles message updates
-- `xdelo_trg_extract_analyzed_content`: Extracts analyzed content
-- `xdelo_auto_queue_messages_trigger`: Auto-queues messages for processing
-- `xdelo_trg_check_media_group`: Checks media group content
-- `xdelo_media_group_history_sync`: Syncs media group history
-
-## Message States
+### 3. Message Processing States
 
 Messages go through multiple processing states:
 
@@ -136,65 +108,127 @@ Messages go through multiple processing states:
 4. `completed`: Successfully processed
 5. `error`: Failed processing
 
-## Database Structure
+### 4. Direct Caption Processing
 
-### Key Tables
+The direct caption processor replaces the previous queue system:
 
-- `messages`: Stores all media messages
-- `other_messages`: Stores text-only messages
-- `message_processing_queue`: Manages processing queue
-- `unified_audit_logs`: Centralized audit logging
-- `deleted_messages`: Archive of deleted messages
+1. **Trigger**: 
+   - New message with caption
+   - Updated message with changed caption
+   - Database trigger on message insert/update
 
-### Key Columns
+2. **Transaction Model**:
+   - Uses database transactions to ensure data consistency
+   - Locks relevant rows during processing
+   - Maintains correlation ID through entire process
 
-For `messages` table:
-- `analyzed_content`: JSON object with structured data
-- `old_analyzed_content`: Array of previous analyzed content
-- `processing_state`: Current processing state
-- `media_group_id`: Telegram media group ID
-- `is_original_caption`: Flag for caption authority
-- `group_caption_synced`: Flag for group sync status
+3. **Processing Steps**:
+   - Manual parsing for standard patterns
+   - Pattern-based parsing with multiple strategies
+   - Media group synchronization
+   - Complete audit logging
 
-## Error Handling and Recovery
+### 5. Media Group Synchronization
 
-### Automatic Retry
+Enhanced media group handling with transaction support:
 
-- Failed analyses are retried up to 3 times
-- Processing errors are logged with detailed diagnostics
-- Queue system ensures no message is lost
+1. **Synchronization Strategy**:
+   - Advisory locks prevent concurrent updates
+   - First message with caption becomes authoritative
+   - Consistent edit history across all group messages
+   - Forward tracking preserved across group
 
-### Manual Recovery
+2. **Coordination Functions**:
+   - `xdelo_sync_media_group_content`: Syncs content to all group messages
+   - `xdelo_find_caption_message`: Locates authoritative caption in group
+   - `xdelo_check_media_group_content`: Checks and applies group content
+   - Transaction-based approach ensures consistency
 
-- `xdelo_repair_media_group_syncs()`: Repairs broken media group synchronizations
-- `xdelo_repair_storage_paths()`: Fixes storage path issues
-- `xdelo_diagnose_queue_issues()`: Diagnoses queue problems
+### 6. Transaction Management
 
-## Audit Logging
+Transaction-based processing ensures consistency:
 
-All operations are logged in the `unified_audit_logs` table:
+1. **Transaction Functions**:
+   - `xdelo_begin_transaction`: Initializes transaction with unique ID
+   - `xdelo_commit_transaction_with_sync`: Commits with group synchronization
+   - `xdelo_update_message_with_analyzed_content`: Atomic message updates
+   - `xdelo_handle_failed_caption_analysis`: Consistent error handling
 
-- Message creation, updates, and deletions
-- Processing state changes
-- Media group synchronizations
-- Media downloads and storage operations
+2. **Advisory Locks**:
+   - Prevent race conditions on media group updates
+   - Ensure only one process updates a group at a time
+   - Allow parallel processing of unrelated groups
 
-## Recent Improvements
+### 7. Error Handling and Recovery
 
-### Media Group Handling
+Improved error handling with transaction support:
 
-- Improved synchronization with proper locking
-- Better handling of missing captions
-- More robust conflict resolution
+1. **Automatic Retry**:
+   - Failed analyses are automatically retried
+   - Incremental backoff for repeated failures
+   - Transaction rollback on critical errors
 
-### Caption Analysis
+2. **Manual Recovery**:
+   - `xdelo_repair_media_group_syncs()`: Repairs broken media group synchronizations
+   - `xdelo_reset_stalled_messages()`: Resets messages stuck in processing
+   - `repair-processing-flow`: Edge function for system-wide repairs
 
-- Two-stage parsing: Manual + AI analysis
-- Better handling of complex product descriptions
-- Improved extraction of quantities and dates
+3. **Maintenance Functions**:
+   - Scheduled cleanup of stalled processes
+   - Automatic reset of stuck messages
+   - Daily maintenance of processing states
 
-### Message Editing
+### 8. Audit Logging
 
-- Proper history tracking for all edits
-- Preservation of previous analyses
-- Consistent group synchronization
+Comprehensive audit logging for all operations:
+
+1. **Log Types**:
+   - Message state changes
+   - Processing events
+   - Media group synchronizations
+   - Transaction events
+   - Error conditions
+
+2. **Correlation Tracking**:
+   - Each message flow has a unique correlation ID
+   - All related operations share the same ID
+   - Enables full tracing of message processing
+
+3. **Log Storage**:
+   - Centralized `unified_audit_logs` table
+   - Structured metadata in JSONB format
+   - Retention policies for log management
+
+### 9. Edge Functions
+
+Key edge functions in the processing flow:
+
+1. **Processing Functions**:
+   - `direct-caption-processor`: Processes captions in real-time
+   - `parse-caption-with-ai`: Parses captions using pattern matching
+   - `manual-caption-parser`: Low-level caption parsing
+
+2. **Maintenance Functions**:
+   - `repair-processing-flow`: Repairs processing system issues
+   - `scheduler-process-queue`: Processes pending messages
+   - `xdelo_sync_media_group`: Synchronizes media groups
+
+3. **Utility Functions**:
+   - `redownload-from-media-group`: Recovers media files
+   - `validate-storage-files`: Validates storage integrity
+   - `repair-storage-paths`: Repairs invalid storage paths
+
+### 10. Database Triggers
+
+Key database triggers in the system:
+
+1. **Message Triggers**:
+   - `trigger_direct_caption_analysis`: Triggers direct caption processing
+   - `xdelo_trg_handle_forward`: Handles forwarded messages
+   - `xdelo_trg_extract_analyzed_content`: Extracts structured content
+   - `xdelo_media_group_history_sync`: Synchronizes media group history
+
+2. **Maintenance Triggers**:
+   - `trigger_retry_failed_analysis`: Retries failed analyses
+   - `trg_check_media_group_on_message_change`: Checks media group content
+   - `trg_ensure_edit_history_consistency`: Ensures consistent edits
