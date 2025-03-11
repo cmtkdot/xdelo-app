@@ -1,0 +1,11 @@
+
+project_id = "xjhhehxcxkiumnwbirel"
+template = "typescript"
+memory = 1024
+verify_jwt = false
+entrypoint = "/index.ts"
+
+# Trigger whenever a message with caption is inserted or updated
+[triggers]
+database_messages_insert = "INSERT ON messages WHERE caption IS NOT NULL AND caption != ''"
+database_messages_update = "UPDATE OF caption ON messages WHERE caption IS NOT NULL AND caption != ''"

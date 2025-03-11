@@ -2,35 +2,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from "../_shared/cors.ts";
+import { MessageQueueItem, ProcessingResults, ProcessingDetail } from './types.ts';
 
 // Create Supabase client
 const supabaseClient = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
-
-interface MessageQueueItem {
-  queue_id: string;
-  message_id: string;
-  correlation_id: string;
-  caption: string;
-  media_group_id?: string;
-}
-
-interface ProcessingDetail {
-  message_id: string;
-  queue_id: string;
-  status: 'success' | 'error';
-  result?: any;
-  error_message?: string;
-}
-
-interface ProcessingResults {
-  processed: number;
-  success: number;
-  failed: number;
-  details: ProcessingDetail[];
-}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -43,13 +21,14 @@ serve(async (req) => {
     console.log(`Starting to process up to ${limit} messages from queue`);
     
     // Get messages from the queue using the new function name
-    const { data: messagesToProcess, error: queueError } = await supabaseClient.rpc(
+    let messagesToProcess;
+    const { data: queueData, error: queueError } = await supabaseClient.rpc(
       'tg_get_next_messages',
       { limit_count: limit }
     );
     
     if (queueError) {
-      console.error('Failed to get messages from queue:', queueError);
+      console.error('Failed to get messages from queue using new function:', queueError);
       
       // Try fallback with old function name if the new one fails
       const { data: fallbackMessages, error: fallbackError } = await supabaseClient.rpc(
@@ -62,11 +41,10 @@ serve(async (req) => {
       }
       
       console.log(`Successfully retrieved ${fallbackMessages?.length || 0} messages using fallback method`);
-      if (fallbackMessages && fallbackMessages.length > 0) {
-        messagesToProcess = fallbackMessages;
-      }
+      messagesToProcess = fallbackMessages;
     } else {
-      console.log(`Successfully retrieved ${messagesToProcess?.length || 0} messages using new method`);
+      console.log(`Successfully retrieved ${queueData?.length || 0} messages using new method`);
+      messagesToProcess = queueData;
     }
 
     if (!messagesToProcess || messagesToProcess.length === 0) {
@@ -125,7 +103,7 @@ serve(async (req) => {
           continue;
         }
         
-        // Call the parse-caption-with-ai function
+        // Call the parse-caption-with-ai function - ensure correlationId is a string
         const response = await fetch(
           `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
           {
@@ -138,15 +116,15 @@ serve(async (req) => {
               messageId: message.message_id,
               caption: message.caption,
               media_group_id: message.media_group_id,
-              correlationId: message.correlation_id,
+              correlationId: String(message.correlation_id),
               queue_id: message.queue_id
             })
           }
         );
 
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(`Failed to process message: ${errorData.error || response.statusText}`);
+          const errorText = await response.text();
+          throw new Error(`Failed to process message: ${errorText || response.statusText}`);
         }
 
         const result = await response.json();

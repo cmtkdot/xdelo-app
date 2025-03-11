@@ -26,7 +26,7 @@ interface ProductGroupProps {
   group: Message[];
   onEdit: (media: Message) => void;
   onDelete: (media: Message, deleteTelegram: boolean) => Promise<void>;
-  onView: () => void;
+  onView: (group: Message[]) => void;
   isDeleting?: boolean;
 }
 
@@ -49,6 +49,11 @@ export function ProductGroup({ group, onEdit, onDelete, onView, isDeleting }: Pr
       setShowDeleteDialog(false);
     }
   };
+  
+  // Updated handleView to pass the entire group
+  const handleViewClick = () => {
+    onView(group);
+  };
 
   // Convert Message[] to MediaItem[] for ImageSwiper
   const mediaItems = group.map(message => ({
@@ -64,7 +69,7 @@ export function ProductGroup({ group, onEdit, onDelete, onView, isDeleting }: Pr
       <div className="aspect-square overflow-hidden">
         <ImageSwiper
           media={mediaItems}
-          onClick={onView}
+          onClick={handleViewClick}
           className="w-full h-full object-cover cursor-pointer"
         />
       </div>
@@ -91,7 +96,7 @@ export function ProductGroup({ group, onEdit, onDelete, onView, isDeleting }: Pr
               <DropdownMenuItem onClick={() => setShowDeleteDialog(true)}>
                 <Trash2 className="mr-2 h-4 w-4" /> Delete
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onView}>
+              <DropdownMenuItem onClick={handleViewClick}>
                 <ExternalLink className="mr-2 h-4 w-4" /> View
               </DropdownMenuItem>
             </DropdownMenuContent>

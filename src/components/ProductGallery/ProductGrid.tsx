@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils";
 interface ProductGridProps {
   products: Message[][];
   onEdit: (media: Message) => void;
-  onDelete: (media: Message, deleteTelegram: boolean) => Promise<void>;
-  onView: () => void;
+  onDelete: ((media: Message, deleteTelegram?: boolean) => Promise<void>) | undefined;
+  onView: (group: Message[]) => void;
   className?: string;
   isDeleting?: boolean;
 }

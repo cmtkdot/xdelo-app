@@ -2,78 +2,138 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
+import { withErrorHandling } from "../_shared/errorHandler.ts";
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
+// Main handler with error handling
+const handleQueueProcessing = async (req: Request, correlationId: string) => {
+  console.log('Starting message processing with correlation ID:', correlationId);
+  
+  // Parse request body safely
+  const { limit = 20, trigger_source = 'scheduler', repair = false } = await req.json().catch(() => ({}));
+  
+  console.log(`Processing with limit ${limit}, triggered by ${trigger_source}, repair mode: ${repair}`);
+  
   try {
-    console.log('Starting scheduled queue processing');
+    let result;
     
-    // First find and queue any unprocessed messages
-    const { data: queuedMessages, error: queueError } = await supabase
-      .rpc('xdelo_queue_unprocessed_messages', {
-        limit_count: 20
-      });
-    
-    if (queueError) throw new Error(`Error queueing messages: ${queueError.message}`);
-    console.log(`Found and queued ${queuedMessages?.length || 0} unprocessed messages`);
-    
-    // Process the queue (up to 10 messages at once)
-    const processResponse = await fetch(
-      `${Deno.env.get('SUPABASE_URL')}/functions/v1/process-message-queue`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-        },
-        body: JSON.stringify({ limit: 10 })
+    if (repair) {
+      // Run diagnostics and repair operations
+      console.log('Running repair mode...');
+      
+      // Try to ensure event types exist first
+      try {
+        await supabase.rpc('xdelo_ensure_event_types_exist');
+        console.log('Enum values checked/repaired');
+      } catch (enumError) {
+        console.warn('Could not repair enums from scheduler, continuing:', enumError);
       }
-    );
-    
-    if (!processResponse.ok) {
-      throw new Error(`Error processing queue: ${processResponse.status} ${processResponse.statusText}`);
+      
+      // Call the diagnostic function
+      const { data: diagResult, error: diagError } = await supabase
+        .rpc('xdelo_diagnose_queue_issues')
+        .catch(err => {
+          console.warn('Diagnostic function error (non-critical):', err);
+          return { data: { status: 'error', message: err.message }, error: err };
+        });
+      
+      result = {
+        repair_mode: true,
+        diagnostics: diagError ? { error: diagError.message } : diagResult
+      };
+      
+      // Additionally, repair any message relationships
+      const { data: repairResult, error: repairError } = await supabase
+        .rpc('xdelo_repair_message_relationships')
+        .catch(err => {
+          console.warn('Relationship repair function error (non-critical):', err);
+          return { data: null, error: err };
+        });
+        
+      if (!repairError) {
+        result.relationship_repairs = repairResult;
+      }
+      
+      // Also try to run the direct repair process
+      try {
+        await supabase.functions.invoke('repair-processing-flow', {
+          body: { limit: 10, repair_enums: true }
+        });
+      } catch (repairFlowError) {
+        console.warn('Repair flow function error (non-critical):', repairFlowError);
+      }
+    } else {
+      // Regular processing - run the scheduled processing function
+      const { data: scheduleResult, error: scheduleError } = await supabase
+        .rpc('xdelo_run_scheduled_message_processing')
+        .catch(err => {
+          console.warn('Scheduled processing function error:', err);
+          return { data: null, error: err };
+        });
+      
+      if (scheduleError) {
+        // Try adding enum values and retry
+        try {
+          await supabase.rpc('xdelo_ensure_event_types_exist');
+          console.log('Enum values repaired, retrying processing...');
+          
+          // Retry after fixing enum values
+          const { data: retryResult, error: retryError } = await supabase
+            .rpc('xdelo_run_scheduled_message_processing');
+            
+          if (retryError) {
+            throw new Error(`Error in scheduled processing after enum fix: ${retryError.message}`);
+          }
+          
+          result = retryResult;
+        } catch (enumError) {
+          throw new Error(`Error fixing enums and processing: ${enumError.message}`);
+        }
+      } else {
+        result = scheduleResult;
+      }
     }
     
-    const result = await processResponse.json();
-    
-    // Log the results
-    await supabase.from('unified_audit_logs').insert({
-      event_type: 'scheduler_processed_queue',
-      metadata: {
-        queued_count: queuedMessages?.length || 0,
-        processed: result.data?.processed || 0,
-        success: result.data?.success || 0,
-        failed: result.data?.failed || 0
-      },
-      event_timestamp: new Date().toISOString()
-    });
-    
+    // Return the results
     return new Response(
       JSON.stringify({
         success: true,
-        queued: queuedMessages?.length || 0,
-        processed: result.data?.processed || 0,
-        success: result.data?.success || 0,
-        failed: result.data?.failed || 0
+        correlation_id: correlationId,
+        result,
+        trigger_source
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
     );
   } catch (error) {
     console.error('Error in scheduler:', error);
     
+    // Try to log the error, but don't fail if logging fails
+    try {
+      await supabase.from('unified_audit_logs').insert({
+        event_type: 'scheduler_process_error',
+        error_message: error.message,
+        correlation_id: correlationId,
+        metadata: {
+          trigger_source,
+          error_details: error.stack
+        },
+        event_timestamp: new Date().toISOString()
+      });
+    } catch (logError) {
+      console.warn('Failed to log error (possible enum issue):', logError);
+    }
+    
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message
+        error: error.message,
+        correlation_id: correlationId
       }),
       { 
         status: 500,
@@ -81,4 +141,7 @@ serve(async (req) => {
       }
     );
   }
-});
+};
+
+// Serve the wrapped handler
+serve(withErrorHandling('scheduler-process-queue', handleQueueProcessing));

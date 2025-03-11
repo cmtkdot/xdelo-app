@@ -1531,6 +1531,7 @@ export type Database = {
           is_miscellaneous_item: boolean | null
           is_original_caption: boolean | null
           last_error_at: string | null
+          last_processing_attempt: string | null
           media_group_id: string | null
           media_type: string | null
           message_caption_id: string | null
@@ -1549,6 +1550,7 @@ export type Database = {
           parsed_total_price: number | null
           parsed_unit_price: number | null
           parsed_vendor_uid: string | null
+          processing_attempts: number | null
           processing_completed_at: string | null
           processing_correlation_id: string | null
           processing_started_at: string | null
@@ -1617,6 +1619,7 @@ export type Database = {
           is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
+          last_processing_attempt?: string | null
           media_group_id?: string | null
           media_type?: string | null
           message_caption_id?: string | null
@@ -1635,6 +1638,7 @@ export type Database = {
           parsed_total_price?: number | null
           parsed_unit_price?: number | null
           parsed_vendor_uid?: string | null
+          processing_attempts?: number | null
           processing_completed_at?: string | null
           processing_correlation_id?: string | null
           processing_started_at?: string | null
@@ -1703,6 +1707,7 @@ export type Database = {
           is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
           last_error_at?: string | null
+          last_processing_attempt?: string | null
           media_group_id?: string | null
           media_type?: string | null
           message_caption_id?: string | null
@@ -1721,6 +1726,7 @@ export type Database = {
           parsed_total_price?: number | null
           parsed_unit_price?: number | null
           parsed_vendor_uid?: string | null
+          processing_attempts?: number | null
           processing_completed_at?: string | null
           processing_correlation_id?: string | null
           processing_started_at?: string | null
@@ -2181,7 +2187,43 @@ export type Database = {
           telegram_message_id?: number | null
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_forwards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_relationships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_compatibility"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_with_relationships"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       webhook_entity: {
         Row: {
@@ -2315,7 +2357,43 @@ export type Database = {
           previous_state?: Json | null
           telegram_message_id?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_forwards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_relationships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_compatibility"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_with_relationships"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_message_forwards: {
         Row: {
@@ -2978,6 +3056,7 @@ export type Database = {
         Args: {
           p_media_group_id: string
           p_message_id: string
+          p_correlation_id?: string
         }
         Returns: Json
       }
@@ -2991,9 +3070,24 @@ export type Database = {
           recent_errors: string[]
         }[]
       }
-      xdelo_cleanup_old_queue_entries: {
+      xdelo_cleanup_old_queue_entries:
+        | {
+            Args: Record<PropertyKey, never>
+            Returns: number
+          }
+        | {
+            Args: {
+              days_old?: number
+            }
+            Returns: {
+              deleted_count: number
+            }[]
+          }
+      xdelo_cleanup_orphaned_audit_logs: {
         Args: Record<PropertyKey, never>
-        Returns: number
+        Returns: {
+          deleted_count: number
+        }[]
       }
       xdelo_complete_message_processing: {
         Args: {
@@ -3020,6 +3114,12 @@ export type Database = {
           p_error_message: string
         }
         Returns: boolean
+      }
+      xdelo_find_caption_message: {
+        Args: {
+          p_media_group_id: string
+        }
+        Returns: string
       }
       xdelo_find_valid_file_id: {
         Args: {
@@ -3116,6 +3216,21 @@ export type Database = {
         }
         Returns: undefined
       }
+      xdelo_log_event_flexible: {
+        Args: {
+          p_event_type: string
+          p_entity_id: string
+          p_telegram_message_id?: number
+          p_chat_id?: number
+          p_previous_state?: Json
+          p_new_state?: Json
+          p_metadata?: Json
+          p_correlation_id?: string
+          p_user_id?: string
+          p_error_message?: string
+        }
+        Returns: undefined
+      }
       xdelo_log_webhook_event: {
         Args: {
           p_event_type: string
@@ -3134,12 +3249,31 @@ export type Database = {
         }
         Returns: boolean
       }
+      xdelo_process_pending_messages: {
+        Args: {
+          limit_count?: number
+        }
+        Returns: {
+          message_id: string
+          caption: string
+          media_group_id: string
+          processed: boolean
+        }[]
+      }
       xdelo_queue_message_for_processing: {
         Args: {
           p_message_id: string
           p_correlation_id: string
         }
         Returns: string
+      }
+      xdelo_repair_media_group_syncs: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          media_group_id: string
+          source_message_id: string
+          updated_count: number
+        }[]
       }
       xdelo_repair_message_relationships: {
         Args: Record<PropertyKey, never>
@@ -3158,6 +3292,18 @@ export type Database = {
           status: string
         }[]
       }
+      xdelo_reset_stalled_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          message_id: string
+          previous_state: string
+          reset_reason: string
+        }[]
+      }
+      xdelo_run_scheduled_message_processing: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       xdelo_standardize_storage_path: {
         Args: {
           p_file_unique_id: string
@@ -3172,12 +3318,36 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_sync_media_group_content: {
-        Args: {
-          p_source_message_id: string
-          p_media_group_id: string
-          p_correlation_id?: string
-        }
+      xdelo_sync_media_group_content:
+        | {
+            Args: {
+              p_source_message_id: string
+              p_media_group_id: string
+              p_correlation_id?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_source_message_id: string
+              p_media_group_id: string
+              p_correlation_id?: string
+              p_force_sync?: boolean
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_source_message_id: string
+              p_media_group_id: string
+              p_correlation_id?: string
+              p_force_sync?: boolean
+              p_sync_edit_history?: boolean
+            }
+            Returns: Json
+          }
+      xdelo_sync_pending_media_group_messages: {
+        Args: Record<PropertyKey, never>
         Returns: Json
       }
       xdelo_update_message_processing_state: {
@@ -3211,6 +3381,37 @@ export type Database = {
         | "message_forwarded"
         | "trigger_auto_queue_activated"
         | "trigger_queue_error"
+        | "media_group_content_synced"
+        | "media_group_sync_error"
+        | "message_queued_for_processing"
+        | "direct_caption_analysis_triggered"
+        | "caption_analysis_retry"
+        | "direct_processing_error"
+        | "analyze_message_started"
+        | "analyze_message_failed"
+        | "message_processing_completed"
+        | "message_processing_failed"
+        | "message_processing_retry"
+        | "media_group_content_synced_direct"
+        | "forward_status_changed"
+        | "duplicate_detected"
+        | "file_redownload_flagged"
+        | "health_check_performed"
+        | "edge_function_error"
+        | "queue_processing_started"
+        | "queue_processing_completed"
+        | "caption_analysis_directly_triggered"
+        | "caption_analysis_prepared"
+        | "caption_analysis_error"
+        | "edge_function_fallback"
+        | "media_group_content_synced_batch"
+        | "media_group_edit_synced"
+        | "media_group_sync_triggered"
+        | "media_group_edit_history_synced"
+        | "media_group_sync_validated"
+        | "media_group_sync_conflict"
+        | "edit_content_propagated"
+        | "media_group_version_updated"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
       processing_state_type:
         | "initialized"

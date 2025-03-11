@@ -1,256 +1,150 @@
 
-import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Message } from "@/types";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/useToast";
+import React, { useState, useEffect } from 'react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { useToast } from "@/hooks/useToast"
+import { supabase } from '@/integrations/supabase/client';
+import { useCaptionSync } from '@/hooks/useCaptionSync';
 
 interface MediaEditDialogProps {
-  media: Message;
+  media: { id: string; caption?: string; media_group_id?: string };
   open: boolean;
-  onClose: () => void;
+  onOpenChange: (open: boolean) => void;
+  onClose?: () => void;
+  onSave?: (newCaption: string) => void;
+  onDelete?: (mediaId: string, deleteTelegram: boolean) => Promise<void>;
+  onSuccess?: () => void;
 }
 
-export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
-  media,
-  open,
+export function MediaEditDialog({ 
+  media, 
+  open, 
+  onOpenChange, 
   onClose,
-}) => {
-  const { toast } = useToast();
-  const [caption, setCaption] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  onSave, 
+  onDelete, 
+  onSuccess 
+}: MediaEditDialogProps) {
+  const [newCaption, setNewCaption] = useState(media?.caption || "");
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  
+  const { toast } = useToast();
+  const { processCaptionUpdate } = useCaptionSync();
+
+  const handleOpenChange = (isOpen: boolean) => {
+    onOpenChange(isOpen);
+    if (!isOpen && onClose) {
+      onClose();
+    }
+  };
+
   useEffect(() => {
     if (media) {
-      // Extract caption from telegram_data
-      const telegramData = media.telegram_data as { message?: { caption?: string } } || {};
-      setCaption(telegramData.message?.caption || '');
-      setSyncStatus(null);
+      setNewCaption(media.caption || "");
     }
   }, [media]);
 
-  if (!media) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async () => {
+    setIsSaving(true);
+    setError(null);
+    setSyncStatus(null);
     
     try {
-      setIsSubmitting(true);
-      setSyncStatus('Updating caption...');
+      if (!media) throw new Error("No media found");
       
-      // Only update if caption has changed
-      const currentTelegramData = media.telegram_data as { message?: { caption?: string } } || {};
-      const originalCaption = currentTelegramData.message?.caption || '';
+      setSyncStatus('Updating and analyzing caption...');
       
-      if (caption !== originalCaption) {
-        console.log('Updating caption:', {
-          old: originalCaption,
-          new: caption,
-          messageId: media.telegram_message_id,
-          mediaGroupId: media.media_group_id
-        });
-
-        // Update caption in Telegram if a telegram_message_id exists
-        if (media.telegram_message_id) {
-          setSyncStatus('Updating in Telegram...');
-          const { error: captionError } = await supabase.functions.invoke('update-telegram-caption', {
-            body: {
-              messageId: media.id,
-              newCaption: caption
-            }
-          });
-
-          if (captionError) {
-            if (captionError.message?.includes('message is not modified')) {
-              console.log('Caption unchanged in Telegram, proceeding with other updates');
-            } else {
-              console.warn('Telegram update error:', captionError);
-              setSyncStatus('Telegram update failed, updating database...');
-              // Continue with local updates even if Telegram update fails
-            }
-          }
-        }
-
-        // Update the message in database
-        const updatedTelegramData = {
-          ...currentTelegramData,
-          message: {
-            ...(currentTelegramData.message || {}),
-            caption: caption
-          }
-        };
-
-        setSyncStatus('Updating database...');
-        // Update the database record
-        const { error: updateError } = await supabase
-          .from('messages')
-          .update({
-            caption: caption,
-            telegram_data: updatedTelegramData,
-            updated_at: new Date().toISOString(),
-            processing_state: 'pending',  // Mark for reprocessing
-            analyzed_content: null,       // Clear for reanalysis
-            is_original_caption: media.media_group_id ? true : null, // Mark as original if in a group
-            group_caption_synced: false   // Always reset this flag for resyncing
-          })
-          .eq('id', media.id);
-
-        if (updateError) {
-          setSyncStatus('Database update failed!');
-          throw updateError;
-        }
-
-        // Trigger reanalysis
-        setSyncStatus('Analyzing content...');
-        console.log('Triggering reanalysis for updated content');
-        const correlationId = crypto.randomUUID();
-        
-        const { data: reanalysisData, error: reanalysisError } = await supabase.functions.invoke('parse-caption-with-ai', {
-          body: {
-            messageId: media.id,
-            caption: caption,
-            media_group_id: media.media_group_id,
-            correlationId: correlationId
-          }
-        });
-
-        if (reanalysisError) {
-          console.error('Reanalysis error:', reanalysisError);
-          setSyncStatus('Analysis failed, will retry automatically.');
-          toast({
-            description: "Caption updated but content reanalysis failed. It will be retried automatically.",
-            variant: "destructive"
-          });
-        } else {
-          console.log('Reanalysis completed successfully:', reanalysisData);
-          
-          // Check if media group sync was successful
-          if (media.media_group_id) {
-            if (reanalysisData?.sync_result?.success) {
-              const syncCount = reanalysisData.sync_result.syncedCount || 0;
-              setSyncStatus(`Synced with ${syncCount} other messages in group`);
-              console.log(`Media group sync completed for ${media.media_group_id}:`, reanalysisData.sync_result);
-            } else {
-              setSyncStatus('Media group sync may have failed');
-              console.warn('Media group sync may not have completed properly:', reanalysisData?.sync_result);
-            }
-          } else {
-            setSyncStatus('Analysis completed');
-          }
-        }
-
-        toast({
-          description: "Caption has been updated and content analysis triggered",
-          variant: "success"
-        });
-
-        // Short delay to show the final status before closing
-        setTimeout(() => {
-          onClose();
-        }, 1500);
-      } else {
-        onClose();
+      // Use the new caption sync hook to handle the update and sync
+      const result = await processCaptionUpdate(media as any, newCaption);
+      
+      if (!result?.success) {
+        throw new Error(result?.error || 'Failed to process caption update');
       }
-    } catch (error) {
-      console.error('Error updating caption:', error);
-      setSyncStatus('Error: Update failed');
-      toast({
-        description: "Failed to update caption. Please try again.",
-        variant: "destructive"
-      });
-      setIsSubmitting(false);
+      
+      setSyncStatus('Caption updated and synced');
+      
+      // Call the onSave callback if provided
+      onSave && onSave(newCaption);
+      onSuccess && onSuccess();
+      
+    } catch (err: any) {
+      console.error('Error updating caption:', err);
+      setError(err.message || 'Error updating caption');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  // Display analyzed content in read-only format
-  const renderAnalyzedContent = () => {
-    const content = media.analyzed_content || {};
-    return (
-      <div className="space-y-4 mt-4 p-4 bg-gray-50 rounded-md dark:bg-gray-900">
-        <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300">Analyzed Content (Read-only)</h3>
-        <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-          {Object.entries(content).map(([key, value]) => (
-            key !== 'parsing_metadata' && key !== 'sync_metadata' && (
-              <div key={key} className="flex">
-                <span className="font-medium w-32">{key.replace(/_/g, ' ')}:</span>
-                <span>{String(value)}</span>
-              </div>
-            )
-          ))}
-        </div>
-      </div>
-    );
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setNewCaption(e.target.value);
   };
 
   return (
-    <Dialog open={open} onOpenChange={() => onClose()}>
-      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
-        <DialogTitle>Edit Caption</DialogTitle>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Textarea
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              placeholder="Enter caption"
-              className="min-h-[100px] resize-y"
-              disabled={isSubmitting}
-            />
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Edit Media Caption</AlertDialogTitle>
+          <AlertDialogDescription>
+            Update the caption for this media item.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="name" className="text-right">
+              Caption
+            </Label>
+            <div className="col-span-3">
+              <Textarea
+                id="caption"
+                value={newCaption}
+                onChange={handleChange}
+                className="col-span-3"
+              />
+            </div>
           </div>
-
-          {renderAnalyzedContent()}
-          
           {syncStatus && (
-            <div className="text-sm text-blue-600 dark:text-blue-400 animate-pulse">
-              {syncStatus}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Sync Status
+              </Label>
+              <div className="col-span-3">
+                <p className="text-sm text-muted-foreground">{syncStatus}</p>
+              </div>
             </div>
           )}
-          
-          <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : "Save"}
-            </Button>
-          </div>
-          
-          {/* Telegram Channel Information */}
-          <div className="mt-6 border-t pt-4">
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Telegram Info:
-              {media.chat_id && (
-                <span className="block">
-                  Channel ID: {media.chat_id}
-                </span>
-              )}
-              {media.chat_type && (
-                <span className="block">
-                  Type: {media.chat_type}
-                </span>
-              )}
-              {media.message_url && (
-                <a 
-                  href={media.message_url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="block text-blue-500 hover:underline"
-                >
-                  View in Telegram
-                </a>
-              )}
-            </p>
-          </div>
-          
-          {media.media_group_id && (
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              Media Group ID: {media.media_group_id}
+          {error && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Error
+              </Label>
+              <div className="col-span-3">
+                <p className="text-sm text-red-500">{error}</p>
+              </div>
             </div>
           )}
-        </form>
-      </DialogContent>
-    </Dialog>
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isSaving || isDeleting}>Cancel</AlertDialogCancel>
+          <Button type="submit" onClick={handleSave} disabled={isSaving || isDeleting}>
+            {isSaving ? "Saving..." : "Save changes"}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
-};
+}

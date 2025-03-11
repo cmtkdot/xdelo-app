@@ -9,6 +9,7 @@ export interface FilterValues {
   productCodes?: string[];
   quantity?: { min: number; max: number };
   sortOrder?: 'asc' | 'desc';
+  sortField?: 'created_at' | 'purchase_date';
 }
 
 export interface AnalyzedContent {

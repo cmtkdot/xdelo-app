@@ -16,7 +16,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messageId, caption, mediaGroupId, correlationId = crypto.randomUUID() } = await req.json();
+    const { messageId, caption, mediaGroupId, correlationId = crypto.randomUUID().toString() } = await req.json();
     console.log(`Processing message analysis for messageId: ${messageId}, correlationId: ${correlationId}`);
 
     if (!messageId) {
@@ -51,10 +51,11 @@ serve(async (req) => {
           success: true,
           result: dbResult
         },
+        correlation_id: correlationId,
         event_timestamp: new Date().toISOString()
       });
 
-    // Call the parse-caption-with-ai function
+    // Call the parse-caption-with-ai function directly
     const parseCaptionResponse = await fetch(
       `${Deno.env.get('SUPABASE_URL')}/functions/v1/parse-caption-with-ai`,
       {
@@ -65,7 +66,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           messageId: messageId,
-          caption: caption, // Make sure caption is included
+          caption: caption,
           media_group_id: mediaGroupId,
           correlationId: correlationId,
           file_info: dbResult?.file_info
@@ -98,6 +99,7 @@ serve(async (req) => {
           success: true,
           result
         },
+        correlation_id: correlationId,
         event_timestamp: new Date().toISOString()
       });
 
@@ -118,9 +120,10 @@ serve(async (req) => {
           entity_id: messageId || 'unknown',
           error_message: error.message,
           metadata: {
-            correlation_id: correlationId || crypto.randomUUID(),
-            error_details: JSON.stringify(error)
+            correlation_id: correlationId || crypto.randomUUID().toString(),
+            error_details: error.stack
           },
+          correlation_id: correlationId || crypto.randomUUID().toString(),
           event_timestamp: new Date().toISOString()
         });
     } catch (logError) {

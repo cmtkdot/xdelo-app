@@ -1,6 +1,6 @@
 
 import { createHandler } from '../_shared/baseHandler.ts';
-import { Configuration, OpenAIApi } from "https://esm.sh/openai@3.3.0";
+import { OpenAI } from "https://esm.sh/openai@4.20.1";
 
 export default createHandler(async (req: Request) => {
   const { messageId, caption } = await req.json();
@@ -12,40 +12,117 @@ export default createHandler(async (req: Request) => {
     );
   }
 
-  const configuration = new Configuration({
-    apiKey: Deno.env.get("OPENAI_API_KEY"),
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) {
+    console.error('Missing OpenAI API key');
+    return new Response(
+      JSON.stringify({ error: 'Configuration error: Missing API key' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const openai = new OpenAI({
+    apiKey,
+    timeout: 15000, // 15 second timeout
   });
-  const openai = new OpenAIApi(configuration);
 
   try {
     console.log(`Processing AI analysis for message ${messageId}`);
     
-    const response = await openai.createChatCompletion({
-      model: "gpt-3.5-turbo",
-      messages: [
-        { 
-          role: "system", 
-          content: "You are a product information extractor. Extract product details from the given caption." 
-        },
-        { 
-          role: "user", 
-          content: `Extract product name, product code, vendor ID, purchase date, and quantity from this caption: ${caption}` 
-        }
-      ],
-      temperature: 0.3
-    });
+    // Define a retry mechanism
+    const maxRetries = 2;
+    let retries = 0;
+    let response;
+    let error;
 
-    const result = response.data.choices[0].message.content;
+    while (retries <= maxRetries) {
+      try {
+        response = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            { 
+              role: "system", 
+              content: `You are a product information extraction assistant. Extract structured data from the given caption.
+                
+                Here are specific instructions for extracting product quantity:
+                1. Look for explicit quantity markers like "x2", "x 2", "qty: 2", "quantity: 2"
+                2. Check for quantity terms like "2 pcs", "2 pieces", "2 units"
+                3. Look for numbers that appear after product codes (after # symbol)
+                4. Check for standalone numbers that might indicate quantity
+                5. Default to 1 if no quantity is specified but product clearly exists
+                
+                Please return only JSON in this exact format:
+                {
+                  "product_name": "Full product name",
+                  "product_code": "Code found after # symbol",
+                  "vendor_uid": "1-4 letter vendor code (usually first part of product_code)",
+                  "purchase_date": "Date in YYYY-MM-DD format",
+                  "quantity": number or null,
+                  "notes": "Any additional details",
+                  "extraction_confidence": {
+                    "quantity": number between 0-1,
+                    "overall": number between 0-1
+                  }
+                }` 
+            },
+            { 
+              role: "user", 
+              content: `Extract product details from this caption: "${caption}"` 
+            }
+          ],
+          temperature: 0.1,
+          response_format: { type: "json_object" }
+        });
+        
+        // If we get here, the API call was successful
+        break;
+      } catch (err) {
+        error = err;
+        console.error(`AI analysis attempt ${retries + 1} failed:`, err);
+        
+        // Exponential backoff
+        if (retries < maxRetries) {
+          const delay = Math.pow(2, retries) * 1000;
+          console.log(`Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        
+        retries++;
+      }
+    }
+    
+    if (!response) {
+      throw error || new Error('Failed to get response from AI after retries');
+    }
+
+    const result = response.choices[0].message.content;
     console.log('AI analysis completed successfully');
 
-    return new Response(
-      JSON.stringify({ success: true, data: result }),
-      { headers: { 'Content-Type': 'application/json' } }
-    );
+    try {
+      // Verify we have valid JSON output
+      const parsedResult = JSON.parse(result);
+      return new Response(
+        JSON.stringify({ success: true, data: parsedResult }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    } catch (parseError) {
+      console.error('Invalid JSON returned from AI:', parseError);
+      return new Response(
+        JSON.stringify({ 
+          error: 'AI returned invalid format', 
+          partialResult: result 
+        }),
+        { status: 422, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
   } catch (error) {
     console.error('Error during AI analysis:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        errorType: error.name,
+        status: 'failed'
+      }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }

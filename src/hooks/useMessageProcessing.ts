@@ -8,7 +8,7 @@ export function useMessageProcessing() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
-  // Manually trigger reanalysis for a specific message
+  // Directly trigger analysis for a specific message
   const handleReanalyze = async (message: any) => {
     if (isProcessing[message.id]) return;
     
@@ -16,86 +16,137 @@ export function useMessageProcessing() {
       setIsProcessing(prev => ({ ...prev, [message.id]: true }));
       setErrors(prev => ({ ...prev, [message.id]: '' }));
       
-      console.log('Requesting reanalysis for message:', message.id);
+      console.log('Requesting direct analysis for message:', message.id);
       
-      // Generate a correlation ID
+      // Validate required fields
+      if (!message.id) {
+        throw new Error('Message ID is required for analysis');
+      }
+      
+      if (!message.caption) {
+        throw new Error('Message caption is required for analysis');
+      }
+      
+      // Generate a correlation ID as a string
       const correlationId = crypto.randomUUID();
       
-      // Use raw SQL call since Supabase's rpc doesn't accept function names from a variable
-      const { data, error: queueError } = await supabase.rpc(
-        'xdelo_queue_message_for_processing',
-        {
-          p_message_id: message.id,
-          p_correlation_id: correlationId
-        }
-      );
-
-      if (queueError) {
-        throw queueError;
-      }
-
-      console.log('Message queued for processing:', data);
+      // Log analysis start
+      console.log(`Starting analysis for message ${message.id} with correlation ID ${correlationId}`);
       
-      // Call the edge function to process the queue
-      const { data: processingData, error: processingError } = await supabase.functions.invoke(
-        'process-message-queue',
+      // Call parse-caption-with-ai directly for immediate processing
+      const { data: analysisData, error: analysisError } = await supabase.functions.invoke(
+        'parse-caption-with-ai',
         {
-          body: { limit: 1 }
+          body: { 
+            messageId: message.id, 
+            caption: message.caption,
+            media_group_id: message.media_group_id,
+            correlationId, 
+            isEdit: false,
+            retryCount: 0
+          }
         }
       );
       
-      if (processingError) {
-        throw processingError;
+      if (analysisError) {
+        throw new Error(analysisError.message || 'Analysis failed');
       }
       
-      console.log('Processing result:', processingData);
+      console.log('Analysis result:', analysisData);
+      
+      // If this is part of a media group, force sync the content to other messages immediately
+      if (message.media_group_id) {
+        try {
+          console.log(`Forcing direct sync for media group ${message.media_group_id}`);
+          
+          const { data: syncData, error: syncError } = await supabase.functions.invoke(
+            'xdelo_sync_media_group',
+            {
+              body: {
+                mediaGroupId: message.media_group_id,
+                sourceMessageId: message.id,
+                correlationId,
+                forceSync: true,
+                syncEditHistory: true
+              }
+            }
+          );
+          
+          if (syncError) {
+            console.warn('Media group sync warning:', syncError);
+          } else {
+            console.log('Media group sync result:', syncData);
+          }
+        } catch (syncError) {
+          console.warn('Media group sync error (non-fatal):', syncError);
+        }
+      }
       
       toast({
-        title: "Processing Initiated",
-        description: "The message has been queued for analysis."
+        title: "Analysis Complete",
+        description: "The message has been analyzed successfully."
       });
       
+      return analysisData?.data;
+      
     } catch (error: any) {
-      console.error('Error reanalyzing message:', error);
+      console.error('Error analyzing message:', error);
+      
+      // Set detailed error message
+      const errorMessage = error.message || 'Failed to analyze message';
       setErrors(prev => ({ 
         ...prev, 
-        [message.id]: error.message || 'Failed to process message' 
+        [message.id]: errorMessage
       }));
       
       toast({
-        title: "Processing Failed",
-        description: error.message || "Failed to process message",
+        title: "Analysis Failed",
+        description: errorMessage,
         variant: "destructive"
       });
+      
+      throw error;
     } finally {
       setIsProcessing(prev => ({ ...prev, [message.id]: false }));
     }
   };
 
-  // Process all pending messages in the queue
-  const processMessageQueue = async (limit = 10) => {
+  // Process all pending messages
+  const processMessageQueue = async (limit = 10, repair = false) => {
     try {
+      // Call the scheduler function to process pending messages
       const { data, error } = await supabase.functions.invoke(
-        'process-message-queue',
+        'scheduler-process-queue',
         {
-          body: { limit }
+          body: { 
+            limit,
+            trigger_source: 'manual',
+            repair
+          }
         }
       );
       
       if (error) throw error;
       
-      toast({
-        title: "Queue Processing Complete",
-        description: `Processed ${data?.processed || 0} messages from the queue.`
-      });
+      if (repair) {
+        toast({
+          title: "System Repair Complete",
+          description: `Diagnostics and repairs completed successfully.`
+        });
+      } else {
+        toast({
+          title: "Message Processing Complete",
+          description: `Processed ${data?.result?.processed_count || 0} pending messages.`
+        });
+      }
       
       return data;
     } catch (error: any) {
-      console.error('Error processing message queue:', error);
+      console.error('Error processing messages:', error);
       
       toast({
-        title: "Queue Processing Failed",
-        description: error.message || "Failed to process message queue",
+        title: "Processing Failed",
+        description: error.message || "Failed to process messages",
         variant: "destructive"
       });
       
@@ -103,26 +154,33 @@ export function useMessageProcessing() {
     }
   };
 
-  // Queue any unprocessed messages with captions
+  // Find unprocessed messages with captions and queue them for processing
   const queueUnprocessedMessages = async (limit = 10) => {
     try {
-      const { data, error } = await supabase.functions.invoke(
-        'process-unanalyzed-messages',
-        {
-          body: { limit }
-        }
-      );
+      const { data, error } = await supabase.from('messages')
+        .update({ 
+          processing_state: 'pending',
+          updated_at: new Date().toISOString() 
+        })
+        .is('analyzed_content', null)
+        .not('caption', 'is', null)
+        .not('caption', 'eq', '')
+        .limit(limit)
+        .select('id');
       
       if (error) throw error;
       
       toast({
         title: "Messages Queued",
-        description: `Queued ${data?.queued || 0} unprocessed messages.`
+        description: `Queued ${data?.length || 0} unprocessed messages.`
       });
       
-      return data;
+      // Immediately run the processor after queueing
+      await processMessageQueue(limit);
+      
+      return { queued: data?.length || 0 };
     } catch (error: any) {
-      console.error('Error queuing unprocessed messages:', error);
+      console.error('Error queueing unprocessed messages:', error);
       
       toast({
         title: "Queueing Failed",
@@ -134,10 +192,47 @@ export function useMessageProcessing() {
     }
   };
 
+  // Repair any issues with the queue system and message relationships
+  const repairMessageProcessingSystem = async () => {
+    try {
+      // First repair media group relationships
+      const { data: repairResult, error: repairError } = await supabase.functions.invoke(
+        'direct-media-group-repair',
+        {
+          body: { 
+            correlation_id: crypto.randomUUID(),
+            repair_type: 'full'
+          }
+        }
+      );
+      
+      if (repairError) throw repairError;
+      
+      toast({
+        title: "Media Group Repair Complete",
+        description: `Fixed ${repairResult?.fixed_count || 0} media group relationships.`
+      });
+      
+      // Then run the standard repair process
+      return processMessageQueue(20, true);
+    } catch (error: any) {
+      console.error('Error repairing system:', error);
+      
+      toast({
+        title: "Repair Failed",
+        description: error.message || "Failed to repair message processing system",
+        variant: "destructive"
+      });
+      
+      throw error;
+    }
+  };
+
   return {
     handleReanalyze,
     processMessageQueue,
     queueUnprocessedMessages,
+    repairMessageProcessingSystem,
     isProcessing,
     errors
   };

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SearchFilter } from "./Filters/SearchFilter";
 import { VendorFilter } from "./Filters/VendorFilter";
+import { DateRangeFilter } from "./Filters/DateRangeFilter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
@@ -20,23 +21,29 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   const [search, setSearch] = useState(filters.search);
   const [selectedVendors, setSelectedVendors] = useState<string[]>(filters.vendors || []);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder || "desc");
+  const [sortField, setSortField] = useState<"created_at" | "purchase_date">(filters.sortField || "created_at");
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | null>(filters.dateRange || null);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
   useEffect(() => {
     let count = 0;
     if (search) count++;
     if (selectedVendors.length > 0) count++;
+    if (dateRange) count++;
+    if (sortField !== "created_at") count++;
     setActiveFiltersCount(count);
-  }, [search, selectedVendors]);
+  }, [search, selectedVendors, dateRange, sortField]);
 
   const handleFilterChange = useCallback(() => {
     onFilterChange({
       search,
       vendors: selectedVendors,
       sortOrder,
+      sortField,
+      dateRange,
       processingState: ['completed']
     });
-  }, [search, selectedVendors, sortOrder, onFilterChange]);
+  }, [search, selectedVendors, sortOrder, sortField, dateRange, onFilterChange]);
 
   useEffect(() => {
     handleFilterChange();
@@ -46,10 +53,16 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     setSearch("");
     setSelectedVendors([]);
     setSortOrder("desc");
+    setSortField("created_at");
+    setDateRange(null);
   };
 
   const handleSortOrderChange = (value: string) => {
     setSortOrder(value as "asc" | "desc");
+  };
+
+  const handleSortFieldChange = (value: string) => {
+    setSortField(value as "created_at" | "purchase_date");
   };
 
   const FilterContent = () => (
@@ -60,7 +73,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label className="text-sm font-medium">Vendor</Label>
           <VendorFilter 
@@ -68,6 +81,21 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
             vendors={vendors} 
             onChange={setSelectedVendors}
           />
+        </div>
+
+        <DateRangeFilter value={dateRange} onChange={setDateRange} />
+
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Sort By</Label>
+          <Select value={sortField} onValueChange={handleSortFieldChange}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="created_at">Upload Date</SelectItem>
+              <SelectItem value="purchase_date">Purchase Date</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="space-y-2">
