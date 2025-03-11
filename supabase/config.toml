@@ -1,3 +1,4 @@
+
 project_id = "xjhhehxcxkiumnwbirel"
 [functions.analyze-with-ai]
 verify_jwt = false
@@ -21,4 +22,3 @@ verify_jwt = false
 verify_jwt = false
 [functions.user-data]
 verify_jwt = false
-
