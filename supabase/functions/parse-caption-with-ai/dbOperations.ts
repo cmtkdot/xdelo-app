@@ -29,67 +29,114 @@ export async function updateMessageWithAnalysis(
   queueId?: string, // Kept for backward compatibility but no longer used
   isForceUpdate: boolean = false
 ) {
-  // Determine if we need to save old content for edit history
-  let oldAnalyzedContent = [];
-  
-  if (isForceUpdate && existingMessage?.analyzed_content) {
-    // Get existing old_analyzed_content array
-    oldAnalyzedContent = existingMessage?.old_analyzed_content || [];
+  try {
+    // Begin transaction with the consolidated function
+    const { data: txResult, error: txError } = await supabaseClient.rpc(
+      'xdelo_begin_transaction'
+    );
     
-    // Add current content to history with archive reason
-    const archiveReason = parsedContent.parsing_metadata.is_edit ? 
-      'edit' : 
-      'forced_reprocess';
-      
-    oldAnalyzedContent.push({
-      ...existingMessage.analyzed_content,
-      archived_timestamp: new Date().toISOString(),
-      archived_reason: archiveReason
-    });
-  }
-  
-  // Update edit history
-  let editHistory = existingMessage?.edit_history || [];
-  if (isForceUpdate) {
-    // Determine edit type
-    const editType = parsedContent.parsing_metadata.is_edit ? 
-      'edit' : 
-      'forced_reprocess';
-      
-    // Add to edit history
-    editHistory.push({
-      timestamp: new Date().toISOString(),
-      type: editType,
-      previous_analyzed_content: existingMessage?.analyzed_content || null
-    });
-  }
-  
-  // Determine processing state based on partial success flag
-  const processingState = parsedContent.parsing_metadata.partial_success 
-    ? 'partial_success' 
-    : 'completed';
-  
-  // Update message with analyzed content
-  const { error: updateError } = await supabaseClient
-    .from('messages')
-    .update({
-      analyzed_content: parsedContent,
-      processing_state: processingState,
-      processing_completed_at: new Date().toISOString(),
-      is_original_caption: existingMessage?.media_group_id ? true : undefined,
-      group_caption_synced: true,
-      old_analyzed_content: oldAnalyzedContent.length > 0 ? oldAnalyzedContent : undefined,
-      edit_history: editHistory.length > 0 ? editHistory : undefined,
-      edit_count: isForceUpdate ? (existingMessage?.edit_count || 0) + 1 : existingMessage?.edit_count,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', messageId);
+    if (txError) {
+      console.warn('Could not use transaction helper, continuing with standard update');
+    }
     
-  if (updateError) {
-    throw new Error(`Error updating message with analysis: ${updateError.message}`);
+    // Determine if we need to save old content for edit history
+    let oldAnalyzedContent = [];
+    
+    if (isForceUpdate && existingMessage?.analyzed_content) {
+      // Get existing old_analyzed_content array
+      oldAnalyzedContent = existingMessage?.old_analyzed_content || [];
+      
+      // Add current content to history with archive reason
+      const archiveReason = parsedContent.parsing_metadata.is_edit ? 
+        'edit' : 
+        'forced_reprocess';
+        
+      oldAnalyzedContent.push({
+        ...existingMessage.analyzed_content,
+        archived_timestamp: new Date().toISOString(),
+        archived_reason: archiveReason
+      });
+    }
+    
+    // Update edit history
+    let editHistory = existingMessage?.edit_history || [];
+    if (isForceUpdate) {
+      // Determine edit type
+      const editType = parsedContent.parsing_metadata.is_edit ? 
+        'edit' : 
+        'forced_reprocess';
+        
+      // Add to edit history
+      editHistory.push({
+        timestamp: new Date().toISOString(),
+        type: editType,
+        previous_analyzed_content: existingMessage?.analyzed_content || null
+      });
+    }
+    
+    // Determine processing state based on partial success flag
+    const processingState = parsedContent.parsing_metadata.partial_success 
+      ? 'partial_success' 
+      : 'completed';
+    
+    // Update message with analyzed content using direct update
+    const { error: updateError } = await supabaseClient
+      .from('messages')
+      .update({
+        analyzed_content: parsedContent,
+        processing_state: processingState,
+        processing_completed_at: new Date().toISOString(),
+        is_original_caption: existingMessage?.media_group_id ? true : undefined,
+        group_caption_synced: existingMessage?.media_group_id ? false : undefined, // Will be synced later
+        old_analyzed_content: oldAnalyzedContent.length > 0 ? oldAnalyzedContent : undefined,
+        edit_history: editHistory.length > 0 ? editHistory : undefined,
+        edit_count: isForceUpdate ? (existingMessage?.edit_count || 0) + 1 : existingMessage?.edit_count,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', messageId);
+      
+    if (updateError) {
+      throw new Error(`Error updating message with analysis: ${updateError.message}`);
+    }
+    
+    // Log the analysis completion
+    await logAnalysisEvent(
+      messageId,
+      existingMessage?.correlation_id || 'no-correlation-id',
+      {
+        processing_state: existingMessage?.processing_state || 'unknown',
+        analyzed_content: existingMessage?.analyzed_content
+      },
+      {
+        processing_state: processingState,
+        analyzed_content: parsedContent
+      },
+      {
+        is_force_update: isForceUpdate,
+        is_edit: parsedContent.parsing_metadata.is_edit || false,
+        timestamp: new Date().toISOString()
+      }
+    );
+    
+    // If part of a media group, sync the content to other messages
+    if (existingMessage?.media_group_id) {
+      try {
+        await syncMediaGroupContent(
+          existingMessage.media_group_id,
+          messageId,
+          existingMessage?.correlation_id || 'no-correlation-id',
+          parsedContent.parsing_metadata.is_edit || false
+        );
+      } catch (syncError) {
+        console.error(`Warning: Media group sync failed but message was updated: ${syncError.message}`);
+      }
+    }
+    
+    return { success: true, processed: true };
+  } catch (error) {
+    console.error(`Error in updateMessageWithAnalysis: ${error.message}`);
+    throw error;
   }
-  
-  return { success: true, processed: true };
 }
 
 export async function markQueueItemAsFailed(queueId: string, errorMessage: string) {
@@ -105,6 +152,7 @@ export async function syncMediaGroupContent(
   isEdit: boolean = false
 ) {
   try {
+    // Use the consolidated media group sync function
     const { data, error } = await supabaseClient.rpc(
       'xdelo_sync_media_group_content',
       {
@@ -117,7 +165,31 @@ export async function syncMediaGroupContent(
     );
     
     if (error) {
-      throw error;
+      // Try the fallback method with the edge function
+      const response = await fetch(
+        `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+          },
+          body: JSON.stringify({
+            mediaGroupId,
+            sourceMessageId,
+            correlationId,
+            forceSync: true,
+            syncEditHistory: isEdit
+          })
+        }
+      );
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Edge function sync failed: ${errorText || response.statusText}`);
+      }
+      
+      return await response.json();
     }
     
     return data;
