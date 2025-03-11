@@ -1,9 +1,7 @@
-
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { ProcessingState, Message, AnalyzedContent } from "../_shared/types.ts";
 import { MessageInput, ForwardInfo } from "./types.ts";
 
-// Types specific to dbOperations
 interface BaseMessageRecord {
   id: string;
   telegram_message_id: number;
@@ -81,7 +79,6 @@ export async function createMessage(
   logger: any
 ): Promise<MessageResponse> {
   try {
-    // Ensure correlation_id is stored as string
     const correlationId = messageData.correlation_id ? 
       messageData.correlation_id.toString() : 
       crypto.randomUUID().toString();
@@ -125,7 +122,6 @@ export async function createNonMediaMessage(
   logger: any
 ): Promise<MessageResponse> {
   try {
-    // Ensure correlation_id is stored as string
     const correlationId = messageData.correlation_id ? 
       messageData.correlation_id.toString() : 
       crypto.randomUUID().toString();
@@ -199,18 +195,18 @@ export async function updateMessage(
 
     if (error) throw error;
 
-    await logMessageEvent(supabase, 'message_updated', {
-      entity_id: existingMessage.id,
-      telegram_message_id: messageId,
-      chat_id: chatId,
-      previous_state: existingMessage,
-      new_state: updateData,
-      metadata: {
-        media_group_id: existingMessage.media_group_id,
-        is_edit: true,
-        correlation_id: updateData.correlation_id
+    await logMessageOperation(
+      'edit',
+      existingMessage.correlation_id,
+      {
+        message: `Message ${messageId} edited in chat ${chatId}`,
+        telegram_message_id: messageId,
+        chat_id: chatId,
+        source_message_id: existingMessage.id,
+        edit_type: 'caption_edit',
+        media_group_id: existingMessage.media_group_id
       }
-    });
+    );
 
     return { id: existingMessage.id, success: true };
   } catch (error) {
@@ -258,30 +254,22 @@ export async function updateMessageProcessingState(
 
     if (updateError) throw updateError;
 
-    // Ensure correlation_id is a string for logging
     const correlationId = existingMessage?.correlation_id ? 
       existingMessage.correlation_id.toString() : 
       null;
 
-    await logMessageEvent(supabase, 'processing_state_changed', {
-      entity_id: params.messageId,
-      telegram_message_id: existingMessage?.telegram_message_id,
-      chat_id: existingMessage?.chat_id,
-      previous_state: { 
-        processing_state: existingMessage?.processing_state,
-        analyzed_content: existingMessage?.analyzed_content 
-      },
-      new_state: { 
+    await logMessageOperation(
+      'processing_state_changed',
+      correlationId,
+      {
+        message: `Processing state updated for message ${params.messageId}`,
+        telegram_message_id: existingMessage?.telegram_message_id,
+        chat_id: existingMessage?.chat_id,
+        source_message_id: params.messageId,
         processing_state: params.state,
-        analyzed_content: params.analyzedContent 
-      },
-      metadata: {
-        error_message: params.error,
-        media_group_id: existingMessage?.media_group_id,
-        retry_count: updateData.retry_count,
-        correlation_id: correlationId
+        error: params.error
       }
-    });
+    );
 
     return { id: params.messageId, success: true };
   } catch (error) {
@@ -313,6 +301,34 @@ async function logMessageEvent(
       new_state: data.new_state,
       metadata: data.metadata,
       error_message: data.error_message,
+      event_timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error logging event:', error);
+  }
+}
+
+async function logMessageOperation(
+  operationType: string,
+  correlationId: string | null,
+  data: {
+    message: string;
+    telegram_message_id?: number;
+    chat_id?: number;
+    source_message_id?: string;
+    [key: string]: any;
+  }
+): Promise<void> {
+  try {
+    await supabase.from('unified_audit_logs').insert({
+      event_type: operationType,
+      entity_id: data.source_message_id,
+      telegram_message_id: data.telegram_message_id,
+      chat_id: data.chat_id,
+      metadata: {
+        ...data,
+        correlation_id: correlationId
+      },
       event_timestamp: new Date().toISOString()
     });
   } catch (error) {
