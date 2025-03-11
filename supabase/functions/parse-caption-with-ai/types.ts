@@ -1,5 +1,11 @@
 
-// Types for the parse-caption-with-ai function
+import { ParsedContent as BaseContent } from '../_shared/captionParser.ts';
+
+// Extend the base parsed content with any additional fields needed specifically for this function
+export interface ParsedContent extends BaseContent {
+  // Additional fields could be added here if needed in the future
+}
+
 export interface RequestPayload {
   messageId: string;
   media_group_id?: string;
@@ -8,30 +14,6 @@ export interface RequestPayload {
   queue_id?: string;
   file_info?: any;
   isEdit?: boolean;
-}
-
-export interface ParsedContent {
-  product_name: string;
-  product_code: string;
-  vendor_uid: string;
-  purchase_date: string;
-  quantity: number | null;
-  notes: string;
-  caption: string;
-  parsing_metadata: {
-    method: 'manual';
-    timestamp: string;
-    quantity_pattern?: string;
-    used_fallback?: boolean;
-    original_caption?: string;
-    is_edit?: boolean;
-    edit_timestamp?: string;
-    error?: string;
-  };
-  sync_metadata?: {
-    media_group_id?: string;
-    sync_source_message_id?: string;
-  };
 }
 
 export interface ParseResult {

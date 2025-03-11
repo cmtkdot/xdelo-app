@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
-import { parseCaption } from './captionParser.ts';
+import { xdelo_parseCaption } from '../_shared/captionParser.ts';
 import { 
   getMessage, 
   updateMessageWithAnalysis, 
@@ -71,7 +71,8 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     })}`);
 
     console.log(`Performing manual parsing on caption: ${captionForLog}`);
-    let parsedContent: ParsedContent = parseCaption(caption);
+    // Use the new shared parser function
+    let parsedContent: ParsedContent = xdelo_parseCaption(caption);
     console.log(`Manual parsing result: ${JSON.stringify(parsedContent)}`);
 
     parsedContent.caption = caption;

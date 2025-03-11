@@ -2,276 +2,237 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
+import { xdelo_parseCaption, ParsedContent } from '../_shared/captionParser.ts';
 import { withErrorHandling } from "../_shared/errorHandler.ts";
-import { parseCaption } from "./captionParser.ts";
 
 // Create Supabase client
-const supabase = createClient(
+const supabaseClient = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-const manualCaptionParser = async (req: Request, correlationId: string) => {
-  // Parse request body
-  const body = await req.json();
-  const { 
-    messageId, 
-    caption, 
-    media_group_id, 
-    trigger_source = 'database_trigger', 
-    isEdit = false 
-  } = body;
-  
-  if (!messageId) {
-    throw new Error("Message ID is required");
+const handleCaptionParsing = async (req: Request, correlationId: string) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
   }
 
-  console.log(`Manual caption parser triggered for message ${messageId}, correlation ID: ${correlationId}, isEdit: ${isEdit}, trigger source: ${trigger_source}`);
-  
   try {
-    // Get the message details if caption wasn't provided
-    let messageCaption = caption;
-    let messageGroupId = media_group_id;
-    let existingMessage = null;
-
-    if (!messageCaption) {
-      const { data: message, error: messageError } = await supabase
+    const { messageId, caption, media_group_id, is_edit = false } = await req.json();
+    
+    console.log(`Manual caption parsing for message ${messageId}, correlation ID: ${correlationId}`);
+    
+    if (!messageId || !caption) {
+      throw new Error('Missing required parameters: messageId and caption are required');
+    }
+    
+    // Parse the caption
+    console.log(`Parsing caption: ${caption.substring(0, 50)}${caption.length > 50 ? '...' : ''}`);
+    const parsedContent = xdelo_parseCaption(caption);
+    
+    // Add the original caption and media group metadata
+    parsedContent.caption = caption;
+    
+    if (media_group_id) {
+      parsedContent.sync_metadata = {
+        media_group_id: media_group_id
+      };
+    }
+    
+    // Add edit flag if this is an edit
+    if (is_edit) {
+      parsedContent.parsing_metadata.is_edit = true;
+      parsedContent.parsing_metadata.edit_timestamp = new Date().toISOString();
+    }
+    
+    console.log(`Parsed content: ${JSON.stringify(parsedContent)}`);
+    
+    // Update the message with the analyzed content
+    const { data: message, error: messageError } = await supabaseClient
+      .from('messages')
+      .select('id, analyzed_content, processing_state, media_group_id')
+      .eq('id', messageId)
+      .single();
+    
+    if (messageError) {
+      throw new Error(`Message lookup error: ${messageError.message}`);
+    }
+    
+    if (!message) {
+      throw new Error(`Message not found: ${messageId}`);
+    }
+    
+    // If not an edit and message already has analyzed content, return it without changes
+    if (!is_edit && message.analyzed_content) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Message already has analyzed content',
+          parsed_content: message.analyzed_content,
+          existing: true
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // Create old_analyzed_content array if editing
+    let oldAnalyzedContent = [];
+    if (is_edit && message.analyzed_content) {
+      // Get current old_analyzed_content array if it exists
+      const { data: oldVersions } = await supabaseClient
         .from('messages')
-        .select('id, caption, media_group_id, processing_state, analyzed_content, old_analyzed_content')
+        .select('old_analyzed_content')
         .eq('id', messageId)
         .single();
       
-      if (messageError || !message) {
-        throw new Error(`Message not found: ${messageError?.message || 'Unknown error'}`);
-      }
-      
-      // Skip processing if no caption or already processed (and not an edit)
-      if (!message.caption || (message.processing_state === 'completed' && !isEdit)) {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: `Message ${messageId} skipped: ${!message.caption ? 'No caption' : 'Already processed'}`,
-            correlation_id: correlationId
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      messageCaption = message.caption;
-      messageGroupId = message.media_group_id;
-      existingMessage = message;
-    } else {
-      // If caption was provided but we need existing message data for edit handling
-      if (isEdit) {
-        const { data: message, error: messageError } = await supabase
-          .from('messages')
-          .select('analyzed_content, old_analyzed_content')
-          .eq('id', messageId)
-          .single();
-          
-        if (!messageError && message) {
-          existingMessage = message;
-        }
-      }
+      // Build new array with current content added
+      oldAnalyzedContent = oldVersions?.old_analyzed_content || [];
+      oldAnalyzedContent.push(message.analyzed_content);
     }
-
-    console.log(`Processing caption for message ${messageId}, caption length: ${messageCaption.length}, isEdit: ${isEdit}`);
     
-    // Use transaction to ensure atomic updates and prevent race conditions
-    const { data: transactionResult, error: transactionError } = await supabase.rpc(
-      'begin_transaction'
-    );
-    
-    // Mark message as processing first with a separate update
-    console.log(`Marking message ${messageId} as processing`);
-    const { error: processingError } = await supabase
+    // Update the message
+    const { error: updateError } = await supabaseClient
       .from('messages')
       .update({
-        processing_state: 'processing',
-        processing_started_at: new Date().toISOString(),
-        processing_correlation_id: correlationId
+        analyzed_content: parsedContent,
+        processing_state: parsedContent.parsing_metadata.partial_success ? 'partial_success' : 'completed',
+        processing_completed_at: new Date().toISOString(),
+        is_original_caption: message.media_group_id ? true : undefined,
+        group_caption_synced: true,
+        old_analyzed_content: is_edit ? oldAnalyzedContent : undefined,
+        updated_at: new Date().toISOString()
       })
-      .eq('id', messageId);
-      
-    if (processingError) {
-      console.error(`Error marking message as processing: ${processingError.message}`);
-      // Continue anyway as this is not critical
-    }
-    
-    // Use manual caption parser
-    const parsedContent = parseCaption(messageCaption);
-    
-    console.log(`Caption parsed successfully for message ${messageId}:`, parsedContent);
-    
-    // Prepare update data
-    const updateData: any = {
-      analyzed_content: parsedContent,
-      processing_state: 'completed',
-      processing_completed_at: new Date().toISOString(),
-      is_original_caption: true,
-      group_caption_synced: false, // Always set to false to ensure sync is triggered
-      updated_at: new Date().toISOString()
-    };
-    
-    // Handle edit history properly
-    if (isEdit && existingMessage?.analyzed_content) {
-      // Prepare old_analyzed_content array
-      let oldAnalyzedContent = [];
-      
-      if (existingMessage.old_analyzed_content) {
-        oldAnalyzedContent = Array.isArray(existingMessage.old_analyzed_content) ? 
-          [...existingMessage.old_analyzed_content] : 
-          [existingMessage.old_analyzed_content];
-      }
-      
-      // Add timestamp to the previous content before storing it
-      const previousContent = {
-        ...existingMessage.analyzed_content,
-        edit_timestamp: new Date().toISOString()
-      };
-      
-      oldAnalyzedContent.push(previousContent);
-      updateData.old_analyzed_content = oldAnalyzedContent;
-      
-      // Add edit metadata to the new parsed content
-      parsedContent.parsing_metadata = {
-        ...parsedContent.parsing_metadata,
-        is_edit: true,
-        edit_timestamp: new Date().toISOString()
-      };
-      
-      updateData.analyzed_content = parsedContent;
-      console.log(`Storing edit history for message ${messageId}, previous edits: ${oldAnalyzedContent.length}`);
-    }
-    
-    // Update the message with the analyzed content
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update(updateData)
       .eq('id', messageId);
     
     if (updateError) {
       throw new Error(`Error updating message: ${updateError.message}`);
     }
     
-    // If this is part of a media group, sync the content to other messages in the group
-    let syncResult = null;
-    if (messageGroupId) {
-      try {
-        console.log(`Triggering sync for media group ${messageGroupId} from message ${messageId}, isEdit: ${isEdit}`);
-        
-        // Use edge function for more robust handling, especially for edits
-        try {
-          const syncResponse = await fetch(
-            `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-              },
-              body: JSON.stringify({
-                mediaGroupId: messageGroupId,
-                sourceMessageId: messageId,
-                correlationId: correlationId,
-                forceSync: true,
-                syncEditHistory: isEdit
-              })
-            }
-          );
-          
-          if (!syncResponse.ok) {
-            const errorText = await syncResponse.text();
-            console.error(`Media group sync via edge function failed: ${errorText}`);
-            throw new Error(`Edge function sync failed: ${errorText}`);
-          }
-          
-          syncResult = await syncResponse.json();
-          console.log(`Media group sync via edge function succeeded:`, syncResult);
-        } catch (edgeFunctionError) {
-          console.error(`Edge function sync error, falling back to RPC: ${edgeFunctionError.message}`);
-          
-          // Fall back to the RPC function
-          const { data, error } = await supabase.rpc(
-            'xdelo_sync_media_group_content',
-            {
-              p_source_message_id: messageId,
-              p_media_group_id: messageGroupId,
-              p_correlation_id: correlationId,
-              p_force_sync: true,
-              p_sync_edit_history: isEdit
-            }
-          );
-          
-          if (error) {
-            console.warn(`Warning: Media group sync via RPC failed: ${error.message}`);
-            // Continue without aborting - sync may be handled by another process
-          } else {
-            syncResult = data;
-          }
-        }
-      } catch (syncError) {
-        console.error(`Media group sync error: ${syncError.message}`);
-        // Continue without aborting - sync may be handled by another process
-      }
-    }
-    
-    // Log successful parsing
-    await supabase.from('unified_audit_logs').insert({
+    // Log the analysis event
+    await supabaseClient.from('unified_audit_logs').insert({
       event_type: 'manual_caption_parsed',
       entity_id: messageId,
       correlation_id: correlationId,
       metadata: {
-        trigger_source,
-        is_edit: isEdit,
-        caption_length: messageCaption.length,
-        media_group_id: messageGroupId,
-        has_sync_result: !!syncResult
+        parsed_content: parsedContent,
+        caption_length: caption.length,
+        media_group_id: message.media_group_id,
+        is_edit: is_edit,
+        partial_success: parsedContent.parsing_metadata.partial_success
       },
       event_timestamp: new Date().toISOString()
     });
-
+    
+    // If part of a media group, sync content to other messages
+    let syncResult = null;
+    if (message.media_group_id) {
+      try {
+        // First try the dedicated edge function
+        const syncResponse = await fetch(
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+            },
+            body: JSON.stringify({
+              mediaGroupId: message.media_group_id,
+              sourceMessageId: messageId,
+              correlationId: correlationId,
+              forceSync: true,
+              syncEditHistory: is_edit
+            })
+          }
+        );
+        
+        if (syncResponse.ok) {
+          syncResult = await syncResponse.json();
+          console.log(`Sync completed through edge function: ${syncResult?.synced_count ?? 0} messages`);
+        } else {
+          console.warn(`Edge function sync failed with ${syncResponse.status}, falling back to direct DB query`);
+          
+          // Fallback: Direct DB query to sync content
+          const { data: syncQueryResult, error: syncError } = await supabaseClient.rpc(
+            'xdelo_sync_media_group_content',
+            {
+              p_source_message_id: messageId,
+              p_media_group_id: message.media_group_id,
+              p_correlation_id: correlationId,
+              p_force_sync: true,
+              p_sync_edit_history: is_edit
+            }
+          );
+          
+          if (syncError) {
+            throw syncError;
+          }
+          
+          syncResult = syncQueryResult;
+          console.log(`Sync completed through direct query: ${syncResult?.synced_count ?? 0} messages`);
+        }
+      } catch (syncError) {
+        console.error(`Media group sync error (non-fatal): ${syncError.message}`);
+        
+        // Log the error but continue
+        await supabaseClient.from('unified_audit_logs').insert({
+          event_type: 'manual_caption_parser_error',
+          entity_id: messageId,
+          correlation_id: correlationId,
+          error_message: `Media group sync error: ${syncError.message}`,
+          metadata: {
+            media_group_id: message.media_group_id,
+            error_detail: syncError.stack
+          },
+          event_timestamp: new Date().toISOString()
+        });
+        
+        syncResult = { 
+          error: syncError.message, 
+          success: false 
+        };
+      }
+    }
+    
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Caption processed for message ${messageId}`,
-        data: parsedContent,
+        message: `Caption parsed successfully for message ${messageId}`,
+        parsed_content: parsedContent,
         sync_result: syncResult,
-        correlation_id: correlationId,
-        is_edit: isEdit
+        correlation_id: correlationId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error(`Error in manual caption parser: ${error.message}`);
+    console.error('Error in manual-caption-parser:', error);
     
     // Log the error
-    await supabase.from('unified_audit_logs').insert({
-      event_type: 'manual_caption_parser_error',
-      entity_id: messageId,
-      error_message: error.message,
-      correlation_id: correlationId,
-      metadata: {
-        trigger_source,
-        is_edit: isEdit,
-        error_stack: error.stack
-      },
-      event_timestamp: new Date().toISOString()
-    });
+    try {
+      await supabaseClient.from('unified_audit_logs').insert({
+        event_type: 'manual_caption_parser_error',
+        error_message: error.message,
+        correlation_id: correlationId,
+        metadata: {
+          error_stack: error.stack,
+          timestamp: new Date().toISOString()
+        },
+        event_timestamp: new Date().toISOString()
+      });
+    } catch (logError) {
+      console.warn('Failed to log parser error:', logError);
+    }
     
-    // Update message with error state
-    await supabase
-      .from('messages')
-      .update({
-        processing_state: 'error',
-        error_message: `Manual parsing error: ${error.message}`,
-        last_error_at: new Date().toISOString(),
-        retry_count: supabase.rpc('increment_retry_count', { message_id: messageId })
-      })
-      .eq('id', messageId);
-    
-    throw error;
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message,
+        correlation_id: correlationId
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 };
 
-serve(withErrorHandling('manual-caption-parser', manualCaptionParser));
+// Serve the wrapped handler
+serve(withErrorHandling('manual-caption-parser', handleCaptionParsing));
