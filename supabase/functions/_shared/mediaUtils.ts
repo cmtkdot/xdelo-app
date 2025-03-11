@@ -49,10 +49,8 @@ export function xdelo_getExtensionFromMedia(media: any): string {
     }
   }
   if (media.video?.mime_type) {
-    const parts = media.video.mime_type.split('/');
-    if (parts.length === 2 && parts[1] !== 'octet-stream') {
-      return parts[1];
-    }
+    // Force video files to mp4 for consistency
+    return 'mp4';
   }
   if (media.audio?.mime_type) {
     const parts = media.audio.mime_type.split('/');
@@ -73,8 +71,8 @@ export function xdelo_getExtensionFromMedia(media: any): string {
   }
   
   // Fallback to media type detection
-  if (media.photo) return 'jpeg';
-  if (media.video) return 'mp4';
+  if (media.photo) return 'jpeg'; // Force photos to jpeg
+  if (media.video) return 'mp4'; // Force videos to mp4
   if (media.audio) return 'mp3';
   if (media.voice) return 'ogg';
   if (media.animation) return 'mp4';
@@ -100,13 +98,13 @@ export function xdelo_getUploadOptions(extension: string): any {
     'svg': 'image/svg+xml',
     'heic': 'image/heic',
     
-    // Videos
+    // Videos - Always standardize to mp4
     'mp4': 'video/mp4',
-    'mov': 'video/quicktime',
+    'mov': 'video/mp4', // Convert to mp4 content type
     'webm': 'video/webm',
-    'mkv': 'video/x-matroska',
-    'avi': 'video/x-msvideo',
-    '3gp': 'video/3gpp',
+    'mkv': 'video/mp4', // Convert to mp4 content type
+    'avi': 'video/mp4', // Convert to mp4 content type
+    '3gp': 'video/mp4', // Convert to mp4 content type
     
     // Audio
     'mp3': 'audio/mpeg',
@@ -300,7 +298,14 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
 
   // Extract file extension from media with improved detection
   const mediaObj = { photo, video, document, sticker, animation, voice, audio };
-  const extension = xdelo_getExtensionFromMedia(mediaObj);
+  let extension = xdelo_getExtensionFromMedia(mediaObj);
+  
+  // Force specific extensions for standardization
+  if (photo) {
+    extension = 'jpeg'; // Always use jpeg for photos
+  } else if (video) {
+    extension = 'mp4'; // Always use mp4 for videos
+  }
   
   console.log(`Detected extension for media: ${extension}`);
   
@@ -339,7 +344,10 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
         const telegramExt = pathParts.pop()?.toLowerCase();
         if (telegramExt && telegramExt.length > 0 && telegramExt.length < 5) {
           console.log(`Using extension from Telegram path: ${telegramExt}`);
-          finalExtension = telegramExt;
+          // Only use Telegram's extension if it's not a photo or video (which we standardize)
+          if (!photo && !video) {
+            finalExtension = telegramExt;
+          }
         }
       }
     }
@@ -424,7 +432,12 @@ export async function xdelo_redownloadMissingFile(message: any, correlationId: s
     // Try to determine extension from Telegram file path
     let extension = message.storage_path?.split('.').pop() || 'bin';
     
-    if (fileInfo.result.file_path) {
+    // Force specific extensions for standardization based on media_type property
+    if (message.media_type === 'photo') {
+      extension = 'jpeg';
+    } else if (message.media_type === 'video') {
+      extension = 'mp4';
+    } else if (fileInfo.result.file_path) {
       const pathParts = fileInfo.result.file_path.split('.');
       if (pathParts.length > 1) {
         const telegramExt = pathParts.pop()?.toLowerCase();
@@ -467,6 +480,17 @@ export async function xdelo_redownloadMissingFile(message: any, correlationId: s
       error: error.message
     };
   }
+}
+
+// Determine if an extension is viewable in browser
+export function xdelo_isViewableExtension(extension: string): boolean {
+  const viewableExtensions = [
+    'jpeg', 'jpg', 'png', 'gif', 'webp', 'svg',
+    'mp4', 'mov', 'webm',
+    'mp3', 'ogg', 'wav',
+    'pdf'
+  ];
+  return viewableExtensions.includes(extension.toLowerCase());
 }
 
 // For backward compatibility - will be removed in future update

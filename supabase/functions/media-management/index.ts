@@ -12,10 +12,46 @@ import {
 } from "../_shared/mediaUtils.ts";
 import { getStoragePublicUrl } from "../_shared/urls.ts";
 
-// Helper to get MIME type from file extension using the shared utility
-function getMimeTypeFromExtension(extension: string): string {
-  const options = xdelo_getUploadOptions(extension);
-  return options.contentType;
+// Helper to get MIME type from file extension and mediaType
+function getMimeType(extension: string, mediaType?: string): string {
+  // Comprehensive map of extensions to MIME types
+  const mimeMap: Record<string, string> = {
+    // Images
+    'jpeg': 'image/jpeg',
+    'jpg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'svg': 'image/svg+xml',
+    
+    // Videos
+    'mp4': 'video/mp4',
+    'mov': 'video/quicktime',
+    'webm': 'video/webm',
+    'mkv': 'video/x-matroska',
+    
+    // Audio
+    'mp3': 'audio/mpeg',
+    'ogg': 'audio/ogg',
+    'wav': 'audio/wav',
+    
+    // Documents
+    'pdf': 'application/pdf',
+    'doc': 'application/msword',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'txt': 'text/plain',
+    
+    // Telegram specific
+    'tgs': 'application/gzip', // Telegram animated stickers
+  };
+
+  // Handle special cases from Telegram media types
+  if (mediaType) {
+    if (mediaType.includes('photo')) return 'image/jpeg';
+    if (mediaType.includes('video')) return 'video/mp4';
+  }
+
+  return mimeMap[extension.toLowerCase()] || `application/${extension}`;
 }
 
 // Helper function to validate and sanitize extensions
@@ -80,7 +116,7 @@ serve(async (req) => {
   }
 });
 
-// Handle media upload using shared utilities
+// Handle media upload with explicit content type
 async function handleUpload(
   fileUrl: string, 
   fileUniqueId: string, 
@@ -90,9 +126,16 @@ async function handleUpload(
 ): Promise<Response> {
   try {
     // Determine extension and sanitize it
-    const extension = getSafeExtension(requestedExtension, mediaType);
+    let extension = getSafeExtension(requestedExtension, mediaType);
     
-    // Generate storage path using the shared utility
+    // Force specific extensions based on mediaType for standardization
+    if (mediaType.includes('photo')) {
+      extension = 'jpeg';
+    } else if (mediaType.includes('video')) {
+      extension = 'mp4';
+    }
+    
+    // Generate storage path
     const storagePath = xdelo_constructStoragePath(fileUniqueId, extension);
     
     console.log(`Downloading media from ${fileUrl} with extension ${extension}`);
@@ -106,17 +149,27 @@ async function handleUpload(
     // Get media as blob
     const mediaBlob = await mediaResponse.blob();
     
-    console.log(`Uploading to storage path: ${storagePath}`);
+    // Get correct MIME type for this extension and media type
+    const mimeType = getMimeType(extension, mediaType);
+    console.log(`Uploading to storage path: ${storagePath} with MIME type: ${mimeType}`);
     
-    // Use the shared upload utility to handle the upload with correct settings
-    const { success, publicUrl, mimeType } = await xdelo_uploadMediaToStorage(
-      mediaBlob,
-      storagePath
-    );
+    // Upload with explicit content type
+    const { error } = await supabaseClient
+      .storage
+      .from('telegram-media')
+      .upload(storagePath, mediaBlob, {
+        contentType: mimeType,
+        upsert: true,
+        cacheControl: '3600',
+        contentDisposition: 'inline'
+      });
     
-    if (!success || !publicUrl) {
-      throw new Error("Failed to upload media to storage");
+    if (error) {
+      throw new Error(`Upload failed: ${error.message}`);
     }
+    
+    // Generate public URL
+    const publicUrl = getStoragePublicUrl(storagePath);
     
     // Log the successful upload
     await supabaseClient.from('unified_audit_logs').insert({

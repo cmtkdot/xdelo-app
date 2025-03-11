@@ -124,6 +124,12 @@ export const getMimeTypeFromExtension = (extension: string) => {
 
 // Helper function to validate and sanitize extensions
 export const getSafeExtension = (extension?: string, mediaType?: string) => {
+  // Force specific extensions for photo and video
+  if (mediaType) {
+    if (mediaType.includes('photo')) return 'jpeg';
+    if (mediaType.includes('video')) return 'mp4';
+  }
+
   if (!extension || extension === 'bin') {
     return mediaType ? xdelo_getFileExtension(mediaType) : 'bin';
   }

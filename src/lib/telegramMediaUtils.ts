@@ -54,6 +54,60 @@ export function xdelo_getSafeExtension(extension?: string, mediaType?: string): 
 }
 
 /**
+ * Get MIME type from extension or mediaType
+ */
+export function xdelo_getMimeType(extension: string, mediaType?: string): string {
+  // Comprehensive map of extensions to MIME types
+  const mimeMap: Record<string, string> = {
+    // Images
+    'jpeg': 'image/jpeg',
+    'jpg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'svg': 'image/svg+xml',
+    
+    // Videos
+    'mp4': 'video/mp4',
+    'mov': 'video/quicktime',
+    'webm': 'video/webm',
+    'mkv': 'video/x-matroska',
+    
+    // Audio
+    'mp3': 'audio/mpeg',
+    'ogg': 'audio/ogg',
+    'wav': 'audio/wav',
+    
+    // Documents
+    'pdf': 'application/pdf',
+    'doc': 'application/msword',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'txt': 'text/plain',
+    
+    // Telegram specific
+    'tgs': 'application/gzip', // Telegram animated stickers
+  };
+
+  // Get MIME type from extension or use a generic fallback with the extension
+  const mimeType = mimeMap[extension.toLowerCase()];
+  
+  if (mimeType) {
+    return mimeType;
+  }
+  
+  // If we don't have a mapping but have a mediaType, use that to determine a generic MIME type
+  if (mediaType) {
+    if (mediaType.includes('photo')) return 'image/jpeg';
+    if (mediaType.includes('video')) return 'video/mp4';
+    if (mediaType.includes('audio')) return 'audio/mpeg';
+    if (mediaType.includes('voice')) return 'audio/ogg';
+  }
+  
+  // Generic fallback
+  return `application/${extension}`;
+}
+
+/**
  * Construct standardized storage path for a media file
  */
 export function xdelo_constructStoragePath(fileUniqueId: string, extension: string): string {
@@ -115,7 +169,7 @@ export async function xdelo_uploadTelegramMedia(
     return { 
       publicUrl: data.publicUrl, 
       storagePath: data.storagePath,
-      mimeType: data.mimeType || `application/${extension}` // Get MIME type from server
+      mimeType: data.mimeType || xdelo_getMimeType(extension, mediaType) // Get MIME type from response or calculate it
     };
   } catch (error) {
     console.error('❌ Error uploading media:', error);
