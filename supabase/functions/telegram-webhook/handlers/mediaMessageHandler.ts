@@ -1,3 +1,4 @@
+
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { getMediaInfo } from '../utils/mediaUtils.ts';
 import { logMessageOperation } from '../utils/logger.ts';
@@ -167,7 +168,7 @@ async function handleEditedMediaMessage(
           telegram_message_id: message.message_id,
           chat_id: message.chat.id,
           file_unique_id: mediaInfo.file_unique_id,
-          sourceMessageId: existingMessage.id, // Replace existing_message_id with sourceMessageId
+          sourceMessageId: existingMessage.id,
           edit_type: captionChanged ? 'caption_changed' : (mediaChanged ? 'media_changed' : 'other_edit'),
           media_group_id: message.media_group_id
         }
@@ -390,7 +391,7 @@ async function handleNewMediaMessage(
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         file_unique_id: mediaInfo.file_unique_id,
-        sourceMessageId: existingMessage.id, // Replace existing_message_id with sourceMessageId
+        sourceMessageId: existingMessage.id,
         update_type: 'duplicate_update',
         media_group_id: message.media_group_id
       }
@@ -657,18 +658,34 @@ async function syncFromMediaGroupDirect(
     
     // Log the sync operation
     try {
-      await supabaseClient.from('unified_audit_logs').insert({
-        event_type: 'media_group_content_synced_direct',
-        entity_id: targetMessageId,
-        metadata: {
-          media_group_id: mediaGroupId,
-          source_message_id: source.id,
-          correlation_id: correlationId
-        },
-        event_timestamp: new Date().toISOString()
-      });
+      await xdelo_logMediaGroupSync(
+        source.id, 
+        targetMessageId,
+        mediaGroupId,
+        correlationId,
+        {
+          sync_method: 'direct_database',
+          sync_trigger: 'media_group_member_without_caption'
+        }
+      );
     } catch (logError) {
-      console.error('Error logging direct media group sync:', logError);
+      console.error('Error logging media group sync operation:', logError);
+      
+      // Fallback to legacy logging if new logging fails
+      try {
+        await supabaseClient.from('unified_audit_logs').insert({
+          event_type: 'media_group_content_synced_direct',
+          entity_id: targetMessageId,
+          metadata: {
+            media_group_id: mediaGroupId,
+            source_message_id: source.id,
+            correlation_id: correlationId
+          },
+          event_timestamp: new Date().toISOString()
+        });
+      } catch (fallbackLogError) {
+        console.error('Error logging direct media group sync:', fallbackLogError);
+      }
     }
     
     console.log(`Successfully synced content from message ${source.id} to message ${targetMessageId}`);
@@ -678,4 +695,3 @@ async function syncFromMediaGroupDirect(
     return false;
   }
 }
-
