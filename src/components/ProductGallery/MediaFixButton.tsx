@@ -1,70 +1,57 @@
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Loader2, UploadCloud, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/useToast';
+import { Loader2 } from 'lucide-react';
 
-export const MediaFixButton = () => {
-  const [isRepairing, setIsRepairing] = useState(false);
-  const [repairResults, setRepairResults] = useState<any>(null);
+export function MediaFixButton() {
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleRepairMedia = async () => {
-    if (isRepairing) return;
-    
-    setIsRepairing(true);
+  const handleFixMedia = async () => {
     try {
-      // Call the repair-storage-paths edge function
+      setIsLoading(true);
+      
+      // Call the repair storage paths function
       const { data, error } = await supabase.functions.invoke('repair-storage-paths', {
-        body: { 
-          fixContentDisposition: true 
-        }
+        body: { trigger_source: 'manual_ui', force_update: true }
       });
       
-      if (error) throw new Error(error.message);
-      
-      setRepairResults(data);
+      if (error) throw error;
       
       toast({
-        title: "Media repair completed",
-        description: `Processed ${data.data.processed} files, repaired ${data.data.repaired} storage paths, fixed ${data.data.contentDispositionFixed} content types.`,
+        title: "Media Repair Started",
+        description: "Media repair process has been initiated successfully."
       });
-    } catch (error) {
-      console.error('Media repair failed:', error);
+      
+    } catch (error: any) {
+      console.error('Error initiating media repair:', error);
+      
       toast({
-        title: "Media repair failed",
-        description: error instanceof Error ? error.message : "An unknown error occurred",
+        title: "Repair Failed",
+        description: error.message || "Failed to start media repair process",
         variant: "destructive"
       });
     } finally {
-      setIsRepairing(false);
+      setIsLoading(false);
     }
   };
 
   return (
     <Button 
-      onClick={handleRepairMedia} 
-      disabled={isRepairing}
-      className="mb-4"
-      variant="outline"
+      variant="outline" 
+      onClick={handleFixMedia}
+      disabled={isLoading}
     >
-      {isRepairing ? (
+      {isLoading ? (
         <>
-          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          Repairing media...
-        </>
-      ) : repairResults ? (
-        <>
-          <CheckCircle className="h-4 w-4 mr-2" />
-          Media repaired
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Repairing...
         </>
       ) : (
-        <>
-          <UploadCloud className="h-4 w-4 mr-2" />
-          Repair media files
-        </>
+        'Fix Media Paths'
       )}
     </Button>
   );
-};
+}
