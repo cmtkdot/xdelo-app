@@ -20,10 +20,8 @@ import { xdelo_logMediaRedownload } from '../../_shared/messageLogger.ts';
 
 // Re-export the primary functions with simpler names for the webhook context
 export const getMediaInfo = async (message: any) => {
-  // This is now just a wrapper around the shared utility
   try {
-    const result = await xdelo_getMediaInfoFromTelegram(message);
-    return result;
+    return await xdelo_getMediaInfoFromTelegram(message);
   } catch (error) {
     console.error('Error in getMediaInfo wrapper:', error);
     throw error;
@@ -33,7 +31,6 @@ export const getMediaInfo = async (message: any) => {
 // Function to redownload missing files that also updates the message record
 export const redownloadMissingFile = async (message: any) => {
   try {
-    // Call the shared utility
     const result = await xdelo_redownloadMissingFile(message);
     
     if (result.success) {
@@ -52,7 +49,6 @@ export const redownloadMissingFile = async (message: any) => {
 
       if (updateError) {
         console.error(`Failed to update message after redownload: ${updateError.message}`);
-        // Continue anyway, since the file was uploaded successfully
       }
 
       // Log success using the new logging function
@@ -101,13 +97,6 @@ export const redownloadMissingFile = async (message: any) => {
           error: result.error
         }
       );
-      
-      // Keep legacy logging for backward compatibility
-      await logMessageOperation('error', crypto.randomUUID(), {
-        action: 'redownload_failed',
-        file_unique_id: message.file_unique_id,
-        error: result.error
-      });
     }
     
     return result;

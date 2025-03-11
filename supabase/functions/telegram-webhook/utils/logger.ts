@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
 import { xdelo_logMessageOperation, MessageOperationType } from '../../_shared/messageLogger.ts';
 
@@ -20,17 +21,6 @@ export const logMessageOperation = async (
   metadata: LogMetadata
 ) => {
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false
-        }
-      }
-    );
-
     // Add timestamp to metadata if not present
     const logMetadata = {
       ...metadata,
@@ -83,10 +73,22 @@ export const logMessageOperation = async (
         metadata: logMetadata,
         errorMessage: metadata.error
       });
+      return; // Exit early since we've logged using the new system
     }
 
+    // Legacy fallback - create supabase client for old logging method
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false
+        }
+      }
+    );
+
     // Attempt to write to the database using legacy method as fallback
-    // This ensures backward compatibility
     try {
       await supabase.from('unified_audit_logs').insert({
         event_type: `telegram_webhook_${operation}`,
