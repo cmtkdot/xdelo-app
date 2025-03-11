@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -50,8 +49,7 @@ export function useRealTimeMessages({
         }
         
         if (processingState && processingState.length > 0) {
-          // Explicitly cast the array to handle the type issue
-          query = query.in('processing_state', processingState as unknown as string[]);
+          query = query.in('processing_state', processingState);
         }
         
         if (showForwarded) {
