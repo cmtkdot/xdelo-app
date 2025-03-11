@@ -68,22 +68,44 @@ async function handleEditedMediaMessage(
   if (existingMessage) {
     // Store previous state in edit_history
     let editHistory = existingMessage.edit_history || [];
+    
+    // Add media information to edit history for tracking changes
     editHistory.push({
       timestamp: new Date().toISOString(),
       previous_caption: existingMessage.caption,
       new_caption: message.caption,
       edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
-      previous_analyzed_content: existingMessage.analyzed_content
+      previous_analyzed_content: existingMessage.analyzed_content,
+      previous_media_info: {
+        file_id: existingMessage.file_id,
+        file_unique_id: existingMessage.file_unique_id,
+        storage_path: existingMessage.storage_path,
+        public_url: existingMessage.public_url,
+        mime_type: existingMessage.mime_type
+      },
+      new_media_info: {
+        file_id: mediaInfo.file_id,
+        file_unique_id: mediaInfo.file_unique_id,
+        storage_path: mediaInfo.storage_path,
+        public_url: mediaInfo.public_url,
+        mime_type: mediaInfo.mime_type
+      }
     });
     
-    // Check if caption changed
+    // Check if caption changed or media file changed
     const captionChanged = message.caption !== existingMessage.caption;
+    const mediaChanged = mediaInfo.file_unique_id !== existingMessage.file_unique_id;
     
-    // Update the message with new caption and edit history
+    // Update the message with new media info, caption and edit history
     const { error: updateError } = await supabaseClient
       .from('messages')
       .update({
         caption: message.caption,
+        file_id: mediaInfo.file_id,
+        file_unique_id: mediaInfo.file_unique_id,
+        storage_path: mediaInfo.storage_path,
+        public_url: mediaInfo.public_url,
+        mime_type: mediaInfo.mime_type,
         telegram_data: message,
         edit_date: new Date(message.edit_date * 1000).toISOString(),
         edit_history: editHistory,
@@ -91,23 +113,23 @@ async function handleEditedMediaMessage(
         is_edited: true,
         correlation_id: correlationId,
         updated_at: new Date().toISOString(),
-        // Reset processing state if caption changed
-        processing_state: captionChanged ? 'pending' : existingMessage.processing_state,
-        // Reset analyzed content if caption changed
-        analyzed_content: captionChanged ? null : existingMessage.analyzed_content,
-        // Mark as needing group sync if caption changed and part of a group
-        group_caption_synced: captionChanged && message.media_group_id ? false : existingMessage.group_caption_synced,
-        // Set is_original_caption to false if caption was removed
-        is_original_caption: captionChanged && !message.caption ? false : existingMessage.is_original_caption
+        // Reset processing state if caption or media changed
+        processing_state: (captionChanged || mediaChanged) ? 'pending' : existingMessage.processing_state,
+        // Reset analyzed content if caption or media changed
+        analyzed_content: (captionChanged || mediaChanged) ? null : existingMessage.analyzed_content,
+        // Mark as needing group sync if caption or media changed and part of a group
+        group_caption_synced: (captionChanged || mediaChanged) && message.media_group_id ? false : existingMessage.group_caption_synced,
+        // Set is_original_caption to true if caption was changed (new source of truth)
+        is_original_caption: captionChanged ? true : existingMessage.is_original_caption
       })
       .eq('id', existingMessage.id);
 
     if (updateError) throw updateError;
 
-    // If caption changed and has content, directly trigger caption analysis
-    if (captionChanged && message.caption) {
+    // If caption or media changed and has content, directly trigger caption analysis
+    if ((captionChanged || mediaChanged) && message.caption) {
       try {
-        console.log(`Caption changed, directly triggering analysis for message ${existingMessage.id}`);
+        console.log(`Caption or media changed, directly triggering analysis for message ${existingMessage.id}`);
         
         // Directly call the parse-caption-with-ai edge function for immediate processing
         const analyzeResponse = await supabaseClient.functions.invoke('parse-caption-with-ai', {
@@ -159,10 +181,10 @@ async function handleEditedMediaMessage(
         }
       }
     } 
-    // If caption was removed, check if this is part of a media group and needs syncing
-    else if (captionChanged && !message.caption && message.media_group_id) {
+    // If caption was removed or media changed, check if this is part of a media group and needs syncing
+    else if ((captionChanged && !message.caption || mediaChanged) && message.media_group_id) {
       try {
-        console.log(`Caption removed, checking for media group sync from group ${message.media_group_id}`);
+        console.log(`Caption removed or media changed, checking for media group sync from group ${message.media_group_id}`);
         
         // Look for another message in the group with a caption
         const { data: groupMessages } = await supabaseClient
@@ -193,7 +215,7 @@ async function handleEditedMediaMessage(
           }
         }
       } catch (syncError) {
-        console.error('Failed to sync from media group after caption removal:', syncError);
+        console.error('Failed to sync from media group after caption removal or media change:', syncError);
       }
     }
 
@@ -208,7 +230,7 @@ async function handleEditedMediaMessage(
           chat_id: message.chat.id,
           file_unique_id: mediaInfo.file_unique_id,
           existing_message_id: existingMessage.id,
-          edit_type: captionChanged ? 'caption_changed' : 'other_edit',
+          edit_type: captionChanged ? 'caption_changed' : (mediaChanged ? 'media_changed' : 'other_edit'),
           media_group_id: message.media_group_id
         }
       );
@@ -233,7 +255,8 @@ async function handleNewMediaMessage(
 ): Promise<Response> {
   const { correlationId } = context;
 
-  // IMPORTANT: Check for duplicate message by file_unique_id before creating new record
+  // Check for duplicate message by file_unique_id before creating new record
+  // But we'll still update it with the new media info since we always re-upload
   const { data: existingMedia } = await supabaseClient
     .from('messages')
     .select('*')
@@ -250,7 +273,26 @@ async function handleNewMediaMessage(
     // Check if caption changed
     const captionChanged = message.caption !== existingMessage.caption;
     
-    // Update the existing message
+    // Create history entry for this update
+    let editHistory = existingMessage.edit_history || [];
+    editHistory.push({
+      timestamp: new Date().toISOString(),
+      previous_caption: existingMessage.caption,
+      new_caption: message.caption,
+      duplicate_update: true,
+      previous_media_info: {
+        storage_path: existingMessage.storage_path,
+        public_url: existingMessage.public_url,
+        mime_type: existingMessage.mime_type
+      },
+      new_media_info: {
+        storage_path: mediaInfo.storage_path,
+        public_url: mediaInfo.public_url,
+        mime_type: mediaInfo.mime_type
+      }
+    });
+    
+    // Update the existing message with new media info
     const { error: updateError } = await supabaseClient
       .from('messages')
       .update({
@@ -262,14 +304,17 @@ async function handleNewMediaMessage(
         telegram_data: message,
         correlation_id: correlationId,
         media_group_id: message.media_group_id,
-        // Preserve existing storage path and public URL
-        storage_path: existingMessage.storage_path,
-        public_url: existingMessage.public_url,
+        // Update with new storage path and public URL from the re-upload
+        storage_path: mediaInfo.storage_path,
+        public_url: mediaInfo.public_url,
+        mime_type: mediaInfo.mime_type,
+        file_id: mediaInfo.file_id, // Update with new file_id
         // Reset processing if caption changed
         processing_state: captionChanged ? 'pending' : existingMessage.processing_state,
         analyzed_content: captionChanged ? null : existingMessage.analyzed_content,
         updated_at: new Date().toISOString(),
-        is_duplicate: true
+        is_duplicate: true,
+        edit_history: editHistory
       })
       .eq('id', existingMessage.id);
 
@@ -280,7 +325,7 @@ async function handleNewMediaMessage(
       'success',
       context.correlationId,
       {
-        message: `Duplicate message detected with file_unique_id ${mediaInfo.file_unique_id}`,
+        message: `Duplicate message detected with file_unique_id ${mediaInfo.file_unique_id}, media re-uploaded`,
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         file_unique_id: mediaInfo.file_unique_id,

@@ -9,17 +9,6 @@ export function xdelo_isViewableMimeType(mimeType: string): boolean {
 }
 
 /**
- * Gets upload options with proper content disposition based on MIME type
- */
-export function xdelo_getUploadOptions(mimeType: string): any {
-  return {
-    contentType: mimeType || 'application/octet-stream',
-    upsert: true,
-    contentDisposition: xdelo_isViewableMimeType(mimeType) ? 'inline' : 'attachment'
-  };
-}
-
-/**
  * Get default MIME type based on media type
  */
 export function xdelo_getDefaultMimeType(mediaType: string): string {
@@ -48,6 +37,7 @@ export function xdelo_constructStoragePath(fileUniqueId: string, mimeType: strin
 
 /**
  * Uploads media to storage with proper MIME type handling and standardized paths
+ * Always re-uploads media to replace existing files
  */
 export async function xdelo_uploadTelegramMedia(
   fileUrl: string, 
@@ -61,6 +51,7 @@ export async function xdelo_uploadTelegramMedia(
   
   // Generate standardized storage path
   const storagePath = xdelo_constructStoragePath(fileUniqueId, mimeType);
+  const bucketPath = `telegram-media/${storagePath}`;
   
   try {
     // Download media from source URL
@@ -71,12 +62,14 @@ export async function xdelo_uploadTelegramMedia(
     
     const mediaBuffer = await mediaResponse.arrayBuffer();
 
-    // Upload with proper content disposition based on MIME type
-    const uploadOptions = xdelo_getUploadOptions(mimeType);
+    // Always use upsert to replace existing files
     const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')
-      .upload(storagePath, mediaBuffer, uploadOptions);
+      .upload(storagePath, mediaBuffer, {
+        contentType: mimeType,
+        upsert: true // Always replace existing files
+      });
 
     if (uploadError) {
       throw uploadError;
@@ -89,8 +82,7 @@ export async function xdelo_uploadTelegramMedia(
       .getPublicUrl(storagePath);
 
     console.log('✅ Media uploaded successfully:', publicUrl);
-    return { publicUrl, storagePath };
-
+    return { publicUrl, storagePath: bucketPath };
   } catch (error) {
     console.error('❌ Error uploading media:', error);
     throw error;
@@ -109,7 +101,7 @@ export async function xdelo_validateStorageFile(storagePath: string): Promise<bo
     
     if (!bucket || !path) return false;
     
-    // Check if file exists using head request
+    // Check if file exists
     const { data, error } = await supabase
       .storage
       .from(bucket)
@@ -124,6 +116,7 @@ export async function xdelo_validateStorageFile(storagePath: string): Promise<bo
 
 /**
  * Repairs content disposition for an existing file
+ * This is simplified to just re-upload the file with correct content type
  */
 export async function xdelo_repairContentDisposition(storagePath: string, mimeType: string): Promise<boolean> {
   try {
@@ -142,16 +135,18 @@ export async function xdelo_repairContentDisposition(storagePath: string, mimeTy
       
     if (error || !data) return false;
     
-    // Re-upload with proper content disposition
-    const uploadOptions = xdelo_getUploadOptions(mimeType);
+    // Re-upload with correct content type
     const { error: uploadError } = await supabase
       .storage
       .from(bucket)
-      .upload(path, data, { ...uploadOptions, upsert: true });
+      .upload(path, data, {
+        contentType: mimeType,
+        upsert: true
+      });
       
     return !uploadError;
   } catch (error) {
-    console.error('Error repairing content disposition:', error);
+    console.error('Error updating file content type:', error);
     return false;
   }
 }

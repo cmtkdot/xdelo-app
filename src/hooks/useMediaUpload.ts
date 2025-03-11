@@ -12,6 +12,10 @@ export function useMediaUpload() {
   const [lastUploadedUrl, setLastUploadedUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
+  /**
+   * Upload media to storage
+   * Always re-uploads media even if it already exists, replacing the existing file
+   */
   const uploadMedia = async (
     fileUrl: string, 
     fileUniqueId: string, 
@@ -30,7 +34,7 @@ export function useMediaUpload() {
       setLastUploadedUrl(publicUrl);
       toast({
         title: "Upload successful",
-        description: "Media file has been uploaded successfully."
+        description: "Media file has been uploaded and replaced if it existed."
       });
       
       return { publicUrl, storagePath };
@@ -47,6 +51,9 @@ export function useMediaUpload() {
     }
   };
 
+  /**
+   * Validate if a file exists in storage
+   */
   const validateStorageFile = async (storagePath: string) => {
     try {
       return await xdelo_validateStorageFile(storagePath);
@@ -56,26 +63,29 @@ export function useMediaUpload() {
     }
   };
 
+  /**
+   * Repair file by re-uploading with correct content type
+   */
   const repairFile = async (storagePath: string, mimeType: string) => {
     try {
       const result = await xdelo_repairContentDisposition(storagePath, mimeType);
       if (result) {
         toast({
-          title: "File repaired",
-          description: "File content disposition has been fixed."
+          title: "File updated",
+          description: "File has been re-uploaded with correct content type."
         });
       } else {
         toast({
-          title: "Repair failed",
-          description: "Could not repair the file.",
+          title: "Update failed",
+          description: "Could not update the file.",
           variant: "destructive"
         });
       }
       return result;
     } catch (error) {
-      console.error('Repair failed:', error);
+      console.error('File update failed:', error);
       toast({
-        title: "Repair failed",
+        title: "Update failed",
         description: error instanceof Error ? error.message : "An unknown error occurred",
         variant: "destructive"
       });
