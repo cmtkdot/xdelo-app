@@ -7,11 +7,7 @@ export function useMediaUpload() {
   const [lastUploadedUrl, setLastUploadedUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const uploadMedia = async (
-    fileUrl: string, 
-    fileUniqueId: string, 
-    extension: string
-  ) => {
+  const uploadMedia = async (fileUrl: string, fileUniqueId: string) => {
     setIsUploading(true);
     try {
       // Get the file data
@@ -19,10 +15,11 @@ export function useMediaUpload() {
       if (!response.ok) throw new Error('Failed to fetch media');
       const fileData = await response.blob();
 
-      // Construct storage path using just fileUniqueId and extension
+      // Construct storage path using fileUniqueId, let Supabase determine extension
+      const extension = fileData.type.split('/')[1] || 'bin';
       const storagePath = `${fileUniqueId}.${extension}`;
       
-      // Upload/replace in storage with upsert
+      // Upload to storage with upsert enabled, let Supabase handle content type
       const result = await fetch('/functions/v1/media-management', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

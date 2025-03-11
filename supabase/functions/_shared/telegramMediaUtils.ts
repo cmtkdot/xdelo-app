@@ -1,16 +1,7 @@
 
-// Telegram media utilities
-// @ts-ignore - Allow Deno global
-declare const Deno: any;
-
 import { supabaseClient as supabase } from "./supabase.ts";
 import { getTelegramApiUrl, getTelegramFileUrl, getStoragePublicUrl } from "./urls.ts";
-import { xdelo_detectMimeType } from "./mimeUtils.ts";
-import { 
-  xdelo_constructStoragePath, 
-  xdelo_uploadMediaToStorage,
-  xdelo_checkFileExistsInStorage 
-} from "./storageUtils.ts";
+import { xdelo_uploadMediaToStorage } from "./storageUtils.ts";
 import { xdelo_logMediaRedownload } from "./messageLogger.ts";
 
 // Get media info from a Telegram message
@@ -22,22 +13,7 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
   const media = photo || video || document;
   if (!media) throw new Error('No media found in message');
 
-  // Determine the MIME type
-  const mediaObj = { photo, video, document };
-  const mimeType = xdelo_detectMimeType(mediaObj);
-  
-  // Generate standardized storage path
-  const fileName = xdelo_constructStoragePath(media.file_unique_id, mimeType);
-  
-  // Check if the file already exists in storage - for logging purposes only
-  // We'll always re-upload to ensure we have the latest version
-  const existsInStorage = await xdelo_checkFileExistsInStorage(media.file_unique_id, mimeType);
-  
-  if (existsInStorage) {
-    console.log(`File ${media.file_unique_id} already exists in storage, will replace it`);
-  }
-
-  // Always download from Telegram and upload to ensure we have the latest version
+  // Get file info from Telegram
   try {
     const fileInfoResponse = await fetch(getTelegramApiUrl(`getFile?file_id=${media.file_id}`));
     
@@ -58,46 +34,40 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
     }
     
     const fileData = await fileDataResponse.blob();
+    const extension = fileData.type.split('/')[1] || 'bin';
+    const fileName = `${media.file_unique_id}.${extension}`;
 
-    // Upload to Supabase Storage with correct content type, always replacing existing files
-    const { success, publicUrl } = await xdelo_uploadMediaToStorage(
-      fileData,
-      fileName,
-      mimeType
-    );
+    // Upload to storage with upsert enabled
+    const { success, publicUrl } = await xdelo_uploadMediaToStorage(fileData, fileName);
 
     if (!success || !publicUrl) {
       throw new Error('Failed to upload media to storage');
     }
 
-    // Return full info, setting file expiration and tracking original file ID
     return {
       file_id: media.file_id,
       file_unique_id: media.file_unique_id,
-      mime_type: mimeType,
       file_size: media.file_size,
       width: media.width,
       height: media.height,
       duration: video?.duration,
       storage_path: fileName,
       public_url: publicUrl,
-      file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours from now
-      original_file_id: media.file_id // Store the original file_id for reference
+      file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      original_file_id: media.file_id
     };
   } catch (error) {
     console.error('Error downloading media from Telegram:', error);
     
-    // If download fails but we have file info, return placeholder data
     return {
       file_id: media.file_id,
       file_unique_id: media.file_unique_id,
-      mime_type: mimeType,
       file_size: media.file_size,
       width: media.width,
       height: media.height,
       duration: video?.duration,
-      storage_path: fileName,
-      public_url: getStoragePublicUrl(fileName),
+      storage_path: `${media.file_unique_id}.bin`,
+      public_url: getStoragePublicUrl(`${media.file_unique_id}.bin`),
       needs_redownload: true,
       file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       original_file_id: media.file_id,
@@ -115,9 +85,6 @@ export async function xdelo_redownloadMissingFile(message: any, correlationId: s
       throw new Error('Missing file_id for redownload');
     }
     
-    // Always download from Telegram (no storage checks)
-    
-    // Get file info from Telegram
     const fileInfoResponse = await fetch(getTelegramApiUrl(`getFile?file_id=${message.file_id}`));
     
     if (!fileInfoResponse.ok) {
@@ -130,7 +97,6 @@ export async function xdelo_redownloadMissingFile(message: any, correlationId: s
       throw new Error(`Telegram API error: ${JSON.stringify(fileInfo)}`);
     }
 
-    // Download file from Telegram
     const fileDataResponse = await fetch(getTelegramFileUrl(fileInfo.result.file_path));
     
     if (!fileDataResponse.ok) {
@@ -138,25 +104,15 @@ export async function xdelo_redownloadMissingFile(message: any, correlationId: s
     }
     
     const fileData = await fileDataResponse.blob();
-    
-    // Ensure we have a valid mime type
-    const mimeType = message.mime_type || 'application/octet-stream';
-    
-    // Generate standardized storage path
-    const fileName = xdelo_constructStoragePath(message.file_unique_id, mimeType);
+    const extension = fileData.type.split('/')[1] || 'bin';
+    const fileName = `${message.file_unique_id}.${extension}`;
 
-    // Upload to storage with correct content disposition
-    const { success, publicUrl } = await xdelo_uploadMediaToStorage(
-      fileData,
-      fileName,
-      mimeType
-    );
+    const { success, publicUrl } = await xdelo_uploadMediaToStorage(fileData, fileName);
 
     if (!success || !publicUrl) {
       throw new Error('Failed to upload media to storage during redownload');
     }
 
-    // Return success information
     return {
       success: true,
       message_id: message.id,
