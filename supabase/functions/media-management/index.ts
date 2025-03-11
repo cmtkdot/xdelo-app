@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { supabaseClient } from "../_shared/supabase.ts";
@@ -63,7 +62,7 @@ serve(async (req) => {
     // Handle different actions
     switch (action) {
       case 'upload':
-        return await handleUpload(fileUrl, fileUniqueId, mediaType, mimeType, correlationId);
+        return await handleUpload(fileUrl, fileUniqueId, correlationId);
         
       case 'validate':
         return await handleValidate(storagePath, correlationId);
@@ -93,20 +92,10 @@ serve(async (req) => {
 // Handle media upload using shared utilities
 async function handleUpload(
   fileUrl: string, 
-  fileUniqueId: string, 
-  mediaType: string, 
-  explicitMimeType: string | undefined,
+  fileUniqueId: string,
   correlationId: string
 ): Promise<Response> {
   try {
-    // Determine MIME type
-    const mimeType = explicitMimeType || getMimeTypeFromExt(fileUrl) || 'application/octet-stream';
-    
-    // Generate storage path using the shared utility
-    const storagePath = `${fileUniqueId}.${mimeType.split('/')[1] || 'bin'}`;
-    
-    console.log(`Downloading media from ${fileUrl} with MIME type ${mimeType}`);
-    
     // Download media from URL
     const mediaResponse = await fetch(fileUrl);
     if (!mediaResponse.ok) {
@@ -116,18 +105,25 @@ async function handleUpload(
     // Get media as blob
     const mediaBlob = await mediaResponse.blob();
     
+    // Let Supabase determine content type from extension
+    const storagePath = `${fileUniqueId}.${mediaBlob.type.split('/')[1] || 'bin'}`;
+    
     console.log(`Uploading to storage path: ${storagePath}`);
     
-    // Use the shared upload utility to handle the upload with correct settings
-    const { success, publicUrl } = await xdelo_uploadMediaToStorage(
-      mediaBlob,
-      storagePath,
-      mimeType
-    );
+    // Upload with upsert enabled
+    const { data: uploadData, error: uploadError } = await supabaseClient
+      .storage
+      .from('telegram-media')
+      .upload(storagePath, mediaBlob, {
+        upsert: true // Enable overwriting existing files
+      });
     
-    if (!success || !publicUrl) {
-      throw new Error("Failed to upload media to storage");
+    if (uploadError) {
+      throw uploadError;
     }
+    
+    // Get public URL
+    const publicUrl = `https://xjhhehxcxkiumnwbirel.supabase.co/storage/v1/object/public/telegram-media/${storagePath}`;
     
     // Log the successful upload
     await supabaseClient.from('unified_audit_logs').insert({
@@ -136,7 +132,6 @@ async function handleUpload(
       metadata: {
         file_unique_id: fileUniqueId,
         storage_path: storagePath,
-        mime_type: mimeType
       }
     });
     
@@ -144,8 +139,7 @@ async function handleUpload(
       JSON.stringify({ 
         success: true, 
         publicUrl, 
-        storagePath: `telegram-media/${storagePath}`,
-        mimeType
+        storagePath: `telegram-media/${storagePath}`
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

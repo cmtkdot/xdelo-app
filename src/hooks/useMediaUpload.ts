@@ -9,7 +9,7 @@ export function useMediaUpload() {
 
   const uploadMedia = async (
     fileUrl: string, 
-    fileUniqueId: string,
+    fileUniqueId: string, 
     extension: string
   ) => {
     setIsUploading(true);
@@ -18,15 +18,19 @@ export function useMediaUpload() {
       const response = await fetch(fileUrl);
       if (!response.ok) throw new Error('Failed to fetch media');
       const fileData = await response.blob();
+
+      // Construct storage path using just fileUniqueId and extension
+      const storagePath = `${fileUniqueId}.${extension}`;
       
-      // Upload/replace in storage
+      // Upload/replace in storage with upsert
       const result = await fetch('/functions/v1/media-management', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'upload',
           fileData: fileData,
-          storagePath: `${fileUniqueId}.${extension}`
+          storagePath,
+          upsert: true // Enable overwriting existing files
         })
       });
 
@@ -38,7 +42,7 @@ export function useMediaUpload() {
         description: "Media file has been uploaded successfully."
       });
       
-      return { publicUrl, storagePath: `${fileUniqueId}.${extension}` };
+      return { publicUrl, storagePath };
     } catch (error) {
       console.error('Upload failed:', error);
       toast({

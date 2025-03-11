@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,7 +40,7 @@ const ProductGallery = () => {
   const { data: mediaGroups = {}, isLoading } = useMediaGroups();
   const { data: vendors = [] } = useVendors();
   const { handleDelete, isProcessing } = useTelegramOperations();
-  const { checkMediaExists } = useMediaUpload();
+  const { checkMediaExists, uploadMedia } = useMediaUpload();
 
   useEffect(() => {
     const channel = supabase
@@ -132,6 +131,15 @@ const ProductGallery = () => {
       const nextIndex = currentGroupIndex + 1;
       setCurrentGroupIndex(nextIndex);
       setCurrentViewGroup(paginatedProducts[nextIndex]);
+    }
+  };
+
+  const handleMediaRepair = async (fileUrl: string, fileUniqueId: string, extension: string) => {
+    try {
+      await uploadMedia(fileUrl, fileUniqueId, extension);
+      refetch(); // Refresh data after repair
+    } catch (error) {
+      console.error('Media repair failed:', error);
     }
   };
 
