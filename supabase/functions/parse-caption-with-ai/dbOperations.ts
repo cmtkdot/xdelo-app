@@ -26,7 +26,7 @@ export async function updateMessageWithAnalysis(
   messageId: string,
   parsedContent: ParsedContent,
   existingMessage: any,
-  queueId?: string,
+  queueId?: string, // Kept for backward compatibility but no longer used
   isForceUpdate: boolean = false
 ) {
   // Determine if we need to save old content for edit history
@@ -89,57 +89,13 @@ export async function updateMessageWithAnalysis(
     throw new Error(`Error updating message with analysis: ${updateError.message}`);
   }
   
-  // If queue ID provided, mark queue item as completed
-  if (queueId) {
-    await markQueueItemAsCompleted(queueId, parsedContent);
-  }
-  
   return { success: true, processed: true };
 }
 
-async function markQueueItemAsCompleted(queueId: string, parsedContent: ParsedContent) {
-  try {
-    const { error } = await supabaseClient
-      .from('message_processing_queue')
-      .update({
-        status: 'completed',
-        processing_completed_at: new Date().toISOString(),
-        metadata: supabaseClient.rpc('jsonb_deep_merge', { 
-          a: supabaseClient.rpc('get_column_value', { 
-            table_name: 'message_processing_queue', 
-            column_name: 'metadata', 
-            row_id: queueId 
-          }),
-          b: { analyzed_content: parsedContent } 
-        })
-      })
-      .eq('id', queueId);
-      
-    if (error) {
-      console.error(`Error marking queue item as completed: ${error.message}`);
-    }
-  } catch (error) {
-    console.error(`Exception marking queue item as completed: ${error.message}`);
-  }
-}
-
 export async function markQueueItemAsFailed(queueId: string, errorMessage: string) {
-  try {
-    const { error } = await supabaseClient
-      .from('message_processing_queue')
-      .update({
-        status: 'error',
-        error_message: errorMessage,
-        last_error_at: new Date().toISOString()
-      })
-      .eq('id', queueId);
-      
-    if (error) {
-      console.error(`Error marking queue item as failed: ${error.message}`);
-    }
-  } catch (error) {
-    console.error(`Exception marking queue item as failed: ${error.message}`);
-  }
+  // This is now a no-op since the queue table is gone
+  console.log(`Queue is deprecated. Error for operation: ${errorMessage}`);
+  return;
 }
 
 export async function syncMediaGroupContent(

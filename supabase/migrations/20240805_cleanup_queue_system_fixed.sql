@@ -168,7 +168,7 @@ BEGIN
 END;
 $$;
 
--- 7. Update the media group content check function to remove processing_state references
+-- 7. Update the media group content check function to include processing_state updates
 CREATE OR REPLACE FUNCTION public.xdelo_check_media_group_content(
   p_media_group_id text, 
   p_message_id uuid, 
@@ -279,11 +279,7 @@ BEGIN
             'process-pending-messages',
             '*/5 * * * *',  -- Every 5 minutes
             $$
-            DO $$
-            BEGIN
-                PERFORM xdelo_process_pending_messages(20);
-            END;
-            $$;
+            PERFORM xdelo_process_pending_messages(20);
             $$
         );
     END IF;
@@ -298,32 +294,30 @@ BEGIN
             'xdelo-daily-maintenance',
             '0 3 * * *',  -- Run at 3 AM daily
             $$
-            BEGIN
-                -- Cleanup old audit logs 
-                DELETE FROM unified_audit_logs 
-                WHERE event_timestamp < NOW() - INTERVAL '30 days';
-                
-                -- Reset any messages stuck in processing state for over 24 hours
-                UPDATE messages
-                SET processing_state = 'pending',
-                    error_message = 'Reset by maintenance job after 24h',
-                    retry_count = COALESCE(retry_count, 0) + 1
-                WHERE processing_state = 'processing'
-                  AND processing_started_at < NOW() - INTERVAL '24 hours';
-                
-                -- Log maintenance completion
-                INSERT INTO unified_audit_logs (
-                  event_type,
-                  metadata,
-                  event_timestamp
-                ) VALUES (
-                  'system_maintenance_completed',
-                  jsonb_build_object(
-                    'maintenance_type', 'scheduled_daily'
-                  ),
-                  NOW()
-                );
-            END;
+            -- Cleanup old audit logs 
+            DELETE FROM unified_audit_logs 
+            WHERE event_timestamp < NOW() - INTERVAL '30 days';
+            
+            -- Reset any messages stuck in processing state for over 24 hours
+            UPDATE messages
+            SET processing_state = 'pending',
+                error_message = 'Reset by maintenance job after 24h',
+                retry_count = COALESCE(retry_count, 0) + 1
+            WHERE processing_state = 'processing'
+              AND processing_started_at < NOW() - INTERVAL '24 hours';
+            
+            -- Log maintenance completion
+            INSERT INTO unified_audit_logs (
+              event_type,
+              metadata,
+              event_timestamp
+            ) VALUES (
+              'system_maintenance_completed',
+              jsonb_build_object(
+                'maintenance_type', 'scheduled_daily'
+              ),
+              NOW()
+            );
             $$
         );
     END IF;
