@@ -4,28 +4,17 @@ project_id = "xjhhehxcxkiumnwbirel"
 
 [functions.analyze-with-ai]
 verify_jwt = false
-[functions.create-analyze-message-caption]
-verify_jwt = false
-
-[functions.delete-telegram-message]
-verify_jwt = false
-
-[functions.generic-webhook]
-verify_jwt = false
-
-[functions.openai-request]
-verify_jwt = false
 
 [functions.parse-caption-with-ai]
+verify_jwt = false
+
+[functions.telegram-webhook]
 verify_jwt = false
 
 [functions.repair-storage-paths]
 verify_jwt = false
 
 [functions.redownload-from-media-group]
-verify_jwt = false
-
-[functions.telegram-webhook]
 verify_jwt = false
 
 [functions.xdelo_sync_media_group]
@@ -36,3 +25,4 @@ verify_jwt = false
 
 [functions.user-data]
 verify_jwt = false
+
