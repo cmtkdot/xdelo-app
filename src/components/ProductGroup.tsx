@@ -21,6 +21,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { logDeletion } from "@/lib/syncLogger";
 
 interface ProductGroupProps {
   group: Message[];
@@ -43,6 +44,15 @@ export function ProductGroup({ group, onEdit, onDelete, onView, isDeleting }: Pr
   const handleDeleteClick = async (deleteTelegram: boolean) => {
     try {
       setIsDeleting_(true);
+      // Log the deletion operation
+      await logDeletion(
+        mainMedia.id,
+        deleteTelegram ? 'both' : 'database',
+        { 
+          group_id: mainMedia.media_group_id || 'none',
+          product_name: mainMedia.analyzed_content?.product_name
+        }
+      );
       await onDelete(mainMedia, deleteTelegram);
     } finally {
       setIsDeleting_(false);
@@ -64,6 +74,11 @@ export function ProductGroup({ group, onEdit, onDelete, onView, isDeleting }: Pr
     analyzed_content: message.analyzed_content
   }));
 
+  // Function to get product name with proper fallback
+  const getProductName = () => {
+    return mainMedia.analyzed_content?.product_name || "Untitled";
+  };
+
   return (
     <div className="group relative bg-white dark:bg-gray-950 rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden">
       <div className="aspect-square overflow-hidden">
@@ -77,7 +92,7 @@ export function ProductGroup({ group, onEdit, onDelete, onView, isDeleting }: Pr
       <div className="p-4">
         <div className="flex justify-between items-start mb-2">
           <h3 className="text-sm font-medium leading-none truncate max-w-[80%]">
-            {mainMedia.analyzed_content?.product_name || "Untitled"}
+            {getProductName()}
           </h3>
           <DropdownMenu>
             <DropdownMenuTrigger
