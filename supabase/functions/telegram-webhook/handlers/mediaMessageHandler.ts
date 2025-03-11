@@ -18,6 +18,7 @@ import {
 export async function handleMediaMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
     const { correlationId, isEdit, previousMessage } = context;
+    // Always use our single function to handle all media operations consistently
     const mediaInfo = await getMediaInfo(message);
     
     // Check if this is an edited message
@@ -30,19 +31,17 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
 
   } catch (error) {
     console.error('Error handling media message:', error);
-    // Log error event using new logging system
-    const errorMetadata = {
-      message: 'Error handling media message',
-      error_message: error.message,
-      telegram_message_id: message.message_id,
-      chat_id: message.chat.id,
-      error_code: error.code,
-      processing_stage: 'media_handling'
-    };
-    
+    // Log error event
     try {
-      // Use new logging system - but since we don't have a message ID yet, 
-      // we'll use the legacy logging for errors at this stage
+      const errorMetadata = {
+        message: 'Error handling media message',
+        error_message: error.message,
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        error_code: error.code,
+        processing_stage: 'media_handling'
+      };
+      
       await logMessageOperation(
         'error',
         context.correlationId,
@@ -90,15 +89,13 @@ async function handleEditedMediaMessage(
         file_id: existingMessage.file_id,
         file_unique_id: existingMessage.file_unique_id,
         storage_path: existingMessage.storage_path,
-        public_url: existingMessage.public_url,
-        mime_type: existingMessage.mime_type
+        public_url: existingMessage.public_url
       },
       new_media_info: {
         file_id: mediaInfo.file_id,
         file_unique_id: mediaInfo.file_unique_id,
         storage_path: mediaInfo.storage_path,
-        public_url: mediaInfo.public_url,
-        mime_type: mediaInfo.mime_type
+        public_url: mediaInfo.public_url
       }
     });
     
@@ -106,7 +103,7 @@ async function handleEditedMediaMessage(
     const captionChanged = message.caption !== existingMessage.caption;
     const mediaChanged = mediaInfo.file_unique_id !== existingMessage.file_unique_id;
     
-    // Update the message with new media info, caption and edit history
+    // Always update with the latest media info from Telegram regardless of change
     const { error: updateError } = await supabaseClient
       .from('messages')
       .update({
@@ -115,7 +112,6 @@ async function handleEditedMediaMessage(
         file_unique_id: mediaInfo.file_unique_id,
         storage_path: mediaInfo.storage_path,
         public_url: mediaInfo.public_url,
-        mime_type: mediaInfo.mime_type,
         telegram_data: message,
         edit_date: new Date(message.edit_date * 1000).toISOString(),
         edit_history: editHistory,
@@ -345,7 +341,7 @@ async function handleNewMediaMessage(
         telegram_data: message,
         correlation_id: correlationId,
         media_group_id: message.media_group_id,
-        // Update with new storage path and public URL from the re-upload
+        // Always update with new storage path and public URL from the re-upload
         storage_path: mediaInfo.storage_path,
         public_url: mediaInfo.public_url,
         file_id: mediaInfo.file_id, // Update with new file_id
@@ -387,7 +383,7 @@ async function handleNewMediaMessage(
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         file_unique_id: mediaInfo.file_unique_id,
-        source_message_id: existingMessage.id, // Changed from existing_message_id to source_message_id
+        source_message_id: existingMessage.id,
         update_type: 'duplicate_update',
         media_group_id: message.media_group_id
       }
