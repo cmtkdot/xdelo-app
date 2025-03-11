@@ -1,14 +1,14 @@
 
-
-import React from 'react';
+import React, { useState } from 'react';
 import { Message } from '@/types';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ImageSwiper } from "@/components/ui/image-swiper";
-import { ChevronLeft, ChevronRight, Tag, Package, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Tag, Package, Calendar, Settings } from "lucide-react";
 import { format } from 'date-fns';
 import { cn } from '@/lib/generalUtils';
 import { messageToMediaItem } from './types';
+import { MediaFixButton } from './MediaFixButton';
 
 interface MediaViewerProps {
   isOpen: boolean;
@@ -31,6 +31,7 @@ export const MediaViewer = ({
   hasNext = false,
   editMode = false
 }: MediaViewerProps) => {
+  const [showTools, setShowTools] = useState(false);
   const mainMedia = currentGroup?.find(media => media?.is_original_caption) || currentGroup?.[0];
   const analyzedContent = mainMedia?.analyzed_content;
 
@@ -55,12 +56,18 @@ export const MediaViewer = ({
     if (onNext && hasNext) onNext();
   };
 
+  const handleToolsComplete = () => {
+    // Optionally refresh data or close tools panel
+    setShowTools(false);
+  };
+
   // Guard against undefined currentGroup
   if (!currentGroup || currentGroup.length === 0) {
     return null;
   }
 
   const mediaItems = currentGroup.map(message => messageToMediaItem(message));
+  const messageIds = currentGroup.map(message => message.id);
 
   return (
     <Dialog open={isOpen} onOpenChange={() => onClose()}>
@@ -98,8 +105,28 @@ export const MediaViewer = ({
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
+              
+              {/* Media tools toggle button */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setShowTools(!showTools)}
+                className="absolute top-4 right-4 rounded-full bg-background/80 hover:bg-background/90 backdrop-blur"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
             </div>
           </div>
+          
+          {/* Media tools panel */}
+          {showTools && (
+            <div className="p-4 bg-muted/20 border-b">
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-medium">Media Tools</h3>
+                <MediaFixButton messageIds={messageIds} onComplete={handleToolsComplete} />
+              </div>
+            </div>
+          )}
 
           <div className="p-6 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -200,4 +227,4 @@ export const MediaViewer = ({
       </DialogContent>
     </Dialog>
   );
-};
+}

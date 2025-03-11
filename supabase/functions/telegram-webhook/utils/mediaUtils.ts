@@ -16,6 +16,32 @@ const supabase = createClient(
   }
 );
 
+// Helper to determine if the MIME type is viewable in browser
+function isViewableMimeType(mimeType: string): boolean {
+  return mimeType.startsWith('image/') || 
+         mimeType.startsWith('video/') || 
+         mimeType === 'application/pdf';
+}
+
+// Helper to get proper upload options based on MIME type
+function getUploadOptions(mimeType: string): any {
+  // Default options for all uploads
+  const options = {
+    contentType: mimeType || 'application/octet-stream',
+    upsert: true
+  };
+  
+  // Add inline content disposition for viewable types
+  if (isViewableMimeType(mimeType)) {
+    return {
+      ...options,
+      contentDisposition: 'inline'
+    };
+  }
+  
+  return options;
+}
+
 /**
  * Extract and process media from a Telegram message
  */
@@ -88,17 +114,31 @@ export const getMediaInfo = async (message: any) => {
                   document ? (document.mime_type || 'application/octet-stream') :
                   'image/jpeg';
     
-    const extension = mimeType.split('/')[1];
-    const fileName = `${media.file_unique_id}.${extension}`;
+    // Standardize the storage path
+    const { data: standardPath, error: pathError } = await supabase.rpc(
+      'xdelo_standardize_storage_path',
+      {
+        p_file_unique_id: media.file_unique_id,
+        p_mime_type: mimeType
+      }
+    );
 
-    // Upload to Supabase Storage
+    if (pathError) {
+      console.error('Error getting standardized path:', pathError);
+      const extension = mimeType.split('/')[1];
+      var fileName = `${media.file_unique_id}.${extension}`;
+    } else {
+      var fileName = standardPath;
+    }
+
+    // Get upload options based on MIME type
+    const uploadOptions = getUploadOptions(mimeType);
+
+    // Upload to Supabase Storage with proper content type and disposition
     const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')
-      .upload(fileName, fileData, {
-        contentType: mimeType,
-        upsert: true
-      });
+      .upload(fileName, fileData, uploadOptions);
 
     if (uploadError) {
       console.error('Storage upload error:', uploadError);
@@ -239,19 +279,27 @@ export const redownloadMissingFile = async (message: any) => {
     
     const fileData = await fileDataResponse.blob();
 
-    // Extract storage path or create from file_unique_id and mime_type
-    const mimeType = message.mime_type || 'image/jpeg';
-    const extension = mimeType.split('/')[1];
-    const storagePath = `${message.file_unique_id}.${extension}`;
+    // Get standardized storage path
+    const { data: storagePath, error: pathError } = await supabase.rpc(
+      'xdelo_standardize_storage_path',
+      {
+        p_file_unique_id: message.file_unique_id,
+        p_mime_type: message.mime_type
+      }
+    );
 
-    // Upload to Supabase Storage with upsert=true to overwrite
+    if (pathError) {
+      throw new Error(`Failed to get standardized storage path: ${pathError.message}`);
+    }
+
+    // Get proper upload options based on MIME type
+    const uploadOptions = getUploadOptions(message.mime_type);
+
+    // Upload to Supabase Storage with proper content type and disposition
     const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')
-      .upload(storagePath, fileData, {
-        contentType: mimeType,
-        upsert: true
-      });
+      .upload(storagePath, fileData, uploadOptions);
 
     if (uploadError) {
       throw new Error(`Failed to upload media to storage: ${uploadError.message}`);

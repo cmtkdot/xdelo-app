@@ -3,7 +3,6 @@ import React from 'react';
 import { MessageListContainer } from '../components/Messages/MessageListContainer';
 import { Helmet } from 'react-helmet';
 import { Card } from '@/components/ui/card';
-import { MediaFixButton } from '@/components/ProductGallery/MediaFixButton';
 
 export default function MessagesPage() {
   return (
@@ -13,7 +12,6 @@ export default function MessagesPage() {
       </Helmet>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Message Processing Queue</h1>
-        <MediaFixButton />
       </div>
       
       <div className="space-y-6">

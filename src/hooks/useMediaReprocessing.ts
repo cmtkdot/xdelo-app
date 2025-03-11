@@ -28,7 +28,7 @@ export function useMediaReprocessing() {
       
       toast({
         title: "Content Disposition Fixed",
-        description: `Successfully updated ${data?.data?.repaired || 0} files to display inline.`
+        description: `Successfully updated ${data?.data?.contentDispositionFixed || 0} files to display inline.`
       });
       
       return data;
@@ -83,9 +83,47 @@ export function useMediaReprocessing() {
     }
   };
 
+  /**
+   * Redownload a specific file from its media group
+   */
+  const redownloadFromMediaGroup = async (messageId: string, mediaGroupId?: string) => {
+    try {
+      setIsProcessing(true);
+      
+      const { data, error } = await supabase.functions.invoke('redownload-from-media-group', {
+        body: { 
+          messageId,
+          mediaGroupId
+        }
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "File Redownloaded",
+        description: `Successfully redownloaded file for message ${messageId}.`
+      });
+      
+      return data;
+    } catch (error: any) {
+      console.error('Error redownloading file:', error);
+      
+      toast({
+        title: "Redownload Failed",
+        description: error.message || "Failed to redownload file",
+        variant: "destructive"
+      });
+      
+      throw error;
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return {
     fixContentDisposition,
     repairStoragePaths,
+    redownloadFromMediaGroup,
     isProcessing
   };
 }
