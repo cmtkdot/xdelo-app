@@ -1,9 +1,11 @@
 
-import { useState } from 'react';
 import { useProcessingStats } from './useProcessingStats';
 import { useSystemRepair } from './useSystemRepair';
 import { useStuckMessageRepair } from './useStuckMessageRepair';
 
+/**
+ * Unified hook that combines all processing system repair functionality
+ */
 export function useProcessingSystemRepair() {
   // Use the individual hooks
   const { getProcessingStats } = useProcessingStats();
