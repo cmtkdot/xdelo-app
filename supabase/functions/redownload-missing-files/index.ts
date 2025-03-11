@@ -34,6 +34,20 @@ async function downloadFromMediaGroup(message: any): Promise<string | null> {
 
     console.log(`Searching media group ${message.media_group_id} for file ${message.file_unique_id}`);
 
+    // Get standardized storage path first
+    const { data: storagePath, error: pathError } = await supabase.rpc(
+      'xdelo_standardize_storage_path',
+      {
+        p_file_unique_id: message.file_unique_id,
+        p_mime_type: message.mime_type
+      }
+    );
+
+    if (pathError) {
+      console.error(`Error getting standardized path: ${pathError.message}`);
+      throw pathError;
+    }
+
     // Find another message in the same media group with the same file_unique_id
     // that has a valid public_url
     const { data: groupMessages, error: groupError } = await supabase
@@ -62,7 +76,7 @@ async function downloadFromMediaGroup(message: any): Promise<string | null> {
           .from('messages')
           .update({
             public_url: groupMessage.public_url,
-            storage_path: groupMessage.storage_path,
+            storage_path: storagePath, // Use standardized path
             needs_redownload: false,
             redownload_completed_at: new Date().toISOString(),
             redownload_attempts: (message.redownload_attempts || 0) + 1,
@@ -74,7 +88,42 @@ async function downloadFromMediaGroup(message: any): Promise<string | null> {
       }
     }
     
-    return null;
+    // Try using the redownload-from-media-group endpoint as fallback
+    try {
+      console.log(`No valid URL found in group. Attempting redownload-from-media-group for message ${message.id}`);
+      
+      const redownloadResponse = await fetch(
+        `${Deno.env.get('SUPABASE_URL')}/functions/v1/redownload-from-media-group`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({
+            messageId: message.id,
+            mediaGroupId: message.media_group_id,
+            correlationId: crypto.randomUUID()
+          })
+        }
+      );
+      
+      if (!redownloadResponse.ok) {
+        const errorText = await redownloadResponse.text();
+        console.error(`Redownload from media group failed: ${errorText}`);
+        return null;
+      }
+      
+      const result = await redownloadResponse.json();
+      console.log(`Redownload from media group succeeded:`, result);
+      
+      return result.success ? 
+        `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${result.storagePath}` : 
+        null;
+    } catch (redownloadError) {
+      console.error('Error calling redownload function:', redownloadError);
+      return null;
+    }
   } catch (error) {
     console.error('Error downloading from media group:', error);
     throw error;
@@ -114,12 +163,21 @@ async function downloadFromTelegram(message: any): Promise<string | null> {
     // Get file data as blob
     const fileBlob = await fileResponse.blob();
     
-    // Determine the correct storage path
-    const fileExtension = filePath.split('.').pop();
-    const storagePath = `telegram-media/${message.file_unique_id}.${fileExtension}`;
+    // Get standardized storage path
+    const { data: storagePath, error: pathError } = await supabase.rpc(
+      'xdelo_standardize_storage_path',
+      {
+        p_file_unique_id: message.file_unique_id,
+        p_mime_type: message.mime_type
+      }
+    );
+
+    if (pathError) {
+      throw new Error(`Failed to get standardized path: ${pathError.message}`);
+    }
 
     // Upload to Supabase storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('telegram-media')
       .upload(storagePath, fileBlob, {
         contentType: message.mime_type || 'application/octet-stream',
@@ -131,9 +189,7 @@ async function downloadFromTelegram(message: any): Promise<string | null> {
     }
 
     // Get public URL
-    const publicURL = supabase.storage
-      .from('telegram-media')
-      .getPublicUrl(storagePath).data.publicUrl;
+    const publicURL = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${storagePath}`;
 
     // Update message record
     await supabase
@@ -144,7 +200,8 @@ async function downloadFromTelegram(message: any): Promise<string | null> {
         needs_redownload: false,
         redownload_completed_at: new Date().toISOString(),
         redownload_attempts: (message.redownload_attempts || 0) + 1,
-        error_message: null
+        error_message: null,
+        file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       })
       .eq('id', message.id);
 
@@ -303,7 +360,7 @@ serve(async (req) => {
         failed: failed.length,
         results
       }),
-      { headers: corsHeaders }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     return new Response(
