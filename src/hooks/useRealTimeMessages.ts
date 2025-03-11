@@ -1,130 +1,66 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Message } from '@/types';
-import { ProcessingState } from '@/types';
+import { Message } from '@/types/MessagesTypes';
+import { useToast } from './useToast';
 
-export type ProcessingStateType = ProcessingState;
-
-interface RealTimeMessagesOptions {
-  limit?: number;
-  states?: ProcessingState[];
-  chatId?: number;
-  filter?: string;
-  processingState?: ProcessingStateType[];
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-  showForwarded?: boolean;
-  showEdited?: boolean;
+// Export enum for ProcessingState to match database values
+export enum ProcessingState {
+  Initialized = 'initialized',
+  Pending = 'pending',
+  Processing = 'processing',
+  Completed = 'completed',
+  Error = 'error',
+  PartialSuccess = 'partial_success'
 }
 
-export default function useRealTimeMessages({ 
-  limit = 20, 
-  states = ["initialized", "pending", "processing", "completed", "error", "partial_success"] as ProcessingState[], 
-  chatId,
-  filter = '',
-  processingState,
-  sortBy = 'updated_at',
-  sortOrder = 'desc',
-  showForwarded = false,
-  showEdited = false
-}: RealTimeMessagesOptions) {
+// Export type for other components to use
+export type ProcessingStateType = keyof typeof ProcessingState;
+
+interface UseRealTimeMessagesProps {
+  limit?: number;
+  processingStates?: ProcessingState[];
+  mediaGroupId?: string | null;
+  chatId?: number | null;
+  orderBy?: 'created_at' | 'updated_at';
+  orderDirection?: 'asc' | 'desc';
+}
+
+export const useRealTimeMessages = ({
+  limit = 20,
+  processingStates = [
+    ProcessingState.Initialized, 
+    ProcessingState.Pending, 
+    ProcessingState.Processing, 
+    ProcessingState.Completed, 
+    ProcessingState.Error
+  ],
+  mediaGroupId = null,
+  chatId = null,
+  orderBy = 'created_at',
+  orderDirection = 'desc'
+}: UseRealTimeMessagesProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [processAllLoading, setProcessAllLoading] = useState(false);
+  const { toast } = useToast();
 
-  // Use the provided processingState or fall back to states
-  const effectiveStates = processingState || states;
-
-  const handleRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    setOffset(0);
-    setHasMore(true);
-    fetchMessages(0)
-      .finally(() => {
-        setIsRefreshing(false);
-        setLastRefresh(new Date());
-      });
-  }, []);
-
-  useEffect(() => {
-    setMessages([]);
-    setOffset(0);
-    setHasMore(true);
-    fetchMessages(0);
-  }, [limit, effectiveStates, chatId, filter, sortBy, sortOrder, showForwarded, showEdited]);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel('public:messages')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'messages' },
-        (payload) => {
-          console.log('Change received!', payload);
-          if (payload.eventType === 'INSERT') {
-            const newMessage = payload.new as Message;
-            if (effectiveStates.includes(newMessage.processing_state as ProcessingState)) {
-              setMessages((prevMessages) => [newMessage, ...prevMessages]);
-            }
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedMessage = payload.new as Message;
-            setMessages((prevMessages) =>
-              prevMessages.map((message) =>
-                message.id === updatedMessage.id ? updatedMessage : message
-              )
-            );
-          } else if (payload.eventType === 'DELETE') {
-            const deletedMessageId = payload.old.id;
-            setMessages((prevMessages) =>
-              prevMessages.filter((message) => message.id !== deletedMessageId)
-            );
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [effectiveStates]);
-
-  const fetchMessages = useCallback(async (newOffset?: number) => {
-    setLoading(true);
-    setError(null);
-    
+  const fetchMessages = useCallback(async () => {
+    setIsLoading(true);
     try {
       let query = supabase
         .from('messages')
-        .select('*, other_messages(*)')
-        .in('processing_state', effectiveStates)
-        .order(sortBy, { ascending: sortOrder === 'asc' })
+        .select('*')
+        .in('processing_state', processingStates as any[])
+        .order(orderBy, { ascending: orderDirection === 'asc' })
         .limit(limit);
-      
-      if (chatId) {
-        query = query.eq('chat_id', chatId);
-      }
-      
-      if (filter && filter.trim() !== '') {
-        query = query.ilike('caption', `%${filter}%`);
-      }
-      
-      if (showForwarded) {
-        query = query.eq('is_forward', true);
-      }
-      
-      if (showEdited) {
-        query = query.gt('edit_count', 0);
+
+      if (mediaGroupId) {
+        query = query.eq('media_group_id', mediaGroupId);
       }
 
-      if (newOffset !== undefined) {
-        query = query.range(newOffset, newOffset + limit - 1);
-      } else {
-        query = query.range(offset, offset + limit - 1);
+      if (chatId) {
+        query = query.eq('chat_id', chatId);
       }
 
       const { data, error } = await query;
@@ -133,43 +69,105 @@ export default function useRealTimeMessages({
         throw error;
       }
 
-      const fetchedMessages = data as Message[];
-
-      if (newOffset !== undefined) {
-        setMessages((prevMessages) => [...prevMessages, ...fetchedMessages]);
-        setOffset(newOffset + limit);
-      } else {
-        setMessages((prevMessages) => (offset === 0 ? fetchedMessages : [...prevMessages, ...fetchedMessages]));
-        setOffset(offset + limit);
-      }
-
-      if (fetchedMessages.length < limit) {
-        setHasMore(false);
-      } else {
-        setHasMore(true);
-      }
-    } catch (error: any) {
-      setError(error.message);
+      setMessages(data || []);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch messages',
+        variant: 'destructive'
+      });
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  }, [limit, effectiveStates, chatId, filter, sortBy, sortOrder, showForwarded, showEdited, offset]);
+  }, [limit, processingStates, mediaGroupId, chatId, orderBy, orderDirection, toast]);
 
-  const loadMore = () => {
-    if (hasMore && !loading) {
-      fetchMessages(offset);
+  // Initial fetch
+  useEffect(() => {
+    fetchMessages();
+  }, [fetchMessages]);
+
+  // Real-time subscription
+  useEffect(() => {
+    const subscription = supabase
+      .channel('messages-channel')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'messages'
+      }, () => {
+        fetchMessages();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, [fetchMessages]);
+
+  // Retry processing function
+  const retryProcessing = async (messageId: string) => {
+    try {
+      const { error } = await supabase.functions.invoke('manual-caption-parser', {
+        body: { messageId, force_reprocess: true }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Processing started',
+        description: 'Message processing has been triggered'
+      });
+
+      // Refresh messages
+      await fetchMessages();
+    } catch (error) {
+      console.error('Error retrying processing:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to trigger message processing',
+        variant: 'destructive'
+      });
     }
   };
 
-  return { 
-    messages, 
-    loading, 
-    error, 
-    loadMore, 
-    hasMore, 
-    isRefreshing, 
-    lastRefresh, 
-    handleRefresh, 
-    isLoading: loading 
+  // Process all pending messages
+  const processAllPending = async () => {
+    setProcessAllLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('xdelo_direct_process_message', {
+        body: { action: 'process_pending', limit: 20 }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Processing started',
+        description: `Processing ${data?.processed_count || 0} messages`
+      });
+
+      // Refresh messages
+      await fetchMessages();
+    } catch (error) {
+      console.error('Error processing all pending messages:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to process pending messages',
+        variant: 'destructive'
+      });
+    } finally {
+      setProcessAllLoading(false);
+    }
   };
-}
+
+  return {
+    messages,
+    isLoading,
+    processAllLoading,
+    retryProcessing,
+    processAllPending,
+    refreshMessages: fetchMessages
+  };
+};
+
+export default useRealTimeMessages;

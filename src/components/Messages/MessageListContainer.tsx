@@ -1,128 +1,111 @@
 
-import React, { useState } from 'react';
-import { MessageList } from './MessageList';
-import { Card, CardContent } from '@/components/ui/card';
-import { MessageHeader } from './MessageHeader';
-import { MessageControlPanel } from './MessageControlPanel';
-import { MessagesFilter, MessageFilterValues } from './MessagesFilter';
-import useRealTimeMessages, { ProcessingStateType } from '@/hooks/useRealTimeMessages';
-import { useMessageQueue } from '@/hooks/useMessageQueue';
-import { useToast } from '@/hooks/useToast';
+import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import MessageList from './MessageList';
+import useRealTimeMessages, { ProcessingState } from '@/hooks/useRealTimeMessages';
 import { useMediaFixer } from '@/hooks/useMediaFixer';
 
-export const MessageListContainer: React.FC = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState<MessageFilterValues>({
-    processingState: undefined,
-    sortBy: 'updated_at',
-    sortOrder: 'desc',
-    showForwarded: false,
-    showEdited: false
-  });
-  const [showFilters, setShowFilters] = useState(false);
-  const { toast } = useToast();
-  const { fixMediaContentType } = useMediaFixer();
+const MessageListContainer = () => {
+  const [activeTab, setActiveTab] = useState<'pending' | 'processing' | 'completed' | 'error'>('pending');
+  
+  const processingStates: Record<string, ProcessingState[]> = {
+    pending: [ProcessingState.Pending, ProcessingState.Initialized],
+    processing: [ProcessingState.Processing],
+    completed: [ProcessingState.Completed],
+    error: [ProcessingState.Error]
+  };
   
   const { 
-    messages,
-    isLoading,
-    isRefreshing,
-    lastRefresh,
-    handleRefresh
-  } = useRealTimeMessages({ 
-    filter: searchTerm,
-    processingState: filters.processingState as ProcessingStateType[] | undefined,
-    sortBy: filters.sortBy,
-    sortOrder: filters.sortOrder,
-    showForwarded: filters.showForwarded,
-    showEdited: filters.showEdited
+    messages, 
+    isLoading, 
+    processAllLoading, 
+    retryProcessing, 
+    processAllPending 
+  } = useRealTimeMessages({
+    processingStates: processingStates[activeTab],
+    limit: 50
   });
-  
-  const { 
-    processMessageById,
-    isProcessing 
-  } = useMessageQueue();
-  
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
-  };
 
-  const handleFilterChange = (newFilters: MessageFilterValues) => {
-    setFilters(newFilters);
-  };
+  const { fixMediaContentType, isRepairing } = useMediaFixer();
 
-  const handleToggleFilters = () => {
-    setShowFilters(!showFilters);
+  const handleTabChange = (tab: 'pending' | 'processing' | 'completed' | 'error') => {
+    setActiveTab(tab);
   };
 
   const handleRetryProcessing = async (messageId: string) => {
-    try {
-      await processMessageById(messageId);
-      handleRefresh();
-      toast({
-        title: "Processing started",
-        description: "Message processing has been queued."
-      });
-    } catch (error: any) {
-      console.error('Error retrying message processing:', error);
-      toast({
-        title: "Processing failed",
-        description: error.message || "Failed to start message processing",
-        variant: "destructive"
-      });
-    }
+    await retryProcessing(messageId);
   };
-  
+
   const handleFixMedia = async (messageId: string, storagePath: string) => {
     if (!storagePath) {
-      toast({
-        title: "Cannot fix media",
-        description: "No storage path provided for this media",
-        variant: "destructive"
-      });
+      console.error('No storage path provided for message', messageId);
       return;
     }
     
-    const success = await fixMediaContentType(storagePath);
-    if (success) {
-      handleRefresh();
-    }
+    await fixMediaContentType(storagePath);
   };
-  
-  const isProcessingAny = isProcessing || isRefreshing;
+
+  useEffect(() => {
+    // Auto refresh the list when tab changes
+    const interval = setInterval(() => {
+      if (activeTab === 'processing') {
+        processAllPending();
+      }
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [activeTab, processAllPending]);
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card>
-        <MessageHeader lastRefresh={lastRefresh} />
-        <CardContent>
-          <MessageControlPanel 
-            searchTerm={searchTerm}
-            onSearchChange={handleSearchChange}
-            onRefresh={handleRefresh}
-            isRefreshing={isRefreshing}
-            onToggleFilters={handleToggleFilters}
-            showFilters={showFilters}
-          />
-          
-          {showFilters && (
-            <div className="mt-4 pt-4 border-t">
-              <MessagesFilter 
-                filters={filters}
-                onFilterChange={handleFilterChange}
-              />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        <Button 
+          variant={activeTab === 'pending' ? 'default' : 'outline'} 
+          onClick={() => handleTabChange('pending')}
+        >
+          Pending
+        </Button>
+        <Button 
+          variant={activeTab === 'processing' ? 'default' : 'outline'} 
+          onClick={() => handleTabChange('processing')}
+        >
+          Processing
+        </Button>
+        <Button 
+          variant={activeTab === 'completed' ? 'default' : 'outline'} 
+          onClick={() => handleTabChange('completed')}
+        >
+          Completed
+        </Button>
+        <Button 
+          variant={activeTab === 'error' ? 'default' : 'outline'} 
+          onClick={() => handleTabChange('error')}
+        >
+          Errors
+        </Button>
+        
+        {activeTab === 'pending' && (
+          <Button 
+            variant="outline" 
+            onClick={processAllPending}
+            disabled={processAllLoading || messages.length === 0}
+            className="ml-auto"
+          >
+            {processAllLoading ? <Spinner size="sm" /> : 'Process All'}
+          </Button>
+        )}
+      </div>
       
       <MessageList 
-        messages={messages}
-        isLoading={isLoading}
+        messages={messages} 
+        isLoading={isLoading} 
         onRetryProcessing={handleRetryProcessing}
         onFixMedia={handleFixMedia}
-        processAllLoading={isProcessingAny}
+        processAllLoading={processAllLoading}
       />
     </div>
   );
 };
+
+export default MessageListContainer;

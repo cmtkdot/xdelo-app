@@ -1,26 +1,26 @@
 
-import React from 'react';
-import { Message } from '@/types';
 import { Spinner } from '@/components/ui/spinner';
-import { StatusSummary } from './StatusSummary';
-import { MessageCard } from './MessageCard';
+import MessageCard from './MessageCard';
+import { Message } from '@/types/MessagesTypes';
 
-interface MessageListProps {
+export interface MessageListProps {
   messages: Message[];
   isLoading: boolean;
   onRetryProcessing: (messageId: string) => Promise<void>;
+  onFixMedia: (messageId: string, storagePath: string) => Promise<void>;
   processAllLoading?: boolean;
 }
 
-export const MessageList: React.FC<MessageListProps> = ({
-  messages,
-  isLoading,
-  onRetryProcessing,
-  processAllLoading = false
+const MessageList: React.FC<MessageListProps> = ({ 
+  messages, 
+  isLoading, 
+  onRetryProcessing, 
+  onFixMedia,
+  processAllLoading 
 }) => {
-  if (isLoading) {
+  if (isLoading || processAllLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
+      <div className="flex justify-center items-center py-8">
         <Spinner size="lg" />
       </div>
     );
@@ -28,37 +28,24 @@ export const MessageList: React.FC<MessageListProps> = ({
 
   if (messages.length === 0) {
     return (
-      <div className="text-center p-8">
-        <h3 className="text-xl font-semibold mb-2">No messages found</h3>
-        <p className="text-gray-500">There are no messages to display.</p>
+      <div className="text-center py-8 text-gray-500">
+        No messages found
       </div>
     );
   }
 
-  // Count messages by processing state
-  const pendingCount = messages.filter(msg => msg.processing_state === 'pending').length;
-  const processingCount = messages.filter(msg => msg.processing_state === 'processing').length;
-  const errorCount = messages.filter(msg => msg.processing_state === 'error').length;
-  const completedCount = messages.filter(msg => msg.processing_state === 'completed').length;
-
   return (
-    <div className="space-y-6">
-      <StatusSummary
-        pendingCount={pendingCount}
-        processingCount={processingCount}
-        completedCount={completedCount}
-        errorCount={errorCount}
-      />
-
-      <div className="space-y-4">
-        {messages.map(message => (
-          <MessageCard 
-            key={message.id} 
-            message={message} 
-            onRetryProcessing={onRetryProcessing} 
-          />
-        ))}
-      </div>
+    <div className="space-y-4">
+      {messages.map((message) => (
+        <MessageCard 
+          key={message.id} 
+          message={message} 
+          onRetryProcessing={onRetryProcessing}
+          onFixMedia={onFixMedia}
+        />
+      ))}
     </div>
   );
 };
+
+export default MessageList;
