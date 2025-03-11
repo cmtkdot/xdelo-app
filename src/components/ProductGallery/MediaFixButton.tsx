@@ -7,10 +7,11 @@ import { Message } from "@/types";
 
 interface MediaFixButtonProps {
   messageIds?: string[];
+  messages?: Message[];
   onComplete?: () => void;
 }
 
-export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) {
+export function MediaFixButton({ messageIds, messages, onComplete }: MediaFixButtonProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const handleOpenDialog = () => {
@@ -22,6 +23,14 @@ export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) 
       onComplete();
     }
   };
+
+  // We can't show if there are no messages or messageIds
+  if ((!messages || messages.length === 0) && (!messageIds || messageIds.length === 0)) {
+    return null;
+  }
+
+  // Get the initial message IDs from either source
+  const initialMessageIds = messageIds || (messages ? messages.map(m => m.id) : []);
 
   return (
     <>
@@ -43,7 +52,8 @@ export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) 
             handleComplete();
           }
         }}
-        initialMessageIds={messageIds}
+        initialMessageIds={initialMessageIds}
+        initialMessages={messages}
       />
     </>
   );

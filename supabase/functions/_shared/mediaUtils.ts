@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
 // Initialize Supabase client (will use env vars from edge function context)
@@ -252,6 +253,93 @@ export async function xdelo_recoverFileMetadata(messageId: string): Promise<{suc
     return {
       success: false,
       message: error.message || 'Unknown error occurred'
+    };
+  }
+}
+
+// New function to download media from Telegram
+export async function xdelo_downloadMediaFromTelegram(
+  fileId: string, 
+  fileUniqueId: string, 
+  mimeType: string, 
+  telegramBotToken: string
+): Promise<{success: boolean, blob?: Blob, storagePath?: string, error?: string}> {
+  try {
+    // Get file info from Telegram
+    const fileInfoResponse = await fetch(
+      `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${fileId}`
+    );
+    
+    if (!fileInfoResponse.ok) {
+      throw new Error(`Failed to get file info from Telegram: ${await fileInfoResponse.text()}`);
+    }
+    
+    const fileInfo = await fileInfoResponse.json();
+
+    if (!fileInfo.ok) {
+      throw new Error(`Telegram API error: ${JSON.stringify(fileInfo)}`);
+    }
+
+    // Download file from Telegram
+    const fileDataResponse = await fetch(
+      `https://api.telegram.org/file/bot${telegramBotToken}/${fileInfo.result.file_path}`
+    );
+    
+    if (!fileDataResponse.ok) {
+      throw new Error(`Failed to download file from Telegram: ${await fileDataResponse.text()}`);
+    }
+    
+    const fileData = await fileDataResponse.blob();
+    
+    // Generate a standardized storage path
+    const storagePath = xdelo_validateAndFixStoragePath(fileUniqueId, mimeType);
+    
+    return {
+      success: true,
+      blob: fileData,
+      storagePath
+    };
+  } catch (error) {
+    console.error(`Error downloading media from Telegram: ${error.message}`);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+// Upload media to Supabase storage with proper options
+export async function xdelo_uploadMediaToStorage(
+  storagePath: string,
+  fileData: Blob,
+  mimeType: string
+): Promise<{success: boolean, publicUrl?: string, error?: string}> {
+  try {
+    // Get proper upload options
+    const uploadOptions = xdelo_getUploadOptions(mimeType);
+    
+    // Upload to storage
+    const { data, error: uploadError } = await supabase
+      .storage
+      .from('telegram-media')
+      .upload(storagePath, fileData, uploadOptions);
+      
+    if (uploadError) {
+      throw new Error(`Failed to upload media to storage: ${uploadError.message}`);
+    }
+    
+    // Generate public URL
+    const publicUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${storagePath}`;
+    
+    return {
+      success: true,
+      publicUrl
+    };
+  } catch (error) {
+    console.error(`Error uploading media to storage: ${error.message}`);
+    return {
+      success: false,
+      error: error.message
     };
   }
 }
