@@ -1,6 +1,5 @@
 
 import { useState, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
 import { useMessageProcessingStats } from './useMessageProcessingStats';
 
@@ -18,7 +17,7 @@ export function useProcessingHealth() {
     try {
       setIsLoading(true);
       
-      // Use the new hook to get stats
+      // Use the hook to get stats
       const stats = await fetchProcessingStats();
       
       return stats;

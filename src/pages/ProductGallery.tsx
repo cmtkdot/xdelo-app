@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +7,6 @@ import { useToast } from "@/hooks/useToast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
 import { ProductPagination } from "@/components/ProductGallery/ProductPagination";
 import ProductFilters from "@/components/ProductGallery/ProductFilters";
-import { ProcessingRepairButton } from "@/components/ProductGallery/ProcessingRepairButton";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
 import { useVendors } from "@/hooks/useVendors";
 import { logMessageOperation } from "@/lib/syncLogger";
@@ -165,7 +163,6 @@ const ProductGallery = () => {
       });
     }
     
-    // Filter out untitled products if showUntitled is false
     if (!filters.showUntitled) {
       filtered = filtered.filter(group => {
         const mainMedia = group.find(m => m.caption) || group[0];
@@ -236,8 +233,6 @@ const ProductGallery = () => {
   return (
     <div className="container mx-auto py-6 space-y-6">
       <h1 className="text-2xl font-bold">Product Gallery</h1>
-      
-      <ProcessingRepairButton />
       
       <ProductFilters 
         vendors={vendors}

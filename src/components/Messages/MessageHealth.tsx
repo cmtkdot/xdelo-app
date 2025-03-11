@@ -1,5 +1,4 @@
-
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,10 +12,7 @@ export function MessageHealth() {
   const { processingStats, diagnoseProcessingHealth, isLoading, error } = useProcessingHealth();
   const { repairStuckMessages, isRepairing } = useStuckMessageRepair();
   
-  // Get health metrics on initial load
-  useEffect(() => {
-    diagnoseProcessingHealth();
-  }, [diagnoseProcessingHealth]);
+  // No auto-fetch on initial load
   
   const handleRepair = async () => {
     await repairStuckMessages();
@@ -79,7 +75,7 @@ export function MessageHealth() {
               variant="link" 
               onClick={() => diagnoseProcessingHealth()}
               className="mt-2">
-              Refresh data
+              Check health
             </Button>
           </div>
         ) : (
