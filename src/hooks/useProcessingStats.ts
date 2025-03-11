@@ -25,7 +25,7 @@ export function useProcessingStats() {
       
       if (error) throw error;
       
-      // Handle the response data safely
+      // Handle the response data safely by ensuring proper types
       const processedStats: ProcessingStats = {
         pending_count: typeof data.pending_count === 'number' ? data.pending_count : 0,
         processing_count: typeof data.processing_count === 'number' ? data.processing_count : 0,
