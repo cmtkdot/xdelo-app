@@ -3248,14 +3248,19 @@ export type Database = {
           deleted_count: number
         }[]
       }
-      xdelo_commit_transaction_with_sync: {
-        Args: {
-          p_message_id: string
-          p_media_group_id: string
-          p_correlation_id: string
-        }
-        Returns: Json
-      }
+      xdelo_commit_transaction_with_sync:
+        | {
+            Args: Record<PropertyKey, never>
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_message_id: string
+              p_media_group_id: string
+              p_correlation_id: string
+            }
+            Returns: Json
+          }
       xdelo_complete_message_processing: {
         Args: {
           p_queue_id: string
@@ -3484,14 +3489,22 @@ export type Database = {
           status: string
         }[]
       }
-      xdelo_reset_stalled_messages: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          message_id: string
-          previous_state: string
-          reset_reason: string
-        }[]
-      }
+      xdelo_reset_stalled_messages:
+        | {
+            Args: Record<PropertyKey, never>
+            Returns: {
+              message_id: string
+              previous_state: string
+              reset_reason: string
+            }[]
+          }
+        | {
+            Args: {
+              p_minutes_threshold?: number
+              p_correlation_id?: string
+            }
+            Returns: Json
+          }
       xdelo_run_scheduled_message_processing: {
         Args: Record<PropertyKey, never>
         Returns: Json
@@ -3550,14 +3563,24 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_update_message_with_analyzed_content: {
-        Args: {
-          p_message_id: string
-          p_analyzed_content: Json
-          p_correlation_id?: string
-        }
-        Returns: Json
-      }
+      xdelo_update_message_with_analyzed_content:
+        | {
+            Args: {
+              p_message_id: string
+              p_analyzed_content: Json
+              p_correlation_id?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_message_id: string
+              p_analyzed_content: Json
+              p_processing_state?: string
+              p_is_edit?: boolean
+            }
+            Returns: Json
+          }
       xdelo_validate_file_storage: {
         Args: {
           p_file_unique_id: string
@@ -3613,6 +3636,13 @@ export type Database = {
         | "edit_content_propagated"
         | "media_group_version_updated"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
+      processing_state:
+        | "initialized"
+        | "pending"
+        | "processing"
+        | "completed"
+        | "partial_success"
+        | "error"
       processing_state_type:
         | "initialized"
         | "pending"

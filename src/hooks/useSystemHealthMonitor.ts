@@ -1,80 +1,57 @@
 
 import { useCallback, useState } from 'react';
-import { useSupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
 
 export function useSystemHealthMonitor() {
-  const supabase = useSupabaseClient();
-  const [isRepairing, setIsRepairing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const repairMessageProcessingSystem = useCallback(async () => {
+  const repairStuckMessages = useCallback(async () => {
     try {
-      setIsRepairing(true);
-      
-      // Call the repair function
-      const { data, error } = await supabase.rpc('xdelo_repair_processing_flow', { 
-        p_limit: 20, 
-        p_correlation_id: null 
+      setIsLoading(true);
+      const { data, error } = await supabase.rpc('xdelo_reset_stalled_messages', {
+        p_minutes_threshold: 15,
+        p_correlation_id: `manual_repair_${new Date().toISOString()}`
       });
       
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
       
-      // Call the repair media groups function
-      const { data: mediaGroupData, error: mediaGroupError } = await supabase.rpc('xdelo_repair_media_group_syncs');
-      
-      if (mediaGroupError) {
-        toast.error('Error repairing media groups: ' + mediaGroupError.message);
-      }
-      
-      toast.success('Processing system repaired successfully');
-      return {
-        success: true,
-        media_group_fix: mediaGroupData,
-        process_result: data
-      };
-    } catch (error: any) {
-      toast.error('Failed to repair processing system: ' + error.message);
-      return {
-        success: false,
-        error: error?.message
-      };
+      toast.success(`Reset ${data.reset_count} stuck messages`);
+      return data;
+    } catch (error) {
+      console.error('Failed to repair stuck messages:', error);
+      toast.error('Failed to repair stuck messages');
+      return null;
     } finally {
-      setIsRepairing(false);
+      setIsLoading(false);
     }
-  }, [supabase]);
+  }, []);
 
   const repairMediaGroups = useCallback(async () => {
     try {
-      setIsRepairing(true);
+      setIsLoading(true);
+      const { data, error } = await supabase.rpc('xdelo_find_broken_media_groups', {
+        repair_mode: true,
+        correlation_id: `manual_repair_${new Date().toISOString()}`
+      });
       
-      // Call the repair media groups function
-      const { data, error } = await supabase.rpc('xdelo_repair_media_group_syncs');
+      if (error) throw error;
       
-      if (error) {
-        throw error;
-      }
-      
-      toast.success('Media groups repaired successfully');
-      return {
-        success: true,
-        result: data
-      };
-    } catch (error: any) {
-      toast.error('Failed to repair media groups: ' + error.message);
-      return {
-        success: false,
-        error: error?.message
-      };
+      const fixedCount = data?.fixed_groups?.length || 0;
+      toast.success(`Fixed ${fixedCount} broken media groups`);
+      return data;
+    } catch (error) {
+      console.error('Failed to repair media groups:', error);
+      toast.error('Failed to repair media groups');
+      return null;
     } finally {
-      setIsRepairing(false);
+      setIsLoading(false);
     }
-  }, [supabase]);
+  }, []);
 
   return {
-    repairMessageProcessingSystem,
-    repairMediaGroups,
-    isRepairing
+    isLoading,
+    repairStuckMessages,
+    repairMediaGroups
   };
 }

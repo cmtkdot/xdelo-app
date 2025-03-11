@@ -13,11 +13,11 @@ export async function logSyncOperation(
   error?: string
 ) {
   try {
-    await supabase.from('sync_logs').insert({
-      operation_type: operation,
-      status: success ? 'success' : 'error',
-      details: details,
-      error_message: error || null
+    await supabase.rpc('xdelo_log_sync_operation', {
+      p_operation_type: operation,
+      p_status: success ? 'success' : 'error',
+      p_details: details,
+      p_error_message: error || null
     });
   } catch (err) {
     console.error('Failed to log sync operation:', err);
@@ -37,15 +37,17 @@ export async function logSyncOperationBatch(
   }>
 ) {
   try {
-    // Use batch insert into the sync_logs table
-    const records = operations.map(op => ({
-      operation_type: op.operation,
-      status: op.success ? 'success' : 'error',
-      details: op.details,
-      error_message: op.error || null
-    }));
+    // Use individual calls to the RPC function since we can't batch them
+    const promises = operations.map(op => 
+      supabase.rpc('xdelo_log_sync_operation', {
+        p_operation_type: op.operation,
+        p_status: op.success ? 'success' : 'error',
+        p_details: op.details,
+        p_error_message: op.error || null
+      })
+    );
     
-    await supabase.from('sync_logs').insert(records);
+    await Promise.all(promises);
   } catch (err) {
     console.error('Failed to log sync operations batch:', err);
   }
