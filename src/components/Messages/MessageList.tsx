@@ -56,6 +56,7 @@ export const MessageList: React.FC<MessageListProps> = ({
             key={message.id} 
             message={message} 
             onRetryProcessing={onRetryProcessing} 
+            processAllLoading={processAllLoading}
           />
         ))}
       </div>

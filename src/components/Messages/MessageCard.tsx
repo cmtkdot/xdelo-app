@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { RefreshCw } from 'lucide-react';
 import { Message } from '@/types';
 import { formatDate } from '@/lib/utils';
@@ -8,13 +9,13 @@ import { formatDate } from '@/lib/utils';
 interface MessageCardProps {
   message: Message;
   onRetryProcessing: (messageId: string) => Promise<void>;
-  processAllLoading: boolean;
+  processAllLoading?: boolean;
 }
 
 export const MessageCard: React.FC<MessageCardProps> = ({ 
   message, 
   onRetryProcessing,
-  processAllLoading
+  processAllLoading = false
 }) => {
   const { 
     id,

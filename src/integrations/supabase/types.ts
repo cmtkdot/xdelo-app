@@ -2994,16 +2994,6 @@ export type Database = {
         }
         Returns: Json
       }
-      xdelo_check_webhook_health: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          last_success_time: string
-          last_error_time: string
-          error_count: number
-          success_count: number
-          recent_errors: string[]
-        }[]
-      }
       xdelo_cleanup_old_queue_entries: {
         Args: {
           days_old?: number
@@ -3100,10 +3090,6 @@ export type Database = {
           analyzed_content: Json
           forward_count: number
         }[]
-      }
-      xdelo_get_message_processing_stats: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
       }
       xdelo_get_or_create_file_url: {
         Args: {

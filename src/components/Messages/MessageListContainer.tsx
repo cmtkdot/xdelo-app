@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { MessageList } from './MessageList';
 import { Card, CardContent } from '@/components/ui/card';
@@ -53,7 +54,7 @@ export const MessageListContainer: React.FC = () => {
     setShowFilters(!showFilters);
   };
 
-  const handleRetryProcessing = async (messageId) => {
+  const handleRetryProcessing = async (messageId: string) => {
     try {
       await processMessageById(messageId);
       handleRefresh();
