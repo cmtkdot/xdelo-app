@@ -8,6 +8,7 @@ import { MessagesFilter, MessageFilterValues } from './MessagesFilter';
 import useRealTimeMessages, { ProcessingStateType } from '@/hooks/useRealTimeMessages';
 import { useMessageQueue } from '@/hooks/useMessageQueue';
 import { useToast } from '@/hooks/useToast';
+import { useMediaFixer } from '@/hooks/useMediaFixer';
 
 export const MessageListContainer: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -20,6 +21,7 @@ export const MessageListContainer: React.FC = () => {
   });
   const [showFilters, setShowFilters] = useState(false);
   const { toast } = useToast();
+  const { fixMediaContentType } = useMediaFixer();
   
   const { 
     messages,
@@ -53,12 +55,37 @@ export const MessageListContainer: React.FC = () => {
     setShowFilters(!showFilters);
   };
 
-  const handleRetryProcessing = async (messageId) => {
+  const handleRetryProcessing = async (messageId: string) => {
     try {
       await processMessageById(messageId);
       handleRefresh();
-    } catch (error) {
+      toast({
+        title: "Processing started",
+        description: "Message processing has been queued."
+      });
+    } catch (error: any) {
       console.error('Error retrying message processing:', error);
+      toast({
+        title: "Processing failed",
+        description: error.message || "Failed to start message processing",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  const handleFixMedia = async (messageId: string, storagePath: string) => {
+    if (!storagePath) {
+      toast({
+        title: "Cannot fix media",
+        description: "No storage path provided for this media",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const success = await fixMediaContentType(storagePath);
+    if (success) {
+      handleRefresh();
     }
   };
   
@@ -93,6 +120,7 @@ export const MessageListContainer: React.FC = () => {
         messages={messages}
         isLoading={isLoading}
         onRetryProcessing={handleRetryProcessing}
+        onFixMedia={handleFixMedia}
         processAllLoading={isProcessingAny}
       />
     </div>

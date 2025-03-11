@@ -16,7 +16,40 @@ serve(async (req) => {
     console.log(`Processing update with correlation ID: ${correlationId}`);
     console.log(`Webhook received: ${new Date().toISOString()}`);
 
-    const update = await req.json();
+    // Parse the update JSON
+    let update;
+    try {
+      update = await req.json();
+    } catch (parseError) {
+      console.error('Error parsing webhook JSON:', parseError);
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON payload" }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    // Log basic info about the update
+    if (update.message || update.channel_post) {
+      const messageObj = update.message || update.channel_post;
+      console.log(`Processing ${update.message ? 'message' : 'channel post'} from chat ID: ${messageObj.chat.id}`);
+      
+      // Log media type if present
+      if (messageObj.photo) {
+        console.log('Media type: photo');
+      } else if (messageObj.video) {
+        console.log('Media type: video');
+      } else if (messageObj.document) {
+        console.log('Media type: document');
+      } else if (messageObj.audio) {
+        console.log('Media type: audio');
+      } else if (messageObj.voice) {
+        console.log('Media type: voice');
+      } else if (messageObj.sticker) {
+        console.log('Media type: sticker');
+      }
+    }
+
+    // Process the update
     return await handleTelegramUpdate(update, correlationId);
 
   } catch (error) {

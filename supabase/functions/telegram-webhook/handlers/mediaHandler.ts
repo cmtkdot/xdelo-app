@@ -1,10 +1,9 @@
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { 
-  xdelo_getMediaInfoFromTelegram,
-  xdelo_constructStoragePath,
-  xdelo_getExtensionFromMedia
-} from '../../_shared/mediaUtils.ts';
+  xdelo_getTelegramMediaInfo,
+  xdelo_validateAndRepairMedia
+} from '../utils/mediaUtils.ts';
 import { 
   xdelo_logMessageCreation, 
   xdelo_logMessageError,
@@ -90,8 +89,13 @@ export async function handleMediaMessage(
   context: MessageContext
 ): Promise<Response> {
   try {
-    // Get media info from Telegram using shared utilities
-    const mediaInfo = await xdelo_getMediaInfoFromTelegram(message, context.correlationId);
+    // Get media info from Telegram using enhanced utilities that properly handle MIME types
+    const mediaInfo = await xdelo_getTelegramMediaInfo(message, context.correlationId);
+    
+    // Validate and repair the media to ensure proper content type
+    if (mediaInfo.storage_path) {
+      await xdelo_validateAndRepairMedia(mediaInfo.storage_path);
+    }
     
     // Check if this is a new message or an existing message
     const { data: existingMessages } = await supabaseClient

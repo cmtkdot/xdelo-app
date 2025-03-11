@@ -1,6 +1,6 @@
 
 /**
- * Media Utilities for Telegram Webhook (Re-export Wrapper)
+ * Media Utilities for Telegram Webhook
  * 
  * IMPORTANT: This file is a compatibility wrapper that re-exports
  * functions from ./utils/mediaUtils.ts, which uses the centralized 
@@ -12,3 +12,4 @@
 
 // Re-export all utilities from utils/mediaUtils.ts
 export * from './utils/mediaUtils.ts';
+
