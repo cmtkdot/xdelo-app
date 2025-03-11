@@ -47,8 +47,8 @@ export function useRealTimeMessages({
         }
         
         if (processingState && processingState.length > 0) {
-          // Cast the array to string[] to satisfy the Supabase type requirements
-          query = query.in('processing_state', processingState as unknown as string[]);
+          // Explicitly cast the array to avoid TypeScript errors
+          query = query.in('processing_state', processingState as unknown as readonly ProcessingState[]);
         }
         
         if (showForwarded) {

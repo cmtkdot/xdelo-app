@@ -2,7 +2,7 @@
 import React from 'react';
 import { MessageListContainer } from '../components/Messages/MessageListContainer';
 import { Helmet } from 'react-helmet';
-import { MediaRepairButton } from '../components/ProductGallery/MediaRepairButton';
+import { ProcessingRepairButton } from '../components/ProductGallery/ProcessingRepairButton';
 
 export default function MessagesPage() {
   return (
@@ -13,7 +13,7 @@ export default function MessagesPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Message Processing Queue</h1>
         <div>
-          <MediaRepairButton />
+          <ProcessingRepairButton />
         </div>
       </div>
       
@@ -22,4 +22,4 @@ export default function MessagesPage() {
       </div>
     </div>
   );
-}
+};

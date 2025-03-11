@@ -1,12 +1,14 @@
+
 import { SupabaseClient } from "@supabase/supabase-js";
 
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
+export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'partial_success' | 'error';
 
 export const PROCESSING_STATES: Record<string, ProcessingState> = {
   INITIALIZED: 'initialized',
   PENDING: 'pending',
   PROCESSING: 'processing',
   COMPLETED: 'completed',
+  PARTIAL_SUCCESS: 'partial_success',
   ERROR: 'error'
 };
 
