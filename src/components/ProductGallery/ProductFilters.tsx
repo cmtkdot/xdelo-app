@@ -10,6 +10,7 @@ import { VendorFilter } from "./Filters/VendorFilter";
 import { DateRangeFilter } from "./Filters/DateRangeFilter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface ProductFiltersProps {
   vendors: string[];
@@ -23,6 +24,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder || "desc");
   const [sortField, setSortField] = useState<"created_at" | "purchase_date">(filters.sortField || "created_at");
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | null>(filters.dateRange || null);
+  const [showUntitled, setShowUntitled] = useState<boolean>(filters.showUntitled || false);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
   useEffect(() => {
@@ -31,8 +33,9 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     if (selectedVendors.length > 0) count++;
     if (dateRange) count++;
     if (sortField !== "created_at") count++;
+    if (showUntitled) count++;
     setActiveFiltersCount(count);
-  }, [search, selectedVendors, dateRange, sortField]);
+  }, [search, selectedVendors, dateRange, sortField, showUntitled]);
 
   const handleFilterChange = useCallback(() => {
     onFilterChange({
@@ -41,9 +44,10 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
       sortOrder,
       sortField,
       dateRange,
+      showUntitled,
       processingState: ['completed']
     });
-  }, [search, selectedVendors, sortOrder, sortField, dateRange, onFilterChange]);
+  }, [search, selectedVendors, sortOrder, sortField, dateRange, showUntitled, onFilterChange]);
 
   useEffect(() => {
     handleFilterChange();
@@ -55,6 +59,7 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
     setSortOrder("desc");
     setSortField("created_at");
     setDateRange(null);
+    setShowUntitled(false);
   };
 
   const handleSortOrderChange = (value: string) => {
@@ -110,6 +115,17 @@ export default function ProductFilters({ vendors, filters, onFilterChange }: Pro
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      <div className="flex items-center space-x-2 pt-2">
+        <Checkbox 
+          id="show-untitled-products" 
+          checked={showUntitled}
+          onCheckedChange={(checked) => setShowUntitled(checked as boolean)}
+        />
+        <Label htmlFor="show-untitled-products" className="cursor-pointer">
+          Show untitled products
+        </Label>
       </div>
 
       {activeFiltersCount > 0 && (

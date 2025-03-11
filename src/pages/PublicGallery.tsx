@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,6 +11,7 @@ import ProductFilters from "@/components/ProductGallery/ProductFilters";
 import { ProductPagination } from "@/components/ProductGallery/ProductPagination";
 import { parseISO, isWithinInterval } from "date-fns";
 import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
+import { ProcessingRepairButton } from "@/components/ProductGallery/ProcessingRepairButton";
 
 const ITEMS_PER_PAGE = 12;
 
@@ -20,7 +22,8 @@ const PublicGallery = () => {
     search: "",
     vendors: [],
     sortOrder: "desc",
-    sortField: "created_at"
+    sortField: "created_at",
+    showUntitled: false
   });
   
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -122,7 +125,7 @@ const PublicGallery = () => {
     }
   };
 
-  const handleDelete = async (media: Message) => {
+  const handleDelete = async (media: Message, deleteTelegram = false) => {
     if (!user) {
       toast({
         title: "Authentication required",
@@ -203,6 +206,16 @@ const PublicGallery = () => {
       });
     }
     
+    // Filter out untitled products if showUntitled is false
+    if (!filters.showUntitled) {
+      filtered = filtered.filter(group => {
+        const mainMedia = group.find(m => m.caption) || group[0];
+        return mainMedia && 
+               mainMedia.analyzed_content?.product_name && 
+               mainMedia.analyzed_content.product_name.toLowerCase() !== "untitled";
+      });
+    }
+    
     return filtered;
   }, [mediaGroups, filters]);
   
@@ -254,6 +267,8 @@ const PublicGallery = () => {
         </div>
       ) : (
         <>
+          {user && <ProcessingRepairButton />}
+          
           <ProductGrid
             products={paginatedProducts}
             onEdit={user ? handleEdit : undefined}

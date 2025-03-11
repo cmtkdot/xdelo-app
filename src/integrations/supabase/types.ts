@@ -668,7 +668,7 @@ export type Database = {
           last_modified_at: string | null
           last_sync_time: string | null
           main_date_of_sale: string | null
-          main_line_total: number | null
+          main_line_total: string | null
           main_product_sale_note: string | null
           main_qty_sold: number | null
           main_renamed_product_name: string | null
@@ -690,7 +690,7 @@ export type Database = {
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_sale?: string | null
-          main_line_total?: number | null
+          main_line_total?: string | null
           main_product_sale_note?: string | null
           main_qty_sold?: number | null
           main_renamed_product_name?: string | null
@@ -712,7 +712,7 @@ export type Database = {
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_sale?: string | null
-          main_line_total?: number | null
+          main_line_total?: string | null
           main_product_sale_note?: string | null
           main_qty_sold?: number | null
           main_renamed_product_name?: string | null
@@ -743,7 +743,7 @@ export type Database = {
           main_invoice_total: number | null
           main_invoice_uid: string | null
           main_notes: string | null
-          main_processed: boolean | null
+          main_processed: string | null
           main_submitted_timestamp: string | null
           main_user_email: string | null
           rowids_accountsid_new: string | null
@@ -765,7 +765,7 @@ export type Database = {
           main_invoice_total?: number | null
           main_invoice_uid?: string | null
           main_notes?: string | null
-          main_processed?: boolean | null
+          main_processed?: string | null
           main_submitted_timestamp?: string | null
           main_user_email?: string | null
           rowids_accountsid_new?: string | null
@@ -787,7 +787,7 @@ export type Database = {
           main_invoice_total?: number | null
           main_invoice_uid?: string | null
           main_notes?: string | null
-          main_processed?: boolean | null
+          main_processed?: string | null
           main_submitted_timestamp?: string | null
           main_user_email?: string | null
           rowids_accountsid_new?: string | null
@@ -911,11 +911,19 @@ export type Database = {
           last_sync_time: string | null
           main_balance_due: number | null
           main_po_date: string | null
+          main_po_date_used_for_uid: string | null
           main_po_total: number | null
           main_purchase_order_uid: string | null
+          main_purchase_order_uid_from_product: string | null
           rowid_accntrowid: string | null
           sb_accounts_id: string | null
+          sb_pdf_updated_at: string | null
+          sb_pdf_url: string | null
+          secure_share_id: string | null
+          share_last_viewed_at: string | null
+          share_pin_code: string | null
           share_url: string | null
+          share_view_count: number | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
@@ -929,11 +937,19 @@ export type Database = {
           last_sync_time?: string | null
           main_balance_due?: number | null
           main_po_date?: string | null
+          main_po_date_used_for_uid?: string | null
           main_po_total?: number | null
           main_purchase_order_uid?: string | null
+          main_purchase_order_uid_from_product?: string | null
           rowid_accntrowid?: string | null
           sb_accounts_id?: string | null
+          sb_pdf_updated_at?: string | null
+          sb_pdf_url?: string | null
+          secure_share_id?: string | null
+          share_last_viewed_at?: string | null
+          share_pin_code?: string | null
           share_url?: string | null
+          share_view_count?: number | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
@@ -947,11 +963,19 @@ export type Database = {
           last_sync_time?: string | null
           main_balance_due?: number | null
           main_po_date?: string | null
+          main_po_date_used_for_uid?: string | null
           main_po_total?: number | null
           main_purchase_order_uid?: string | null
+          main_purchase_order_uid_from_product?: string | null
           rowid_accntrowid?: string | null
           sb_accounts_id?: string | null
+          sb_pdf_updated_at?: string | null
+          sb_pdf_url?: string | null
+          secure_share_id?: string | null
+          share_last_viewed_at?: string | null
+          share_pin_code?: string | null
           share_url?: string | null
+          share_view_count?: number | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
@@ -1518,6 +1542,7 @@ export type Database = {
           group_caption_synced: boolean | null
           group_first_message_time: string | null
           group_last_message_time: string | null
+          group_message_count: string | null
           height: number | null
           id: string
           is_channel_post: string | null
@@ -1606,6 +1631,7 @@ export type Database = {
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
+          group_message_count?: string | null
           height?: number | null
           id?: string
           is_channel_post?: string | null
@@ -1694,6 +1720,7 @@ export type Database = {
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
+          group_message_count?: string | null
           height?: number | null
           id?: string
           is_channel_post?: string | null
@@ -2733,10 +2760,6 @@ export type Database = {
           purchase_date: string
         }[]
       }
-      generate_share_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
       get_accounts_aging_report: {
         Args: Record<PropertyKey, never>
         Returns: Json
@@ -2980,12 +3003,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      update_share_view_stats: {
-        Args: {
-          po_id: string
-        }
-        Returns: undefined
-      }
       vector_avg: {
         Args: {
           "": number[]
@@ -3037,11 +3054,53 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      xan_generate_share_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      xan_handle_circular_references: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          relationship_type: string
+          records_updated: number
+        }[]
+      }
+      xan_perform_maintenance: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      xan_recalculate_entity_totals: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          entity_type: string
+          records_updated: number
+        }[]
+      }
+      xan_repair_entity_relationships: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          table_name: string
+          records_updated: number
+        }[]
+      }
       xan_sync_glide_configuration: {
         Args: {
           table_name: string
         }
         Returns: undefined
+      }
+      xan_update_share_view_stats: {
+        Args: {
+          po_id: string
+        }
+        Returns: undefined
+      }
+      xan_validate_entity_references: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          entity_type: string
+          invalid_references: number
+        }[]
       }
       xdelo_analyze_message_caption: {
         Args: {
@@ -3135,6 +3194,19 @@ export type Database = {
         }
         Returns: boolean
       }
+      xdelo_get_incomplete_media_groups: {
+        Args: {
+          limit_param?: number
+        }
+        Returns: {
+          media_group_id: string
+          total_messages: number
+          processed_messages: number
+          unprocessed_messages: number
+          oldest_message_id: string
+          oldest_message_created_at: string
+        }[]
+      }
       xdelo_get_logger: {
         Args: {
           p_correlation_id: string
@@ -3153,6 +3225,10 @@ export type Database = {
           analyzed_content: Json
           forward_count: number
         }[]
+      }
+      xdelo_get_message_processing_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       xdelo_get_next_message_for_processing: {
         Args: {

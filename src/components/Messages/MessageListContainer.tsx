@@ -1,18 +1,22 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button } from '@/components/ui/button';
 import { MessageList } from './MessageList';
 import { Spinner } from '@/components/ui/spinner';
 import { useMessageProcessing } from '@/hooks/useMessageProcessing';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
+import { Card, CardContent } from '@/components/ui/card';
+import { debounce } from 'lodash';
+import { MessageHeader } from './MessageHeader';
+import { MessageControlPanel } from './MessageControlPanel';
 
 export const MessageListContainer: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [messages, setMessages] = useState([]);
+  const [filteredMessages, setFilteredMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
   
   const { 
@@ -22,7 +26,6 @@ export const MessageListContainer: React.FC = () => {
     isProcessing: processingState
   } = useMessageProcessing();
   
-  // Refactored fetch messages function with better error handling
   const fetchMessages = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -34,6 +37,7 @@ export const MessageListContainer: React.FC = () => {
         
       if (error) throw error;
       setMessages(data || []);
+      setFilteredMessages(data || []);
       setLastRefresh(new Date());
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -52,7 +56,40 @@ export const MessageListContainer: React.FC = () => {
     fetchMessages();
   }, [fetchMessages]);
   
-  // Refresh function for manual refresh
+  const filterMessages = useCallback((term: string) => {
+    if (!term.trim()) {
+      setFilteredMessages(messages);
+      return;
+    }
+    
+    const termLower = term.toLowerCase();
+    const filtered = messages.filter(message => {
+      return (
+        message.caption?.toLowerCase().includes(termLower) ||
+        message.analyzed_content?.product_name?.toLowerCase().includes(termLower) ||
+        message.analyzed_content?.vendor_uid?.toLowerCase().includes(termLower) ||
+        message.analyzed_content?.product_code?.toLowerCase().includes(termLower) ||
+        message.telegram_message_id?.toString().includes(termLower) ||
+        message.chat_title?.toLowerCase().includes(termLower)
+      );
+    });
+    
+    setFilteredMessages(filtered);
+  }, [messages]);
+  
+  const debouncedSearch = useCallback(
+    debounce((term: string) => {
+      filterMessages(term);
+    }, 300),
+    [filterMessages]
+  );
+  
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    debouncedSearch(value);
+  };
+  
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     fetchMessages();
@@ -61,7 +98,6 @@ export const MessageListContainer: React.FC = () => {
   const handleProcessQueue = async () => {
     try {
       await processMessageQueue(10);
-      // Refresh the list after processing
       handleRefresh();
     } catch (error) {
       console.error('Failed to process queue:', error);
@@ -71,7 +107,6 @@ export const MessageListContainer: React.FC = () => {
   const handleQueueUnprocessed = async () => {
     try {
       await queueUnprocessedMessages(20);
-      // Refresh the list after queueing
       handleRefresh();
     } catch (error) {
       console.error('Failed to queue unprocessed messages:', error);
@@ -80,7 +115,6 @@ export const MessageListContainer: React.FC = () => {
 
   const handleRetryProcessing = async (messageId) => {
     try {
-      // Get the message details for reanalysis
       const { data: messageData } = await supabase
         .from('messages')
         .select('*')
@@ -92,7 +126,6 @@ export const MessageListContainer: React.FC = () => {
       }
       
       await handleReanalyze(messageData);
-      // Refresh after processing
       handleRefresh();
     } catch (error) {
       console.error('Error retrying message processing:', error);
@@ -108,43 +141,20 @@ export const MessageListContainer: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-2 md:gap-4 items-center justify-between bg-slate-50 dark:bg-slate-900 p-4 rounded-lg shadow-sm">
-        <div className="flex items-center gap-2">
-          <h2 className="text-xl font-medium">Messages Queue</h2>
-          {lastRefresh && (
-            <p className="text-xs text-gray-500 hidden md:block">
-              Last updated: {lastRefresh.toLocaleTimeString()}
-            </p>
-          )}
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handleRefresh}
-            disabled={isProcessingAny}
-          >
-            <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-          <Button 
-            variant="secondary" 
-            onClick={handleQueueUnprocessed}
-            disabled={isProcessingAny}
-          >
-            {isProcessingAny && <Loader2 size="sm" className="mr-2 h-4 w-4 animate-spin" />}
-            Find & Queue Unprocessed
-          </Button>
-          <Button 
-            variant="default" 
-            onClick={handleProcessQueue}
-            disabled={isProcessingAny}
-          >
-            {isProcessingAny && <Loader2 size="sm" className="mr-2 h-4 w-4 animate-spin" />}
-            Process Queue
-          </Button>
-        </div>
-      </div>
+      <Card>
+        <MessageHeader lastRefresh={lastRefresh} />
+        <CardContent>
+          <MessageControlPanel 
+            searchTerm={searchTerm}
+            onSearchChange={handleSearchChange}
+            onRefresh={handleRefresh}
+            onQueueUnprocessed={handleQueueUnprocessed}
+            onProcessQueue={handleProcessQueue}
+            isProcessingAny={isProcessingAny}
+            isRefreshing={isRefreshing}
+          />
+        </CardContent>
+      </Card>
       
       {isRefreshing ? (
         <div className="flex items-center justify-center p-8">
@@ -152,7 +162,7 @@ export const MessageListContainer: React.FC = () => {
         </div>
       ) : (
         <MessageList 
-          messages={messages}
+          messages={filteredMessages}
           isLoading={isLoading}
           onRetryProcessing={handleRetryProcessing}
           onProcessAll={handleProcessQueue}

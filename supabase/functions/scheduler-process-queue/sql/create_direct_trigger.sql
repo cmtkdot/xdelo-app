@@ -5,6 +5,7 @@ RETURNS TRIGGER AS $$
 DECLARE
   v_correlation_id TEXT;
   http_response JSONB;
+  v_analyzed_message_id UUID;
 BEGIN
   -- Skip if no caption or already analyzed
   IF NEW.caption IS NULL OR NEW.caption = '' OR NEW.analyzed_content IS NOT NULL THEN
@@ -13,6 +14,33 @@ BEGIN
 
   -- Generate a correlation ID if not present
   v_correlation_id := COALESCE(NEW.correlation_id, gen_random_uuid()::text);
+
+  -- For media groups, first check if we can sync from existing analyzed content
+  IF NEW.media_group_id IS NOT NULL THEN
+    -- Try to find an analyzed message in the same media group
+    SELECT id INTO v_analyzed_message_id
+    FROM messages
+    WHERE media_group_id = NEW.media_group_id 
+    AND analyzed_content IS NOT NULL 
+    AND id != NEW.id
+    LIMIT 1;
+
+    IF FOUND THEN
+      PERFORM xdelo_check_media_group_content(
+        NEW.media_group_id,
+        NEW.id,
+        v_correlation_id
+      );
+      
+      -- We're done if sync was successful
+      IF EXISTS (
+        SELECT 1 FROM messages 
+        WHERE id = NEW.id AND analyzed_content IS NOT NULL
+      ) THEN
+        RETURN NEW;
+      END IF;
+    END IF;
+  END IF;
 
   -- Update status to processing
   UPDATE messages
