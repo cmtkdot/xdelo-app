@@ -67,3 +67,58 @@ select cron.schedule(
   SELECT * FROM xdelo_sync_pending_media_group_messages();
   $$
 );
+
+-- Add a new job to reset stalled messages every 15 minutes
+select cron.schedule(
+  'reset-stalled-messages',
+  '*/15 * * * *',
+  $$
+  WITH reset_messages AS (
+    SELECT * FROM xdelo_reset_stalled_messages()
+  )
+  INSERT INTO unified_audit_logs (
+    event_type,
+    metadata,
+    event_timestamp
+  )
+  SELECT 
+    'cron_reset_stalled_triggered',
+    jsonb_build_object(
+      'reset_count', (SELECT COUNT(*) FROM reset_messages),
+      'timestamp', NOW()
+    ),
+    NOW();
+  $$
+);
+
+-- Add a new job to cleanup old logs and maintenance tasks weekly
+select cron.schedule(
+  'maintenance-cleanup',
+  '0 1 * * 0', -- Run at 1 AM every Sunday
+  $$
+  -- Cleanup old audit logs (older than 30 days)
+  DELETE FROM unified_audit_logs
+  WHERE event_timestamp < NOW() - INTERVAL '30 days';
+  
+  -- Cleanup old queue entries
+  WITH deleted AS (
+    DELETE FROM message_processing_queue
+    WHERE 
+      (status = 'completed' AND processing_completed_at < NOW() - INTERVAL '7 days')
+      OR (status = 'error' AND last_error_at < NOW() - INTERVAL '7 days')
+    RETURNING id
+  )
+  INSERT INTO unified_audit_logs (
+    event_type,
+    metadata,
+    event_timestamp
+  )
+  SELECT 
+    'queue_cleanup',
+    jsonb_build_object(
+      'deleted_count', (SELECT COUNT(*) FROM deleted),
+      'timestamp', NOW()
+    ),
+    NOW();
+  $$
+);

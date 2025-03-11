@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
+import { logSyncOperation } from '@/lib/syncUtils';
 
 export function useProcessingSystemRepair() {
   const [isRepairing, setIsRepairing] = useState(false);
@@ -115,6 +116,18 @@ export function useProcessingSystemRepair() {
         description: `Successfully repaired ${processedCount} stuck messages and optimized the processing system.`,
       });
       
+      // Log the successful repair operation
+      await logSyncOperation(
+        supabase,
+        'processing_system_repair',
+        {
+          processed_count: processedCount,
+          scheduler_results: schedulerResults,
+          timestamp: new Date().toISOString()
+        },
+        true
+      );
+      
       return { 
         success: true, 
         processed: processedCount,
@@ -129,6 +142,18 @@ export function useProcessingSystemRepair() {
         description: error.message || "Failed to repair processing system",
         variant: "destructive"
       });
+      
+      // Log the failed repair attempt
+      await logSyncOperation(
+        supabase,
+        'processing_system_repair',
+        {
+          error: error.message,
+          timestamp: new Date().toISOString()
+        },
+        false,
+        error.message
+      );
       
       throw error;
     } finally {
@@ -201,6 +226,19 @@ export function useProcessingSystemRepair() {
         description: `Reset ${resetData?.length || 0} stuck messages and ${initializedData?.length || 0} initialized messages. Processed ${processedCount} messages.`,
       });
       
+      // Log the repair operation
+      await logSyncOperation(
+        supabase,
+        'stuck_messages_repair',
+        {
+          reset_count: resetData?.length || 0,
+          initialized_count: initializedData?.length || 0,
+          processed_count: processedCount,
+          timestamp: new Date().toISOString()
+        },
+        true
+      );
+      
       return { 
         success: true,
         reset: resetData?.length || 0,
@@ -216,6 +254,18 @@ export function useProcessingSystemRepair() {
         description: error.message || "Failed to repair stuck messages",
         variant: "destructive"
       });
+      
+      // Log the failed repair attempt
+      await logSyncOperation(
+        supabase,
+        'stuck_messages_repair',
+        {
+          error: error.message,
+          timestamp: new Date().toISOString()
+        },
+        false,
+        error.message
+      );
       
       throw error;
     } finally {
