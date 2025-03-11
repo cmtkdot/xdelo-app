@@ -8,6 +8,12 @@ import {
   ForwardInfo,
   MessageInput,
 } from '../types.ts';
+import { 
+  xdelo_logMessageCreation, 
+  xdelo_logMessageEdit, 
+  xdelo_logMessageError,
+  xdelo_logMediaGroupSync
+} from '../../_shared/messageLogger.ts';
 
 export async function handleMediaMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
@@ -24,19 +30,23 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
 
   } catch (error) {
     console.error('Error handling media message:', error);
-    // Log error event
+    // Log error event using new logging system
+    const errorMetadata = {
+      message: 'Error handling media message',
+      error_message: error.message,
+      telegram_message_id: message.message_id,
+      chat_id: message.chat.id,
+      error_code: error.code,
+      processing_stage: 'media_handling'
+    };
+    
     try {
+      // Use new logging system - but since we don't have a message ID yet, 
+      // we'll use the legacy logging for errors at this stage
       await logMessageOperation(
         'error',
         context.correlationId,
-        {
-          message: 'Error handling media message',
-          error_message: error.message,
-          telegram_message_id: message.message_id,
-          chat_id: message.chat.id,
-          error_code: error.code,
-          processing_stage: 'media_handling'
-        }
+        errorMetadata
       );
     } catch (logError) {
       console.error('Error logging error operation:', logError);
@@ -126,6 +136,46 @@ async function handleEditedMediaMessage(
 
     if (updateError) throw updateError;
 
+    // Log the edit event using new logging system
+    const editType = captionChanged 
+      ? 'caption_change' 
+      : (mediaChanged ? 'media_change' : 'message_edit');
+    
+    await xdelo_logMessageEdit(
+      existingMessage.id,
+      message.message_id,
+      message.chat.id,
+      correlationId,
+      editType,
+      {
+        file_unique_id: mediaInfo.file_unique_id,
+        media_group_id: message.media_group_id,
+        caption_changed: captionChanged,
+        media_changed: mediaChanged,
+        previous_caption: existingMessage.caption,
+        new_caption: message.caption
+      }
+    );
+    
+    // Keep legacy logging for backward compatibility
+    try {
+      await logMessageOperation(
+        'edit',
+        correlationId,
+        {
+          message: `Message ${message.message_id} edited in chat ${message.chat.id}`,
+          telegram_message_id: message.message_id,
+          chat_id: message.chat.id,
+          file_unique_id: mediaInfo.file_unique_id,
+          sourceMessageId: existingMessage.id, // Replace existing_message_id with sourceMessageId
+          edit_type: captionChanged ? 'caption_changed' : (mediaChanged ? 'media_changed' : 'other_edit'),
+          media_group_id: message.media_group_id
+        }
+      );
+    } catch (logError) {
+      console.error('Error logging edit operation:', logError);
+    }
+
     // If caption or media changed and has content, directly trigger caption analysis
     if ((captionChanged || mediaChanged) && message.caption) {
       try {
@@ -201,6 +251,18 @@ async function handleEditedMediaMessage(
           if (captionMessage) {
             console.log(`Found another message with caption in group: ${captionMessage.id}`);
             
+            // Log the sync operation using new logging
+            await xdelo_logMediaGroupSync(
+              captionMessage.id,
+              existingMessage.id,
+              message.media_group_id,
+              correlationId,
+              {
+                sync_reason: 'caption_removed_or_media_changed',
+                message_count: groupMessages.length + 1
+              }
+            );
+            
             // Update the group relationships
             await supabaseClient.rpc(
               'xdelo_sync_media_group_content',
@@ -217,25 +279,6 @@ async function handleEditedMediaMessage(
       } catch (syncError) {
         console.error('Failed to sync from media group after caption removal or media change:', syncError);
       }
-    }
-
-    // Log the edit event
-    try {
-      await logMessageOperation(
-        'edit',
-        context.correlationId,
-        {
-          message: `Message ${message.message_id} edited in chat ${message.chat.id}`,
-          telegram_message_id: message.message_id,
-          chat_id: message.chat.id,
-          file_unique_id: mediaInfo.file_unique_id,
-          existing_message_id: existingMessage.id,
-          edit_type: captionChanged ? 'caption_changed' : (mediaChanged ? 'media_changed' : 'other_edit'),
-          media_group_id: message.media_group_id
-        }
-      );
-    } catch (logError) {
-      console.error('Error logging edit operation:', logError);
     }
 
     return new Response(
@@ -320,7 +363,25 @@ async function handleNewMediaMessage(
 
     if (updateError) throw updateError;
 
-    // Log the duplicate detection
+    // Log the duplicate detection using new logging
+    const editType = captionChanged ? 'caption_change' : 'message_update';
+    await xdelo_logMessageEdit(
+      existingMessage.id,
+      message.message_id,
+      message.chat.id,
+      correlationId,
+      editType,
+      {
+        file_unique_id: mediaInfo.file_unique_id,
+        update_type: 'duplicate_update',
+        media_group_id: message.media_group_id,
+        caption_changed: captionChanged,
+        previous_caption: existingMessage.caption,
+        new_caption: message.caption
+      }
+    );
+    
+    // Keep legacy logging for backward compatibility
     await logMessageOperation(
       'success',
       context.correlationId,
@@ -329,7 +390,7 @@ async function handleNewMediaMessage(
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         file_unique_id: mediaInfo.file_unique_id,
-        existing_message_id: existingMessage.id,
+        sourceMessageId: existingMessage.id, // Replace existing_message_id with sourceMessageId
         update_type: 'duplicate_update',
         media_group_id: message.media_group_id
       }
@@ -390,7 +451,23 @@ async function handleNewMediaMessage(
 
   if (insertError) throw insertError;
 
-  // Log the insert event
+  // Log the insert event using new logging
+  await xdelo_logMessageCreation(
+    insertedMessage.id,
+    message.message_id,
+    message.chat.id,
+    correlationId,
+    {
+      file_unique_id: mediaInfo.file_unique_id,
+      media_group_id: message.media_group_id,
+      is_forwarded: !!forwardInfo,
+      forward_info: forwardInfo,
+      message_type: 'media',
+      has_caption: !!message.caption
+    }
+  );
+  
+  // Keep legacy logging for backward compatibility
   try {
     await logMessageOperation(
       'success',
@@ -601,3 +678,4 @@ async function syncFromMediaGroupDirect(
     return false;
   }
 }
+

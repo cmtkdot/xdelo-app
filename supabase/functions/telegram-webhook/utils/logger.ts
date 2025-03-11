@@ -1,5 +1,5 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
+import { xdelo_logMessageOperation, MessageOperationType } from '../../_shared/messageLogger.ts';
 
 type OperationType = 'edit' | 'skip' | 'duplicate' | 'reupload' | 'success' | 'error' | 'info';
 
@@ -9,7 +9,8 @@ interface LogMetadata {
   telegram_message_id?: number;
   chat_id?: number;
   file_unique_id?: string;
-  existing_message_id?: string;
+  sourceMessageId?: string;
+  targetMessageId?: string;
   [key: string]: any;
 }
 
@@ -42,7 +43,50 @@ export const logMessageOperation = async (
       console.error(`Error details: ${metadata.error}`);
     }
 
-    // Attempt to write to the database, but don't fail if it doesn't work
+    // If sourceMessageId is available, use the new logging function
+    if (metadata.sourceMessageId) {
+      // Map the operation to MessageOperationType
+      let operationType: MessageOperationType = 'message_update';
+      switch (operation) {
+        case 'edit':
+          operationType = metadata.edit_type === 'caption_changed' 
+            ? 'caption_change' 
+            : (metadata.edit_type === 'media_changed' ? 'media_change' : 'message_edit');
+          break;
+        case 'duplicate':
+          operationType = 'message_update';
+          break;
+        case 'reupload':
+          operationType = 'media_redownload';
+          break;
+        case 'success':
+          operationType = metadata.action === 'redownload_completed' 
+            ? 'media_redownload' 
+            : 'message_update';
+          break;
+        case 'error':
+          // Keep as message_update but include error
+          break;
+        case 'info':
+          operationType = 'message_update';
+          break;
+      }
+
+      // Use new logging function with source/target message IDs
+      await xdelo_logMessageOperation({
+        sourceMessageId: metadata.sourceMessageId,
+        targetMessageId: metadata.targetMessageId,
+        operationType,
+        correlationId,
+        telegramMessageId: metadata.telegram_message_id,
+        chatId: metadata.chat_id,
+        metadata: logMetadata,
+        errorMessage: metadata.error
+      });
+    }
+
+    // Attempt to write to the database using legacy method as fallback
+    // This ensures backward compatibility
     try {
       await supabase.from('unified_audit_logs').insert({
         event_type: `telegram_webhook_${operation}`,

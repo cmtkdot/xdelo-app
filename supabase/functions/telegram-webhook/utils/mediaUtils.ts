@@ -1,4 +1,3 @@
-
 /**
  * Media Utilities for Telegram Webhook
  * 
@@ -17,6 +16,7 @@ import {
   xdelo_checkFileExistsInStorage,
   xdelo_getDefaultMimeType
 } from '../../_shared/mediaUtils.ts';
+import { xdelo_logMediaRedownload } from '../../_shared/messageLogger.ts';
 
 // Re-export the primary functions with simpler names for the webhook context
 export const getMediaInfo = async (message: any) => {
@@ -55,7 +55,20 @@ export const redownloadMissingFile = async (message: any) => {
         // Continue anyway, since the file was uploaded successfully
       }
 
-      // Log success
+      // Log success using the new logging function
+      await xdelo_logMediaRedownload(
+        message.id,
+        message.telegram_message_id,
+        message.chat_id,
+        message.correlation_id || crypto.randomUUID(),
+        true,
+        {
+          file_unique_id: message.file_unique_id,
+          storage_path: result.storage_path
+        }
+      );
+      
+      // Keep legacy logging for backward compatibility
       await logMessageOperation('success', crypto.randomUUID(), {
         action: 'redownload_completed',
         file_unique_id: message.file_unique_id,
@@ -76,7 +89,20 @@ export const redownloadMissingFile = async (message: any) => {
         console.error('Error updating error state:', updateErr);
       }
       
-      // Log failure
+      // Log failure using the new logging function
+      await xdelo_logMediaRedownload(
+        message.id,
+        message.telegram_message_id,
+        message.chat_id,
+        message.correlation_id || crypto.randomUUID(),
+        false,
+        {
+          file_unique_id: message.file_unique_id,
+          error: result.error
+        }
+      );
+      
+      // Keep legacy logging for backward compatibility
       await logMessageOperation('error', crypto.randomUUID(), {
         action: 'redownload_failed',
         file_unique_id: message.file_unique_id,

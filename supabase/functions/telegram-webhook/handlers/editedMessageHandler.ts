@@ -1,8 +1,8 @@
-
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { logMessageOperation } from '../utils/logger.ts';
+import { xdelo_logMessageEdit } from '../../_shared/messageLogger.ts';
 
 export async function handleEditedMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
@@ -73,7 +73,23 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         throw new Error(`Failed to update message: ${updateError.message}`);
       }
       
-      // Log edit operation
+      // Log edit operation using new logging system
+      await xdelo_logMessageEdit(
+        existingMessage.id,
+        message.message_id,
+        message.chat.id,
+        correlationId,
+        'caption_change',
+        {
+          edit_type: 'caption_edit',
+          media_group_id: existingMessage.media_group_id,
+          previous_caption: existingMessage.caption,
+          new_caption: message.caption || '',
+          message_type: 'media'
+        }
+      );
+      
+      // Keep legacy logging for backward compatibility
       try {
         await logMessageOperation(
           'edit',
@@ -82,7 +98,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
             message: `Media message ${message.message_id} edited in chat ${message.chat.id}`,
             telegram_message_id: message.message_id,
             chat_id: message.chat.id,
-            existing_message_id: existingMessage.id,
+            sourceMessageId: existingMessage.id, // Replace existing_message_id with sourceMessageId
             media_group_id: existingMessage.media_group_id,
             edit_type: 'caption_edit'
           }
