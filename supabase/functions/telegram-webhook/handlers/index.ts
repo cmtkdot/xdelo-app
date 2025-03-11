@@ -1,3 +1,4 @@
 
 export { handleMediaMessage } from './mediaMessageHandler.ts';
-export { handleOtherMessage, handleEditedMessage } from './textMessageHandler.ts';
+export { handleOtherMessage } from './textMessageHandler.ts';
+export { handleEditedMessage } from './editedMessageHandler.ts';

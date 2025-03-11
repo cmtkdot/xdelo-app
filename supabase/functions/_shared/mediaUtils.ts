@@ -25,16 +25,45 @@ export function xdelo_getDefaultMimeType(media: any): string {
   return 'application/octet-stream';
 }
 
-// Detect MIME type from Telegram media object
+// Detect MIME type from Telegram media object with improved accuracy
 export function xdelo_detectMimeType(media: any): string {
-  // Try to extract from the media object directly
-  if (media.document?.mime_type) return media.document.mime_type;
-  if (media.video?.mime_type) return media.video.mime_type;
-  if (media.audio?.mime_type) return media.audio.mime_type;
-  if (media.voice?.mime_type) return media.voice.mime_type;
+  // First check if we have specific media types
+  if (media.photo) return 'image/jpeg'; // Always use JPEG for photos
   
-  // Use default MIME type based on media type
-  return xdelo_getDefaultMimeType(media);
+  // For videos, prioritize MP4 or fallback to provided mime_type
+  if (media.video) {
+    return media.video.mime_type && media.video.mime_type.startsWith('video/') 
+      ? media.video.mime_type 
+      : 'video/mp4';
+  }
+  
+  // For audio, use specific formats
+  if (media.audio) {
+    return media.audio.mime_type && media.audio.mime_type.startsWith('audio/') 
+      ? media.audio.mime_type 
+      : 'audio/mpeg';
+  }
+  
+  if (media.voice) {
+    return media.voice.mime_type && media.voice.mime_type.startsWith('audio/') 
+      ? media.voice.mime_type 
+      : 'audio/ogg';
+  }
+  
+  // For documents, check mime_type
+  if (media.document && media.document.mime_type) {
+    return media.document.mime_type;
+  }
+  
+  // Stickers and other special types
+  if (media.sticker) {
+    return media.sticker.is_animated ? 'application/x-tgsticker' : 'image/webp';
+  }
+  
+  if (media.animation) return 'video/mp4';
+  
+  // Fallback to octet-stream for unknown types
+  return 'application/octet-stream';
 }
 
 // Helper to get proper upload options based on MIME type
@@ -43,6 +72,8 @@ export function xdelo_getUploadOptions(mimeType: string): any {
   const options = {
     contentType: mimeType || 'application/octet-stream',
     upsert: true,
+    // Set cache control for better performance
+    cacheControl: '3600',
     // Always set contentDisposition based on mime type
     contentDisposition: xdelo_isViewableMimeType(mimeType) ? 'inline' : 'attachment'
   };
@@ -113,5 +144,121 @@ export async function xdelo_repairContentDisposition(path: string): Promise<bool
   } catch (err) {
     console.error('Error repairing content disposition:', err);
     return false;
+  }
+}
+
+// New helper to normalize file extensions based on MIME type
+export function xdelo_getFileExtensionFromMimeType(mimeType: string): string {
+  const mimeToExt: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'video/mp4': 'mp4',
+    'video/webm': 'webm',
+    'audio/mpeg': 'mp3',
+    'audio/ogg': 'ogg',
+    'audio/webm': 'webm',
+    'application/pdf': 'pdf',
+    'application/x-tgsticker': 'tgs',
+    'text/plain': 'txt'
+  };
+  
+  return mimeToExt[mimeType] || mimeType.split('/')[1] || 'bin';
+}
+
+// New function to validate and correct storage path
+export function xdelo_validateAndFixStoragePath(fileUniqueId: string, mimeType: string): string {
+  const extension = xdelo_getFileExtensionFromMimeType(mimeType);
+  // Create a properly structured path using Year/Month folders for better organization
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  
+  return `${year}/${month}/${fileUniqueId}.${extension}`;
+}
+
+// New function to repair and recover file metadata
+export async function xdelo_recoverFileMetadata(messageId: string): Promise<{success: boolean, message: string, data?: any}> {
+  try {
+    // Get the message
+    const { data: message, error: messageError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', messageId)
+      .single();
+      
+    if (messageError || !message) {
+      throw new Error(`Message not found: ${messageError?.message || 'No data returned'}`);
+    }
+    
+    // Extract necessary information
+    const { file_unique_id, file_id, mime_type, storage_path, public_url } = message;
+    
+    if (!file_unique_id) {
+      throw new Error('Message has no file_unique_id');
+    }
+    
+    let updatedData: any = {};
+    
+    // 1. Check if mime_type needs correction
+    if (!mime_type || mime_type === 'application/octet-stream') {
+      // Try to detect better MIME type from existing data
+      const detectedMimeType = xdelo_detectMimeType({
+        photo: message.telegram_data?.photo,
+        video: message.telegram_data?.video,
+        document: message.telegram_data?.document,
+        audio: message.telegram_data?.audio,
+        voice: message.telegram_data?.voice
+      });
+      
+      if (detectedMimeType !== 'application/octet-stream') {
+        updatedData.mime_type = detectedMimeType;
+      }
+    }
+    
+    // 2. Check if storage_path needs correction
+    if (!storage_path || storage_path.split('/').length < 2) {
+      const correctedPath = xdelo_validateAndFixStoragePath(
+        file_unique_id, 
+        updatedData.mime_type || mime_type || 'application/octet-stream'
+      );
+      updatedData.storage_path = correctedPath;
+    }
+    
+    // 3. Update public_url if needed
+    if (!public_url || public_url.indexOf(file_unique_id) === -1) {
+      updatedData.public_url = `${process.env.SUPABASE_URL}/storage/v1/object/public/telegram-media/${updatedData.storage_path || storage_path}`;
+    }
+    
+    // 4. If we have changes, update the record
+    if (Object.keys(updatedData).length > 0) {
+      const { error: updateError } = await supabase
+        .from('messages')
+        .update(updatedData)
+        .eq('id', messageId);
+        
+      if (updateError) {
+        throw new Error(`Failed to update message: ${updateError.message}`);
+      }
+      
+      return {
+        success: true,
+        message: 'File metadata recovered successfully',
+        data: { ...updatedData, id: messageId }
+      };
+    }
+    
+    return {
+      success: true,
+      message: 'No recovery needed, file metadata is valid',
+      data: { id: messageId }
+    };
+  } catch (error) {
+    console.error('Error recovering file metadata:', error);
+    return {
+      success: false,
+      message: error.message || 'Unknown error occurred'
+    };
   }
 }
