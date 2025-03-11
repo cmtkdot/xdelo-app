@@ -10,7 +10,7 @@ export function useMediaReprocessing() {
   const fixContentDisposition = async (messageIds?: string[]) => {
     try {
       setIsProcessing(true);
-      const { data, error } = await supabase.functions.invoke('media-management', {
+      const { data, error } = await supabase.functions.invoke('repair-media', {
         body: { 
           action: 'fix_content_disposition',
           messageIds 
@@ -21,7 +21,7 @@ export function useMediaReprocessing() {
 
       toast({
         title: "Success",
-        description: `Fixed content disposition for ${data.successful} files. ${data.failed} failed.`
+        description: `Fixed content disposition for ${data.data.successful} files. ${data.data.failed} failed.`
       });
 
       return data;
@@ -41,9 +41,9 @@ export function useMediaReprocessing() {
   const fixMimeTypes = async (messageIds?: string[]) => {
     try {
       setIsProcessing(true);
-      const { data, error } = await supabase.functions.invoke('media-management', {
+      const { data, error } = await supabase.functions.invoke('repair-media', {
         body: { 
-          action: 'fix_missing_mime_types',
+          action: 'fix_mime_types',
           messageIds 
         }
       });
@@ -52,7 +52,7 @@ export function useMediaReprocessing() {
 
       toast({
         title: "Success",
-        description: `Updated MIME types for ${data.processed} files`
+        description: `Updated MIME types for ${data.fixed} files`
       });
 
       return data;
@@ -72,9 +72,9 @@ export function useMediaReprocessing() {
   const repairStoragePaths = async (messageIds?: string[]) => {
     try {
       setIsProcessing(true);
-      const { data, error } = await supabase.functions.invoke('repair-storage-paths', {
+      const { data, error } = await supabase.functions.invoke('repair-media', {
         body: { 
-          action: 'repair',
+          action: 'repair_storage_paths',
           messageIds 
         }
       });
@@ -83,7 +83,7 @@ export function useMediaReprocessing() {
 
       toast({
         title: "Success",
-        description: `Repaired storage paths for ${data.repaired || 0} files`
+        description: `Repaired storage paths for ${data.data.repaired || 0} files`
       });
 
       return data;
@@ -103,9 +103,9 @@ export function useMediaReprocessing() {
   const recoverFileMetadata = async (messageIds: string[]) => {
     try {
       setIsProcessing(true);
-      const { data, error } = await supabase.functions.invoke('media-management', {
+      const { data, error } = await supabase.functions.invoke('repair-media', {
         body: { 
-          action: 'recover_file_metadata',
+          action: 'recover_metadata',
           messageIds 
         }
       });
@@ -114,7 +114,7 @@ export function useMediaReprocessing() {
 
       toast({
         title: "Success",
-        description: `Recovered metadata for ${messageIds.length} files`
+        description: `Recovered metadata for ${data.recovered} files`
       });
 
       return data;
@@ -159,12 +159,51 @@ export function useMediaReprocessing() {
     }
   };
 
+  // New consolidated repair method
+  const repairAllIssues = async (messageIds: string[]) => {
+    try {
+      setIsProcessing(true);
+      const { data, error } = await supabase.functions.invoke('repair-media', {
+        body: { 
+          action: 'repair_all',
+          messageIds,
+          options: {
+            fixContentDisposition: true,
+            fixMimeTypes: true,
+            repairStoragePaths: true,
+            recoverMetadata: true
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `Repaired ${data.results.successful} of ${messageIds.length} messages`
+      });
+
+      return data;
+    } catch (error) {
+      console.error('Error repairing media issues:', error);
+      toast({
+        title: "Error",
+        description: "Failed to repair media issues",
+        variant: "destructive"
+      });
+      throw error;
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return {
     fixContentDisposition,
     fixMimeTypes,
     repairStoragePaths,
     recoverFileMetadata,
     redownloadFromMediaGroup,
+    repairAllIssues,
     isProcessing
   };
 }
