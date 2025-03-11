@@ -5,6 +5,7 @@ import { useToast } from './useToast';
 import { useStuckMessageRepair } from './useStuckMessageRepair';
 import { useMediaGroupRepair } from './useMediaGroupRepair';
 import { useMediaRecovery } from './useMediaRecovery';
+import { useProcessingStats } from './useProcessingStats';
 
 export function useProcessingSystemRepair() {
   const [isRepairing, setIsRepairing] = useState(false);
@@ -12,6 +13,7 @@ export function useProcessingSystemRepair() {
   const { repairStuckMessages } = useStuckMessageRepair();
   const { repairMessageProcessingSystem } = useMediaGroupRepair();
   const { validateStorageFiles } = useMediaRecovery();
+  const { getProcessingStats } = useProcessingStats();
 
   const repairProcessingSystem = async () => {
     try {
@@ -58,6 +60,7 @@ export function useProcessingSystemRepair() {
     repairStuckMessages,
     repairMediaGroups: repairMessageProcessingSystem,
     validateStorageFiles,
-    isRepairing
+    isRepairing,
+    getProcessingStats
   };
 }
