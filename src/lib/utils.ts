@@ -24,15 +24,12 @@ export const messageToMediaItem = (message: Message) => {
 export { cn } from './generalUtils';
 
 // Explicitly import and re-export from productMatching to avoid conflicts
-import { findMatches, matchProduct, updateProduct, logSyncOperation as productLogSyncOperation } from './productMatching';
+import { findMatches, matchProduct, updateProduct } from './productMatching';
 export { findMatches, matchProduct, updateProduct };
 
 // Export our sync utils
-import { logSyncOperationBatch, logSyncWarning } from './syncUtils';
-export { logSyncOperationBatch, logSyncWarning };
-
-// Export logSyncOperation with a clear alias to avoid naming conflicts
-export { productLogSyncOperation as logSyncOperation };
+import { logSyncOperation, logSyncOperationBatch, logSyncWarning } from './syncUtils';
+export { logSyncOperation, logSyncOperationBatch, logSyncWarning };
 
 /**
  * Parses quantity from a caption using multiple pattern matching strategies

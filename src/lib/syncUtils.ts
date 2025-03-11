@@ -1,6 +1,6 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { Database } from '../types';
+import { Database } from '../integrations/supabase/types';
 
 /**
  * Logs a single sync operation to the sync_logs table
