@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
 import { logSyncOperation } from '@/lib/syncUtils';
+import type { AnalyzedContent } from '@/types';
 
 export function useProcessingSystemRepair() {
   const [isRepairing, setIsRepairing] = useState(false);
@@ -117,8 +118,9 @@ export function useProcessingSystemRepair() {
       });
       
       // Log the successful repair operation
+      // Cast to any to avoid type issues with the logSyncOperation function
       await logSyncOperation(
-        supabase,
+        supabase as any,
         'processing_system_repair',
         {
           processed_count: processedCount,
@@ -134,7 +136,7 @@ export function useProcessingSystemRepair() {
         scheduler_results: schedulerResults
       };
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error repairing processing system:', error);
       
       toast({
@@ -144,8 +146,9 @@ export function useProcessingSystemRepair() {
       });
       
       // Log the failed repair attempt
+      // Cast to any to avoid type issues with the logSyncOperation function
       await logSyncOperation(
-        supabase,
+        supabase as any,
         'processing_system_repair',
         {
           error: error.message,
@@ -227,8 +230,9 @@ export function useProcessingSystemRepair() {
       });
       
       // Log the repair operation
+      // Cast to any to avoid type issues with the logSyncOperation function
       await logSyncOperation(
-        supabase,
+        supabase as any,
         'stuck_messages_repair',
         {
           reset_count: resetData?.length || 0,
@@ -246,7 +250,7 @@ export function useProcessingSystemRepair() {
         processed: processedCount
       };
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error repairing stuck messages:', error);
       
       toast({
@@ -256,8 +260,9 @@ export function useProcessingSystemRepair() {
       });
       
       // Log the failed repair attempt
+      // Cast to any to avoid type issues with the logSyncOperation function
       await logSyncOperation(
-        supabase,
+        supabase as any,
         'stuck_messages_repair',
         {
           error: error.message,
