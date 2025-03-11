@@ -1,7 +1,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useMediaReprocessing } from "@/hooks/useMediaReprocessing";
-import { FileDown, FileUp, Wrench } from "lucide-react";
+import { FileDown } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/useToast";
 
@@ -11,73 +11,38 @@ interface MediaFixButtonProps {
 }
 
 export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) {
-  const { fixContentDisposition, fixMimeTypes, recoverFileMetadata, isProcessing } = useMediaReprocessing();
+  const { redownloadFromMediaGroup, isProcessing } = useMediaReprocessing();
   const { toast } = useToast();
 
-  const handleFixMediaDisplay = async () => {
+  const handleRedownloadFiles = async () => {
     if (!messageIds?.length) {
       toast({
         title: "Error",
-        description: "No messages selected for fixing",
+        description: "No messages selected for redownloading",
         variant: "destructive"
       });
       return;
     }
 
     try {
-      await fixContentDisposition(messageIds);
-      onComplete?.();
+      // Process each message ID for redownload
+      const promises = messageIds.map(messageId => 
+        redownloadFromMediaGroup(messageId)
+      );
+      
+      await Promise.all(promises);
+      
+      toast({
+        title: "Success",
+        description: `Started redownloading ${messageIds.length} media files`,
+      });
+      
+      if (onComplete) onComplete();
     } catch (error) {
-      console.error("Failed to fix media display:", error);
+      console.error("Failed to redownload media files:", error);
       toast({
         title: "Error",
-        description: "Failed to fix media display. Check console for details.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleFixMimeTypes = async () => {
-    if (!messageIds?.length) {
-      toast({
-        title: "Error",
-        description: "No messages selected for fixing",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      await fixMimeTypes(messageIds);
-      onComplete?.();
-    } catch (error) {
-      console.error("Failed to fix MIME types:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fix MIME types. Check console for details.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleRecoverMetadata = async () => {
-    if (!messageIds?.length) {
-      toast({
-        title: "Error",
-        description: "No messages selected for metadata recovery",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      await recoverFileMetadata(messageIds);
-      onComplete?.();
-    } catch (error) {
-      console.error("Failed to recover metadata:", error);
-      toast({
-        title: "Error",
-        description: "Failed to recover file metadata. Check console for details.",
+        description: "Failed to redownload media files. Check console for details.",
         variant: "destructive"
       });
     }
@@ -88,34 +53,12 @@ export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) 
       <Button 
         variant="outline" 
         size="sm"
-        onClick={handleFixMediaDisplay}
+        onClick={handleRedownloadFiles}
         disabled={isProcessing}
-        title="Fix media files to display in the browser instead of downloading"
-      >
-        <Wrench className="w-4 h-4 mr-2" />
-        {isProcessing ? "Fixing Media..." : "Fix Media Display"}
-      </Button>
-      
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleFixMimeTypes}
-        disabled={isProcessing}
-        title="Fix missing or incorrect MIME types"
+        title="Redownload media files with proper MIME types and storage paths"
       >
         <FileDown className="w-4 h-4 mr-2" />
-        Fix MIME Types
-      </Button>
-      
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleRecoverMetadata}
-        disabled={isProcessing}
-        title="Recover missing metadata for files"
-      >
-        <FileUp className="w-4 h-4 mr-2" />
-        Recover Metadata
+        {isProcessing ? "Processing..." : "Redownload Media"}
       </Button>
     </div>
   );
