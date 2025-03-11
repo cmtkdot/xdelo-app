@@ -1,4 +1,3 @@
-
 // @ts-ignore - Allow Deno global
 declare const Deno: any;
 
@@ -72,21 +71,46 @@ export function xdelo_constructStoragePath(fileUniqueId: string, extension: stri
   return `${fileUniqueId}.${extension}`;
 }
 
-// Get upload options - simplified to remove MIME type handling
-export function xdelo_getUploadOptions(): any {
+// Get upload options with explicit content type mapping
+export function xdelo_getUploadOptions(extension: string): any {
+  // Map common extensions to proper MIME types
+  const mimeMap: Record<string, string> = {
+    'jpeg': 'image/jpeg',
+    'jpg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'mp4': 'video/mp4',
+    'mov': 'video/quicktime',
+    'webm': 'video/webm',
+    'mp3': 'audio/mpeg',
+    'ogg': 'audio/ogg',
+    'm4a': 'audio/mp4',
+    'wav': 'audio/wav',
+    'pdf': 'application/pdf',
+    'doc': 'application/msword',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls': 'application/vnd.ms-excel',
+    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'zip': 'application/zip',
+    'tgs': 'application/gzip',
+  };
+
   return {
+    contentType: mimeMap[extension.toLowerCase()] || `application/${extension}`,
     contentDisposition: 'inline', // Always set to inline for better browser viewing
     upsert: true // Always replace existing files
   };
 }
 
-// Upload media to Supabase Storage - simplified to rely on file extension
+// Upload media to Supabase Storage with explicit content type based on extension
 export async function xdelo_uploadMediaToStorage(
   fileData: Blob,
   storagePath: string
 ): Promise<{success: boolean, publicUrl?: string}> {
   try {
-    const uploadOptions = xdelo_getUploadOptions();
+    const extension = storagePath.split('.').pop()?.toLowerCase() || 'bin';
+    const uploadOptions = xdelo_getUploadOptions(extension);
     
     const { error } = await supabase
       .storage
@@ -163,8 +187,11 @@ export async function xdelo_repairContentDisposition(storagePath: string): Promi
       
     if (error || !data) return false;
     
-    // Re-upload with correct content disposition
-    const uploadOptions = xdelo_getUploadOptions();
+    // Extract extension for content type
+    const extension = path.split('.').pop()?.toLowerCase() || 'bin';
+    
+    // Re-upload with correct content disposition and content type
+    const uploadOptions = xdelo_getUploadOptions(extension);
     const { error: uploadError } = await supabase
       .storage
       .from(bucket)
@@ -194,7 +221,7 @@ export async function xdelo_urlExists(url: string): Promise<boolean> {
   }
 }
 
-// Get media info from a Telegram message - simplified to only use extensions
+// Get media info from a Telegram message with proper content type handling
 export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId: string = crypto.randomUUID()): Promise<any> {
   const photo = message.photo ? message.photo[message.photo.length - 1] : null;
   const video = message.video;
@@ -234,7 +261,7 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
     
     const fileData = await fileDataResponse.blob();
 
-    // Upload to Supabase Storage with inline content disposition
+    // Upload to Supabase Storage with proper content type
     const { success, publicUrl } = await xdelo_uploadMediaToStorage(
       fileData,
       storagePath
@@ -339,4 +366,15 @@ export async function xdelo_redownloadMissingFile(message: any, correlationId: s
       error: error.message
     };
   }
+}
+
+// For backward compatibility - will be removed in future update
+export function xdelo_isViewableMimeType(mimeType: string): boolean {
+  if (!mimeType) return false;
+  const viewableMimeTypes = [
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+    'video/mp4', 'video/quicktime', 'video/webm',
+    'application/pdf'
+  ];
+  return viewableMimeTypes.includes(mimeType);
 }

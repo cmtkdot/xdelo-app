@@ -90,7 +90,7 @@ export async function xdelo_uploadTelegramMedia(
     return { 
       publicUrl: data.publicUrl, 
       storagePath: data.storagePath,
-      mimeType: data.mimeType || `application/${extension}` // Fallback MIME type based on extension
+      mimeType: data.mimeType || `application/${extension}` // Get MIME type from server
     };
   } catch (error) {
     console.error('❌ Error uploading media:', error);

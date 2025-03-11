@@ -1,3 +1,4 @@
+
 /**
  * Media Utilities for Telegram Webhook
  * 
@@ -14,7 +15,8 @@ import {
   xdelo_constructStoragePath,
   xdelo_uploadMediaToStorage,
   xdelo_checkFileExistsInStorage,
-  xdelo_getFileExtension
+  xdelo_getFileExtension,
+  xdelo_getUploadOptions
 } from '../../_shared/mediaUtils.ts';
 import { xdelo_logMediaRedownload } from '../../_shared/messageLogger.ts';
 
@@ -110,11 +112,18 @@ export const redownloadMissingFile = async (message: any) => {
   }
 };
 
+// Get MIME type from extension using the shared utility
+export const getMimeTypeFromExtension = (extension: string) => {
+  const options = xdelo_getUploadOptions(extension);
+  return options.contentType;
+};
+
 // Also re-export other utilities that might be used directly
 export {
   xdelo_getExtensionFromMedia as getExtensionFromMedia,
   xdelo_constructStoragePath as constructStoragePath,
   xdelo_uploadMediaToStorage as uploadMediaToStorage,
   xdelo_checkFileExistsInStorage as checkFileExistsInStorage,
-  xdelo_getFileExtension as getFileExtension
+  xdelo_getFileExtension as getFileExtension,
+  xdelo_getUploadOptions as getUploadOptions
 };

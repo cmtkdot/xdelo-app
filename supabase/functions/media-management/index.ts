@@ -7,39 +7,15 @@ import {
   xdelo_uploadMediaToStorage,
   xdelo_validateStoragePath,
   xdelo_repairContentDisposition,
-  xdelo_constructStoragePath
+  xdelo_constructStoragePath,
+  xdelo_getUploadOptions
 } from "../_shared/mediaUtils.ts";
 import { getStoragePublicUrl } from "../_shared/urls.ts";
 
-// Helper to get MIME type from file extension
+// Helper to get MIME type from file extension using the shared utility
 function getMimeTypeFromExtension(extension: string): string {
-  extension = extension.toLowerCase();
-  
-  switch (extension) {
-    case 'jpg':
-    case 'jpeg': 
-      return 'image/jpeg';
-    case 'png': 
-      return 'image/png';
-    case 'gif': 
-      return 'image/gif';
-    case 'webp': 
-      return 'image/webp';
-    case 'mp4': 
-      return 'video/mp4';
-    case 'mov': 
-      return 'video/quicktime';
-    case 'pdf': 
-      return 'application/pdf';
-    case 'mp3': 
-      return 'audio/mpeg';
-    case 'm4a': 
-      return 'audio/mp4';
-    case 'ogg': 
-      return 'audio/ogg';
-    default:
-      return 'application/octet-stream';
-  }
+  const options = xdelo_getUploadOptions(extension);
+  return options.contentType;
 }
 
 // Main function to serve the edge function
@@ -202,7 +178,7 @@ async function handleValidate(storagePath: string, correlationId: string): Promi
   }
 }
 
-// Handle media repair using shared utility - no longer requires mime type
+// Handle media repair using shared utility
 async function handleRepair(storagePath: string, correlationId: string): Promise<Response> {
   try {
     // Use shared utility to repair content disposition

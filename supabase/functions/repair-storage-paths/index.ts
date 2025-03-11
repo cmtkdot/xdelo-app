@@ -1,10 +1,12 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { 
-  xdelo_isViewableMimeType, 
+  xdelo_isViewableExtension,
   xdelo_getUploadOptions,
   xdelo_validateStoragePath,
-  xdelo_repairContentDisposition
+  xdelo_repairContentDisposition,
+  xdelo_isViewableMimeType
 } from "../_shared/mediaUtils.ts";
 import { supabaseClient as supabase } from "../_shared/supabase.ts";
 
@@ -82,24 +84,32 @@ serve(async (req) => {
         }
         
         // Fix content disposition if requested
-        if (fixContentDisposition && xdelo_isViewableMimeType(message.mime_type)) {
+        if (fixContentDisposition) {
           try {
-            // First, validate the storage path exists
-            const fullPath = `telegram-media/${storagePath}`;
-            const exists = await xdelo_validateStoragePath(fullPath);
+            // Extract extension for viewability check
+            const extension = storagePath.split('.').pop() || 'bin';
+            const shouldFix = message.mime_type ? 
+              xdelo_isViewableMimeType(message.mime_type) : 
+              xdelo_isViewableExtension(extension);
             
-            if (exists) {
-              // Use our enhanced function to repair content disposition
-              const success = await xdelo_repairContentDisposition(fullPath);
+            if (shouldFix) {
+              // First, validate the storage path exists
+              const fullPath = `telegram-media/${storagePath}`;
+              const exists = await xdelo_validateStoragePath(fullPath);
               
-              if (success) {
-                contentDispositionFixed++;
-                console.log(`Fixed content disposition for ${message.id} (${storagePath})`);
+              if (exists) {
+                // Use our enhanced function to repair content disposition
+                const success = await xdelo_repairContentDisposition(fullPath);
+                
+                if (success) {
+                  contentDispositionFixed++;
+                  console.log(`Fixed content disposition for ${message.id} (${storagePath})`);
+                } else {
+                  console.log(`No changes needed for content disposition on ${message.id} (${storagePath})`);
+                }
               } else {
-                console.log(`No changes needed for content disposition on ${message.id} (${storagePath})`);
+                console.warn(`Storage path does not exist for ${message.id}: ${storagePath}`);
               }
-            } else {
-              console.warn(`Storage path does not exist for ${message.id}: ${storagePath}`);
             }
           } catch (fileError) {
             console.error(`Error fixing content disposition for ${message.id}:`, fileError);
