@@ -5,10 +5,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { MessageHeader } from './MessageHeader';
 import { MessageControlPanel } from './MessageControlPanel';
 import { MessagesFilter, MessageFilterValues } from './MessagesFilter';
-import { useRealTimeMessages } from '@/hooks/useRealTimeMessages';
+import { useRealTimeMessages, ProcessingStateType } from '@/hooks/useRealTimeMessages';
 import { useMessageQueue } from '@/hooks/useMessageQueue';
 import { useToast } from '@/hooks/useToast';
-import { ProcessingState } from '@/types';
 
 export const MessageListContainer: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -30,7 +29,7 @@ export const MessageListContainer: React.FC = () => {
     handleRefresh
   } = useRealTimeMessages({ 
     filter: searchTerm,
-    processingState: filters.processingState as ProcessingState[] | undefined,
+    processingState: filters.processingState as ProcessingStateType[] | undefined,
     sortBy: filters.sortBy,
     sortOrder: filters.sortOrder,
     showForwarded: filters.showForwarded,

@@ -2,10 +2,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Message } from '@/types';
+import { Message, ProcessingState } from '@/types';
 import { toast } from 'sonner';
 
-export type ProcessingStateType = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'partial_success';
+export type ProcessingStateType = ProcessingState;
 
 interface UseRealTimeMessagesOptions {
   limit?: number;
@@ -41,7 +41,8 @@ export function useRealTimeMessages({
     }
     
     if (processingState && processingState.length > 0) {
-      query = query.in('processing_state', processingState);
+      // Cast to string[] which Supabase accepts for the in() operator
+      query = query.in('processing_state', processingState as string[]);
     }
     
     if (showForwarded) {
