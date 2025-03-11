@@ -60,12 +60,15 @@ export function useProcessingHealth() {
       
       if (mixedError) throw mixedError;
 
+      // Cast the data to the expected type
+      const typedStatsData = statsData as ProcessingStats;
+
       // Combine everything into a health report
       const healthReport: ProcessingStats = {
-        state_counts: statsData.state_counts,
-        media_group_stats: statsData.media_group_stats,
-        timing_stats: statsData.timing_stats,
-        timestamp: statsData.timestamp,
+        state_counts: typedStatsData.state_counts,
+        media_group_stats: typedStatsData.media_group_stats,
+        timing_stats: typedStatsData.timing_stats,
+        timestamp: typedStatsData.timestamp,
         mixed_media_groups: mixedMediaGroups as MediaGroupStatus[]
       };
       
