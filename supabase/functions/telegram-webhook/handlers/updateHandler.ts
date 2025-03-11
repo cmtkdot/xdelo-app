@@ -1,7 +1,7 @@
 
 import { corsHeaders } from '../../_shared/cors.ts';
 import { xdelo_logMessageError } from '../../_shared/messageLogger.ts';
-import { handleMediaMessage } from './mediaHandler.ts';
+import { handleMediaMessage } from './media/mediaHandler.ts';
 import { handleTextMessage } from './textHandler.ts';
 import { handleEditedMessage } from './editHandler.ts';
 

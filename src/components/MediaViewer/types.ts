@@ -1,3 +1,4 @@
+
 import { Message, AnalyzedContent } from "@/types";
 
 export interface MediaItem {
@@ -19,8 +20,19 @@ export function messageToMediaItem(message: Message): MediaItem {
 }
 
 export interface MediaViewerProps {
-  publicUrl: string;
-  mimeType: string;
+  // Original props for dialog version
+  isOpen?: boolean;
+  onClose?: () => void;
+  currentGroup?: Message[];
+  onPrevious?: () => void;
+  onNext?: () => void;
+  hasPrevious?: boolean;
+  hasNext?: boolean;
+  editMode?: boolean;
+  
+  // Simple inline viewer props
+  publicUrl?: string;
+  mimeType?: string;
   caption?: string;
   className?: string;
 }

@@ -1,105 +1,74 @@
 
-import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
+import React, { useState } from 'react';
+import useRealTimeMessages from '@/hooks/useRealTimeMessages';
 import MessageList from './MessageList';
-import useRealTimeMessages, { ProcessingState } from '@/hooks/useRealTimeMessages';
-import { useMediaFixer } from '@/hooks/useMediaFixer';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/useToast';
 
-const MessageListContainer = () => {
-  const [activeTab, setActiveTab] = useState<'pending' | 'processing' | 'completed' | 'error'>('pending');
-  
-  const processingStates: Record<string, ProcessingState[]> = {
-    pending: [ProcessingState.Pending, ProcessingState.Initialized],
-    processing: [ProcessingState.Processing],
-    completed: [ProcessingState.Completed],
-    error: [ProcessingState.Error]
-  };
-  
+const MessageListContainer: React.FC = () => {
+  const { toast } = useToast();
   const { 
     messages, 
     isLoading, 
-    processAllLoading, 
-    retryProcessing, 
-    processAllPending 
-  } = useRealTimeMessages({
-    processingStates: processingStates[activeTab],
-    limit: 50
-  });
-
-  const { fixMediaContentType, isRepairing } = useMediaFixer();
-
-  const handleTabChange = (tab: 'pending' | 'processing' | 'completed' | 'error') => {
-    setActiveTab(tab);
-  };
+    processAllLoading,
+    retryProcessing,
+    refreshMessages
+  } = useRealTimeMessages({});
+  
+  const [isFixingMedia, setIsFixingMedia] = useState<Record<string, boolean>>({});
 
   const handleRetryProcessing = async (messageId: string) => {
     await retryProcessing(messageId);
+    refreshMessages();
   };
 
   const handleFixMedia = async (messageId: string, storagePath: string) => {
     if (!storagePath) {
-      console.error('No storage path provided for message', messageId);
+      toast({
+        title: 'Error',
+        description: 'Missing storage path for media',
+        variant: 'destructive'
+      });
       return;
     }
     
-    await fixMediaContentType(storagePath);
+    setIsFixingMedia(prev => ({ ...prev, [messageId]: true }));
+    
+    try {
+      const { error } = await supabase.functions.invoke('media-management', {
+        body: { 
+          action: 'repair_content_disposition', 
+          storagePath,
+          messageId
+        }
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: 'Success',
+        description: 'Media content type fixed successfully'
+      });
+      
+      // Refresh the messages to show updated public URLs
+      await refreshMessages();
+    } catch (error) {
+      console.error('Error fixing media content type:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to fix media content type',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsFixingMedia(prev => ({ ...prev, [messageId]: false }));
+    }
   };
 
-  useEffect(() => {
-    // Auto refresh the list when tab changes
-    const interval = setInterval(() => {
-      if (activeTab === 'processing') {
-        processAllPending();
-      }
-    }, 30000); // 30 seconds
-    
-    return () => clearInterval(interval);
-  }, [activeTab, processAllPending]);
-
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        <Button 
-          variant={activeTab === 'pending' ? 'default' : 'outline'} 
-          onClick={() => handleTabChange('pending')}
-        >
-          Pending
-        </Button>
-        <Button 
-          variant={activeTab === 'processing' ? 'default' : 'outline'} 
-          onClick={() => handleTabChange('processing')}
-        >
-          Processing
-        </Button>
-        <Button 
-          variant={activeTab === 'completed' ? 'default' : 'outline'} 
-          onClick={() => handleTabChange('completed')}
-        >
-          Completed
-        </Button>
-        <Button 
-          variant={activeTab === 'error' ? 'default' : 'outline'} 
-          onClick={() => handleTabChange('error')}
-        >
-          Errors
-        </Button>
-        
-        {activeTab === 'pending' && (
-          <Button 
-            variant="outline" 
-            onClick={processAllPending}
-            disabled={processAllLoading || messages.length === 0}
-            className="ml-auto"
-          >
-            {processAllLoading ? <Spinner size="sm" /> : 'Process All'}
-          </Button>
-        )}
-      </div>
-      
+    <div>
       <MessageList 
-        messages={messages} 
-        isLoading={isLoading} 
+        messages={messages}
+        isLoading={isLoading}
         onRetryProcessing={handleRetryProcessing}
         onFixMedia={handleFixMedia}
         processAllLoading={processAllLoading}

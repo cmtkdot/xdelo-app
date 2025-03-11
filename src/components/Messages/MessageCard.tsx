@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
@@ -30,7 +31,7 @@ const MessageCard: React.FC<MessageCardProps> = ({ message, onRetryProcessing, o
             <div className="text-sm text-muted-foreground">
               Message ID: {message.telegram_message_id} • {formattedCreatedAt}
             </div>
-            <StatusBadge status={message.processing_state} className="mt-1" />
+            <StatusBadge status={message.processing_state} />
           </div>
           
           {message.media_group_id && (

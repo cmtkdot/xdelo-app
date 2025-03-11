@@ -69,7 +69,8 @@ export const useRealTimeMessages = ({
         throw error;
       }
 
-      setMessages(data || []);
+      // Cast data to Message[] to fix TypeScript error
+      setMessages(data as unknown as Message[]);
     } catch (error) {
       console.error('Error fetching messages:', error);
       toast({

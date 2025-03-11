@@ -7,14 +7,19 @@ export interface MediaFixButtonProps {
   storagePath: string;
   onFix: () => Promise<void>;
   isRepairing?: boolean;
-  messageId?: string; // Added for individual message fixes
+  messageId?: string;
+  // Add support for multiple message IDs
+  messageIds?: string[];
+  onComplete?: () => void;
 }
 
 export const MediaFixButton: React.FC<MediaFixButtonProps> = ({ 
   storagePath, 
   onFix, 
   isRepairing = false,
-  messageId 
+  messageId,
+  messageIds,
+  onComplete
 }) => {
   if (!storagePath) return null;
 
@@ -23,7 +28,10 @@ export const MediaFixButton: React.FC<MediaFixButtonProps> = ({
       size="sm"
       variant="outline"
       className="bg-white/70 hover:bg-white dark:bg-black/70 dark:hover:bg-black rounded-full h-8 w-8 p-0"
-      onClick={onFix}
+      onClick={async () => {
+        await onFix();
+        if (onComplete) onComplete();
+      }}
       disabled={isRepairing}
       title="Fix media content type"
       data-message-id={messageId}
