@@ -1,21 +1,16 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
 import { logMessageOperation } from './logger.ts';
+import { supabaseClient as supabase } from '../_shared/supabase.ts';
+import { 
+  xdelo_isViewableMimeType,
+  xdelo_getUploadOptions,
+  xdelo_detectMimeType,
+  xdelo_getDefaultMimeType,
+  xdelo_validateStoragePath
+} from '../_shared/mediaUtils.ts';
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')
 if (!TELEGRAM_BOT_TOKEN) throw new Error('Missing TELEGRAM_BOT_TOKEN')
-
-// Create Supabase client with storage capabilities
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    }
-  }
-);
 
 export const getMediaInfo = async (message: any) => {
   const photo = message.photo ? message.photo[message.photo.length - 1] : null
@@ -78,22 +73,36 @@ export const getMediaInfo = async (message: any) => {
     
     const fileData = await fileDataResponse.blob();
 
-    // Get mime type and extension
-    const mimeType = video ? (video.mime_type || 'video/mp4') :
-                  document ? (document.mime_type || 'application/octet-stream') :
-                  'image/jpeg';
+    // Get mime type using our enhanced detection
+    const mediaObj = {
+      photo: photo,
+      video: video,
+      document: document
+    };
+    const mimeType = xdelo_detectMimeType(mediaObj);
     
-    const extension = mimeType.split('/')[1];
-    const fileName = `${media.file_unique_id}.${extension}`;
+    // Get standardized storage path
+    const { data: storagePath, error: pathError } = await supabase.rpc(
+      'xdelo_standardize_storage_path',
+      {
+        p_file_unique_id: media.file_unique_id,
+        p_mime_type: mimeType
+      }
+    );
+    
+    if (pathError) {
+      console.error('Error getting standardized path:', pathError);
+      throw new Error(`Failed to get standardized storage path: ${pathError.message}`);
+    }
+    
+    const fileName = storagePath || `${media.file_unique_id}.${mimeType.split('/')[1]}`;
 
-    // Upload to Supabase Storage
+    // Upload to Supabase Storage with proper content disposition
+    const uploadOptions = xdelo_getUploadOptions(mimeType);
     const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')
-      .upload(fileName, fileData, {
-        contentType: mimeType,
-        upsert: true
-      });
+      .upload(fileName, fileData, uploadOptions);
 
     if (uploadError) {
       console.error('Storage upload error:', uploadError);
@@ -143,7 +152,7 @@ export const getMediaInfo = async (message: any) => {
   }
 }
 
-// Simplified function to redownload missing files
+// Enhanced function to redownload missing files
 export const redownloadMissingFile = async (message: any) => {
   try {
     console.log('Attempting to redownload file for message:', message.id);
@@ -178,19 +187,35 @@ export const redownloadMissingFile = async (message: any) => {
     
     const fileData = await fileDataResponse.blob();
 
-    // Extract storage path or create from file_unique_id and mime_type
-    const mimeType = message.mime_type || 'image/jpeg';
-    const extension = mimeType.split('/')[1];
-    const storagePath = `${message.file_unique_id}.${extension}`;
+    // Better MIME type detection
+    const mimeType = message.mime_type || xdelo_getDefaultMimeType({ 
+      photo: message.photo, 
+      video: message.video,
+      document: message.document
+    });
+    
+    // Get standardized storage path
+    const { data: storagePath, error: pathError } = await supabase.rpc(
+      'xdelo_standardize_storage_path',
+      {
+        p_file_unique_id: message.file_unique_id,
+        p_mime_type: mimeType
+      }
+    );
+    
+    if (pathError) {
+      console.error('Error getting standardized path:', pathError);
+      throw new Error(`Failed to get standardized storage path: ${pathError.message}`);
+    }
 
-    // Upload to Supabase Storage
+    const fileName = storagePath || `${message.file_unique_id}.${mimeType.split('/')[1]}`;
+
+    // Upload to Supabase Storage with proper content disposition
+    const uploadOptions = xdelo_getUploadOptions(mimeType);
     const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')
-      .upload(storagePath, fileData, {
-        contentType: mimeType,
-        upsert: true
-      });
+      .upload(fileName, fileData, uploadOptions);
 
     if (uploadError) {
       throw new Error(`Failed to upload media to storage: ${uploadError.message}`);

@@ -1,13 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
-import { xdelo_isViewableMimeType, xdelo_getUploadOptions } from "../_shared/mediaUtils.ts";
-
-// Create Supabase client
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-);
+import { 
+  xdelo_isViewableMimeType, 
+  xdelo_getUploadOptions,
+  xdelo_validateStoragePath,
+  xdelo_repairContentDisposition
+} from "../_shared/mediaUtils.ts";
+import { supabaseClient as supabase } from "../_shared/supabase.ts";
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -84,41 +83,26 @@ serve(async (req) => {
         
         // Fix content disposition if requested
         if (fixContentDisposition && xdelo_isViewableMimeType(message.mime_type)) {
-          // Check if file exists
-          const { data: fileExists } = await supabase
-            .storage
-            .from('telegram-media')
-            .list('', {
-              limit: 1,
-              search: storagePath
-            });
+          try {
+            // First, validate the storage path exists
+            const fullPath = `telegram-media/${storagePath}`;
+            const exists = await xdelo_validateStoragePath(fullPath);
             
-          if (fileExists && fileExists.length > 0) {
-            try {
-              // Get current file metadata
-              const { data: fileData } = await supabase
-                .storage
-                .from('telegram-media')
-                .download(storagePath);
-                
-              if (fileData) {
-                // Get proper upload options
-                const uploadOptions = xdelo_getUploadOptions(message.mime_type);
-                
-                // Re-upload with inline content disposition
-                const { error: uploadError } = await supabase
-                  .storage
-                  .from('telegram-media')
-                  .upload(storagePath, fileData, uploadOptions);
-                  
-                if (!uploadError) {
-                  contentDispositionFixed++;
-                  console.log(`Fixed content disposition for ${message.id} (${storagePath})`);
-                }
+            if (exists) {
+              // Use our enhanced function to repair content disposition
+              const success = await xdelo_repairContentDisposition(fullPath);
+              
+              if (success) {
+                contentDispositionFixed++;
+                console.log(`Fixed content disposition for ${message.id} (${storagePath})`);
+              } else {
+                console.log(`No changes needed for content disposition on ${message.id} (${storagePath})`);
               }
-            } catch (fileError) {
-              console.error(`Error fixing content disposition for ${message.id}:`, fileError);
+            } else {
+              console.warn(`Storage path does not exist for ${message.id}: ${storagePath}`);
             }
+          } catch (fileError) {
+            console.error(`Error fixing content disposition for ${message.id}:`, fileError);
           }
         }
       } catch (messageError) {

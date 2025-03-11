@@ -1,43 +1,13 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-// Initialize Supabase client
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-);
-
-// Helper to determine if the MIME type is viewable in browser
-function isViewableMimeType(mimeType: string): boolean {
-  return mimeType.startsWith('image/') || 
-         mimeType.startsWith('video/') || 
-         mimeType === 'application/pdf';
-}
-
-// Helper to get proper upload options based on MIME type
-function getUploadOptions(mimeType: string): any {
-  // Default options for all uploads
-  const options = {
-    contentType: mimeType || 'application/octet-stream',
-    upsert: true
-  };
-  
-  // Add inline content disposition for viewable types
-  if (isViewableMimeType(mimeType)) {
-    return {
-      ...options,
-      contentDisposition: 'inline'
-    };
-  }
-  
-  return options;
-}
+import { corsHeaders } from "../_shared/cors.ts";
+import { 
+  xdelo_isViewableMimeType, 
+  xdelo_getUploadOptions,
+  xdelo_detectMimeType,
+  xdelo_validateStoragePath 
+} from "../_shared/mediaUtils.ts";
+import { supabaseClient as supabase } from "../_shared/supabase.ts";
 
 // Function to validate if a file exists based on its public URL
 async function fileExists(publicURL: string): Promise<boolean> {
@@ -203,7 +173,7 @@ async function downloadFromTelegram(message: any): Promise<string | null> {
     }
 
     // Upload to Supabase storage with proper content disposition
-    const uploadOptions = getUploadOptions(message.mime_type);
+    const uploadOptions = xdelo_getUploadOptions(message.mime_type);
     const { error: uploadError } = await supabase.storage
       .from('telegram-media')
       .upload(storagePath, fileBlob, uploadOptions);

@@ -1,5 +1,4 @@
 project_id = "xjhhehxcxkiumnwbirel"
-base_url = "https://xjhhehxcxkiumnwbirel.supabase.co"
 [functions.analyze-with-ai]
 verify_jwt = false
 [functions.create-analyze-message-caption]
