@@ -2,7 +2,6 @@
 import React from 'react';
 import { MessageListContainer } from '../components/Messages/MessageListContainer';
 import { Helmet } from 'react-helmet';
-import { MessageHealth } from '@/components/Messages/MessageHealth';
 import { Card } from '@/components/ui/card';
 
 export default function MessagesPage() {
@@ -16,7 +15,6 @@ export default function MessagesPage() {
       </div>
       
       <div className="space-y-6">
-        <MessageHealth />
         <MessageListContainer />
       </div>
     </div>

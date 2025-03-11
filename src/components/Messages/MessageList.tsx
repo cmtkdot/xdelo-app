@@ -9,7 +9,6 @@ interface MessageListProps {
   messages: Message[];
   isLoading: boolean;
   onRetryProcessing: (messageId: string) => Promise<void>;
-  onProcessAll: () => Promise<void>;
   processAllLoading?: boolean;
 }
 
@@ -17,7 +16,6 @@ export const MessageList: React.FC<MessageListProps> = ({
   messages,
   isLoading,
   onRetryProcessing,
-  onProcessAll,
   processAllLoading = false
 }) => {
   if (isLoading) {
@@ -50,8 +48,6 @@ export const MessageList: React.FC<MessageListProps> = ({
         processingCount={processingCount}
         completedCount={completedCount}
         errorCount={errorCount}
-        onProcessAll={onProcessAll}
-        processAllLoading={processAllLoading}
       />
 
       <div className="space-y-4">

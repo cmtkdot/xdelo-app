@@ -55,8 +55,8 @@ export function useProcessingStats() {
       
       if (error) throw error;
       
-      // Safe type guard for the response data
-      const responseData = data as ProcessingStatsResponse;
+      // Safely cast the response data
+      const responseData = data as unknown as ProcessingStatsResponse;
       
       // Map the nested response to our flat ProcessingStats interface
       const processedStats: ProcessingStats = {
