@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -16,9 +15,10 @@ interface MediaRepairDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialMessages?: Message[];
+  initialMessageIds?: string[];
 }
 
-export function MediaRepairDialog({ open, onOpenChange, initialMessages = [] }: MediaRepairDialogProps) {
+export function MediaRepairDialog({ open, onOpenChange, initialMessages = [], initialMessageIds = [] }: MediaRepairDialogProps) {
   const {
     isProcessing,
     selectedMessages,
@@ -60,8 +60,37 @@ export function MediaRepairDialog({ open, onOpenChange, initialMessages = [] }: 
     if (initialMessages && initialMessages.length > 0) {
       setAvailableMessages(initialMessages);
       selectMessages(initialMessages);
+    } else if (initialMessageIds && initialMessageIds.length > 0) {
+      // Load messages by IDs
+      const loadMessagesByIds = async () => {
+        setLoadingMessages(true);
+        try {
+          const { data } = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/repair-media`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({ 
+              action: 'get_messages_by_ids',
+              messageIds: initialMessageIds
+            })
+          }).then(res => res.json());
+          
+          if (data && Array.isArray(data)) {
+            setAvailableMessages(data);
+            selectMessages(data);
+          }
+        } catch (error) {
+          console.error('Error loading messages by IDs:', error);
+        } finally {
+          setLoadingMessages(false);
+        }
+      };
+      
+      loadMessagesByIds();
     }
-  }, [initialMessages]);
+  }, [initialMessages, initialMessageIds]);
 
   const loadFilteredMessages = async () => {
     setLoadingMessages(true);

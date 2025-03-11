@@ -1,116 +1,119 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { corsHeaders } from "../_shared/cors.ts";
-import { withErrorHandling } from "../_shared/errorHandler.ts";
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
-// Create Supabase client
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+// Initialize Supabase client
 const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  Deno.env.get('SUPABASE_URL') || '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 );
 
-const xdelo_reprocessMessage = async (req: Request, correlationId: string) => {
-  const body = await req.json();
-  const { messageId, forceReprocess = true } = body;
-  
-  if (!messageId) {
-    throw new Error("Message ID is required");
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders, status: 204 });
   }
 
-  console.log(`Reprocessing message ${messageId}, correlation ID: ${correlationId}, force_reprocess: ${forceReprocess}`);
-  
+  // Only accept POST requests
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
+      status: 405 
+    });
+  }
+
   try {
-    // Get the message details
+    const { messageId, force = false } = await req.json();
+    
+    if (!messageId) {
+      throw new Error('Message ID is required');
+    }
+
+    console.log(`Reprocessing message: ${messageId}, force: ${force}`);
+
+    // Get the message first to check if we should continue
     const { data: message, error: messageError } = await supabase
       .from('messages')
-      .select('id, caption, media_group_id, processing_state, analyzed_content')
+      .select('*')
       .eq('id', messageId)
       .single();
     
-    if (messageError || !message) {
-      throw new Error(`Message not found: ${messageError?.message || 'Unknown error'}`);
+    if (messageError) {
+      throw new Error(`Failed to get message: ${messageError.message}`);
     }
     
-    // Update the message to processing state
-    await supabase
+    if (!message) {
+      throw new Error(`Message with ID ${messageId} not found`);
+    }
+
+    // Only allow reprocessing if there's a caption
+    if (!message.caption) {
+      throw new Error('Cannot reprocess a message without a caption');
+    }
+
+    // Check if we're already in a good state and don't need to reprocess
+    if (!force && message.processing_state === 'completed' && message.analyzed_content) {
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: 'Message already processed successfully',
+        alreadyProcessed: true
+      }), { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+
+    // Mark as processing
+    const { error: updateError } = await supabase
       .from('messages')
       .update({
-        processing_state: 'processing',
+        processing_state: 'pending',
         processing_started_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        error_message: null,
+        retry_count: (message.retry_count || 0) + 1
       })
       .eq('id', messageId);
     
-    // Call direct-caption-processor with force_reprocess flag
-    const { data: processorResult, error: processorError } = await supabase.functions.invoke(
-      'direct-caption-processor',
-      {
-        body: {
-          messageId,
-          trigger_source: 'reprocess_function',
-          force_reprocess: forceReprocess
-        }
-      }
-    );
-    
-    if (processorError) {
-      throw new Error(`Processing failed: ${processorError.message}`);
+    if (updateError) {
+      throw new Error(`Failed to update message state: ${updateError.message}`);
     }
-    
-    // Log the reprocessing
-    await supabase.from('unified_audit_logs').insert({
-      event_type: 'message_reprocessed',
-      entity_id: messageId,
-      correlation_id: correlationId,
-      metadata: {
-        previous_state: message.processing_state,
-        had_analyzed_content: !!message.analyzed_content,
-        media_group_id: message.media_group_id,
-        force_reprocess: forceReprocess,
-        trigger_source: 'xdelo_reprocess_message'
-      },
-      event_timestamp: new Date().toISOString()
-    });
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: `Message ${messageId} reprocessed successfully`,
-        data: processorResult,
-        correlation_id: correlationId
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    // Trigger direct caption processor (if available)
+    try {
+      const { data: processorResponse, error: processorError } = await supabase.functions.invoke('direct-caption-processor', {
+        body: { messageId }
+      });
+      
+      if (processorError) {
+        console.error('Error calling direct-caption-processor:', processorError);
+      } else {
+        console.log('Direct caption processor response:', processorResponse);
+      }
+    } catch (err) {
+      console.error('Failed to call direct caption processor:', err);
+      // Continue anyway - the message is in pending state and will be picked up by scheduler
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: 'Message successfully queued for reprocessing'
+    }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
   } catch (error) {
-    console.error(`Error reprocessing message: ${error.message}`);
+    console.error('Error reprocessing message:', error);
     
-    // Update the message to error state
-    await supabase
-      .from('messages')
-      .update({
-        processing_state: 'error',
-        error_message: error.message,
-        last_error_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', messageId);
-    
-    // Log the error
-    await supabase.from('unified_audit_logs').insert({
-      event_type: 'message_reprocess_error',
-      entity_id: messageId,
-      error_message: error.message,
-      correlation_id: correlationId,
-      metadata: {
-        error_stack: error.stack,
-        force_reprocess: forceReprocess
-      },
-      event_timestamp: new Date().toISOString()
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: error.message 
+    }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 400
     });
-    
-    throw error;
   }
-};
-
-serve(withErrorHandling('xdelo_reprocess_message', xdelo_reprocessMessage));
+});

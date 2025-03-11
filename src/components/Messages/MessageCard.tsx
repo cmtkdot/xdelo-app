@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, ExternalLink, Sync } from 'lucide-react';
+import { RefreshCw, ExternalLink, SyncIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
@@ -144,7 +143,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, onRetryProces
                   }}
                   title="Sync content with all messages in this media group"
                 >
-                  <Sync className="w-4 h-4 mr-1" />
+                  <SyncIcon className="w-4 h-4 mr-1" />
                   Sync Group
                 </Button>
               )}

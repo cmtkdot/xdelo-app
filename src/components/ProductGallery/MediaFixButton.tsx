@@ -29,9 +29,6 @@ export function MediaFixButton({ messageIds, messages, onComplete }: MediaFixBut
     return null;
   }
 
-  // Get the initial message IDs from either source
-  const initialMessageIds = messageIds || (messages ? messages.map(m => m.id) : []);
-
   return (
     <>
       <Button 
@@ -52,7 +49,7 @@ export function MediaFixButton({ messageIds, messages, onComplete }: MediaFixBut
             handleComplete();
           }
         }}
-        initialMessageIds={initialMessageIds}
+        initialMessageIds={messageIds}
         initialMessages={messages}
       />
     </>

@@ -2,7 +2,7 @@
 import { useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
-import { Message } from '@/types';
+import { Message, ProcessingState } from '@/types';
 
 export type RepairOption = 
   | 'fix_content_disposition' 
@@ -12,7 +12,7 @@ export type RepairOption =
   | 'repair_all';
 
 export type RepairFilter = {
-  processingState?: string[];
+  processingState?: ProcessingState[];
   mimeType?: string[];
   hasMissingStoragePath?: boolean;
   limit?: number;
@@ -45,7 +45,9 @@ export function useMediaRepair() {
 
       // Apply processing state filter
       if (filter.processingState && filter.processingState.length > 0) {
-        query = query.in('processing_state', filter.processingState);
+        // Cast the array to string[] for the database query
+        const stateStrings = filter.processingState as unknown as string[];
+        query = query.in('processing_state', stateStrings);
       }
 
       // Apply MIME type filter
@@ -71,7 +73,9 @@ export function useMediaRepair() {
       const { data, error } = await query;
 
       if (error) throw error;
-      return data || [];
+      
+      // Cast the database response to the Message type
+      return (data || []) as Message[];
     } catch (error) {
       console.error('Error filtering messages:', error);
       toast({
