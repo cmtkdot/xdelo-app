@@ -65,6 +65,7 @@ The caption is analyzed using a multi-step approach:
 2. **Result Storage**:
    - Analyzed results are stored in a structured JSONB object
    - Includes all extracted fields and parsing metadata
+   - Partial success is supported when certain fields can't be extracted
    - Transaction prevents partial updates
 
 ### 3. Media Group Handling
@@ -81,7 +82,7 @@ If the message is part of a media group:
 After processing:
 
 - The transaction is committed using `xdelo_commit_transaction_with_sync()`
-- The message state is set to "completed"
+- The message state is set to "completed" or "partial_success"
 - All changes are logged to the unified audit log
 
 ## Error Handling
@@ -96,7 +97,27 @@ If an error occurs during processing:
 2. **Automatic Retry**:
    - Failed messages can be automatically retried
    - Retry count is tracked in the message record
+   - Exponential backoff prevents rapid retry cycles
    - Maximum retry attempts prevent endless loops
+
+3. **Fallback Processing**:
+   - If direct processing fails, message is queued for later processing
+   - Edge function fallbacks with different parsing strategies
+   - Direct database fallbacks for media group syncing
+
+## Partial Success Handling
+
+When messages can be partially processed:
+
+1. **Partial Success State**:
+   - New `partial_success` state for messages with some but not all fields
+   - Missing fields are tracked in the metadata
+   - Vendor UID and purchase date are now optional
+
+2. **Media Group Sync**:
+   - Partial content is still synced to media groups
+   - Ensures consistent state across all group messages
+   - Allows for updates when more complete information arrives
 
 ## Recovery Mechanisms
 
@@ -113,3 +134,53 @@ For handling edge cases and failures:
 3. **Media Group Repair**:
    - The `xdelo_repair_media_group_syncs()` function fixes inconsistencies in media groups
    - Identifies groups with mixed processing states and repairs them
+
+## Monitoring and Health Checks
+
+Comprehensive health monitoring for the processing system:
+
+1. **Processing Stats**:
+   - Track counts by processing state
+   - Monitor stalled messages
+   - Detect mixed media groups (partially processed)
+
+2. **Scheduled Maintenance**:
+   - Cron jobs run at regular intervals to fix stalled messages
+   - Reset stuck processes and advisory locks
+   - Repair broken media group relationships
+
+3. **Manual Intervention**:
+   - Admin UI for direct repair operations
+   - Diagnostic functions to identify problematic messages
+   - Tools to force reprocessing of specific messages
+
+## Transaction Management
+
+Transaction-based processing ensures consistency:
+
+1. **Transaction Functions**:
+   - `xdelo_begin_transaction`: Initializes transaction with unique ID
+   - `xdelo_commit_transaction_with_sync`: Commits with group synchronization
+   - `xdelo_update_message_with_analyzed_content`: Atomic message updates
+   - `xdelo_handle_failed_caption_analysis`: Consistent error handling
+
+2. **Advisory Locks**:
+   - Prevent race conditions on media group updates
+   - Ensure only one process updates a group at a time
+   - Allow parallel processing of unrelated groups
+   - Get automatically released when a transaction ends or connection terminates
+
+## Progressive and Immediate Media Group Sync
+
+Improved media group synchronization:
+
+1. **Immediate Sync**:
+   - Media groups are synced immediately after processing a caption
+   - No waiting for scheduled processes or triggers
+   - Multiple fallback mechanisms for reliability
+
+2. **Progressive Sync**:
+   - New messages without captions check for existing group content
+   - Automatically inherit analyzed content if available
+   - Scheduled re-checks for groups that had no content initially
+   - Delayed re-processing attempts for better sync rates

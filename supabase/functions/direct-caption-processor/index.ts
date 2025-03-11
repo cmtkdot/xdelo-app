@@ -67,6 +67,12 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
       })
       .eq('id', messageId);
     
+    // Begin transaction for atomic operations
+    const { data: txResult, error: txError } = await supabase.rpc('xdelo_begin_transaction');
+    if (txError) {
+      console.warn('Transaction begin warning (non-fatal):', txError.message);
+    }
+    
     // Directly call the manual-caption-parser for simplicity and consistency
     const { data: analysisResult, error: analysisError } = await supabase.functions.invoke(
       'manual-caption-parser',
@@ -82,10 +88,36 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
     );
     
     if (analysisError) {
-      throw new Error(`Analysis error: ${analysisError.message}`);
+      // Attempt to call parse-caption-with-ai as a fallback
+      console.log(`Manual parser failed, trying parse-caption-with-ai as fallback`);
+      
+      const { data: fallbackResult, error: fallbackError } = await supabase.functions.invoke(
+        'parse-caption-with-ai',
+        {
+          body: {
+            messageId,
+            caption: message.caption,
+            media_group_id: message.media_group_id,
+            correlationId,
+            trigger_source: 'direct_fallback'
+          }
+        }
+      );
+      
+      if (fallbackError) {
+        throw new Error(`Analysis failed with both methods: ${analysisError.message}, fallback: ${fallbackError.message}`);
+      }
+      
+      console.log('Fallback caption processing successful');
+    } else {
+      console.log(`Successfully processed caption for message ${messageId}`);
     }
     
-    console.log(`Successfully processed caption for message ${messageId}`);
+    // Commit transaction to ensure all changes are applied atomically
+    const { error: commitError } = await supabase.rpc('xdelo_commit_transaction_with_sync');
+    if (commitError) {
+      console.warn('Transaction commit warning (non-fatal):', commitError.message);
+    }
     
     // For media groups, force sync to ensure all messages get updated
     if (message.media_group_id) {
@@ -99,7 +131,8 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
               mediaGroupId: message.media_group_id,
               sourceMessageId: messageId,
               correlationId,
-              forceSync: true
+              forceSync: true,
+              syncEditHistory: true
             }
           }
         );
@@ -111,6 +144,27 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
         }
       } catch (syncError) {
         console.warn(`Media group sync error (non-fatal): ${syncError.message}`);
+        
+        // Try direct database function as backup
+        try {
+          const { data: backupSyncResult, error: backupSyncError } = await supabase.rpc(
+            'xdelo_sync_media_group_content',
+            {
+              p_source_message_id: messageId,
+              p_media_group_id: message.media_group_id,
+              p_correlation_id: correlationId,
+              p_force_sync: true
+            }
+          );
+          
+          if (backupSyncError) {
+            console.warn(`Backup sync also failed: ${backupSyncError.message}`);
+          } else {
+            console.log(`Backup sync successful: ${JSON.stringify(backupSyncResult)}`);
+          }
+        } catch (backupError) {
+          console.warn(`Backup sync exception: ${backupError.message}`);
+        }
       }
     }
     
@@ -163,6 +217,22 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
       },
       event_timestamp: new Date().toISOString()
     });
+    
+    // Try to queue message as a fallback for later processing
+    try {
+      console.log(`Queueing message ${messageId} for fallback processing`);
+      
+      await supabase.rpc('xdelo_queue_message_for_processing', {
+        p_message_id: messageId,
+        p_correlation_id: correlationId,
+        p_priority: 5, // Medium priority
+        p_retry_after: 60 // Try again after 60 seconds
+      });
+      
+      console.log(`Message queued for fallback processing`);
+    } catch (queueError) {
+      console.error(`Failed to queue for fallback: ${queueError.message}`);
+    }
     
     throw error;
   }

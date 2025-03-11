@@ -1,4 +1,4 @@
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
+export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'partial_success' | 'error';
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
 export interface FilterValues {
