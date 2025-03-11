@@ -1,15 +1,14 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button } from '@/components/ui/button';
 import { MessageList } from './MessageList';
 import { Spinner } from '@/components/ui/spinner';
 import { useMessageProcessing } from '@/hooks/useMessageProcessing';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, RefreshCw, Search } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ProcessingRepairButton } from '@/components/ProductGallery/ProcessingRepairButton';
-import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
 import { debounce } from 'lodash';
+import { MessageHeader } from './MessageHeader';
+import { MessageControlPanel } from './MessageControlPanel';
 
 export const MessageListContainer: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -143,65 +142,17 @@ export const MessageListContainer: React.FC = () => {
   return (
     <div className="flex flex-col gap-4">
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-xl font-semibold flex items-center justify-between">
-            <span>Messages Queue</span>
-            {lastRefresh && (
-              <span className="text-xs text-gray-500 font-normal">
-                Last updated: {lastRefresh.toLocaleTimeString()}
-              </span>
-            )}
-          </CardTitle>
-          <CardDescription>
-            Process and monitor message processing from Telegram
-          </CardDescription>
-        </CardHeader>
+        <MessageHeader lastRefresh={lastRefresh} />
         <CardContent>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-              <div className="relative w-full sm:w-64 flex-shrink-0">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search messages..."
-                  value={searchTerm}
-                  onChange={handleSearchChange}
-                  className="pl-9"
-                />
-              </div>
-              
-              <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={handleRefresh}
-                  disabled={isProcessingAny}
-                >
-                  <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  Refresh
-                </Button>
-                <Button 
-                  variant="secondary" 
-                  size="sm"
-                  onClick={handleQueueUnprocessed}
-                  disabled={isProcessingAny}
-                >
-                  {isProcessingAny && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Find Unprocessed
-                </Button>
-                <Button 
-                  variant="default" 
-                  size="sm"
-                  onClick={handleProcessQueue}
-                  disabled={isProcessingAny}
-                >
-                  {isProcessingAny && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Process Queue
-                </Button>
-              </div>
-            </div>
-            
-            <ProcessingRepairButton />
-          </div>
+          <MessageControlPanel 
+            searchTerm={searchTerm}
+            onSearchChange={handleSearchChange}
+            onRefresh={handleRefresh}
+            onQueueUnprocessed={handleQueueUnprocessed}
+            onProcessQueue={handleProcessQueue}
+            isProcessingAny={isProcessingAny}
+            isRefreshing={isRefreshing}
+          />
         </CardContent>
       </Card>
       
