@@ -13,7 +13,7 @@ export async function logSyncOperation(
   error?: string
 ) {
   try {
-    await supabase.rpc('xdelo_log_sync_operation', {
+    await supabase.rpc('xdelo_log_sync_operation_new', {
       operation_type: operation,
       status_value: success ? 'success' : 'error',
       details_json: details,
@@ -39,7 +39,7 @@ export async function logSyncOperationBatch(
   try {
     // Use individual calls to the RPC function since we can't batch them
     const promises = operations.map(op => 
-      supabase.rpc('xdelo_log_sync_operation', {
+      supabase.rpc('xdelo_log_sync_operation_new', {
         operation_type: op.operation,
         status_value: op.success ? 'success' : 'error',
         details_json: op.details,

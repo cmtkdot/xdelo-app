@@ -2,14 +2,23 @@
 -- Add the partial_success state to the processing_state enum if it doesn't exist
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'processing_state' AND typelem <> 0) THEN
-        CREATE TYPE processing_state AS ENUM ('initialized', 'pending', 'processing', 'completed', 'partial_success', 'error');
+    -- Check if the enum type exists
+    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'processing_state') THEN
+        -- Check if the value already exists in the enum
+        IF NOT EXISTS (
+            SELECT 1
+            FROM pg_enum
+            WHERE enumtypid = (SELECT oid FROM pg_type WHERE typname = 'processing_state')
+            AND enumlabel = 'partial_success'
+        ) THEN
+            -- Add the new value to the enum
+            ALTER TYPE processing_state ADD VALUE 'partial_success';
+        END IF;
     ELSE
-        BEGIN
-            ALTER TYPE processing_state ADD VALUE 'partial_success' IF NOT EXISTS;
-        EXCEPTION
-            WHEN duplicate_object THEN NULL;
-        END;
+        -- Create the enum if it doesn't exist
+        CREATE TYPE processing_state AS ENUM (
+            'initialized', 'pending', 'processing', 'completed', 'partial_success', 'error'
+        );
     END IF;
 END$$;
 
