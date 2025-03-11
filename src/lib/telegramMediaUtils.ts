@@ -5,7 +5,12 @@ import { supabase } from '@/integrations/supabase/client';
  * Determines if a file extension is viewable in browser
  */
 export function xdelo_isViewableExtension(extension: string): boolean {
-  const viewableExtensions = ['jpeg', 'jpg', 'png', 'gif', 'webp', 'mp4', 'mov', 'webm', 'pdf'];
+  const viewableExtensions = [
+    'jpeg', 'jpg', 'png', 'gif', 'webp', 'svg',
+    'mp4', 'mov', 'webm',
+    'mp3', 'ogg', 'wav',
+    'pdf'
+  ];
   return viewableExtensions.includes(extension.toLowerCase());
 }
 
@@ -22,10 +27,30 @@ export function xdelo_getFileExtension(mediaType: string): string {
       return 'mp3';
     case 'voice':
       return 'ogg';
+    case 'sticker':
+      return 'webp';
+    case 'animation':
+      return 'mp4';
     case 'document':
     default:
       return 'bin';
   }
+}
+
+/**
+ * Helper function to validate and sanitize extensions
+ */
+export function xdelo_getSafeExtension(extension?: string, mediaType?: string): string {
+  if (!extension || extension === 'bin') {
+    return mediaType ? xdelo_getFileExtension(mediaType) : 'bin';
+  }
+  
+  // Only allow valid extensions (alphanumeric, 1-5 chars)
+  if (/^[a-z0-9]{1,5}$/i.test(extension)) {
+    return extension.toLowerCase();
+  }
+  
+  return mediaType ? xdelo_getFileExtension(mediaType) : 'bin';
 }
 
 /**
@@ -68,7 +93,7 @@ export async function xdelo_uploadTelegramMedia(
   explicitExtension?: string
 ): Promise<{publicUrl: string, storagePath: string, mimeType: string}> {
   // Get extension from explicit param or fallback to media type extension
-  const extension = explicitExtension || xdelo_getFileExtension(mediaType);
+  const extension = xdelo_getSafeExtension(explicitExtension, mediaType);
   console.log('📤 Uploading media to storage:', { fileUniqueId, mediaType, extension });
   
   // Call the media-management edge function to handle the upload

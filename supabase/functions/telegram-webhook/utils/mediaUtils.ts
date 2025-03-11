@@ -23,7 +23,10 @@ import { xdelo_logMediaRedownload } from '../../_shared/messageLogger.ts';
 // Re-export the primary functions with simpler names for the webhook context
 export const getMediaInfo = async (message: any) => {
   try {
-    return await xdelo_getMediaInfoFromTelegram(message);
+    const correlationId = crypto.randomUUID();
+    console.log(`Getting media info for message ${message.message_id} with correlation ID ${correlationId}`);
+    
+    return await xdelo_getMediaInfoFromTelegram(message, correlationId);
   } catch (error) {
     console.error('Error in getMediaInfo wrapper:', error);
     throw error;
@@ -44,6 +47,7 @@ export const redownloadMissingFile = async (message: any) => {
           redownload_completed_at: new Date().toISOString(),
           storage_path: result.storage_path,
           public_url: result.public_url,
+          mime_type: result.mime_type,
           error_message: null,
           redownload_attempts: (message.redownload_attempts || 0) + 1
         })
@@ -116,6 +120,20 @@ export const redownloadMissingFile = async (message: any) => {
 export const getMimeTypeFromExtension = (extension: string) => {
   const options = xdelo_getUploadOptions(extension);
   return options.contentType;
+};
+
+// Helper function to validate and sanitize extensions
+export const getSafeExtension = (extension?: string, mediaType?: string) => {
+  if (!extension || extension === 'bin') {
+    return mediaType ? xdelo_getFileExtension(mediaType) : 'bin';
+  }
+  
+  // Only allow valid extensions (alphanumeric, 1-5 chars)
+  if (/^[a-z0-9]{1,5}$/i.test(extension)) {
+    return extension.toLowerCase();
+  }
+  
+  return mediaType ? xdelo_getFileExtension(mediaType) : 'bin';
 };
 
 // Also re-export other utilities that might be used directly

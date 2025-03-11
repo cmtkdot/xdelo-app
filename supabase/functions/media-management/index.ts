@@ -18,6 +18,20 @@ function getMimeTypeFromExtension(extension: string): string {
   return options.contentType;
 }
 
+// Helper function to validate and sanitize extensions
+function getSafeExtension(extension?: string, mediaType?: string): string {
+  if (!extension || extension === 'bin') {
+    return mediaType ? xdelo_getFileExtension(mediaType) : 'bin';
+  }
+  
+  // Only allow valid extensions (alphanumeric, 1-5 chars)
+  if (/^[a-z0-9]{1,5}$/i.test(extension)) {
+    return extension.toLowerCase();
+  }
+  
+  return mediaType ? xdelo_getFileExtension(mediaType) : 'bin';
+}
+
 // Main function to serve the edge function
 serve(async (req) => {
   // Handle CORS preflight request
@@ -75,8 +89,8 @@ async function handleUpload(
   correlationId: string
 ): Promise<Response> {
   try {
-    // Determine extension
-    const extension = requestedExtension || xdelo_getFileExtension(mediaType);
+    // Determine extension and sanitize it
+    const extension = getSafeExtension(requestedExtension, mediaType);
     
     // Generate storage path using the shared utility
     const storagePath = xdelo_constructStoragePath(fileUniqueId, extension);
@@ -95,7 +109,7 @@ async function handleUpload(
     console.log(`Uploading to storage path: ${storagePath}`);
     
     // Use the shared upload utility to handle the upload with correct settings
-    const { success, publicUrl } = await xdelo_uploadMediaToStorage(
+    const { success, publicUrl, mimeType } = await xdelo_uploadMediaToStorage(
       mediaBlob,
       storagePath
     );
@@ -111,12 +125,10 @@ async function handleUpload(
       metadata: {
         file_unique_id: fileUniqueId,
         storage_path: storagePath,
-        extension
+        extension,
+        mime_type: mimeType
       }
     });
-
-    // Get MIME type from extension for client info
-    const mimeType = getMimeTypeFromExtension(extension);
     
     return new Response(
       JSON.stringify({ 

@@ -1,10 +1,9 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { 
   xdelo_isViewableMimeType, 
   xdelo_getUploadOptions,
-  xdelo_detectMimeType,
+  xdelo_getExtensionFromMedia,
   xdelo_validateStoragePath,
   xdelo_urlExists as fileExists,
   xdelo_redownloadMissingFile,
@@ -24,18 +23,24 @@ async function downloadFromMediaGroup(message: any): Promise<string | null> {
     console.log(`Searching media group ${message.media_group_id} for file ${message.file_unique_id}`);
 
     // Get standardized storage path first
-    const { data: storagePath, error: pathError } = await supabase.rpc(
-      'xdelo_standardize_storage_path',
-      {
-        p_file_unique_id: message.file_unique_id,
-        p_mime_type: message.mime_type
+    let extension = 'bin';
+    
+    // Try to get extension from storage path
+    if (message.storage_path) {
+      const parts = message.storage_path.split('.');
+      if (parts.length > 1) {
+        extension = parts.pop() || 'bin';
       }
-    );
-
-    if (pathError) {
-      console.error(`Error getting standardized path: ${pathError.message}`);
-      throw pathError;
+    } else if (message.mime_type) {
+      // Try to extract from MIME type
+      const parts = message.mime_type.split('/');
+      if (parts.length > 1 && parts[1] !== 'octet-stream') {
+        extension = parts[1];
+      }
     }
+    
+    // Construct standardized path
+    const storagePath = xdelo_constructStoragePath(message.file_unique_id, extension);
 
     // Find another message in the same media group with the same file_unique_id
     // that has a valid public_url
@@ -135,6 +140,7 @@ async function downloadFromTelegram(message: any): Promise<string | null> {
       .update({
         public_url: result.public_url,
         storage_path: result.storage_path,
+        mime_type: result.mime_type,
         needs_redownload: false,
         redownload_completed_at: new Date().toISOString(),
         redownload_attempts: (message.redownload_attempts || 0) + 1,

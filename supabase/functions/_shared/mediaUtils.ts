@@ -21,19 +21,31 @@ export function xdelo_getFileExtension(mediaType: string): string {
       return 'ogg';
     case 'animation':
       return 'mp4';
+    case 'sticker':
+      return 'webp'; // Default sticker format
     case 'document':
     default:
       return 'bin';
   }
 }
 
-// Extract file extension from Telegram media object
+// Extract file extension from Telegram media object with improved detection
 export function xdelo_getExtensionFromMedia(media: any): string {
   // Try to extract extension from mime_type if available
   if (media.document?.mime_type) {
     const parts = media.document.mime_type.split('/');
     if (parts.length === 2 && parts[1] !== 'octet-stream') {
       return parts[1];
+    }
+    // For documents, try to extract from file_name if available
+    if (media.document.file_name) {
+      const nameParts = media.document.file_name.split('.');
+      if (nameParts.length > 1) {
+        const ext = nameParts.pop()?.toLowerCase();
+        if (ext && ext.length > 0 && ext.length < 5) { // Reasonable extension length
+          return ext;
+        }
+      }
     }
   }
   if (media.video?.mime_type) {
@@ -54,6 +66,11 @@ export function xdelo_getExtensionFromMedia(media: any): string {
       return parts[1];
     }
   }
+  if (media.sticker) {
+    if (media.sticker.is_animated) return 'tgs';
+    if (media.sticker.is_video) return 'webm';
+    return 'webp';
+  }
   
   // Fallback to media type detection
   if (media.photo) return 'jpeg';
@@ -61,8 +78,6 @@ export function xdelo_getExtensionFromMedia(media: any): string {
   if (media.audio) return 'mp3';
   if (media.voice) return 'ogg';
   if (media.animation) return 'mp4';
-  if (media.sticker && media.sticker.is_animated) return 'tgs';
-  if (media.sticker) return 'webp';
   
   return 'bin';
 }
@@ -74,33 +89,69 @@ export function xdelo_constructStoragePath(fileUniqueId: string, extension: stri
 
 // Get upload options with explicit content type mapping
 export function xdelo_getUploadOptions(extension: string): any {
-  // Map common extensions to proper MIME types
+  // Expanded map of common extensions to proper MIME types
   const mimeMap: Record<string, string> = {
+    // Images
     'jpeg': 'image/jpeg',
     'jpg': 'image/jpeg',
     'png': 'image/png',
     'gif': 'image/gif',
     'webp': 'image/webp',
+    'svg': 'image/svg+xml',
+    'heic': 'image/heic',
+    
+    // Videos
     'mp4': 'video/mp4',
     'mov': 'video/quicktime',
     'webm': 'video/webm',
+    'mkv': 'video/x-matroska',
+    'avi': 'video/x-msvideo',
+    '3gp': 'video/3gpp',
+    
+    // Audio
     'mp3': 'audio/mpeg',
     'ogg': 'audio/ogg',
     'm4a': 'audio/mp4',
     'wav': 'audio/wav',
+    'flac': 'audio/flac',
+    'aac': 'audio/aac',
+    
+    // Documents
     'pdf': 'application/pdf',
     'doc': 'application/msword',
     'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'xls': 'application/vnd.ms-excel',
     'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'ppt': 'application/vnd.ms-powerpoint',
+    'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'txt': 'text/plain',
+    'rtf': 'application/rtf',
+    
+    // Archives
     'zip': 'application/zip',
-    'tgs': 'application/gzip',
+    'rar': 'application/x-rar-compressed',
+    '7z': 'application/x-7z-compressed',
+    'tar': 'application/x-tar',
+    'gz': 'application/gzip',
+    
+    // Telegram specific
+    'tgs': 'application/gzip', // Telegram animated stickers
   };
 
+  // Get proper content type or use a safe default with the extension
+  const contentType = mimeMap[extension.toLowerCase()] || `application/${extension}`;
+  
+  // Determine if this is a viewable media type
+  const isViewable = xdelo_isViewableExtension(extension);
+  
+  // Add caching headers for static content
+  const cacheControl = isViewable ? 'public, max-age=31536000' : 'no-cache';
+
   return {
-    contentType: mimeMap[extension.toLowerCase()] || `application/${extension}`,
+    contentType,
     contentDisposition: 'inline', // Always set to inline for better browser viewing
-    upsert: true // Always replace existing files
+    upsert: true, // Always replace existing files
+    cacheControl
   };
 }
 
@@ -108,10 +159,13 @@ export function xdelo_getUploadOptions(extension: string): any {
 export async function xdelo_uploadMediaToStorage(
   fileData: Blob,
   storagePath: string
-): Promise<{success: boolean, publicUrl?: string}> {
+): Promise<{success: boolean, publicUrl?: string, mimeType?: string}> {
   try {
+    // Extract extension from storage path
     const extension = storagePath.split('.').pop()?.toLowerCase() || 'bin';
     const uploadOptions = xdelo_getUploadOptions(extension);
+    
+    console.log(`Uploading file to ${storagePath} with content type: ${uploadOptions.contentType}`);
     
     const { error } = await supabase
       .storage
@@ -123,7 +177,11 @@ export async function xdelo_uploadMediaToStorage(
     // Generate public URL
     const publicUrl = getStoragePublicUrl(storagePath);
     
-    return { success: true, publicUrl };
+    return { 
+      success: true, 
+      publicUrl,
+      mimeType: uploadOptions.contentType
+    };
   } catch (error) {
     console.error('Error uploading to storage:', error);
     return { success: false };
@@ -207,7 +265,12 @@ export async function xdelo_repairContentDisposition(storagePath: string): Promi
 
 // Determine if an extension is viewable in browser
 export function xdelo_isViewableExtension(extension: string): boolean {
-  const viewableExtensions = ['jpeg', 'jpg', 'png', 'gif', 'webp', 'mp4', 'mov', 'webm', 'pdf'];
+  const viewableExtensions = [
+    'jpeg', 'jpg', 'png', 'gif', 'webp', 'svg',
+    'mp4', 'mov', 'webm',
+    'mp3', 'ogg', 'wav',
+    'pdf'
+  ];
   return viewableExtensions.includes(extension.toLowerCase());
 }
 
@@ -227,13 +290,19 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
   const photo = message.photo ? message.photo[message.photo.length - 1] : null;
   const video = message.video;
   const document = message.document;
+  const sticker = message.sticker;
+  const animation = message.animation;
+  const voice = message.voice;
+  const audio = message.audio;
   
-  const media = photo || video || document;
+  const media = photo || video || document || sticker || animation || voice || audio;
   if (!media) throw new Error('No media found in message');
 
-  // Extract file extension from media
-  const mediaObj = { photo, video, document };
+  // Extract file extension from media with improved detection
+  const mediaObj = { photo, video, document, sticker, animation, voice, audio };
   const extension = xdelo_getExtensionFromMedia(mediaObj);
+  
+  console.log(`Detected extension for media: ${extension}`);
   
   // Generate standardized storage path using just the extension
   const storagePath = xdelo_constructStoragePath(media.file_unique_id, extension);
@@ -262,10 +331,26 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
     
     const fileData = await fileDataResponse.blob();
 
+    // Extract actual extension from Telegram path if available
+    let finalExtension = extension;
+    if (fileInfo.result.file_path) {
+      const pathParts = fileInfo.result.file_path.split('.');
+      if (pathParts.length > 1) {
+        const telegramExt = pathParts.pop()?.toLowerCase();
+        if (telegramExt && telegramExt.length > 0 && telegramExt.length < 5) {
+          console.log(`Using extension from Telegram path: ${telegramExt}`);
+          finalExtension = telegramExt;
+        }
+      }
+    }
+    
+    // Re-compute storage path with possibly updated extension
+    const finalStoragePath = xdelo_constructStoragePath(media.file_unique_id, finalExtension);
+
     // Upload to Supabase Storage with proper content type
-    const { success, publicUrl } = await xdelo_uploadMediaToStorage(
+    const { success, publicUrl, mimeType } = await xdelo_uploadMediaToStorage(
       fileData,
-      storagePath
+      finalStoragePath
     );
 
     if (!success || !publicUrl) {
@@ -279,9 +364,11 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
       file_size: media.file_size,
       width: media.width,
       height: media.height,
-      duration: video?.duration,
-      storage_path: storagePath,
-      public_url: publicUrl
+      duration: video?.duration || animation?.duration || voice?.duration || audio?.duration,
+      storage_path: finalStoragePath,
+      public_url: publicUrl,
+      mime_type: mimeType,
+      extension: finalExtension
     };
   } catch (error) {
     console.error('Error downloading media from Telegram:', error);
@@ -293,11 +380,12 @@ export async function xdelo_getMediaInfoFromTelegram(message: any, correlationId
       file_size: media.file_size,
       width: media.width,
       height: media.height,
-      duration: video?.duration,
+      duration: video?.duration || animation?.duration || voice?.duration || audio?.duration,
       storage_path: storagePath,
       public_url: getStoragePublicUrl(storagePath),
       needs_redownload: true,
-      error: error.message
+      error: error.message,
+      extension
     };
   }
 }
@@ -333,14 +421,24 @@ export async function xdelo_redownloadMissingFile(message: any, correlationId: s
     
     const fileData = await fileDataResponse.blob();
     
-    // Extract file extension from storage path
-    const extension = message.storage_path.split('.').pop() || 'bin';
+    // Try to determine extension from Telegram file path
+    let extension = message.storage_path?.split('.').pop() || 'bin';
+    
+    if (fileInfo.result.file_path) {
+      const pathParts = fileInfo.result.file_path.split('.');
+      if (pathParts.length > 1) {
+        const telegramExt = pathParts.pop()?.toLowerCase();
+        if (telegramExt && telegramExt.length > 0 && telegramExt.length < 5) {
+          extension = telegramExt;
+        }
+      }
+    }
     
     // Generate standardized storage path
     const storagePath = xdelo_constructStoragePath(message.file_unique_id, extension);
 
     // Upload to storage with inline content disposition
-    const { success, publicUrl } = await xdelo_uploadMediaToStorage(
+    const { success, publicUrl, mimeType } = await xdelo_uploadMediaToStorage(
       fileData,
       storagePath
     );
@@ -356,7 +454,9 @@ export async function xdelo_redownloadMissingFile(message: any, correlationId: s
       file_unique_id: message.file_unique_id,
       storage_path: storagePath,
       public_url: publicUrl,
-      method: 'telegram_api'
+      method: 'telegram_api',
+      mime_type: mimeType,
+      extension
     };
   } catch (error) {
     console.error('Failed to redownload file:', error);
@@ -373,8 +473,9 @@ export async function xdelo_redownloadMissingFile(message: any, correlationId: s
 export function xdelo_isViewableMimeType(mimeType: string): boolean {
   if (!mimeType) return false;
   const viewableMimeTypes = [
-    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
     'video/mp4', 'video/quicktime', 'video/webm',
+    'audio/mpeg', 'audio/ogg', 'audio/wav',
     'application/pdf'
   ];
   return viewableMimeTypes.includes(mimeType);
