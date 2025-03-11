@@ -1,6 +1,6 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'partial_success' | 'error' | 'no_caption';
+export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
 // Types for analyzed content
 export interface AnalyzedContent {
   product_name?: string;

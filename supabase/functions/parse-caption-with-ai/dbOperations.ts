@@ -1,4 +1,3 @@
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { ParsedContent } from '../_shared/captionParser.ts';
 
@@ -74,10 +73,8 @@ export async function updateMessageWithAnalysis(
       });
     }
     
-    // Determine processing state based on partial success flag
-    const processingState = parsedContent.parsing_metadata.partial_success 
-      ? 'partial_success' 
-      : 'completed';
+    // Always use 'completed' as the processing state, regardless of partial success flag
+    const processingState = 'completed';
     
     // Update message with analyzed content using direct update
     const { error: updateError } = await supabaseClient

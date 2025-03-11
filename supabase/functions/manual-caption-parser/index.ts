@@ -46,6 +46,7 @@ serve(async (req) => {
     const parsedContent = parseCaption(caption);
     
     // Update the message with the parsed content
+    // Always use 'completed' for the processing state
     const { error: updateError } = await supabase
       .from("messages")
       .update({
@@ -136,6 +137,7 @@ async function syncMediaGroup(
     }
 
     // Update all other messages in the group with the same analyzed content
+    // Always use 'completed' for the processing state
     const { error: updateError } = await supabase
       .from("messages")
       .update({
