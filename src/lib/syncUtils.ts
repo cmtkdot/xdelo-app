@@ -13,7 +13,7 @@ export async function logSyncOperation(
   error?: string
 ) {
   try {
-    // Insert directly to the sync_logs table instead of using RPC function
+    // Insert directly to the gl_sync_logs table instead of using RPC function
     await supabase.from('gl_sync_logs').insert({
       operation: operation,
       status: success ? 'success' : 'error',

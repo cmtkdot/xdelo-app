@@ -3287,6 +3287,16 @@ export type Database = {
         }
         Returns: boolean
       }
+      xdelo_find_broken_media_groups: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          media_group_id: string
+          source_message_id: string
+          total_count: number
+          pending_count: number
+          analyzed_count: number
+        }[]
+      }
       xdelo_find_caption_message: {
         Args: {
           p_media_group_id: string
@@ -3425,6 +3435,15 @@ export type Database = {
           p_correlation_id?: string
           p_user_id?: string
           p_error_message?: string
+        }
+        Returns: undefined
+      }
+      xdelo_log_sync_operation: {
+        Args: {
+          p_operation: string
+          p_details: Json
+          p_success: boolean
+          p_error?: string
         }
         Returns: undefined
       }

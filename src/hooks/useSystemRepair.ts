@@ -3,6 +3,16 @@ import { useState, useCallback } from 'react';
 import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
 
+// Define a type for the repair results
+interface RepairResult {
+  results?: {
+    stuck_reset?: number;
+    media_groups_fixed?: number;
+  };
+  success?: boolean;
+  message?: string;
+}
+
 /**
  * Custom hook for repairing the system
  */
@@ -34,7 +44,7 @@ export function useSystemRepair() {
       const mediaGroupsFixed = data?.results?.media_groups_fixed || 0;
       
       toast.success(`System repair completed: Reset ${resetCount} stuck messages and fixed ${mediaGroupsFixed} media groups`);
-      return data;
+      return data as RepairResult;
     } catch (error) {
       console.error('Failed to repair processing system:', error);
       toast.error('Failed to repair processing system');
