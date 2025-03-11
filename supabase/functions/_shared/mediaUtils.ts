@@ -1,4 +1,3 @@
-
 // @ts-ignore - Allow Deno global
 declare const Deno: any;
 
