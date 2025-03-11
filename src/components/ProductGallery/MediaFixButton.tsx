@@ -12,16 +12,20 @@ interface MediaFixButtonProps {
 
 export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) {
   const { fixContentDisposition, fixMimeTypes, recoverFileMetadata, isProcessing } = useMediaReprocessing();
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { toast } = useToast();
 
   const handleFixMediaDisplay = async () => {
+    if (!messageIds?.length) {
+      toast({
+        title: "Error",
+        description: "No messages selected for fixing",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       await fixContentDisposition(messageIds);
-      toast({
-        title: "Success",
-        description: "Started fixing media files to display inline. This will be applied to new files and redownloaded files."
-      });
       onComplete?.();
     } catch (error) {
       console.error("Failed to fix media display:", error);
@@ -34,12 +38,17 @@ export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) 
   };
 
   const handleFixMimeTypes = async () => {
-    try {
-      await fixMimeTypes();
+    if (!messageIds?.length) {
       toast({
-        title: "Success",
-        description: "Fixed MIME types for media files with missing or incorrect types."
+        title: "Error",
+        description: "No messages selected for fixing",
+        variant: "destructive"
       });
+      return;
+    }
+
+    try {
+      await fixMimeTypes(messageIds);
       onComplete?.();
     } catch (error) {
       console.error("Failed to fix MIME types:", error);
@@ -52,21 +61,17 @@ export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) 
   };
 
   const handleRecoverMetadata = async () => {
-    try {
-      if (!messageIds || messageIds.length === 0) {
-        toast({
-          title: "Error",
-          description: "No message IDs provided for metadata recovery.",
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      await recoverFileMetadata(messageIds);
+    if (!messageIds?.length) {
       toast({
-        title: "Success",
-        description: `Recovered metadata for ${messageIds.length} files.`
+        title: "Error",
+        description: "No messages selected for metadata recovery",
+        variant: "destructive"
       });
+      return;
+    }
+
+    try {
+      await recoverFileMetadata(messageIds);
       onComplete?.();
     } catch (error) {
       console.error("Failed to recover metadata:", error);
@@ -91,19 +96,6 @@ export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) 
         {isProcessing ? "Fixing Media..." : "Fix Media Display"}
       </Button>
       
-      {messageIds && messageIds.length > 0 && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRecoverMetadata}
-          disabled={isProcessing}
-          title="Recover missing metadata for selected files"
-        >
-          <FileUp className="w-4 h-4 mr-2" />
-          Recover Metadata
-        </Button>
-      )}
-      
       <Button
         variant="outline"
         size="sm"
@@ -113,6 +105,17 @@ export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) 
       >
         <FileDown className="w-4 h-4 mr-2" />
         Fix MIME Types
+      </Button>
+      
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleRecoverMetadata}
+        disabled={isProcessing}
+        title="Recover missing metadata for files"
+      >
+        <FileUp className="w-4 h-4 mr-2" />
+        Recover Metadata
       </Button>
     </div>
   );

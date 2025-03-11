@@ -2,66 +2,60 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
 // Initialize Supabase client (will use env vars from edge function context)
 const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  Deno.env.get('SUPABASE_URL') || '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 );
 
 // Helper to determine if the MIME type is viewable in browser
 export function xdelo_isViewableMimeType(mimeType: string): boolean {
-  // Enhanced to include more viewable types
-  return /^(image\/|video\/|text\/|application\/pdf)/.test(mimeType);
+  if (!mimeType) return false;
+  const viewableTypes = [
+    'image/',
+    'video/',
+    'audio/',
+    'text/',
+    'application/pdf'
+  ];
+  return viewableTypes.some(type => mimeType.startsWith(type));
 }
 
 // Get default MIME type based on media type
 export function xdelo_getDefaultMimeType(media: any): string {
+  if (!media) return 'application/octet-stream';
+  
   if (media.photo) return 'image/jpeg';
   if (media.video) return 'video/mp4';
   if (media.audio) return 'audio/mpeg';
   if (media.voice) return 'audio/ogg';
   if (media.animation) return 'video/mp4';
-  if (media.sticker && media.sticker.is_animated) return 'application/x-tgsticker';
+  if (media.sticker?.is_animated) return 'application/x-tgsticker';
   if (media.sticker) return 'image/webp';
+  if (media.document?.mime_type) return media.document.mime_type;
+  
   return 'application/octet-stream';
 }
 
 // Detect MIME type from Telegram media object with improved accuracy
 export function xdelo_detectMimeType(media: any): string {
-  // First check if we have specific media types
-  if (media.photo) return 'image/jpeg'; // Always use JPEG for photos
+  if (!media) return 'application/octet-stream';
   
-  // For videos, prioritize MP4 or fallback to provided mime_type
-  if (media.video) {
-    return media.video.mime_type && media.video.mime_type.startsWith('video/') 
-      ? media.video.mime_type 
-      : 'video/mp4';
-  }
-  
-  // For audio, use specific formats
-  if (media.audio) {
-    return media.audio.mime_type && media.audio.mime_type.startsWith('audio/') 
-      ? media.audio.mime_type 
-      : 'audio/mpeg';
-  }
-  
-  if (media.voice) {
-    return media.voice.mime_type && media.voice.mime_type.startsWith('audio/') 
-      ? media.voice.mime_type 
-      : 'audio/ogg';
-  }
-  
-  // For documents, check mime_type
-  if (media.document && media.document.mime_type) {
+  // First check for explicit mime_type in document
+  if (media.document?.mime_type) {
     return media.document.mime_type;
   }
   
-  // Stickers and other special types
-  if (media.sticker) {
-    return media.sticker.is_animated ? 'application/x-tgsticker' : 'image/webp';
-  }
-  
+  // Then check specific media types
+  if (media.photo) return 'image/jpeg';
+  if (media.video?.mime_type) return media.video.mime_type;
+  if (media.video) return 'video/mp4';
+  if (media.audio?.mime_type) return media.audio.mime_type;
+  if (media.audio) return 'audio/mpeg';
+  if (media.voice?.mime_type) return media.voice.mime_type;
+  if (media.voice) return 'audio/ogg';
   if (media.animation) return 'video/mp4';
+  if (media.sticker?.is_animated) return 'application/x-tgsticker';
+  if (media.sticker) return 'image/webp';
   
-  // Fallback to octet-stream for unknown types
   return 'application/octet-stream';
 }
 
