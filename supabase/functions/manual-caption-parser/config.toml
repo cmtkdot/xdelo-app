@@ -2,6 +2,7 @@
 project_id = "xjhhehxcxkiumnwbirel"
 template = "typescript"
 memory = 1024
+verify_jwt = false
 entrypoint = "/index.ts"
 
 # Trigger whenever a message with caption is inserted or updated

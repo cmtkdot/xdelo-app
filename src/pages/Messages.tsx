@@ -1,7 +1,7 @@
 
 import React from 'react';
+import { MessageListContainer } from '../components/Messages/MessageListContainer';
 import { Helmet } from 'react-helmet';
-import MessageListContainer from '../components/Messages/MessageListContainer';
 
 export default function MessagesPage() {
   return (
@@ -18,4 +18,4 @@ export default function MessagesPage() {
       </div>
     </div>
   );
-};
+}

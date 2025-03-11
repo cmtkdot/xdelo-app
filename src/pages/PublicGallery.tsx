@@ -10,6 +10,7 @@ import ProductFilters from "@/components/ProductGallery/ProductFilters";
 import { ProductPagination } from "@/components/ProductGallery/ProductPagination";
 import { parseISO, isWithinInterval } from "date-fns";
 import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
+import { ProcessingRepairButton } from "@/components/ProductGallery/ProcessingRepairButton";
 import { MediaFixButton } from "@/components/ProductGallery/MediaFixButton";
 
 const ITEMS_PER_PAGE = 12;
@@ -205,6 +206,7 @@ const PublicGallery = () => {
       });
     }
     
+    // Filter out untitled products if showUntitled is false
     if (!filters.showUntitled) {
       filtered = filtered.filter(group => {
         const mainMedia = group.find(m => m.caption) || group[0];
@@ -267,6 +269,7 @@ const PublicGallery = () => {
         <>
           {user && (
             <div className="flex space-x-4">
+              <ProcessingRepairButton />
               <MediaFixButton />
             </div>
           )}

@@ -1,42 +1,124 @@
 
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Wrench } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { useMediaReprocessing } from "@/hooks/useMediaReprocessing";
+import { Wrench } from "lucide-react";
+import { useToast } from "@/hooks/useToast";
 
-export interface MediaFixButtonProps {
-  storagePath: string;
-  onFix: () => Promise<void>;
-  isRepairing?: boolean;
-  messageId?: string;
-  // Add support for multiple message IDs
+interface MediaFixButtonProps {
   messageIds?: string[];
   onComplete?: () => void;
 }
 
-export const MediaFixButton: React.FC<MediaFixButtonProps> = ({ 
-  storagePath, 
-  onFix, 
-  isRepairing = false,
-  messageId,
-  messageIds,
-  onComplete
-}) => {
-  if (!storagePath) return null;
+export function MediaFixButton({ messageIds, onComplete }: MediaFixButtonProps) {
+  const { fixContentDisposition, repairStoragePaths, redownloadFromMediaGroup, isProcessing } = useMediaReprocessing();
+  const { toast } = useToast();
+
+  const handleFixMediaDisplay = async () => {
+    try {
+      await fixContentDisposition(messageIds);
+      toast({
+        title: "Success",
+        description: messageIds ? 
+          "Fixed content disposition for selected media." : 
+          "Started fixing all media files to display inline."
+      });
+      if (onComplete) onComplete();
+    } catch (error) {
+      console.error("Failed to fix media display:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fix media display. See console for details.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleRepairStoragePaths = async () => {
+    try {
+      await repairStoragePaths(messageIds);
+      toast({
+        title: "Success",
+        description: messageIds ? 
+          "Repaired storage paths for selected media." : 
+          "Repaired storage paths for all media."
+      });
+      if (onComplete) onComplete();
+    } catch (error) {
+      console.error("Failed to repair storage paths:", error);
+      toast({
+        title: "Error",
+        description: "Failed to repair storage paths. See console for details.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleRedownloadFromGroup = async () => {
+    if (!messageIds || messageIds.length === 0) {
+      toast({
+        title: "Warning",
+        description: "No messages selected for redownload",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Invoke the redownload-from-media-group function for each selected message
+      const promises = messageIds.map(messageId => 
+        redownloadFromMediaGroup(messageId)
+      );
+
+      await Promise.all(promises);
+      
+      toast({
+        title: "Success",
+        description: "Started redownloading selected media from their groups."
+      });
+      if (onComplete) onComplete();
+    } catch (error) {
+      console.error("Failed to redownload media:", error);
+      toast({
+        title: "Error",
+        description: "Failed to redownload media. See console for details.",
+        variant: "destructive"
+      });
+    }
+  };
 
   return (
-    <Button
-      size="sm"
-      variant="outline"
-      className="bg-white/70 hover:bg-white dark:bg-black/70 dark:hover:bg-black rounded-full h-8 w-8 p-0"
-      onClick={async () => {
-        await onFix();
-        if (onComplete) onComplete();
-      }}
-      disabled={isRepairing}
-      title="Fix media content type"
-      data-message-id={messageId}
-    >
-      <Wrench className="h-4 w-4" />
-    </Button>
+    <div className="flex space-x-2">
+      <Button 
+        variant="outline" 
+        size="sm"
+        onClick={handleFixMediaDisplay}
+        disabled={isProcessing}
+      >
+        <Wrench className="w-4 h-4 mr-2" />
+        {isProcessing ? "Fixing..." : "Fix Display"}
+      </Button>
+      
+      <Button 
+        variant="outline" 
+        size="sm"
+        onClick={handleRepairStoragePaths}
+        disabled={isProcessing}
+      >
+        <Wrench className="w-4 h-4 mr-2" />
+        {isProcessing ? "Repairing..." : "Fix Storage Paths"}
+      </Button>
+      
+      {messageIds && messageIds.length > 0 && (
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={handleRedownloadFromGroup}
+          disabled={isProcessing}
+        >
+          <Wrench className="w-4 h-4 mr-2" />
+          {isProcessing ? "Redownloading..." : "Redownload Files"}
+        </Button>
+      )}
+    </div>
   );
-};
+}

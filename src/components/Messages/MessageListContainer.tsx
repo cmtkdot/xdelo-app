@@ -1,80 +1,100 @@
 
 import React, { useState } from 'react';
-import useRealTimeMessages from '@/hooks/useRealTimeMessages';
-import MessageList from './MessageList';
-import { supabase } from '@/integrations/supabase/client';
+import { MessageList } from './MessageList';
+import { Card, CardContent } from '@/components/ui/card';
+import { MessageHeader } from './MessageHeader';
+import { MessageControlPanel } from './MessageControlPanel';
+import { MessagesFilter, MessageFilterValues } from './MessagesFilter';
+import { useRealTimeMessages } from '@/hooks/useRealTimeMessages';
+import { useMessageQueue } from '@/hooks/useMessageQueue';
 import { useToast } from '@/hooks/useToast';
 
-const MessageListContainer: React.FC = () => {
+export const MessageListContainer: React.FC = () => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState<MessageFilterValues>({
+    processingState: undefined,
+    sortBy: 'updated_at',
+    sortOrder: 'desc',
+    showForwarded: false,
+    showEdited: false
+  });
+  const [showFilters, setShowFilters] = useState(false);
   const { toast } = useToast();
-  const { 
-    messages, 
-    isLoading, 
-    processAllLoading,
-    retryProcessing,
-    refreshMessages
-  } = useRealTimeMessages({});
   
-  const [isFixingMedia, setIsFixingMedia] = useState<Record<string, boolean>>({});
-
-  const handleRetryProcessing = async (messageId: string) => {
-    await retryProcessing(messageId);
-    refreshMessages();
+  const { 
+    messages,
+    isLoading,
+    isRefreshing,
+    lastRefresh,
+    handleRefresh
+  } = useRealTimeMessages({ 
+    filter: searchTerm,
+    processingState: filters.processingState,
+    sortBy: filters.sortBy,
+    sortOrder: filters.sortOrder,
+    showForwarded: filters.showForwarded,
+    showEdited: filters.showEdited
+  });
+  
+  const { 
+    processMessageById,
+    isProcessing 
+  } = useMessageQueue();
+  
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
   };
 
-  const handleFixMedia = async (messageId: string, storagePath: string) => {
-    if (!storagePath) {
-      toast({
-        title: 'Error',
-        description: 'Missing storage path for media',
-        variant: 'destructive'
-      });
-      return;
-    }
-    
-    setIsFixingMedia(prev => ({ ...prev, [messageId]: true }));
-    
+  const handleFilterChange = (newFilters: MessageFilterValues) => {
+    setFilters(newFilters);
+  };
+
+  const handleToggleFilters = () => {
+    setShowFilters(!showFilters);
+  };
+
+  const handleRetryProcessing = async (messageId) => {
     try {
-      const { error } = await supabase.functions.invoke('media-management', {
-        body: { 
-          action: 'repair_content_disposition', 
-          storagePath,
-          messageId
-        }
-      });
-      
-      if (error) throw error;
-      
-      toast({
-        title: 'Success',
-        description: 'Media content type fixed successfully'
-      });
-      
-      // Refresh the messages to show updated public URLs
-      await refreshMessages();
+      await processMessageById(messageId);
+      handleRefresh();
     } catch (error) {
-      console.error('Error fixing media content type:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fix media content type',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsFixingMedia(prev => ({ ...prev, [messageId]: false }));
+      console.error('Error retrying message processing:', error);
     }
   };
+  
+  const isProcessingAny = isProcessing || isRefreshing;
 
   return (
-    <div>
+    <div className="flex flex-col gap-4">
+      <Card>
+        <MessageHeader lastRefresh={lastRefresh} />
+        <CardContent>
+          <MessageControlPanel 
+            searchTerm={searchTerm}
+            onSearchChange={handleSearchChange}
+            onRefresh={handleRefresh}
+            isRefreshing={isRefreshing}
+            onToggleFilters={handleToggleFilters}
+            showFilters={showFilters}
+          />
+          
+          {showFilters && (
+            <div className="mt-4 pt-4 border-t">
+              <MessagesFilter 
+                filters={filters}
+                onFilterChange={handleFilterChange}
+              />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
       <MessageList 
         messages={messages}
         isLoading={isLoading}
         onRetryProcessing={handleRetryProcessing}
-        onFixMedia={handleFixMedia}
-        processAllLoading={processAllLoading}
+        processAllLoading={isProcessingAny}
       />
     </div>
   );
 };
-
-export default MessageListContainer;

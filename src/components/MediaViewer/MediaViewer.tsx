@@ -6,80 +6,21 @@ import { ImageSwiper } from "@/components/ui/image-swiper";
 import { ChevronLeft, ChevronRight, Tag, Package, Calendar, Settings } from "lucide-react";
 import { format } from 'date-fns';
 import { cn } from '@/lib/generalUtils';
-import { messageToMediaItem, MediaViewerProps } from './types';
+import { messageToMediaItem } from './types';
 import { MediaFixButton } from './MediaFixButton';
 
-export const MediaViewer: React.FC<MediaViewerProps> = (props) => {
-  if (props.publicUrl && props.mimeType) {
-    return renderInlineMedia(props);
-  }
-  
-  return renderDialogViewer(props);
-};
+interface MediaViewerProps {
+  isOpen: boolean;
+  onClose: () => void;
+  currentGroup: Message[];
+  onPrevious?: () => void;
+  onNext?: () => void;
+  hasPrevious?: boolean;
+  hasNext?: boolean;
+  editMode?: boolean;
+}
 
-const renderInlineMedia = ({ 
-  publicUrl, 
-  mimeType, 
-  caption, 
-  className 
-}: MediaViewerProps) => {
-  if (!publicUrl) return null;
-  
-  const isImage = mimeType?.startsWith('image/');
-  const isVideo = mimeType?.startsWith('video/');
-  const isAudio = mimeType?.startsWith('audio/');
-  
-  if (isImage) {
-    return (
-      <div className={className}>
-        <img 
-          src={publicUrl} 
-          alt={caption || 'Media content'} 
-          className="w-full h-full object-contain rounded-md" 
-        />
-        {caption && <p className="mt-2 text-sm text-muted-foreground">{caption}</p>}
-      </div>
-    );
-  } else if (isVideo) {
-    return (
-      <div className={className}>
-        <video 
-          src={publicUrl} 
-          controls 
-          className="w-full h-full object-contain rounded-md"
-        />
-        {caption && <p className="mt-2 text-sm text-muted-foreground">{caption}</p>}
-      </div>
-    );
-  } else if (isAudio) {
-    return (
-      <div className={className}>
-        <audio 
-          src={publicUrl} 
-          controls 
-          className="w-full rounded-md"
-        />
-        {caption && <p className="mt-2 text-sm text-muted-foreground">{caption}</p>}
-      </div>
-    );
-  } else {
-    return (
-      <div className={className}>
-        <a 
-          href={publicUrl} 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="flex items-center justify-center p-4 border border-dashed rounded-md hover:bg-muted"
-        >
-          Open attachment
-        </a>
-        {caption && <p className="mt-2 text-sm text-muted-foreground">{caption}</p>}
-      </div>
-    );
-  }
-};
-
-const renderDialogViewer = ({
+export const MediaViewer = ({
   isOpen,
   onClose,
   currentGroup,
@@ -93,13 +34,6 @@ const renderDialogViewer = ({
 
   const mainMedia = currentGroup?.find(media => media?.is_original_caption) || currentGroup?.[0];
   const analyzedContent = mainMedia?.analyzed_content;
-
-  if (!isOpen || !currentGroup || currentGroup.length === 0 || !onClose) {
-    return null;
-  }
-
-  const mediaItems = currentGroup.map(message => messageToMediaItem(message));
-  const messageIds = currentGroup.map(message => message.id);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
@@ -126,26 +60,14 @@ const renderDialogViewer = ({
     setShowTools(false);
   };
 
-  const MediaFixButtonWrapper = () => {
-    if (!messageIds || messageIds.length === 0) return null;
-    
-    const storagePath = mainMedia?.storage_path || '';
-    
-    return (
-      <MediaFixButton 
-        storagePath={storagePath} 
-        messageId={messageIds[0]} 
-        onFix={async () => {
-          console.log("Fixing media for messages:", messageIds);
-          return Promise.resolve();
-        }}
-        onComplete={handleToolsComplete}
-      />
-    );
-  };
+  if (!currentGroup || currentGroup.length === 0) {
+    return null;
+  }
 
-  return (
-    <Dialog open={isOpen} onOpenChange={() => onClose()}>
+  const mediaItems = currentGroup.map(message => messageToMediaItem(message));
+  const messageIds = currentGroup.map(message => message.id);
+
+  return <Dialog open={isOpen} onOpenChange={() => onClose()}>
       <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] h-auto p-0 overflow-y-auto">
         <DialogTitle className="sr-only">Media Viewer</DialogTitle>
         
@@ -163,20 +85,20 @@ const renderDialogViewer = ({
                 </Button>
               </div>
               
+              {/* Media tools toggle button */}
               <Button variant="outline" size="icon" onClick={() => setShowTools(!showTools)} className="absolute top-4 right-4 rounded-full bg-background/80 hover:bg-background/90 backdrop-blur">
                 <Settings className="h-4 w-4" />
               </Button>
             </div>
           </div>
           
-          {showTools && (
-            <div className="p-4 bg-muted/20 border-b">
+          {/* Media tools panel */}
+          {showTools && <div className="p-4 bg-muted/20 border-b">
               <div className="flex justify-between items-center">
                 <h3 className="text-sm font-medium">Media Tools</h3>
-                <MediaFixButtonWrapper />
+                <MediaFixButton messageIds={messageIds} onComplete={handleToolsComplete} />
               </div>
-            </div>
-          )}
+            </div>}
 
           <div className="p-6 space-y-4">
             {mainMedia?.caption && <div className="p-4 bg-secondary/5 rounded-lg mb-4">
@@ -257,7 +179,5 @@ const renderDialogViewer = ({
           </div>
         </div>
       </DialogContent>
-    </Dialog>
-  );
+    </Dialog>;
 };
-

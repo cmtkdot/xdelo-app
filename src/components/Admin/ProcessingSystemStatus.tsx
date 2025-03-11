@@ -1,146 +1,145 @@
 
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Spinner } from "@/components/ui/spinner";
-import { useProcessingSystem } from "@/hooks/useProcessingSystem";
-import { useEffect } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useProcessingSystemRepair } from '@/hooks/useProcessingSystemRepair';
+import { useToast } from '@/hooks/useToast';
+import { formatDistanceToNow } from 'date-fns';
 
 export function ProcessingSystemStatus() {
-  const { 
-    systemStatus, 
-    isLoading, 
-    isRepairing, 
-    getProcessingStats, 
-    repairProcessingSystem, 
-    repairStuckMessages 
-  } = useProcessingSystem();
+  const [stats, setStats] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const { repairProcessingSystem, getProcessingStats, isRepairing } = useProcessingSystemRepair();
+  const { toast } = useToast();
 
+  const loadStats = async () => {
+    try {
+      setIsLoading(true);
+      const stats = await getProcessingStats();
+      setStats(stats);
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load stats on mount
   useEffect(() => {
-    getProcessingStats();
-    const interval = setInterval(() => {
-      getProcessingStats();
-    }, 30000); // refresh every 30 seconds
-    
-    return () => clearInterval(interval);
-  }, [getProcessingStats]);
+    loadStats();
+  }, []);
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex justify-between items-center">
-          <span>Processing System Status</span>
-          {isLoading && <Spinner size="sm" />}
-        </CardTitle>
-        <CardDescription>
-          Overview of message processing system health
-        </CardDescription>
-      </CardHeader>
-      
-      <CardContent>
-        {!systemStatus && !isLoading ? (
-          <div className="text-center p-4 text-muted-foreground">
-            No status information available
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <StatusMetric 
-                label="Pending" 
-                value={systemStatus?.pending_messages || 0} 
-                variant={systemStatus?.pending_messages > 50 ? "warning" : "default"}
-              />
-              <StatusMetric 
-                label="Processing" 
-                value={systemStatus?.processing_messages || 0} 
-                variant={systemStatus?.processing_messages > 10 ? "warning" : "default"}
-              />
-              <StatusMetric 
-                label="Error" 
-                value={systemStatus?.error_messages || 0} 
-                variant={systemStatus?.error_messages > 0 ? "destructive" : "default"}
-              />
-              <StatusMetric 
-                label="Stalled" 
-                value={systemStatus?.stalled_messages || 0} 
-                variant={systemStatus?.stalled_messages > 0 ? "destructive" : "default"}
-              />
-            </div>
-            
-            <Separator />
-            
-            {systemStatus?.recent_errors && systemStatus.recent_errors.length > 0 && (
-              <div>
-                <h3 className="text-sm font-medium mb-2">Recent Errors</h3>
-                <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                  {systemStatus.recent_errors.map((error, i) => (
-                    <div key={i} className="text-sm p-2 bg-muted rounded-md">
-                      <div className="font-medium">{error.component}</div>
-                      <div className="text-destructive">{error.message}</div>
-                      <div className="text-xs text-muted-foreground">{new Date(error.timestamp).toLocaleString()}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </CardContent>
-      
-      <CardFooter className="flex justify-between">
-        <Button 
-          variant="outline" 
-          onClick={getProcessingStats}
-          disabled={isLoading}
-        >
-          Refresh
-        </Button>
-        
-        <div className="space-x-2">
-          <Button 
-            variant="outline" 
-            onClick={repairStuckMessages}
-            disabled={isLoading || isRepairing}
-          >
-            Process Pending
-          </Button>
-          
-          <Button 
-            variant="secondary" 
-            onClick={repairProcessingSystem}
-            disabled={isLoading || isRepairing}
-          >
-            {isRepairing ? <Spinner size="sm" className="mr-2" /> : null}
-            Repair System
-          </Button>
-        </div>
-      </CardFooter>
-    </Card>
-  );
-}
-
-interface StatusMetricProps {
-  label: string;
-  value: number;
-  variant?: "default" | "warning" | "destructive";
-}
-
-function StatusMetric({ label, value, variant = "default" }: StatusMetricProps) {
-  const getVariantClass = () => {
-    switch (variant) {
-      case "warning":
-        return "text-amber-600";
-      case "destructive":
-        return "text-destructive";
-      default:
-        return "";
+  const handleRepair = async () => {
+    try {
+      await repairProcessingSystem();
+      // Reload stats after repair
+      loadStats();
+    } catch (error) {
+      console.error('Repair error:', error);
     }
   };
 
   return (
-    <div className="p-3 bg-muted/50 rounded-md">
-      <div className="text-sm text-muted-foreground">{label}</div>
-      <div className={`text-2xl font-bold ${getVariantClass()}`}>{value}</div>
-    </div>
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>Processing System Status</CardTitle>
+        <CardDescription>
+          Monitor and repair message processing queue and system
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Tabs defaultValue="summary">
+          <TabsList className="mb-4">
+            <TabsTrigger value="summary">Summary</TabsTrigger>
+            <TabsTrigger value="stuck">Stuck Messages ({stats?.stuck_count || 0})</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="summary">
+            {isLoading ? (
+              <div className="flex justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <h3 className="font-medium text-orange-700">Stuck Messages</h3>
+                  <p className="text-2xl font-bold">{stats?.stuck_count || 0}</p>
+                  <p className="text-sm text-gray-500">In "processing" state</p>
+                </div>
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h3 className="font-medium text-blue-700">Pending Messages</h3>
+                  <p className="text-2xl font-bold">{stats?.pending_count || 0}</p>
+                  <p className="text-sm text-gray-500">Awaiting processing</p>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <h3 className="font-medium text-purple-700">Legacy Queue Entries</h3>
+                  <p className="text-2xl font-bold">{stats?.queue_count || 0}</p>
+                  <p className="text-sm text-gray-500">In old queue table</p>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+          
+          <TabsContent value="stuck">
+            {isLoading ? (
+              <div className="flex justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="px-4 py-2 text-left">Message ID</th>
+                      <th className="px-4 py-2 text-left">Telegram ID</th>
+                      <th className="px-4 py-2 text-left">Has Caption</th>
+                      <th className="px-4 py-2 text-left">Started At</th>
+                      <th className="px-4 py-2 text-left">Stuck For</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats?.stuck_messages && stats.stuck_messages.length > 0 ? (
+                      stats.stuck_messages.map((message: any) => (
+                        <tr key={message.id} className="border-t">
+                          <td className="px-4 py-2 font-mono text-xs">{message.id}</td>
+                          <td className="px-4 py-2">{message.telegram_message_id}</td>
+                          <td className="px-4 py-2">{message.caption ? "Yes" : "No"}</td>
+                          <td className="px-4 py-2">{new Date(message.processing_started_at).toLocaleString()}</td>
+                          <td className="px-4 py-2">
+                            {formatDistanceToNow(new Date(message.processing_started_at), { addSuffix: true })}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-2 text-center">
+                          No stuck messages found
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+      <CardFooter className="flex justify-between">
+        <Button variant="outline" onClick={loadStats} disabled={isLoading}>
+          Refresh Status
+        </Button>
+        <Button onClick={handleRepair} disabled={isRepairing}>
+          {isRepairing ? (
+            <>
+              <span className="animate-spin mr-2">⟳</span>
+              Repairing...
+            </>
+          ) : (
+            "Repair Processing System"
+          )}
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }

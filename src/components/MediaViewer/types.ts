@@ -18,21 +18,3 @@ export function messageToMediaItem(message: Message): MediaItem {
     analyzed_content: message.analyzed_content,
   };
 }
-
-export interface MediaViewerProps {
-  // Original props for dialog version
-  isOpen?: boolean;
-  onClose?: () => void;
-  currentGroup?: Message[];
-  onPrevious?: () => void;
-  onNext?: () => void;
-  hasPrevious?: boolean;
-  hasNext?: boolean;
-  editMode?: boolean;
-  
-  // Simple inline viewer props
-  publicUrl?: string;
-  mimeType?: string;
-  caption?: string;
-  className?: string;
-}

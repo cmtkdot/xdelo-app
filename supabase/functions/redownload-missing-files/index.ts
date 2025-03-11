@@ -1,16 +1,24 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { 
   xdelo_isViewableMimeType, 
   xdelo_getUploadOptions,
-  xdelo_getExtensionFromMedia,
-  xdelo_validateStoragePath,
-  xdelo_urlExists as fileExists,
-  xdelo_redownloadMissingFile,
-  xdelo_constructStoragePath
+  xdelo_detectMimeType,
+  xdelo_validateStoragePath 
 } from "../_shared/mediaUtils.ts";
 import { supabaseClient as supabase } from "../_shared/supabase.ts";
-import { getStoragePublicUrl, getTelegramApiUrl, getTelegramFileUrl } from "../_shared/urls.ts";
+
+// Function to validate if a file exists based on its public URL
+async function fileExists(publicURL: string): Promise<boolean> {
+  try {
+    const response = await fetch(publicURL, { method: 'HEAD' });
+    return response.status !== 404;
+  } catch (error) {
+    console.error('Error checking file existence:', error);
+    return false;
+  }
+}
 
 // Function to download file from another message in the same media group
 async function downloadFromMediaGroup(message: any): Promise<string | null> {
@@ -23,24 +31,18 @@ async function downloadFromMediaGroup(message: any): Promise<string | null> {
     console.log(`Searching media group ${message.media_group_id} for file ${message.file_unique_id}`);
 
     // Get standardized storage path first
-    let extension = 'bin';
-    
-    // Try to get extension from storage path
-    if (message.storage_path) {
-      const parts = message.storage_path.split('.');
-      if (parts.length > 1) {
-        extension = parts.pop() || 'bin';
+    const { data: storagePath, error: pathError } = await supabase.rpc(
+      'xdelo_standardize_storage_path',
+      {
+        p_file_unique_id: message.file_unique_id,
+        p_mime_type: message.mime_type
       }
-    } else if (message.mime_type) {
-      // Try to extract from MIME type
-      const parts = message.mime_type.split('/');
-      if (parts.length > 1 && parts[1] !== 'octet-stream') {
-        extension = parts[1];
-      }
+    );
+
+    if (pathError) {
+      console.error(`Error getting standardized path: ${pathError.message}`);
+      throw pathError;
     }
-    
-    // Construct standardized path
-    const storagePath = xdelo_constructStoragePath(message.file_unique_id, extension);
 
     // Find another message in the same media group with the same file_unique_id
     // that has a valid public_url
@@ -127,20 +129,68 @@ async function downloadFromMediaGroup(message: any): Promise<string | null> {
 // Function to download directly from Telegram API using bot token
 async function downloadFromTelegram(message: any): Promise<string | null> {
   try {
-    // Use the centralized utility for redownloading from Telegram
-    const result = await xdelo_redownloadMissingFile(message);
-    
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to redownload from Telegram');
+    const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+    if (!botToken) {
+      throw new Error('Telegram bot token not found in environment variables');
     }
+
+    if (!message.file_id) {
+      throw new Error('No file_id available for direct download');
+    }
+
+    // Get file path from Telegram
+    const getFileUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${message.file_id}`;
+    const getFileResponse = await fetch(getFileUrl);
+    const getFileData = await getFileResponse.json();
+
+    if (!getFileData.ok || !getFileData.result.file_path) {
+      throw new Error(`Failed to get file path: ${JSON.stringify(getFileData)}`);
+    }
+
+    // Download the file using the file path
+    const filePath = getFileData.result.file_path;
+    const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+    
+    const fileResponse = await fetch(downloadUrl);
+    if (!fileResponse.ok) {
+      throw new Error(`Failed to download file: ${fileResponse.statusText}`);
+    }
+
+    // Get file data as blob
+    const fileBlob = await fileResponse.blob();
+    
+    // Get standardized storage path
+    const { data: storagePath, error: pathError } = await supabase.rpc(
+      'xdelo_standardize_storage_path',
+      {
+        p_file_unique_id: message.file_unique_id,
+        p_mime_type: message.mime_type
+      }
+    );
+
+    if (pathError) {
+      throw new Error(`Failed to get standardized path: ${pathError.message}`);
+    }
+
+    // Upload to Supabase storage with proper content disposition
+    const uploadOptions = xdelo_getUploadOptions(message.mime_type);
+    const { error: uploadError } = await supabase.storage
+      .from('telegram-media')
+      .upload(storagePath, fileBlob, uploadOptions);
+
+    if (uploadError) {
+      throw new Error(`Failed to upload to storage: ${uploadError.message}`);
+    }
+
+    // Get public URL
+    const publicURL = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${storagePath}`;
 
     // Update message record
     await supabase
       .from('messages')
       .update({
-        public_url: result.public_url,
-        storage_path: result.storage_path,
-        mime_type: result.mime_type,
+        public_url: publicURL,
+        storage_path: storagePath,
         needs_redownload: false,
         redownload_completed_at: new Date().toISOString(),
         redownload_attempts: (message.redownload_attempts || 0) + 1,
@@ -149,7 +199,7 @@ async function downloadFromTelegram(message: any): Promise<string | null> {
       })
       .eq('id', message.id);
 
-    return result.public_url;
+    return publicURL;
   } catch (error) {
     console.error('Error downloading from Telegram:', error);
     throw error;
@@ -163,7 +213,7 @@ async function redownloadMissingFile(message: any) {
     throw new Error(`Missing file_unique_id for message ${message.id}.`);
   }
 
-  // Check if the file already exists (same behavior as before)
+  // Check if the file already exists
   if (message.public_url && await fileExists(message.public_url)) {
     console.log(`File already exists for message ${message.id}.`);
     return {
@@ -194,7 +244,7 @@ async function redownloadMissingFile(message: any) {
     }
   }
 
-  // If not found in media group, try direct Telegram download using shared utilities
+  // If not found in media group, try direct Telegram download
   try {
     console.log(`Attempting direct Telegram download for message ${message.id}`);
     const publicURL = await downloadFromTelegram(message);

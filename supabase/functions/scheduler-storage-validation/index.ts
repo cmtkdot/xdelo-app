@@ -1,10 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-import { 
-  xdelo_checkFileExistsInStorage,
-  xdelo_constructStoragePath 
-} from "../_shared/mediaUtils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -52,27 +48,24 @@ async function validateStorage(batchSize: number = 50): Promise<any> {
       details: []
     };
     
-    // Check each message's file directly in storage
+    // Check each message's file
     for (const message of messages || []) {
       results.checked++;
       
       // Skip messages without necessary data
-      if (!message.file_unique_id || !message.mime_type) {
-        console.log(`Skipping message ${message.id}: Missing file_unique_id or mime_type`);
+      if (!message.file_unique_id || !message.storage_path) {
+        console.log(`Skipping message ${message.id}: Missing file_unique_id or storage_path`);
         continue;
       }
       
       try {
-        // Generate standardized storage path
-        const storagePath = xdelo_constructStoragePath(message.file_unique_id, message.mime_type);
+        // Check if file exists in storage
+        const { data, error } = await supabase
+          .storage
+          .from('telegram-media')
+          .download(message.storage_path);
         
-        // Check if file exists directly in storage
-        const exists = await xdelo_checkFileExistsInStorage(
-          message.file_unique_id, 
-          message.mime_type
-        );
-        
-        if (exists) {
+        if (data && !error) {
           // File exists
           results.valid++;
           
@@ -81,28 +74,17 @@ async function validateStorage(batchSize: number = 50): Promise<any> {
             .from('storage_validations')
             .upsert({
               file_unique_id: message.file_unique_id,
-              storage_path: storagePath,
+              storage_path: message.storage_path,
               last_checked_at: new Date().toISOString(),
               is_valid: true,
               error_message: null
             }, { onConflict: 'file_unique_id' });
             
-          // If the storage_path is different from our standard path, update it
-          if (message.storage_path !== storagePath) {
-            await supabase
-              .from('messages')
-              .update({
-                storage_path: storagePath,
-                public_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${storagePath}`
-              })
-              .eq('id', message.id);
-          }
-            
           results.details.push({
             message_id: message.id,
             file_unique_id: message.file_unique_id,
             status: 'valid',
-            storage_path: storagePath
+            size: data.size
           });
         } else {
           // File doesn't exist
@@ -113,10 +95,10 @@ async function validateStorage(batchSize: number = 50): Promise<any> {
             .from('storage_validations')
             .upsert({
               file_unique_id: message.file_unique_id,
-              storage_path: storagePath,
+              storage_path: message.storage_path,
               last_checked_at: new Date().toISOString(),
               is_valid: false,
-              error_message: 'File not found in storage'
+              error_message: error?.message || 'File not found'
             }, { onConflict: 'file_unique_id' });
           
           // Flag for redownload
@@ -124,10 +106,8 @@ async function validateStorage(batchSize: number = 50): Promise<any> {
             .from('messages')
             .update({
               needs_redownload: true,
-              redownload_reason: 'File not found in scheduler validation',
-              redownload_flagged_at: new Date().toISOString(),
-              storage_path: storagePath, // Ensure standardized path for redownload
-              public_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${storagePath}`
+              redownload_reason: error?.message || 'File not found in scheduler validation',
+              redownload_flagged_at: new Date().toISOString()
             })
             .eq('id', message.id);
           
@@ -139,8 +119,7 @@ async function validateStorage(batchSize: number = 50): Promise<any> {
             message_id: message.id,
             file_unique_id: message.file_unique_id,
             status: 'invalid',
-            storage_path: storagePath,
-            error: 'File not found in storage',
+            error: error?.message || 'File not found',
             flagged: !flagError
           });
         }

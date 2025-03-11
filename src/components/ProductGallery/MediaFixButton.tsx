@@ -1,57 +1,39 @@
 
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/useToast';
-import { Loader2 } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { useMediaReprocessing } from "@/hooks/useMediaReprocessing";
+import { Wrench } from "lucide-react";
+import { useState } from "react";
+import { useToast } from "@/hooks/useToast";
 
 export function MediaFixButton() {
-  const [isLoading, setIsLoading] = useState(false);
+  const { fixContentDisposition, isProcessing } = useMediaReprocessing();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { toast } = useToast();
 
-  const handleFixMedia = async () => {
+  const handleFixMediaDisplay = async () => {
     try {
-      setIsLoading(true);
-      
-      // Call the repair storage paths function
-      const { data, error } = await supabase.functions.invoke('repair-storage-paths', {
-        body: { trigger_source: 'manual_ui', force_update: true }
-      });
-      
-      if (error) throw error;
-      
+      await fixContentDisposition();
       toast({
-        title: "Media Repair Started",
-        description: "Media repair process has been initiated successfully."
+        title: "Success",
+        description: "Started fixing media files to display inline. This will be applied to new files and redownloaded files."
       });
-      
-    } catch (error: any) {
-      console.error('Error initiating media repair:', error);
-      
-      toast({
-        title: "Repair Failed",
-        description: error.message || "Failed to start media repair process",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
+    } catch (error) {
+      console.error("Failed to fix media display:", error);
     }
   };
 
   return (
-    <Button 
-      variant="outline" 
-      onClick={handleFixMedia}
-      disabled={isLoading}
-    >
-      {isLoading ? (
-        <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Repairing...
-        </>
-      ) : (
-        'Fix Media Paths'
-      )}
-    </Button>
+    <div className="mb-4">
+      <Button 
+        variant="outline" 
+        size="sm"
+        onClick={handleFixMediaDisplay}
+        disabled={isProcessing}
+        title="Fix media files to display in the browser instead of downloading"
+      >
+        <Wrench className="w-4 h-4 mr-2" />
+        {isProcessing ? "Fixing Media..." : "Fix Media Display"}
+      </Button>
+    </div>
   );
 }

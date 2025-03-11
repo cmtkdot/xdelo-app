@@ -1,34 +1,38 @@
 
 import { useState } from 'react';
-import { useToast } from './useToast';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from './useToast';
 
-/**
- * Hook for repairing stuck messages in the processing system
- */
 export function useStuckMessageRepair() {
   const [isRepairing, setIsRepairing] = useState(false);
   const { toast } = useToast();
 
   /**
-   * Repairs stuck messages by resetting their processing state
+   * Resets and repairs messages stuck in processing state
    */
   const repairStuckMessages = async () => {
     try {
       setIsRepairing(true);
       
-      const { data, error } = await supabase.functions.invoke('parse-caption-with-ai', {
+      // Call the repair function through the unified endpoint
+      const { data, error } = await supabase.functions.invoke('media-management', {
         body: { 
-          operation: 'reset_stalled',
-          trigger_source: 'manual_ui'
+          action: 'repair-processing-flow',
+          limit: 50, 
+          options: {
+            repairEnums: true,
+            forceResetStalled: true
+          }
         }
       });
       
       if (error) throw error;
       
+      const results = data?.data?.results || {};
+      
       toast({
-        title: "Repair Completed",
-        description: "Stuck messages were successfully reset"
+        title: "Recovery Process Complete",
+        description: `Reset ${results.stuck_reset || 0} stalled messages and fixed ${results.media_groups_fixed || 0} media groups.`
       });
       
       return data;
@@ -41,7 +45,7 @@ export function useStuckMessageRepair() {
         variant: "destructive"
       });
       
-      return null;
+      throw error;
     } finally {
       setIsRepairing(false);
     }

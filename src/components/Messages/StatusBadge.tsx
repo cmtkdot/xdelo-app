@@ -1,24 +1,22 @@
 
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/generalUtils';
 
 interface StatusBadgeProps {
   status?: string;
-  className?: string;
 }
 
-export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className }) => {
+export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
   switch (status) {
     case 'completed':
-      return <Badge variant="success" className={cn("text-xs", className)}>Completed</Badge>;
+      return <Badge variant="success" className="text-xs">Completed</Badge>;
     case 'processing':
-      return <Badge variant="default" className={cn("text-xs", className)}>Processing</Badge>;
+      return <Badge variant="default" className="text-xs">Processing</Badge>;
     case 'error':
-      return <Badge variant="destructive" className={cn("text-xs", className)}>Error</Badge>;
+      return <Badge variant="destructive" className="text-xs">Error</Badge>;
     case 'pending':
-      return <Badge variant="warning" className={cn("text-xs bg-yellow-500", className)}>Pending</Badge>;
+      return <Badge variant="warning" className="text-xs bg-yellow-500">Pending</Badge>;
     default:
-      return <Badge variant="outline" className={cn("text-xs", className)}>Unknown</Badge>;
+      return <Badge variant="outline" className="text-xs">Unknown</Badge>;
   }
 };

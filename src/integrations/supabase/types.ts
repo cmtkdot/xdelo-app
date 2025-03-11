@@ -2145,12 +2145,7 @@ export type Database = {
           message_type: string | null
           metadata: Json | null
           new_state: Json | null
-          operation_type:
-            | Database["public"]["Enums"]["message_operation_type"]
-            | null
           previous_state: Json | null
-          source_message_id: string | null
-          target_message_id: string | null
           telegram_message_id: number | null
           user_id: string | null
         }
@@ -2165,12 +2160,7 @@ export type Database = {
           message_type?: string | null
           metadata?: Json | null
           new_state?: Json | null
-          operation_type?:
-            | Database["public"]["Enums"]["message_operation_type"]
-            | null
           previous_state?: Json | null
-          source_message_id?: string | null
-          target_message_id?: string | null
           telegram_message_id?: number | null
           user_id?: string | null
         }
@@ -2185,12 +2175,7 @@ export type Database = {
           message_type?: string | null
           metadata?: Json | null
           new_state?: Json | null
-          operation_type?:
-            | Database["public"]["Enums"]["message_operation_type"]
-            | null
           previous_state?: Json | null
-          source_message_id?: string | null
-          target_message_id?: string | null
           telegram_message_id?: number | null
           user_id?: string | null
         }
@@ -3174,20 +3159,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_log_message_operation: {
-        Args: {
-          p_operation_type: Database["public"]["Enums"]["message_operation_type"]
-          p_source_message_id: string
-          p_target_message_id?: string
-          p_correlation_id?: string
-          p_telegram_message_id?: number
-          p_chat_id?: number
-          p_metadata?: Json
-          p_user_id?: string
-          p_error_message?: string
-        }
-        Returns: string
-      }
       xdelo_log_sync_operation: {
         Args: {
           p_operation: string
@@ -3339,12 +3310,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      xdelo_validate_message_ids: {
-        Args: {
-          p_message_id: string
-        }
-        Returns: boolean
-      }
     }
     Enums: {
       audit_event_type:
@@ -3392,16 +3357,6 @@ export type Database = {
         | "edit_content_propagated"
         | "media_group_version_updated"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
-      message_operation_type:
-        | "message_create"
-        | "message_update"
-        | "message_delete"
-        | "message_forward"
-        | "message_edit"
-        | "media_redownload"
-        | "caption_change"
-        | "media_change"
-        | "group_sync"
       processing_state:
         | "initialized"
         | "pending"
