@@ -1,128 +1,132 @@
-import React from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
-import { AlertCircle, ArrowUpCircle, CheckCircle, Clock, RefreshCw } from 'lucide-react';
-import { useProcessingHealth } from '@/hooks/useProcessingHealth';
-import { useStuckMessageRepair } from '@/hooks/useStuckMessageRepair';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertTriangle, CheckCircle, Clock, Activity } from 'lucide-react';
+import { useToast } from '@/hooks/useToast';
+import { supabase } from '@/integrations/supabase/client';
 
 export function MessageHealth() {
-  const { processingStats, diagnoseProcessingHealth, isLoading, error } = useProcessingHealth();
-  const { repairStuckMessages, isRepairing } = useStuckMessageRepair();
-  
-  // No auto-fetch on initial load
-  
-  const handleRepair = async () => {
-    await repairStuckMessages();
-    // Refresh health metrics after repair
-    diagnoseProcessingHealth();
+  const [stats, setStats] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const fetchStats = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const { data, error } = await supabase.rpc('xdelo_get_message_health_stats');
+      
+      if (error) throw error;
+      
+      setStats(data);
+    } catch (err) {
+      console.error('Error fetching message health stats:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error occurred');
+      toast({
+        title: "Error loading message health",
+        description: err instanceof Error ? err.message : 'Unknown error occurred',
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
-  
-  return (
-    <Card className="bg-white dark:bg-gray-800">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-xl">Processing Health</CardTitle>
-          <div className="flex space-x-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => diagnoseProcessingHealth()}
-              disabled={isLoading}
-            >
-              {isLoading ? <Spinner size="sm" className="mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-              Refresh
-            </Button>
-            <Button 
-              variant="secondary" 
-              size="sm" 
-              onClick={handleRepair}
-              disabled={isRepairing || !processingStats?.media_group_stats?.stuck_in_processing}
-            >
-              {isRepairing ? <Spinner size="sm" className="mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-              Reset Stuck
+
+  useEffect(() => {
+    fetchStats();
+    
+    // Setup a refresh interval
+    const interval = setInterval(fetchStats, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  if (isLoading && !stats) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Message Processing Health</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center p-4">
+            <p>Loading statistics...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Message Processing Health</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center justify-center p-4 text-red-600">
+            <AlertTriangle size={24} className="mb-2" />
+            <p>Error loading statistics: {error}</p>
+            <Button onClick={fetchStats} variant="outline" className="mt-2">
+              Retry
             </Button>
           </div>
-        </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex justify-between items-center">
+          <span>Message Processing Health</span>
+          <Button onClick={fetchStats} variant="ghost" size="sm">
+            Refresh
+          </Button>
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>
-              {error}
-              <Button 
-                variant="link" 
-                className="p-0 h-auto text-xs ml-2" 
-                onClick={() => diagnoseProcessingHealth()}>
-                Try again
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard 
+            title="Completed"
+            value={stats?.completed_count || 0}
+            icon={<CheckCircle className="h-5 w-5 text-green-500" />}
+            description="Successfully processed"
+          />
+          <StatCard 
+            title="Pending"
+            value={stats?.pending_count || 0}
+            icon={<Clock className="h-5 w-5 text-amber-500" />}
+            description="Waiting for processing"
+          />
+          <StatCard 
+            title="Errors"
+            value={stats?.error_count || 0}
+            icon={<AlertTriangle className="h-5 w-5 text-red-500" />}
+            description="Failed processing"
+          />
+          <StatCard 
+            title="Processing"
+            value={stats?.processing_count || 0}
+            icon={<Activity className="h-5 w-5 text-blue-500" />}
+            description="Currently processing"
+          />
+        </div>
         
-        {isLoading ? (
-          <div className="flex justify-center p-4">
-            <Spinner size="lg" />
-          </div>
-        ) : !processingStats ? (
-          <div className="text-center py-4">
-            <p className="text-gray-500">No health stats available</p>
-            <Button 
-              variant="link" 
-              onClick={() => diagnoseProcessingHealth()}
-              className="mt-2">
-              Check health
-            </Button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <StatusGroup 
-              title="Message States" 
-              items={[
-                { label: 'Pending', value: processingStats.state_counts?.pending || 0, icon: <Clock className="w-4 h-4 text-amber-500" /> },
-                { label: 'Processing', value: processingStats.state_counts?.processing || 0, icon: <ArrowUpCircle className="w-4 h-4 text-blue-500" /> },
-                { label: 'Completed', value: processingStats.state_counts?.completed || 0, icon: <CheckCircle className="w-4 h-4 text-green-500" /> },
-                { label: 'Error', value: processingStats.state_counts?.error || 0, icon: <AlertCircle className="w-4 h-4 text-red-500" /> },
-              ]} 
-            />
-            
-            <StatusGroup 
-              title="Media Groups" 
-              items={[
-                { label: 'Unprocessed with Caption', value: processingStats.media_group_stats?.unprocessed_with_caption || 0 },
-                { label: 'Stuck in Processing', value: processingStats.media_group_stats?.stuck_in_processing || 0, alert: true },
-                { label: 'Orphaned Messages', value: processingStats.media_group_stats?.orphaned_media_group_messages || 0 },
-              ]} 
-            />
-            
-            <StatusGroup 
-              title="Processing Times" 
-              items={[
-                { 
-                  label: 'Avg Processing Time', 
-                  value: processingStats.timing_stats?.avg_processing_time_seconds ? 
-                    `${processingStats.timing_stats.avg_processing_time_seconds.toFixed(1)}s` : 'N/A' 
-                },
-                { 
-                  label: 'Oldest Unprocessed', 
-                  value: processingStats.timing_stats?.oldest_unprocessed_caption_age_hours ? 
-                    `${processingStats.timing_stats.oldest_unprocessed_caption_age_hours.toFixed(1)}h` : 'N/A',
-                  alert: processingStats.timing_stats?.oldest_unprocessed_caption_age_hours ? 
-                    processingStats.timing_stats.oldest_unprocessed_caption_age_hours > 1 : false
-                },
-                { 
-                  label: 'Oldest Stuck', 
-                  value: processingStats.timing_stats?.oldest_stuck_processing_hours ? 
-                    `${processingStats.timing_stats.oldest_stuck_processing_hours.toFixed(1)}h` : 'N/A',
-                  alert: processingStats.timing_stats?.oldest_stuck_processing_hours ? 
-                    processingStats.timing_stats.oldest_stuck_processing_hours > 1 : false 
-                },
-              ]} 
-            />
+        {stats?.recent_errors && stats.recent_errors.length > 0 && (
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="font-medium mb-2">Recent Errors:</h4>
+            <ul className="space-y-1 text-sm">
+              {stats.recent_errors.map((err: any, idx: number) => (
+                <li key={idx} className="text-red-600 dark:text-red-400 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span className="line-clamp-2">{err.error_message}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </CardContent>
@@ -130,35 +134,26 @@ export function MessageHealth() {
   );
 }
 
-interface StatusItemProps {
-  label: string;
-  value: number | string;
-  icon?: React.ReactNode;
-  alert?: boolean;
-}
-
-interface StatusGroupProps {
-  title: string;
-  items: StatusItemProps[];
-}
-
-function StatusGroup({ title, items }: StatusGroupProps) {
+function StatCard({ title, value, icon, description }: { 
+  title: string; 
+  value: number; 
+  icon: React.ReactNode; 
+  description: string 
+}) {
   return (
-    <div>
-      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">{title}</h3>
-      <div className="space-y-2">
-        {items.map((item, index) => (
-          <div key={index} className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              {item.icon}
-              <span className="text-sm">{item.label}</span>
-            </div>
-            <Badge variant={item.alert ? "destructive" : "secondary"} className="ml-2">
-              {item.value}
-            </Badge>
-          </div>
-        ))}
+    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+      <div className="flex justify-between items-start">
+        <div>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+            {title}
+          </p>
+          <p className="text-2xl font-bold mt-1">{value}</p>
+        </div>
+        {icon}
       </div>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+        {description}
+      </p>
     </div>
   );
 }

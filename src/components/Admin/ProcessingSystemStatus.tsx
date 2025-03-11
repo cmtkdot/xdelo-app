@@ -1,145 +1,185 @@
 
-import { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useProcessingSystemRepair } from '@/hooks/useProcessingSystemRepair';
-import { useToast } from '@/hooks/useToast';
-import { formatDistanceToNow } from 'date-fns';
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Loader2, AlertTriangle, Terminal, RefreshCw, Clock } from 'lucide-react';
+import { useProcessingSystem } from '@/hooks/useProcessingSystem';
 
 export function ProcessingSystemStatus() {
   const [stats, setStats] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const { repairProcessingSystem, getProcessingStats, isRepairing } = useProcessingSystemRepair();
-  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { 
+    getProcessingStats, 
+    repairProcessingSystem, 
+    repairStuckMessages, 
+    isRepairing 
+  } = useProcessingSystem();
 
-  const loadStats = async () => {
+  const fetchStats = async () => {
     try {
       setIsLoading(true);
-      const stats = await getProcessingStats();
-      setStats(stats);
-    } catch (error) {
-      console.error('Failed to load stats:', error);
+      setError(null);
+      const data = await getProcessingStats();
+      setStats(data);
+    } catch (err) {
+      console.error('Error fetching processing system stats:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error occurred');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Load stats on mount
   useEffect(() => {
-    loadStats();
+    fetchStats();
+    
+    // Setup a refresh interval
+    const interval = setInterval(fetchStats, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
-  const handleRepair = async () => {
-    try {
-      await repairProcessingSystem();
-      // Reload stats after repair
-      loadStats();
-    } catch (error) {
-      console.error('Repair error:', error);
-    }
-  };
+  if (isLoading && !stats) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Processing System Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center p-4">
+            <Loader2 className="h-5 w-5 animate-spin mr-2" />
+            <p>Loading status...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <Card className="w-full">
+    <Card>
       <CardHeader>
-        <CardTitle>Processing System Status</CardTitle>
+        <CardTitle className="flex justify-between items-center">
+          <span>Processing System Status</span>
+          <Button onClick={fetchStats} variant="ghost" size="sm" disabled={isLoading}>
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+            Refresh
+          </Button>
+        </CardTitle>
         <CardDescription>
-          Monitor and repair message processing queue and system
+          Status of the background processing system and message queues
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="summary">
-          <TabsList className="mb-4">
-            <TabsTrigger value="summary">Summary</TabsTrigger>
-            <TabsTrigger value="stuck">Stuck Messages ({stats?.stuck_count || 0})</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="summary">
-            {isLoading ? (
-              <div className="flex justify-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-orange-50 p-4 rounded-lg">
-                  <h3 className="font-medium text-orange-700">Stuck Messages</h3>
-                  <p className="text-2xl font-bold">{stats?.stuck_count || 0}</p>
-                  <p className="text-sm text-gray-500">In "processing" state</p>
-                </div>
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h3 className="font-medium text-blue-700">Pending Messages</h3>
-                  <p className="text-2xl font-bold">{stats?.pending_count || 0}</p>
-                  <p className="text-sm text-gray-500">Awaiting processing</p>
-                </div>
-                <div className="bg-purple-50 p-4 rounded-lg">
-                  <h3 className="font-medium text-purple-700">Legacy Queue Entries</h3>
-                  <p className="text-2xl font-bold">{stats?.queue_count || 0}</p>
-                  <p className="text-sm text-gray-500">In old queue table</p>
-                </div>
-              </div>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="stuck">
-            {isLoading ? (
-              <div className="flex justify-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="px-4 py-2 text-left">Message ID</th>
-                      <th className="px-4 py-2 text-left">Telegram ID</th>
-                      <th className="px-4 py-2 text-left">Has Caption</th>
-                      <th className="px-4 py-2 text-left">Started At</th>
-                      <th className="px-4 py-2 text-left">Stuck For</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stats?.stuck_messages && stats.stuck_messages.length > 0 ? (
-                      stats.stuck_messages.map((message: any) => (
-                        <tr key={message.id} className="border-t">
-                          <td className="px-4 py-2 font-mono text-xs">{message.id}</td>
-                          <td className="px-4 py-2">{message.telegram_message_id}</td>
-                          <td className="px-4 py-2">{message.caption ? "Yes" : "No"}</td>
-                          <td className="px-4 py-2">{new Date(message.processing_started_at).toLocaleString()}</td>
-                          <td className="px-4 py-2">
-                            {formatDistanceToNow(new Date(message.processing_started_at), { addSuffix: true })}
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={5} className="px-4 py-2 text-center">
-                          No stuck messages found
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+        {error ? (
+          <div className="flex flex-col items-center justify-center p-4 text-red-600">
+            <AlertTriangle size={24} className="mb-2" />
+            <p>Error loading status: {error}</p>
+            <Button onClick={fetchStats} variant="outline" className="mt-2">
+              Retry
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              <StatusCard 
+                title="Queue Health"
+                status={stats?.queue_health === 'healthy' ? 'healthy' : 'warning'}
+                value={stats?.queue_health || 'Unknown'}
+                description="Overall queue system status"
+              />
+              <StatusCard 
+                title="Messages in Queue"
+                status={stats?.queued_count > 50 ? 'warning' : 'healthy'}
+                value={stats?.queued_count || 0}
+                description="Waiting to be processed"
+              />
+              <StatusCard 
+                title="Processing Workers"
+                status={stats?.active_workers > 0 ? 'healthy' : 'warning'}
+                value={stats?.active_workers || 0}
+                description={`Last activity: ${stats?.last_worker_activity || 'Unknown'}`}
+              />
+            </div>
+            
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button 
+                onClick={repairProcessingSystem}
+                disabled={isRepairing}
+                variant="outline"
+              >
+                {isRepairing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Terminal className="h-4 w-4 mr-1" />}
+                Repair Processing System
+              </Button>
+              
+              <Button 
+                onClick={repairStuckMessages}
+                disabled={isRepairing}
+                variant="outline"
+              >
+                {isRepairing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Clock className="h-4 w-4 mr-1" />}
+                Reset Stuck Messages
+              </Button>
+            </div>
+            
+            {stats?.recent_errors && stats.recent_errors.length > 0 && (
+              <div className="mt-4 pt-4 border-t">
+                <h4 className="font-medium mb-2">Recent System Errors:</h4>
+                <ul className="space-y-1 text-sm">
+                  {stats.recent_errors.map((err: any, idx: number) => (
+                    <li key={idx} className="text-red-600 dark:text-red-400">
+                      <span className="font-semibold">{err.component}:</span> {err.message}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
-          </TabsContent>
-        </Tabs>
+          </>
+        )}
       </CardContent>
-      <CardFooter className="flex justify-between">
-        <Button variant="outline" onClick={loadStats} disabled={isLoading}>
-          Refresh Status
-        </Button>
-        <Button onClick={handleRepair} disabled={isRepairing}>
-          {isRepairing ? (
-            <>
-              <span className="animate-spin mr-2">⟳</span>
-              Repairing...
-            </>
-          ) : (
-            "Repair Processing System"
-          )}
-        </Button>
-      </CardFooter>
     </Card>
+  );
+}
+
+function StatusCard({ 
+  title, 
+  status, 
+  value, 
+  description 
+}: { 
+  title: string; 
+  status: 'healthy' | 'warning' | 'error'; 
+  value: string | number; 
+  description: string;
+}) {
+  return (
+    <div className={`
+      p-4 rounded-lg border 
+      ${status === 'healthy' ? 'bg-green-50 border-green-100 dark:bg-green-900/20 dark:border-green-800' : ''}
+      ${status === 'warning' ? 'bg-yellow-50 border-yellow-100 dark:bg-yellow-900/20 dark:border-yellow-800' : ''}
+      ${status === 'error' ? 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-800' : ''}
+    `}>
+      <div className="flex justify-between items-start">
+        <div>
+          <p className={`
+            text-sm font-medium
+            ${status === 'healthy' ? 'text-green-800 dark:text-green-400' : ''}
+            ${status === 'warning' ? 'text-yellow-800 dark:text-yellow-400' : ''}
+            ${status === 'error' ? 'text-red-800 dark:text-red-400' : ''}
+          `}>
+            {title}
+          </p>
+          <p className="text-2xl font-bold mt-1">{value}</p>
+        </div>
+        <span className={`
+          inline-flex h-3 w-3 rounded-full 
+          ${status === 'healthy' ? 'bg-green-500' : ''}
+          ${status === 'warning' ? 'bg-yellow-500' : ''}
+          ${status === 'error' ? 'bg-red-500' : ''}
+        `}></span>
+      </div>
+      <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+        {description}
+      </p>
+    </div>
   );
 }

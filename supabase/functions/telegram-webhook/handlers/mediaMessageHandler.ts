@@ -168,7 +168,7 @@ async function handleEditedMediaMessage(
           telegram_message_id: message.message_id,
           chat_id: message.chat.id,
           file_unique_id: mediaInfo.file_unique_id,
-          sourceMessageId: existingMessage.id, // Fixed: changed from existing_message_id to sourceMessageId
+          source_message_id: existingMessage.id,
           edit_type: captionChanged ? 'caption_changed' : (mediaChanged ? 'media_changed' : 'other_edit'),
           media_group_id: message.media_group_id
         }
