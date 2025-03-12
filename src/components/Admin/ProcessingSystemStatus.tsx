@@ -1,140 +1,145 @@
 
-import React, { useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useProcessingStats } from '@/hooks/useProcessingStats';
+import { useState, useEffect } from 'react';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useProcessingSystemRepair } from '@/hooks/useProcessingSystemRepair';
-import { Sparkles } from "lucide-react";
-import { Button } from '../ui/button';
+import { useToast } from '@/hooks/useToast';
+import { formatDistanceToNow } from 'date-fns';
 
-export const ProcessingSystemStatus: React.FC = () => {
-  const { stats, isLoading, refetch } = useProcessingStats(30000); // Refresh every 30 seconds
-  const { repairProcessingFlow, isRepairing } = useProcessingSystemRepair();
+export function ProcessingSystemStatus() {
+  const [stats, setStats] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const { repairProcessingSystem, getProcessingStats, isRepairing } = useProcessingSystemRepair();
+  const { toast } = useToast();
 
-  // Calculate the completion percentage
-  const getCompletionPercentage = () => {
-    if (!stats || stats.total === 0) return 0;
-    return Math.round((stats.completed / stats.total) * 100);
+  const loadStats = async () => {
+    try {
+      setIsLoading(true);
+      const stats = await getProcessingStats();
+      setStats(stats);
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Calculate error percentage
-  const getErrorPercentage = () => {
-    if (!stats || stats.total === 0) return 0;
-    return Math.round((stats.error / stats.total) * 100);
-  };
-
-  // Check if the system is healthy
-  const isSystemHealthy = () => {
-    if (!stats) return true;
-    
-    const stallThreshold = 5; // System is unhealthy if more than 5 stalled messages
-    const errorThreshold = 0.05; // System is unhealthy if more than 5% errors
-    
-    const totalStalled = stats.stalled_processing + stats.stalled_pending;
-    const errorRate = stats.total > 0 ? stats.error / stats.total : 0;
-    
-    return totalStalled < stallThreshold && errorRate < errorThreshold;
-  };
+  // Load stats on mount
+  useEffect(() => {
+    loadStats();
+  }, []);
 
   const handleRepair = async () => {
     try {
-      await repairProcessingFlow({
-        limit: 20,
-        repair_enums: true,
-        force_reset_stalled: true,
-        reset_all: false
-      });
-      refetch();
+      await repairProcessingSystem();
+      // Reload stats after repair
+      loadStats();
     } catch (error) {
-      console.error('Error during repair:', error);
+      console.error('Repair error:', error);
     }
   };
 
-  // Conditionally refresh stats after a repair operation
-  useEffect(() => {
-    if (!isRepairing) {
-      refetch();
-    }
-  }, [isRepairing, refetch]);
-
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium flex justify-between items-center">
-          <span>Processing System Status</span>
-          {!isLoading && !isSystemHealthy() && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleRepair}
-              disabled={isRepairing}
-              className="h-7 text-xs"
-            >
-              <Sparkles className="h-3.5 w-3.5 mr-1" />
-              Auto Repair
-            </Button>
-          )}
-        </CardTitle>
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>Processing System Status</CardTitle>
+        <CardDescription>
+          Monitor and repair message processing queue and system
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
-          </div>
-        ) : stats ? (
-          <div className="space-y-2">
-            <div className="flex justify-between text-xs text-muted-foreground mb-1">
-              <span>Processing Progress</span>
-              <span>{getCompletionPercentage()}% Complete</span>
-            </div>
-            <Progress value={getCompletionPercentage()} className="h-2" />
-            
-            <div className="grid grid-cols-2 gap-x-2 gap-y-1 mt-3">
-              <div className="text-xs">
-                <span className="text-muted-foreground">Total:</span>{' '}
-                <span className="font-medium">{stats.total}</span>
+        <Tabs defaultValue="summary">
+          <TabsList className="mb-4">
+            <TabsTrigger value="summary">Summary</TabsTrigger>
+            <TabsTrigger value="stuck">Stuck Messages ({stats?.stuck_count || 0})</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="summary">
+            {isLoading ? (
+              <div className="flex justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
               </div>
-              <div className="text-xs">
-                <span className="text-muted-foreground">Completed:</span>{' '}
-                <span className="font-medium">{stats.completed}</span>
-              </div>
-              <div className="text-xs">
-                <span className="text-muted-foreground">In Processing:</span>{' '}
-                <span className="font-medium">{stats.processing}</span>
-              </div>
-              <div className="text-xs">
-                <span className="text-muted-foreground">Pending:</span>{' '}
-                <span className="font-medium">{stats.pending}</span>
-              </div>
-              <div className="text-xs">
-                <span className="text-muted-foreground">Initialized:</span>{' '}
-                <span className="font-medium">{stats.initialized}</span>
-              </div>
-              <div className="text-xs">
-                <span className="text-muted-foreground">Errors:</span>{' '}
-                <span className={`font-medium ${getErrorPercentage() > 5 ? 'text-destructive' : ''}`}>
-                  {stats.error} ({getErrorPercentage()}%)
-                </span>
-              </div>
-              {(stats.stalled_processing > 0 || stats.stalled_pending > 0) && (
-                <div className="text-xs col-span-2 text-amber-500">
-                  <span className="text-muted-foreground">Stalled:</span>{' '}
-                  <span className="font-medium">
-                    {stats.stalled_processing + stats.stalled_pending} messages
-                  </span>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <h3 className="font-medium text-orange-700">Stuck Messages</h3>
+                  <p className="text-2xl font-bold">{stats?.stuck_count || 0}</p>
+                  <p className="text-sm text-gray-500">In "processing" state</p>
                 </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="text-sm text-muted-foreground">
-            No processing statistics available
-          </div>
-        )}
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h3 className="font-medium text-blue-700">Pending Messages</h3>
+                  <p className="text-2xl font-bold">{stats?.pending_count || 0}</p>
+                  <p className="text-sm text-gray-500">Awaiting processing</p>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <h3 className="font-medium text-purple-700">Legacy Queue Entries</h3>
+                  <p className="text-2xl font-bold">{stats?.queue_count || 0}</p>
+                  <p className="text-sm text-gray-500">In old queue table</p>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+          
+          <TabsContent value="stuck">
+            {isLoading ? (
+              <div className="flex justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="px-4 py-2 text-left">Message ID</th>
+                      <th className="px-4 py-2 text-left">Telegram ID</th>
+                      <th className="px-4 py-2 text-left">Has Caption</th>
+                      <th className="px-4 py-2 text-left">Started At</th>
+                      <th className="px-4 py-2 text-left">Stuck For</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats?.stuck_messages && stats.stuck_messages.length > 0 ? (
+                      stats.stuck_messages.map((message: any) => (
+                        <tr key={message.id} className="border-t">
+                          <td className="px-4 py-2 font-mono text-xs">{message.id}</td>
+                          <td className="px-4 py-2">{message.telegram_message_id}</td>
+                          <td className="px-4 py-2">{message.caption ? "Yes" : "No"}</td>
+                          <td className="px-4 py-2">{new Date(message.processing_started_at).toLocaleString()}</td>
+                          <td className="px-4 py-2">
+                            {formatDistanceToNow(new Date(message.processing_started_at), { addSuffix: true })}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-2 text-center">
+                          No stuck messages found
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </CardContent>
+      <CardFooter className="flex justify-between">
+        <Button variant="outline" onClick={loadStats} disabled={isLoading}>
+          Refresh Status
+        </Button>
+        <Button onClick={handleRepair} disabled={isRepairing}>
+          {isRepairing ? (
+            <>
+              <span className="animate-spin mr-2">⟳</span>
+              Repairing...
+            </>
+          ) : (
+            "Repair Processing System"
+          )}
+        </Button>
+      </CardFooter>
     </Card>
   );
-};
+}
