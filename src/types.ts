@@ -25,7 +25,6 @@ export interface AnalyzedContent {
     method: 'manual' | 'ai' | 'fallback';
     confidence: number;
     timestamp: string;
-    partial_success?: boolean;
     error?: string;
     missing_fields?: string[];
   };

@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
 import { withErrorHandling } from "../_shared/errorHandler.ts";
+import { PROCESSING_STATES } from "../_shared/states.ts";
 
 // Create Supabase client
 const supabase = createClient(
@@ -39,11 +40,11 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
     
     // Skip processing if no caption
     if (!message.caption) {
-      // Instead of just skipping, set the message to error state if there's no caption
+      // Set message to error state if there's no caption
       await supabase
         .from('messages')
         .update({
-          processing_state: 'error',
+          processing_state: PROCESSING_STATES.ERROR,
           error_message: 'No caption to process',
           updated_at: new Date().toISOString()
         })
@@ -79,7 +80,7 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
     await supabase
       .from('messages')
       .update({
-        processing_state: 'processing',
+        processing_state: PROCESSING_STATES.PROCESSING,
         processing_started_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
@@ -220,7 +221,7 @@ const directCaptionProcessor = async (req: Request, correlationId: string) => {
     await supabase
       .from('messages')
       .update({
-        processing_state: 'error',
+        processing_state: PROCESSING_STATES.ERROR,
         error_message: error.message,
         last_error_at: new Date().toISOString(),
         updated_at: new Date().toISOString()

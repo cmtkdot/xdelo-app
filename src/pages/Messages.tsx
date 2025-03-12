@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { ProcessingState } from '@/types';
 
 export default function MessagesPage() {
   const [isReanalyzing, setIsReanalyzing] = useState(false);
@@ -20,7 +21,7 @@ export default function MessagesPage() {
         .from('messages')
         .select('id, caption')
         .not('caption', 'is', null)
-        .in('processing_state', ['error', 'pending'])
+        .in('processing_state', ['error', 'pending'] as ProcessingState[])
         .limit(30); // Limit to prevent excessive processing
       
       if (error) throw error;
@@ -44,7 +45,7 @@ export default function MessagesPage() {
           await supabase
             .from('messages')
             .update({
-              processing_state: 'pending',
+              processing_state: 'pending' as ProcessingState,
               updated_at: new Date().toISOString()
             })
             .eq('id', message.id);

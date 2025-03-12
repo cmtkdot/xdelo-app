@@ -64,3 +64,50 @@ export async function syncMediaGroupContent(
     p_correlation_id: correlationId
   });
 }
+
+export async function xdelo_update_message_state(
+  supabase: SupabaseClient,
+  messageId: string,
+  state: ProcessingState,
+  errorMessage?: string
+): Promise<void> {
+  const updateData: Record<string, any> = {
+    processing_state: state,
+    updated_at: new Date().toISOString()
+  };
+  
+  if (state === 'processing') {
+    updateData.processing_started_at = new Date().toISOString();
+  } else if (state === 'completed') {
+    updateData.processing_completed_at = new Date().toISOString();
+  } else if (state === 'error' && errorMessage) {
+    updateData.error_message = errorMessage;
+    updateData.last_error_at = new Date().toISOString();
+  }
+  
+  await supabase
+    .from('messages')
+    .update(updateData)
+    .eq('id', messageId);
+}
+
+export async function xdelo_get_message_processing_stats(
+  supabase: SupabaseClient
+): Promise<Record<string, any>> {
+  const { data } = await supabase.rpc('xdelo_get_message_processing_stats');
+  return data || {
+    total_messages: 0,
+    by_state: {
+      initialized: 0,
+      pending: 0,
+      processing: 0,
+      completed: 0,
+      error: 0
+    },
+    with_analyzed_content: 0,
+    with_caption: 0,
+    needs_redownload: 0,
+    with_media_group_id: 0,
+    stalled_processing: 0
+  };
+}

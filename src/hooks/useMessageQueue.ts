@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
+import { ProcessingState } from '@/types';
 
 export function useMessageQueue() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -72,7 +73,7 @@ export function useMessageQueue() {
       // Find messages that have captions but no analyzed content and set them to pending
       const { data, error } = await supabase.from('messages')
         .update({ 
-          processing_state: 'pending',
+          processing_state: 'pending' as ProcessingState,
           updated_at: new Date().toISOString() 
         })
         .is('analyzed_content', null)
@@ -117,7 +118,7 @@ export function useMessageQueue() {
       // First, set the message to pending state
       const { error: updateError } = await supabase.from('messages')
         .update({ 
-          processing_state: 'pending',
+          processing_state: 'pending' as ProcessingState,
           updated_at: new Date().toISOString()
         })
         .eq('id', messageId);

@@ -43,7 +43,7 @@ BEGIN
   END IF;
 END $$;
 
--- Create the message processing stats function if it doesn't exist
+-- Create the message processing stats function
 CREATE OR REPLACE FUNCTION xdelo_get_message_processing_stats()
 RETURNS jsonb AS $$
 DECLARE
@@ -79,3 +79,31 @@ BEGIN
     RAISE NOTICE 'Column needs_redownload already exists or another issue occurred: %', SQLERRM;
   END;
 END $$;
+
+-- Create a function to reset stalled messages
+CREATE OR REPLACE FUNCTION xdelo_reset_stalled_processing()
+RETURNS jsonb AS $$
+DECLARE
+  reset_count INTEGER;
+  result jsonb;
+BEGIN
+  WITH updated_rows AS (
+    UPDATE messages
+    SET processing_state = 'error',
+        error_message = 'Reset due to stalled processing',
+        updated_at = NOW()
+    WHERE processing_state = 'processing'
+    AND processing_started_at < NOW() - INTERVAL '30 minutes'
+    RETURNING id
+  )
+  SELECT COUNT(*) INTO reset_count FROM updated_rows;
+  
+  SELECT jsonb_build_object(
+    'reset_count', reset_count,
+    'success', TRUE,
+    'timestamp', NOW()
+  ) INTO result;
+  
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql;
