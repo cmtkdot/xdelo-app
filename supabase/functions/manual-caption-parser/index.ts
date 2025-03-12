@@ -1,5 +1,5 @@
 
-import { ParsedContent, analyzeCaptionContent } from "./captionParser.ts";
+import { xdelo_parseCaption } from "../_shared/captionParser.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { AnalysisRequest, MediaGroupResult } from "./types.ts";
@@ -50,12 +50,18 @@ async function handleCaptionParsing(request: AnalysisRequest) {
     // Determine if this is an edit operation
     const isEdit = request.isEdit || false;
     
-    // Analyze the caption using our parser
-    const parsedContent = analyzeCaptionContent(captionToAnalyze, {
-      isEdit,
+    // Analyze the caption using our shared parser from _shared/captionParser.ts
+    const parsedContent = xdelo_parseCaption(captionToAnalyze);
+    
+    // Add metadata about this processing operation
+    parsedContent.parsing_metadata = {
+      ...(parsedContent.parsing_metadata || {}),
+      method: 'manual',
+      timestamp: new Date().toISOString(),
       original_caption: captionToAnalyze,
-      trigger_source: request.trigger_source || 'manual-caption-parser',
-    });
+      is_edit: isEdit,
+      trigger_source: request.trigger_source || 'manual-caption-parser'
+    };
 
     // Save the analysis results to the database
     const { error: updateError } = await supabaseClient

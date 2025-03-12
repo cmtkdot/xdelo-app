@@ -5,6 +5,7 @@ import { MessageControlPanel } from './MessageControlPanel';
 import { useMediaGroups } from '@/hooks/useMediaGroups';
 import { Spinner } from '../ui/spinner';
 import { useCaptionSync } from '@/hooks/useCaptionSync';
+import { useToast } from '@/hooks/useToast';
 
 export function MessageListContainer() {
   const {
@@ -16,13 +17,33 @@ export function MessageListContainer() {
   } = useMediaGroups();
 
   const { forceSyncMessageGroup } = useCaptionSync();
+  const { toast } = useToast();
 
   // Convert the grouped messages object to an array for rendering
   const messages = mediaGroups ? Object.values(mediaGroups).flatMap(group => group) : [];
 
   const onRetryProcessing = async (messageId: string) => {
-    await forceSyncMessageGroup(messageId);
-    await refetch();
+    try {
+      toast({
+        title: "Processing Message",
+        description: "Analyzing caption and syncing with media group...",
+      });
+      
+      await forceSyncMessageGroup(messageId);
+      await refetch();
+      
+      toast({
+        title: "Processing Complete",
+        description: "Message has been processed and synchronized.",
+      });
+    } catch (error) {
+      console.error("Error retrying processing:", error);
+      toast({
+        title: "Processing Failed",
+        description: error.message || "An error occurred during processing",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

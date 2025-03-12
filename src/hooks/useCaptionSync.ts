@@ -103,7 +103,7 @@ export function useCaptionSync() {
         throw new Error(`Failed to update caption: ${updateError.message}`);
       }
       
-      // Then trigger analysis and sync
+      // Then trigger analysis and sync using our fixed manual-caption-parser
       const correlationId = crypto.randomUUID();
       
       // Directly invoke the manual-caption-parser for immediate processing
@@ -189,6 +189,33 @@ export function useCaptionSync() {
       
       if (fetchError || !message) {
         throw new Error(`Failed to fetch message: ${fetchError?.message || 'Message not found'}`);
+      }
+      
+      // If message lacks analyzed content but has caption, first process the caption
+      if (message.caption && (!message.analyzed_content || Object.keys(message.analyzed_content).length === 0)) {
+        console.log(`Message ${messageId} has caption but no analyzed content, processing caption first`);
+        
+        const correlationId = crypto.randomUUID();
+        
+        // Process the caption using our fixed manual-caption-parser
+        const { data: parsingData, error: parsingError } = await supabase.functions.invoke(
+          'manual-caption-parser',
+          {
+            body: {
+              messageId: message.id,
+              caption: message.caption,
+              media_group_id: message.media_group_id,
+              correlationId,
+              trigger_source: 'force_sync_ui'
+            }
+          }
+        );
+        
+        if (parsingError) {
+          throw new Error(`Failed to process caption before sync: ${parsingError.message}`);
+        }
+        
+        console.log('Caption processing completed, now syncing media group');
       }
       
       // Then trigger a forced sync
