@@ -1,110 +1,53 @@
 
-import { useState, useEffect } from 'react';
-import { useSupabase } from '@/integrations/supabase/SupabaseProvider';
-import { Message, MessageProcessingStats, ProcessingState } from '@/types/MessagesTypes';
+import { useState } from 'react';
+import { useSupabaseClient } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
 
 export function useMessageQueue() {
-  const { supabase } = useSupabase();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [results, setResults] = useState<any>(null);
   const { toast } = useToast();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const [isRefetching, setIsRefetching] = useState(false);
-  const [stats, setStats] = useState<MessageProcessingStats>({
-    state_counts: {
-      pending: 0,
-      processing: 0,
-      completed: 0,
-      error: 0,
-      total_messages: 0
-    }
-  });
+  const supabaseClient = useSupabaseClient();
 
-  const fetchMessages = async () => {
+  const processMessageQueue = async (count: number = 10) => {
     try {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (error) throw error;
-
-      setMessages(data as Message[]);
+      setIsProcessing(true);
       
-      const stateCounts = {
-        pending: 0,
-        processing: 0,
-        completed: 0,
-        error: 0,
-        total_messages: data.length
-      };
-      
-      data.forEach((message: Message) => {
-        const state = message.processing_state as ProcessingState;
-        if (state in stateCounts) {
-          stateCounts[state]++;
+      // Simplified direct processing approach
+      const { data, error } = await supabaseClient.functions.invoke('direct-caption-processor', {
+        body: { 
+          count,
+          auto_process: true 
         }
       });
-      
-      setStats({ state_counts: stateCounts });
-      
-    } catch (err) {
-      console.error('Error fetching messages:', err);
-      setError(err instanceof Error ? err : new Error('Unknown error fetching messages'));
-    } finally {
-      setIsLoading(false);
-      setIsRefetching(false);
-    }
-  };
 
-  useEffect(() => {
-    fetchMessages();
-  }, []);
+      if (error) {
+        throw error;
+      }
 
-  const refetch = async () => {
-    setIsRefetching(true);
-    await fetchMessages();
-  };
-
-  const handleRefresh = () => {
-    refetch();
-  };
-
-  const retryMessage = async (messageId: string) => {
-    try {
-      const { data, error } = await supabase.functions.invoke('xdelo_reprocess_message', {
-        body: { messageId }
-      });
-
-      if (error) throw error;
-
+      setResults(data);
       toast({
-        title: 'Processing started',
-        description: 'Message is being reprocessed',
+        title: 'Processing complete',
+        description: `Processed ${data.processed_count || 0} messages.`
       });
-
-      await refetch();
+      
       return data;
-    } catch (err) {
-      console.error('Error retrying message:', err);
+    } catch (error) {
       toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to retry message processing',
-        variant: 'destructive',
+        title: 'Processing failed',
+        description: error.message,
+        variant: 'destructive'
       });
+      console.error('Processing error:', error);
+      return null;
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   return {
-    messages,
-    isLoading,
-    error,
-    refetch,
-    isRefetching,
-    stats,
-    handleRefresh,
-    retryMessage
+    isProcessing,
+    results,
+    processMessageQueue
   };
 }

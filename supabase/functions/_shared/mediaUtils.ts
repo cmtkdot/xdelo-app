@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
 // Initialize Supabase client (will use env vars from edge function context)
@@ -93,7 +94,7 @@ export function xdelo_getFileExtensionFromMimeType(mimeType: string): string {
 }
 
 // Validate if a file exists in storage
-export async function xdelo_validateStoragePath(path: string): Promise<boolean> {
+export async function xdelo_validateStoragePath(path: string): boolean {
   if (!path) return false;
   
   // Extract bucket name and file path
@@ -406,6 +407,114 @@ export async function xdelo_uploadMediaToStorage(
     return {
       success: false,
       error: error.message
+    };
+  }
+}
+
+// Helper function to recover file metadata from Telegram (replacement for recoverFileMetadata)
+export async function xdelo_recoverFileMetadata(messageId: string): Promise<{ success: boolean, message: string, data?: any }> {
+  try {
+    // Get the message with its file_id
+    const { data: message, error: messageError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', messageId)
+      .single();
+      
+    if (messageError || !message) {
+      return {
+        success: false,
+        message: `Message not found: ${messageError?.message || 'No data returned'}`
+      };
+    }
+    
+    if (!message.file_id) {
+      return {
+        success: false,
+        message: 'Message has no file_id for recovery'
+      };
+    }
+    
+    // Get the Telegram bot token
+    const { data: settings } = await supabase
+      .from('settings')
+      .select('bot_token')
+      .single();
+      
+    if (!settings?.bot_token) {
+      return {
+        success: false,
+        message: 'Bot token not found in settings'
+      };
+    }
+    
+    // Use the existing function to download from Telegram
+    const download = await xdelo_downloadMediaFromTelegram(
+      message.file_id,
+      message.file_unique_id,
+      message.mime_type || 'application/octet-stream',
+      settings.bot_token
+    );
+    
+    if (!download.success || !download.blob || !download.storagePath) {
+      return {
+        success: false,
+        message: download.error || 'Failed to download from Telegram'
+      };
+    }
+    
+    // Upload to storage
+    const upload = await xdelo_uploadMediaToStorage(
+      download.storagePath,
+      download.blob,
+      message.mime_type || 'application/octet-stream'
+    );
+    
+    if (!upload.success || !upload.publicUrl) {
+      return {
+        success: false,
+        message: upload.error || 'Failed to upload to storage'
+      };
+    }
+    
+    // Update the message with new storage info
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        storage_path: download.storagePath,
+        public_url: upload.publicUrl,
+        storage_exists: true,
+        storage_path_standardized: true,
+        needs_redownload: false,
+        redownload_completed_at: new Date().toISOString(),
+        redownload_attempts: (message.redownload_attempts || 0) + 1,
+        error_message: null,
+        error_code: null
+      })
+      .eq('id', messageId);
+      
+    if (updateError) {
+      return {
+        success: false,
+        message: `Failed to update message record: ${updateError.message}`
+      };
+    }
+    
+    return {
+      success: true,
+      message: 'Successfully recovered file metadata',
+      data: {
+        messageId,
+        storagePath: download.storagePath,
+        publicUrl: upload.publicUrl,
+        fileSize: download.blob.size
+      }
+    };
+  } catch (error) {
+    console.error('Error in xdelo_recoverFileMetadata:', error);
+    return {
+      success: false,
+      message: error.message || 'Unknown error during metadata recovery'
     };
   }
 }

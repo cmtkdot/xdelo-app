@@ -3194,6 +3194,13 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_repair_file: {
+        Args: {
+          p_message_id: string
+          p_action: string
+        }
+        Returns: Json
+      }
       xdelo_repair_media_group_syncs: {
         Args: Record<PropertyKey, never>
         Returns: {

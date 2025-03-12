@@ -20,6 +20,13 @@ After the cleanup and simplification process, we've consolidated the essential d
 - **Purpose**: Standardizes storage paths for media files.
 - **Usage**: Maintains consistent storage organization
 
+### xdelo_process_caption
+- **Purpose**: Processes captions for messages and manages media group synchronization.
+- **Simplifications**:
+  - Simplified transaction handling
+  - Removed complex sync attempts tracking
+  - One clear processing path instead of multiple approaches
+
 ## Removed Complexity
 
 The following complex functions have been removed or significantly simplified:
@@ -38,7 +45,8 @@ We've simplified our edge function ecosystem to focus on core functionality:
 1. **telegram-webhook** - Simplified to handle basic message reception
 2. **direct-caption-processor** - Simplified to process captions directly
 3. **repair-storage-paths** - Maintained as a utility function
-4. **fix-file-ids** - Added as a utility for correcting invalid file IDs
+4. **generic-webhook** - Added as a simple webhook receiver
+5. **media-management** - Consolidated media utility functions
 
 ## Schema Changes
 
@@ -61,5 +69,14 @@ We've simplified the database schema by:
    - last_processing_attempt
    - retry_count
    - fallback_processed
+
+## Media Utils Consolidation
+
+We've consolidated all media utility functions with the xdelo_ prefix for consistency:
+
+1. **xdelo_validateAndFixStoragePath** - Consistent storage path generation
+2. **xdelo_detectMimeType** - Reliable MIME type detection
+3. **xdelo_downloadMediaFromTelegram** - Simplified download from Telegram
+4. **xdelo_uploadMediaToStorage** - Consistent storage upload  
 
 This simplified approach focuses on the core functionality needed for the Telegram bot message processing flow, making the system more maintainable and easier to understand.

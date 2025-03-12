@@ -84,3 +84,4 @@ export interface MessageProcessingStats {
 }
 
 export * from './GlProducts';
+export * from './MessagesTypes';
