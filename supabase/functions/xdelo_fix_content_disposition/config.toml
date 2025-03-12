@@ -1,0 +1,6 @@
+
+project_id = "xjhhehxcxkiumnwbirel"
+name = "xdelo_fix_content_disposition"
+description = "Fixes content disposition for media files to ensure proper display in browser"
+version = 1
+verify_jwt = false

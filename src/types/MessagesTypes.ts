@@ -23,6 +23,10 @@ export interface Message {
   public_url: string;
   storage_path?: string;
   mime_type?: string;
+  mime_type_verified?: boolean;
+  mime_type_original?: string;
+  content_disposition?: 'inline' | 'attachment';
+  storage_metadata?: Record<string, any>;
   file_size?: number;
   width?: number;
   height?: number;
