@@ -1,5 +1,6 @@
 
 import { Json } from '@/integrations/supabase/types';
+import { AnalyzedContent } from '@/types';
 
 // ProcessingState matches the simplified database enum
 export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error';
@@ -46,7 +47,7 @@ export interface Message {
   telegram_date: string;
   mime_type: string | null;
   caption: string | null;
-  analyzed_content: Json | null;
+  analyzed_content: AnalyzedContent | null;
   is_bot: boolean;
   message_type: string;
   from_id: number | null;
@@ -77,6 +78,13 @@ export interface Message {
   storage_exists: boolean | null;
   storage_path_standardized: boolean | null;
   storage_path: string | null;
+  purchase_order?: string;
+  needs_redownload?: boolean;
+  redownload_reason?: string;
+  redownload_flagged_at?: string;
+  redownload_completed_at?: string;
+  file_id_expires_at?: string;
+  duration?: number;
 }
 
 export interface MessageApiResponse {

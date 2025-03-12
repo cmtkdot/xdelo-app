@@ -1,55 +1,94 @@
 
 import { useState } from 'react';
-import { useSupabase } from '@/integrations/supabase/SupabaseProvider';
 import { useToast } from './useToast';
+import { supabase } from '@/integrations/supabase/client';
 
-type RepairOperation = 'mime-types' | 'storage-paths' | 'file-ids' | 'all';
+interface FileRepairOptions {
+  messageIds?: string[];
+  limit?: number;
+  dryRun?: boolean;
+}
+
+interface StandardizeResponse {
+  success: boolean;
+  message: string;
+  stats?: {
+    fixed: number;
+    skipped: number;
+    needs_redownload: number;
+    details: any[];
+  };
+  error?: string;
+}
 
 export function useFileRepair() {
-  const { supabase } = useSupabase();
+  const [isLoading, setIsLoading] = useState(false);
+  const [results, setResults] = useState<StandardizeResponse | null>(null);
   const { toast } = useToast();
-  const [isRepairing, setIsRepairing] = useState(false);
 
-  const repairFiles = async (operation: RepairOperation) => {
-    setIsRepairing(true);
+  const standardizeStoragePaths = async (options: FileRepairOptions = {}) => {
+    setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('xdelo_file_repair', {
-        body: { operation }
+      const { data, error } = await supabase.functions.invoke('xdelo_standardize_storage_paths', {
+        body: {
+          messageIds: options.messageIds || [],
+          limit: options.limit || 100,
+          dryRun: options.dryRun || false
+        }
       });
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
-      const { success, message, stats } = data;
-      
-      if (success) {
+      const response = data as StandardizeResponse;
+      setResults(response);
+
+      if (response.success) {
+        const fixedCount = response.stats?.fixed || 0;
         toast({
-          title: 'File repair completed',
-          description: `${message || 'Files were successfully repaired'} ${stats ? `(${stats.fixed} fixed, ${stats.skipped} skipped)` : ''}`,
-          variant: 'default',
+          title: "Storage paths standardized",
+          description: `${fixedCount} file paths were updated successfully.`,
+          variant: "success",
         });
       } else {
         toast({
-          title: 'File repair failed',
-          description: message || 'There was an error repairing files',
-          variant: 'destructive',
+          title: "Error standardizing paths",
+          description: response.error || "An unknown error occurred",
+          variant: "destructive",
         });
       }
+
+      return response;
+    } catch (error) {
+      console.error('Error standardizing storage paths:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
       
-      return data;
-    } catch (err) {
-      console.error('Error repairing files:', err);
       toast({
-        title: 'File repair error',
-        description: err instanceof Error ? err.message : 'Unknown error occurred',
-        variant: 'destructive',
+        title: "Error standardizing paths",
+        description: errorMessage,
+        variant: "destructive",
       });
+      
+      setResults({
+        success: false,
+        message: "Error processing request",
+        error: errorMessage
+      });
+      
+      return {
+        success: false,
+        message: "Error processing request",
+        error: errorMessage
+      };
     } finally {
-      setIsRepairing(false);
+      setIsLoading(false);
     }
   };
 
   return {
-    repairFiles,
-    isRepairing
+    standardizeStoragePaths,
+    isLoading,
+    results
   };
 }

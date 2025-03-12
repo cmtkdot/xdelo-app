@@ -16,12 +16,15 @@ export const useMediaGroups = () => {
 
       // Group messages by media_group_id
       const groupedMessages = (data || []).reduce((groups: { [key: string]: Message[] }, message) => {
+        // Cast the database row to our Message type
+        const typedMessage = message as unknown as Message;
+        
         // Use media_group_id if available, otherwise use message id as the group key
-        const groupId = message.media_group_id || message.id;
+        const groupId = typedMessage.media_group_id || typedMessage.id;
         if (!groups[groupId]) {
           groups[groupId] = [];
         }
-        groups[groupId].push(message as Message);
+        groups[groupId].push(typedMessage);
         
         // Sort messages within group to ensure consistent order
         // Put messages with original captions first

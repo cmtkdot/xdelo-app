@@ -2982,10 +2982,6 @@ export type Database = {
         }
         Returns: Json
       }
-      xdelo_begin_transaction: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
       xdelo_check_media_group_content: {
         Args: {
           p_media_group_id: string
@@ -2993,14 +2989,6 @@ export type Database = {
           p_correlation_id?: string
         }
         Returns: Json
-      }
-      xdelo_cleanup_old_queue_entries: {
-        Args: {
-          days_old?: number
-        }
-        Returns: {
-          deleted_count: number
-        }[]
       }
       xdelo_cleanup_orphaned_audit_logs: {
         Args: Record<PropertyKey, never>
@@ -3012,19 +3000,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
-      xdelo_commit_transaction_with_sync:
-        | {
-            Args: Record<PropertyKey, never>
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_message_id: string
-              p_media_group_id: string
-              p_correlation_id: string
-            }
-            Returns: Json
-          }
+      xdelo_commit_transaction_with_sync: {
+        Args: {
+          p_message_id: string
+          p_media_group_id: string
+          p_correlation_id: string
+        }
+        Returns: Json
+      }
       xdelo_construct_telegram_message_url: {
         Args: {
           chat_type: Database["public"]["Enums"]["telegram_chat_type"]
@@ -3211,17 +3194,6 @@ export type Database = {
         }
         Returns: Json
       }
-      xdelo_process_pending_messages: {
-        Args: {
-          limit_count?: number
-        }
-        Returns: {
-          message_id: string
-          caption: string
-          media_group_id: string
-          processed: boolean
-        }[]
-      }
       xdelo_repair_media_group_syncs: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3238,33 +3210,11 @@ export type Database = {
           updated_count: number
         }[]
       }
-      xdelo_repair_storage_paths: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          message_id: string
-          old_path: string
-          new_path: string
-          status: string
-        }[]
-      }
-      xdelo_reset_stalled_messages:
-        | {
-            Args: Record<PropertyKey, never>
-            Returns: {
-              message_id: string
-              previous_state: string
-              reset_reason: string
-            }[]
-          }
-        | {
-            Args: {
-              p_minutes_threshold?: number
-              p_correlation_id?: string
-            }
-            Returns: Json
-          }
-      xdelo_run_scheduled_message_processing: {
-        Args: Record<PropertyKey, never>
+      xdelo_reset_stalled_messages: {
+        Args: {
+          p_minutes_threshold?: number
+          p_correlation_id?: string
+        }
         Returns: Json
       }
       xdelo_standardize_storage_path: {
@@ -3321,14 +3271,6 @@ export type Database = {
             }
             Returns: Json
           }
-      xdelo_validate_file_storage: {
-        Args: {
-          p_file_unique_id: string
-          p_storage_path: string
-          p_mime_type?: string
-        }
-        Returns: boolean
-      }
       xdelo_validate_message_ids: {
         Args: {
           p_message_id: string

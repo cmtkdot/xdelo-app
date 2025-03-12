@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { Message } from '@/types';
+import { Message } from '@/types/MessagesTypes';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ImageSwiper } from "@/components/ui/image-swiper";
@@ -67,11 +66,9 @@ export const MediaViewer = ({
     setActiveMediaIndex(index);
   };
 
-  // Generate Telegram message URL
   const getTelegramMessageUrl = (message: Message) => {
     if (!message || !message.chat_id || !message.telegram_message_id) return null;
     
-    // Standard format for Telegram URLs
     return `https://t.me/c/${message.chat_id.toString().replace("-100", "")}/${message.telegram_message_id}`;
   };
 
@@ -106,14 +103,12 @@ export const MediaViewer = ({
                 </Button>
               </div>
               
-              {/* Media tools toggle button */}
               <Button variant="outline" size="icon" onClick={() => setShowTools(!showTools)} className="absolute top-4 right-4 rounded-full bg-background/80 hover:bg-background/90 backdrop-blur">
                 <Settings className="h-4 w-4" />
               </Button>
             </div>
           </div>
           
-          {/* External links and tools */}
           <div className="p-4 bg-muted/10 border-b flex justify-between">
             <div className="flex gap-2">
               {publicUrl && (

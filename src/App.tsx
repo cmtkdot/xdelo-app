@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -18,11 +17,10 @@ import Settings from "./pages/Settings";
 import AudioUpload from "./pages/AudioUpload";
 import NotFound from "./pages/NotFound";
 import PublicGallery from "./pages/PublicGallery";
-import AppSidebar from "./components/Layout/AppSidebar";
+import { AppSidebar } from "./components/Layout/AppSidebar";
 
 interface ApiError extends Error {
   status?: number;
-  message?: string;
 }
 
 const queryClient = new QueryClient({

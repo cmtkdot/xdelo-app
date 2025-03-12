@@ -1,7 +1,9 @@
+
 import { useState, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { FilterValues, Message } from "@/types";
+import { FilterValues } from "@/types";
+import { Message } from "@/types/MessagesTypes";
 import { MediaEditDialog } from "@/components/MediaEditDialog/MediaEditDialog";
 import { useToast } from "@/hooks/useToast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
@@ -15,8 +17,17 @@ import { isSameDay, isWithinInterval, parseISO } from "date-fns";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
 import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
 import { MediaFixButton } from "@/components/ProductGallery/MediaFixButton";
+import { AnalyzedContent } from "@/types";
 
 const ITEMS_PER_PAGE = 12;
+
+// Type guard to check if analyzed_content has a property
+function hasProperty<T extends object, K extends string>(
+  obj: T | null | undefined, 
+  prop: K
+): obj is T & Record<K, any> {
+  return !!obj && typeof obj === 'object' && prop in obj;
+}
 
 const ProductGallery = () => {
   const [editItem, setEditItem] = useState<Message | null>(null);
@@ -90,7 +101,8 @@ const ProductGallery = () => {
   const handleView = (group: Message[]) => {
     if (!group || group.length === 0) return;
     
-    setCurrentViewGroup(group);
+    // Make a shallow copy to avoid type conflicts
+    setCurrentViewGroup([...group]);
     setViewerOpen(true);
     
     const groupIndex = paginatedProducts.findIndex(g => {
@@ -106,7 +118,8 @@ const ProductGallery = () => {
     if (currentGroupIndex > 0) {
       const prevIndex = currentGroupIndex - 1;
       setCurrentGroupIndex(prevIndex);
-      setCurrentViewGroup(paginatedProducts[prevIndex]);
+      // Make a shallow copy to avoid type conflicts
+      setCurrentViewGroup([...paginatedProducts[prevIndex]]);
     }
   };
 
@@ -114,7 +127,8 @@ const ProductGallery = () => {
     if (currentGroupIndex < paginatedProducts.length - 1) {
       const nextIndex = currentGroupIndex + 1;
       setCurrentGroupIndex(nextIndex);
-      setCurrentViewGroup(paginatedProducts[nextIndex]);
+      // Make a shallow copy to avoid type conflicts
+      setCurrentViewGroup([...paginatedProducts[nextIndex]]);
     }
   };
 
@@ -127,12 +141,14 @@ const ProductGallery = () => {
         const mainMedia = group.find(m => m.caption) || group[0];
         if (!mainMedia) return false;
         
+        const ac = mainMedia.analyzed_content as AnalyzedContent | null;
+        
         return (
-          mainMedia.analyzed_content?.product_name?.toLowerCase().includes(searchLower) ||
-          mainMedia.analyzed_content?.vendor_uid?.toLowerCase().includes(searchLower) ||
-          mainMedia.analyzed_content?.product_code?.toLowerCase().includes(searchLower) ||
-          mainMedia.caption?.toLowerCase().includes(searchLower) ||
-          mainMedia.purchase_order?.toLowerCase().includes(searchLower)
+          (hasProperty(ac, 'product_name') && ac.product_name.toLowerCase().includes(searchLower)) ||
+          (hasProperty(ac, 'vendor_uid') && ac.vendor_uid.toLowerCase().includes(searchLower)) ||
+          (hasProperty(ac, 'product_code') && ac.product_code.toLowerCase().includes(searchLower)) ||
+          (mainMedia.caption?.toLowerCase().includes(searchLower)) ||
+          (mainMedia.purchase_order?.toLowerCase().includes(searchLower))
         );
       });
     }
@@ -140,7 +156,8 @@ const ProductGallery = () => {
     if (filters.vendors && filters.vendors.length > 0) {
       filtered = filtered.filter(group => {
         const mainMedia = group.find(m => m.caption) || group[0];
-        return mainMedia && filters.vendors?.includes(mainMedia.analyzed_content?.vendor_uid || '');
+        const ac = mainMedia?.analyzed_content as AnalyzedContent | null;
+        return mainMedia && hasProperty(ac, 'vendor_uid') && filters.vendors?.includes(ac.vendor_uid);
       });
     }
     
@@ -149,27 +166,31 @@ const ProductGallery = () => {
         const mainMedia = group.find(m => m.caption) || group[0];
         if (!mainMedia) return false;
         
-        let purchaseDate: Date | null = null;
+        const ac = mainMedia.analyzed_content as AnalyzedContent | null;
+        if (!hasProperty(ac, 'purchase_date') || !ac.purchase_date) return false;
         
-        if (mainMedia.analyzed_content?.purchase_date) {
-          purchaseDate = parseISO(mainMedia.analyzed_content.purchase_date);
+        try {
+          const purchaseDate = parseISO(ac.purchase_date);
+          
+          return isWithinInterval(purchaseDate, {
+            start: filters.dateRange!.from,
+            end: filters.dateRange!.to
+          });
+        } catch (error) {
+          return false;
         }
-        
-        if (!purchaseDate) return false;
-        
-        return isWithinInterval(purchaseDate, {
-          start: filters.dateRange!.from,
-          end: filters.dateRange!.to
-        });
       });
     }
     
     if (!filters.showUntitled) {
       filtered = filtered.filter(group => {
         const mainMedia = group.find(m => m.caption) || group[0];
-        return mainMedia && 
-               mainMedia.analyzed_content?.product_name && 
-               mainMedia.analyzed_content.product_name.toLowerCase() !== "untitled";
+        if (!mainMedia) return false;
+        
+        const ac = mainMedia.analyzed_content as AnalyzedContent | null;
+        return hasProperty(ac, 'product_name') && 
+               ac.product_name && 
+               ac.product_name.toLowerCase() !== "untitled";
       });
     }
     
@@ -179,16 +200,27 @@ const ProductGallery = () => {
       
       if (!mainMediaA || !mainMediaB) return 0;
       
+      const acA = mainMediaA.analyzed_content as AnalyzedContent | null;
+      const acB = mainMediaB.analyzed_content as AnalyzedContent | null;
+      
       if (filters.sortField === 'purchase_date') {
         let dateA: Date | null = null;
         let dateB: Date | null = null;
         
-        if (mainMediaA.analyzed_content?.purchase_date) {
-          dateA = parseISO(mainMediaA.analyzed_content.purchase_date);
+        if (hasProperty(acA, 'purchase_date') && acA.purchase_date) {
+          try {
+            dateA = parseISO(acA.purchase_date);
+          } catch (e) {
+            dateA = null;
+          }
         }
         
-        if (mainMediaB.analyzed_content?.purchase_date) {
-          dateB = parseISO(mainMediaB.analyzed_content.purchase_date);
+        if (hasProperty(acB, 'purchase_date') && acB.purchase_date) {
+          try {
+            dateB = parseISO(acB.purchase_date);
+          } catch (e) {
+            dateB = null;
+          }
         }
         
         if (!dateA) dateA = new Date(mainMediaA.created_at || 0);

@@ -17,6 +17,11 @@ export function MessageListContainer() {
     handleRefresh
   } = useMessageQueue();
 
+  const handleRetryProcessing = async (messageId: string) => {
+    // This would need to be implemented to handle retrying a specific message
+    console.log('Retrying processing for message:', messageId);
+  };
+
   return (
     <div className="space-y-4">
       <StatusSummary stats={stats} />
@@ -37,7 +42,12 @@ export function MessageListContainer() {
           <p className="text-red-800 dark:text-red-200">Error loading messages: {error.message}</p>
         </div>
       ) : (
-        <MessageList messages={messages} onRefresh={refetch} />
+        <MessageList 
+          messages={messages} 
+          onRefresh={refetch} 
+          onRetryProcessing={handleRetryProcessing}
+          stats={stats}
+        />
       )}
     </div>
   );
