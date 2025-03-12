@@ -96,18 +96,17 @@ export async function xdelo_get_message_processing_stats(
 ): Promise<Record<string, any>> {
   const { data } = await supabase.rpc('xdelo_get_message_processing_stats');
   return data || {
-    total_messages: 0,
-    by_state: {
-      initialized: 0,
-      pending: 0,
-      processing: 0,
-      completed: 0,
-      error: 0
-    },
-    with_analyzed_content: 0,
-    with_caption: 0,
-    needs_redownload: 0,
-    with_media_group_id: 0,
-    stalled_processing: 0
+    total: 0,
+    initialized: 0,
+    pending: 0,
+    processing: 0,
+    completed: 0,
+    error: 0,
+    stalled_processing: 0,
+    stalled_pending: 0,
+    processing_times: {
+      avg_minutes: 0,
+      max_minutes: 0
+    }
   };
 }

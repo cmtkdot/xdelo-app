@@ -746,7 +746,7 @@ export type Database = {
           main_processed: string | null
           main_submitted_timestamp: string | null
           main_user_email: string | null
-          rowids_accountsid_new: string | null
+          rowids_accountsid: string | null
           sb_accounts_id: string | null
           sb_estimates_id: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
@@ -768,7 +768,7 @@ export type Database = {
           main_processed?: string | null
           main_submitted_timestamp?: string | null
           main_user_email?: string | null
-          rowids_accountsid_new?: string | null
+          rowids_accountsid?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
@@ -790,7 +790,7 @@ export type Database = {
           main_processed?: string | null
           main_submitted_timestamp?: string | null
           main_user_email?: string | null
-          rowids_accountsid_new?: string | null
+          rowids_accountsid?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
