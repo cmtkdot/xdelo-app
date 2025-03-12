@@ -1,22 +1,24 @@
 
 import React from 'react';
-import { Message } from '@/types';
+import type { Message } from '@/types/MessagesTypes';
 import { Spinner } from '@/components/ui/spinner';
 import { StatusSummary } from './StatusSummary';
 import { MessageCard } from './MessageCard';
 
 interface MessageListProps {
   messages: Message[];
-  isLoading: boolean;
+  isLoading?: boolean;
   onRetryProcessing: (messageId: string) => Promise<void>;
   processAllLoading?: boolean;
+  stats: any; // Will be properly typed with MessageProcessingStats
 }
 
 export const MessageList: React.FC<MessageListProps> = ({
   messages,
   isLoading,
   onRetryProcessing,
-  processAllLoading = false
+  processAllLoading = false,
+  stats
 }) => {
   if (isLoading) {
     return (
@@ -35,21 +37,9 @@ export const MessageList: React.FC<MessageListProps> = ({
     );
   }
 
-  // Count messages by processing state
-  const pendingCount = messages.filter(msg => msg.processing_state === 'pending').length;
-  const processingCount = messages.filter(msg => msg.processing_state === 'processing').length;
-  const errorCount = messages.filter(msg => msg.processing_state === 'error').length;
-  const completedCount = messages.filter(msg => msg.processing_state === 'completed').length;
-
   return (
     <div className="space-y-6">
-      <StatusSummary
-        pendingCount={pendingCount}
-        processingCount={processingCount}
-        completedCount={completedCount}
-        errorCount={errorCount}
-      />
-
+      <StatusSummary stats={stats} />
       <div className="space-y-4">
         {messages.map(message => (
           <MessageCard 

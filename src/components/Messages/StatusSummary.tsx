@@ -2,7 +2,7 @@
 import React from 'react';
 import { Clock, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
 import { Card } from "@/components/ui/card";
-import { MessageProcessingStats } from '@/types/MessagesTypes';
+import type { MessageProcessingStats } from '@/types/MessagesTypes';
 
 interface StatusSummaryProps {
   stats: MessageProcessingStats;

@@ -3,7 +3,7 @@ import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RefreshCw } from 'lucide-react';
-import { Message } from '@/types/MessagesTypes';
+import type { Message } from '@/types/MessagesTypes';
 import { formatDate } from '@/lib/utils';
 
 interface MessageCardProps {
@@ -31,17 +31,20 @@ export const MessageCard: React.FC<MessageCardProps> = ({
   };
 
   const isError = message.processing_state === 'error';
+  const productDetails = analyzed_content ? (analyzed_content as any)?.product_name : null;
 
   return (
     <Card className="w-full">
       <CardContent className="p-4">
         <div className="flex justify-between items-start">
           <div className="space-y-1">
-            {analyzed_content?.product_name && (
-              <div className="text-sm font-medium">{analyzed_content.product_name}</div>
+            {productDetails && (
+              <div className="text-sm font-medium">{productDetails}</div>
             )}
             {caption && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">{caption.substring(0, 100)}{caption.length > 100 ? '...' : ''}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {caption.substring(0, 100)}{caption.length > 100 ? '...' : ''}
+              </p>
             )}
             <div className="text-xs text-gray-400 dark:text-gray-500">
               Created: {formatDate(new Date(created_at || ''))}

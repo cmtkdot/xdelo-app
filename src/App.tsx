@@ -2,30 +2,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from "react-router-dom";
-import { DashboardLayout } from "./components/Layout/DashboardLayout";
-import Dashboard from "./pages/Dashboard";
-import ProductGallery from "./pages/ProductGallery";
-import MediaTable from "./pages/MediaTable";
-import PublicGallery from "./pages/PublicGallery";
-import Vendors from "./pages/Vendors";
-import Settings from "./pages/Settings";
-import Auth from "./pages/Auth";
-import NotFound from "./pages/NotFound";
-import AIChat from "./pages/AIChat";
-import GlProducts from "./pages/GlProducts";
-import AudioUpload from "./pages/AudioUpload";
-import MessagesPage from "./pages/Messages";
-import { useEffect, useState } from "react";
-import { supabase } from "./integrations/supabase/client";
+import { SupabaseProvider } from "./integrations/supabase/SupabaseProvider";
 import { ThemeProvider } from "./components/Theme/ThemeProvider";
-import { Session } from "@supabase/supabase-js";
-import { useNavigate } from "react-router-dom";
-import { AppSidebar } from "./components/Layout/AppSidebar";
-
-interface ApiError {
-  status?: number;
-  message?: string;
-}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -102,11 +80,11 @@ const ProtectedRoute = ({
 };
 
 const App = () => (
-  <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Router>
-          <Routes>
+  <SupabaseProvider>
+    <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Router>
             <Route path="/auth" element={<Auth />} />
             <Route path="/p/:id" element={<PublicGallery />} />
             <Route element={
@@ -130,12 +108,12 @@ const App = () => (
               <Route path="/audio-upload" element={<AudioUpload />} />
               <Route path="*" element={<NotFound />} />
             </Route>
-          </Routes>
+          </Router>
           <Toaster />
-        </Router>
-      </TooltipProvider>
-    </QueryClientProvider>
-  </ThemeProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
+  </SupabaseProvider>
 );
 
 export default App;
