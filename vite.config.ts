@@ -71,10 +71,6 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       protocol: 'wss',
       clientPort: 443
-    },
-    allowedHosts: [
-      '79512fb5-8301-4d61-9349-6769d5c8295b.lovableproject.com',
-      '*.lovableproject.com'
-    ]
+    }
   }
 }));
