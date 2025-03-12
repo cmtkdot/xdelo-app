@@ -2,6 +2,7 @@ import { supabaseClient } from '../../_shared/supabase.ts';
 import { getMediaInfo } from '../utils/mediaUtils.ts';
 import { logMessageOperation } from '../utils/logger.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
+import { xdelo_analyzeMessageCaption } from '../../_shared/databaseOperations.ts';
 import { 
   TelegramMessage, 
   MessageContext, 
@@ -371,8 +372,8 @@ async function handleNewMediaMessage(
         chat_id: message.chat.id,
         file_unique_id: mediaInfo.file_unique_id,
         media_group_id: message.media_group_id,
-        is_forwarded: !!forwardInfo,
-        forward_info: forwardInfo
+        is_forwarded: !!messageInput.forward_info,
+        forward_info: messageInput.forward_info
       }
     );
   } catch (logError) {
@@ -445,51 +446,84 @@ async function processMessage(
     console.log(`Message ${dbMessage.id} has caption, calling manual caption parser`);
     
     try {
-      // First try direct caption processor with our new manual-caption-parser
-      // Note the addition of the force_reprocess: true flag to ensure we always process
+      // First try direct caption processor with our fixed manual-caption-parser
+      const captionProcessorUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/manual-caption-parser`;
+      const processorResponse = await fetch(captionProcessorUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          'x-client-info': 'telegram-webhook'
+        },
+        body: JSON.stringify({
+          messageId: dbMessage.id,
+          caption: message.caption,
+          mediaGroupId: message.media_group_id,
+          correlationId: context.correlationId,
+          triggerSource: 'webhook_handler',
+          forceReprocess: true
+        })
+      });
+      
+      if (!processorResponse.ok) {
+        // Read the error message and status for better diagnostics
+        const errorText = await processorResponse.text();
+        throw new Error(`Manual parser error: ${processorResponse.status} ${processorResponse.statusText} - ${errorText}`);
+      }
+      
+      const processorResult = await processorResponse.json();
+      console.log('Manual caption processing successful:', processorResult);
+      
+      return; // Success - we're done!
+    } catch (directError) {
+      console.error('Manual caption processor failed, falling back to database function:', directError);
+      
+      // Fallback: Call the database function using our wrapper with correct parameters
       try {
-        const { data: processorResult, error: processorError } = await supabaseClient.functions.invoke(
-          'manual-caption-parser',
-          {
-            body: {
-              messageId: dbMessage.id,
-              caption: message.caption,
-              media_group_id: message.media_group_id,
-              correlationId: context.correlationId,
-              trigger_source: 'webhook_handler',
-              force_reprocess: true // Force reprocessing always for new messages
-            }
-          }
+        const captionResult = await xdelo_analyzeMessageCaption(
+          dbMessage.id,
+          context.correlationId,
+          message.caption,
+          message.media_group_id,
+          true // Force reprocess
         );
         
-        if (processorError) {
-          throw new Error(`Manual parser error: ${processorError.message}`);
-        }
-        
-        console.log('Manual caption processing successful:', processorResult);
-      } catch (directError) {
-        console.error('Manual caption processor failed, falling back to database function:', directError);
-        
-        // Fallback: Call the database function directly
-        const { data: captionResult, error: captionError } = await supabaseClient.rpc(
-          'xdelo_analyze_message_caption',
-          {
-            p_message_id: dbMessage.id,
-            p_correlation_id: context.correlationId,
-            p_caption: message.caption,
-            p_media_group_id: message.media_group_id,
-            p_force_reprocess: true // Add force reprocess parameter
-          }
-        );
-        
-        if (captionError) {
-          console.error('Database caption processing failed:', captionError);
+        if (!captionResult.success) {
+          console.error('Database caption processing failed:', captionResult.error);
         } else {
-          console.log('Database caption processing successful:', captionResult);
+          console.log('Database caption processing successful:', captionResult.data);
+        }
+      } catch (dbError) {
+        console.error('All caption processing attempts failed:', dbError);
+        
+        // Last resort: Try to parse directly
+        try {
+          console.log('Attempting direct caption parsing and database update');
+          
+          // Import parseCaption function dynamically
+          const { parseCaption } = await import('../../manual-caption-parser/captionParser.ts');
+          const parsedContent = parseCaption(message.caption);
+          
+          // Update the message directly
+          const { error: updateError } = await supabaseClient
+            .from('messages')
+            .update({
+              analyzed_content: parsedContent,
+              processing_state: 'completed',
+              processing_completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', dbMessage.id);
+            
+          if (updateError) {
+            console.error('Final fallback parsing failed:', updateError);
+          } else {
+            console.log('Final fallback parsing succeeded');
+          }
+        } catch (finalError) {
+          console.error('All caption processing methods failed:', finalError);
         }
       }
-    } catch (processingError) {
-      console.error('Error in message processing:', processingError);
     }
   }
 }

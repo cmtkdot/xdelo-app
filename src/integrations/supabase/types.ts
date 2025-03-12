@@ -1520,6 +1520,7 @@ export type Database = {
           edit_date: string | null
           edit_history: Json | null
           edited_channel_post: boolean | null
+          error_code: string | null
           error_message: string | null
           file_id: string | null
           file_id_expires_at: string | null
@@ -1555,6 +1556,7 @@ export type Database = {
           message_caption_id: string | null
           message_url: string | null
           mime_type: string | null
+          mime_type_original: string | null
           needs_redownload: boolean | null
           notes: string | null
           old_analyzed_content: Json[] | null
@@ -1585,7 +1587,9 @@ export type Database = {
           redownload_reason: string | null
           redownload_strategy: string | null
           retry_count: number | null
+          storage_exists: string | null
           storage_path: string | null
+          storage_path_standardized: string | null
           sync_attempt: number | null
           telegram_data: Json | null
           telegram_message_id: number | null
@@ -1609,6 +1613,7 @@ export type Database = {
           edit_date?: string | null
           edit_history?: Json | null
           edited_channel_post?: boolean | null
+          error_code?: string | null
           error_message?: string | null
           file_id?: string | null
           file_id_expires_at?: string | null
@@ -1644,6 +1649,7 @@ export type Database = {
           message_caption_id?: string | null
           message_url?: string | null
           mime_type?: string | null
+          mime_type_original?: string | null
           needs_redownload?: boolean | null
           notes?: string | null
           old_analyzed_content?: Json[] | null
@@ -1674,7 +1680,9 @@ export type Database = {
           redownload_reason?: string | null
           redownload_strategy?: string | null
           retry_count?: number | null
+          storage_exists?: string | null
           storage_path?: string | null
+          storage_path_standardized?: string | null
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
@@ -1698,6 +1706,7 @@ export type Database = {
           edit_date?: string | null
           edit_history?: Json | null
           edited_channel_post?: boolean | null
+          error_code?: string | null
           error_message?: string | null
           file_id?: string | null
           file_id_expires_at?: string | null
@@ -1733,6 +1742,7 @@ export type Database = {
           message_caption_id?: string | null
           message_url?: string | null
           mime_type?: string | null
+          mime_type_original?: string | null
           needs_redownload?: boolean | null
           notes?: string | null
           old_analyzed_content?: Json[] | null
@@ -1763,7 +1773,9 @@ export type Database = {
           redownload_reason?: string | null
           redownload_strategy?: string | null
           retry_count?: number | null
+          storage_exists?: string | null
           storage_path?: string | null
+          storage_path_standardized?: string | null
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null

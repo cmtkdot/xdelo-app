@@ -1,16 +1,19 @@
 
-// Types for the manual-caption-parser function
+// Types for manual caption parser
+
 export interface ParsedContent {
   product_name?: string;
   product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
+  vendor_uid?: string | null;
+  purchase_date?: string | null;
   quantity?: number | null;
   notes?: string;
   caption?: string;
-  parsing_metadata?: {
+  parsing_metadata: {
     method: 'manual';
     timestamp: string;
+    partial_success?: boolean;
+    missing_fields?: string[];
     quantity_pattern?: string;
     used_fallback?: boolean;
     original_caption?: string;
@@ -23,6 +26,8 @@ export interface ParsedContent {
   sync_metadata?: {
     media_group_id?: string;
     sync_source_message_id?: string;
+    sync_correlation_id?: string;
+    sync_timestamp?: string;
   };
 }
 
