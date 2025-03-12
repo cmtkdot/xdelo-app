@@ -23,7 +23,7 @@ export function DangerZoneCard() {
       console.log('Clear messages result:', data);
     } catch (error) {
       console.error('Error clearing messages:', error);
-      toast.error('Failed to clear messages: ' + (error.message || 'Unknown error'));
+      toast.error('Failed to clear messages: ' + (error?.message || 'Unknown error'));
     } finally {
       setIsDeleting(false);
     }
