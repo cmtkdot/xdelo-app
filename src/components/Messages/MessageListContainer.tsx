@@ -57,7 +57,7 @@ export const MessageListContainer: React.FC = () => {
   const handleRetryProcessing = async (messageId: string) => {
     try {
       await processMessageById(messageId);
-      handleRefresh();
+      await handleRefresh();
     } catch (error) {
       console.error('Error retrying message processing:', error);
     }

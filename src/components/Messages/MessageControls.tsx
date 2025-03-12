@@ -1,7 +1,7 @@
 
 import React from 'react';
-import type { Message } from './types';
-import { useMessageProcessing } from '../../hooks/useMessageProcessing';
+import { Message } from '@/types';
+import { useMessageQueue } from '@/hooks/useMessageQueue';
 
 interface MessageControlsProps {
   message: Message;
@@ -9,19 +9,22 @@ interface MessageControlsProps {
 }
 
 export function MessageControls({ message, onSuccess }: MessageControlsProps) {
-  const { handleReanalyze, isProcessing, errors } = useMessageProcessing();
+  const { processMessageById, isProcessing } = useMessageQueue();
 
-  const isCurrentlyProcessing = isProcessing[message.id];
-  const error = errors[message.id];
   const canRetry = message.processing_state === 'error' || 
     (message.processing_state === 'completed' && (!message.analyzed_content || !message.analyzed_content.product_code));
+  
   const canSync = message.media_group_id && 
     message.processing_state === 'completed' && 
     !message.group_caption_synced;
 
   const handleRetry = async () => {
-    await handleReanalyze(message);
-    onSuccess?.();
+    try {
+      await processMessageById(message.id);
+      onSuccess?.();
+    } catch (error) {
+      console.error('Error retrying message processing:', error);
+    }
   };
 
   return (
@@ -29,20 +32,15 @@ export function MessageControls({ message, onSuccess }: MessageControlsProps) {
       {canRetry && (
         <button
           onClick={handleRetry}
-          disabled={isCurrentlyProcessing}
+          disabled={isProcessing}
           className={`px-3 py-1 text-sm rounded-md
-            ${isCurrentlyProcessing 
+            ${isProcessing 
               ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
               : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
             }`}
         >
-          {isCurrentlyProcessing ? 'Processing...' : 'Retry Analysis'}
+          {isProcessing ? 'Processing...' : 'Retry Analysis'}
         </button>
-      )}
-      {error && (
-        <div className="text-sm text-red-600 mt-1">
-          {error}
-        </div>
       )}
     </div>
   );
