@@ -44,15 +44,10 @@ detailed:
 Caption Processing and Media Group Synchronization
 1. Caption Processing Flow --> If No caption then will check for other media groups that are the same and see if they have analyzed content parsed from caption already completed and not null. It will sync if it  has captions then: 
 A. Entry Points
-Direct Processing (Primary Path)
 Webhook receives Telegram message
 Message stored with initial state 'initialized'
-Caption processor triggered immediately
-Manual Processing (Secondary Path)
+Caption processor triggered immediately after caption is not null
 
-UI-triggered reprocessing
-Force reprocessing flag set
-Existing analysis preserved in history
 B. Caption Analysis Algorithm
 The system uses a sophisticated multi-pattern matching approach:
 
@@ -92,13 +87,14 @@ Metadata Tracking
     "timestamp": "2024-03-10T..."
   }
 }
+
 2. Media Group Synchronization
 A. Immediate Synchronization
 Trigger Points
-
 New message in group received
 Caption edited
 Force reprocessing requested
+Any edits to the caption from our app to telegram
 Synchronization Process
 
 
