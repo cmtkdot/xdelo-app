@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { supabaseClient } from "../_shared/supabase.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
-// This edge function will execute SQL to remove deprecated xdelo functions
+// This edge function will directly execute SQL to remove deprecated xdelo functions
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -11,31 +11,9 @@ serve(async (req) => {
   }
 
   try {
-    console.log("Starting database function cleanup process");
+    console.log("Starting direct database function cleanup process");
     
-    // Get the list of functions to check before removal
-    const { data: functionList, error: listError } = await supabaseClient.rpc(
-      'xdelo_execute_sql_query',
-      {
-        p_query: `
-          SELECT routine_name 
-          FROM information_schema.routines 
-          WHERE routine_schema = 'public' 
-          AND routine_type = 'FUNCTION' 
-          AND routine_name LIKE 'xdelo_%'
-          ORDER BY routine_name;
-        `,
-        p_params: []
-      }
-    );
-    
-    if (listError) {
-      throw new Error(`Error fetching function list: ${listError.message}`);
-    }
-    
-    console.log(`Found ${functionList.length} functions with xdelo_ prefix`);
-    
-    // List of functions that are safe to remove
+    // List of functions to be removed
     const functionsToRemove = [
       'xdelo_begin_transaction',
       'xdelo_commit_transaction_with_sync',
@@ -50,83 +28,15 @@ serve(async (req) => {
     
     // Track results
     const results = {
-      checked: 0,
       removed: 0,
-      skipped: 0,
       errors: [],
       details: []
     };
     
-    // Check recent usage of each function before removal
+    // Drop each function
     for (const funcName of functionsToRemove) {
-      results.checked++;
-      
       try {
-        // Check if function exists
-        const { data: exists, error: existsError } = await supabaseClient.rpc(
-          'xdelo_execute_sql_query',
-          {
-            p_query: `
-              SELECT EXISTS(
-                SELECT 1 
-                FROM information_schema.routines 
-                WHERE routine_schema = 'public' 
-                AND routine_type = 'FUNCTION' 
-                AND routine_name = $1
-              );
-            `,
-            p_params: [funcName]
-          }
-        );
-        
-        if (existsError) {
-          throw new Error(`Error checking if function exists: ${existsError.message}`);
-        }
-        
-        if (!exists[0].exists) {
-          console.log(`Function ${funcName} does not exist, skipping`);
-          results.skipped++;
-          results.details.push({
-            function: funcName,
-            status: 'skipped',
-            reason: 'function does not exist'
-          });
-          continue;
-        }
-        
-        // Check for recent usage in audit logs
-        const { data: usageData, error: usageError } = await supabaseClient.rpc(
-          'xdelo_execute_sql_query',
-          {
-            p_query: `
-              SELECT COUNT(*) 
-              FROM unified_audit_logs 
-              WHERE event_type = 'function_executed' 
-              AND metadata->>'function_name' = $1
-              AND event_timestamp > NOW() - INTERVAL '7 days';
-            `,
-            p_params: [funcName]
-          }
-        );
-        
-        if (usageError) {
-          throw new Error(`Error checking function usage: ${usageError.message}`);
-        }
-        
-        const recentUsageCount = parseInt(usageData[0].count);
-        
-        if (recentUsageCount > 0) {
-          console.log(`Function ${funcName} has been used ${recentUsageCount} times in the last 7 days, skipping removal`);
-          results.skipped++;
-          results.details.push({
-            function: funcName,
-            status: 'skipped',
-            reason: `recent usage (${recentUsageCount} calls in last 7 days)`
-          });
-          continue;
-        }
-        
-        // Drop the function
+        // Directly drop the function without checking usage
         const { error: dropError } = await supabaseClient.rpc(
           'xdelo_execute_sql_query',
           {
@@ -148,7 +58,7 @@ serve(async (req) => {
         });
         
       } catch (error) {
-        console.error(`Error processing function ${funcName}:`, error);
+        console.error(`Error dropping function ${funcName}:`, error);
         results.errors.push({
           function: funcName,
           error: error.message
@@ -169,9 +79,7 @@ serve(async (req) => {
         entity_id: 'system',
         metadata: {
           operation: 'function_cleanup',
-          functions_checked: results.checked,
           functions_removed: results.removed,
-          functions_skipped: results.skipped,
           errors: results.errors.length,
           timestamp: new Date().toISOString()
         },
@@ -182,7 +90,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Database function cleanup completed: ${results.removed} functions removed, ${results.skipped} skipped, ${results.errors.length} errors`,
+        message: `Database function cleanup completed: ${results.removed} functions removed, ${results.errors.length} errors`,
         results
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
