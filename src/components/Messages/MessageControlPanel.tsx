@@ -19,10 +19,7 @@ export function MessageControlPanel({
   messageCount,
   stats 
 }: MessageControlPanelProps) {
-  const { 
-    repairFiles, 
-    isRepairing
-  } = useFileRepair();
+  const { repairFiles, isRepairing } = useFileRepair();
 
   return (
     <Card className="p-4">
@@ -41,7 +38,7 @@ export function MessageControlPanel({
           <Button 
             variant="outline" 
             size="sm"
-            onClick={() => repairFiles('all')}
+            onClick={() => repairFiles({})}
             disabled={isRepairing}
           >
             <Wrench className="mr-2 h-4 w-4" />

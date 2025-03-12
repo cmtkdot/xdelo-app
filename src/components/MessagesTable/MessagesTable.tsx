@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -18,17 +17,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Message as MessageType } from "@/types/MessagesTypes"; // Import from MessagesTypes
+import { Message } from "@/types/MessagesTypes";
 
-interface EditableMessage extends MessageType {
+interface EditableMessage extends Message {
   isEditing: boolean;
 }
 
 interface MessagesTableProps {
-  messages: MessageType[];
+  messages: Message[];
 }
 
-// The rest of the component with proper type annotations
 export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialMessages }) => {
   const [messages, setMessages] = useState<EditableMessage[]>(
     initialMessages.map(message => ({ ...message, isEditing: false }))
