@@ -1,5 +1,6 @@
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ProcessingStats {
@@ -17,53 +18,49 @@ export interface ProcessingStats {
   };
 }
 
-export const useProcessingStats = () => {
-  const [stats, setStats] = useState<ProcessingStats>({
-    total: 0,
-    initialized: 0,
-    pending: 0,
-    processing: 0,
-    completed: 0,
-    error: 0,
-    stalled_processing: 0,
-    stalled_pending: 0,
-    processing_times: {
-      avg_minutes: 0,
-      max_minutes: 0
-    }
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+export const useProcessingStats = (refreshInterval = 60000) => {
+  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
-  const fetchStats = async () => {
+  const getProcessingStats = async (): Promise<ProcessingStats> => {
     try {
-      setIsLoading(true);
-      
       const { data, error } = await supabase.rpc('xdelo_get_message_processing_stats');
       
-      if (error) throw error;
+      if (error) {
+        throw new Error(`Error fetching processing stats: ${error.message}`);
+      }
       
-      setStats(data as ProcessingStats);
-    } catch (err: any) {
-      console.error('Error fetching processing stats:', err);
-      setError(err);
-    } finally {
-      setIsLoading(false);
+      return data as ProcessingStats;
+    } catch (error) {
+      console.error('Error fetching processing stats:', error);
+      throw error;
     }
   };
 
+  const { 
+    data: stats, 
+    isLoading, 
+    error, 
+    refetch,
+    isRefetching
+  } = useQuery({
+    queryKey: ['processingStats'],
+    queryFn: getProcessingStats,
+    staleTime: refreshInterval,
+    refetchInterval: refreshInterval,
+  });
+
   useEffect(() => {
-    fetchStats();
-    
-    // Set up a refresh interval
-    const interval = setInterval(fetchStats, 60000); // Refresh every minute
-    
-    return () => clearInterval(interval);
-  }, []);
+    if (!isRefetching && !isLoading) {
+      setLastRefreshed(new Date());
+    }
+  }, [isRefetching, isLoading, stats]);
 
-  const refetch = async () => {
-    await fetchStats();
+  return { 
+    stats, 
+    isLoading, 
+    error, 
+    refetch, 
+    lastRefreshed,
+    isRefetching
   };
-
-  return { stats, isLoading, error, refetch };
 };

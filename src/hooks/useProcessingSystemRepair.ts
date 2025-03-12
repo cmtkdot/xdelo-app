@@ -1,74 +1,57 @@
 
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/useToast';
-import { useProcessingStats } from './useProcessingStats';
+import { useToast } from './useToast';
 
-export interface RepairOptions {
+interface RepairOptions {
   limit?: number;
-  reset_all?: boolean;
   repair_enums?: boolean;
+  reset_all?: boolean;
   force_reset_stalled?: boolean;
 }
 
-const useProcessingSystemRepair = () => {
+export function useProcessingSystemRepair() {
   const [isRepairing, setIsRepairing] = useState(false);
-  const [results, setResults] = useState<any>(null);
   const { toast } = useToast();
-  const { refetch } = useProcessingStats();
 
-  const repairProcessingSystem = async (options: RepairOptions = {}) => {
+  const repairProcessingFlow = async (options?: RepairOptions) => {
+    setIsRepairing(true);
+    
     try {
-      setIsRepairing(true);
-      
-      // Call the edge function to repair the processing system
       const { data, error } = await supabase.functions.invoke('repair-processing-flow', {
         body: {
-          limit: options.limit || 20,
-          reset_all: options.reset_all || false,
-          repair_enums: options.repair_enums !== false, // Default to true
-          force_reset_stalled: options.force_reset_stalled || false
+          limit: options?.limit || 20,
+          repair_enums: options?.repair_enums !== undefined ? options.repair_enums : true,
+          reset_all: options?.reset_all || false,
+          force_reset_stalled: options?.force_reset_stalled || false
         }
       });
       
-      if (error) throw error;
-      
-      setResults(data);
-      
-      // Refresh stats after repair
-      await refetch();
+      if (error) {
+        throw new Error(`Error repairing processing flow: ${error.message}`);
+      }
       
       toast({
-        title: 'System Repair Completed',
-        description: `Successfully repaired the processing system. ${data?.results?.stuck_reset || 0} stuck messages reset.`,
+        title: "System repair completed",
+        description: data.message || "Processing system repair completed successfully",
       });
       
       return data;
-    } catch (err: any) {
-      console.error('Error repairing processing system:', err);
-      
+    } catch (error: any) {
       toast({
-        title: 'Repair Failed',
-        description: err.message || 'An unexpected error occurred',
-        variant: 'destructive'
+        title: "System repair failed",
+        description: error.message || "An error occurred during system repair",
+        variant: "destructive",
       });
       
-      throw err;
+      throw error;
     } finally {
       setIsRepairing(false);
     }
   };
-
-  const resetStalledProcessing = async () => {
-    return repairProcessingSystem({ force_reset_stalled: true });
-  };
-
+  
   return {
-    isRepairing,
-    results,
-    repairProcessingSystem,
-    resetStalledProcessing
+    repairProcessingFlow,
+    isRepairing
   };
-};
-
-export default useProcessingSystemRepair;
+}
