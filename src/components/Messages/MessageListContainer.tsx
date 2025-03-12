@@ -39,6 +39,7 @@ export const MessageListContainer: React.FC = () => {
   
   const { 
     processMessageById,
+    xdelo_fixMediaMimeTypes,
     isProcessing 
   } = useMessageQueue();
 
@@ -62,6 +63,19 @@ export const MessageListContainer: React.FC = () => {
       console.error('Error retrying message processing:', error);
     }
   };
+
+  const handleFixMimeTypes = async () => {
+    try {
+      await xdelo_fixMediaMimeTypes(50);
+      await handleRefresh();
+      toast({
+        title: "MIME Type Fix",
+        description: "MIME type fix operation completed successfully"
+      });
+    } catch (error) {
+      console.error('Error fixing MIME types:', error);
+    }
+  };
   
   const isProcessingAny = isProcessing || isRefreshing;
 
@@ -77,6 +91,7 @@ export const MessageListContainer: React.FC = () => {
             isRefreshing={isRefreshing}
             onToggleFilters={handleToggleFilters}
             showFilters={showFilters}
+            onFixMimeTypes={handleFixMimeTypes}
           />
           
           {showFilters && (

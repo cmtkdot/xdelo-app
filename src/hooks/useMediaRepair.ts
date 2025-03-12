@@ -209,6 +209,43 @@ export function useMediaRepair() {
     }
   };
 
+  const xdelo_fixIncorrectMimeTypes = async (limit = 50): Promise<any> => {
+    try {
+      setIsProcessing(true);
+      
+      const { data, error } = await supabase.functions.invoke('repair-media', {
+        body: { 
+          action: 'fix_mime_types',
+          limit,
+          options: {
+            onlyIncorrectTypes: true,
+            updateDatabase: true,
+            updateStorageMetadata: true
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "MIME Type Fix Complete",
+        description: `Fixed ${data.fixed || 0} messages with incorrect MIME types`,
+      });
+
+      return data;
+    } catch (error) {
+      console.error('Error fixing MIME types:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to fix MIME types",
+        variant: "destructive"
+      });
+      return null;
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return {
     isProcessing,
     selectedMessages,
@@ -219,6 +256,7 @@ export function useMediaRepair() {
     clearSelection,
     repairMessages,
     validateMessages,
-    cancelRepair
+    cancelRepair,
+    xdelo_fixIncorrectMimeTypes
   };
 }

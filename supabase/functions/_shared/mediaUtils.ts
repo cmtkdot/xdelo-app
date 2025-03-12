@@ -222,7 +222,7 @@ export async function xdelo_recoverFileMetadata(messageId: string): Promise<{suc
     
     // 3. Update public_url if needed
     if (!public_url || public_url.indexOf(file_unique_id) === -1) {
-      updatedData.public_url = `${process.env.SUPABASE_URL}/storage/v1/object/public/telegram-media/${updatedData.storage_path || storage_path}`;
+      updatedData.public_url = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${updatedData.storage_path || storage_path}`;
     }
     
     // 4. If we have changes, update the record

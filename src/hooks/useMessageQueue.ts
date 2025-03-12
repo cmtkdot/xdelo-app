@@ -133,11 +133,99 @@ export function useMessageQueue() {
       setIsProcessing(false);
     }
   };
+  
+  // New function to fix files with incorrect MIME types
+  const xdelo_fixMediaMimeTypes = async (limit: number = 50) => {
+    try {
+      setIsProcessing(true);
+      
+      // Call the repair-media edge function
+      const { data, error } = await supabase.functions.invoke(
+        'repair-media',
+        {
+          body: { 
+            action: 'fix_mime_types',
+            limit,
+            options: {
+              updateDatabase: true,
+              updateStorageMetadata: true,
+              onlyIncorrectTypes: true
+            }
+          }
+        }
+      );
+      
+      if (error) throw error;
+      
+      toast({
+        title: "MIME Type Repair",
+        description: `Fixed ${data.updated || 0} files with incorrect MIME types.`
+      });
+      
+      return data;
+    } catch (error) {
+      console.error('Error fixing MIME types:', error);
+      
+      toast({
+        title: "Repair Failed",
+        description: error.message || "Failed to fix MIME types",
+        variant: "destructive"
+      });
+      
+      throw error;
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // New function to redownload missing media files
+  const xdelo_redownloadMissingMedia = async (limit: number = 20) => {
+    try {
+      setIsProcessing(true);
+      
+      // Call the repair-media edge function
+      const { data, error } = await supabase.functions.invoke(
+        'repair-media',
+        {
+          body: { 
+            action: 'redownload_missing',
+            limit,
+            options: {
+              prioritizeRecent: true
+            }
+          }
+        }
+      );
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Media Redownload",
+        description: `Redownloaded ${data.successful || 0} missing files. Failed: ${data.failed || 0}.`
+      });
+      
+      return data;
+    } catch (error) {
+      console.error('Error redownloading missing media:', error);
+      
+      toast({
+        title: "Redownload Failed",
+        description: error.message || "Failed to redownload missing media",
+        variant: "destructive"
+      });
+      
+      throw error;
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return {
     processMessageById,
     xdelo_processStuckMessages,
     xdelo_resetStalledMessages,
+    xdelo_fixMediaMimeTypes,
+    xdelo_redownloadMissingMedia,
     isProcessing
   };
 }

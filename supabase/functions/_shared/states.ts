@@ -1,4 +1,3 @@
-
 import { SupabaseClient } from "@supabase/supabase-js";
 
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
@@ -109,4 +108,88 @@ export async function xdelo_get_message_processing_stats(
       max_minutes: 0
     }
   };
+}
+
+export async function xdelo_fix_message_mime_type(
+  supabase: SupabaseClient,
+  messageId: string
+): Promise<{success: boolean, original?: string, updated?: string}> {
+  try {
+    // Get the message
+    const { data: message, error: messageError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', messageId)
+      .single();
+      
+    if (messageError || !message) {
+      throw new Error(`Message not found: ${messageError?.message || 'No data returned'}`);
+    }
+    
+    // Skip if no telegram_data or file_unique_id
+    if (!message.telegram_data || !message.file_unique_id) {
+      return { success: false };
+    }
+    
+    // Detect better MIME type from telegram_data
+    const detectedMimeType = getMoreAccurateMimeType(message);
+    
+    // If detected type is the same as current, no need to update
+    if (detectedMimeType === message.mime_type) {
+      return { 
+        success: true,
+        original: message.mime_type,
+        updated: message.mime_type
+      };
+    }
+    
+    // Update the message with the detected MIME type
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        mime_type: detectedMimeType,
+        mime_type_corrected: true,
+        mime_type_original: message.mime_type,
+        mime_type_updated_at: new Date().toISOString()
+      })
+      .eq('id', messageId);
+      
+    if (updateError) {
+      throw new Error(`Failed to update MIME type: ${updateError.message}`);
+    }
+    
+    return {
+      success: true,
+      original: message.mime_type,
+      updated: detectedMimeType
+    };
+  } catch (error) {
+    console.error(`Error fixing MIME type for message ${messageId}:`, error);
+    return { success: false };
+  }
+}
+
+function getMoreAccurateMimeType(message: any): string {
+  // If mime_type exists and is not octet-stream, trust it
+  if (message.mime_type && message.mime_type !== 'application/octet-stream') {
+    return message.mime_type;
+  }
+  
+  const telegramData = message.telegram_data || {};
+  
+  // Check based on media type in telegram_data
+  if (telegramData.photo) return 'image/jpeg';
+  if (telegramData.video?.mime_type) return telegramData.video.mime_type;
+  if (telegramData.video) return 'video/mp4';
+  if (telegramData.document?.mime_type) return telegramData.document.mime_type;
+  if (telegramData.audio?.mime_type) return telegramData.audio.mime_type;
+  if (telegramData.audio) return 'audio/mpeg';
+  if (telegramData.voice?.mime_type) return telegramData.voice.mime_type;
+  if (telegramData.voice) return 'audio/ogg';
+  if (telegramData.animation) return 'video/mp4';
+  if (telegramData.sticker?.is_animated) return 'application/x-tgsticker';
+  if (telegramData.sticker) return 'image/webp';
+  
+  // If we can't determine a better type, keep the existing one
+  return message.mime_type || 'application/octet-stream';
 }
