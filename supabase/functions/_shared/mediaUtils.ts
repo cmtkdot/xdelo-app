@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
 // Initialize Supabase client (will use env vars from edge function context)
@@ -20,7 +19,7 @@ export function xdelo_isViewableMimeType(mimeType: string): boolean {
   return viewableTypes.some(type => mimeType.startsWith(type));
 }
 
-// Get default MIME type based on media type
+// Get default MIME type based on media type - simplified version
 export function xdelo_getDefaultMimeType(media: any): string {
   if (!media) return 'application/octet-stream';
   
@@ -36,22 +35,20 @@ export function xdelo_getDefaultMimeType(media: any): string {
   return 'application/octet-stream';
 }
 
-// Detect MIME type from Telegram media object with improved accuracy
+// Detect MIME type from Telegram media object - standard implementations
 export function xdelo_detectMimeType(media: any): string {
   if (!media) return 'application/octet-stream';
   
-  // First check for explicit mime_type in document
-  if (media.document?.mime_type) {
-    return media.document.mime_type;
-  }
-  
-  // Then check specific media types
+  // Simple, standardized MIME type detection - photos are JPEG, videos are MP4
   if (media.photo) return 'image/jpeg';
-  if (media.video?.mime_type) return media.video.mime_type;
   if (media.video) return 'video/mp4';
-  if (media.audio?.mime_type) return media.audio.mime_type;
+  
+  // For documents, trust Telegram's MIME type if available
+  if (media.document?.mime_type) return media.document.mime_type;
+  
+  // Otherwise use our default mappings
+  if (media.document) return 'application/octet-stream';
   if (media.audio) return 'audio/mpeg';
-  if (media.voice?.mime_type) return media.voice.mime_type;
   if (media.voice) return 'audio/ogg';
   if (media.animation) return 'video/mp4';
   if (media.sticker?.is_animated) return 'application/x-tgsticker';
@@ -75,6 +72,26 @@ export function xdelo_getUploadOptions(mimeType: string): any {
   return options;
 }
 
+// Very simple function to get file extension from MIME type
+export function xdelo_getFileExtensionFromMimeType(mimeType: string): string {
+  const mimeToExt: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'video/mp4': 'mp4',
+    'video/webm': 'webm',
+    'audio/mpeg': 'mp3',
+    'audio/ogg': 'ogg',
+    'audio/webm': 'webm',
+    'application/pdf': 'pdf',
+    'application/x-tgsticker': 'tgs',
+    'text/plain': 'txt'
+  };
+  
+  return mimeToExt[mimeType] || mimeType.split('/')[1] || 'bin';
+}
+
 // Validate if a file exists in storage
 export async function xdelo_validateStoragePath(path: string): Promise<boolean> {
   if (!path) return false;
@@ -87,15 +104,12 @@ export async function xdelo_validateStoragePath(path: string): Promise<boolean> 
   if (!bucket || !filePath) return false;
   
   try {
-    // Check if file exists
+    // Check if file exists using createSignedUrl (more reliable than list)
     const { data, error } = await supabase.storage
       .from(bucket)
-      .list(filePath.split('/').slice(0, -1).join('/'), {
-        limit: 1,
-        search: filePath.split('/').pop() || ''
-      });
+      .createSignedUrl(filePath, 60);
       
-    return !error && !!data?.length;
+    return !error && !!data;
   } catch (err) {
     console.error('Error validating storage path:', err);
     return false;
@@ -141,35 +155,11 @@ export async function xdelo_repairContentDisposition(path: string): Promise<bool
   }
 }
 
-// New helper to normalize file extensions based on MIME type
-export function xdelo_getFileExtensionFromMimeType(mimeType: string): string {
-  const mimeToExt: Record<string, string> = {
-    'image/jpeg': 'jpg',
-    'image/png': 'png',
-    'image/gif': 'gif',
-    'image/webp': 'webp',
-    'video/mp4': 'mp4',
-    'video/webm': 'webm',
-    'audio/mpeg': 'mp3',
-    'audio/ogg': 'ogg',
-    'audio/webm': 'webm',
-    'application/pdf': 'pdf',
-    'application/x-tgsticker': 'tgs',
-    'text/plain': 'txt'
-  };
-  
-  return mimeToExt[mimeType] || mimeType.split('/')[1] || 'bin';
-}
-
-// New function to validate and correct storage path
+// Simplified function to validate and generate storage path
 export function xdelo_validateAndFixStoragePath(fileUniqueId: string, mimeType: string): string {
   const extension = xdelo_getFileExtensionFromMimeType(mimeType);
-  // Create a properly structured path using Year/Month folders for better organization
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  
-  return `${year}/${month}/${fileUniqueId}.${extension}`;
+  // Create a simple path: fileUniqueId.extension
+  return `${fileUniqueId}.${extension}`;
 }
 
 // New function to repair and recover file metadata
@@ -211,17 +201,19 @@ export async function xdelo_recoverFileMetadata(messageId: string): Promise<{suc
       }
     }
     
-    // 2. Check if storage_path needs correction
-    if (!storage_path || storage_path.split('/').length < 2) {
-      const correctedPath = xdelo_validateAndFixStoragePath(
-        file_unique_id, 
-        updatedData.mime_type || mime_type || 'application/octet-stream'
-      );
-      updatedData.storage_path = correctedPath;
+    // 2. Use simplified storage path logic
+    const expectedPath = xdelo_validateAndFixStoragePath(
+      file_unique_id, 
+      updatedData.mime_type || mime_type || 'application/octet-stream'
+    );
+    
+    if (expectedPath !== storage_path) {
+      updatedData.storage_path = expectedPath;
+      updatedData.storage_path_standardized = true;
     }
     
     // 3. Update public_url if needed
-    if (!public_url || public_url.indexOf(file_unique_id) === -1) {
+    if (!public_url || public_url.indexOf(file_unique_id) === -1 || (updatedData.storage_path && !public_url.endsWith(updatedData.storage_path))) {
       updatedData.public_url = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${updatedData.storage_path || storage_path}`;
     }
     
@@ -257,7 +249,7 @@ export async function xdelo_recoverFileMetadata(messageId: string): Promise<{suc
   }
 }
 
-// New function to download media from Telegram
+// Simplified download media function from Telegram
 export async function xdelo_downloadMediaFromTelegram(
   fileId: string, 
   fileUniqueId: string, 
@@ -291,7 +283,7 @@ export async function xdelo_downloadMediaFromTelegram(
     
     const fileData = await fileDataResponse.blob();
     
-    // Generate a standardized storage path
+    // Generate a simplified storage path
     const storagePath = xdelo_validateAndFixStoragePath(fileUniqueId, mimeType);
     
     return {

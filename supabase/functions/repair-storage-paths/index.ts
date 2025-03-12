@@ -1,11 +1,6 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
-import { 
-  xdelo_isViewableMimeType, 
-  xdelo_getUploadOptions,
-  xdelo_validateStoragePath,
-  xdelo_repairContentDisposition
-} from "../_shared/mediaUtils.ts";
 import { supabaseClient as supabase } from "../_shared/supabase.ts";
 
 serve(async (req) => {
@@ -15,98 +10,89 @@ serve(async (req) => {
   }
   
   try {
-    const { messageIds, fixContentDisposition } = await req.json();
+    const { messageIds, limit = 100, checkStorage = true } = await req.json();
     const correlationId = crypto.randomUUID();
     
-    console.log(`Repair storage paths request: correlationId=${correlationId}, messageIds=${JSON.stringify(messageIds)}, fixContentDisposition=${fixContentDisposition}`);
+    console.log(`Repair storage paths request: correlationId=${correlationId}, messageCount=${messageIds?.length || 'all'}, limit=${limit}, checkStorage=${checkStorage}`);
     
-    // Build query to find messages to repair
-    let query = supabase
-      .from('messages')
-      .select('id, file_unique_id, mime_type, storage_path')
-      .eq('deleted_from_telegram', false)
-      .is('file_unique_id', 'not', null);
+    // Call the database function to standardize paths
+    const { data, error } = await supabase.rpc(
+      'xdelo_fix_storage_paths',
+      {
+        p_limit: limit,
+        p_only_check: false
+      }
+    );
+    
+    if (error) {
+      throw new Error(`Failed to standardize storage paths: ${error.message}`);
+    }
+    
+    const results = {
+      processed: data?.length || 0,
+      fixed: 0,
+      needs_redownload: 0,
+      details: []
+    };
+    
+    // Process the results
+    if (data && data.length > 0) {
+      for (const item of data) {
+        results.details.push(item);
+        if (item.fixed) results.fixed++;
+        if (item.needs_redownload) results.needs_redownload++;
+      }
       
-    // If specific message IDs provided, use those
-    if (messageIds && messageIds.length > 0) {
-      query = query.in('id', messageIds);
-    } else {
-      // Otherwise limit to recent messages
-      query = query.order('created_at', { ascending: false }).limit(100);
-    }
-    
-    const { data: messages, error: queryError } = await query;
-    
-    if (queryError) {
-      throw new Error(`Failed to fetch messages: ${queryError.message}`);
-    }
-    
-    console.log(`Found ${messages?.length || 0} messages to process`);
-    
-    let repairedCount = 0;
-    let contentDispositionFixed = 0;
-    
-    // Process each message
-    for (const message of messages || []) {
-      try {
-        if (!message.file_unique_id) continue;
-        
-        // Get proper storage path
-        const { data: storagePath, error: pathError } = await supabase.rpc(
-          'xdelo_standardize_storage_path',
-          {
-            p_file_unique_id: message.file_unique_id,
-            p_mime_type: message.mime_type || 'application/octet-stream'
-          }
-        );
-        
-        if (pathError) {
-          console.error(`Error getting standardized path for ${message.id}:`, pathError);
-          continue;
-        }
-        
-        // Update storage path if needed
-        if (storagePath !== message.storage_path) {
-          const publicUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${storagePath}`;
+      // If requested, check actual storage existence for fixed paths
+      if (checkStorage && results.fixed > 0) {
+        const messageIdsToCheck = data
+          .filter(item => item.fixed && !item.needs_redownload)
+          .map(item => item.message_id);
           
-          await supabase
+        if (messageIdsToCheck.length > 0) {
+          console.log(`Checking storage existence for ${messageIdsToCheck.length} fixed paths`);
+          
+          // Get the messages with their new paths
+          const { data: messages } = await supabase
             .from('messages')
-            .update({
-              storage_path: storagePath,
-              public_url: publicUrl
-            })
-            .eq('id', message.id);
+            .select('id, storage_path')
+            .in('id', messageIdsToCheck);
             
-          repairedCount++;
-          console.log(`Updated storage path for message ${message.id}: ${message.storage_path} -> ${storagePath}`);
-        }
-        
-        // Fix content disposition if requested
-        if (fixContentDisposition && xdelo_isViewableMimeType(message.mime_type)) {
-          try {
-            // First, validate the storage path exists
-            const fullPath = `telegram-media/${storagePath}`;
-            const exists = await xdelo_validateStoragePath(fullPath);
-            
-            if (exists) {
-              // Use our enhanced function to repair content disposition
-              const success = await xdelo_repairContentDisposition(fullPath);
-              
-              if (success) {
-                contentDispositionFixed++;
-                console.log(`Fixed content disposition for ${message.id} (${storagePath})`);
-              } else {
-                console.log(`No changes needed for content disposition on ${message.id} (${storagePath})`);
+          if (messages && messages.length > 0) {
+            for (const message of messages) {
+              try {
+                const { data: signedUrl, error: signedUrlError } = await supabase
+                  .storage
+                  .from('telegram-media')
+                  .createSignedUrl(message.storage_path, 60);
+                  
+                const exists = !signedUrlError && !!signedUrl;
+                
+                // Update storage_exists flag
+                await supabase
+                  .from('messages')
+                  .update({ storage_exists: exists })
+                  .eq('id', message.id);
+                  
+                // If file doesn't exist, mark for redownload
+                if (!exists) {
+                  await supabase
+                    .from('messages')
+                    .update({
+                      needs_redownload: true,
+                      redownload_reason: 'Storage path fixed but file not found',
+                      redownload_flagged_at: new Date().toISOString()
+                    })
+                    .eq('id', message.id);
+                    
+                  results.needs_redownload++;
+                }
+              } catch (error) {
+                console.error(`Error checking storage for message ${message.id}:`, error);
               }
-            } else {
-              console.warn(`Storage path does not exist for ${message.id}: ${storagePath}`);
             }
-          } catch (fileError) {
-            console.error(`Error fixing content disposition for ${message.id}:`, fileError);
           }
         }
-      } catch (messageError) {
-        console.error(`Error processing message ${message.id}:`, messageError);
       }
     }
     
@@ -115,9 +101,9 @@ serve(async (req) => {
       event_type: 'storage_paths_repaired',
       correlation_id: correlationId,
       metadata: {
-        messages_processed: messages?.length || 0,
-        repaired_count: repairedCount,
-        content_disposition_fixed: contentDispositionFixed,
+        processed: results.processed,
+        fixed: results.fixed,
+        needs_redownload: results.needs_redownload,
         specific_message_ids: messageIds && messageIds.length > 0
       }
     });
@@ -125,12 +111,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        data: {
-          processed: messages?.length || 0,
-          repaired: repairedCount,
-          contentDispositionFixed,
-          correlation_id: correlationId
-        }
+        data: results,
+        correlation_id: correlationId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

@@ -1,3 +1,4 @@
+
 import { SupabaseClient } from "@supabase/supabase-js";
 
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
@@ -110,6 +111,146 @@ export async function xdelo_get_message_processing_stats(
   };
 }
 
+// Function to find files with potential MIME type issues
+export async function xdelo_find_mime_type_issues(
+  supabase: SupabaseClient,
+  limit: number = 100
+): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('id, file_unique_id, mime_type, telegram_data')
+    .or('mime_type.is.null,mime_type.eq.application/octet-stream')
+    .eq('deleted_from_telegram', false)
+    .is('file_unique_id', 'not', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+    
+  if (error) {
+    console.error('Error finding MIME type issues:', error);
+    return [];
+  }
+  
+  return data || [];
+}
+
+// Function to synchronize storage paths with the database
+export async function xdelo_sync_storage_paths(
+  supabase: SupabaseClient,
+  messageIds?: string[],
+  limit: number = 100
+): Promise<Record<string, any>> {
+  try {
+    const { data, error } = await supabase.rpc(
+      'xdelo_fix_storage_paths',
+      {
+        p_limit: limit,
+        p_only_check: false
+      }
+    );
+    
+    if (error) {
+      throw error;
+    }
+    
+    // Count results
+    const results = {
+      total: data?.length || 0,
+      fixed: 0,
+      needsRedownload: 0
+    };
+    
+    if (data && data.length > 0) {
+      results.fixed = data.filter(item => item.fixed).length;
+      results.needsRedownload = data.filter(item => item.needs_redownload).length;
+    }
+    
+    return results;
+  } catch (error) {
+    console.error('Error syncing storage paths:', error);
+    return {
+      error: error.message,
+      total: 0,
+      fixed: 0,
+      needsRedownload: 0
+    };
+  }
+}
+
+// Enhanced function to fix MIME types in the database
+export async function xdelo_fix_file_mime_types(
+  supabase: SupabaseClient,
+  messageId?: string | null,
+  limit: number = 50
+): Promise<{success: boolean, updated: number, error?: string}> {
+  try {
+    if (messageId) {
+      // Fix a specific message
+      const { data: message, error: messageError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', messageId)
+        .single();
+        
+      if (messageError || !message) {
+        throw new Error(`Message not found: ${messageError?.message || 'No data returned'}`);
+      }
+      
+      // Skip if no telegram_data
+      if (!message.telegram_data) {
+        return { success: false, updated: 0, error: 'No telegram_data available' };
+      }
+      
+      // Get more accurate MIME type
+      const { data: detectedType, error: typeError } = await supabase.rpc(
+        'xdelo_get_accurate_mime_type',
+        { p_message_data: JSON.stringify(message) }
+      );
+      
+      if (typeError) {
+        throw new Error(`Failed to detect MIME type: ${typeError.message}`);
+      }
+      
+      // Only update if detected type is different and not empty
+      if (detectedType && detectedType !== message.mime_type) {
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({
+            mime_type: detectedType,
+            mime_type_original: message.mime_type,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', messageId);
+          
+        if (updateError) {
+          throw new Error(`Failed to update MIME type: ${updateError.message}`);
+        }
+        
+        return { success: true, updated: 1 };
+      }
+      
+      return { success: true, updated: 0 };
+    } else {
+      // Fix multiple messages
+      const { data, error } = await supabase.rpc(
+        'xdelo_fix_mime_types',
+        {
+          p_limit: limit,
+          p_only_octet_stream: true
+        }
+      );
+      
+      if (error) {
+        throw new Error(`Failed to run fix_mime_types: ${error.message}`);
+      }
+      
+      return { success: true, updated: data?.length || 0 };
+    }
+  } catch (error) {
+    console.error('Error fixing MIME types:', error);
+    return { success: false, updated: 0, error: error.message };
+  }
+}
+
 export async function xdelo_fix_message_mime_type(
   supabase: SupabaseClient,
   messageId: string
@@ -148,9 +289,8 @@ export async function xdelo_fix_message_mime_type(
       .from('messages')
       .update({
         mime_type: detectedMimeType,
-        mime_type_corrected: true,
         mime_type_original: message.mime_type,
-        mime_type_updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString()
       })
       .eq('id', messageId);
       

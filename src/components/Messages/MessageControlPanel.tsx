@@ -2,8 +2,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { RefreshCw, Search, Filter } from 'lucide-react';
-import { Spinner } from '@/components/ui/spinner';
+import { RefreshCw, Filter, FileText, FolderSync } from 'lucide-react';
 
 interface MessageControlPanelProps {
   searchTerm: string;
@@ -12,51 +11,69 @@ interface MessageControlPanelProps {
   isRefreshing: boolean;
   onToggleFilters: () => void;
   showFilters: boolean;
+  onFixMimeTypes: () => void;
+  onRepairStoragePaths: () => void;
 }
 
-export function MessageControlPanel({
+export const MessageControlPanel: React.FC<MessageControlPanelProps> = ({
   searchTerm,
   onSearchChange,
   onRefresh,
   isRefreshing,
   onToggleFilters,
-  showFilters
-}: MessageControlPanelProps) {
+  showFilters,
+  onFixMimeTypes,
+  onRepairStoragePaths
+}) => {
   return (
-    <div className="flex items-center space-x-2">
-      <div className="relative flex-1">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+    <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
+      <div className="flex-1 w-full md:w-auto">
         <Input
-          type="search"
           placeholder="Search messages..."
-          className="pl-8"
           value={searchTerm}
           onChange={onSearchChange}
+          className="w-full"
         />
       </div>
       
-      <Button
-        variant={showFilters ? "default" : "outline"}
-        size="sm"
-        onClick={onToggleFilters}
-      >
-        <Filter className="h-4 w-4 mr-2" />
-        Filters
-      </Button>
-      
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onRefresh}
-        disabled={isRefreshing}
-      >
-        {isRefreshing ? (
-          <Spinner size="sm" className="mr-2" />
-        ) : (
-          <RefreshCw className="h-4 w-4 mr-2" />
-        )}
-        Refresh
-      </Button>
+      <div className="flex flex-wrap gap-2 justify-end">
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={onToggleFilters}
+        >
+          <Filter className="h-4 w-4 mr-1" />
+          {showFilters ? 'Hide Filters' : 'Show Filters'}
+        </Button>
+        
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={onFixMimeTypes}
+        >
+          <FileText className="h-4 w-4 mr-1" />
+          Fix MIME Types
+        </Button>
+        
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={onRepairStoragePaths}
+        >
+          <FolderSync className="h-4 w-4 mr-1" />
+          Repair Paths
+        </Button>
+        
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={onRefresh}
+          disabled={isRefreshing}
+        >
+          <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+          {isRefreshing ? 'Refreshing...' : 'Refresh'}
+        </Button>
+      </div>
     </div>
   );
-}
+};

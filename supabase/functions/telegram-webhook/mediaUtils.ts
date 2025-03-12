@@ -2,11 +2,12 @@
 import { logMessageOperation } from './logger.ts';
 import { supabaseClient as supabase } from '../_shared/supabase.ts';
 import { 
-  xdelo_isViewableMimeType,
+  xdelo_isViewableMimeType, 
   xdelo_getUploadOptions,
   xdelo_detectMimeType,
   xdelo_getDefaultMimeType,
-  xdelo_validateStoragePath
+  xdelo_validateStoragePath,
+  xdelo_validateAndFixStoragePath
 } from '../_shared/mediaUtils.ts';
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')
@@ -21,28 +22,39 @@ export const getMediaInfo = async (message: any) => {
   if (!media) throw new Error('No media found in message')
 
   // Check if file already exists in the database
-  const { data: existingFile } = await supabase
+  const { data: existingFiles } = await supabase
     .from('messages')
-    .select('file_unique_id, storage_path, public_url')
+    .select('file_unique_id, storage_path, public_url, mime_type, file_size, width, height, duration')
     .eq('file_unique_id', media.file_unique_id)
+    .eq('deleted_from_telegram', false)
     .limit(1)
 
   // If we already have this file, return the existing information
-  if (existingFile && existingFile.length > 0) {
+  if (existingFiles && existingFiles.length > 0) {
     console.log(`Duplicate file detected: ${media.file_unique_id}, reusing existing file information`)
-    return {
-      file_id: media.file_id,
-      file_unique_id: media.file_unique_id,
-      mime_type: video ? (video.mime_type || 'video/mp4') :
-                document ? (document.mime_type || 'application/octet-stream') :
-                'image/jpeg',
-      file_size: media.file_size,
-      width: media.width,
-      height: media.height,
-      duration: video?.duration,
-      storage_path: existingFile[0].storage_path,
-      public_url: existingFile[0].public_url,
-      is_duplicate: true
+    
+    // Verify the file actually exists in storage
+    const fileExists = existingFiles[0].storage_path ? 
+      await xdelo_validateStoragePath(`telegram-media/${existingFiles[0].storage_path}`) : 
+      false;
+      
+    if (fileExists) {
+      return {
+        file_id: media.file_id,
+        file_unique_id: media.file_unique_id,
+        mime_type: existingFiles[0].mime_type,
+        file_size: existingFiles[0].file_size || media.file_size,
+        width: existingFiles[0].width || media.width,
+        height: existingFiles[0].height || media.height,
+        duration: existingFiles[0].duration || (video?.duration),
+        storage_path: existingFiles[0].storage_path,
+        public_url: existingFiles[0].public_url,
+        is_duplicate: true,
+        storage_exists: true
+      }
+    } else {
+      console.log(`File ${media.file_unique_id} exists in database but not in storage, will reupload`);
+      // Continue with upload process since file doesn't actually exist
     }
   }
 
@@ -73,29 +85,14 @@ export const getMediaInfo = async (message: any) => {
     
     const fileData = await fileDataResponse.blob();
 
-    // Get mime type using our enhanced detection
-    const mediaObj = {
-      photo: photo,
-      video: video,
-      document: document
-    };
-    const mimeType = xdelo_detectMimeType(mediaObj);
+    // Simplify MIME type detection
+    const mimeType = photo ? 'image/jpeg' : 
+                    video ? (video.mime_type || 'video/mp4') :
+                    document?.mime_type || 'application/octet-stream';
     
-    // Get standardized storage path
-    const { data: storagePath, error: pathError } = await supabase.rpc(
-      'xdelo_standardize_storage_path',
-      {
-        p_file_unique_id: media.file_unique_id,
-        p_mime_type: mimeType
-      }
-    );
-    
-    if (pathError) {
-      console.error('Error getting standardized path:', pathError);
-      throw new Error(`Failed to get standardized storage path: ${pathError.message}`);
-    }
-    
-    const fileName = storagePath || `${media.file_unique_id}.${mimeType.split('/')[1]}`;
+    // Simple storage path format - just file_unique_id.extension
+    const extension = mimeType.split('/')[1] === 'jpeg' ? 'jpg' : mimeType.split('/')[1];
+    const fileName = `${media.file_unique_id}.${extension}`;
 
     // Upload to Supabase Storage with proper content disposition
     const uploadOptions = xdelo_getUploadOptions(mimeType);
@@ -116,13 +113,16 @@ export const getMediaInfo = async (message: any) => {
       file_id: media.file_id,
       file_unique_id: media.file_unique_id,
       mime_type: mimeType,
+      mime_type_original: document?.mime_type || video?.mime_type,
       file_size: media.file_size,
       width: media.width,
       height: media.height,
       duration: video?.duration,
       storage_path: fileName,
       public_url: publicUrl,
-      is_duplicate: false
+      is_duplicate: false,
+      storage_exists: true,
+      storage_path_standardized: true
     }
   } catch (error) {
     console.error('Error downloading media from Telegram:', error);
@@ -131,7 +131,7 @@ export const getMediaInfo = async (message: any) => {
     const mimeType = video ? (video.mime_type || 'video/mp4') : 
                   document ? (document.mime_type || 'application/octet-stream') : 
                   'image/jpeg';
-    const extension = mimeType.split('/')[1];
+    const extension = mimeType.split('/')[1] === 'jpeg' ? 'jpg' : mimeType.split('/')[1];
     const fileName = `${media.file_unique_id}.${extension}`;
     const publicUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${fileName}`;
     
@@ -140,6 +140,7 @@ export const getMediaInfo = async (message: any) => {
       file_id: media.file_id,
       file_unique_id: media.file_unique_id,
       mime_type: mimeType,
+      mime_type_original: document?.mime_type || video?.mime_type,
       file_size: media.file_size,
       width: media.width,
       height: media.height,
@@ -147,7 +148,10 @@ export const getMediaInfo = async (message: any) => {
       storage_path: fileName,
       public_url: publicUrl,
       needs_redownload: true,
-      error: error.message
+      redownload_reason: error.message,
+      redownload_flagged_at: new Date().toISOString(),
+      is_duplicate: false,
+      storage_exists: false
     };
   }
 }
@@ -187,35 +191,24 @@ export const redownloadMissingFile = async (message: any) => {
     
     const fileData = await fileDataResponse.blob();
 
-    // Better MIME type detection
-    const mimeType = message.mime_type || xdelo_getDefaultMimeType({ 
-      photo: message.photo, 
-      video: message.video,
-      document: message.document
-    });
-    
-    // Get standardized storage path
-    const { data: storagePath, error: pathError } = await supabase.rpc(
-      'xdelo_standardize_storage_path',
-      {
-        p_file_unique_id: message.file_unique_id,
-        p_mime_type: mimeType
-      }
-    );
-    
-    if (pathError) {
-      console.error('Error getting standardized path:', pathError);
-      throw new Error(`Failed to get standardized storage path: ${pathError.message}`);
-    }
-
-    const fileName = storagePath || `${message.file_unique_id}.${mimeType.split('/')[1]}`;
+    // Simple storage path - just use file_unique_id.extension
+    const mimeType = message.mime_type || 'application/octet-stream';
+    const extension = mimeType.split('/')[1] === 'jpeg' ? 'jpg' : mimeType.split('/')[1];
+    const storagePath = `${message.file_unique_id}.${extension}`;
 
     // Upload to Supabase Storage with proper content disposition
-    const uploadOptions = xdelo_getUploadOptions(mimeType);
+    const isViewable = xdelo_isViewableMimeType(mimeType);
+    const uploadOptions = {
+      contentType: mimeType,
+      upsert: true,
+      cacheControl: '3600',
+      contentDisposition: isViewable ? 'inline' : 'attachment'
+    };
+    
     const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')
-      .upload(fileName, fileData, uploadOptions);
+      .upload(storagePath, fileData, uploadOptions);
 
     if (uploadError) {
       throw new Error(`Failed to upload media to storage: ${uploadError.message}`);
@@ -228,7 +221,10 @@ export const redownloadMissingFile = async (message: any) => {
         needs_redownload: false,
         redownload_completed_at: new Date().toISOString(),
         storage_path: storagePath,
-        error_message: null
+        public_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${storagePath}`,
+        error_message: null,
+        storage_exists: true,
+        storage_path_standardized: true
       })
       .eq('id', message.id);
 

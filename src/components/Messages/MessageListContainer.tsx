@@ -40,6 +40,7 @@ export const MessageListContainer: React.FC = () => {
   const { 
     processMessageById,
     xdelo_fixMediaMimeTypes,
+    xdelo_repairStoragePaths,
     isProcessing 
   } = useMessageQueue();
 
@@ -77,6 +78,19 @@ export const MessageListContainer: React.FC = () => {
     }
   };
   
+  const handleRepairStoragePaths = async () => {
+    try {
+      await xdelo_repairStoragePaths(100);
+      await handleRefresh();
+      toast({
+        title: "Storage Path Repair",
+        description: "Storage path repair operation completed successfully"
+      });
+    } catch (error) {
+      console.error('Error repairing storage paths:', error);
+    }
+  };
+  
   const isProcessingAny = isProcessing || isRefreshing;
 
   return (
@@ -92,6 +106,7 @@ export const MessageListContainer: React.FC = () => {
             onToggleFilters={handleToggleFilters}
             showFilters={showFilters}
             onFixMimeTypes={handleFixMimeTypes}
+            onRepairStoragePaths={handleRepairStoragePaths}
           />
           
           {showFilters && (

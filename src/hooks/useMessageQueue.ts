@@ -134,23 +134,54 @@ export function useMessageQueue() {
     }
   };
   
-  // New function to fix files with incorrect MIME types
+  // Function to fix files with incorrect MIME types
   const xdelo_fixMediaMimeTypes = async (limit: number = 50) => {
     try {
       setIsProcessing(true);
       
-      // Call the repair-media edge function
+      // Call the direct database function for best performance
+      const { data, error } = await supabase.rpc('xdelo_fix_mime_types', {
+        p_limit: limit,
+        p_only_octet_stream: true
+      });
+      
+      if (error) throw error;
+      
+      const fixedCount = data?.length || 0;
+      
+      toast({
+        title: "MIME Type Repair",
+        description: `Fixed ${fixedCount} files with incorrect MIME types.`
+      });
+      
+      return { success: true, updated: fixedCount };
+    } catch (error) {
+      console.error('Error fixing MIME types:', error);
+      
+      toast({
+        title: "Repair Failed",
+        description: error.message || "Failed to fix MIME types",
+        variant: "destructive"
+      });
+      
+      throw error;
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Function to repair storage paths
+  const xdelo_repairStoragePaths = async (limit: number = 100) => {
+    try {
+      setIsProcessing(true);
+      
+      // Call the repair-storage-paths edge function
       const { data, error } = await supabase.functions.invoke(
-        'repair-media',
+        'repair-storage-paths',
         {
           body: { 
-            action: 'fix_mime_types',
             limit,
-            options: {
-              updateDatabase: true,
-              updateStorageMetadata: true,
-              onlyIncorrectTypes: true
-            }
+            checkStorage: true
           }
         }
       );
@@ -158,17 +189,17 @@ export function useMessageQueue() {
       if (error) throw error;
       
       toast({
-        title: "MIME Type Repair",
-        description: `Fixed ${data.updated || 0} files with incorrect MIME types.`
+        title: "Storage Path Repair",
+        description: `Repaired ${data.data.fixed} storage paths. ${data.data.needs_redownload} files need redownload.`
       });
       
       return data;
     } catch (error) {
-      console.error('Error fixing MIME types:', error);
+      console.error('Error repairing storage paths:', error);
       
       toast({
         title: "Repair Failed",
-        description: error.message || "Failed to fix MIME types",
+        description: error.message || "Failed to repair storage paths",
         variant: "destructive"
       });
       
@@ -226,6 +257,7 @@ export function useMessageQueue() {
     xdelo_resetStalledMessages,
     xdelo_fixMediaMimeTypes,
     xdelo_redownloadMissingMedia,
+    xdelo_repairStoragePaths,
     isProcessing
   };
 }
