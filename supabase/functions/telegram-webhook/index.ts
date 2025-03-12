@@ -4,6 +4,7 @@ import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage } from './handlers/textMessageHandler.ts';
 import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
 import { corsHeaders } from '../_shared/cors.ts';
+import { getLogger } from './utils/logger.ts';
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -13,20 +14,21 @@ serve(async (req) => {
 
   try {
     // Generate correlation ID for this request
-    const correlationId = crypto.randomUUID()
-    console.log(`Processing update with correlation ID: ${correlationId}`)
-    console.log(`Webhook received: ${new Date().toISOString()}`)
+    const correlationId = crypto.randomUUID();
+    const logger = getLogger(correlationId);
+    
+    logger.info(`Processing webhook request`, { timestamp: new Date().toISOString() });
 
-    const update = await req.json()
+    const update = await req.json();
 
     // Get the message object, checking for different types of updates
-    const message = update.message || update.edited_message || update.channel_post || update.edited_channel_post
+    const message = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
     if (!message) {
-      console.log('No processable content in update')
+      logger.info('No processable content in update');
       return new Response(JSON.stringify({ message: "No processable content" }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400
-      })
+      });
     }
 
     // Determine message context
@@ -36,7 +38,7 @@ serve(async (req) => {
       correlationId,
       isEdit: !!update.edited_message || !!update.edited_channel_post,
       previousMessage: update.edited_message || update.edited_channel_post
-    }
+    };
 
     // Handle edited messages
     if (context.isEdit) {
@@ -49,13 +51,13 @@ serve(async (req) => {
     }
 
     // Handle other types of messages
-    return await handleOtherMessage(message, context)
+    return await handleOtherMessage(message, context);
 
   } catch (error) {
-    console.error('Error processing webhook:', error)
+    console.error('Error processing webhook:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500
-    })
+    });
   }
-})
+});

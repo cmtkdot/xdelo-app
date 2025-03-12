@@ -5,7 +5,7 @@ import { Database } from '../integrations/supabase/types';
 /**
  * Logs a single sync operation to the sync_logs table
  */
-export async function logSyncOperation(
+export async function xdelo_logSyncOperation(
   supabase: SupabaseClient<Database>,
   operation: string,
   details: Record<string, any>,
@@ -30,7 +30,7 @@ export async function logSyncOperation(
 /**
  * Logs multiple sync operations in a single batch insert
  */
-export async function logSyncOperationBatch(
+export async function xdelo_logSyncOperationBatch(
   supabase: SupabaseClient<Database>,
   operations: Array<{
     operation: string;
@@ -59,15 +59,20 @@ export async function logSyncOperationBatch(
 /**
  * Logs a warning message to the sync_logs table
  */
-export async function logSyncWarning(
+export async function xdelo_logSyncWarning(
   supabase: SupabaseClient<Database>,
   message: string,
   details: Record<string, any>
 ) {
-  await logSyncOperation(
+  await xdelo_logSyncOperation(
     supabase,
     'warning',
     { message, ...details },
     true
   );
 }
+
+// Export the old function names for backward compatibility
+export const logSyncOperation = xdelo_logSyncOperation;
+export const logSyncOperationBatch = xdelo_logSyncOperationBatch;
+export const logSyncWarning = xdelo_logSyncWarning;

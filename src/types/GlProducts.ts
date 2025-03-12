@@ -1,4 +1,3 @@
-
 import type { SyncStatus } from "@/types";
 
 export interface GlProduct {
@@ -15,20 +14,24 @@ export interface GlProduct {
   created_at: string;
   updated_at: string;
   sync_status: SyncStatus;
-  cart_rename: string; // Changed to only allow string type
+  cart_rename: string;
   date_timestamp_subm?: string;
   email_email_of_user_who_added_product?: string;
   glide_id?: string;
   rowid_account_rowid?: string;
   rowid_purchase_order_row_id?: string;
-  messages: any[];
+  messages?: any[];
   [key: string]: any; // Allow additional properties
 }
 
-export const convertToGlProduct = (data: any): GlProduct => {
+/**
+ * Converts data to a GlProduct type, ensuring all required fields are present
+ * and properly typed.
+ */
+export const xdelo_convertToGlProduct = (data: any): GlProduct => {
   return {
     ...data,
-    cart_rename: String(data.cart_rename), // Always convert cart_rename to string
+    cart_rename: String(data.cart_rename || ''), // Always convert cart_rename to string
     main_product_image1: data.main_product_image1 || '',
     main_purchase_notes: data.main_purchase_notes || '',
     product_name_display: data.product_name_display || '',
@@ -37,3 +40,6 @@ export const convertToGlProduct = (data: any): GlProduct => {
     sync_status: data.sync_status || 'pending'
   };
 };
+
+// Keep the old function name for backward compatibility
+export const convertToGlProduct = xdelo_convertToGlProduct;

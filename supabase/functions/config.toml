@@ -28,6 +28,9 @@ verify_jwt = false
 [functions.redownload-from-media-group]
 verify_jwt = false
 
+[functions.fix-file-ids]
+verify_jwt = false
+
 [functions.scheduler-process-queue]
 verify_jwt = false
 
@@ -39,3 +42,4 @@ verify_jwt = false
 
 [functions.user-data]
 verify_jwt = false
+

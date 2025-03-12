@@ -1,4 +1,5 @@
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
+
+export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error';
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
 export interface FilterValues {
@@ -58,10 +59,9 @@ export interface Message {
   analyzed_content?: AnalyzedContent;
   telegram_data?: Record<string, unknown>;
   error_message?: string;
-  retry_count?: number;
-  last_error_at?: string;
-  group_first_message_time?: string;
-  group_last_message_time?: string;
+  error_code?: string;
+  storage_exists?: boolean;
+  storage_path_standardized?: boolean;
   chat_id?: number;
   chat_type?: string;
   chat_title?: string;
@@ -94,7 +94,6 @@ export interface GlProduct {
   created_at: string;
   updated_at: string;
   sync_status: SyncStatus;
-  cart_add_note?: boolean;
   cart_rename?: string;
   date_timestamp_subm?: string;
   email_email_of_user_who_added_product?: string;

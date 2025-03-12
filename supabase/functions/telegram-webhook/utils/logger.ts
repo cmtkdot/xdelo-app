@@ -13,7 +13,10 @@ interface LogMetadata {
   [key: string]: any;
 }
 
-export const logMessageOperation = async (
+/**
+ * Logs a message operation to the unified_audit_logs table
+ */
+export const xdelo_logMessageOperation = async (
   operation: OperationType,
   correlationId: string,
   metadata: LogMetadata
@@ -63,13 +66,16 @@ export const logMessageOperation = async (
 export const getLogger = (correlationId: string) => {
   return {
     info: (message: string, metadata: Record<string, any> = {}) => {
-      logMessageOperation('info', correlationId, { message, ...metadata });
+      xdelo_logMessageOperation('info', correlationId, { message, ...metadata });
     },
     error: (message: string, error: any = null) => {
-      logMessageOperation('error', correlationId, { message, error: error?.message || JSON.stringify(error) });
+      xdelo_logMessageOperation('error', correlationId, { message, error: error?.message || JSON.stringify(error) });
     },
     success: (message: string, metadata: Record<string, any> = {}) => {
-      logMessageOperation('success', correlationId, { message, ...metadata });
+      xdelo_logMessageOperation('success', correlationId, { message, ...metadata });
     }
   };
 };
+
+// For backward compatibility
+export const logMessageOperation = xdelo_logMessageOperation;
