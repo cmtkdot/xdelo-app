@@ -23,13 +23,15 @@ CREATE TRIGGER trg_process_caption
   WHEN (NEW.caption IS NOT NULL AND NEW.caption != '')
   EXECUTE FUNCTION public.xdelo_process_caption_trigger();
 
--- Log the creation for audit purposes
+-- Log the creation for audit purposes with a valid entity_id
 INSERT INTO unified_audit_logs (
   event_type,
+  entity_id, -- Must provide a valid UUID here
   metadata,
   event_timestamp
 ) VALUES (
   'system_configuration_updated',
+  '00000000-0000-0000-0000-000000000000', -- Using zero UUID as system placeholder
   jsonb_build_object(
     'component', 'trigger',
     'name', 'trg_process_caption',

@@ -3351,6 +3351,7 @@ export type Database = {
         | "media_group_sync_conflict"
         | "edit_content_propagated"
         | "media_group_version_updated"
+        | "system_configuration_updated"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
       message_operation_type:
         | "message_create"
