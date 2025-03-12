@@ -31,13 +31,12 @@ export function MessageListContainer() {
       
       await forceSyncMessageGroup(messageId);
       
-      // Fix type error: handle the Promise returned by refetch() properly
       refetch().then(() => {
         toast({
           title: "Processing Complete",
           description: "Message has been processed and synchronized.",
         });
-      }).catch(err => {
+      }).catch((err: Error) => {
         console.error("Error refetching after sync:", err);
         toast({
           title: "Refetch Failed",
@@ -45,7 +44,7 @@ export function MessageListContainer() {
           variant: "destructive",
         });
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error retrying processing:", error);
       toast({
         title: "Processing Failed",
@@ -69,7 +68,7 @@ export function MessageListContainer() {
         </div>
       ) : error ? (
         <div className="bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 rounded-md">
-          <p className="text-red-800 dark:text-red-200">Error loading messages: {error.message}</p>
+          <p className="text-red-800 dark:text-red-200">Error loading messages: {(error as Error).message}</p>
         </div>
       ) : (
         <MessageList 

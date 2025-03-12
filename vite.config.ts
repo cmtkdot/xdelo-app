@@ -6,7 +6,16 @@ import { componentTagger } from "lovable-tagger";
 
 export default defineConfig(({ mode }) => ({
   plugins: [
-    react(),
+    react({
+      // Enable Fast Refresh for React components
+      fastRefresh: true,
+      // Babel config for better React optimization
+      babel: {
+        plugins: [
+          ['@babel/plugin-transform-react-jsx', { runtime: 'automatic' }]
+        ]
+      }
+    }),
     mode === 'development' && componentTagger(),
   ].filter(Boolean),
   resolve: {
@@ -77,6 +86,15 @@ export default defineConfig(({ mode }) => ({
       'localhost',
       '*.lovableproject.com',
       '79512fb5-8301-4d61-9349-6769d5c8295b.lovableproject.com'
+    ]
+  },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      '@supabase/supabase-js',
+      '@tanstack/react-query'
     ]
   }
 }));
