@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { useSupabaseClient } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
 
 interface SqlExecutionResult {
@@ -18,13 +18,12 @@ export function useSqlQuery() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [results, setResults] = useState<SqlExecutionResult | null>(null);
   const { toast } = useToast();
-  const supabaseClient = useSupabaseClient();
 
   const executeQuery = async (query: string, params?: any[]) => {
     try {
       setIsExecuting(true);
       
-      const { data, error } = await supabaseClient.functions.invoke('xdelo_execute_sql', {
+      const { data, error } = await supabase.functions.invoke('xdelo_execute_sql', {
         body: { 
           query,
           params

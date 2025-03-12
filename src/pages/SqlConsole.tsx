@@ -5,7 +5,8 @@ import { SqlConsole as SqlConsoleComponent } from '@/components/SqlConsole/SqlCo
 
 export default function SqlConsole() {
   return (
-    <PageContainer title="SQL Console">
+    <PageContainer>
+      <h1 className="text-2xl font-bold mb-4">SQL Console</h1>
       <SqlConsoleComponent />
     </PageContainer>
   );
