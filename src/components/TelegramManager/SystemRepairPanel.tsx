@@ -1,230 +1,178 @@
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
-import { useProcessingStats } from '@/hooks/useProcessingStats';
-import { useMediaGroupRepair } from '@/hooks/useMediaGroupRepair';
-import { useProcessingSystemRepair } from '@/hooks/useProcessingSystemRepair';
-import { useMediaRepair } from '@/hooks/useMediaRepair';
-import { useToast } from '@/hooks/useToast';
+import React from 'react';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { RefreshCw, Tool, AlertTriangle, CheckCircle, FileText, Clock } from "lucide-react";
+import { MessageProcessingStats } from '@/types';
+import { useMessageQueue } from '@/hooks/useMessageQueue';
+import { xdelo_useFileRepair } from '@/hooks/useFileRepair';
+import { format } from 'date-fns';
 
-export function SystemRepairPanel() {
-  const [activeTab, setActiveTab] = useState('processing');
-  const { stats, isLoading, refreshStats } = useProcessingStats(true, 30000);
-  const { repairProcessingSystem, isRepairing: isSystemRepairing } = useProcessingSystemRepair();
-  const { repairAllMediaGroups, isRepairing: isMediaGroupRepairing } = useMediaGroupRepair();
-  const { repairMessages } = useMediaRepair();
-  const { toast } = useToast();
+export const SystemRepairPanel: React.FC = () => {
+  const { stats, isLoading, error, handleRefresh, isRefreshing } = useMessageQueue();
+  const { repairAll, isRepairing } = xdelo_useFileRepair();
   
-  const handleRepairSystem = async () => {
+  const formatDate = (dateString: string) => {
     try {
-      await repairProcessingSystem();
-      setTimeout(refreshStats, 1000);
+      return format(new Date(dateString), 'MMM d, yyyy h:mm a');
+    } catch (e) {
+      return 'Unknown';
+    }
+  };
+  
+  const handleRepairAll = async () => {
+    try {
+      await repairAll();
+      await handleRefresh();
     } catch (error) {
       console.error('Error in system repair:', error);
     }
   };
   
-  const handleRepairMediaGroups = async () => {
-    try {
-      await repairAllMediaGroups();
-      setTimeout(refreshStats, 1000);
-    } catch (error) {
-      console.error('Error in media group repair:', error);
-    }
-  };
+  if (isLoading) {
+    return (
+      <Card className="w-full h-48 flex items-center justify-center">
+        <CardContent className="text-center">
+          <div className="flex flex-col items-center">
+            <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+            <p className="mt-2 text-gray-500">Loading system stats...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
   
-  const handleFixContentDisposition = async () => {
-    try {
-      if (stats?.state_counts?.error) {
-        toast({
-          title: "Starting Repair",
-          description: "Fixing content disposition for error messages. This may take a moment.",
-          variant: "default"
-        });
-        
-        await repairMessages('fix_content_disposition');
-        setTimeout(refreshStats, 1000);
-      }
-    } catch (error) {
-      console.error('Error fixing content disposition:', error);
-    }
-  };
-
+  if (error) {
+    return (
+      <Card className="w-full h-48 bg-red-50 dark:bg-red-900/20">
+        <CardHeader>
+          <CardTitle className="text-red-700 dark:text-red-400 flex items-center">
+            <AlertTriangle className="h-5 w-5 mr-2" />
+            Error Loading System Stats
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-red-600 dark:text-red-300">{error.message}</p>
+        </CardContent>
+        <CardFooter>
+          <Button variant="outline" onClick={handleRefresh}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </CardFooter>
+      </Card>
+    );
+  }
+  
   return (
     <Card className="w-full">
       <CardHeader>
-        <div className="flex justify-between items-center">
-          <div>
-            <CardTitle>System Status & Repair</CardTitle>
-            <CardDescription>
-              View processing system status and perform repair operations
-            </CardDescription>
-          </div>
+        <CardTitle className="flex items-center justify-between">
+          <span>System Health & Maintenance</span>
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={() => refreshStats()}
-            disabled={isLoading}
+            onClick={handleRefresh}
+            disabled={isRefreshing}
           >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
-            Refresh
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </Button>
-        </div>
+        </CardTitle>
+        <CardDescription>View system health and perform maintenance operations</CardDescription>
       </CardHeader>
-      
       <CardContent>
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-2 mb-4">
-            <TabsTrigger value="processing">Processing Status</TabsTrigger>
-            <TabsTrigger value="actions">Repair Actions</TabsTrigger>
-          </TabsList>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <StatusCard 
+            title="Messages by State" 
+            items={[
+              { label: 'Pending', value: stats?.by_processing_state?.pending || 0, icon: <Clock className="h-4 w-4 text-yellow-500" /> },
+              { label: 'Processing', value: stats?.by_processing_state?.processing || 0, icon: <RefreshCw className="h-4 w-4 text-blue-500" /> },
+              { label: 'Completed', value: stats?.by_processing_state?.completed || 0, icon: <CheckCircle className="h-4 w-4 text-green-500" /> },
+              { label: 'Error', value: stats?.by_processing_state?.error || 0, icon: <AlertTriangle className="h-4 w-4 text-red-500" /> },
+              { label: 'Total', value: stats?.total || 0 }
+            ]} 
+          />
           
-          <TabsContent value="processing">
-            {isLoading ? (
-              <div className="flex justify-center items-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : stats ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium mb-2">Message States</h3>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline" className="bg-gray-100">
-                        Total: {stats.state_counts.total_messages}
-                      </Badge>
-                      <Badge variant="outline" className="bg-blue-100">
-                        Initialized: {stats.state_counts.initialized}
-                      </Badge>
-                      <Badge variant="outline" className="bg-yellow-100">
-                        Pending: {stats.state_counts.pending}
-                      </Badge>
-                      <Badge variant="outline" className="bg-purple-100">
-                        Processing: {stats.state_counts.processing}
-                      </Badge>
-                      <Badge variant="outline" className="bg-green-100">
-                        Completed: {stats.state_counts.completed}
-                      </Badge>
-                      <Badge variant="outline" className="bg-red-100">
-                        Error: {stats.state_counts.error}
-                      </Badge>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-sm font-medium mb-2">Problem Indicators</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>Stuck in Processing:</span>
-                        <Badge variant={stats.media_group_stats.stuck_in_processing > 0 ? "destructive" : "outline"}>
-                          {stats.media_group_stats.stuck_in_processing}
-                        </Badge>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span>Orphaned Media Group Messages:</span>
-                        <Badge variant={stats.media_group_stats.orphaned_media_group_messages > 0 ? "destructive" : "outline"}>
-                          {stats.media_group_stats.orphaned_media_group_messages}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium mb-2">Processing Metrics</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>Avg Processing Time:</span>
-                        <span>{stats.timing_stats.avg_processing_time_seconds?.toFixed(2) || 'N/A'} seconds</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span>Oldest Unprocessed Caption:</span>
-                        <span>{stats.timing_stats.oldest_unprocessed_caption_age_hours?.toFixed(1) || 'N/A'} hours</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span>Oldest Stuck Message:</span>
-                        <span>{stats.timing_stats.oldest_stuck_processing_hours?.toFixed(1) || 'N/A'} hours</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>
-                  Could not load processing statistics.
-                </AlertDescription>
-              </Alert>
-            )}
-          </TabsContent>
+          <StatusCard 
+            title="Messages by Type" 
+            items={[
+              { label: 'Photos', value: stats?.by_media_type?.photo || 0 },
+              { label: 'Videos', value: stats?.by_media_type?.video || 0 },
+              { label: 'Documents', value: stats?.by_media_type?.document || 0 },
+              { label: 'Other', value: stats?.by_media_type?.other || 0 }
+            ]} 
+          />
           
-          <TabsContent value="actions">
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-sm font-medium mb-2">System Repair</h3>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Fix stuck messages and processing issues
-                </p>
-                <Button 
-                  onClick={() => handleRepairSystem()}
-                  disabled={isSystemRepairing}
-                  className="mr-2"
-                >
-                  {isSystemRepairing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Repair Processing System
-                </Button>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-medium mb-2">Media Group Repair</h3>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Fix inconsistencies in media groups
-                </p>
-                <Button 
-                  onClick={() => handleRepairMediaGroups()}
-                  disabled={isMediaGroupRepairing}
-                  variant="secondary"
-                  className="mr-2"
-                >
-                  {isMediaGroupRepairing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Repair Media Groups
-                </Button>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-medium mb-2">Media Content Repair</h3>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Fix content display issues
-                </p>
-                <Button 
-                  onClick={() => handleFixContentDisposition()}
-                  variant="outline"
-                >
-                  Fix Content Display
-                </Button>
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-      
-      <CardFooter className="flex justify-between border-t pt-4">
-        <div className="text-xs text-muted-foreground">
-          Last updated: {stats?.timestamp ? new Date(stats.timestamp).toLocaleString() : 'Never'}
+          <StatusCard 
+            title="Processing Times" 
+            items={[
+              { 
+                label: 'Average', 
+                value: stats?.processing_times?.avg_seconds 
+                  ? `${Math.round(stats.processing_times.avg_seconds)}s` 
+                  : 'N/A' 
+              },
+              { 
+                label: 'Maximum', 
+                value: stats?.processing_times?.max_seconds 
+                  ? `${Math.round(stats.processing_times.max_seconds)}s` 
+                  : 'N/A' 
+              }
+            ]} 
+          />
         </div>
+        
+        <div className="mt-6">
+          <h3 className="text-lg font-medium">System Maintenance</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 mb-3">
+            Perform maintenance operations to fix common issues
+          </p>
+          
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={handleRepairAll}
+              disabled={isRepairing}
+              className="flex items-center"
+            >
+              <Tool className="h-4 w-4 mr-2" />
+              {isRepairing ? 'Repairing...' : 'Comprehensive System Repair'}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+      <CardFooter className="border-t pt-4 text-xs text-gray-500 dark:text-gray-400">
+        Last updated: {stats?.latest_update ? formatDate(stats.latest_update) : 'Never'}
       </CardFooter>
     </Card>
   );
+};
+
+interface StatusCardProps {
+  title: string;
+  items: Array<{
+    label: string;
+    value: number | string;
+    icon?: React.ReactNode;
+  }>;
 }
+
+const StatusCard: React.FC<StatusCardProps> = ({ title, items }) => {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <h3 className="text-sm font-medium mb-3">{title}</h3>
+      <div className="space-y-2">
+        {items.map((item, index) => (
+          <div key={index} className="flex justify-between items-center">
+            <div className="flex items-center">
+              {item.icon && <span className="mr-1.5">{item.icon}</span>}
+              <span className="text-sm text-gray-600 dark:text-gray-400">{item.label}</span>
+            </div>
+            <span className="font-medium">{item.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};

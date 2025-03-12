@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { RefreshCw, Filter, FileText, FolderSync, FileX } from 'lucide-react';
+import { RefreshCw, Filter, FileText, FolderSync, FileX, Tool } from 'lucide-react';
 
 interface MessageControlPanelProps {
   searchTerm: string;
@@ -13,7 +13,8 @@ interface MessageControlPanelProps {
   showFilters: boolean;
   onFixMimeTypes: () => void;
   onRepairStoragePaths: () => void;
-  onFixInvalidFileIds?: () => void; // New optional handler
+  onFixInvalidFileIds?: () => void;
+  onRepairAll?: () => void; // New handler for repair all
 }
 
 export const MessageControlPanel: React.FC<MessageControlPanelProps> = ({
@@ -25,7 +26,8 @@ export const MessageControlPanel: React.FC<MessageControlPanelProps> = ({
   showFilters,
   onFixMimeTypes,
   onRepairStoragePaths,
-  onFixInvalidFileIds
+  onFixInvalidFileIds,
+  onRepairAll
 }) => {
   return (
     <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
@@ -74,6 +76,17 @@ export const MessageControlPanel: React.FC<MessageControlPanelProps> = ({
           >
             <FileX className="h-4 w-4 mr-1" />
             Fix Invalid Files
+          </Button>
+        )}
+        
+        {onRepairAll && (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={onRepairAll}
+          >
+            <Tool className="h-4 w-4 mr-1" />
+            Repair All
           </Button>
         )}
         

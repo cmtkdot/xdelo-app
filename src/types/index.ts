@@ -1,55 +1,55 @@
 
-// Processing States
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error' | 'no_caption';
+export type SyncStatus = 'pending' | 'synced' | 'failed' | 'queued';
 
-// Message Interface
+export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error';
+
 export interface Message {
   id: string;
-  telegram_message_id: number;
   chat_id: number;
-  chat_type: string;
-  chat_title?: string;
+  message_id: number;
+  text?: string;
   caption?: string;
+  telegram_data: any;
   file_id?: string;
   file_unique_id?: string;
   media_group_id?: string;
-  message_caption_id?: string;
-  is_original_caption?: boolean;
-  group_caption_synced?: boolean;
-  public_url?: string;
-  storage_path?: string;
-  mime_type?: string;
-  file_size?: number;
-  width?: number;
-  height?: number;
-  duration?: number;
-  analyzed_content?: Record<string, any>;
   processing_state: ProcessingState;
+  analyzed_content?: any;
+  chat_type?: string;
+  is_channel_post?: boolean;
+  from_user_id?: number;
   processing_started_at?: string;
   processing_completed_at?: string;
-  error_message?: string;
-  retry_count?: number;
-  last_error_at?: string;
   created_at: string;
   updated_at: string;
-  telegram_data?: Record<string, any>;
-  deleted_from_telegram?: boolean;
+  storage_path?: string;
+  public_url?: string;
+  mime_type?: string;
+  error_message?: string;
+  error_code?: string;
+  needs_redownload?: boolean;
+  redownload_attempts?: number;
+  storage_exists?: boolean;
 }
 
-// Media Group Info
-export interface MediaGroupInfo {
-  messageCount: number;
-  firstMessageTime: string | null;
-  lastMessageTime: string | null;
-  analyzedContent?: Record<string, any>;
+export interface MessageProcessingStats {
+  total: number;
+  pending: number;
+  processing: number;
+  completed: number;
+  error: number;
+  by_processing_state: Record<ProcessingState, number>;
+  by_media_type: {
+    photo: number;
+    video: number;
+    document: number;
+    other: number;
+  };
+  processing_times: {
+    avg_seconds: number;
+    max_seconds: number;
+  };
+  latest_update: string;
 }
 
-// Processing Metadata
-export interface ProcessingMetadata {
-  state: ProcessingState;
-  completedAt?: string;
-  correlationId: string;
-  lastProcessedAt: string;
-  syncAttempt: number;
-  error?: string;
-}
+export * from './GlProducts';
