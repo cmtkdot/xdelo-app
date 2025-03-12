@@ -19,21 +19,6 @@ verify_jwt = false
 [functions.parse-caption-with-ai]
 verify_jwt = false
 
-[functions.process-unanalyzed-messages]
-verify_jwt = false
-
-[functions.repair-storage-paths]
-verify_jwt = false
-
-[functions.redownload-from-media-group]
-verify_jwt = false
-
-[functions.fix-file-ids]
-verify_jwt = false
-
-[functions.scheduler-process-queue]
-verify_jwt = false
-
 [functions.telegram-webhook]
 verify_jwt = false
 
@@ -45,3 +30,14 @@ verify_jwt = false
 
 [functions.xdelo_file_repair]
 verify_jwt = false
+
+# New, consolidated file repair function
+[functions.xdelo_standardize_storage_paths]
+verify_jwt = false
+
+# Cleanup unnecessary or deprecated functions
+# [functions.process-unanalyzed-messages]
+# [functions.repair-storage-paths]
+# [functions.redownload-from-media-group]
+# [functions.fix-file-ids]
+# [functions.scheduler-process-queue]

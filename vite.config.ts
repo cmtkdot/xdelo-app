@@ -71,6 +71,11 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       protocol: 'wss',
       clientPort: 443
-    }
+    },
+    // Allow lovable project domain for development
+    allowedHosts: [
+      'localhost',
+      '*.lovableproject.com'
+    ]
   }
 }));

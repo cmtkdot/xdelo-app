@@ -1,380 +1,354 @@
 
-import { corsHeaders } from '../_shared/cors';
-import { createClient } from '@supabase/supabase-js';
-import { Database } from '../_shared/types';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { corsHeaders } from "../_shared/cors.ts";
+import { xdelo_getUploadOptions } from "../_shared/mediaUtils.ts";
 
-type RepairOperation = 'mime-types' | 'storage-paths' | 'file-ids' | 'all';
-
-interface FileRepairRequest {
-  operation: RepairOperation;
-  limit?: number;
-}
-
-interface FileRepairResponse {
-  success: boolean;
-  message: string;
-  stats?: {
-    fixed: number;
-    skipped: number;
-    errors: number;
-  };
-}
-
-// Create a Supabase client with the service role key
-const supabaseAdmin = createClient<Database>(
+// Create a Supabase client
+const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-  {
-    auth: {
-      persistSession: false,
-    }
-  }
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-Deno.serve(async (req) => {
+// Get Telegram bot token
+const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
+if (!TELEGRAM_BOT_TOKEN) {
+  throw new Error('Missing TELEGRAM_BOT_TOKEN env variable');
+}
+
+interface RequestBody {
+  messageId?: string;
+  fileUniqueId?: string;
+  repairType?: 'mime_type' | 'storage_path' | 'redownload';
+  correlationId?: string;
+}
+
+serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { operation = 'all', limit = 100 } = await req.json() as FileRepairRequest;
+    const { messageId, fileUniqueId, repairType = 'storage_path', correlationId = crypto.randomUUID() } = await req.json() as RequestBody;
     
-    // Execute the appropriate repair operation
-    let response: FileRepairResponse;
-    
-    if (operation === 'mime-types' || operation === 'all') {
-      response = await fixMimeTypes(limit);
-      
-      if (operation !== 'all') {
-        return new Response(JSON.stringify(response), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200,
-        });
-      }
+    if (!messageId && !fileUniqueId) {
+      throw new Error('Either messageId or fileUniqueId is required');
     }
-    
-    if (operation === 'storage-paths' || operation === 'all') {
-      response = await repairStoragePaths(limit);
-      
-      if (operation !== 'all') {
-        return new Response(JSON.stringify(response), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200,
-        });
-      }
-    }
-    
-    if (operation === 'file-ids' || operation === 'all') {
-      response = await fixInvalidFileIds(limit);
-      
-      if (operation !== 'all') {
-        return new Response(JSON.stringify(response), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200,
-        });
-      }
-    }
-    
-    // If operation is 'all', return a combined response
-    if (operation === 'all') {
-      response = {
-        success: true,
-        message: 'All repair operations completed',
-        stats: {
-          fixed: 0,
-          skipped: 0,
-          errors: 0
-        }
-      };
-    }
-    
-    return new Response(JSON.stringify(response), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    });
-  } catch (error) {
-    console.error('Error in file repair function:', error);
-    
-    return new Response(JSON.stringify({
-      success: false,
-      message: error.message || 'An error occurred during file repair',
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
-    });
-  }
-});
 
-async function fixMimeTypes(limit: number): Promise<FileRepairResponse> {
-  try {
-    // Get messages with incorrect or missing MIME types
-    const { data: messages, error: fetchError } = await supabaseAdmin
-      .from('messages')
-      .select('id, file_id, mime_type, message_type')
-      .or('mime_type.is.null,mime_type.eq.,mime_type.not.like.%/%')
-      .not('file_id', 'is', null)
-      .limit(limit);
+    console.log(`Processing file repair: ${repairType}, messageId: ${messageId}, fileUniqueId: ${fileUniqueId}, correlation ID: ${correlationId}`);
+
+    let message;
     
-    if (fetchError) throw fetchError;
-    
-    if (!messages || messages.length === 0) {
-      return {
-        success: true,
-        message: 'No messages found needing MIME type fixes',
-        stats: { fixed: 0, skipped: 0, errors: 0 }
-      };
-    }
-    
-    let fixed = 0;
-    let skipped = 0;
-    let errors = 0;
-    
-    for (const message of messages) {
-      try {
-        let mimeType = '';
+    // Get the message that needs repair
+    if (messageId) {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', messageId)
+        .single();
         
-        // Determine correct MIME type based on message_type
-        if (message.message_type === 'photo') {
-          mimeType = 'image/jpeg';
-        } else if (message.message_type === 'video') {
-          mimeType = 'video/mp4';
-        } else if (message.message_type === 'document') {
-          // For documents, try to determine MIME type from file extension
-          const fileId = message.file_id;
-          if (fileId && fileId.includes('.')) {
-            const extension = fileId.split('.').pop()?.toLowerCase();
-            if (extension) {
-              switch (extension) {
-                case 'pdf': mimeType = 'application/pdf'; break;
-                case 'doc': case 'docx': mimeType = 'application/msword'; break;
-                case 'xls': case 'xlsx': mimeType = 'application/vnd.ms-excel'; break;
-                case 'jpg': case 'jpeg': mimeType = 'image/jpeg'; break;
-                case 'png': mimeType = 'image/png'; break;
-                case 'mp4': mimeType = 'video/mp4'; break;
-                default: mimeType = 'application/octet-stream';
-              }
-            } else {
-              mimeType = 'application/octet-stream';
-            }
-          } else {
-            mimeType = 'application/octet-stream';
-          }
-        } else {
-          // For other types, use a generic MIME type
-          mimeType = 'application/octet-stream';
-        }
-        
-        // Update the message with the correct MIME type
-        const { error: updateError } = await supabaseAdmin
-          .from('messages')
-          .update({ mime_type: mimeType })
-          .eq('id', message.id);
-        
-        if (updateError) {
-          errors++;
-          console.error(`Error updating MIME type for message ${message.id}:`, updateError);
-        } else {
-          fixed++;
-        }
-      } catch (err) {
-        errors++;
-        console.error(`Error processing message ${message.id}:`, err);
+      if (error) {
+        throw new Error(`Failed to get message: ${error.message}`);
       }
+      
+      message = data;
+    } else if (fileUniqueId) {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('file_unique_id', fileUniqueId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+        
+      if (error) {
+        throw new Error(`Failed to find message with file_unique_id ${fileUniqueId}: ${error.message}`);
+      }
+      
+      message = data;
     }
-    
-    return {
-      success: true,
-      message: `Fixed ${fixed} messages with incorrect MIME types`,
-      stats: { fixed, skipped, errors }
+
+    if (!message) {
+      throw new Error('No message found to repair');
+    }
+
+    // Result to return
+    const result: Record<string, any> = {
+      messageId: message.id,
+      fileUniqueId: message.file_unique_id,
+      repairType,
+      success: false
     };
-  } catch (error) {
-    console.error('Error fixing MIME types:', error);
-    return {
-      success: false,
-      message: error.message || 'Failed to fix MIME types',
-      stats: { fixed: 0, skipped: 0, errors: 1 }
-    };
-  }
-}
 
-async function repairStoragePaths(limit: number): Promise<FileRepairResponse> {
-  try {
-    // Get messages that need storage path repair
-    const { data: messages, error: fetchError } = await supabaseAdmin
-      .from('messages')
-      .select('id, file_id, media_group_id, storage_path_standardized')
-      .or('storage_path_standardized.is.null,storage_path_standardized.eq.false')
-      .not('file_id', 'is', null)
-      .limit(limit);
-    
-    if (fetchError) throw fetchError;
-    
-    if (!messages || messages.length === 0) {
-      return {
-        success: true,
-        message: 'No messages found needing storage path repairs',
-        stats: { fixed: 0, skipped: 0, errors: 0 }
-      };
-    }
-    
-    let fixed = 0;
-    let skipped = 0;
-    let errors = 0;
-    
-    for (const message of messages) {
-      try {
-        // Standardize the storage path format
-        let newFileId = message.file_id;
+    // Handle different repair types
+    switch (repairType) {
+      case 'mime_type': {
+        // Fix MIME type
+        const { data: detectedType, error: typeError } = await supabase.rpc(
+          'xdelo_get_accurate_mime_type',
+          { p_message_data: JSON.stringify(message) }
+        );
         
-        // Fix common path issues
-        if (newFileId) {
-          // Remove double slashes
-          newFileId = newFileId.replace(/\/\//g, '/');
-          
-          // Ensure paths start with /
-          if (!newFileId.startsWith('/')) {
-            newFileId = '/' + newFileId;
-          }
-          
-          // Replace spaces with underscores
-          newFileId = newFileId.replace(/\s+/g, '_');
-          
-          // Add media group ID to the path if available
-          if (message.media_group_id && !newFileId.includes(message.media_group_id)) {
-            const pathParts = newFileId.split('/');
-            const fileName = pathParts.pop();
-            pathParts.push(message.media_group_id);
-            if (fileName) pathParts.push(fileName);
-            newFileId = pathParts.join('/');
-          }
+        if (typeError) {
+          throw new Error(`Failed to detect MIME type: ${typeError.message}`);
         }
         
-        if (newFileId !== message.file_id) {
-          // Update the message with the standardized file ID
-          const { error: updateError } = await supabaseAdmin
+        // Only update if detected type is different and not empty
+        if (detectedType && detectedType !== message.mime_type) {
+          const { error: updateError } = await supabase
             .from('messages')
-            .update({ 
-              file_id: newFileId,
-              storage_path_standardized: true
+            .update({
+              mime_type: detectedType,
+              mime_type_original: message.mime_type,
+              updated_at: new Date().toISOString()
             })
             .eq('id', message.id);
-          
+            
           if (updateError) {
-            errors++;
-            console.error(`Error updating storage path for message ${message.id}:`, updateError);
-          } else {
-            fixed++;
+            throw new Error(`Failed to update MIME type: ${updateError.message}`);
+          }
+          
+          result.success = true;
+          result.original = message.mime_type;
+          result.updated = detectedType;
+        } else {
+          result.success = true;
+          result.unchanged = true;
+          result.mime_type = message.mime_type;
+        }
+        break;
+      }
+      
+      case 'storage_path': {
+        // Get correct storage path
+        const { data: storagePath, error: storagePathError } = await supabase.rpc(
+          'xdelo_standardize_storage_path',
+          {
+            p_file_unique_id: message.file_unique_id,
+            p_mime_type: message.mime_type
+          }
+        );
+        
+        if (storagePathError) {
+          throw new Error(`Failed to get standardized storage path: ${storagePathError.message}`);
+        }
+        
+        // If storage path is already correct, no need to update
+        if (storagePath === message.storage_path) {
+          result.success = true;
+          result.unchanged = true;
+          result.storage_path = storagePath;
+          break;
+        }
+        
+        // Check if the file exists at the current path
+        let fileExists = false;
+        if (message.storage_path) {
+          try {
+            const { data } = await supabase
+              .storage
+              .from('telegram-media')
+              .download(message.storage_path);
+              
+            fileExists = !!data;
+          } catch (error) {
+            console.error('Error checking file existence:', error);
+            fileExists = false;
+          }
+        }
+        
+        // If file exists at current path, move it to the new path
+        if (fileExists) {
+          try {
+            // Download the file from the old path
+            const { data: fileData, error: downloadError } = await supabase
+              .storage
+              .from('telegram-media')
+              .download(message.storage_path);
+              
+            if (downloadError || !fileData) {
+              throw new Error(`Failed to download from ${message.storage_path}: ${downloadError?.message}`);
+            }
+            
+            // Upload to the new path
+            const uploadOptions = xdelo_getUploadOptions(message.mime_type);
+            const { error: uploadError } = await supabase
+              .storage
+              .from('telegram-media')
+              .upload(storagePath, fileData, uploadOptions);
+              
+            if (uploadError) {
+              throw new Error(`Failed to upload to ${storagePath}: ${uploadError.message}`);
+            }
+            
+            // Delete the old file
+            const { error: deleteError } = await supabase
+              .storage
+              .from('telegram-media')
+              .remove([message.storage_path]);
+              
+            // Log but don't fail if delete fails
+            if (deleteError) {
+              console.error(`Failed to delete old file at ${message.storage_path}: ${deleteError.message}`);
+            }
+          } catch (error) {
+            console.error('Error moving file:', error);
+            // Continue with path update even if move fails
           }
         } else {
-          // Path is already standardized, just mark it as such
-          const { error: updateError } = await supabaseAdmin
-            .from('messages')
-            .update({ storage_path_standardized: true })
-            .eq('id', message.id);
-          
-          if (updateError) {
-            errors++;
-          } else {
-            skipped++;
-          }
-        }
-      } catch (err) {
-        errors++;
-        console.error(`Error processing message ${message.id}:`, err);
-      }
-    }
-    
-    return {
-      success: true,
-      message: `Fixed ${fixed} messages with non-standard storage paths`,
-      stats: { fixed, skipped, errors }
-    };
-  } catch (error) {
-    console.error('Error repairing storage paths:', error);
-    return {
-      success: false,
-      message: error.message || 'Failed to repair storage paths',
-      stats: { fixed: 0, skipped: 0, errors: 1 }
-    };
-  }
-}
-
-async function fixInvalidFileIds(limit: number): Promise<FileRepairResponse> {
-  try {
-    // Get messages with potentially invalid file IDs
-    const { data: messages, error: fetchError } = await supabaseAdmin
-      .from('messages')
-      .select('id, file_id, media_unique_file_id, mime_type')
-      .not('file_id', 'is', null)
-      .not('mime_type', 'is', null)
-      .limit(limit);
-    
-    if (fetchError) throw fetchError;
-    
-    if (!messages || messages.length === 0) {
-      return {
-        success: true,
-        message: 'No messages found with file IDs to check',
-        stats: { fixed: 0, skipped: 0, errors: 0 }
-      };
-    }
-    
-    let fixed = 0;
-    let skipped = 0;
-    let errors = 0;
-    
-    for (const message of messages) {
-      try {
-        // Check if file exists in storage
-        const { data: fileExists, error: fileCheckError } = await supabaseAdmin
-          .storage
-          .from('telegram-files')
-          .list('', {
-            limit: 1,
-            offset: 0,
-            search: message.file_id.split('/').pop()
-          });
-        
-        if (fileCheckError) {
-          console.error(`Error checking file existence for message ${message.id}:`, fileCheckError);
-          errors++;
-          continue;
+          // File doesn't exist at current path, mark for redownload
+          result.needs_redownload = true;
         }
         
-        const exists = fileExists && fileExists.length > 0;
-        
-        // Update the storage_exists flag
-        const { error: updateError } = await supabaseAdmin
+        // Update the message with the new storage path
+        const { error: updateError } = await supabase
           .from('messages')
-          .update({ storage_exists: exists })
+          .update({
+            storage_path: storagePath,
+            storage_path_standardized: true,
+            needs_redownload: result.needs_redownload || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', message.id);
+          
+        if (updateError) {
+          throw new Error(`Failed to update storage path: ${updateError.message}`);
+        }
+        
+        result.success = true;
+        result.original = message.storage_path;
+        result.updated = storagePath;
+        break;
+      }
+      
+      case 'redownload': {
+        if (!message.file_unique_id) {
+          throw new Error('Message has no file_unique_id to redownload');
+        }
+        
+        if (!message.media_group_id) {
+          throw new Error('This message is not part of a media group. Use Telegram API redownload instead.');
+        }
+        
+        // Find a valid file_id in the media group
+        const { data: validFile, error: fileError } = await supabase.rpc(
+          'xdelo_find_valid_file_id',
+          {
+            p_media_group_id: message.media_group_id,
+            p_file_unique_id: message.file_unique_id
+          }
+        );
+        
+        if (fileError) {
+          throw new Error(`Failed to find valid file_id: ${fileError.message}`);
+        }
+        
+        if (!validFile) {
+          throw new Error('No valid file_id found in media group');
+        }
+        
+        console.log(`Found valid file_id for ${message.file_unique_id} in media group ${message.media_group_id}`);
+        
+        // Get file path from Telegram
+        const fileInfoResponse = await fetch(
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${validFile}`
+        );
+        
+        if (!fileInfoResponse.ok) {
+          throw new Error(`Failed to get file info from Telegram: ${await fileInfoResponse.text()}`);
+        }
+        
+        const fileInfo = await fileInfoResponse.json();
+        
+        if (!fileInfo.ok) {
+          throw new Error(`Telegram API error: ${JSON.stringify(fileInfo)}`);
+        }
+        
+        // Download file from Telegram
+        const fileDataResponse = await fetch(
+          `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`
+        );
+        
+        if (!fileDataResponse.ok) {
+          throw new Error(`Failed to download file from Telegram: ${await fileDataResponse.text()}`);
+        }
+        
+        const fileData = await fileDataResponse.blob();
+        
+        // Get correct storage path
+        const { data: storagePath, error: storagePathError } = await supabase.rpc(
+          'xdelo_standardize_storage_path',
+          {
+            p_file_unique_id: message.file_unique_id,
+            p_mime_type: message.mime_type
+          }
+        );
+        
+        if (storagePathError) {
+          throw new Error(`Failed to get standardized storage path: ${storagePathError.message}`);
+        }
+        
+        // Upload to Supabase Storage with proper options
+        const uploadOptions = xdelo_getUploadOptions(message.mime_type);
+        const { error: uploadError } = await supabase
+          .storage
+          .from('telegram-media')
+          .upload(storagePath, fileData, uploadOptions);
+        
+        if (uploadError) {
+          throw new Error(`Failed to upload media to storage: ${uploadError.message}`);
+        }
+        
+        // Update the message status
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({
+            file_id: validFile,
+            file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            needs_redownload: false,
+            redownload_completed_at: new Date().toISOString(),
+            storage_path: storagePath,
+            error_message: null
+          })
           .eq('id', message.id);
         
         if (updateError) {
-          errors++;
-          console.error(`Error updating storage_exists for message ${message.id}:`, updateError);
-        } else if (exists) {
-          skipped++;  // File exists, no need to fix
-        } else {
-          fixed++;    // File doesn't exist, marked as such
+          throw new Error(`Failed to update message: ${updateError.message}`);
         }
-      } catch (err) {
-        errors++;
-        console.error(`Error processing message ${message.id}:`, err);
+        
+        result.success = true;
+        result.storagePath = storagePath;
+        break;
       }
+      
+      default:
+        throw new Error(`Unknown repair type: ${repairType}`);
     }
     
-    return {
-      success: true,
-      message: `Checked ${messages.length} file IDs (${fixed} marked as missing)`,
-      stats: { fixed, skipped, errors }
-    };
+    // Log success 
+    await supabase
+      .from('unified_audit_logs')
+      .insert({
+        event_type: `file_${repairType}_repaired`,
+        entity_id: message.id,
+        correlation_id: correlationId,
+        metadata: result
+      });
+    
+    return new Response(
+      JSON.stringify(result),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   } catch (error) {
-    console.error('Error fixing invalid file IDs:', error);
-    return {
-      success: false,
-      message: error.message || 'Failed to fix invalid file IDs',
-      stats: { fixed: 0, skipped: 0, errors: 1 }
-    };
+    console.error('Error in file repair:', error);
+    
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
-}
+});

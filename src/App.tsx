@@ -1,9 +1,29 @@
+
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from "react-router-dom";
 import { SupabaseProvider } from "./integrations/supabase/SupabaseProvider";
 import { ThemeProvider } from "./components/Theme/ThemeProvider";
+import { useState, useEffect } from "react";
+import { supabase } from "./integrations/supabase/client";
+import { Session } from "@supabase/supabase-js";
+import Auth from "./pages/Auth";
+import Dashboard from "./pages/Dashboard";
+import MessagesPage from "./pages/Messages";
+import ProductGallery from "./pages/ProductGallery";
+import MediaTable from "./pages/MediaTable";
+import AIChat from "./pages/AIChat";
+import Settings from "./pages/Settings";
+import AudioUpload from "./pages/AudioUpload";
+import NotFound from "./pages/NotFound";
+import PublicGallery from "./pages/PublicGallery";
+import AppSidebar from "./components/Layout/AppSidebar";
+
+interface ApiError extends Error {
+  status?: number;
+  message?: string;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,7 +72,7 @@ const ProtectedRoute = ({
         subscription
       }
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (_event === 'SIGNED_OUT' || _event === 'TOKEN_REFRESHED' && !session) {
+      if (_event === 'SIGNED_OUT' || (_event === 'TOKEN_REFRESHED' && !session)) {
         setSession(null);
         navigate('/auth');
       } else {
@@ -85,29 +105,31 @@ const App = () => (
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Router>
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/p/:id" element={<PublicGallery />} />
-            <Route element={
-              <ProtectedRoute>
-                <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-                  <AppSidebar />
-                  <main className="transition-all duration-300 ease-in-out pl-16 min-h-screen">
-                    <div className="container py-6 px-4 mx-auto">
-                      <Outlet />
-                    </div>
-                  </main>
-                </div>
-              </ProtectedRoute>
-            }>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/messages" element={<MessagesPage />} />
-              <Route path="/gallery" element={<ProductGallery />} />
-              <Route path="/media-table" element={<MediaTable />} />
-              <Route path="/ai-chat" element={<AIChat />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/audio-upload" element={<AudioUpload />} />
-              <Route path="*" element={<NotFound />} />
-            </Route>
+            <Routes>
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/p/:id" element={<PublicGallery />} />
+              <Route element={
+                <ProtectedRoute>
+                  <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+                    <AppSidebar />
+                    <main className="transition-all duration-300 ease-in-out pl-16 min-h-screen">
+                      <div className="container py-6 px-4 mx-auto">
+                        <Outlet />
+                      </div>
+                    </main>
+                  </div>
+                </ProtectedRoute>
+              }>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/messages" element={<MessagesPage />} />
+                <Route path="/gallery" element={<ProductGallery />} />
+                <Route path="/media-table" element={<MediaTable />} />
+                <Route path="/ai-chat" element={<AIChat />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/audio-upload" element={<AudioUpload />} />
+                <Route path="*" element={<NotFound />} />
+              </Route>
+            </Routes>
           </Router>
           <Toaster />
         </TooltipProvider>

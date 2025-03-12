@@ -106,10 +106,10 @@ export interface MessageInput {
   is_edited_channel_post?: boolean;
   edit_date?: string;
   correlation_id: string;
-  processing_state: ProcessingState;
+  processing_state: 'pending' | 'processing' | 'completed' | 'error';
 }
 
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
+export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error';
 
 export interface AnalyzedContent {
   product_name?: string;
@@ -155,10 +155,7 @@ export interface Message {
   old_analyzed_content?: AnalyzedContent[];
   telegram_data?: Record<string, unknown>;
   error_message?: string;
-  retry_count?: number;
-  last_error_at?: string;
-  group_first_message_time?: string;
-  group_last_message_time?: string;
+  error_code?: string;
   chat_id?: number;
   chat_type?: string;
   chat_title?: string;
@@ -172,5 +169,6 @@ export interface Message {
   deleted_from_telegram?: boolean;
   edit_history?: AnalyzedContent[];
   needs_redownload?: boolean;
-  redownload_strategy?: string;
+  redownload_reason?: string;
+  file_id_expires_at?: string;
 }

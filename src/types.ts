@@ -23,11 +23,8 @@ export interface AnalyzedContent {
   notes?: string;
   caption?: string;
   parsing_metadata?: {
-    method: 'manual' | 'ai' | 'fallback';
-    confidence: number;
+    method: 'manual' | 'ai';
     timestamp: string;
-    error?: string;
-    missing_fields?: string[];
   };
   sync_metadata?: {
     sync_source_message_id?: string;
@@ -78,6 +75,11 @@ export interface Message {
   forward_from_chat?: Record<string, unknown>;
   forward_chain?: Record<string, unknown>[];
   old_analyzed_content?: Record<string, unknown>[];
+  needs_redownload?: boolean;
+  redownload_reason?: string;
+  redownload_flagged_at?: string;
+  redownload_completed_at?: string;
+  file_id_expires_at?: string;
 }
 
 export interface GlProduct {

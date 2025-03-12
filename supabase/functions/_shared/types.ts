@@ -1,6 +1,7 @@
+
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
+export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error';
 
 // Types for analyzed content
 export interface AnalyzedContent {
@@ -56,10 +57,7 @@ export interface Message {
   old_analyzed_content?: AnalyzedContent[];
   telegram_data?: Record<string, unknown>;
   error_message?: string;
-  retry_count?: number;
-  last_error_at?: string;
-  group_first_message_time?: string;
-  group_last_message_time?: string;
+  error_code?: string;
   chat_id?: number;
   chat_type?: string;
   chat_title?: string;
@@ -74,7 +72,12 @@ export interface Message {
   edit_history?: AnalyzedContent[];
   file_id_expires_at?: string; // Timestamp when file_id expires
   original_file_id?: string;   // The original file_id that created this record
-  redownload_strategy?: 'storage' | 'telegram_api' | 'media_group' | 'manual'; // How to recover the file
+  needs_redownload?: boolean;  // Flag to indicate file needs redownloading
+  redownload_reason?: string;  // Reason why redownload is needed
+  redownload_completed_at?: string; // When redownload completed
+  storage_path?: string;       // Path in storage
+  storage_exists?: boolean;    // Whether file exists in storage
+  storage_path_standardized?: boolean; // Whether path follows standard format
 }
 
 // Database interface
@@ -117,51 +120,11 @@ export interface Database {
   };
 }
 
-export interface AIAnalysisResult {
-  content: AnalyzedContent;
-}
-
-export interface MessageUpdate {
-  analyzed_content: AnalyzedContent;
-  processing_state: ProcessingState;
-  processing_completed_at?: string;
-  is_original_caption?: boolean;
-  group_caption_synced?: boolean;
-  message_caption_id?: string;
-  error_message?: string;
-  last_error_at?: string;
-}
-
-export const PROCESSING_STATES: Record<string, ProcessingState> = {
-  INITIALIZED: 'initialized',
-  PENDING: 'pending',
-  PROCESSING: 'processing',
-  COMPLETED: 'completed',
-  ERROR: 'error'
-};
-
-export interface ProcessingMetadata {
-  state: ProcessingState;
-  completedAt?: string;
-  correlationId: string;
-  lastProcessedAt: string;
-  syncAttempt: number;
-  error?: string;
-}
-
 export interface MediaGroupInfo {
   messageCount: number;
   firstMessageTime: string | null;
   lastMessageTime: string | null;
   analyzedContent?: Record<string, any>;
-}
-
-export interface FunctionInvocationContext {
-  logger: {
-    info: (message: string, data?: any) => void;
-    error: (message: string, error?: any) => void;
-  };
-  correlationId: string;
 }
 
 export async function getMediaGroupInfo(
@@ -209,5 +172,4 @@ export interface MediaHandlingResult {
   public_url: string;
   error?: string;
   needs_redownload?: boolean;
-  redownload_strategy?: 'storage' | 'telegram_api' | 'media_group' | 'manual';
 }
