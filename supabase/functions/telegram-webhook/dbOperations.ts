@@ -1,7 +1,6 @@
-
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { ProcessingState, Message, AnalyzedContent } from "../_shared/types.ts";
-import { MessageInput, ForwardInfo } from "./types.ts";
+import { ProcessingState, Message, AnalyzedContent } from "../_shared/types";
+import { MessageInput, ForwardInfo } from "./types";
 
 // Types specific to dbOperations
 interface BaseMessageRecord {
@@ -19,8 +18,8 @@ interface BaseMessageRecord {
   error_message?: string;
   created_at: string;
   updated_at: string;
-  telegram_data: any;
-  edit_history?: any[];
+  telegram_data: Record<string, unknown>;
+  edit_history?: Record<string, unknown>[];
   edit_count?: number;
   is_edited_channel_post?: boolean;
   forward_info?: ForwardInfo;
@@ -63,7 +62,8 @@ interface NonMediaMessage extends BaseMessageRecord {
 interface MessageResponse {
   id: string;
   success: boolean;
-  error?: string;
+  error_message?: string;
+  error_code?: string;
 }
 
 interface UpdateProcessingStateParams {
@@ -75,10 +75,16 @@ interface UpdateProcessingStateParams {
   processingCompleted?: boolean;
 }
 
+interface LoggerInterface {
+  error: (message: string, error: unknown) => void;
+  info?: (message: string, data?: unknown) => void;
+  warn?: (message: string, data?: unknown) => void;
+}
+
 export async function createMessage(
   supabase: SupabaseClient,
   messageData: MessageInput,
-  logger: any
+  logger: LoggerInterface
 ): Promise<MessageResponse> {
   try {
     // Ensure correlation_id is stored as string
@@ -86,43 +92,96 @@ export async function createMessage(
       messageData.correlation_id.toString() : 
       crypto.randomUUID().toString();
 
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
-        ...messageData,
+    // Try to use RPC to handle schema-agnostic insert if available
+    try {
+      const { data, error } = await supabase.rpc('xdelo_create_message', {
+        message_data: messageData,
+        p_correlation_id: correlationId
+      });
+
+      if (error) throw error;
+
+      await logMessageEvent(supabase, 'message_created', {
+        entity_id: data.id,
+        telegram_message_id: messageData.telegram_message_id,
+        chat_id: messageData.chat_id,
+        new_state: messageData,
+        metadata: {
+          media_group_id: messageData.media_group_id,
+          is_forward: !!messageData.forward_info,
+          correlation_id: correlationId
+        }
+      });
+
+      return { id: data.id, success: true };
+    } catch (rpcError) {
+      // If RPC is not available, fall back to direct insert but with explicit columns
+      // This avoids the "column not found in schema" error by being explicit
+      logger.error('RPC failed, using direct insert', rpcError);
+      
+      // Create an object with only the supported columns
+      const safeMessageData = {
+        telegram_message_id: messageData.telegram_message_id,
+        chat_id: messageData.chat_id,
+        chat_type: messageData.chat_type,
+        chat_title: messageData.chat_title,
+        caption: messageData.caption,
+        media_group_id: messageData.media_group_id,
+        file_id: messageData.file_id,
+        file_unique_id: messageData.file_unique_id,
+        mime_type: messageData.mime_type,
+        file_size: messageData.file_size,
+        width: messageData.width,
+        height: messageData.height,
+        duration: messageData.duration,
+        storage_path: messageData.storage_path,
+        public_url: messageData.public_url,
         correlation_id: correlationId,
         processing_state: 'pending',
+        telegram_data: messageData.telegram_data,
+        forward_info: messageData.forward_info,
+        is_edited_channel_post: messageData.is_edited_channel_post,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      })
-      .select('id')
-      .single();
+      };
 
-    if (error) throw error;
+      const { data, error } = await supabase
+        .from('messages')
+        .insert(safeMessageData)
+        .select('id')
+        .single();
 
-    await logMessageEvent(supabase, 'message_created', {
-      entity_id: data.id,
-      telegram_message_id: messageData.telegram_message_id,
-      chat_id: messageData.chat_id,
-      new_state: messageData,
-      metadata: {
-        media_group_id: messageData.media_group_id,
-        is_forward: !!messageData.forward_info,
-        correlation_id: correlationId
-      }
-    });
+      if (error) throw error;
 
-    return { id: data.id, success: true };
+      await logMessageEvent(supabase, 'message_created', {
+        entity_id: data.id,
+        telegram_message_id: messageData.telegram_message_id,
+        chat_id: messageData.chat_id,
+        new_state: safeMessageData,
+        metadata: {
+          media_group_id: messageData.media_group_id,
+          is_forward: !!messageData.forward_info,
+          correlation_id: correlationId
+        }
+      });
+
+      return { id: data.id, success: true };
+    }
   } catch (error) {
     logger.error('Error creating message:', error);
-    return { id: '', success: false, error: error.message };
+    return { 
+      id: '', 
+      success: false, 
+      error_message: error instanceof Error ? error.message : String(error),
+      error_code: error instanceof Error && 'code' in error ? (error as {code?: string}).code : 'DB_INSERT_ERROR' 
+    };
   }
 }
 
 export async function createNonMediaMessage(
   supabase: SupabaseClient,
   messageData: Omit<NonMediaMessage, 'id' | 'created_at' | 'updated_at'>,
-  logger: any
+  logger: LoggerInterface
 ): Promise<MessageResponse> {
   try {
     // Ensure correlation_id is stored as string
@@ -158,7 +217,12 @@ export async function createNonMediaMessage(
     return { id: data.id, success: true };
   } catch (error) {
     logger.error('Error creating non-media message:', error);
-    return { id: '', success: false, error: error.message };
+    return { 
+      id: '', 
+      success: false, 
+      error_message: error instanceof Error ? error.message : String(error),
+      error_code: error instanceof Error && 'code' in error ? (error as {code?: string}).code : 'NON_MEDIA_INSERT_ERROR'
+    };
   }
 }
 
@@ -167,7 +231,7 @@ export async function updateMessage(
   chatId: number,
   messageId: number,
   updateData: Partial<MediaMessage>,
-  logger: any
+  logger: LoggerInterface
 ): Promise<MessageResponse> {
   try {
     const { data: existingMessage } = await supabase
@@ -215,17 +279,33 @@ export async function updateMessage(
     return { id: existingMessage.id, success: true };
   } catch (error) {
     logger.error('Error updating message:', error);
-    return { id: '', success: false, error: error.message };
+    return { 
+      id: '', 
+      success: false, 
+      error_message: error instanceof Error ? error.message : String(error),
+      error_code: error instanceof Error && 'code' in error ? (error as {code?: string}).code : 'MESSAGE_UPDATE_ERROR'
+    };
   }
 }
 
 export async function updateMessageProcessingState(
   supabase: SupabaseClient,
   params: UpdateProcessingStateParams,
-  logger: any
+  logger: LoggerInterface
 ): Promise<MessageResponse> {
   try {
-    const updateData: any = {
+    // Get existing message first to ensure we have current state
+    const { data: existingMessage } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', params.messageId)
+      .single();
+
+    if (!existingMessage) {
+      throw new Error('Message not found');
+    }
+
+    const updateData: Record<string, unknown> = {
       processing_state: params.state,
       updated_at: new Date().toISOString()
     };
@@ -238,18 +318,12 @@ export async function updateMessageProcessingState(
     if (params.error) {
       updateData.error_message = params.error;
       updateData.last_error_at = new Date().toISOString();
-      updateData.retry_count = supabase.sql`COALESCE(retry_count, 0) + 1`;
+      updateData.retry_count = (existingMessage.retry_count || 0) + 1;
     }
 
     if (params.processingStarted) {
       updateData.processing_started_at = new Date().toISOString();
     }
-
-    const { data: existingMessage } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('id', params.messageId)
-      .single();
 
     const { error: updateError } = await supabase
       .from('messages')
@@ -285,8 +359,17 @@ export async function updateMessageProcessingState(
 
     return { id: params.messageId, success: true };
   } catch (error) {
-    logger?.error('Error updating message processing state:', error);
-    return { id: params.messageId, success: false, error: error.message };
+    if (logger?.error) {
+      logger.error('Error updating message processing state:', error);
+    } else {
+      console.error('Error updating message processing state:', error);
+    }
+    return { 
+      id: params.messageId, 
+      success: false, 
+      error_message: error instanceof Error ? error.message : String(error),
+      error_code: error instanceof Error && 'code' in error ? (error as {code?: string}).code : 'PROCESSING_STATE_UPDATE_ERROR'
+    };
   }
 }
 
@@ -297,9 +380,9 @@ async function logMessageEvent(
     entity_id: string;
     telegram_message_id?: number;
     chat_id?: number;
-    previous_state?: any;
-    new_state?: any;
-    metadata?: any;
+    previous_state?: Record<string, unknown>;
+    new_state?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
     error_message?: string;
   }
 ): Promise<void> {

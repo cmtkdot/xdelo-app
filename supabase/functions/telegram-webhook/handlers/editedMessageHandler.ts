@@ -1,8 +1,15 @@
-
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { logMessageOperation } from '../utils/logger.ts';
+import { getMediaInfo } from '../utils/mediaUtils.ts';
+
+// Declare Deno type for Edge Functions
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  }
+};
 
 export async function handleEditedMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
@@ -16,6 +23,9 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
     // Check if message has media
     if (message.photo || message.video || message.document) {
       console.log(`Edited message contains media, handling media edit`);
+      
+      // Get media info using the same utility as mediaMessageHandler
+      const mediaInfo = await getMediaInfo(message);
       
       // Find the existing message in our database
       const { data: existingMessage, error: messageError } = await supabaseClient
@@ -33,62 +43,174 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         return await handleMediaMessage(message, { ...context, isEdit: false });
       }
       
-      // Create updated telegram_data
-      const updatedTelegramData = {
-        ...existingMessage.telegram_data,
-        message: {
-          ...(existingMessage.telegram_data?.message || {}),
-          caption: message.caption
-        },
-        edit_date: message.edit_date
-      };
-      
-      // Store old analyzed content before we clear it
-      let oldAnalyzedContent = existingMessage.old_analyzed_content || [];
-      if (existingMessage.analyzed_content) {
-        oldAnalyzedContent = [...oldAnalyzedContent, {
-          ...existingMessage.analyzed_content,
-          edit_timestamp: new Date().toISOString()
-        }];
-      }
-      
-      // Update the message with new caption and reset analysis state
-      const { error: updateError } = await supabaseClient
-        .from('messages')
-        .update({
-          caption: message.caption || '',
-          telegram_data: updatedTelegramData,
-          processing_state: 'pending',
-          analyzed_content: null, // Clear for reanalysis
-          old_analyzed_content: oldAnalyzedContent,
-          is_original_caption: true, // Set as original for media group
-          group_caption_synced: false, // Reset sync flag
-          updated_at: new Date().toISOString(),
-          edit_count: (existingMessage.edit_count || 0) + 1,
-          edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
-        })
-        .eq('id', existingMessage.id);
-      
-      if (updateError) {
-        throw new Error(`Failed to update message: ${updateError.message}`);
-      }
-      
-      // Log edit operation
-      try {
-        await logMessageOperation(
-          'edit',
-          correlationId,
-          {
-            message: `Media message ${message.message_id} edited in chat ${message.chat.id}`,
-            telegram_message_id: message.message_id,
-            chat_id: message.chat.id,
-            existing_message_id: existingMessage.id,
-            media_group_id: existingMessage.media_group_id,
-            edit_type: 'caption_edit'
-          }
+      // Check if the file content has actually changed by comparing file_unique_id
+      const fileChanged = mediaInfo.file_unique_id !== existingMessage.file_unique_id;
+      if (fileChanged) {
+        console.log(`Media file changed in edit, old file_unique_id: ${existingMessage.file_unique_id}, new file_unique_id: ${mediaInfo.file_unique_id}`);
+        
+        // Store previous file info in edit_history
+        const editHistory = existingMessage.edit_history || [];
+        editHistory.push({
+          timestamp: new Date().toISOString(),
+          previous_file_unique_id: existingMessage.file_unique_id,
+          new_file_unique_id: mediaInfo.file_unique_id,
+          previous_caption: existingMessage.caption,
+          new_caption: message.caption,
+          edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
+          previous_analyzed_content: existingMessage.analyzed_content
+        });
+        
+        // Use mediaUtils from mediaMessageHandler to process file upload
+        // Import shared media utilities to download and upload the new file
+        const { xdelo_downloadMediaFromTelegram, xdelo_uploadMediaToStorage } = 
+          await import('../../_shared/mediaUtils.ts');
+        
+        // Get bot token from database
+        const { data: settings } = await supabaseClient
+          .from('settings')
+          .select('bot_token')
+          .single();
+          
+        if (!settings?.bot_token) {
+          throw new Error('Bot token not found in settings');
+        }
+        
+        // Download the new media from Telegram
+        const download = await xdelo_downloadMediaFromTelegram(
+          mediaInfo.file_id,
+          mediaInfo.file_unique_id,
+          mediaInfo.mime_type || 'application/octet-stream',
+          settings.bot_token
         );
-      } catch (logError) {
-        console.error('Error logging edit operation:', logError);
+        
+        if (!download.success || !download.blob || !download.storagePath) {
+          throw new Error(download.error || 'Failed to download new media from Telegram');
+        }
+        
+        // Upload the new media to Supabase storage
+        const upload = await xdelo_uploadMediaToStorage(
+          download.storagePath,
+          download.blob,
+          mediaInfo.mime_type || 'application/octet-stream'
+        );
+        
+        if (!upload.success || !upload.publicUrl) {
+          throw new Error(upload.error || 'Failed to upload new media to storage');
+        }
+        
+        // Update the message with new media info and storage path
+        const { error: updateMediaError } = await supabaseClient
+          .from('messages')
+          .update({
+            file_id: mediaInfo.file_id,
+            file_unique_id: mediaInfo.file_unique_id,
+            file_size: mediaInfo.file_size,
+            mime_type: mediaInfo.mime_type,
+            // Don't use file_type, width, height, duration as they may not exist in MediaInfo
+            caption: message.caption || '',
+            telegram_data: message,
+            storage_path: download.storagePath,
+            public_url: upload.publicUrl,
+            processing_state: 'pending',
+            analyzed_content: null,
+            old_analyzed_content: existingMessage.old_analyzed_content || [],
+            is_original_caption: true,
+            group_caption_synced: false,
+            updated_at: new Date().toISOString(),
+            edit_count: (existingMessage.edit_count || 0) + 1,
+            edit_history: editHistory,
+            edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
+            storage_exists: true,
+            storage_path_standardized: true,
+            needs_redownload: false
+          })
+          .eq('id', existingMessage.id);
+        
+        if (updateMediaError) {
+          throw new Error(`Failed to update message with new media: ${updateMediaError.message}`);
+        }
+        
+        console.log(`Successfully updated message ${existingMessage.id} with new media file`);
+        
+        // Log media change event
+        try {
+          await logMessageOperation(
+            'edit',
+            correlationId,
+            {
+              message: `Media file changed in message ${message.message_id} edited in chat ${message.chat.id}`,
+              telegram_message_id: message.message_id,
+              chat_id: message.chat.id,
+              file_unique_id: mediaInfo.file_unique_id,
+              old_file_unique_id: existingMessage.file_unique_id,
+              existing_message_id: existingMessage.id,
+              media_group_id: existingMessage.media_group_id,
+              edit_type: 'media_file_changed'
+            }
+          );
+        } catch (logError) {
+          console.error('Error logging media change operation:', logError);
+        }
+      } else {
+        console.log(`Media file unchanged in edit, only updating caption or metadata`);
+      
+        // Create updated telegram_data
+        const updatedTelegramData = {
+          ...existingMessage.telegram_data,
+          message: {
+            ...(existingMessage.telegram_data?.message || {}),
+            caption: message.caption
+          },
+          edit_date: message.edit_date
+        };
+        
+        // Store old analyzed content before we clear it
+        const oldAnalyzedContent = existingMessage.old_analyzed_content || [];
+        if (existingMessage.analyzed_content) {
+          oldAnalyzedContent.push({
+            ...existingMessage.analyzed_content,
+            edit_timestamp: new Date().toISOString()
+          });
+        }
+        
+        // Update the message with new caption and reset analysis state
+        const { error: updateError } = await supabaseClient
+          .from('messages')
+          .update({
+            caption: message.caption || '',
+            telegram_data: updatedTelegramData,
+            processing_state: 'pending',
+            analyzed_content: null, // Clear for reanalysis
+            old_analyzed_content: oldAnalyzedContent,
+            is_original_caption: true, // Set as original for media group
+            group_caption_synced: false, // Reset sync flag
+            updated_at: new Date().toISOString(),
+            edit_count: (existingMessage.edit_count || 0) + 1,
+            edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+          })
+          .eq('id', existingMessage.id);
+      
+        if (updateError) {
+          throw new Error(`Failed to update message: ${updateError.message}`);
+        }
+        
+        // Log edit operation
+        try {
+          await logMessageOperation(
+            'edit',
+            correlationId,
+            {
+              message: `Media message ${message.message_id} edited in chat ${message.chat.id}`,
+              telegram_message_id: message.message_id,
+              chat_id: message.chat.id,
+              existing_message_id: existingMessage.id,
+              media_group_id: existingMessage.media_group_id,
+              edit_type: 'caption_edit'
+            }
+          );
+        } catch (logError) {
+          console.error('Error logging edit operation:', logError);
+        }
       }
       
       // Directly trigger manual caption parser instead of parse-caption-with-ai

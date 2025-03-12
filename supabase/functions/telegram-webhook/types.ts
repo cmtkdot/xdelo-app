@@ -101,12 +101,21 @@ export interface MessageInput {
   width?: number;
   height?: number;
   duration?: number;
-  telegram_data: any;
+  telegram_data: Record<string, unknown>;
   forward_info?: ForwardInfo;
   is_edited_channel_post?: boolean;
   edit_date?: string;
   correlation_id: string;
   processing_state: 'pending' | 'processing' | 'completed' | 'error';
+  storage_path?: string;
+  public_url?: string;
+  is_duplicate?: boolean;
+  storage_exists?: boolean;
+  needs_redownload?: boolean;
+  redownload_reason?: string;
+  error_message?: string;
+  error_code?: string;
+  [key: string]: unknown; // Index signature for flexible properties
 }
 
 export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error';

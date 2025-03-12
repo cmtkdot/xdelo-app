@@ -1,347 +1,563 @@
+# xdelo-app - Telegram Message Processing System
 
-# Telegram Webhook Flow
+## Knowledge Base
+
+Telegram Webhook Entry Point (telegram-webhook/index.ts):
+
+Receives webhook updates from Telegram
+Generates a unique correlation ID for tracking
+Determines message context (channel post, forwarded, edited)
+Routes messages based on type:
+Edited messages → handleEditedMessage
+Media messages → handleMediaMessage
+Other messages → handleOtherMessage
+Media Message Handling (mediaMessageHandler.ts):
+
+Duplicate Detection:
+
+Checks for existing messages with same file_unique_id used for the name directly in the telegram-storage bucket 
+Updates existing record if found instead of creating new one
+Media Group Handling:
+
+Recognizes messages part of a media group
+Maintains relationships between grouped messages
+Syncs the analyzed content across group members
+Caption Processing:
+
+Messages with captions go to manual-caption-parser
+Falls back to database function if parser fails
+Handles caption edits and removals
+Processing States:
+
+'initialized': Initial state for new messages
+'pending': Ready for caption analysis
+'completed': Successfully processed
+'error': Processing failed
+Media Group Synchronization:
+
+Immediate sync after processing captions
+Delayed re-checks for initially empty groups
+Direct database fallback for reliability
+Maintains edit history and caption relationships
+
+detailed: 
+Caption Processing and Media Group Synchronization
+1. Caption Processing Flow --> If No caption then will check for other media groups that are the same and see if they have analyzed content parsed from caption already completed and not null. It will sync if it  has captions then: 
+A. Entry Points
+Direct Processing (Primary Path)
+Webhook receives Telegram message
+Message stored with initial state 'initialized'
+Caption processor triggered immediately
+Manual Processing (Secondary Path)
+
+UI-triggered reprocessing
+Force reprocessing flag set
+Existing analysis preserved in history
+B. Caption Analysis Algorithm
+The system uses a sophisticated multi-pattern matching approach:
+
+Simple Patterns
+
+- Single Quantity: "14x"
+- Basic Product: "Gelato Cake"
+- Product with Quantity: "Mochi x 1"
+Complex Patterns
+
+- Standard Format: "Product Name #CODE x Quantity"
+- Special Format: "Platinum #2 #HEFF022425 x 1 (30 + behind)"
+- Multiline Format: Multiple lines with product name, code, and notes
+Data Extraction
+
+Product Name: Text before code/quantity
+Product Code: Text following '#' with specific format
+Vendor UID: First 1-4 letters of product code
+Purchase Date: 6 digits after vendor code (mmDDyy)
+Quantity: Numbers following 'x' or preceding 'x'
+Notes: Text in parentheses
+C. Partial Success Handling
+Missing Field Detection
+
+Tracks which fields couldn't be parsed
+Allows operation to continue with partial data
+Marks message with partial_success flag
+Metadata Tracking
+
+
+{
+  "parsing_metadata": {
+    "method": "manual",
+    "partial_success": true,
+    "missing_fields": ["quantity", "purchase_date"],
+    "quantity_pattern": "x 4",
+    "timestamp": "2024-03-10T..."
+  }
+}
+2. Media Group Synchronization
+A. Immediate Synchronization
+Trigger Points
+
+New message in group received
+Caption edited
+Force reprocessing requested
+Synchronization Process
+
+
+sequenceDiagram
+    participant M as Message
+    participant DB as Database
+    participant S as Sync Function
+    participant G as Media Group
+    
+    M->>DB: Update analyzed content
+    DB->>S: Trigger sync
+    S->>DB: Acquire advisory lock
+    S->>G: Propagate content
+    S->>DB: Update group metadata
+    S->>DB: Release lock
+B. Multi-Layer Fallback System
+Primary Path
+
+Edge function synchronization
+Uses database transaction
+Advisory locks prevent conflicts
+Fallback Mechanisms
+
+Edge Function → Direct DB Function → Manual Repair
+Error Recovery
+
+Transaction rollback on failure
+Automatic retry with backoff
+Error logging and monitoring
+Manual repair tools
+C. State Management
+Message States
+
+initialized → processing → completed/error
+Group Metadata
+
+
+{
+  "group_message_count": 4,
+  "group_first_message_time": "2024-03-10T...",
+  "group_last_message_time": "2024-03-10T...",
+  "is_original_caption": true,
+  "group_caption_synced": true
+}
+Edit History Tracking
+
+
+{
+  "edit_history": [
+    {
+      "timestamp": "2024-03-10T...",
+      "type": "edit",
+      "previous_analyzed_content": {...}
+    }
+  ]
+}
+3. Error Handling and Recovery
+A. Transaction Management
+Critical Sections
+
+Caption analysis
+Group synchronization
+State updates
+Rollback Scenarios
+
+Parse failures
+Sync conflicts
+Network issues
+B. Monitoring and Maintenance
+Health Checks
+
+Processing state counts
+Stalled messages
+Mixed group states
+Automated Repairs
+
+Reset stalled processes
+Clear stuck locks
+Repair group inconsistencies
+C. Manual Intervention Tools
+UI Controls
+
+Force reprocessing
+Group repair
+State reset
+Diagnostic Functions
+
+Message status query
+Group consistency check
+Processing history view
+
+### Full System Architecture
+```mermaid
+flowchart LR
+    subgraph Frontend
+        A[React UI] --> B[Message Dashboard]
+        A --> C[Media Viewer]
+        A --> D[Audit Logs]
+        B --> E[MessageControlPanel]
+        B --> F[MessageList]
+        C --> G[MediaRepairDialog]
+        D --> H[SyncLogsTable]
+    end
+    
+    subgraph Backend
+        I[Telegram Webhook] --> J[Edge Functions]
+        J --> K[Database Operations]
+        K --> L[PostgreSQL]
+        J --> M[Supabase Storage]
+        L --> N[Audit Tables]
+        M --> O[Media Files]
+    end
+    
+    subgraph Services
+        P[Telegram API] --> I
+        Q[Scheduled Jobs] --> R[Auto-repair]
+        Q --> S[Daily Maintenance]
+    end
+    
+    Frontend -- REST API --> Backend
+    Backend -- WebSocket --> Frontend
+```
+
+### Frontend Architecture
+
+1. **Core Components**:
+   - `MessageControlPanel`: Central hub for message operations
+   - `MediaViewer`: Handles media display and repair workflows
+   - `SyncLogsTable`: Real-time monitoring of sync operations
+
+2. **State Management**:
+   ```typescript
+   // Example from useMessageQueue.ts
+   const { messages, processingState, errorStats } = useMessageQueue({
+     initialFilter: 'pending',
+     refreshInterval: 15000,
+     repairOptions: {
+       autoRetry: true,
+       maxAttempts: 3
+     }
+   });
+   ```
+
+3. **Key Flows**:
+   - Media repair workflow with error recovery
+   - Real-time message updates via Supabase subscriptions
+   - Batch processing controls for large media groups
+
+### End-to-End Workflow
+```mermaid
+sequenceDiagram
+    participant User as Telegram User
+    participant TG as Telegram API
+    participant BE as Backend
+    participant DB as Database
+    participant FE as Frontend
+    
+    User->>TG: Send Media Message
+    TG->>BE: Webhook Notification
+    BE->>DB: Store Raw Message
+    BE->>BE: Process Media
+    BE->>DB: Update Analyzed Content
+    DB->>FE: Real-time Update
+    FE->>User: Display Processed Message
+    FE->>BE: Initiate Repair (if needed)
+    BE->>TG: Redownload Media
+    BE->>DB: Update Fixed Record
+```
+
+### Key System Flows
+
+
+
+```mermaid
+graph TD
+    A[Cloudflare] --> B[Edge Functions1. **Media Processing**:
+   - Automatic MIME type detection/correction
+   - Multi-phase storage validation
+   - EXIF data stripping for security
+
+2. **Caption Analysis**:
+   - Pattern-based parsing with fallback to AI
+   - Vendor code normalization
+   - Historical version tracking
+
+3. **Error Recovery**:
+   - Automatic hash verification
+   - Cross-service correlation ID tracing
+   - Progressive backoff algorithm
+
+### Deployment Architecture]
+    B --> C[Supabase PostgreSQL]
+    B --> D[Supabase Storage]
+    C --> E[OLAP Reporting]
+    D --> F[CDN Distribution]
+    G[Telegram] --> B
+    H[React Frontend] --> B
+    H --> C
+    H --> D
+```
+
+### Frontend Component Hierarchy
+```mermaid
+flowchart TD
+    App --> Dashboard
+    App --> Settings
+    Dashboard --> MessageList
+    Dashboard --> MediaGrid
+    MessageList --> MessageCard
+    MessageCard --> MediaPreview
+    MessageCard --> AnalysisDetails
+    MediaGrid --> MediaItem
+    MediaItem --> RepairControls
+    Settings --> SyncStatus
+    Settings --> SystemTools
+```
+
+### Error Recovery Workflow
+```mermaid
+flowchart TD
+    A[Error Detected] --> B{Retryable?}
+    B -->|Yes| C[Increment Retry Count]
+    C --> D{Under Limit?}
+    D -->|Yes| E[Queue Retry]
+    D -->|No| F[Mark Permanent Failure]
+    B -->|No| F
+    E --> G[Backoff Delay]
+    G --> H[Re-process]
+    F --> I[Alert Dashboard]
+```
+
+### Project Overview
+A robust system for processing Telegram messages with media attachments, designed to:
+- Extract structured product data from media captions
+- Maintain media group synchronization
+- Provide comprehensive audit logging
+- Handle message edits and updates gracefully
+
+**Core Technologies:**
+- Supabase (PostgreSQL + Storage)
+- Deno Edge Functions
+- Telegram Bot API
+- React Frontend
+
+### Key Features
+1. **Media Processing Pipeline**
+   - Automatic media download from Telegram
+   - Storage in Supabase with public URL generation
+   - MIME type validation and correction
+
+2. **Caption Analysis Engine**
+   - Pattern-based product data extraction
+   - Vendor UID detection from product codes
+   - Purchase date parsing from multiple formats
+
+3. **Audit System**
+   - Unified logging of all system operations
+   - Message edit history tracking
+   - Correlation ID tracing across services
+
+4. **Error Recovery**
+   - Automatic media redownloads
+   - Stalled message detection/reset
+   - Media group consistency checks
+
+### Design Guidelines
+1. **Architecture Principles**
+   - Direct processing over queued systems
+   - Transaction-based database operations
+   - Edge-function first approach
+
+2. **Error Handling**
+   - Automatic retries with exponential backoff
+   - Partial success states for complex operations
+   - Daily maintenance jobs for system health
+
+3. **Code Standards**
+   - TypeScript across all layers
+   - SQL functions for complex data operations
+   - React hooks for frontend state management
+
+---
 
 ## Overview
 
-This document describes the complete system architecture for processing Telegram messages, focusing on the integration between Edge Functions, database functions, and triggers. The system processes media messages with captions, analyzes content, and maintains media group synchronization.
+This system processes Telegram messages with media and captions, extracting structured data while maintaining media group synchronization and audit logging. The system focuses on reliability and maintainability with direct processing instead of queues.
 
 ```mermaid
 flowchart TD
-    A[Telegram Webhook] --> B[Message Handler]
-    B --> C{Message Type}
+    A[Telegram Message] --> B{Message Type}
+    B -->|Media| C[Download & Store Media]
+    B -->|Text| D[Process Text Content]
+    B -->|Edited| E[Handle Edits]
     
-    C -->|Media| D[Process Media]
-    C -->|Text| E[Process Text]
-    C -->|Edited| F[Process Edit]
+    C --> F{Has Caption?}
+    F -->|Yes| G[Parse Caption]
+    F -->|No| H[Check Media Group]
     
-    D --> G{Has Caption?}
-    G -->|Yes| H[Direct Caption Processor]
-    G -->|No| I[Check Media Group]
+    G --> I[Extract Product Data]
+    I --> J[Store Analyzed Content]
+    J --> K[Sync Across Media Group]
     
-    H --> J[Parse Caption]
-    J --> K[Store Analysis]
-    K --> L[Sync to Group]
+    H --> L{Group Has Analysis?}
+    L -->|Yes| M[Sync From Group]
+    L -->|No| N[Flag for Later]
     
-    I --> M{Group has Caption?}
-    M -->|Yes| N[Sync from Group]
-    M -->|No| O[Leave Pending]
-    
-    F --> P{Caption Changed?}
-    P -->|Yes| Q[Reset Analysis]
-    P -->|No| R[Keep Analysis]
-    Q --> H
+    E --> O{Caption Changed?}
+    O -->|Yes| P[Reset Analysis]
+    O -->|No| Q[Preserve History]
 ```
 
-## System Architecture
+## Key Components
 
-### 1. Edge Functions
+### 1. Telegram Webhook Handler (`telegram-webhook`)
+- Entry point for all Telegram updates
+- Handles media downloads and storage
+- Routes messages to appropriate processors
+- Generates correlation IDs for tracing
 
-The system uses three primary edge functions:
+### 2. Media Processing Pipeline
+```typescript
+// From mediaUtils.ts
+export const processMediaMessage = async (message: TelegramMessage) => {
+  const mediaInfo = await getMediaInfo(message);
+  const dbRecord = await createMediaRecord(mediaInfo);
+  
+  if (mediaInfo.caption) {
+    await triggerCaptionAnalysis(dbRecord.id, mediaInfo.correlationId);
+  }
+  
+  return mediaInfo;
+};
+```
 
-| Function | Purpose | Processing Time | Status |
-|----------|---------|-----------------|--------|
-| `telegram-webhook` | Entry point for all Telegram updates | 300-500ms | Active |
-| `manual-caption-parser` | Parses captions from messages | 200-600ms | Active (with occasional 500 errors) |
-| `log-operation` | Logs operational events | 60-100ms | Active |
-| `xdelo_sync_media_group` | Synchronizes media group content | 150-300ms | Active |
+### 3. Caption Analysis System
+- Pattern-based extraction of:
+  - Product Name
+  - Product Code
+  - Vendor UID
+  - Purchase Date
+  - Quantity
 
-#### Edge Function Flow:
-
-1. **telegram-webhook**: 
-   - Receives updates from Telegram
-   - Identifies message type (media, text, edited)
-   - Processes media files (uploads to storage)
-   - Routes to appropriate handlers
-   - Average processing time: ~300-500ms
-
-2. **manual-caption-parser**:
-   - Triggered by database insert/update on messages with captions
-   - Parses caption using pattern matching
-   - Updates message with analyzed content
-   - Synchronizes content to media groups
-   - Average processing time: ~200-600ms
-
-3. **xdelo_sync_media_group**:
-   - Synchronizes analyzed content across media groups
-   - Uses advisory locks to prevent race conditions
-   - Called by other edge functions or database triggers
-   - Average processing time: ~150-300ms
-
-### 2. Database Functions
-
-The system relies on several database functions for processing and maintenance:
-
-| Function | Purpose | Trigger |
-|----------|---------|---------|
-| `xdelo_parse_caption` | Pattern-based caption parsing | Manual call |
-| `xdelo_process_message_with_caption` | Process a message with caption | Database trigger |
-| `xdelo_check_media_group_content` | Check and sync media group content | Called by other functions |
-| `xdelo_process_pending_messages` | Batch process pending messages | Scheduled job |
-| `xdelo_reset_stalled_messages` | Reset messages stuck in processing | Scheduled job |
-| `xdelo_sync_media_group_content` | Synchronize media group content | Called by other functions |
-| `xdelo_find_caption_message` | Find authoritative caption in group | Called by other functions |
-
-#### Database Function Flow:
-
-1. **Caption Processing**:
-   ```
-   xdelo_process_message_with_caption
-   ├── xdelo_parse_caption (extract structured data)
-   └── xdelo_check_media_group_content (sync to group)
-   ```
-
-2. **Media Group Handling**:
-   ```
-   xdelo_sync_media_group_content
-   ├── xdelo_find_caption_message (locate authoritative source)
-   └── Database update (sync content to all messages)
-   ```
-
-3. **Maintenance**:
-   ```
-   xdelo_process_pending_messages (run every 5 minutes)
-   xdelo_reset_stalled_messages (run daily)
-   ```
-
-### 3. Database Triggers
-
-The system uses triggers to automate processing:
-
-| Trigger | Table | Event | Action |
-|---------|-------|-------|--------|
-| `manual-caption-parser` | `messages` | `INSERT/UPDATE` on caption | Parse caption with edge function |
-| `xdelo_trg_handle_forward` | `messages` | `INSERT` with forward data | Process forwarded messages |
-| `xdelo_trg_extract_analyzed_content` | `messages` | `UPDATE` on analyzed_content | Extract structured data |
-| `xdelo_media_group_history_sync` | `messages` | `UPDATE` on edit_history | Sync history across group |
-
-## Message Processing Flow
-
-### 1. Entry Point: Telegram Webhook
-
-- Receives webhook requests from Telegram
-- Identifies message type (media, text, edited, forwarded)
-- Routes to appropriate handlers
-- Generates a unique correlation ID for tracking
-
-### 2. Media Message Processing
-
+### 4. Media Group Synchronization
 ```mermaid
-flowchart TD
-    A[Media Message Received] --> B[Upload to Storage]
-    B --> C[Store in Database]
-    C --> D{Has Caption?}
-    D -->|Yes| E[Trigger manual-caption-parser]
-    D -->|No| F[Check Media Group]
-    E --> G[Parse Caption]
-    G --> H[Update analyzed_content]
-    H --> I[Sync to Media Group]
-    F --> J{Group has analyzed_content?}
-    J -->|Yes| K[Sync from Group]
-    J -->|No| L[Leave as pending]
+sequenceDiagram
+    participant M as Media Message
+    participant D as Database
+    participant S as Sync Service
+    
+    M->>D: Store initial message
+    D->>S: Trigger media group check
+    S->>D: Find group members
+    S->>D: Sync analyzed content
+    D->>D: Update all group members
 ```
 
-1. **Media Extraction**:
-   - Downloads media from Telegram
-   - Uploads to 'telegram-media' storage bucket
-   - Generates public URL
-   - Stores metadata in 'messages' table
-
-2. **Caption Processing**:
-   - Triggered by database insert/update
-   - `manual-caption-parser` edge function processes caption
-   - Pattern matching extracts:
-     - product_name: Text before '#', line break, dash, or 'x'
-     - product_code: Text following '#' symbol
-     - vendor_uid: First 1-4 letters of product_code (uppercase)
-     - purchase_date: Parse date portion from product_code
-     - quantity: Number following 'x' or similar quantity indicators
-     - notes: Text in parentheses or remaining unclassified text
-   - Fallback to database function if edge function fails
-
-3. **Media Group Synchronization**:
-   - First message with caption becomes authoritative
-   - `xdelo_sync_media_group` synchronizes content to all messages
-   - Advisory locks prevent concurrent updates
-   - Full audit logging of all operations
-
-### 3. Edited Message Processing
-
-```mermaid
-flowchart TD
-    A[Edited Message] --> B{Caption Changed?}
-    B -->|Yes| C[Save Old analyzed_content]
-    B -->|No| D[Keep Current Analysis]
-    C --> E[Trigger New Analysis]
-    E --> F[Update analyzed_content]
-    F --> G[Sync to Media Group]
+### 5. Unified Audit Logging
+```sql
+-- From simplified-audit-logging.md
+CREATE TABLE unified_audit_logs (
+  id UUID PRIMARY KEY,
+  event_type VARCHAR(50) NOT NULL,
+  entity_id UUID NOT NULL,
+  previous_state JSONB,
+  new_state JSONB,
+  metadata JSONB,
+  correlation_id TEXT,
+  event_timestamp TIMESTAMPTZ DEFAULT NOW()
+);
 ```
 
-- Tracks edit history in edit_history array
-- Preserves previous analyzed_content in old_analyzed_content
-- Resets analysis if caption changes
-- Ensures edit history consistency across media groups
+## Processing States
 
-### 4. Processing States
+| State | Description | Next Actions |
+|-------|-------------|--------------|
+| `pending` | Initial state after message receipt | Automatic processing |
+| `processing` | Analysis in progress | Completion or error |
+| `completed` | Successful processing | - |
+| `error` | Failed processing | Automatic retries |
 
-Messages progress through multiple states:
+## Error Handling
 
-1. `initialized`: Initial state after message reception
-2. `pending`: Waiting for processing
-3. `processing`: Currently being processed
-4. `completed`: Successfully processed
-5. `error`: Failed processing
-6. `partial_success`: Some fields successfully parsed
+### Retry Mechanism
+```typescript
+// From analysisHandler.ts
+async function handleAnalysisError(messageId: string, error: Error) {
+  await supabase
+    .from('messages')
+    .update({
+      retry_count: supabase.sql`COALESCE(retry_count, 0) + 1`,
+      last_error_at: new Date().toISOString()
+    })
+    .eq('id', messageId);
 
-## Error Handling and Recovery
+  if (retryCount < MAX_RETRIES) {
+    await supabase
+      .from('messages')
+      .update({ processing_state: 'pending' })
+      .eq('id', messageId);
+  }
+}
+```
 
-The system includes robust error handling:
+### Recovery Tools
+1. `xdelo_redownload_missing_media` - Recover failed media
+2. `xdelo_reset_stalled_messages` - Reset stuck messages
+3. `xdelo_repair_media_group_syncs` - Fix group inconsistencies
 
-1. **Automatic Retry**:
-   - Failed analyses are automatically retried
-   - Incremental backoff for repeated failures
-   - Transaction rollback on critical errors
+## Deployment
 
-2. **Manual Recovery**:
-   - `xdelo_repair_media_group_syncs()`: Repairs broken media group synchronizations
-   - `xdelo_reset_stalled_messages()`: Resets messages stuck in processing
-   - `repair-processing-flow`: Edge function for system-wide repairs
+### Environment Setup
+```toml
+# supabase/config.toml
+[telegram]
+bot_token = "YOUR_BOT_TOKEN"
+api_id = "YOUR_API_ID"
+api_hash = "YOUR_API_HASH"
 
-3. **Maintenance Functions**:
-   - Scheduled cleanup of stalled processes
-   - Automatic reset of stuck messages
-   - Daily maintenance of processing states
+[storage]
+bucket_name = "telegram-media"
+max_file_size = "20MB"
+```
 
-## Performance Optimizations
+### Required Services
+1. Supabase PostgreSQL
+2. Supabase Storage
+3. Telegram Bot API
+4. Deno Edge Functions
 
-Recent improvements to the system include:
+## Documentation Structure
 
-1. **Transaction-Based Processing**:
-   - Database transactions ensure data consistency
-   - Advisory locks prevent race conditions
-   - Atomic operations for critical updates
+```
+docs/
+├── consolidated-functions.md      # Core database functions
+├── direct-caption-processing.md   # Caption analysis details
+└── simplified-audit-logging.md    # Audit system design
+```
 
-2. **Direct Processing Model**:
-   - Replacement of queue system with direct processing
-   - Database triggers initiate processing
-   - Reduced latency and complexity
+## Monitoring
 
-3. **Parallel Processing**:
-   - Independent messages processed in parallel
-   - Media group synchronization protected by locks
-   - Batch processing for efficiency
+Key metrics tracked:
+1. Messages processed/minute
+2. Error rate by category
+3. Media group sync success rate
+4. Average processing latency
 
-## Monitoring and Logging
+```sql
+-- From v_message_audit_trail
+SELECT * FROM v_message_audit_trail
+WHERE entity_id = 'message-uuid'
+ORDER BY event_timestamp DESC;
+```
 
-The system includes comprehensive monitoring:
+## Maintenance
 
-1. **Unified Audit Logs**:
-   - All operations logged in `unified_audit_logs` table
-   - Correlation IDs for end-to-end tracking
-   - Structured metadata for analysis
+Scheduled jobs:
+```cron
+# Daily maintenance
+0 3 * * * xdelo_daily_maintenance
 
-2. **Health Metrics**:
-   - Processing state counts
-   - Error rate monitoring
-   - Processing time tracking
-
-3. **Alert System**:
-   - Automatic detection of processing issues
-   - Notification of stalled messages
-   - Error rate threshold alerts
-
-## Integration Points
-
-The system integrates with:
-
-1. **Telegram Bot API**:
-   - Webhook for message reception
-   - Media file downloading
-   - Message editing and deletion
-
-2. **Storage System**:
-   - 'telegram-media' bucket for media files
-   - Public URLs for frontend access
-   - Automatic cleanup on deletion
-
-3. **Frontend Application**:
-   - Real-time message display
-   - Media group visualization
-   - Processing state indicators
-
-## Configuration and Deployment
-
-The system uses:
-
-1. **Environment Variables**:
-   - `SUPABASE_URL`: Supabase project URL
-   - `SUPABASE_SERVICE_ROLE_KEY`: Service role key
-   - Other Telegram-specific credentials
-
-2. **Scheduled Jobs**:
-   - `process-pending-messages`: Every 5 minutes
-   - `xdelo-daily-maintenance`: Daily at 3 AM
-
-3. **Deployment Process**:
-   - Edge functions deployed via Supabase CLI
-   - Database migrations for schema changes
-   - Scheduled job configuration via SQL
-
-## Security and Authentication
-
-The system implements a flexible JWT verification model:
-
-1. **Security Levels**:
-   - `PUBLIC`: No JWT verification required
-   - `AUTHENTICATED`: Requires a valid user JWT
-   - `SERVICE_ROLE`: Requires a service role JWT
-
-2. **JWT Verification Options**:
-   - `fallbackToPublic`: Optional fallback to public access when JWT verification fails
-   - `bypassForServiceRole`: Allows service role tokens to bypass regular security checks
-
-3. **Implementation**:
-   - Shared JWT verification utility across all edge functions
-   - Integration with error handling middleware
-   - Configuration via function's `config.toml` and code-level options
-
-4. **Usage**:
-   ```typescript
-   // Example of using the secure handler with AUTHENTICATED level:
-   serve(withErrorHandling(
-     'function-name', 
-     handlerFunction, 
-     { 
-       securityLevel: SecurityLevel.AUTHENTICATED,
-       fallbackToPublic: false
-     }
-   ));
-   ```
-
-5. **Function Configuration**:
-   - Function-specific security in `config.toml` using `verify_jwt` flag
-   - Granular control over which functions require authentication
-
-## Recent Improvements
-
-Recent system enhancements include:
-
-1. **Reliability Improvements**:
-   - Replacement of queue-based system with direct processing
-   - Transaction-based operations for data consistency
-   - Improved error handling and recovery
-
-2. **Performance Optimizations**:
-   - Enhanced caption parsing with multiple strategies
-   - Optimized database indexes for faster queries
-   - Reduced latency in media group synchronization
-
-3. **Security Enhancements**:
-   - Flexible JWT authentication system
-   - Multiple security levels with fallback options
-   - Comprehensive error logging
-   - Access control based on token roles
-
-4. **Maintenance Features**:
-   - Automated health checks
-   - Self-healing capabilities
-   - Comprehensive audit logging
+# 5-minute retries
+*/5 * * * * xdelo_process_pending_messages
