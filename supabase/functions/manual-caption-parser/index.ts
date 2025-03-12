@@ -54,14 +54,22 @@ async function handleCaptionParsing(request: AnalysisRequest) {
     const parsedContent = xdelo_parseCaption(captionToAnalyze);
     
     // Add metadata about this processing operation
-    parsedContent.parsing_metadata = {
-      ...(parsedContent.parsing_metadata || {}),
-      method: 'manual',
+    const parsingMetadata = {
+      method: 'manual' as const,
       timestamp: new Date().toISOString(),
       original_caption: captionToAnalyze,
       is_edit: isEdit,
-      trigger_source: request.trigger_source || 'manual-caption-parser'
     };
+    
+    if (request.triggerSource) {
+      // Add additional metadata that might be useful but not part of the core type
+      parsedContent.parsing_metadata = {
+        ...parsingMetadata,
+        trigger_source: request.triggerSource
+      };
+    } else {
+      parsedContent.parsing_metadata = parsingMetadata;
+    }
 
     // Save the analysis results to the database
     const { error: updateError } = await supabaseClient
@@ -172,7 +180,7 @@ serve(async (req) => {
       isEdit: request.isEdit,
       hasCaption: !!request.caption,
       correlationId: request.correlationId,
-      trigger_source: request.trigger_source
+      trigger_source: request.triggerSource
     });
 
     // Process the caption

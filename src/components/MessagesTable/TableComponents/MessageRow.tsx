@@ -14,7 +14,7 @@ interface MessageRowProps {
   onSave: (id: string) => void;
   onDelete: (message: Message) => void;
   onCaptionChange: (id: string, value: string) => void;
-  onAnalyzedContentChange: (id: string, field: keyof typeof message.analyzed_content, value: string | number) => void;
+  onAnalyzedContentChange: (id: string, field: keyof Message['analyzed_content'], value: string | number) => void;
   onMediaClick: (message: Message) => void;
   isProcessing: boolean;
 }

@@ -108,6 +108,27 @@ BEGIN
       updated_at = NOW()
   WHERE id = p_message_id;
   
+  -- Immediately call the manual-caption-parser for any message with a caption
+  -- This is done through an audit log entry with special type that will be picked up
+  -- by a trigger/function to immediately process the message
+  INSERT INTO unified_audit_logs (
+    event_type,
+    entity_id,
+    correlation_id,
+    metadata,
+    event_timestamp
+  ) VALUES (
+    'caption_ready_for_processing',
+    p_message_id,
+    p_correlation_id::text,
+    jsonb_build_object(
+      'media_group_id', v_media_group_id,
+      'caption', v_caption,
+      'immediate_processing', TRUE
+    ),
+    NOW()
+  );
+  
   RETURN jsonb_build_object(
     'success', TRUE,
     'message_id', p_message_id,
@@ -115,7 +136,8 @@ BEGIN
     'is_media_group', v_media_group_id IS NOT NULL,
     'caption', v_caption,
     'correlation_id', p_correlation_id,
-    'ready_for_edge_function', TRUE
+    'ready_for_processing', TRUE,
+    'immediate_trigger', TRUE
   );
 EXCEPTION
   WHEN OTHERS THEN

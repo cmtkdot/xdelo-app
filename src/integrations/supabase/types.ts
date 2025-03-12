@@ -2994,6 +2994,10 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_begin_transaction: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       xdelo_check_media_group_content: {
         Args: {
           p_media_group_id: string
@@ -3020,6 +3024,13 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_complete_message_processing: {
+        Args: {
+          p_message_id: string
+          p_analyzed_content: Json
+        }
+        Returns: Json
+      }
       xdelo_construct_telegram_message_url: {
         Args: {
           chat_type: Database["public"]["Enums"]["telegram_chat_type"]
@@ -3027,6 +3038,13 @@ export type Database = {
           message_id: number
         }
         Returns: string
+      }
+      xdelo_fail_message_processing: {
+        Args: {
+          p_message_id: string
+          p_error_message: string
+        }
+        Returns: Json
       }
       xdelo_find_broken_media_groups: {
         Args: Record<PropertyKey, never>
@@ -3076,6 +3094,22 @@ export type Database = {
           p_correlation_id: string
         }
         Returns: Json
+      }
+      xdelo_get_message_for_processing: {
+        Args: {
+          p_message_id: string
+        }
+        Returns: {
+          id: string
+          telegram_message_id: number
+          caption: string
+          media_group_id: string
+          processing_state: string
+          analyzed_content: Json
+          old_analyzed_content: Json[]
+          is_original_caption: boolean
+          correlation_id: string
+        }[]
       }
       xdelo_get_message_forward_history: {
         Args: {
@@ -3235,6 +3269,13 @@ export type Database = {
           p_correlation_id?: string
         }
         Returns: Json
+      }
+      xdelo_set_message_processing: {
+        Args: {
+          p_message_id: string
+          p_correlation_id: string
+        }
+        Returns: undefined
       }
       xdelo_standardize_storage_path: {
         Args: {

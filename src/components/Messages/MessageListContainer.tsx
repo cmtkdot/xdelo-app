@@ -30,11 +30,12 @@ export function MessageListContainer() {
       });
       
       await forceSyncMessageGroup(messageId);
-      await refetch();
-      
-      toast({
-        title: "Processing Complete",
-        description: "Message has been processed and synchronized.",
+      // Don't directly await refetch since it returns QueryObserverResult
+      refetch().then(() => {
+        toast({
+          title: "Processing Complete",
+          description: "Message has been processed and synchronized.",
+        });
       });
     } catch (error) {
       console.error("Error retrying processing:", error);
