@@ -3,6 +3,26 @@ export type SyncStatus = 'pending' | 'synced' | 'failed' | 'queued';
 
 export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error';
 
+export interface AnalyzedContent {
+  product_name?: string;
+  product_code?: string;
+  vendor_uid?: string;
+  purchase_date?: string;
+  quantity?: number;
+  unit_price?: number;
+  total_price?: number;
+  notes?: string;
+  caption?: string;
+  parsing_metadata?: {
+    method: 'manual' | 'ai';
+    timestamp: string;
+  };
+  sync_metadata?: {
+    sync_source_message_id?: string;
+    media_group_id?: string;
+  };
+}
+
 export interface Message {
   id: string;
   chat_id: number;

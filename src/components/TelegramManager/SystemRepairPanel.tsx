@@ -1,80 +1,99 @@
 
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { RefreshCw, Wrench } from 'lucide-react';
-import { MessageProcessingStats } from '@/types/MessagesTypes';
 import { useFileRepair } from '@/hooks/useFileRepair';
+import { useProcessingRepair } from '@/hooks/useProcessingRepair';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/button';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { useSystemRepair } from '@/hooks/useSystemRepair';
+import { useState } from 'react';
+import { useToast } from '@/hooks/useToast';
 
-interface SystemRepairPanelProps {
-  stats: MessageProcessingStats;
-  onRefresh: () => Promise<void>;
-  isRefetching: boolean;
-}
+export function SystemRepairPanel() {
+  const { repairFiles, isRepairing, results } = useFileRepair();
+  const { isRepairing: isProcessingRepair, repairProcessingFlow } = useProcessingRepair();
+  const { fixAllStorageIssues, fixStoragePaths, fixFileReferences, isFixing } = useSystemRepair();
+  const [isFixingAll, setIsFixingAll] = useState(false);
+  const { toast } = useToast();
 
-export function SystemRepairPanel({ stats, onRefresh, isRefetching }: SystemRepairPanelProps) {
-  const { repairFiles, isRepairing } = useFileRepair();
+  const handleFixAll = async () => {
+    setIsFixingAll(true);
+    try {
+      toast({
+        title: "System repair started",
+        description: "All repair operations are now running...",
+      });
+      await repairFiles('all');
+      await repairProcessingFlow();
+      toast({
+        title: "System repair completed",
+        description: "All repair operations have finished."
+      });
+    } catch (error) {
+      toast({
+        title: "System repair failed",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive"
+      });
+    } finally {
+      setIsFixingAll(false);
+    }
+  };
 
   return (
-    <Card>
+    <Card className="w-full">
       <CardHeader>
-        <CardTitle>System Repair Tools</CardTitle>
-        <CardDescription>
-          Fix common issues with media files and processing
-        </CardDescription>
+        <CardTitle className="flex items-center gap-2">
+          <AlertTriangle className="h-5 w-5 text-yellow-500" />
+          System Repair
+        </CardTitle>
+        <CardDescription>Fix system issues and repair corrupted data</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-2">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => repairFiles('mime-types')}
-            disabled={isRepairing}
-          >
-            <Wrench className="mr-2 h-4 w-4" />
-            Fix MIME Types
-          </Button>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-4 border rounded-md">
+            <h3 className="font-medium mb-2">Storage Path Standardization</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Fix non-standard storage paths and update database records.
+            </p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full"
+              onClick={() => repairFiles('all')}
+              disabled={isRepairing || isFixingAll}
+            >
+              {isRepairing ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : null}
+              {isRepairing ? 'Fixing...' : 'Repair Storage Paths'}
+            </Button>
+          </div>
           
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => repairFiles('storage-paths')}
-            disabled={isRepairing}
-          >
-            <Wrench className="mr-2 h-4 w-4" />
-            Fix Storage Paths
-          </Button>
-          
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => repairFiles('file-ids')}
-            disabled={isRepairing}
-          >
-            <Wrench className="mr-2 h-4 w-4" />
-            Fix File IDs
-          </Button>
+          <div className="p-4 border rounded-md">
+            <h3 className="font-medium mb-2">Processing Flow Repair</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Fix stuck processing states and reset failed processing jobs.
+            </p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full"
+              onClick={repairProcessingFlow}
+              disabled={isProcessingRepair || isFixingAll}
+            >
+              {isProcessingRepair ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : null}
+              {isProcessingRepair ? 'Repairing...' : 'Repair Processing Flow'}
+            </Button>
+          </div>
         </div>
       </CardContent>
-      <CardFooter className="justify-between">
+      <CardFooter>
         <Button 
-          variant="secondary" 
-          size="sm" 
-          onClick={() => repairFiles('all')}
-          disabled={isRepairing}
+          className="w-full" 
+          variant="default"
+          onClick={handleFixAll}
+          disabled={isFixingAll || isRepairing || isProcessingRepair || isFixing}
         >
-          <Wrench className="mr-2 h-4 w-4" />
-          Run All Repairs
-        </Button>
-        
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={onRefresh}
-          disabled={isRefetching}
-        >
-          <RefreshCw className={`mr-2 h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
-          Refresh Stats
+          {isFixingAll ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : null}
+          {isFixingAll ? 'Running System Repair...' : 'Run All Repair Operations'}
         </Button>
       </CardFooter>
     </Card>

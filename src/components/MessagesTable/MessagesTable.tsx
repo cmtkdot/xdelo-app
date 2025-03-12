@@ -18,16 +18,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Message } from "@/types";
+import { Message as MessageType } from "@/types/MessagesTypes"; // Import from MessagesTypes
 
-interface EditableMessage extends Message {
+interface EditableMessage extends MessageType {
   isEditing: boolean;
 }
 
 interface MessagesTableProps {
-  messages: Message[];
+  messages: MessageType[];
 }
 
+// The rest of the component with proper type annotations
 export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialMessages }) => {
   const [messages, setMessages] = useState<EditableMessage[]>(
     initialMessages.map(message => ({ ...message, isEditing: false }))
@@ -326,7 +327,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
       <MediaViewer
         isOpen={isViewerOpen}
         onClose={() => setIsViewerOpen(false)}
-        currentGroup={selectedMedia}
+        currentGroup={selectedMedia as MessageType[]}
       />
     </>
   );

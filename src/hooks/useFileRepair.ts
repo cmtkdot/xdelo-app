@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { useToast } from './useToast';
-import { supabase } from '@/integrations/supabase/client';
+import { useSupabase } from '@/integrations/supabase/SupabaseProvider';
 
 interface FileRepairOptions {
   messageIds?: string[];
@@ -22,6 +22,7 @@ interface StandardizeResponse {
 }
 
 export function useFileRepair() {
+  const { supabase } = useSupabase();
   const [isLoading, setIsLoading] = useState(false);
   const [isRepairing, setIsRepairing] = useState(false);
   const [results, setResults] = useState<StandardizeResponse | null>(null);
