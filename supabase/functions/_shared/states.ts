@@ -1,4 +1,3 @@
-
 import { SupabaseClient } from "@supabase/supabase-js";
 
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
@@ -332,4 +331,15 @@ function getMoreAccurateMimeType(message: any): string {
   
   // If we can't determine a better type, keep the existing one
   return message.mime_type || 'application/octet-stream';
+}
+
+async function updateRetryCount(supabase, messageId) {
+  // Update the message with incremented retry count
+  await supabase
+    .from('messages')
+    .update({
+      retry_count: supabase.rpc('increment', { row_id: messageId, column_name: 'retry_count' }),
+      last_retry_at: new Date().toISOString()
+    })
+    .eq('id', messageId);
 }

@@ -29,7 +29,7 @@ export interface Message {
   telegram_data?: Record<string, unknown>;
   error_message?: string;
   error_code?: string;
-  storage_exists?: boolean;
+  storage_exists?: boolean | string; // Fix: Allow both boolean and string types
   storage_path_standardized?: boolean;
   chat_id?: number;
   chat_type?: string;

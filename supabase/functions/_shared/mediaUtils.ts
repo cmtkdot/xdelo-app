@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
 // Initialize Supabase client (will use env vars from edge function context)
@@ -94,7 +93,7 @@ export function xdelo_getFileExtensionFromMimeType(mimeType: string): string {
 }
 
 // Validate if a file exists in storage
-export async function xdelo_validateStoragePath(path: string): boolean {
+export async function xdelo_validateStoragePath(path: string): Promise<boolean> {
   if (!path) return false;
   
   // Extract bucket name and file path

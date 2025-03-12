@@ -489,3 +489,57 @@ export async function xdelo_repairStoragePaths(
     throw error;
   }
 }
+
+// Update the increment_retry_count call to use the correct parameters
+export async function xdelo_updateMessageProcessingState(
+  supabase: SupabaseClient,
+  messageId: string,
+  state: string,
+  correlationId: string,
+  errorMessage?: string
+) {
+  try {
+    const updates: Record<string, any> = {
+      processing_state: state,
+      updated_at: new Date().toISOString()
+    };
+    
+    if (state === 'completed') {
+      updates.processing_completed_at = new Date().toISOString();
+    } else if (state === 'processing') {
+      updates.processing_started_at = new Date().toISOString();
+    }
+    
+    if (errorMessage) {
+      updates.error_message = errorMessage;
+      updates.last_error_at = new Date().toISOString();
+      updates.retry_count = await supabase.rpc('increment_retry_count', { 
+        p_message_id: messageId 
+      }).single();
+    }
+    
+    const { error } = await supabase
+      .from('messages')
+      .update(updates)
+      .eq('id', messageId);
+      
+    if (error) {
+      console.error(`Error updating message state:`, error);
+      return { success: false, error: error.message };
+    }
+    
+    // Log the state change
+    // await xdelo_logProcessingEvent(
+    //   'message_state_changed',
+    //   messageId,
+    //   correlationId,
+    //   { old_state: state === 'error' ? 'processing' : null, new_state: state },
+    //   errorMessage
+    // );
+    
+    return { success: true };
+  } catch (error) {
+    console.error(`Error in xdelo_updateMessageProcessingState:`, error);
+    return { success: false, error: error.message };
+  }
+}
