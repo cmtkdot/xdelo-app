@@ -2,7 +2,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { supabaseClient } from '../_shared/supabase.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { handleError } from '../_shared/errorHandler.ts';
 
 const handler = async (req: Request) => {
   // Handle CORS preflight requests
@@ -30,7 +29,17 @@ const handler = async (req: Request) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    return handleError(error, 'Error clearing messages');
+    console.error('Error clearing messages:', error);
+    
+    return new Response(
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      }),
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
   }
 };
 
