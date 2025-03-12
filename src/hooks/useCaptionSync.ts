@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
@@ -237,10 +236,82 @@ export function useCaptionSync() {
     }
   };
 
+  /**
+   * Fix content disposition for a media group
+   */
+  const fixMediaGroupContentDisposition = async (mediaGroupId: string, disposition?: 'inline' | 'attachment') => {
+    try {
+      setIsSyncing(prev => ({ ...prev, [mediaGroupId]: true }));
+      
+      // Get all messages in the media group
+      const { data: messages, error: fetchError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('media_group_id', mediaGroupId);
+      
+      if (fetchError) {
+        throw new Error(`Failed to fetch media group messages: ${fetchError.message}`);
+      }
+      
+      if (!messages || messages.length === 0) {
+        throw new Error(`No messages found in media group ${mediaGroupId}`);
+      }
+      
+      // Fix content disposition for each message
+      const results = {
+        total: messages.length,
+        success: 0,
+        failed: 0,
+        errors: [] as string[]
+      };
+      
+      for (const message of messages) {
+        try {
+          await supabase.functions.invoke('xdelo_fix_content_disposition', {
+            body: {
+              messageId: message.id,
+              contentDisposition: disposition
+            }
+          });
+          results.success++;
+        } catch (error: any) {
+          results.failed++;
+          results.errors.push(error.message || 'Unknown error');
+        }
+      }
+      
+      toast({
+        title: "Content Disposition Fixed",
+        description: `Successfully fixed ${results.success} of ${results.total} messages`,
+        variant: results.failed > 0 ? "warning" : "default"
+      });
+      
+      return results;
+      
+    } catch (error: any) {
+      console.error('Error fixing media group content disposition:', error);
+      
+      toast({
+        title: "Fix Failed",
+        description: error.message || "Failed to fix content disposition",
+        variant: "destructive"
+      });
+      
+      return {
+        success: false,
+        error: error.message
+      };
+      
+    } finally {
+      setIsSyncing(prev => ({ ...prev, [mediaGroupId]: false }));
+    }
+  };
+
   return {
     syncMediaGroupContent,
     processCaptionUpdate,
     forceSyncMessageGroup,
+    fixMediaGroupContentDisposition,
     isSyncing,
     errors
   };

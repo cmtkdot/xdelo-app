@@ -1,201 +1,190 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-import { corsHeaders } from '../_shared/cors.ts';
-import { 
-  xdelo_isViewableMimeType, 
-  xdelo_validateMimeType, 
-  xdelo_getUploadOptions 
-} from '../_shared/mediaUtils.ts';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { corsHeaders } from "../_shared/cors.ts";
+import { supabaseClient } from "../_shared/supabase.ts";
+import { handleError, withErrorHandling } from "../_shared/errorHandler.ts";
+import { SecurityLevel } from "../_shared/jwt-verification.ts";
 
-// Create Supabase client
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-);
-
-// Function to fix content disposition for a single file
-async function fixContentDisposition(
-  messageId: string
-): Promise<{success: boolean, message: string, data?: any}> {
-  try {
-    // Get the message
-    const { data: message, error: messageError } = await supabase
-      .from('messages')
-      .select('id, file_unique_id, storage_path, mime_type')
-      .eq('id', messageId)
-      .single();
-      
-    if (messageError || !message) {
-      throw new Error(`Message not found: ${messageError?.message || 'No data returned'}`);
-    }
-    
-    if (!message.storage_path || !message.mime_type) {
-      throw new Error('Message has no storage_path or mime_type');
-    }
-    
-    // Validate the MIME type
-    const validatedMimeType = xdelo_validateMimeType(message.mime_type) ? 
-      message.mime_type : 'application/octet-stream';
-    
-    // Determine proper content disposition
-    const isViewable = xdelo_isViewableMimeType(validatedMimeType);
-    const contentDisposition = isViewable ? 'inline' : 'attachment';
-    
-    // Download the file from storage
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from('telegram-media')
-      .download(message.storage_path);
-      
-    if (downloadError || !fileData) {
-      throw new Error(`Failed to download file: ${downloadError?.message}`);
-    }
-    
-    // Get upload options with proper content disposition
-    const uploadOptions = xdelo_getUploadOptions(validatedMimeType);
-    
-    // Re-upload with correct content disposition
-    const { error: uploadError } = await supabase.storage
-      .from('telegram-media')
-      .upload(message.storage_path, fileData, { ...uploadOptions, upsert: true });
-      
-    if (uploadError) {
-      throw new Error(`Failed to upload file: ${uploadError.message}`);
-    }
-    
-    // Generate appropriate public URL
-    const publicUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${message.storage_path}`;
-    const displayUrl = isViewable ? `${publicUrl}?download=false` : publicUrl;
-    
-    // Update the message with the new content disposition
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update({
-        mime_type: validatedMimeType,
-        mime_type_verified: true,
-        content_disposition: contentDisposition,
-        public_url: displayUrl,
-        storage_metadata: uploadOptions.metadata,
-        storage_exists: true,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', messageId);
-      
-    if (updateError) {
-      throw new Error(`Failed to update message: ${updateError.message}`);
-    }
-    
-    return {
-      success: true,
-      message: 'Successfully fixed content disposition',
-      data: {
-        messageId: message.id,
-        contentDisposition,
-        mimeType: validatedMimeType,
-        publicUrl: displayUrl
-      }
-    };
-  } catch (error) {
-    console.error('Error fixing content disposition:', error);
-    return {
-      success: false,
-      message: error.message || 'Unknown error'
-    };
-  }
+interface FixContentDispositionRequest {
+  messageId: string;
+  contentDisposition?: 'inline' | 'attachment';
 }
 
-Deno.serve(async (req) => {
+const DEFAULT_MIME_TYPES_MAP = {
+  // Images - should be displayed inline
+  'image/jpeg': 'inline',
+  'image/jpg': 'inline',
+  'image/png': 'inline',
+  'image/gif': 'inline',
+  'image/webp': 'inline',
+  'image/svg+xml': 'inline',
+  'image/bmp': 'inline',
+  
+  // Videos - should be displayed inline
+  'video/mp4': 'inline',
+  'video/quicktime': 'inline',
+  'video/mpeg': 'inline',
+  'video/webm': 'inline',
+  'video/ogg': 'inline',
+  'video/x-msvideo': 'inline',
+  
+  // Documents - should typically be downloaded as attachments
+  'application/pdf': 'attachment',
+  'application/msword': 'attachment',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'attachment',
+  'application/vnd.ms-excel': 'attachment',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'attachment',
+  'application/vnd.ms-powerpoint': 'attachment',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'attachment',
+  
+  // Archives - should be downloaded as attachments
+  'application/zip': 'attachment',
+  'application/x-rar-compressed': 'attachment',
+  'application/x-tar': 'attachment',
+  'application/gzip': 'attachment',
+  
+  // Default for unknown types
+  'application/octet-stream': 'attachment'
+};
+
+/**
+ * Gets the recommended content disposition based on MIME type
+ */
+function getRecommendedContentDisposition(mimeType: string): 'inline' | 'attachment' {
+  if (!mimeType) return 'attachment';
+  return DEFAULT_MIME_TYPES_MAP[mimeType] || 'attachment';
+}
+
+async function handleFixContentDisposition(req: Request, correlationId: string) {
   // Handle CORS
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
   
   try {
-    const { messageId, messageIds, limit = 100 } = await req.json();
+    const { messageId, contentDisposition } = await req.json() as FixContentDispositionRequest;
     
-    // Process multiple messages
-    if (messageIds && Array.isArray(messageIds) && messageIds.length > 0) {
-      const results = [];
-      for (const id of messageIds) {
-        const result = await fixContentDisposition(id);
-        results.push({
-          messageId: id,
-          ...result
-        });
-      }
-      
+    if (!messageId) {
       return new Response(
-        JSON.stringify({
-          success: true,
-          results
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: "Message ID is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
-    // Process a single message
-    else if (messageId) {
-      const result = await fixContentDisposition(messageId);
-      
+    // Get the message
+    const { data: message, error: fetchError } = await supabaseClient
+      .from('messages')
+      .select('id, file_unique_id, storage_path, mime_type, storage_exists, mime_type_verified')
+      .eq('id', messageId)
+      .single();
+    
+    if (fetchError || !message) {
       return new Response(
-        JSON.stringify(result),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: fetchError?.message || "Message not found" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
-    // Process messages in bulk
-    else {
-      // Query messages that need fixing
-      const { data: messages, error: queryError } = await supabase
-        .from('messages')
-        .select('id')
-        .is('storage_exists', true)
-        .is('mime_type_verified', null)
-        .limit(limit);
-        
-      if (queryError) {
-        throw new Error(`Failed to query messages: ${queryError.message}`);
-      }
-      
-      if (!messages || messages.length === 0) {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: 'No messages need fixing',
-            count: 0
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      // Process each message
-      const results = [];
-      for (const message of messages) {
-        const result = await fixContentDisposition(message.id);
-        results.push({
-          messageId: message.id,
-          ...result
-        });
-      }
-      
+    // Check if file exists in storage
+    if (!message.storage_exists || !message.storage_path) {
       return new Response(
-        JSON.stringify({
-          success: true,
-          count: messages.length,
-          results
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: "File does not exist in storage" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-  } catch (error) {
+    
+    // Determine content disposition
+    const disposition = contentDisposition || getRecommendedContentDisposition(message.mime_type);
+    
+    // Update the storage metadata
+    const bucketName = 'telegram-media';
+    const filePath = message.storage_path;
+    
+    // Get existing metadata
+    const { data: metadata, error: metadataError } = await supabaseClient
+      .storage
+      .from(bucketName)
+      .getMetadata(filePath);
+    
+    if (metadataError) {
+      return new Response(
+        JSON.stringify({ success: false, error: metadataError.message }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    // Prepare new metadata
+    const updatedMetadata = {
+      ...metadata,
+      cacheControl: 'public, max-age=31536000',
+      contentType: message.mime_type,
+      contentDisposition: `${disposition}; filename="${message.file_unique_id}"`,
+    };
+    
+    // Update metadata in storage
+    const { error: updateError } = await supabaseClient
+      .storage
+      .from(bucketName)
+      .updateMetadata(filePath, updatedMetadata);
+    
+    if (updateError) {
+      return new Response(
+        JSON.stringify({ success: false, error: updateError.message }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    // Update the message record
+    const { error: updateMessageError } = await supabaseClient
+      .from('messages')
+      .update({
+        content_disposition: disposition,
+        storage_metadata: updatedMetadata,
+        mime_type_verified: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', messageId);
+    
+    if (updateMessageError) {
+      return new Response(
+        JSON.stringify({ success: false, error: updateMessageError.message }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    // Log the operation
+    await supabaseClient
+      .from('unified_audit_logs')
+      .insert({
+        event_type: 'content_disposition_fixed',
+        entity_id: messageId,
+        correlation_id: correlationId,
+        metadata: {
+          content_disposition: disposition,
+          mime_type: message.mime_type,
+          storage_path: message.storage_path,
+          file_unique_id: message.file_unique_id
+        },
+        event_timestamp: new Date().toISOString()
+      });
+    
     return new Response(
       JSON.stringify({
-        success: false,
-        message: error.message || 'Unknown error'
+        success: true,
+        message: "Content disposition updated successfully",
+        content_disposition: disposition,
+        mime_type: message.mime_type
       }),
-      { 
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+  } catch (error) {
+    return handleError(error, "Error updating content disposition");
   }
-});
+}
+
+// Use the withErrorHandling wrapper
+serve(withErrorHandling(
+  'xdelo_fix_content_disposition',
+  handleFixContentDisposition,
+  { securityLevel: SecurityLevel.PUBLIC }
+));
