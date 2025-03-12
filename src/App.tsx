@@ -18,6 +18,7 @@ import AudioUpload from "./pages/AudioUpload";
 import NotFound from "./pages/NotFound";
 import PublicGallery from "./pages/PublicGallery";
 import { AppSidebar } from "./components/Layout/AppSidebar";
+import SqlConsole from './pages/SqlConsole';
 
 interface ApiError extends Error {
   status?: number;
@@ -97,43 +98,48 @@ const ProtectedRoute = ({
   return children;
 };
 
-const App = () => (
-  <SupabaseProvider>
-    <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Router>
-            <Routes>
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/p/:id" element={<PublicGallery />} />
-              <Route element={
-                <ProtectedRoute>
-                  <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-                    <AppSidebar />
-                    <main className="transition-all duration-300 ease-in-out pl-16 min-h-screen">
-                      <div className="container py-6 px-4 mx-auto">
-                        <Outlet />
+function App() {
+  return (
+    <div className="app">
+      <SupabaseProvider>
+        <ThemeProvider defaultTheme="system" storageKey="xdelo-theme">
+          <QueryClientProvider client={queryClient}>
+            <TooltipProvider>
+              <Router>
+                <Routes>
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/p/:id" element={<PublicGallery />} />
+                  <Route element={
+                    <ProtectedRoute>
+                      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+                        <AppSidebar />
+                        <main className="transition-all duration-300 ease-in-out pl-16 min-h-screen">
+                          <div className="container py-6 px-4 mx-auto">
+                            <Outlet />
+                          </div>
+                        </main>
                       </div>
-                    </main>
-                  </div>
-                </ProtectedRoute>
-              }>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/messages" element={<MessagesPage />} />
-                <Route path="/gallery" element={<ProductGallery />} />
-                <Route path="/media-table" element={<MediaTable />} />
-                <Route path="/ai-chat" element={<AIChat />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/audio-upload" element={<AudioUpload />} />
-                <Route path="*" element={<NotFound />} />
-              </Route>
-            </Routes>
-          </Router>
-          <Toaster />
-        </TooltipProvider>
-      </QueryClientProvider>
-    </ThemeProvider>
-  </SupabaseProvider>
-);
+                    </ProtectedRoute>
+                  }>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/messages" element={<MessagesPage />} />
+                    <Route path="/gallery" element={<ProductGallery />} />
+                    <Route path="/media-table" element={<MediaTable />} />
+                    <Route path="/ai-chat" element={<AIChat />} />
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/audio-upload" element={<AudioUpload />} />
+                    <Route path="/sql-console" element={<SqlConsole />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Route>
+                </Routes>
+              </Router>
+              <Toaster />
+            </TooltipProvider>
+          </QueryClientProvider>
+        </ThemeProvider>
+      </SupabaseProvider>
+    </div>
+  );
+}
 
 export default App;

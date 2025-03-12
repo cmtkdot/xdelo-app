@@ -1,0 +1,5 @@
+
+# This config allows only authorized requests
+[authorization]
+read = "service_role"
+write = "service_role"
