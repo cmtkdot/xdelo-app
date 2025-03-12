@@ -20,30 +20,13 @@ const handler = async (req: Request) => {
       );
     }
     
-    // Connect to Supabase
-    const client = supabaseClient;
+    // Call the database function to clear all messages
+    const { data, error } = await supabaseClient.rpc('xdelo_clear_all_messages');
     
-    // Clear deleted_messages table
-    await client.from('deleted_messages').delete().neq('original_message_id', '00000000-0000-0000-0000-000000000000');
-    
-    // Clear other dependent tables
-    await client.from('unified_audit_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await client.from('storage_validations').delete().neq('file_unique_id', '');
-    await client.from('sync_matches').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    
-    // Finally delete all messages
-    await client.from('messages').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    
-    // Log operation
-    await client.from('gl_sync_logs').insert({
-      operation: 'clear_all_messages',
-      status: 'success',
-      record_id: 'system',
-      table_name: 'messages'
-    });
+    if (error) throw error;
     
     return new Response(
-      JSON.stringify({ success: true, message: 'All messages deleted successfully' }),
+      JSON.stringify({ success: true, message: 'All messages deleted successfully', details: data }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {

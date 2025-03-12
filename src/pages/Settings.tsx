@@ -40,8 +40,7 @@ const Settings = () => {
       <AccountCard userEmail={userEmail} />
       <TelegramCard 
         botToken={botToken} 
-        webhookUrl={webhookUrl} 
-        onUpdate={loadSettings}
+        webhookUrl={webhookUrl}
       />
       <SyncCard />
       <DangerZoneCard />

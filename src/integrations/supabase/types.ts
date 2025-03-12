@@ -3008,6 +3008,10 @@ export type Database = {
           deleted_count: number
         }[]
       }
+      xdelo_clear_all_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       xdelo_commit_transaction_with_sync:
         | {
             Args: Record<PropertyKey, never>
