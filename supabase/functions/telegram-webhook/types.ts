@@ -1,3 +1,4 @@
+
 export interface TelegramMessage {
   message_id: number;
   chat: {
@@ -108,7 +109,7 @@ export interface MessageInput {
   processing_state: ProcessingState;
 }
 
-export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'partial_success' | 'error' | 'no_caption';
+export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';
 
 export interface AnalyzedContent {
   product_name?: string;
@@ -170,4 +171,6 @@ export interface Message {
   updated_at?: string;
   deleted_from_telegram?: boolean;
   edit_history?: AnalyzedContent[];
+  needs_redownload?: boolean;
+  redownload_strategy?: string;
 }

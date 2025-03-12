@@ -20,7 +20,7 @@ export default function MessagesPage() {
         .from('messages')
         .select('id, caption')
         .not('caption', 'is', null)
-        .in('processing_state', ['error', 'pending', 'processing', 'completed'])
+        .in('processing_state', ['error', 'pending'])
         .limit(30); // Limit to prevent excessive processing
       
       if (error) throw error;
@@ -40,9 +40,20 @@ export default function MessagesPage() {
       
       await Promise.all(messages.map(async (message) => {
         try {
-          await supabase.functions.invoke('xdelo_reprocess_message', {
-            body: { messageId: message.id, forceReprocess: true }
+          // Set messages to pending state
+          await supabase
+            .from('messages')
+            .update({
+              processing_state: 'pending',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', message.id);
+            
+          // Call direct processor
+          await supabase.functions.invoke('direct-caption-processor', {
+            body: { messageId: message.id, force_reprocess: true }
           });
+          
           successCount++;
         } catch (err) {
           console.error(`Failed to reanalyze message ${message.id}:`, err);

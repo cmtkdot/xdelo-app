@@ -1,3 +1,4 @@
+
 import { SupabaseClient } from "@supabase/supabase-js";
 
 export type ProcessingState = 'initialized' | 'pending' | 'processing' | 'completed' | 'error';

@@ -8,38 +8,48 @@ export function useMessageQueue() {
   const { toast } = useToast();
 
   // Process all pending messages
-  const processMessageQueue = async (limit = 10, repair = false) => {
+  const processMessageQueue = async (limit = 10) => {
     try {
       setIsProcessing(true);
       
-      // Call the scheduler function to process pending messages
-      const { data, error } = await supabase.functions.invoke(
-        'scheduler-process-queue',
-        {
-          body: { 
-            limit,
-            trigger_source: 'manual',
-            repair
-          }
-        }
-      );
+      // First find unprocessed messages with captions
+      const { data: messages, error: findError } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('processing_state', 'pending')
+        .limit(limit);
       
-      if (error) throw error;
+      if (findError) throw findError;
       
-      if (repair) {
+      if (!messages || messages.length === 0) {
         toast({
-          title: "System Repair Complete",
-          description: `Diagnostics and repairs completed successfully.`
+          title: "No messages",
+          description: "No pending messages found to process."
         });
-      } else {
-        toast({
-          title: "Message Processing Complete",
-          description: `Processed ${data?.result?.processed_count || 0} pending messages.`
-        });
+        return { processed: 0 };
       }
       
-      return data;
-    } catch (error: any) {
+      // Process each message
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (const message of messages) {
+        try {
+          await processMessageById(message.id);
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to process message ${message.id}:`, err);
+          errorCount++;
+        }
+      }
+      
+      toast({
+        title: "Message Processing Complete",
+        description: `Processed ${successCount} messages successfully${errorCount > 0 ? `, ${errorCount} failed` : ''}.`
+      });
+      
+      return { processed: successCount, errors: errorCount };
+    } catch (error) {
       console.error('Error processing messages:', error);
       
       toast({
@@ -59,7 +69,7 @@ export function useMessageQueue() {
     try {
       setIsProcessing(true);
       
-      // First, find messages that have captions but no analyzed content and set them to pending
+      // Find messages that have captions but no analyzed content and set them to pending
       const { data, error } = await supabase.from('messages')
         .update({ 
           processing_state: 'pending',
@@ -79,10 +89,12 @@ export function useMessageQueue() {
       });
       
       // Immediately run the processor after queueing
-      await processMessageQueue(limit);
+      if (data && data.length > 0) {
+        await processMessageQueue(limit);
+      }
       
       return { queued: data?.length || 0 };
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error queueing unprocessed messages:', error);
       
       toast({
@@ -131,7 +143,7 @@ export function useMessageQueue() {
       });
       
       return data;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error processing message:', error);
       
       toast({
