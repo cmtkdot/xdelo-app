@@ -16,28 +16,29 @@ export function MessageListContainer() {
   } = useMediaGroups();
 
   const stats = {
-    total: messages?.length || 0,
-    pending: 0,
-    processing: 0,
-    completed: messages?.length || 0,
-    error: 0,
-    by_processing_state: {
+    state_counts: {
       pending: 0,
       processing: 0,
       completed: messages?.length || 0,
-      error: 0
+      error: 0,
+      total_messages: messages?.length || 0
     },
-    by_media_type: {
-      photo: 0,
-      video: 0,
-      document: 0,
-      other: 0
+    media_type_counts: {
+      photo_count: 0,
+      video_count: 0,
+      document_count: 0,
+      other_count: 0
     },
-    processing_times: {
-      avg_seconds: 0,
-      max_seconds: 0
+    processing_stats: {
+      avg_processing_seconds: 0,
+      max_processing_seconds: 0
     },
-    latest_update: new Date().toISOString()
+    timestamp: new Date().toISOString()
+  };
+
+  const onRetryProcessing = async (messageId: string) => {
+    console.log("Retry processing for message:", messageId);
+    // In a real implementation, this would call an API to retry processing
   };
 
   return (
@@ -62,7 +63,8 @@ export function MessageListContainer() {
       ) : (
         <MessageList 
           messages={messages || []}
-          onRefresh={refetch}
+          onRefresh={() => refetch()}
+          onRetryProcessing={onRetryProcessing}
           stats={stats}
         />
       )}

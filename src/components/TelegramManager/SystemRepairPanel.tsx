@@ -1,81 +1,88 @@
 
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { useSystemRepair } from "@/hooks/useSystemRepair";
-import { useFileRepair } from "@/hooks/useFileRepair";
-import { useProcessingRepair } from "@/hooks/useProcessingRepair";
+import { Separator } from "@/components/ui/separator";
+import { RotateCw, Database, AlertTriangle, Wrench } from 'lucide-react';
+import { useSystemRepair } from '@/hooks/useSystemRepair';
+import { useFileRepair } from '@/hooks/useFileRepair';
 
-export default function SystemRepairPanel() {
-  const { isRepairing, repairProcessingSystem, resetStalledProcessing } = useSystemRepair();
-  const { isRepairing: isRepairingFiles, repairFileReferences } = useFileRepair();
-  const { runRepairOperation } = useProcessingRepair(); 
+export function SystemRepairPanel() {
+  const { repairSystem, isRepairing: isSystemRepairing } = useSystemRepair();
+  const { repairFiles, isRepairing: isFilesRepairing } = useFileRepair();
+  const [repairResults, setRepairResults] = useState<any>(null);
+
+  const handleRepairSystem = async () => {
+    const results = await repairSystem();
+    setRepairResults(results);
+  };
+
+  const handleRepairFiles = async () => {
+    await repairFiles({});
+  };
 
   return (
-    <Card className="w-full">
+    <Card>
       <CardHeader>
-        <CardTitle>System Repair</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Wrench className="h-5 w-5" />
+          System Repair Tools
+        </CardTitle>
         <CardDescription>
-          Repair processing issues and file storage problems
+          Tools to repair and maintain system functionality
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium">Processing Flow Repair</h3>
+        <div>
+          <h3 className="text-sm font-medium mb-2">Database Maintenance</h3>
           <div className="flex flex-wrap gap-2">
             <Button 
-              variant="secondary" 
+              variant="outline" 
               size="sm"
-              onClick={() => repairProcessingSystem()}
-              disabled={isRepairing}
+              onClick={handleRepairSystem}
+              disabled={isSystemRepairing}
             >
-              {isRepairing ? "Repairing..." : "Repair Processing System"}
+              <Database className="mr-2 h-4 w-4" />
+              Repair Processing Flow
             </Button>
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => resetStalledProcessing()}
-              disabled={isRepairing}
+              disabled={isFilesRepairing}
+              onClick={handleRepairFiles}
             >
-              Reset Stalled Processing
+              <RotateCw className="mr-2 h-4 w-4" />
+              Repair File References
             </Button>
           </div>
         </div>
-
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium">Storage Issues Repair</h3>
+        
+        <Separator />
+        
+        <div>
+          <h3 className="text-sm font-medium mb-2">Advanced Repairs</h3>
           <div className="flex flex-wrap gap-2">
-            <Button 
-              variant="secondary" 
-              size="sm"
-              onClick={() => repairFileReferences()}
-              disabled={isRepairingFiles}
-            >
-              {isRepairingFiles ? "Repairing..." : "Repair File References"}
-            </Button>
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => runRepairOperation(
-                'fix-content-disposition',
-                async () => {
-                  const { data } = await fetch('/api/media-management', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'fix_content_disposition' })
-                  }).then(r => r.json());
-                  return data;
-                },
-                'Content disposition fixed'
-              )}
+              onClick={() => alert("This feature is not implemented yet")}
             >
-              Fix Content Disposition
+              <AlertTriangle className="mr-2 h-4 w-4" />
+              Clean Orphaned Records
             </Button>
           </div>
         </div>
       </CardContent>
-      <CardFooter className="text-xs text-muted-foreground">
-        Use these tools with caution. They may take some time to complete.
-      </CardFooter>
+      {repairResults && (
+        <CardFooter className="border-t p-4 bg-muted/20">
+          <div className="text-sm">
+            <p className="font-medium">Repair Results:</p>
+            <pre className="mt-2 text-xs overflow-auto max-h-40 p-2 bg-muted rounded">
+              {JSON.stringify(repairResults, null, 2)}
+            </pre>
+          </div>
+        </CardFooter>
+      )}
     </Card>
   );
 }
