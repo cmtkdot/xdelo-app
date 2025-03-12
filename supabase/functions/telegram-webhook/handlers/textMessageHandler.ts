@@ -1,6 +1,4 @@
-
 import { supabaseClient } from '../../_shared/supabase.ts';
-import { logMessageOperation } from '../utils/logger.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 
@@ -26,16 +24,41 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
 
     if (error) throw error;
 
-    console.log('Webhook processing completed successfully');
+    // Log success
+    await supabaseClient.from('unified_audit_logs').insert({
+      event_type: 'message_created',
+      metadata: {
+        message_type: 'text',
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        is_forwarded: isForwarded
+      },
+      correlation_id: correlationId
+    });
+
+    console.log(`[${correlationId}] Text message ${message.message_id} processed successfully`);
 
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({ success: true, correlationId }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error handling other message:', error);
+    console.error(`[${correlationId}] Error handling text message:`, error);
+    
+    // Log error
+    await supabaseClient.from('unified_audit_logs').insert({
+      event_type: 'message_processing_failed',
+      error_message: error.message || 'Unknown error in text message handler',
+      metadata: {
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        handler_type: 'text_message'
+      },
+      correlation_id: correlationId
+    });
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message, correlationId }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

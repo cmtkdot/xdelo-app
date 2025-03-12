@@ -4,120 +4,141 @@ import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage } from './handlers/textMessageHandler.ts';
 import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { getLogger } from './utils/logger.ts';
+import { withErrorHandling, SecurityLevel } from '../_shared/errorHandler.ts';
+import { createClient } from '@supabase/supabase-js';
 
-serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
-  }
-
-  try {
-    // Generate correlation ID for this request
-    const correlationId = crypto.randomUUID();
-    const logger = getLogger(correlationId);
-    
-    logger.info(`Processing webhook request`, { timestamp: new Date().toISOString() });
-
-    // Parse the update from Telegram
-    let update;
+// Main handler function wrapped with error handling
+serve(withErrorHandling(
+  'telegram-webhook',
+  async (req: Request, correlationId: string) => {
     try {
-      update = await req.json();
-      logger.info('Received Telegram update', { 
-        update_type: Object.keys(update).join(','),
-        correlation_id: correlationId  
+      // Create Supabase client for database operations
+      const supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false
+          }
+        }
+      );
+
+      // Log webhook received event
+      await supabaseClient.from("unified_audit_logs").insert({
+        event_type: "webhook_received",
+        metadata: {
+          source: "telegram-webhook",
+          timestamp: new Date().toISOString()
+        },
+        correlation_id: correlationId
       });
+
+      // Parse the update from Telegram
+      let update;
+      try {
+        update = await req.json();
+        console.log(`[${correlationId}] Received Telegram update: ${JSON.stringify(Object.keys(update))}`);
+      } catch (error) {
+        console.error(`[${correlationId}] Failed to parse request body:`, error);
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: 'Invalid JSON in request body',
+          correlationId
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400
+        });
+      }
+
+      // Get the message object, checking for different types of updates
+      const message = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
+      if (!message) {
+        console.log(`[${correlationId}] No processable content in update:`, Object.keys(update));
+        return new Response(JSON.stringify({ 
+          success: false, 
+          message: "No processable content",
+          correlationId
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400
+        });
+      }
+
+      // Determine message context
+      const context = {
+        isChannelPost: !!update.channel_post || !!update.edited_channel_post,
+        isForwarded: !!message.forward_from || !!message.forward_from_chat || !!message.forward_origin,
+        correlationId,
+        isEdit: !!update.edited_message || !!update.edited_channel_post,
+        previousMessage: update.edited_message || update.edited_channel_post
+      };
+
+      // Log the message type we're about to process
+      console.log(`[${correlationId}] Processing message ${message.message_id} in chat ${message.chat?.id}, ` +
+        `is_edit: ${context.isEdit}, is_forwarded: ${context.isForwarded}, ` +
+        `has_media: ${!!(message.photo || message.video || message.document)}`);
+
+      // Handle different message types
+      let response;
+      
+      try {
+        // Handle edited messages
+        if (context.isEdit) {
+          response = await handleEditedMessage(message, context);
+        }
+        // Handle media messages (photos, videos, documents)
+        else if (message.photo || message.video || message.document) {
+          response = await handleMediaMessage(message, context);
+        }
+        // Handle other types of messages
+        else {
+          response = await handleOtherMessage(message, context);
+        }
+        
+        console.log(`[${correlationId}] Successfully processed message ${message.message_id} in chat ${message.chat?.id}`);
+        
+        return response;
+      } catch (handlerError) {
+        console.error(`[${correlationId}] Error in message handler:`, handlerError);
+        
+        // Log the error to the database
+        await supabaseClient.from("unified_audit_logs").insert({
+          event_type: "message_processing_failed",
+          error_message: handlerError.message || "Unknown handler error",
+          metadata: {
+            message_id: message.message_id,
+            chat_id: message.chat?.id,
+            is_edit: context.isEdit,
+            has_media: !!(message.photo || message.video || message.document),
+            handler_type: context.isEdit ? 'edited_message' : 
+                          (message.photo || message.video || message.document) ? 'media_message' : 'other_message'
+          },
+          correlation_id: correlationId
+        });
+        
+        // Return error response but with 200 status to acknowledge to Telegram
+        // (Telegram will retry if we return non-200 status)
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: handlerError.message,
+          correlationId
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200 // Still return 200 to prevent Telegram from retrying
+        });
+      }
     } catch (error) {
-      logger.error('Failed to parse request body', error);
+      console.error('Unhandled error processing webhook:', error);
       return new Response(JSON.stringify({ 
         success: false, 
-        error: 'Invalid JSON in request body' 
+        error: error.message || 'Unknown error',
+        correlationId
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
+        status: 500
       });
     }
-
-    // Get the message object, checking for different types of updates
-    const message = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
-    if (!message) {
-      logger.info('No processable content in update', { update_keys: Object.keys(update) });
-      return new Response(JSON.stringify({ 
-        success: false, 
-        message: "No processable content" 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
-      });
-    }
-
-    // Determine message context
-    const context = {
-      isChannelPost: !!update.channel_post || !!update.edited_channel_post,
-      isForwarded: !!message.forward_from || !!message.forward_from_chat || !!message.forward_origin,
-      correlationId,
-      isEdit: !!update.edited_message || !!update.edited_channel_post,
-      previousMessage: update.edited_message || update.edited_channel_post
-    };
-
-    // Log the message type we're about to process
-    logger.info('Processing message', {
-      message_id: message.message_id,
-      chat_id: message.chat?.id,
-      is_edit: context.isEdit,
-      is_forwarded: context.isForwarded,
-      is_channel_post: context.isChannelPost,
-      has_photo: !!message.photo,
-      has_video: !!message.video,
-      has_document: !!message.document,
-      has_caption: !!message.caption
-    });
-
-    // Handle different message types
-    let response;
-    
-    try {
-      // Handle edited messages
-      if (context.isEdit) {
-        response = await handleEditedMessage(message, context);
-      }
-      // Handle media messages (photos, videos, documents)
-      else if (message.photo || message.video || message.document) {
-        response = await handleMediaMessage(message, context);
-      }
-      // Handle other types of messages
-      else {
-        response = await handleOtherMessage(message, context);
-      }
-      
-      logger.info('Successfully processed message', {
-        message_id: message.message_id,
-        chat_id: message.chat?.id
-      });
-      
-      return response;
-    } catch (handlerError) {
-      logger.error(`Error in message handler: ${handlerError.message}`, handlerError);
-      
-      // Return error response but with 200 status to acknowledge to Telegram
-      // (Telegram will retry if we return non-200 status)
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: handlerError.message 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200 // Still return 200 to prevent Telegram from retrying
-      });
-    }
-
-  } catch (error) {
-    console.error('Unhandled error processing webhook:', error);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: error.message || 'Unknown error' 
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500
-    });
-  }
-});
+  },
+  { securityLevel: SecurityLevel.SERVICE_ROLE }
+));

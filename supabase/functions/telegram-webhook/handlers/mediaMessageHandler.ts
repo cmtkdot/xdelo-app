@@ -1,6 +1,5 @@
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { getMediaInfo } from '../utils/mediaUtils.ts';
-import { logMessageOperation } from '../utils/logger.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { xdelo_analyzeMessageCaption } from '../../_shared/databaseOperations.ts';
 import { 
@@ -24,27 +23,31 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     return await handleNewMediaMessage(message, context, mediaInfo);
 
   } catch (error) {
-    console.error('Error handling media message:', error);
+    console.error(`[${context.correlationId}] Error handling media message:`, error);
+    
     // Log error event
     try {
-      await logMessageOperation(
-        'error',
-        context.correlationId,
-        {
-          message: 'Error handling media message',
-          error_message: error.message,
-          telegram_message_id: message.message_id,
-          chat_id: message.chat.id,
+      await supabaseClient.from('unified_audit_logs').insert({
+        event_type: 'message_processing_failed',
+        error_message: error.message || 'Unknown error in media message handler',
+        metadata: {
+          message_id: message.message_id,
+          chat_id: message.chat?.id,
+          processing_stage: 'media_handling',
           error_code: error.code,
-          processing_stage: 'media_handling'
-        }
-      );
+          handler_type: 'media_message'
+        },
+        correlation_id: context.correlationId
+      });
     } catch (logError) {
-      console.error('Error logging error operation:', logError);
+      console.error(`[${context.correlationId}] Failed to log error:`, logError);
     }
     
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        correlationId: context.correlationId 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
@@ -200,19 +203,19 @@ async function handleEditedMediaMessage(
 
     // Log the edit event
     try {
-      await logMessageOperation(
-        'edit',
-        context.correlationId,
-        {
-          message: `Message ${message.message_id} edited in chat ${message.chat.id}`,
-          telegram_message_id: message.message_id,
+      await supabaseClient.from('unified_audit_logs').insert({
+        event_type: 'message_edited',
+        entity_id: existingMessage.id,
+        metadata: {
+          message_id: message.message_id,
           chat_id: message.chat.id,
           file_unique_id: mediaInfo.file_unique_id,
           existing_message_id: existingMessage.id,
           edit_type: captionChanged ? 'caption_changed' : 'other_edit',
           media_group_id: message.media_group_id
-        }
-      );
+        },
+        correlation_id: context.correlationId
+      });
     } catch (logError) {
       console.error('Error logging edit operation:', logError);
     }
@@ -246,7 +249,7 @@ async function handleNewMediaMessage(
   // If file already exists, update instead of creating new record
   if (existingMedia && existingMedia.length > 0) {
     const existingMessage = existingMedia[0];
-    console.log(`Duplicate message detected with file_unique_id ${mediaInfo.file_unique_id}, updating existing record`);
+    console.log(`[${correlationId}] Duplicate message detected with file_unique_id ${mediaInfo.file_unique_id}, updating existing record`);
     
     // Check if caption changed
     const captionChanged = message.caption !== existingMessage.caption;
@@ -278,30 +281,29 @@ async function handleNewMediaMessage(
       .eq('id', existingMessage.id);
 
     if (updateError) {
-      console.error('Error updating existing message:', updateError);
+      console.error(`[${correlationId}] Error updating existing message:`, updateError);
       throw updateError;
     }
 
     // Log the duplicate detection
-    await logMessageOperation(
-      'success',
-      context.correlationId,
-      {
-        message: `Duplicate message detected with file_unique_id ${mediaInfo.file_unique_id}`,
+    await supabaseClient.from('unified_audit_logs').insert({
+      event_type: 'duplicate_file_detected',
+      entity_id: existingMessage.id,
+      metadata: {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         file_unique_id: mediaInfo.file_unique_id,
-        existing_message_id: existingMessage.id,
-        update_type: 'duplicate_update',
-        media_group_id: message.media_group_id
-      }
-    );
+        media_group_id: message.media_group_id,
+        update_type: 'duplicate_update'
+      },
+      correlation_id: correlationId
+    });
 
     // Process the updated message for caption analysis or media group syncing
     await processMessage(message, existingMessage, context);
 
     return new Response(
-      JSON.stringify({ success: true, duplicate: true }),
+      JSON.stringify({ success: true, duplicate: true, correlationId }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -351,7 +353,7 @@ async function handleNewMediaMessage(
     .single();
 
   if (insertError) {
-    console.error('Error inserting message:', insertError);
+    console.error(`[${correlationId}] Error inserting message:`, insertError);
       
     // Check specifically for the schema mismatch error
     if (insertError.message && insertError.message.includes("Could not find the 'error' column")) {
@@ -363,28 +365,27 @@ async function handleNewMediaMessage(
 
   // Log the insert event
   try {
-    await logMessageOperation(
-      'success',
-      context.correlationId,
-      {
-        message: `New message ${message.message_id} created in chat ${message.chat.id}`,
+    await supabaseClient.from('unified_audit_logs').insert({
+      event_type: 'message_created',
+      entity_id: insertedMessage.id,
+      metadata: {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         file_unique_id: mediaInfo.file_unique_id,
         media_group_id: message.media_group_id,
-        is_forwarded: !!messageInput.forward_info,
-        forward_info: messageInput.forward_info
-      }
-    );
+        is_forwarded: !!messageInput.forward_info
+      },
+      correlation_id: correlationId
+    });
   } catch (logError) {
-    console.error('Error logging message operation:', logError);
+    console.error(`[${correlationId}] Error logging message creation:`, logError);
   }
 
   // Process the new message based on caption presence
   await processMessage(message, insertedMessage, context);
 
   return new Response(
-    JSON.stringify({ success: true }),
+    JSON.stringify({ success: true, correlationId }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
 }
