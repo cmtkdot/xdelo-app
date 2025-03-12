@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { MessageList } from './MessageList';
 import { MessageControlPanel } from './MessageControlPanel';
@@ -31,19 +30,11 @@ export function MessageListContainer() {
       
       await forceSyncMessageGroup(messageId);
       
-      // Don't directly assign the Promise result, use void operator
-      void refetch().then(() => {
-        toast({
-          title: "Processing Complete",
-          description: "Message has been processed and synchronized.",
-        });
-      }).catch((err: Error) => {
-        console.error("Error refetching after sync:", err);
-        toast({
-          title: "Refetch Failed",
-          description: "Message was processed but refresh failed.",
-          variant: "destructive",
-        });
+      await refetch();
+      
+      toast({
+        title: "Processing Complete",
+        description: "Message has been processed and synchronized.",
       });
     } catch (error: any) {
       console.error("Error retrying processing:", error);

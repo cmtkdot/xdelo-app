@@ -1,4 +1,3 @@
-
 import { Json } from '@/integrations/supabase/types';
 import { AnalyzedContent } from './index';
 
