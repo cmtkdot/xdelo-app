@@ -1,8 +1,10 @@
+
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { getMediaInfo } from '../utils/mediaUtils.ts';
 import { xdelo_detectMimeType } from '../../_shared/mediaUtils.ts';
+import { updateMessage } from '../dbOperations.ts';
 
 declare const Deno: {
   env: {
@@ -99,10 +101,18 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         if (!upload.success || !upload.publicUrl) {
           throw new Error(upload.error || 'Failed to upload new media to storage');
         }
+
+        // Use updateMessage from dbOperations
+        const logger = {
+          error: (message: string, error: unknown) => console.error(`[${correlationId}] ${message}`, error),
+          info: (message: string, data?: unknown) => console.log(`[${correlationId}] ${message}`, data)
+        };
         
-        const { error: updateMediaError } = await supabaseClient
-          .from('messages')
-          .update({
+        const updateResult = await updateMessage(
+          supabaseClient,
+          message.chat.id,
+          message.message_id,
+          {
             file_id: mediaInfo.file_id,
             file_unique_id: mediaInfo.file_unique_id,
             file_size: mediaInfo.file_size,
@@ -110,10 +120,8 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
             caption: message.caption || '',
             telegram_data: message,
             storage_path: download.storagePath,
-            public_url: upload.publicUrl,
             processing_state: 'pending',
             analyzed_content: null,
-            old_analyzed_content: existingMessage.old_analyzed_content || [],
             is_original_caption: true,
             group_caption_synced: false,
             updated_at: new Date().toISOString(),
@@ -122,12 +130,14 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
             edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
             storage_exists: true,
             storage_path_standardized: true,
-            needs_redownload: false
-          })
-          .eq('id', existingMessage.id);
+            needs_redownload: false,
+            correlation_id: correlationId
+          },
+          logger
+        );
         
-        if (updateMediaError) {
-          throw new Error(`Failed to update message with new media: ${updateMediaError.message}`);
+        if (!updateResult.success) {
+          throw new Error(`Failed to update message with new media: ${updateResult.error_message}`);
         }
         
         console.log(`[${correlationId}] Successfully updated message ${existingMessage.id} with new media file`);

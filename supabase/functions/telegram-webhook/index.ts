@@ -1,8 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
-import { handleOtherMessage } from './handlers/textMessageHandler.ts';
-import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
+import { handleOtherMessage, handleEditedMessage } from './handlers/textMessageHandler.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { withErrorHandling, SecurityLevel } from '../_shared/errorHandler.ts';
 import { createClient } from '@supabase/supabase-js';

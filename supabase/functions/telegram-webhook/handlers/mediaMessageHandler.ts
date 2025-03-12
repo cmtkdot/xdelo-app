@@ -8,6 +8,7 @@ import {
   ForwardInfo,
   MessageInput,
 } from '../types.ts';
+import { createMessage, checkDuplicateFile } from '../dbOperations.ts';
 
 export async function handleMediaMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
@@ -238,21 +239,14 @@ async function handleNewMediaMessage(
   const { correlationId } = context;
 
   // IMPORTANT: Check for duplicate message by file_unique_id before creating new record
-  const { data: existingMedia } = await supabaseClient
-    .from('messages')
-    .select('*')
-    .eq('file_unique_id', mediaInfo.file_unique_id)
-    .eq('deleted_from_telegram', false)
-    .order('created_at', { ascending: false })
-    .limit(1);
+  const existingMedia = await checkDuplicateFile(supabaseClient, mediaInfo.file_unique_id);
 
   // If file already exists, update instead of creating new record
-  if (existingMedia && existingMedia.length > 0) {
-    const existingMessage = existingMedia[0];
+  if (existingMedia) {
     console.log(`[${correlationId}] Duplicate message detected with file_unique_id ${mediaInfo.file_unique_id}, updating existing record`);
     
     // Check if caption changed
-    const captionChanged = message.caption !== existingMessage.caption;
+    const captionChanged = message.caption !== existingMedia.caption;
     
     // Update the existing message
     const { error: updateError } = await supabaseClient
@@ -267,18 +261,18 @@ async function handleNewMediaMessage(
         correlation_id: correlationId,
         media_group_id: message.media_group_id,
         // Preserve existing storage path and public URL
-        storage_path: existingMessage.storage_path,
-        public_url: existingMessage.public_url,
+        storage_path: existingMedia.storage_path,
+        public_url: existingMedia.public_url,
         // Reset processing if caption changed
-        processing_state: captionChanged ? 'pending' : existingMessage.processing_state,
-        analyzed_content: captionChanged ? null : existingMessage.analyzed_content,
+        processing_state: captionChanged ? 'pending' : existingMedia.processing_state,
+        analyzed_content: captionChanged ? null : existingMedia.analyzed_content,
         updated_at: new Date().toISOString(),
         is_duplicate: true,
         // Clear any error state on successful update
         error_message: null,
         error_code: null
       })
-      .eq('id', existingMessage.id);
+      .eq('id', existingMedia.id);
 
     if (updateError) {
       console.error(`[${correlationId}] Error updating existing message:`, updateError);
@@ -288,7 +282,7 @@ async function handleNewMediaMessage(
     // Log the duplicate detection
     await supabaseClient.from('unified_audit_logs').insert({
       event_type: 'duplicate_file_detected',
-      entity_id: existingMessage.id,
+      entity_id: existingMedia.id,
       metadata: {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
@@ -300,7 +294,7 @@ async function handleNewMediaMessage(
     });
 
     // Process the updated message for caption analysis or media group syncing
-    await processMessage(message, existingMessage, context);
+    await processMessage(message, existingMedia, context);
 
     return new Response(
       JSON.stringify({ success: true, duplicate: true, correlationId }),
@@ -345,29 +339,24 @@ async function handleNewMediaMessage(
     }] : []
   };
 
-  // Insert the message into the database
-  const { data: insertedMessage, error: insertError } = await supabaseClient
-    .from('messages')
-    .insert([messageInput])
-    .select('id')
-    .single();
+  // Use the createMessage function from dbOperations.ts
+  const logger = {
+    error: (message: string, error: unknown) => console.error(`[${correlationId}] ${message}`, error),
+    info: (message: string, data?: unknown) => console.log(`[${correlationId}] ${message}`, data)
+  };
+  
+  const result = await createMessage(supabaseClient, messageInput, logger);
 
-  if (insertError) {
-    console.error(`[${correlationId}] Error inserting message:`, insertError);
-      
-    // Check specifically for the schema mismatch error
-    if (insertError.message && insertError.message.includes("Could not find the 'error' column")) {
-      console.error('Schema mismatch detected! Run database schema update script.');
-    }
-      
-    throw insertError;
+  if (!result.success) {
+    console.error(`[${correlationId}] Error creating message:`, result.error_message);
+    throw new Error(result.error_message || 'Failed to create message');
   }
 
   // Log the insert event
   try {
     await supabaseClient.from('unified_audit_logs').insert({
       event_type: 'message_created',
-      entity_id: insertedMessage.id,
+      entity_id: result.id,
       metadata: {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
@@ -382,7 +371,7 @@ async function handleNewMediaMessage(
   }
 
   // Process the new message based on caption presence
-  await processMessage(message, insertedMessage, context);
+  await processMessage(message, { id: result.id }, context);
 
   return new Response(
     JSON.stringify({ success: true, correlationId }),
@@ -606,3 +595,4 @@ async function syncFromMediaGroupDirect(
     return false;
   }
 }
+
