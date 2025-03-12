@@ -106,11 +106,11 @@ export interface MessageInput {
   is_edited_channel_post?: boolean;
   edit_date?: string;
   correlation_id: string;
-  processing_state: 'pending' | 'processing' | 'completed' | 'error';
+  processing_state: 'pending' | 'processing' | 'completed' | 'error' | 'initialized';
   storage_path?: string;
   public_url?: string;
   is_duplicate?: boolean;
-  storage_exists?: boolean;
+  storage_exists?: boolean | string;
   needs_redownload?: boolean;
   redownload_reason?: string;
   error_message?: string;
@@ -118,7 +118,7 @@ export interface MessageInput {
   [key: string]: unknown; // Index signature for flexible properties
 }
 
-export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error';
+export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error' | 'initialized';
 
 export interface AnalyzedContent {
   product_name?: string;
@@ -176,8 +176,10 @@ export interface Message {
   created_at?: string;
   updated_at?: string;
   deleted_from_telegram?: boolean;
-  edit_history?: AnalyzedContent[];
+  edit_history?: Record<string, unknown>[];
   needs_redownload?: boolean;
   redownload_reason?: string;
   file_id_expires_at?: string;
+  storage_exists?: boolean | string;
+  storage_path_standardized?: boolean | string;
 }

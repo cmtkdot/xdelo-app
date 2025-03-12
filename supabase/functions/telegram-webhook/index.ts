@@ -4,7 +4,7 @@ import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage, handleEditedMessage } from './handlers/textMessageHandler.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { withErrorHandling, SecurityLevel } from '../_shared/errorHandler.ts';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
 
 // Main handler function wrapped with error handling

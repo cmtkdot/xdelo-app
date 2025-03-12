@@ -16,6 +16,6 @@ export function messageToMediaItem(message: Message): MediaItem {
     public_url: message.public_url || '',
     mime_type: message.mime_type || undefined,
     created_at: message.created_at || new Date().toISOString(),
-    analyzed_content: message.analyzed_content || undefined,
+    analyzed_content: message.analyzed_content as AnalyzedContent || undefined,
   };
 }

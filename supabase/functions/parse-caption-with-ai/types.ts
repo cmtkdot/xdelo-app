@@ -14,6 +14,8 @@ export interface RequestPayload {
   queue_id?: string;
   file_info?: any;
   isEdit?: boolean;
+  retryCount?: number;
+  force_reprocess?: boolean;
 }
 
 export interface ParseResult {

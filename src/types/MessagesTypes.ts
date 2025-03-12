@@ -1,9 +1,15 @@
 
 import { Json } from '@/integrations/supabase/types';
-import { AnalyzedContent } from './index';
 
+/**
+ * A standardized enum for message processing states across the application
+ */
 export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error' | 'initialized';
 
+/**
+ * Comprehensive Message interface containing all possible properties
+ * used throughout the application
+ */
 export interface Message {
   id: string;
   telegram_message_id?: number;
@@ -25,7 +31,7 @@ export interface Message {
   processing_state?: ProcessingState;
   processing_started_at?: string;
   processing_completed_at?: string;
-  analyzed_content?: AnalyzedContent;
+  analyzed_content?: Record<string, any>;
   telegram_data?: Record<string, unknown>;
   error_message?: string;
   error_code?: string;
@@ -62,6 +68,10 @@ export interface Message {
   correlation_id?: string;
   retry_count?: number;
   last_error_at?: string;
+  edit_count?: number;
+  forward_info?: Record<string, unknown>;
+  edit_history?: Record<string, unknown>[];
+  edit_date?: string;
 }
 
 export interface MessageApiResponse {

@@ -1,7 +1,7 @@
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
-export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error';
+export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error' | 'initialized';
 
 // Types for analyzed content
 export interface AnalyzedContent {
@@ -17,6 +17,15 @@ export interface AnalyzedContent {
   parsing_metadata?: {
     method: 'manual' | 'ai';
     timestamp: string;
+    partial_success?: boolean;
+    missing_fields?: string[];
+    quantity_pattern?: string;
+    is_edit?: boolean;
+    edit_timestamp?: string;
+    force_reprocess?: boolean;
+    reprocess_timestamp?: string;
+    retry_count?: number;
+    retry_timestamp?: string;
   };
   sync_metadata?: {
     sync_source_message_id?: string;
@@ -26,10 +35,19 @@ export interface AnalyzedContent {
 
 // Forward info type
 export interface ForwardInfo {
+  is_forwarded?: boolean;
   from_chat_id?: number;
   from_message_id?: number;
   from_chat_title?: string;
   forward_date?: string;
+  forward_origin_type?: string;
+  forward_from_chat_id?: number;
+  forward_from_chat_title?: string;
+  forward_from_chat_type?: string;
+  forward_from_message_id?: number;
+  original_chat_id?: number;
+  original_chat_title?: string;
+  original_message_id?: number;
 }
 
 // Base Message type that matches our database schema
@@ -76,8 +94,25 @@ export interface Message {
   redownload_reason?: string;  // Reason why redownload is needed
   redownload_completed_at?: string; // When redownload completed
   storage_path?: string;       // Path in storage
-  storage_exists?: boolean;    // Whether file exists in storage
-  storage_path_standardized?: boolean; // Whether path follows standard format
+  storage_exists?: boolean | string;    // Whether file exists in storage
+  storage_path_standardized?: boolean | string; // Whether path follows standard format
+  is_forward?: boolean;
+  forward_count?: number;
+  original_message_id?: string;
+  forward_from?: Record<string, unknown>;
+  forward_from_chat?: Record<string, unknown>;
+  forward_chain?: Record<string, unknown>[];
+  redownload_flagged_at?: string;
+  telegram_date?: string;
+  is_bot?: boolean;
+  message_type?: string;
+  from_id?: number;
+  is_duplicate?: boolean;
+  duplicate_reference_id?: string;
+  redownload_attempts?: number;
+  correlation_id?: string;
+  retry_count?: number;
+  last_error_at?: string;
 }
 
 // Database interface

@@ -3352,6 +3352,7 @@ export type Database = {
         | "edit_content_propagated"
         | "media_group_version_updated"
         | "system_configuration_updated"
+        | "message_processing_error"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
       message_operation_type:
         | "message_create"

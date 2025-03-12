@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { ImageSwiper } from "@/components/ui/image-swiper";
-import { Message } from "@/types";
+import { Message } from "@/types/MessagesTypes";
 import { buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,

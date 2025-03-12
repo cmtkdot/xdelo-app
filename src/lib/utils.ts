@@ -1,5 +1,6 @@
 
 import { Message } from "@/types/MessagesTypes";
+import { AnalyzedContent } from "@/types";
 
 // Common formatters
 export function formatDate(date: Date): string {
@@ -16,7 +17,7 @@ export const messageToMediaItem = (message: Message) => {
     public_url: message.public_url || '',
     mime_type: message.mime_type || '',
     created_at: message.created_at || new Date().toISOString(),
-    analyzed_content: message.analyzed_content || undefined
+    analyzed_content: message.analyzed_content as AnalyzedContent || undefined
   };
 };
 

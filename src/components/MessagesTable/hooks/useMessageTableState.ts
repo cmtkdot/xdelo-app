@@ -1,8 +1,8 @@
-
 import { useState } from "react";
 import { useToast } from "@/hooks/useToast";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
 import { Message } from "@/types/MessagesTypes";
+import { AnalyzedContent } from "@/types";
 
 export interface EditableMessage extends Message {
   isEditing: boolean;
@@ -78,7 +78,6 @@ export function useMessageTableState(initialMessages: Message[]) {
   };
 
   const handleDeleteClick = (message: Message) => {
-    // Convert message to the same type before setting state
     const typedMessage: Message = {
       ...message,
       file_unique_id: message.file_unique_id,
@@ -100,14 +99,14 @@ export function useMessageTableState(initialMessages: Message[]) {
     setMessageToDelete(null);
   };
 
-  const handleAnalyzedContentChange = (id: string, field: keyof typeof messages[0]['analyzed_content'], value: string | number) => {
+  const handleAnalyzedContentChange = (id: string, field: keyof AnalyzedContent, value: string | number) => {
     setMessages(prev =>
       prev.map(message =>
         message.id === id
           ? {
               ...message,
               analyzed_content: {
-                ...message.analyzed_content,
+                ...(message.analyzed_content as AnalyzedContent || {}),
                 [field]: value,
                 parsing_metadata: {
                   method: 'manual' as const,
