@@ -1,170 +1,84 @@
 
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from './useToast';
+import { useToast } from '@/hooks/useToast';
 
-/**
- * Comprehensive hook for all media management operations
- */
-export function useMediaManagement() {
-  const [isProcessing, setIsProcessing] = useState(false);
+const useMediaManagement = () => {
+  const [isValidating, setIsValidating] = useState(false);
+  const [results, setResults] = useState<any>(null);
   const { toast } = useToast();
 
-  /**
-   * Execute a media management operation
-   */
-  const executeOperation = async (
-    action: string, 
-    params: any = {}, 
-    successMessage: string
-  ) => {
+  const validateFilesAndRepair = async (options: { limit?: number } = {}) => {
     try {
-      setIsProcessing(true);
+      setIsValidating(true);
       
+      // Call the media-management function to validate and repair files
       const { data, error } = await supabase.functions.invoke('media-management', {
-        body: { 
-          action,
-          ...params
+        body: {
+          operation: 'validate_and_repair',
+          limit: options.limit || 20
         }
       });
       
       if (error) throw error;
       
-      toast({
-        title: "Operation Complete",
-        description: successMessage
-      });
-      
-      return data?.data;
-    } catch (error: any) {
-      console.error(`Error executing ${action}:`, error);
+      setResults(data);
       
       toast({
-        title: "Operation Failed",
-        description: error.message || `Failed to execute ${action}`,
-        variant: "destructive"
+        title: 'Storage Validation Complete',
+        description: `Checked ${data.checked_count || 0} files, repaired ${data.repaired_count || 0} files.`
       });
       
-      throw error;
+      return data;
+    } catch (err: any) {
+      console.error('Error validating storage files:', err);
+      
+      toast({
+        title: 'Validation Failed',
+        description: err.message || 'Failed to validate storage files',
+        variant: 'destructive'
+      });
+      
+      throw err;
     } finally {
-      setIsProcessing(false);
+      setIsValidating(false);
     }
   };
 
-  /**
-   * Redownload media files for specified messages
-   */
-  const redownloadFiles = async (messageIds?: string[], mediaGroupId?: string) => {
-    const count = messageIds?.length || 'missing';
-    return executeOperation(
-      'redownload', 
-      { messageIds, mediaGroupId }, 
-      `Successfully redownloaded ${count} files.`
-    );
-  };
-
-  /**
-   * Validate storage files and fix issues
-   */
-  const validateStorage = async (limit = 50, onlyNewest = true) => {
-    return executeOperation(
-      'validate', 
-      { limit, options: { onlyNewest } }, 
-      `Validated ${limit} files and flagged missing ones for redownload.`
-    );
-  };
-
-  /**
-   * Repair storage paths
-   */
-  const repairStoragePaths = async (messageIds?: string[]) => {
-    return executeOperation(
-      'repair-storage-paths', 
-      { messageIds }, 
-      `Storage paths repaired successfully.`
-    );
-  };
-
-  /**
-   * Repair media group synchronization
-   */
-  const repairMediaGroups = async (fullRepair = false, mediaGroupId?: string, sourceMessageId?: string) => {
-    return executeOperation(
-      'repair-media-groups', 
-      { 
-        mediaGroupId, 
-        messageIds: sourceMessageId ? [sourceMessageId] : undefined,
-        options: { 
-          fullRepair,
-          sourceMessageId 
-        } 
-      }, 
-      `Media groups repaired successfully.`
-    );
-  };
-
-  /**
-   * Repair processing system, including stuck messages
-   */
-  const repairProcessingFlow = async (resetAll = false, forceResetStalled = true) => {
-    return executeOperation(
-      'repair-processing-flow', 
-      { 
-        limit: 100,
-        options: {
-          repairEnums: true,
-          resetAll,
-          forceResetStalled
-        }
-      }, 
-      `Processing flow repaired successfully.`
-    );
-  };
-  
-  /**
-   * Run a complete system maintenance operation
-   */
-  const runCompleteSystemMaintenance = async () => {
+  // Function to redownload a specific file that's missing
+  const redownloadFile = async (messageId: string) => {
     try {
-      setIsProcessing(true);
-      
-      // 1. First repair processing flow
-      await repairProcessingFlow(true, true);
-      
-      // 2. Then repair media groups
-      await repairMediaGroups(true);
-      
-      // 3. Finally validate storage and repair paths
-      await repairStoragePaths();
-      await validateStorage(100);
-      
-      toast({
-        title: "Complete System Maintenance Finished",
-        description: "All maintenance operations completed successfully."
+      const { data, error } = await supabase.functions.invoke('redownload-from-media-group', {
+        body: { messageId }
       });
       
-      return true;
-    } catch (error: any) {
-      console.error('Error running complete system maintenance:', error);
+      if (error) throw error;
+      
       toast({
-        title: "Maintenance Failed",
-        description: error.message || "System maintenance process encountered errors",
-        variant: "destructive"
+        title: 'File Redownloaded',
+        description: 'The file has been successfully redownloaded'
       });
-      return false;
-    } finally {
-      setIsProcessing(false);
+      
+      return data;
+    } catch (err: any) {
+      console.error('Error redownloading file:', err);
+      
+      toast({
+        title: 'Redownload Failed',
+        description: err.message || 'Failed to redownload the file',
+        variant: 'destructive'
+      });
+      
+      throw err;
     }
   };
 
   return {
-    executeOperation,
-    redownloadFiles,
-    validateStorage,
-    repairStoragePaths,
-    repairMediaGroups,
-    repairProcessingFlow,
-    runCompleteSystemMaintenance,
-    isProcessing
+    isValidating,
+    results,
+    validateFilesAndRepair,
+    redownloadFile
   };
-}
+};
+
+export default useMediaManagement;

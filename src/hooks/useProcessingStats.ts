@@ -1,42 +1,52 @@
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ProcessingStats {
-  total_messages: number;
-  by_state: {
-    initialized: number;
-    pending: number;
-    processing: number;
-    completed: number;
-    error: number;
-  };
-  with_analyzed_content: number;
-  with_caption: number;
-  needs_redownload: number;
-  with_media_group_id: number;
+  total: number;
+  initialized: number;
+  pending: number;
+  processing: number;
+  completed: number;
+  error: number;
   stalled_processing: number;
+  stalled_pending: number;
+  processing_times: {
+    avg_minutes: number;
+    max_minutes: number;
+  };
 }
 
-export function useProcessingStats(refreshInterval = 0) {
-  const [stats, setStats] = useState<ProcessingStats | null>(null);
+export const useProcessingStats = () => {
+  const [stats, setStats] = useState<ProcessingStats>({
+    total: 0,
+    initialized: 0,
+    pending: 0,
+    processing: 0,
+    completed: 0,
+    error: 0,
+    stalled_processing: 0,
+    stalled_pending: 0,
+    processing_times: {
+      avg_minutes: 0,
+      max_minutes: 0
+    }
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchStats = async () => {
     try {
       setIsLoading(true);
-      setError(null);
       
-      // Using the new xdelo_get_message_processing_stats function
-      const { data, error: fetchError } = await supabase.rpc('xdelo_get_message_processing_stats');
+      const { data, error } = await supabase.rpc('xdelo_get_message_processing_stats');
       
-      if (fetchError) throw fetchError;
+      if (error) throw error;
       
       setStats(data as ProcessingStats);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching processing stats:', err);
-      setError(err instanceof Error ? err : new Error('Unknown error occurred'));
+      setError(err);
     } finally {
       setIsLoading(false);
     }
@@ -45,24 +55,15 @@ export function useProcessingStats(refreshInterval = 0) {
   useEffect(() => {
     fetchStats();
     
-    // Set up polling if refresh interval is provided
-    let intervalId: number | undefined;
-    if (refreshInterval > 0) {
-      intervalId = window.setInterval(fetchStats, refreshInterval);
-    }
+    // Set up a refresh interval
+    const interval = setInterval(fetchStats, 60000); // Refresh every minute
     
-    // Clean up interval on unmount
-    return () => {
-      if (intervalId !== undefined) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [refreshInterval]);
+    return () => clearInterval(interval);
+  }, []);
 
-  return {
-    stats,
-    isLoading,
-    error,
-    refetch: fetchStats
+  const refetch = async () => {
+    await fetchStats();
   };
-}
+
+  return { stats, isLoading, error, refetch };
+};

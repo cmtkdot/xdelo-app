@@ -1,172 +1,174 @@
 
-import React, { useState } from 'react';
-import { Button } from "@/components/ui/button";
+import React from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2 } from "lucide-react";
-import { useSystemRepair } from "@/hooks/useSystemRepair";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useProcessingStats } from '@/hooks/useProcessingStats';
+import useProcessingSystemRepair from '@/hooks/useProcessingSystemRepair';
+import { Loader2 } from 'lucide-react';
+import useMediaGroupRepair from '@/hooks/useMediaGroupRepair';
+import useMediaManagement from '@/hooks/useMediaManagement';
+import useMediaRepair from '@/hooks/useMediaRepair';
 
-export function SystemRepairPanel() {
-  const [activeTab, setActiveTab] = useState("quick");
-  const [repairResults, setRepairResults] = useState<any>(null);
-  const {
-    repairFullSystem,
-    performQuickMaintenance,
-    repairMediaGroups,
-    repairStuckMessages,
-    validateStorageFiles,
-    isRepairing
-  } = useSystemRepair();
-
-  const handleQuickMaintenance = async () => {
-    try {
-      const results = await performQuickMaintenance();
-      setRepairResults(results);
-    } catch (error) {
-      console.error("Quick maintenance failed:", error);
-    }
-  };
-
+const SystemRepairPanel = () => {
+  const { stats, isLoading: isLoadingStats } = useProcessingStats();
+  const { isRepairing, repairProcessingSystem, resetStalledProcessing } = useProcessingSystemRepair();
+  const { repairAllMediaGroups, isRepairing: isRepairingMediaGroups } = useMediaGroupRepair();
+  const { validateFilesAndRepair, isValidating } = useMediaManagement();
+  const { repairStuckMessages, isRepairing: isRepairingStuck } = useMediaRepair();
+ 
+  // Handle full system repair (combined operations)
   const handleFullSystemRepair = async () => {
     try {
-      const results = await repairFullSystem();
-      setRepairResults(results);
+      await repairProcessingSystem({ reset_all: true });
+      await repairAllMediaGroups();
+      await repairStuckMessages();
+      await validateFilesAndRepair();
     } catch (error) {
       console.error("Full system repair failed:", error);
     }
   };
 
-  const handleRepairMediaGroups = async () => {
+  // Handle quick maintenance (just stalled processing)
+  const handleQuickMaintenance = async () => {
     try {
-      const results = await repairMediaGroups();
-      setRepairResults(results);
+      await resetStalledProcessing();
     } catch (error) {
-      console.error("Media group repair failed:", error);
+      console.error("Quick maintenance failed:", error);
     }
   };
 
-  const handleRepairStuckMessages = async () => {
-    try {
-      const results = await repairStuckMessages();
-      setRepairResults(results);
-    } catch (error) {
-      console.error("Message repair failed:", error);
-    }
-  };
-
-  const handleValidateStorage = async () => {
-    try {
-      const results = await validateStorageFiles(50, true);
-      setRepairResults(results);
-    } catch (error) {
-      console.error("Storage validation failed:", error);
-    }
-  };
+  const isAnyOperationInProgress = isRepairing || isRepairingMediaGroups || isValidating || isRepairingStuck;
 
   return (
-    <Card className="w-full">
+    <Card>
       <CardHeader>
-        <CardTitle>System Maintenance</CardTitle>
+        <CardTitle>System Repair</CardTitle>
         <CardDescription>
-          Repair and maintain the Telegram message processing system
+          Repair and maintain the message processing system
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="quick" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="quick">Quick Fixes</TabsTrigger>
-            <TabsTrigger value="advanced">Advanced</TabsTrigger>
-            <TabsTrigger value="results">Results</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="quick" className="space-y-4 pt-4">
-            <Alert>
-              <AlertDescription>
-                Quick fixes address common issues without disrupting the system.
-              </AlertDescription>
-            </Alert>
-            
-            <div className="grid grid-cols-2 gap-4 mt-4">
+      <CardContent className="space-y-4">
+        {/* Stats Section */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          <div className="bg-muted p-2 rounded-md text-center">
+            <div className="text-2xl font-bold">{isLoadingStats ? '...' : stats.pending}</div>
+            <div className="text-xs">Pending</div>
+          </div>
+          <div className="bg-muted p-2 rounded-md text-center">
+            <div className="text-2xl font-bold">{isLoadingStats ? '...' : stats.processing}</div>
+            <div className="text-xs">Processing</div>
+          </div>
+          <div className="bg-muted p-2 rounded-md text-center">
+            <div className="text-2xl font-bold">{isLoadingStats ? '...' : stats.completed}</div>
+            <div className="text-xs">Completed</div>
+          </div>
+          <div className="bg-muted p-2 rounded-md text-center">
+            <div className="text-2xl font-bold">{isLoadingStats ? '...' : stats.error}</div>
+            <div className="text-xs">Errors</div>
+          </div>
+          <div className="bg-muted p-2 rounded-md text-center">
+            <div className="text-2xl font-bold">{isLoadingStats ? '...' : stats.stalled_processing}</div>
+            <div className="text-xs">Stalled</div>
+          </div>
+        </div>
+
+        {/* Stalled Messages Alert */}
+        {(stats.stalled_processing > 0 || stats.stalled_pending > 0) && (
+          <Alert variant="warning" className="bg-orange-50 border-orange-300">
+            <AlertTitle>Stalled Messages Detected</AlertTitle>
+            <AlertDescription>
+              {stats.stalled_processing > 0 && (
+                <div>{stats.stalled_processing} messages stuck in "processing" state.</div>
+              )}
+              {stats.stalled_pending > 0 && (
+                <div>{stats.stalled_pending} messages stuck in "pending" state.</div>
+              )}
               <Button 
                 onClick={handleQuickMaintenance} 
-                disabled={isRepairing}
-                className="w-full"
-              >
-                {isRepairing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Quick Maintenance
-              </Button>
-              
-              <Button 
-                onClick={handleRepairStuckMessages} 
-                disabled={isRepairing}
+                size="sm" 
+                className="mt-2"
                 variant="outline"
-                className="w-full"
+                disabled={isAnyOperationInProgress}
               >
-                {isRepairing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Fix Stuck Messages
+                {isRepairing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Resetting...
+                  </>
+                ) : (
+                  "Quick Fix"
+                )}
               </Button>
-              
-              <Button 
-                onClick={handleRepairMediaGroups} 
-                disabled={isRepairing}
-                variant="outline"
-                className="w-full"
-              >
-                {isRepairing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Fix Media Groups
-              </Button>
-              
-              <Button 
-                onClick={handleValidateStorage} 
-                disabled={isRepairing}
-                variant="outline"
-                className="w-full"
-              >
-                {isRepairing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Validate Storage
-              </Button>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="advanced" className="space-y-4 pt-4">
-            <Alert>
-              <AlertDescription>
-                Advanced repairs perform deep system maintenance. Use these options if quick fixes don't resolve issues.
-              </AlertDescription>
-            </Alert>
-            
-            <div className="grid grid-cols-1 gap-4 mt-4">
-              <Button 
-                onClick={handleFullSystemRepair} 
-                disabled={isRepairing}
-                className="w-full"
-                variant="destructive"
-              >
-                {isRepairing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Full System Repair
-              </Button>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="results" className="pt-4">
-            {repairResults ? (
-              <pre className="bg-muted p-4 rounded-md overflow-auto max-h-64 text-xs">
-                {JSON.stringify(repairResults, null, 2)}
-              </pre>
-            ) : (
-              <div className="text-center text-muted-foreground p-4">
-                No repair results to display
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+            </AlertDescription>
+          </Alert>
+        )}
       </CardContent>
-      <CardFooter className="flex justify-between">
-        <div className="text-sm text-muted-foreground">
-          {isRepairing ? 'System repair in progress...' : 'Ready'}
+      <CardFooter className="flex flex-col space-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+          <Button 
+            onClick={handleFullSystemRepair} 
+            disabled={isAnyOperationInProgress}
+          >
+            {isAnyOperationInProgress ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Running...
+              </>
+            ) : (
+              "Full System Repair"
+            )}
+          </Button>
+          <Button
+            onClick={() => repairProcessingSystem()}
+            variant="outline"
+            disabled={isAnyOperationInProgress}
+          >
+            {isRepairing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Repairing...
+              </>
+            ) : (
+              "Repair Processing Only"
+            )}
+          </Button>
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+          <Button
+            onClick={repairAllMediaGroups}
+            variant="outline"
+            disabled={isAnyOperationInProgress}
+          >
+            {isRepairingMediaGroups ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Fixing Media Groups...
+              </>
+            ) : (
+              "Repair Media Groups"
+            )}
+          </Button>
+          
+          <Button
+            onClick={validateFilesAndRepair}
+            variant="outline"
+            disabled={isAnyOperationInProgress}
+          >
+            {isValidating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Validating...
+              </>
+            ) : (
+              "Validate Storage Files"
+            )}
+          </Button>
         </div>
       </CardFooter>
     </Card>
   );
-}
+};
+
+export default SystemRepairPanel;
