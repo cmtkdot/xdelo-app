@@ -3,22 +3,19 @@ import { supabaseClient } from '../../_shared/supabase.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { createNonMediaMessage } from '../dbOperations.ts';
+import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
 
 export async function xdelo_logMessageOperation(
   operationType: string,
   correlationId: string,
   metadata: Record<string, unknown>
 ) {
-  try {
-    await supabaseClient.from('unified_audit_logs').insert({
-      event_type: `message_${operationType}`,
-      metadata,
-      correlation_id: correlationId,
-      event_timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error(`Error logging message ${operationType}:`, error);
-  }
+  return await xdelo_logProcessingEvent(
+    `message_${operationType}`,
+    metadata.telegram_message_id?.toString() || 'unknown',
+    correlationId,
+    metadata
+  );
 }
 
 export async function handleOtherMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
@@ -54,12 +51,13 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
       throw new Error(result.error_message || 'Failed to create non-media message');
     }
 
-    // Log success
+    // Log success using standardized logging
     await xdelo_logMessageOperation('created', correlationId, {
       message_type: 'text',
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
-      is_forwarded: isForwarded
+      is_forwarded: isForwarded,
+      entity_id: result.id
     });
 
     console.log(`[${correlationId}] Text message ${message.message_id} processed successfully`);
@@ -71,17 +69,18 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
   } catch (error) {
     console.error(`[${correlationId}] Error handling text message:`, error);
     
-    // Log error
-    await supabaseClient.from('unified_audit_logs').insert({
-      event_type: 'message_processing_failed',
-      error_message: error.message || 'Unknown error in text message handler',
-      metadata: {
+    // Log error using shared logging
+    await xdelo_logProcessingEvent(
+      'message_processing_failed',
+      'unknown',
+      correlationId,
+      {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         handler_type: 'text_message'
       },
-      correlation_id: correlationId
-    });
+      error.message || 'Unknown error in text message handler'
+    );
     
     return new Response(
       JSON.stringify({ error: error.message, correlationId }),
@@ -141,6 +140,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
 
       if (error) throw error;
 
+      // Log the edit using standardized logging
       try {
         await xdelo_logMessageOperation(
           'edit',
@@ -149,7 +149,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
             message: `Text message ${message.message_id} edited in chat ${message.chat.id}`,
             telegram_message_id: message.message_id,
             chat_id: message.chat.id,
-            existing_message_id: existingMessage.id,
+            entity_id: existingMessage.id,
             edit_type: 'text_edit'
           }
         );
@@ -167,6 +167,20 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
     return await handleOtherMessage(message, context);
   } catch (error) {
     console.error('Error handling edited message:', error);
+    
+    // Log error using shared logging
+    await xdelo_logProcessingEvent(
+      'message_processing_failed',
+      'unknown',
+      context.correlationId,
+      {
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        handler_type: 'edited_message'
+      },
+      error.message || 'Unknown error in edited message handler'
+    );
+    
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }

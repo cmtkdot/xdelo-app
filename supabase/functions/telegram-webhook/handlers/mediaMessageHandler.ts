@@ -1,7 +1,18 @@
+
 import { supabaseClient } from '../../_shared/supabase.ts';
-import { getMediaInfo } from '../utils/mediaUtils.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { xdelo_analyzeMessageCaption } from '../../_shared/databaseOperations.ts';
+import { 
+  xdelo_downloadMediaFromTelegram,
+  xdelo_uploadMediaToStorage,
+  xdelo_validateAndFixStoragePath,
+  xdelo_isViewableMimeType,
+  xdelo_detectMimeType
+} from '../../_shared/mediaUtils.ts';
+import {
+  xdelo_findExistingFile,
+  xdelo_processMessageMedia
+} from '../../_shared/mediaStorage.ts';
 import { 
   TelegramMessage, 
   MessageContext, 
@@ -10,19 +21,29 @@ import {
 } from '../types.ts';
 import { createMessage, checkDuplicateFile } from '../dbOperations.ts';
 
+// Get Telegram bot token from environment
+const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
+if (!TELEGRAM_BOT_TOKEN) {
+  console.error('Missing TELEGRAM_BOT_TOKEN environment variable');
+}
+
+/**
+ * Main handler for media messages from Telegram
+ */
 export async function handleMediaMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
     const { correlationId, isEdit, previousMessage } = context;
-    const mediaInfo = await getMediaInfo(message);
     
-    // Check if this is an edited message
+    // Log the start of processing
+    console.log(`[${correlationId}] Processing ${isEdit ? 'edited' : 'new'} media message ${message.message_id} in chat ${message.chat.id}`);
+    
+    // Determine if this is an edited message or a new message
     if (isEdit && previousMessage) {
-      return await handleEditedMediaMessage(message, context, mediaInfo, previousMessage);
+      return await xdelo_handleEditedMediaMessage(message, context, previousMessage);
     }
 
-    // Handle new message by checking for duplicates first
-    return await handleNewMediaMessage(message, context, mediaInfo);
-
+    // Handle new message
+    return await xdelo_handleNewMediaMessage(message, context);
   } catch (error) {
     console.error(`[${context.correlationId}] Error handling media message:`, error);
     
@@ -54,10 +75,12 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
   }
 }
 
-async function handleEditedMediaMessage(
+/**
+ * Handle edited media messages
+ */
+async function xdelo_handleEditedMediaMessage(
   message: TelegramMessage, 
-  context: MessageContext, 
-  mediaInfo: any, 
+  context: MessageContext,
   previousMessage: TelegramMessage
 ): Promise<Response> {
   const { correlationId } = context;
@@ -81,125 +104,102 @@ async function handleEditedMediaMessage(
       previous_analyzed_content: existingMessage.analyzed_content
     });
     
+    // Extract the media from the message (photo, video, or document)
+    const mediaContent = message.photo ? 
+      message.photo[message.photo.length - 1] : 
+      message.video || message.document;
+    
     // Check if caption changed
     const captionChanged = message.caption !== existingMessage.caption;
+    // Check if media changed
+    const mediaChanged = mediaContent && 
+                         mediaContent.file_unique_id !== existingMessage.file_unique_id;
     
-    // Update the message with new caption and edit history
+    // If media changed, we need to process the new media
+    let mediaInfo = null;
+    if (mediaChanged && TELEGRAM_BOT_TOKEN) {
+      console.log(`[${correlationId}] Media changed in edited message ${message.message_id}, processing new media`);
+      
+      // Use our shared utility to process the media
+      const processResult = await xdelo_processMessageMedia(
+        supabaseClient,
+        message,
+        mediaContent.file_id,
+        mediaContent.file_unique_id,
+        TELEGRAM_BOT_TOKEN,
+        existingMessage.id
+      );
+      
+      if (!processResult.success) {
+        throw new Error(`Failed to process edited media: ${processResult.error}`);
+      }
+      
+      mediaInfo = processResult.fileInfo;
+    }
+    
+    // Prepare update data
+    const updateData: Record<string, any> = {
+      caption: message.caption,
+      telegram_data: message,
+      edit_date: new Date(message.edit_date * 1000).toISOString(),
+      edit_history: editHistory,
+      edit_count: (existingMessage.edit_count || 0) + 1,
+      is_edited: true,
+      correlation_id: correlationId,
+      updated_at: new Date().toISOString(),
+      // Reset processing state if caption changed
+      processing_state: captionChanged ? 'pending' : existingMessage.processing_state,
+      // Reset analyzed content if caption changed
+      analyzed_content: captionChanged ? null : existingMessage.analyzed_content,
+      // Mark as needing group sync if caption changed and part of a group
+      group_caption_synced: captionChanged && message.media_group_id ? false : existingMessage.group_caption_synced,
+      // Set is_original_caption to false if caption was removed
+      is_original_caption: captionChanged && !message.caption ? false : existingMessage.is_original_caption
+    };
+    
+    // If media changed, update media-related fields
+    if (mediaChanged && mediaInfo) {
+      Object.assign(updateData, {
+        file_id: mediaInfo.file_id,
+        file_unique_id: mediaInfo.file_unique_id,
+        mime_type: mediaInfo.mime_type,
+        mime_type_original: mediaInfo.mime_type_original,
+        storage_path: mediaInfo.storage_path,
+        width: mediaInfo.width,
+        height: mediaInfo.height,
+        duration: mediaInfo.duration,
+        file_size: mediaInfo.file_size,
+        storage_exists: true,
+        storage_path_standardized: true,
+        needs_redownload: false
+      });
+    }
+    
+    // Update the message
     const { error: updateError } = await supabaseClient
       .from('messages')
-      .update({
-        caption: message.caption,
-        telegram_data: message,
-        edit_date: new Date(message.edit_date * 1000).toISOString(),
-        edit_history: editHistory,
-        edit_count: (existingMessage.edit_count || 0) + 1,
-        is_edited: true,
-        correlation_id: correlationId,
-        updated_at: new Date().toISOString(),
-        // Reset processing state if caption changed
-        processing_state: captionChanged ? 'pending' : existingMessage.processing_state,
-        // Reset analyzed content if caption changed
-        analyzed_content: captionChanged ? null : existingMessage.analyzed_content,
-        // Mark as needing group sync if caption changed and part of a group
-        group_caption_synced: captionChanged && message.media_group_id ? false : existingMessage.group_caption_synced,
-        // Set is_original_caption to false if caption was removed
-        is_original_caption: captionChanged && !message.caption ? false : existingMessage.is_original_caption
-      })
+      .update(updateData)
       .eq('id', existingMessage.id);
 
     if (updateError) throw updateError;
 
-    // If caption changed and has content, directly trigger caption analysis
+    // If caption changed and has content, trigger caption analysis
     if (captionChanged && message.caption) {
-      try {
-        console.log(`Caption changed, directly triggering analysis for message ${existingMessage.id}`);
-        
-        // Directly call the parse-caption-with-ai edge function for immediate processing
-        const analyzeResponse = await supabaseClient.functions.invoke('parse-caption-with-ai', {
-          body: {
-            messageId: existingMessage.id,
-            caption: message.caption,
-            media_group_id: message.media_group_id,
-            correlationId: correlationId,
-            isEdit: true
-          }
-        });
-        
-        if (!analyzeResponse.error) {
-          console.log('Direct caption analysis successful');
-        } else {
-          console.error('Direct caption analysis failed:', analyzeResponse.error);
-          
-          // Fallback: queue for processing
-          const { error: queueError } = await supabaseClient.rpc(
-            'xdelo_queue_message_for_processing',
-            {
-              p_message_id: existingMessage.id,
-              p_correlation_id: correlationId,
-              p_priority: 10 // Higher priority for edits
-            }
-          );
-          
-          if (queueError) {
-            console.error('Failed to queue edited message for processing:', queueError);
-          } else {
-            console.log('Edited message queued for processing with high priority');
-          }
-        }
-      } catch (analysisError) {
-        console.error('Failed to process edited caption:', analysisError);
-        
-        // Still try to queue as fallback
-        try {
-          await supabaseClient.rpc(
-            'xdelo_queue_message_for_processing',
-            {
-              p_message_id: existingMessage.id,
-              p_correlation_id: correlationId,
-              p_priority: 10
-            }
-          );
-        } catch (queueError) {
-          console.error('Failed to queue edited message for processing:', queueError);
-        }
-      }
+      await xdelo_processCaptionChanges(
+        existingMessage.id,
+        message.caption,
+        message.media_group_id,
+        correlationId,
+        true // isEdit
+      );
     } 
     // If caption was removed, check if this is part of a media group and needs syncing
     else if (captionChanged && !message.caption && message.media_group_id) {
-      try {
-        console.log(`Caption removed, checking for media group sync from group ${message.media_group_id}`);
-        
-        // Look for another message in the group with a caption
-        const { data: groupMessages } = await supabaseClient
-          .from('messages')
-          .select('id, caption, analyzed_content, is_original_caption')
-          .eq('media_group_id', message.media_group_id)
-          .neq('id', existingMessage.id)
-          .order('created_at', { ascending: true });
-        
-        if (groupMessages && groupMessages.length > 0) {
-          // Find a message with caption and analyzed_content
-          const captionMessage = groupMessages.find(m => m.caption && m.analyzed_content);
-          
-          if (captionMessage) {
-            console.log(`Found another message with caption in group: ${captionMessage.id}`);
-            
-            // Update the group relationships
-            await supabaseClient.rpc(
-              'xdelo_sync_media_group_content',
-              {
-                p_source_message_id: captionMessage.id,
-                p_media_group_id: message.media_group_id,
-                p_correlation_id: correlationId
-              }
-            );
-          } else {
-            console.log('No other message with caption found in the group');
-          }
-        }
-      } catch (syncError) {
-        console.error('Failed to sync from media group after caption removal:', syncError);
-      }
+      await xdelo_handleRemovedCaption(
+        existingMessage.id,
+        message.media_group_id,
+        correlationId
+      );
     }
 
     // Log the edit event
@@ -210,9 +210,9 @@ async function handleEditedMediaMessage(
         metadata: {
           message_id: message.message_id,
           chat_id: message.chat.id,
-          file_unique_id: mediaInfo.file_unique_id,
+          file_unique_id: mediaChanged && mediaInfo ? mediaInfo.file_unique_id : existingMessage.file_unique_id,
           existing_message_id: existingMessage.id,
-          edit_type: captionChanged ? 'caption_changed' : 'other_edit',
+          edit_type: mediaChanged ? 'media_changed' : (captionChanged ? 'caption_changed' : 'other_edit'),
           media_group_id: message.media_group_id
         },
         correlation_id: context.correlationId
@@ -228,22 +228,37 @@ async function handleEditedMediaMessage(
   }
   
   // If existing message not found, handle as new message
-  return await handleNewMediaMessage(message, context, mediaInfo);
+  return await xdelo_handleNewMediaMessage(message, context);
 }
 
-async function handleNewMediaMessage(
+/**
+ * Handle new media messages
+ */
+async function xdelo_handleNewMediaMessage(
   message: TelegramMessage, 
-  context: MessageContext, 
-  mediaInfo: any
+  context: MessageContext
 ): Promise<Response> {
   const { correlationId } = context;
+  
+  if (!TELEGRAM_BOT_TOKEN) {
+    throw new Error('Missing TELEGRAM_BOT_TOKEN, cannot process media');
+  }
 
-  // IMPORTANT: Check for duplicate message by file_unique_id before creating new record
-  const existingMedia = await checkDuplicateFile(supabaseClient, mediaInfo.file_unique_id);
+  // Extract the media from the message (photo, video, or document)
+  const mediaContent = message.photo ? 
+    message.photo[message.photo.length - 1] : 
+    message.video || message.document;
+    
+  if (!mediaContent) {
+    throw new Error('No media content found in message');
+  }
+
+  // Check for duplicate message by file_unique_id
+  const existingMedia = await checkDuplicateFile(supabaseClient, mediaContent.file_unique_id);
 
   // If file already exists, update instead of creating new record
   if (existingMedia) {
-    console.log(`[${correlationId}] Duplicate message detected with file_unique_id ${mediaInfo.file_unique_id}, updating existing record`);
+    console.log(`[${correlationId}] Duplicate message detected with file_unique_id ${mediaContent.file_unique_id}, updating existing record`);
     
     // Check if caption changed
     const captionChanged = message.caption !== existingMedia.caption;
@@ -260,9 +275,8 @@ async function handleNewMediaMessage(
         telegram_data: message,
         correlation_id: correlationId,
         media_group_id: message.media_group_id,
-        // Preserve existing storage path and public URL
+        // Preserve existing storage path
         storage_path: existingMedia.storage_path,
-        public_url: existingMedia.public_url,
         // Reset processing if caption changed
         processing_state: captionChanged ? 'pending' : existingMedia.processing_state,
         analyzed_content: captionChanged ? null : existingMedia.analyzed_content,
@@ -286,20 +300,48 @@ async function handleNewMediaMessage(
       metadata: {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
-        file_unique_id: mediaInfo.file_unique_id,
+        file_unique_id: mediaContent.file_unique_id,
         media_group_id: message.media_group_id,
         update_type: 'duplicate_update'
       },
       correlation_id: correlationId
     });
 
-    // Process the updated message for caption analysis or media group syncing
-    await processMessage(message, existingMedia, context);
+    // Process caption if it changed
+    if (captionChanged && message.caption) {
+      await xdelo_processCaptionChanges(
+        existingMedia.id,
+        message.caption,
+        message.media_group_id,
+        correlationId,
+        false // Not an edit
+      );
+    } else if (message.media_group_id) {
+      // Check if we need to sync with media group
+      await xdelo_checkMediaGroupSync(
+        existingMedia.id,
+        message.media_group_id,
+        correlationId
+      );
+    }
 
     return new Response(
       JSON.stringify({ success: true, duplicate: true, correlationId }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+  }
+
+  // Process media for new message
+  const processResult = await xdelo_processMessageMedia(
+    supabaseClient,
+    message,
+    mediaContent.file_id,
+    mediaContent.file_unique_id,
+    TELEGRAM_BOT_TOKEN
+  );
+
+  if (!processResult.success) {
+    throw new Error(`Failed to process media: ${processResult.error}`);
   }
 
   // Prepare forward info if message is forwarded
@@ -316,7 +358,7 @@ async function handleNewMediaMessage(
     original_message_id: message.forward_origin.message_id
   } : undefined;
 
-  // Create message input
+  // Create message input using the processed media info
   const messageInput: MessageInput = {
     telegram_message_id: message.message_id,
     chat_id: message.chat.id,
@@ -324,7 +366,15 @@ async function handleNewMediaMessage(
     chat_title: message.chat.title,
     caption: message.caption,
     media_group_id: message.media_group_id,
-    ...mediaInfo,
+    file_id: processResult.fileInfo.file_id,
+    file_unique_id: processResult.fileInfo.file_unique_id,
+    mime_type: processResult.fileInfo.mime_type,
+    mime_type_original: processResult.fileInfo.mime_type_original,
+    storage_path: processResult.fileInfo.storage_path,
+    width: processResult.fileInfo.width,
+    height: processResult.fileInfo.height,
+    duration: processResult.fileInfo.duration,
+    file_size: processResult.fileInfo.file_size,
     correlation_id: context.correlationId,
     processing_state: message.caption ? 'pending' : 'initialized',
     is_edited_channel_post: context.isChannelPost,
@@ -336,13 +386,16 @@ async function handleNewMediaMessage(
       timestamp: new Date().toISOString(),
       is_initial_edit: true,
       edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
-    }] : []
+    }] : [],
+    storage_exists: !processResult.isDuplicate, // Only true for new uploads
+    storage_path_standardized: true, // We're using our standardized paths
+    is_duplicate: processResult.isDuplicate
   };
 
-  // Use the createMessage function from dbOperations.ts
+  // Create the message record
   const logger = {
-    error: (message: string, error: unknown) => console.error(`[${correlationId}] ${message}`, error),
-    info: (message: string, data?: unknown) => console.log(`[${correlationId}] ${message}`, data)
+    error: (msg: string, error: unknown) => console.error(`[${correlationId}] ${msg}`, error),
+    info: (msg: string, data?: unknown) => console.log(`[${correlationId}] ${msg}`, data)
   };
   
   const result = await createMessage(supabaseClient, messageInput, logger);
@@ -360,7 +413,7 @@ async function handleNewMediaMessage(
       metadata: {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
-        file_unique_id: mediaInfo.file_unique_id,
+        file_unique_id: processResult.fileInfo.file_unique_id,
         media_group_id: message.media_group_id,
         is_forwarded: !!messageInput.forward_info
       },
@@ -370,229 +423,168 @@ async function handleNewMediaMessage(
     console.error(`[${correlationId}] Error logging message creation:`, logError);
   }
 
-  // Process the new message based on caption presence
-  await processMessage(message, { id: result.id }, context);
+  // Process caption or check media group sync
+  if (message.caption) {
+    await xdelo_processCaptionChanges(
+      result.id,
+      message.caption,
+      message.media_group_id,
+      correlationId,
+      false // Not an edit
+    );
+  } else if (message.media_group_id) {
+    // Check if we need to sync with media group
+    await xdelo_checkMediaGroupSync(
+      result.id,
+      message.media_group_id,
+      correlationId
+    );
+  }
 
   return new Response(
-    JSON.stringify({ success: true, correlationId }),
+    JSON.stringify({ success: true, id: result.id, correlationId }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
 }
 
-async function processMessage(
-  message: TelegramMessage, 
-  dbMessage: { id: string }, 
-  context: MessageContext
+/**
+ * Process caption changes
+ */
+async function xdelo_processCaptionChanges(
+  messageId: string,
+  caption: string,
+  mediaGroupId: string | undefined,
+  correlationId: string,
+  isEdit: boolean
 ): Promise<void> {
-  // Handle media group message with no caption - try to sync content from group
-  if (!message.caption && message.media_group_id && dbMessage) {
-    console.log(`Message ${dbMessage.id} has no caption but is part of media group ${message.media_group_id}, checking for analyzed content in group`);
+  console.log(`[${correlationId}] Processing caption for message ${messageId}`);
+  
+  try {
+    // First try direct caption processor with manual-caption-parser
+    const captionProcessorUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/manual-caption-parser`;
+    const processorResponse = await fetch(captionProcessorUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        'x-client-info': 'telegram-webhook'
+      },
+      body: JSON.stringify({
+        messageId: messageId,
+        caption: caption,
+        mediaGroupId: mediaGroupId,
+        correlationId: correlationId,
+        triggerSource: 'webhook_handler',
+        forceReprocess: isEdit // Force reprocess for edits
+      })
+    });
     
+    if (!processorResponse.ok) {
+      // Read the error message and status for better diagnostics
+      const errorText = await processorResponse.text();
+      throw new Error(`Manual parser error: ${processorResponse.status} ${processorResponse.statusText} - ${errorText}`);
+    }
+    
+    const processorResult = await processorResponse.json();
+    console.log(`[${correlationId}] Manual caption processing successful:`, processorResult);
+  } catch (directError) {
+    console.error(`[${correlationId}] Manual caption processor failed, falling back to database function:`, directError);
+    
+    // Fallback: Call the database function
     try {
-      // Use the proper function to check and sync with media group
-      const { data: syncResult, error: syncError } = await supabaseClient.rpc(
-        'xdelo_check_media_group_content',
-        {
-          p_media_group_id: message.media_group_id,
-          p_message_id: dbMessage.id,
-          p_correlation_id: context.correlationId
-        }
+      const captionResult = await xdelo_analyzeMessageCaption(
+        messageId,
+        correlationId,
+        caption,
+        mediaGroupId,
+        isEdit // Force reprocess for edits
       );
       
-      if (syncError) {
-        console.error('Error checking media group content:', syncError);
-        
-        // Fallback: Try to sync directly from the database
-        await syncFromMediaGroupDirect(message.media_group_id, dbMessage.id, context.correlationId);
-      } else if (syncResult && syncResult.success) {
-        console.log(`Successfully synced content from media group ${message.media_group_id} to message ${dbMessage.id}`);
-      } else if (syncResult) {
-        console.log(`No content to sync: ${syncResult.reason}`);
-        
-        // If no content to sync, set a delayed re-check
-        console.log(`Scheduling a delayed re-check for media group ${message.media_group_id} after 10 seconds`);
-        setTimeout(async () => {
-          try {
-            console.log(`Performing delayed re-check for message ${dbMessage.id} in group ${message.media_group_id}`);
-            await supabaseClient.rpc(
-              'xdelo_check_media_group_content',
-              {
-                p_media_group_id: message.media_group_id,
-                p_message_id: dbMessage.id,
-                p_correlation_id: context.correlationId
-              }
-            );
-          } catch (delayedError) {
-            console.error('Delayed media group check failed:', delayedError);
-          }
-        }, 10000);
+      if (!captionResult.success) {
+        console.error(`[${correlationId}] Database caption processing failed:`, captionResult.error);
       }
-    } catch (syncError) {
-      console.error('Failed to sync with media group:', syncError);
-    }
-  }
-  // If message has caption, process it immediately
-  else if (message.caption && dbMessage) {
-    console.log(`Message ${dbMessage.id} has caption, calling manual caption parser`);
-    
-    try {
-      // First try direct caption processor with our fixed manual-caption-parser
-      const captionProcessorUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/manual-caption-parser`;
-      const processorResponse = await fetch(captionProcessorUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-          'x-client-info': 'telegram-webhook'
-        },
-        body: JSON.stringify({
-          messageId: dbMessage.id,
-          caption: message.caption,
-          mediaGroupId: message.media_group_id,
-          correlationId: context.correlationId,
-          triggerSource: 'webhook_handler',
-          forceReprocess: true
-        })
-      });
-      
-      if (!processorResponse.ok) {
-        // Read the error message and status for better diagnostics
-        const errorText = await processorResponse.text();
-        throw new Error(`Manual parser error: ${processorResponse.status} ${processorResponse.statusText} - ${errorText}`);
-      }
-      
-      const processorResult = await processorResponse.json();
-      console.log('Manual caption processing successful:', processorResult);
-      
-      return; // Success - we're done!
-    } catch (directError) {
-      console.error('Manual caption processor failed, falling back to database function:', directError);
-      
-      // Fallback: Call the database function using our wrapper with correct parameters
-      try {
-        const captionResult = await xdelo_analyzeMessageCaption(
-          dbMessage.id,
-          context.correlationId,
-          message.caption,
-          message.media_group_id,
-          true // Force reprocess
-        );
-        
-        if (!captionResult.success) {
-          console.error('Database caption processing failed:', captionResult.error);
-        } else {
-          console.log('Database caption processing successful:', captionResult.data);
-        }
-      } catch (dbError) {
-        console.error('All caption processing attempts failed:', dbError);
-        
-        // Last resort: Try to parse directly
-        try {
-          console.log('Attempting direct caption parsing and database update');
-          
-          // Import parseCaption function dynamically
-          const { parseCaption } = await import('../../manual-caption-parser/captionParser.ts');
-          const parsedContent = parseCaption(message.caption);
-          
-          // Update the message directly
-          const { error: updateError } = await supabaseClient
-            .from('messages')
-            .update({
-              analyzed_content: parsedContent,
-              processing_state: 'completed',
-              processing_completed_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', dbMessage.id);
-            
-          if (updateError) {
-            console.error('Final fallback parsing failed:', updateError);
-          } else {
-            console.log('Final fallback parsing succeeded');
-          }
-        } catch (finalError) {
-          console.error('All caption processing methods failed:', finalError);
-        }
-      }
+    } catch (dbError) {
+      console.error(`[${correlationId}] All caption processing attempts failed:`, dbError);
     }
   }
 }
 
-async function syncFromMediaGroupDirect(
+/**
+ * Handle removed caption in a media group
+ */
+async function xdelo_handleRemovedCaption(
+  messageId: string,
   mediaGroupId: string,
-  targetMessageId: string,
   correlationId: string
-): Promise<boolean> {
+): Promise<void> {
   try {
-    console.log(`Direct sync check for message ${targetMessageId} in group ${mediaGroupId}`);
+    console.log(`[${correlationId}] Caption removed, checking for media group sync from group ${mediaGroupId}`);
     
-    // Find any message in the group with analyzed_content
-    const { data: groupMessages } = await supabaseClient
-      .from('messages')
-      .select('id, analyzed_content, is_original_caption')
-      .eq('media_group_id', mediaGroupId)
-      .neq('id', targetMessageId)
-      .order('created_at', { ascending: true });
+    // Use the RPC function to check and sync with media group
+    const { error: syncError } = await supabaseClient.rpc(
+      'xdelo_check_media_group_content',
+      {
+        p_media_group_id: mediaGroupId,
+        p_message_id: messageId,
+        p_correlation_id: correlationId
+      }
+    );
     
-    if (!groupMessages || groupMessages.length === 0) {
-      console.log(`No other messages found in group ${mediaGroupId}`);
-      return false;
+    if (syncError) {
+      console.error(`[${correlationId}] Error checking media group content:`, syncError);
     }
-    
-    // Look for a message with analyzed_content
-    const sourceMessage = groupMessages.find(m => m.analyzed_content && m.is_original_caption);
-    
-    // If no message with is_original_caption, try any with analyzed_content
-    const fallbackSource = !sourceMessage ? 
-      groupMessages.find(m => m.analyzed_content) : null;
-      
-    if (!sourceMessage && !fallbackSource) {
-      console.log(`No messages with analyzed_content found in group ${mediaGroupId}`);
-      return false;
-    }
-    
-    const source = sourceMessage || fallbackSource;
-    
-    // Update the target message with the analyzed_content from the source
-    const { error: updateError } = await supabaseClient
-      .from('messages')
-      .update({
-        analyzed_content: source.analyzed_content,
-        message_caption_id: source.id,
-        is_original_caption: false,
-        group_caption_synced: true,
-        processing_state: 'completed',
-        processing_completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', targetMessageId);
-    
-    if (updateError) {
-      console.error(`Error updating message ${targetMessageId} with group content:`, updateError);
-      return false;
-    }
-    
-    // Log the sync operation
-    try {
-      await supabaseClient.from('unified_audit_logs').insert({
-        event_type: 'media_group_content_synced_direct',
-        entity_id: targetMessageId,
-        metadata: {
-          media_group_id: mediaGroupId,
-          source_message_id: source.id,
-          correlation_id: correlationId
-        },
-        event_timestamp: new Date().toISOString()
-      });
-    } catch (logError) {
-      console.error('Error logging direct media group sync:', logError);
-    }
-    
-    console.log(`Successfully synced content from message ${source.id} to message ${targetMessageId}`);
-    return true;
   } catch (error) {
-    console.error('Error in syncFromMediaGroupDirect:', error);
-    return false;
+    console.error(`[${correlationId}] Failed to sync with media group after caption removal:`, error);
   }
 }
 
+/**
+ * Check if we need to sync with media group
+ */
+async function xdelo_checkMediaGroupSync(
+  messageId: string,
+  mediaGroupId: string,
+  correlationId: string
+): Promise<void> {
+  try {
+    console.log(`[${correlationId}] Message ${messageId} has no caption but is part of media group ${mediaGroupId}, checking for content`);
+    
+    // Use the RPC function to check and sync with media group
+    const { data: syncResult, error: syncError } = await supabaseClient.rpc(
+      'xdelo_check_media_group_content',
+      {
+        p_media_group_id: mediaGroupId,
+        p_message_id: messageId,
+        p_correlation_id: correlationId
+      }
+    );
+    
+    if (syncError) {
+      console.error(`[${correlationId}] Error checking media group content:`, syncError);
+    } else if (syncResult && syncResult.success) {
+      console.log(`[${correlationId}] Successfully synced content from media group ${mediaGroupId} to message ${messageId}`);
+    } else if (syncResult && !syncResult.success) {
+      console.log(`[${correlationId}] No content to sync: ${syncResult.reason}`);
+      
+      // If no content to sync, set a delayed re-check
+      console.log(`[${correlationId}] Scheduling a delayed re-check for media group ${mediaGroupId} after 10 seconds`);
+      setTimeout(async () => {
+        try {
+          console.log(`[${correlationId}] Performing delayed re-check for message ${messageId} in group ${mediaGroupId}`);
+          await supabaseClient.rpc(
+            'xdelo_check_media_group_content',
+            {
+              p_media_group_id: mediaGroupId,
+              p_message_id: messageId,
+              p_correlation_id: correlationId
+            }
+          );
+        } catch (delayedError) {
+          console.error(`[${correlationId}] Delayed media group check failed:`, delayedError);
+        }
+      }, 10000); // 10 second delay
+    }
+  } catch (error) {
+    console.error(`[${correlationId}] Failed to check media group sync:`, error);
+  }
+}

@@ -5,6 +5,7 @@ import { handleOtherMessage, handleEditedMessage } from './handlers/textMessageH
 import { corsHeaders } from '../_shared/cors.ts';
 import { withErrorHandling, SecurityLevel } from '../_shared/errorHandler.ts';
 import { createClient } from '@supabase/supabase-js';
+import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
 
 // Main handler function wrapped with error handling
 serve(withErrorHandling(
@@ -23,15 +24,16 @@ serve(withErrorHandling(
         }
       );
 
-      // Log webhook received event
-      await supabaseClient.from("unified_audit_logs").insert({
-        event_type: "webhook_received",
-        metadata: {
+      // Log webhook received event using shared utility
+      await xdelo_logProcessingEvent(
+        "webhook_received",
+        "system",
+        correlationId,
+        {
           source: "telegram-webhook",
           timestamp: new Date().toISOString()
-        },
-        correlation_id: correlationId
-      });
+        }
+      );
 
       // Parse the update from Telegram
       let update;
@@ -101,20 +103,21 @@ serve(withErrorHandling(
       } catch (handlerError) {
         console.error(`[${correlationId}] Error in message handler:`, handlerError);
         
-        // Log the error to the database
-        await supabaseClient.from("unified_audit_logs").insert({
-          event_type: "message_processing_failed",
-          error_message: handlerError.message || "Unknown handler error",
-          metadata: {
+        // Log the error to the database using the shared utility
+        await xdelo_logProcessingEvent(
+          "message_processing_failed",
+          message.message_id.toString(),
+          correlationId,
+          {
             message_id: message.message_id,
             chat_id: message.chat?.id,
             is_edit: context.isEdit,
             has_media: !!(message.photo || message.video || message.document),
             handler_type: context.isEdit ? 'edited_message' : 
-                          (message.photo || message.video || message.document) ? 'media_message' : 'other_message'
+                        (message.photo || message.video || message.document) ? 'media_message' : 'other_message'
           },
-          correlation_id: correlationId
-        });
+          handlerError.message || "Unknown handler error"
+        );
         
         // Return error response but with 200 status to acknowledge to Telegram
         // (Telegram will retry if we return non-200 status)
