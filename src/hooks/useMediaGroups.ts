@@ -18,7 +18,7 @@ export const useMediaGroups = () => {
 
       if (error) throw error;
 
-      // Cast the database results to our Message type
+      // Cast the database results to our Message type with unknown as intermediate type
       const typedMessages = (data || []) as unknown as Message[];
       
       // Group messages by media_group_id

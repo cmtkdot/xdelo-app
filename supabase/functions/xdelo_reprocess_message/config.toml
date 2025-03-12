@@ -4,3 +4,4 @@ template = "typescript"
 memory = 1024
 verify_jwt = false
 entrypoint = "/index.ts"
+

@@ -1,16 +1,17 @@
+
 // Import Message from MessagesTypes explicitly 
-import { Message as MessageTypeFromMessages } from "@/types/MessagesTypes";
+import { Message } from "@/types/MessagesTypes";
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { MediaViewer } from '@/components/MediaViewer/MediaViewer';
 import { MediaFixButton } from '@/components/ProductGallery/MediaFixButton';
 
 const PublicGallery = () => {
-  const [messages, setMessages] = useState<MessageTypeFromMessages[]>([]);
-  const [filteredMessages, setFilteredMessages] = useState<MessageTypeFromMessages[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [filteredMessages, setFilteredMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const [selectedMedia, setSelectedMedia] = useState<MessageTypeFromMessages[]>([]);
+  const [selectedMedia, setSelectedMedia] = useState<Message[]>([]);
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -26,8 +27,9 @@ const PublicGallery = () => {
         }
 
         if (data) {
-          setMessages(data as MessageTypeFromMessages[]);
-          setFilteredMessages(data as MessageTypeFromMessages[]);
+          // Use type assertion to convert database response to Message[]
+          setMessages(data as unknown as Message[]);
+          setFilteredMessages(data as unknown as Message[]);
         }
       } finally {
         setIsLoading(false);
@@ -37,7 +39,7 @@ const PublicGallery = () => {
     fetchMessages();
   }, []);
 
-  const handleMediaClick = (message: MessageTypeFromMessages) => {
+  const handleMediaClick = (message: Message) => {
     if (message.media_group_id) {
       const groupMedia = messages.filter(m => m.media_group_id === message.media_group_id);
       setSelectedMedia(groupMedia);
@@ -47,7 +49,7 @@ const PublicGallery = () => {
     setIsViewerOpen(true);
   };
 
-  const renderMedia = (message: MessageTypeFromMessages) => {
+  const renderMedia = (message: Message) => {
     if (!message.public_url) return null;
 
     if (message.mime_type?.startsWith('video/')) {
@@ -87,7 +89,7 @@ const PublicGallery = () => {
           <MediaViewer 
             isOpen={isViewerOpen} 
             onClose={() => setIsViewerOpen(false)} 
-            currentGroup={selectedMedia as MessageTypeFromMessages[]} 
+            currentGroup={selectedMedia} 
           />
 
           <div className="mt-4">

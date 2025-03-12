@@ -31,8 +31,8 @@ export function MessageListContainer() {
       
       await forceSyncMessageGroup(messageId);
       
-      // Fix: Cast the Promise result to void to satisfy TypeScript
-      await refetch().then(() => {
+      // Properly handle the Promise type by using void
+      void refetch().then(() => {
         toast({
           title: "Processing Complete",
           description: "Message has been processed and synchronized.",

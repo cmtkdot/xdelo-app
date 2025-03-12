@@ -31,7 +31,8 @@ export const useTelegramOperations = () => {
           .maybeSingle();
         
         if (captionMessage) {
-          messageToDelete = captionMessage as Message;
+          // Use type assertion to ensure proper type conversion
+          messageToDelete = captionMessage as unknown as Message;
         } else {
           // No caption found in the group, use the original message as fallback
           messageToDelete = message;
@@ -94,7 +95,8 @@ export const useTelegramOperations = () => {
                 .limit(1);
               
               if (alternateMessages && alternateMessages.length > 0) {
-                const alternateMessage = alternateMessages[0] as Message;
+                // Use type assertion to ensure proper type conversion
+                const alternateMessage = alternateMessages[0] as unknown as Message;
                 
                 // Try deleting with this other message
                 const retryResponse = await supabase.functions.invoke('delete-telegram-message', {
