@@ -25,23 +25,22 @@ export interface AnalyzedContent {
 
 export interface Message {
   id: string;
-  chat_id: number;
-  message_id: number;
-  text?: string;
+  telegram_message_id?: number;
+  chat_id?: number;
   caption?: string;
-  telegram_data: any;
+  telegram_data?: any;
   file_id?: string;
   file_unique_id?: string;
   media_group_id?: string;
-  processing_state: ProcessingState;
-  analyzed_content?: any;
+  processing_state?: ProcessingState;
+  analyzed_content?: AnalyzedContent;
   chat_type?: string;
-  is_channel_post?: boolean;
+  chat_title?: string;
   from_user_id?: number;
   processing_started_at?: string;
   processing_completed_at?: string;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
   storage_path?: string;
   public_url?: string;
   mime_type?: string;
@@ -50,6 +49,18 @@ export interface Message {
   needs_redownload?: boolean;
   redownload_attempts?: number;
   storage_exists?: boolean;
+  message_type?: string;
+  is_bot?: boolean;
+  telegram_date?: string;
+  from_id?: number;
+  message_caption_id?: string;
+  is_original_caption?: boolean;
+  group_caption_synced?: boolean;
+  width?: number;
+  height?: number;
+  duration?: number;
+  is_forward?: boolean;
+  correlation_id?: string;
 }
 
 export interface MessageProcessingStats {

@@ -56,6 +56,10 @@ export interface Message {
   is_bot: boolean;
   message_type: string;
   from_id: number;
+  is_duplicate?: boolean;
+  duplicate_reference_id?: string;
+  redownload_attempts?: number;
+  correlation_id?: string;
 }
 
 export interface MessageApiResponse {
