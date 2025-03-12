@@ -1,9 +1,7 @@
-
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { ProcessingState, Message, AnalyzedContent } from "../_shared/types";
 import { MessageInput, ForwardInfo } from "./types";
 
-// Types specific to dbOperations
 interface BaseMessageRecord {
   id: string;
   telegram_message_id: number;
@@ -38,7 +36,6 @@ interface MediaMessage extends BaseMessageRecord {
   caption?: string;
   file_id: string;
   file_unique_id: string;
-  public_url?: string;
   mime_type?: string;
   file_size?: number;
   width?: number;
@@ -106,7 +103,7 @@ export async function createMessage(
     if (messageData.file_unique_id) {
       const { data: existingFile } = await supabase
         .from('messages')
-        .select('id, file_unique_id, storage_path, public_url, telegram_message_id, chat_id')
+        .select('id, file_unique_id, storage_path, telegram_message_id, chat_id')
         .eq('file_unique_id', messageData.file_unique_id)
         .maybeSingle();
 
@@ -138,7 +135,7 @@ export async function createMessage(
       }
     }
 
-    // Prepare message data with consistent format
+    // Prepare message data with consistent format - remove public_url
     const safeMessageData = {
       telegram_message_id: messageData.telegram_message_id,
       chat_id: messageData.chat_id,
@@ -154,7 +151,6 @@ export async function createMessage(
       height: messageData.height,
       duration: messageData.duration,
       storage_path: messageData.storage_path,
-      public_url: messageData.public_url,
       correlation_id: correlationId,
       processing_state: 'pending' as ProcessingState,
       telegram_data: messageData.telegram_data,
@@ -266,6 +262,11 @@ export async function updateMessage(
   logger: LoggerInterface
 ): Promise<MessageResponse> {
   try {
+    // Remove public_url if it's in the update data
+    if ('public_url' in updateData) {
+      delete updateData.public_url;
+    }
+    
     // Log the start of update operation
     logger.info?.('Updating message', {
       chat_id: chatId,

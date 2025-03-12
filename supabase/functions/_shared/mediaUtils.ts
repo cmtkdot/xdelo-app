@@ -218,7 +218,7 @@ export async function xdelo_retryDownload(messageId: string, telegramBotToken: s
     const mimeType = message.mime_type || 'application/octet-stream';
     const storagePath = xdelo_validateAndFixStoragePath(message.file_unique_id, mimeType);
     
-    // Upload to storage
+    // Upload to storage with proper content disposition
     const uploadOptions = xdelo_getUploadOptions(mimeType);
     const { error: uploadError } = await supabase
       .storage
@@ -229,13 +229,12 @@ export async function xdelo_retryDownload(messageId: string, telegramBotToken: s
       throw new Error(`Failed to upload to storage: ${uploadError.message}`);
     }
     
-    // Update the message record
+    // Update the message record - remove public_url field
     const { error: updateError } = await supabase
       .from('messages')
       .update({
         file_id: message.file_id, // May have been updated with an alternate ID
         storage_path: storagePath,
-        public_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${storagePath}`,
         error_message: null,
         error_code: null, 
         needs_redownload: false,
@@ -374,18 +373,18 @@ export async function xdelo_downloadMediaFromTelegram(
   }
 }
 
-// Upload media to Supabase storage with proper options
+// Upload media to Supabase storage with proper options - no more public URL generation
 export async function xdelo_uploadMediaToStorage(
   storagePath: string,
   fileData: Blob,
   mimeType: string
-): Promise<{success: boolean, publicUrl?: string, error?: string}> {
+): Promise<{success: boolean, error?: string}> {
   try {
-    // Get proper upload options
+    // Get proper upload options with content disposition
     const uploadOptions = xdelo_getUploadOptions(mimeType);
     
     // Upload to storage
-    const { data, error: uploadError } = await supabase
+    const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')
       .upload(storagePath, fileData, uploadOptions);
@@ -394,12 +393,8 @@ export async function xdelo_uploadMediaToStorage(
       throw new Error(`Failed to upload media to storage: ${uploadError.message}`);
     }
     
-    // Generate public URL
-    const publicUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${storagePath}`;
-    
     return {
-      success: true,
-      publicUrl
+      success: true
     };
   } catch (error) {
     console.error(`Error uploading media to storage: ${error.message}`);
@@ -462,26 +457,25 @@ export async function xdelo_recoverFileMetadata(messageId: string): Promise<{ su
       };
     }
     
-    // Upload to storage
+    // Upload to storage with proper content disposition
     const upload = await xdelo_uploadMediaToStorage(
       download.storagePath,
       download.blob,
       message.mime_type || 'application/octet-stream'
     );
     
-    if (!upload.success || !upload.publicUrl) {
+    if (!upload.success) {
       return {
         success: false,
         message: upload.error || 'Failed to upload to storage'
       };
     }
     
-    // Update the message with new storage info
+    // Update the message with new storage info - no public_url field
     const { error: updateError } = await supabase
       .from('messages')
       .update({
         storage_path: download.storagePath,
-        public_url: upload.publicUrl,
         storage_exists: true,
         storage_path_standardized: true,
         needs_redownload: false,
@@ -505,7 +499,6 @@ export async function xdelo_recoverFileMetadata(messageId: string): Promise<{ su
       data: {
         messageId,
         storagePath: download.storagePath,
-        publicUrl: upload.publicUrl,
         fileSize: download.blob.size
       }
     };

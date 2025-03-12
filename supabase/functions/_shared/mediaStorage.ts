@@ -115,14 +115,14 @@ export async function xdelo_uploadFileToStorage(
   storagePath: string,
   mimeType: string,
   bucket: string = 'telegram-media'
-): Promise<{ success: boolean; publicUrl?: string; error?: string }> {
+): Promise<{ success: boolean; error?: string }> {
   try {
     // Determine if the file should be viewable in browser
     const isViewable = ['image/', 'video/', 'audio/', 'text/', 'application/pdf'].some(
       prefix => mimeType.startsWith(prefix)
     );
     
-    // Set upload options
+    // Set upload options with proper content disposition
     const uploadOptions = {
       contentType: mimeType,
       upsert: true, // Overwrite if exists
@@ -139,13 +139,7 @@ export async function xdelo_uploadFileToStorage(
       throw new Error(`Storage upload failed: ${error.message}`);
     }
     
-    // Generate public URL
-    const publicUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/${bucket}/${storagePath}`;
-    
-    return {
-      success: true,
-      publicUrl
-    };
+    return { success: true };
   } catch (error) {
     console.error('Upload error:', error);
     return {
@@ -188,7 +182,6 @@ export async function xdelo_processMessageMedia(
             is_duplicate: true,
             duplicate_reference_id: existingMessage.id,
             storage_path: existingMessage.storage_path,
-            public_url: existingMessage.public_url,
             mime_type: existingMessage.mime_type,
             updated_at: new Date().toISOString()
           })
@@ -200,7 +193,6 @@ export async function xdelo_processMessageMedia(
         isDuplicate: true,
         fileInfo: {
           storage_path: existingMessage.storage_path,
-          public_url: existingMessage.public_url,
           mime_type: existingMessage.mime_type,
           file_id: fileId,
           file_unique_id: fileUniqueId,
@@ -245,7 +237,7 @@ export async function xdelo_processMessageMedia(
     const mimeType = xdelo_standardizeMimeType(telegramData);
     const storagePath = xdelo_generateStoragePath(fileUniqueId, mimeType);
     
-    // Step 4: Upload to storage
+    // Step 4: Upload to storage with proper content disposition
     const uploadResult = await xdelo_uploadFileToStorage(
       supabase,
       fileData,
@@ -264,7 +256,6 @@ export async function xdelo_processMessageMedia(
     
     const fileInfo_ = {
       storage_path: storagePath,
-      public_url: uploadResult.publicUrl,
       mime_type: mimeType,
       mime_type_original: telegramData.video?.mime_type || telegramData.document?.mime_type,
       file_id: fileId,
@@ -275,7 +266,7 @@ export async function xdelo_processMessageMedia(
       file_size: media?.file_size
     };
     
-    // Step 6: If messageId provided, update the message
+    // Step 6: If messageId provided, update the message - no public_url field
     if (messageId) {
       await supabase
         .from('messages')

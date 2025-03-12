@@ -139,7 +139,6 @@ interface MediaInfo {
   mime_type_original?: string;
   file_size?: number;
   storage_path?: string;
-  public_url?: string;
   is_duplicate?: boolean;
   storage_exists?: boolean;
   storage_path_standardized?: boolean;
@@ -172,7 +171,7 @@ export const getMediaInfo = async (message: MessageWithMedia): Promise<MediaInfo
   // Check if file already exists in the database
   const { data: existingFiles } = await supabase
     .from('messages')
-    .select('file_unique_id, storage_path, public_url, mime_type, file_size')
+    .select('file_unique_id, storage_path, mime_type, file_size')
     .eq('file_unique_id', media.file_unique_id)
     .eq('deleted_from_telegram', false)
     .limit(1);
@@ -193,7 +192,6 @@ export const getMediaInfo = async (message: MessageWithMedia): Promise<MediaInfo
         mime_type: existingFiles[0].mime_type,
         file_size: existingFiles[0].file_size || media.file_size,
         storage_path: existingFiles[0].storage_path,
-        public_url: existingFiles[0].public_url,
         is_duplicate: true,
         storage_exists: true
       };
@@ -264,9 +262,6 @@ export const getMediaInfo = async (message: MessageWithMedia): Promise<MediaInfo
       throw new Error(`Failed to upload media to storage: ${uploadError.message}`);
     }
 
-    // Generate public URL with correct path
-    const publicUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${fileName}`;
-
     return {
       file_id: media.file_id,
       file_unique_id: media.file_unique_id,
@@ -274,7 +269,6 @@ export const getMediaInfo = async (message: MessageWithMedia): Promise<MediaInfo
       mime_type_original: document?.mime_type || video?.mime_type,
       file_size: media.file_size || fileData.size,
       storage_path: fileName,
-      public_url: publicUrl,
       is_duplicate: false,
       storage_exists: true,
       storage_path_standardized: true
@@ -282,12 +276,11 @@ export const getMediaInfo = async (message: MessageWithMedia): Promise<MediaInfo
   } catch (error) {
     console.error('Error downloading media from Telegram:', error);
     
-    // If download fails, construct a URL based on file_unique_id and mark for redownload
+    // If download fails, construct a basic path based on file_unique_id and mark for redownload
     const mimeType = video?.mime_type || (video ? 'video/mp4' : null) || 
                  document?.mime_type || 'application/octet-stream';
     const extension = mimeType.split('/')[1] === 'jpeg' ? 'jpg' : mimeType.split('/')[1];
     const fileName = `${media.file_unique_id}.${extension}`;
-    const publicUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${fileName}`;
     
     // Log the error but don't throw - we'll return a placeholder and flag for redownload
     return {
@@ -297,7 +290,6 @@ export const getMediaInfo = async (message: MessageWithMedia): Promise<MediaInfo
       mime_type_original: document?.mime_type || video?.mime_type,
       file_size: media.file_size,
       storage_path: fileName,
-      public_url: publicUrl,
       needs_redownload: true,
       redownload_reason: error.message,
       redownload_flagged_at: new Date().toISOString(),
@@ -413,7 +405,7 @@ export const redownloadMissingFile = async (message: MessageRecord): Promise<{su
     const mimeType = message.mime_type || 'application/octet-stream';
     const storagePath = xdelo_validateAndFixStoragePath(message.file_unique_id, mimeType);
     
-    // Upload to storage
+    // Upload to storage with proper content disposition
     const uploadOptions = xdelo_getUploadOptions(mimeType);
     const { error: uploadError } = await supabase
       .storage
@@ -424,13 +416,12 @@ export const redownloadMissingFile = async (message: MessageRecord): Promise<{su
       throw new Error(`Failed to upload to storage: ${uploadError.message}`);
     }
     
-    // Update the message record
+    // Update the message record - note we're not setting public_url
     const { error: updateError } = await supabase
       .from('messages')
       .update({
         file_id: message.file_id, // May have been updated with an alternate ID
         storage_path: storagePath,
-        public_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${storagePath}`,
         error_message: null,
         error_code: null, 
         needs_redownload: false,

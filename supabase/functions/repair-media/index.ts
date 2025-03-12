@@ -128,13 +128,11 @@ async function repairMessages(messageIds, options, correlationId) {
           );
           
           if (!pathError && storagePath !== message.storage_path) {
-            const publicUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${storagePath}`;
-            
+            // Update with new storage path - no public_url field
             await supabase
               .from('messages')
               .update({
-                storage_path: storagePath,
-                public_url: publicUrl
+                storage_path: storagePath
               })
               .eq('id', messageId);
               
@@ -223,7 +221,8 @@ async function repairMessages(messageIds, options, correlationId) {
   }
 }
 
-// Fix content disposition for specified messages
+// Fix content disposition for specified messages - this functions specifically targets
+// ensuring the right content disposition setting for browser viewing
 async function fixContentDisposition(messageIds, correlationId) {
   try {
     let query = supabase.from('messages').select('id, storage_path, mime_type, file_unique_id');
@@ -247,7 +246,7 @@ async function fixContentDisposition(messageIds, correlationId) {
     const successful = [];
     const failed = [];
     
-    // Process each message's file
+    // Process each message's file to ensure proper content disposition
     for (const message of messages) {
       try {
         if (message.storage_path) {
@@ -767,7 +766,7 @@ async function redownloadFromMediaGroup(message) {
       return { success: false, error: `Failed to get standardized path: ${pathError.message}` };
     }
     
-    // Upload to Supabase Storage with proper options
+    // Upload to Supabase Storage with proper options and content disposition
     const uploadOptions = xdelo_getUploadOptions(message.mime_type);
     
     const { error: uploadError } = await supabase.storage
@@ -778,14 +777,13 @@ async function redownloadFromMediaGroup(message) {
       return { success: false, error: `Failed to upload media: ${uploadError.message}` };
     }
     
-    // Update the message
+    // Update the message - remove public_url field
     const { error: updateError } = await supabase
       .from('messages')
       .update({
         file_id: validFileId,
         file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         storage_path: storagePath,
-        public_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${storagePath}`,
         error_message: null
       })
       .eq('id', message.id);
