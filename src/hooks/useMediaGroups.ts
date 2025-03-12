@@ -1,7 +1,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Message } from "@/types";
+import { Message } from "@/types/MessagesTypes";
 
 export const useMediaGroups = () => {
   return useQuery({

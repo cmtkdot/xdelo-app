@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Wrench } from "lucide-react";
 import { MediaRepairDialog } from "@/components/MediaViewer/MediaRepairDialog";
-import { Message } from "@/types";
+import { Message } from "@/types/MessagesTypes";
 
 interface MediaFixButtonProps {
   messageIds?: string[];

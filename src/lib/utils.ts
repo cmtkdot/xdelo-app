@@ -1,5 +1,5 @@
 
-import { Message } from "@/types";
+import { Message } from "@/types/MessagesTypes";
 
 // Common formatters
 export function formatDate(date: Date): string {

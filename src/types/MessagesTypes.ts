@@ -1,5 +1,4 @@
 
-import { Database } from '@/integrations/supabase/types';
 import { Json } from '@/integrations/supabase/types';
 
 // ProcessingState matches the simplified database enum
@@ -77,6 +76,7 @@ export interface Message {
   error_code: string | null;
   storage_exists: boolean | null;
   storage_path_standardized: boolean | null;
+  storage_path: string | null;
 }
 
 export interface MessageApiResponse {

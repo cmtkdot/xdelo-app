@@ -75,7 +75,7 @@ export function useMessageQueue() {
 
   const retryMessage = async (messageId: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke('xdelo_process_message', {
+      const { data, error } = await supabase.functions.invoke('xdelo_reprocess_message', {
         body: { messageId }
       });
 

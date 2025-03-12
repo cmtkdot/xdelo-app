@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Wrench } from "lucide-react";
 import { MediaRepairDialog } from "./MediaRepairDialog";
-import { Message } from "@/types";
+import { Message } from "@/types/MessagesTypes";
 
 interface MediaFixButtonProps {
   messages?: Message[];
@@ -23,6 +23,11 @@ export function MediaFixButton({ messages, messageIds, onComplete }: MediaFixBut
       onComplete();
     }
   };
+
+  // We can't show if there are no messages or messageIds
+  if ((!messages || messages.length === 0) && (!messageIds || messageIds.length === 0)) {
+    return null;
+  }
 
   return (
     <div className="flex space-x-2">
@@ -44,6 +49,7 @@ export function MediaFixButton({ messages, messageIds, onComplete }: MediaFixBut
             handleComplete();
           }
         }}
+        initialMessageIds={messageIds}
         initialMessages={messages}
       />
     </div>
