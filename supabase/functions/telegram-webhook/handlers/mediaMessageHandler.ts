@@ -269,11 +269,17 @@ async function handleNewMediaMessage(
         processing_state: captionChanged ? 'pending' : existingMessage.processing_state,
         analyzed_content: captionChanged ? null : existingMessage.analyzed_content,
         updated_at: new Date().toISOString(),
-        is_duplicate: true
+        is_duplicate: true,
+        // Clear any error state on successful update
+        error_message: null,
+        error_code: null
       })
       .eq('id', existingMessage.id);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      console.error('Error updating existing message:', updateError);
+      throw updateError;
+    }
 
     // Log the duplicate detection
     await logMessageOperation(
@@ -343,7 +349,16 @@ async function handleNewMediaMessage(
     .select('id')
     .single();
 
-  if (insertError) throw insertError;
+  if (insertError) {
+    console.error('Error inserting message:', insertError);
+      
+    // Check specifically for the schema mismatch error
+    if (insertError.message && insertError.message.includes("Could not find the 'error' column")) {
+      console.error('Schema mismatch detected! Run database schema update script.');
+    }
+      
+    throw insertError;
+  }
 
   // Log the insert event
   try {

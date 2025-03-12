@@ -13,6 +13,56 @@ import {
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')
 if (!TELEGRAM_BOT_TOKEN) throw new Error('Missing TELEGRAM_BOT_TOKEN')
 
+// Maximum attempts to download from Telegram
+const MAX_DOWNLOAD_ATTEMPTS = 3;
+
+// Helper to add retry logic for Telegram API calls
+async function fetchWithRetry(url: string, options = {}, maxRetries = MAX_DOWNLOAD_ATTEMPTS): Promise<Response> {
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      
+      if (response.ok) {
+        return response;
+      }
+      
+      // If we get a 429 (rate limit), wait longer before retrying
+      if (response.status === 429) {
+        const retryAfter = parseInt(response.headers.get('retry-after') || '1', 10);
+        await new Promise(r => setTimeout(r, retryAfter * 1000));
+        continue;
+      }
+      
+      // For Telegram-specific errors, check if it's a temporary issue
+      const text = await response.text();
+      if (text.includes('temporarily unavailable')) {
+        console.log(`Temporary error from Telegram on attempt ${attempt}, retrying...`);
+        await new Promise(r => setTimeout(r, 1000 * attempt)); // Exponential backoff
+        continue;
+      }
+      
+      lastError = new Error(`HTTP error ${response.status}: ${text}`);
+      throw lastError;
+    } catch (error) {
+      lastError = error;
+      
+      // Only retry network errors or temporary Telegram errors
+      if (error.message.includes('network') || 
+          error.message.includes('temporarily unavailable')) {
+        console.log(`Network or temporary error on attempt ${attempt}, retrying: ${error.message}`);
+        await new Promise(r => setTimeout(r, 1000 * attempt)); // Exponential backoff
+        continue;
+      }
+      
+      throw error;
+    }
+  }
+  
+  throw lastError || new Error(`Failed after ${maxRetries} attempts`);
+}
+
 export const getMediaInfo = async (message: any) => {
   const photo = message.photo ? message.photo[message.photo.length - 1] : null
   const video = message.video
@@ -59,14 +109,13 @@ export const getMediaInfo = async (message: any) => {
   }
 
   try {
-    // Get file info from Telegram
-    const fileInfoResponse = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${media.file_id}`
+    // Get file info from Telegram with retry
+    console.log(`Fetching file info for ${media.file_id}`);
+    const fileInfoResponse = await fetchWithRetry(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${media.file_id}`,
+      {},
+      3
     );
-    
-    if (!fileInfoResponse.ok) {
-      throw new Error(`Failed to get file info from Telegram: ${await fileInfoResponse.text()}`);
-    }
     
     const fileInfo = await fileInfoResponse.json();
 
@@ -74,14 +123,13 @@ export const getMediaInfo = async (message: any) => {
       throw new Error(`Telegram API error: ${JSON.stringify(fileInfo)}`);
     }
 
-    // Download file from Telegram
-    const fileDataResponse = await fetch(
-      `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`
+    // Download file from Telegram with retry
+    console.log(`Downloading file: ${fileInfo.result.file_path}`);
+    const fileDataResponse = await fetchWithRetry(
+      `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`,
+      {},
+      3
     );
-    
-    if (!fileDataResponse.ok) {
-      throw new Error(`Failed to download file from Telegram: ${await fileDataResponse.text()}`);
-    }
     
     const fileData = await fileDataResponse.blob();
 
@@ -96,6 +144,7 @@ export const getMediaInfo = async (message: any) => {
 
     // Upload to Supabase Storage with proper content disposition
     const uploadOptions = xdelo_getUploadOptions(mimeType);
+    console.log(`Uploading file to storage: ${fileName}`);
     const { error: uploadError } = await supabase
       .storage
       .from('telegram-media')
@@ -151,7 +200,9 @@ export const getMediaInfo = async (message: any) => {
       redownload_reason: error.message,
       redownload_flagged_at: new Date().toISOString(),
       is_duplicate: false,
-      storage_exists: false
+      storage_exists: false,
+      error_code: error.code || 'DOWNLOAD_FAILED',
+      error_message: error.message
     };
   }
 }
@@ -165,14 +216,12 @@ export const redownloadMissingFile = async (message: any) => {
       throw new Error('Missing file_id for redownload');
     }
     
-    // Get file info from Telegram
-    const fileInfoResponse = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${message.file_id}`
+    // Get file info from Telegram with retry
+    const fileInfoResponse = await fetchWithRetry(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${message.file_id}`,
+      {},
+      3
     );
-    
-    if (!fileInfoResponse.ok) {
-      throw new Error(`Failed to get file info from Telegram: ${await fileInfoResponse.text()}`);
-    }
     
     const fileInfo = await fileInfoResponse.json();
 
@@ -180,14 +229,12 @@ export const redownloadMissingFile = async (message: any) => {
       throw new Error(`Telegram API error: ${JSON.stringify(fileInfo)}`);
     }
 
-    // Download file from Telegram
-    const fileDataResponse = await fetch(
-      `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`
+    // Download file from Telegram with retry
+    const fileDataResponse = await fetchWithRetry(
+      `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileInfo.result.file_path}`,
+      {},
+      3
     );
-    
-    if (!fileDataResponse.ok) {
-      throw new Error(`Failed to download file from Telegram: ${await fileDataResponse.text()}`);
-    }
     
     const fileData = await fileDataResponse.blob();
 
@@ -223,6 +270,7 @@ export const redownloadMissingFile = async (message: any) => {
         storage_path: storagePath,
         public_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${storagePath}`,
         error_message: null,
+        error_code: null,
         storage_exists: true,
         storage_path_standardized: true
       })
@@ -255,6 +303,7 @@ export const redownloadMissingFile = async (message: any) => {
         .update({
           redownload_attempts: (message.redownload_attempts || 0) + 1,
           error_message: `Redownload failed: ${error.message}`,
+          error_code: error.code || 'REDOWNLOAD_FAILED',
           last_error_at: new Date().toISOString()
         })
         .eq('id', message.id);

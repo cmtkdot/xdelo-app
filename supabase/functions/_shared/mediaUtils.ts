@@ -116,6 +116,174 @@ export async function xdelo_validateStoragePath(path: string): Promise<boolean> 
   }
 }
 
+// Simplified function to validate and generate storage path
+export function xdelo_validateAndFixStoragePath(fileUniqueId: string, mimeType: string): string {
+  if (!fileUniqueId) {
+    throw new Error('Cannot create storage path: missing file_unique_id');
+  }
+  
+  // Validate the file_unique_id to prevent path traversal attacks
+  if (fileUniqueId.includes('/') || fileUniqueId.includes('..')) {
+    throw new Error('Invalid file_unique_id: contains forbidden characters');
+  }
+  
+  const extension = xdelo_getFileExtensionFromMimeType(mimeType || 'application/octet-stream');
+  // Create a simple path: fileUniqueId.extension
+  return `${fileUniqueId}.${extension}`;
+}
+
+// Function to retry telegram download for a message
+export async function xdelo_retryDownload(messageId: string, telegramBotToken: string): Promise<{ success: boolean, message: string, data?: any }> {
+  try {
+    // Get the message
+    const { data: message, error: messageError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', messageId)
+      .single();
+      
+    if (messageError || !message) {
+      return {
+        success: false,
+        message: `Message not found: ${messageError?.message || 'No data returned'}`
+      };
+    }
+    
+    if (!message.file_id) {
+      return {
+        success: false,
+        message: 'Message has no file_id for retry download'
+      };
+    }
+    
+    // Get file info from Telegram
+    const fileInfoUrl = `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${message.file_id}`;
+    const fileInfoResponse = await fetch(fileInfoUrl);
+    
+    if (!fileInfoResponse.ok) {
+      throw new Error(`Failed to get file info: ${await fileInfoResponse.text()}`);
+    }
+    
+    const fileInfo = await fileInfoResponse.json();
+    
+    if (!fileInfo.ok) {
+      // Try alternate file_id from media_group if available
+      if (message.media_group_id) {
+        const { data: groupData } = await supabase.rpc(
+          'xdelo_find_valid_file_id',
+          {
+            p_media_group_id: message.media_group_id,
+            p_file_unique_id: message.file_unique_id
+          }
+        );
+        
+        if (groupData) {
+          console.log(`Found alternate file_id in media group: ${groupData}`);
+          // Retry with new file_id
+          const alternateFileInfoUrl = `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${groupData}`;
+          const alternateResponse = await fetch(alternateFileInfoUrl);
+          
+          if (!alternateResponse.ok) {
+            throw new Error(`Failed to get file info with alternate file_id: ${await alternateResponse.text()}`);
+          }
+          
+          const alternateFileInfo = await alternateResponse.json();
+          
+          if (!alternateFileInfo.ok) {
+            throw new Error('Failed with alternate file_id as well');
+          }
+          
+          // Use the alternate file info and update file_id
+          fileInfo.result = alternateFileInfo.result;
+          message.file_id = groupData;
+        } else {
+          throw new Error(`No valid file_id found: ${JSON.stringify(fileInfo)}`);
+        }
+      } else {
+        throw new Error(`No valid file_id found: ${JSON.stringify(fileInfo)}`);
+      }
+    }
+    
+    // Download file from Telegram
+    const downloadUrl = `https://api.telegram.org/file/bot${telegramBotToken}/${fileInfo.result.file_path}`;
+    const fileResponse = await fetch(downloadUrl);
+    
+    if (!fileResponse.ok) {
+      throw new Error(`Failed to download file: ${await fileResponse.text()}`);
+    }
+    
+    const fileData = await fileResponse.blob();
+    
+    // Standardize storage path
+    const mimeType = message.mime_type || 'application/octet-stream';
+    const storagePath = xdelo_validateAndFixStoragePath(message.file_unique_id, mimeType);
+    
+    // Upload to storage
+    const uploadOptions = xdelo_getUploadOptions(mimeType);
+    const { error: uploadError } = await supabase
+      .storage
+      .from('telegram-media')
+      .upload(storagePath, fileData, uploadOptions);
+      
+    if (uploadError) {
+      throw new Error(`Failed to upload to storage: ${uploadError.message}`);
+    }
+    
+    // Update the message record
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        file_id: message.file_id, // May have been updated with an alternate ID
+        storage_path: storagePath,
+        public_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${storagePath}`,
+        error_message: null,
+        error_code: null, 
+        needs_redownload: false,
+        redownload_completed_at: new Date().toISOString(),
+        redownload_attempts: (message.redownload_attempts || 0) + 1,
+        storage_exists: true,
+        storage_path_standardized: true
+      })
+      .eq('id', messageId);
+      
+    if (updateError) {
+      throw new Error(`Failed to update message record: ${updateError.message}`);
+    }
+    
+    return {
+      success: true,
+      message: 'Successfully redownloaded and updated file',
+      data: {
+        messageId,
+        storagePath,
+        fileSize: fileData.size
+      }
+    };
+  } catch (error) {
+    console.error('Error in xdelo_retryDownload:', error);
+    
+    try {
+      // Update the message with the error
+      await supabase
+        .from('messages')
+        .update({
+          error_message: `Retry download failed: ${error.message}`,
+          error_code: error.code || 'RETRY_DOWNLOAD_FAILED',
+          redownload_attempts: supabase.rpc('increment', { table: 'messages', column: 'redownload_attempts', id: messageId }),
+          last_error_at: new Date().toISOString()
+        })
+        .eq('id', messageId);
+    } catch (updateError) {
+      console.error('Failed to update error state:', updateError);
+    }
+    
+    return {
+      success: false,
+      message: error.message || 'Unknown error during retry download'
+    };
+  }
+}
+
 // Helper to repair media content disposition
 export async function xdelo_repairContentDisposition(path: string): Promise<boolean> {
   if (!path) return false;

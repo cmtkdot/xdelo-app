@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
@@ -213,7 +212,7 @@ export function useMessageQueue() {
     }
   };
 
-  // New function to redownload missing media files
+  // Function to redownload missing media files
   const xdelo_redownloadMissingMedia = async (limit: number = 20) => {
     try {
       setIsProcessing(true);
@@ -255,6 +254,45 @@ export function useMessageQueue() {
     }
   };
 
+  // New function to fix invalid file IDs
+  const xdelo_fixInvalidFileIds = async (limit: number = 10) => {
+    try {
+      setIsProcessing(true);
+      
+      // Call the fix-file-ids edge function
+      const { data, error } = await supabase.functions.invoke(
+        'fix-file-ids',
+        {
+          body: { 
+            limit,
+            errorCode: 'DOWNLOAD_FAILED' // Target specific error type
+          }
+        }
+      );
+      
+      if (error) throw error;
+      
+      toast({
+        title: "File ID Repair",
+        description: `Fixed ${data.data.succeeded} of ${data.data.processed} files with invalid file_ids.`
+      });
+      
+      return data;
+    } catch (error) {
+      console.error('Error fixing invalid file IDs:', error);
+      
+      toast({
+        title: "Repair Failed",
+        description: error.message || "Failed to fix invalid file IDs",
+        variant: "destructive"
+      });
+      
+      throw error;
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return {
     processMessageById,
     xdelo_processStuckMessages,
@@ -262,6 +300,7 @@ export function useMessageQueue() {
     xdelo_fixMediaMimeTypes,
     xdelo_redownloadMissingMedia,
     xdelo_repairStoragePaths,
+    xdelo_fixInvalidFileIds,
     isProcessing
   };
 }
