@@ -2985,19 +2985,6 @@ export type Database = {
           invalid_references: number
         }[]
       }
-      xdelo_analyze_message_caption: {
-        Args: {
-          p_message_id: string
-          p_correlation_id: string
-          p_caption: string
-          p_media_group_id?: string
-        }
-        Returns: Json
-      }
-      xdelo_begin_transaction: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
       xdelo_check_media_group_content: {
         Args: {
           p_media_group_id: string
@@ -3014,14 +3001,6 @@ export type Database = {
       }
       xdelo_clear_all_messages: {
         Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      xdelo_commit_transaction_with_sync: {
-        Args: {
-          p_message_id: string
-          p_media_group_id: string
-          p_correlation_id: string
-        }
         Returns: Json
       }
       xdelo_complete_message_processing: {
@@ -3140,14 +3119,6 @@ export type Database = {
         }
         Returns: Json
       }
-      xdelo_handle_failed_caption_analysis: {
-        Args: {
-          p_message_id: string
-          p_error_message: string
-          p_correlation_id?: string
-        }
-        Returns: Json
-      }
       xdelo_handle_message_update: {
         Args: {
           p_message_id: string
@@ -3240,6 +3211,14 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_process_caption_workflow: {
+        Args: {
+          p_message_id: string
+          p_correlation_id?: string
+          p_force?: boolean
+        }
+        Returns: Json
+      }
       xdelo_repair_file: {
         Args: {
           p_message_id: string
@@ -3262,13 +3241,6 @@ export type Database = {
           caption_message_id: string
           updated_count: number
         }[]
-      }
-      xdelo_reset_stalled_messages: {
-        Args: {
-          p_minutes_threshold?: number
-          p_correlation_id?: string
-        }
-        Returns: Json
       }
       xdelo_set_message_processing: {
         Args: {
@@ -3299,10 +3271,6 @@ export type Database = {
           p_force_sync?: boolean
           p_sync_edit_history?: boolean
         }
-        Returns: Json
-      }
-      xdelo_sync_pending_media_group_messages: {
-        Args: Record<PropertyKey, never>
         Returns: Json
       }
       xdelo_update_message_processing_state: {
