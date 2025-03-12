@@ -1,7 +1,7 @@
 
 export type SyncStatus = 'pending' | 'synced' | 'failed' | 'queued';
 
-export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error';
+export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error' | 'initialized';
 
 export interface AnalyzedContent {
   product_name?: string;

@@ -1,7 +1,8 @@
+
 import { Json } from '@/integrations/supabase/types';
 import { AnalyzedContent } from './index';
 
-export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error';
+export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error' | 'initialized';
 
 export interface Message {
   id: string;

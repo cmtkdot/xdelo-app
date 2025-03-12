@@ -78,8 +78,16 @@ export function useMessageTableState(initialMessages: Message[]) {
   };
 
   const handleDeleteClick = (message: Message) => {
-    // Ensure message is correctly typed
-    setMessageToDelete(message);
+    // Convert message to the same type before setting state
+    const typedMessage: Message = {
+      ...message,
+      file_unique_id: message.file_unique_id,
+      public_url: message.public_url,
+      storage_path_standardized: message.storage_path_standardized,
+      storage_exists: message.storage_exists
+    };
+    
+    setMessageToDelete(typedMessage);
     setIsDeleteDialogOpen(true);
   };
 
@@ -103,7 +111,6 @@ export function useMessageTableState(initialMessages: Message[]) {
                 [field]: value,
                 parsing_metadata: {
                   method: 'manual' as const,
-                  confidence: 1,
                   timestamp: new Date().toISOString()
                 }
               }

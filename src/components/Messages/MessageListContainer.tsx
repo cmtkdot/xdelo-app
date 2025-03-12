@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { MessageList } from './MessageList';
 import { MessageControlPanel } from './MessageControlPanel';
@@ -30,11 +31,13 @@ export function MessageListContainer() {
       
       await forceSyncMessageGroup(messageId);
       
-      await refetch();
-      
-      toast({
-        title: "Processing Complete",
-        description: "Message has been processed and synchronized.",
+      // Handle the refetch result without expecting void
+      await refetch().then(() => {
+        // Success case handling
+        toast({
+          title: "Processing Complete",
+          description: "Message has been processed and synchronized.",
+        });
       });
     } catch (error: any) {
       console.error("Error retrying processing:", error);
