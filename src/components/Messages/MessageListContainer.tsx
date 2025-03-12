@@ -41,6 +41,7 @@ export const MessageListContainer: React.FC = () => {
     processMessageById,
     xdelo_fixMediaMimeTypes,
     xdelo_repairStoragePaths,
+    xdelo_fixInvalidFileIds,
     isProcessing 
   } = useMessageQueue();
 
@@ -91,6 +92,19 @@ export const MessageListContainer: React.FC = () => {
     }
   };
   
+  const handleFixInvalidFileIds = async () => {
+    try {
+      await xdelo_fixInvalidFileIds(10);
+      await handleRefresh();
+      toast({
+        title: "Invalid File IDs",
+        description: "File ID repair operation completed successfully"
+      });
+    } catch (error) {
+      console.error('Error fixing invalid file IDs:', error);
+    }
+  };
+  
   const isProcessingAny = isProcessing || isRefreshing;
 
   return (
@@ -107,6 +121,7 @@ export const MessageListContainer: React.FC = () => {
             showFilters={showFilters}
             onFixMimeTypes={handleFixMimeTypes}
             onRepairStoragePaths={handleRepairStoragePaths}
+            onFixInvalidFileIds={handleFixInvalidFileIds}
           />
           
           {showFilters && (

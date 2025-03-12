@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
@@ -274,7 +275,7 @@ export function useMessageQueue() {
       
       toast({
         title: "File ID Repair",
-        description: `Fixed ${data.data.succeeded} of ${data.data.processed} files with invalid file_ids.`
+        description: `Fixed ${data.data?.succeeded || 0} of ${data.data?.processed || 0} files with invalid file_ids.`
       });
       
       return data;
