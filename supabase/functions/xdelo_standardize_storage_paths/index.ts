@@ -1,182 +1,143 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders } from "../_shared/cors.ts";
-import { supabaseClient as supabase } from "../_shared/supabase.ts";
-import { xdelo_detectMimeType, xdelo_validateStoragePath } from "../_shared/mediaUtils.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { corsHeaders } from '../_shared/cors.ts';
+import { Database } from '../_shared/types.ts';
 
-interface StoragePathResult {
-  message_id: string;
-  original_path?: string;
-  standardized_path: string;
-  success: boolean;
-  error?: string;
-}
+// Get environment variables
+const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-// Function to standardize a storage path for a message
-async function standardizeStoragePath(messageId: string): Promise<StoragePathResult> {
-  try {
-    // Get message details
-    const { data: message, error: messageError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('id', messageId)
-      .single();
-
-    if (messageError) {
-      throw new Error(`Error fetching message: ${messageError.message}`);
+// Create Supabase client
+const supabase = createClient<Database>(
+  supabaseUrl,
+  supabaseServiceKey,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
     }
-
-    if (!message) {
-      throw new Error(`Message not found: ${messageId}`);
-    }
-
-    if (!message.file_unique_id) {
-      throw new Error(`Message is missing file_unique_id: ${messageId}`);
-    }
-
-    // Get the standardized path
-    const { data: standardizedPath, error: pathError } = await supabase.rpc(
-      'xdelo_standardize_storage_path',
-      {
-        p_file_unique_id: message.file_unique_id,
-        p_mime_type: message.mime_type || ''
-      }
-    );
-
-    if (pathError) {
-      throw new Error(`Error standardizing path: ${pathError.message}`);
-    }
-
-    // Check if the current storage path is already standardized
-    if (message.storage_path === standardizedPath) {
-      return {
-        message_id: messageId,
-        original_path: message.storage_path,
-        standardized_path: standardizedPath,
-        success: true
-      };
-    }
-
-    // If the file exists in storage at the current path, move it to the standardized path
-    if (message.storage_path && message.storage_exists) {
-      try {
-        // Copy to the new standardized path
-        const { error: copyError } = await supabase.storage
-          .from('telegram-media')
-          .copy(message.storage_path, standardizedPath);
-
-        if (!copyError) {
-          // If copy successful, remove the old file
-          await supabase.storage
-            .from('telegram-media')
-            .remove([message.storage_path]);
-        } else {
-          console.error(`Error copying file: ${copyError.message}`);
-          // We'll continue anyway and update the path in the database
-        }
-      } catch (storageError) {
-        console.error(`Storage operation error: ${storageError.message}`);
-        // Continue and update the path
-      }
-    }
-
-    // Update the message with the standardized path
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update({
-        storage_path: standardizedPath,
-        storage_path_standardized: true
-      })
-      .eq('id', messageId);
-
-    if (updateError) {
-      throw new Error(`Error updating message: ${updateError.message}`);
-    }
-
-    return {
-      message_id: messageId,
-      original_path: message.storage_path || undefined,
-      standardized_path,
-      success: true
-    };
-  } catch (error) {
-    console.error(`Error standardizing path for message ${messageId}:`, error);
-    return {
-      message_id: messageId,
-      standardized_path: '',
-      success: false,
-      error: error.message
-    };
   }
+);
+
+// Log function to standardize logging
+function log(level: 'info' | 'warn' | 'error', message: string, data?: any) {
+  const timestamp = new Date().toISOString();
+  console.log(JSON.stringify({
+    timestamp,
+    level,
+    function: 'xdelo_standardize_storage_paths',
+    message,
+    ...(data && { data })
+  }));
 }
 
-// Serve the HTTP request
-serve(async (req) => {
-  // Handle preflight CORS
+// Main handler for standardizing storage paths
+Deno.serve(async (req) => {
+  // Handle CORS for preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
-  
+
   try {
-    const { messageIds, limit = 50 } = await req.json();
+    // Parse request body
+    const { limit = 100, dryRun = false, messageIds = [] } = await req.json();
     
-    // Get messages to process
-    let query = supabase
-      .from('messages')
-      .select('id, file_unique_id, mime_type, storage_path, storage_exists')
-      .is('storage_path_standardized', null)
-      .order('created_at', { ascending: false })
-      .limit(limit);
-    
-    // If specific message IDs were provided, use them
-    if (messageIds && messageIds.length > 0) {
-      query = query.in('id', messageIds);
+    // Validate inputs
+    if (limit < 1 || limit > 1000) {
+      throw new Error('Limit must be between 1 and 1000');
     }
-    
-    const { data: messages, error } = await query;
-    
-    if (error) throw error;
-    
-    const results: StoragePathResult[] = [];
-    const successful: string[] = [];
-    const failed: string[] = [];
-    
-    // Process each message sequentially
-    for (const message of messages) {
-      try {
-        const result = await standardizeStoragePath(message.id);
-        if (result.success) {
-          successful.push(message.id);
-        } else {
-          failed.push(message.id);
-        }
-        results.push(result);
-      } catch (error) {
-        console.error(`Error processing message ${message.id}:`, error);
-        failed.push(message.id);
-        results.push({
-          message_id: message.id,
-          standardized_path: '',
-          success: false,
-          error: error.message
+
+    log('info', 'Starting storage path standardization', { limit, dryRun, messageIds });
+
+    let result;
+    let error = null;
+
+    // If specific messageIds are provided, standardize only those
+    if (messageIds.length > 0) {
+      log('info', `Processing ${messageIds.length} specific messages`);
+      
+      // Loop through each messageId and standardize its storage path
+      const results = [];
+      for (const messageId of messageIds) {
+        const { data, error: rpcError } = await supabase.rpc('xdelo_fix_storage_paths', {
+          p_limit: 1,
+          p_only_check: dryRun,
+          p_message_ids: [messageId]
         });
+        
+        if (rpcError) {
+          log('error', `Error fixing storage path for message ${messageId}`, rpcError);
+          error = rpcError;
+        } else {
+          results.push(...(data || []));
+        }
+      }
+      
+      result = {
+        fixed: results.filter(r => r.fixed).length,
+        skipped: results.filter(r => !r.fixed).length,
+        needs_redownload: results.filter(r => r.needs_redownload).length,
+        details: results
+      };
+    } else {
+      // Process in bulk based on limit
+      log('info', `Processing up to ${limit} messages in bulk`);
+      const { data, error: rpcError } = await supabase.rpc('xdelo_fix_storage_paths', {
+        p_limit: limit,
+        p_only_check: dryRun
+      });
+      
+      if (rpcError) {
+        log('error', 'Error fixing storage paths', rpcError);
+        error = rpcError;
+      } else {
+        result = {
+          fixed: data.filter(r => r.fixed).length,
+          skipped: data.filter(r => !r.fixed).length,
+          needs_redownload: data.filter(r => r.needs_redownload).length,
+          details: data
+        };
       }
     }
+
+    // Log success
+    const finalResult = {
+      success: !error,
+      message: error ? error.message : `Standardized storage paths (${result.fixed} fixed, ${result.skipped} skipped)`,
+      stats: result,
+      error: error ? error.message : null
+    };
+    
+    log('info', 'Completed storage path standardization', finalResult);
+
+    // Return response with CORS headers
+    return new Response(
+      JSON.stringify(finalResult),
+      {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+  } catch (err) {
+    // Log and return error
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    log('error', 'Function execution failed', { error: errorMessage });
     
     return new Response(
       JSON.stringify({
-        success: true,
-        processed: messages.length,
-        successful: successful.length,
-        failed: failed.length,
-        results
+        success: false,
+        message: 'Error processing request',
+        error: errorMessage
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  } catch (error) {
-    return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      { status: 400, headers: corsHeaders }
+      {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      }
     );
   }
 });
