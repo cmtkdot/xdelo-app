@@ -18,8 +18,16 @@ export const useMediaGroups = () => {
 
       if (error) throw error;
 
-      // Cast the database results to our Message type with unknown as intermediate type
-      const typedMessages = (data || []) as unknown as Message[];
+      // Cast the database results to our Message type - explicitly casting properties to match the interface
+      const typedMessages = (data || []).map(item => {
+        // Ensure storage_path_standardized is properly typed
+        const message: Message = {
+          ...item as unknown as Message,
+          // Explicitly handle the problematic property
+          storage_path_standardized: item.storage_path_standardized as boolean | string
+        };
+        return message;
+      });
       
       // Group messages by media_group_id
       const groupedMessages: GroupedMessages = typedMessages.reduce((groups, message) => {

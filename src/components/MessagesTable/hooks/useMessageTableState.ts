@@ -78,6 +78,7 @@ export function useMessageTableState(initialMessages: Message[]) {
   };
 
   const handleDeleteClick = (message: Message) => {
+    // Ensure message is correctly typed
     setMessageToDelete(message);
     setIsDeleteDialogOpen(true);
   };

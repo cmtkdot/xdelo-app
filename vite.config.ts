@@ -12,7 +12,8 @@ export default defineConfig(({ mode }) => ({
       // Babel config for better React optimization
       babel: {
         plugins: [
-          ['@babel/plugin-transform-react-jsx', { runtime: 'automatic' }]
+          // Remove the problematic plugin and let Vite handle JSX transformation
+          // This will use the built-in JSX transformation in Vite
         ]
       }
     }),

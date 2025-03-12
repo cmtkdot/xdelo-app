@@ -30,7 +30,7 @@ export interface Message {
   error_message?: string;
   error_code?: string;
   storage_exists?: boolean | string; 
-  storage_path_standardized?: boolean | string; // Update to accept both boolean and string
+  storage_path_standardized?: boolean | string;
   chat_id?: number;
   chat_type?: string;
   chat_title?: string;

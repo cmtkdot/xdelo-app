@@ -31,7 +31,7 @@ export function MessageListContainer() {
       
       await forceSyncMessageGroup(messageId);
       
-      // Properly handle the Promise type by using void
+      // Don't directly assign the Promise result, use void operator
       void refetch().then(() => {
         toast({
           title: "Processing Complete",
