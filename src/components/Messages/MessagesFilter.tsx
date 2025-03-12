@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -23,8 +22,8 @@ export const MessagesFilter: React.FC<MessagesFilterProps> = ({
   onFilterChange
 }) => {
   // Processing state options
-  const processingStates: { value: ProcessingState; label: string }[] = [
-    { value: 'initialized', label: 'Initialized' },
+  const stateOptions = [
+    { value: 'all', label: 'All States' },
     { value: 'pending', label: 'Pending' },
     { value: 'processing', label: 'Processing' },
     { value: 'completed', label: 'Completed' },
@@ -92,7 +91,7 @@ export const MessagesFilter: React.FC<MessagesFilterProps> = ({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All States</SelectItem>
-              {processingStates.map(state => (
+              {stateOptions.map(state => (
                 <SelectItem key={state.value} value={state.value}>
                   {state.label}
                 </SelectItem>

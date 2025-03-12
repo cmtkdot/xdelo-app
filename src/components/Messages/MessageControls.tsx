@@ -1,47 +1,34 @@
 
 import React from 'react';
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
 import { Message } from '@/types';
-import { useMessageQueue } from '@/hooks/useMessageQueue';
 
 interface MessageControlsProps {
   message: Message;
-  onSuccess?: () => void;
+  onRefresh: () => void;
+  queue: {
+    messages: Message[];
+    isLoading: boolean;
+    error: Error;
+    refetch: () => Promise<void>;
+    isRefetching: boolean;
+    stats: any;
+    handleRefresh: () => Promise<void>;
+  };
 }
 
-export function MessageControls({ message, onSuccess }: MessageControlsProps) {
-  const { processMessageById, isProcessing } = useMessageQueue();
-
-  const canRetry = message.processing_state === 'error' || 
-    (message.processing_state === 'completed' && (!message.analyzed_content || !message.analyzed_content.product_code));
-  
-  const canSync = message.media_group_id && 
-    message.processing_state === 'completed' && 
-    !message.group_caption_synced;
-
-  const handleRetry = async () => {
-    try {
-      await processMessageById(message.id);
-      onSuccess?.();
-    } catch (error) {
-      console.error('Error retrying message processing:', error);
-    }
-  };
-
+export function MessageControls({ message, onRefresh, queue }: MessageControlsProps) {
   return (
-    <div className="flex flex-col space-y-2">
-      {canRetry && (
-        <button
-          onClick={handleRetry}
-          disabled={isProcessing}
-          className={`px-3 py-1 text-sm rounded-md
-            ${isProcessing 
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-              : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-            }`}
-        >
-          {isProcessing ? 'Processing...' : 'Retry Analysis'}
-        </button>
-      )}
+    <div className="flex gap-2 mt-2">
+      <Button 
+        variant="outline" 
+        size="sm" 
+        onClick={onRefresh}
+      >
+        <RefreshCw className="mr-2 h-4 w-4" />
+        Refresh
+      </Button>
     </div>
   );
 }

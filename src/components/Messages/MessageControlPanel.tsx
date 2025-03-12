@@ -1,105 +1,58 @@
 
 import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { RefreshCw, Filter, FileText, FolderSync, FileX, Tool } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { RefreshCw, Wrench } from "lucide-react";
+import { MessageProcessingStats } from '@/types/MessagesTypes';
+import { useFileRepair } from '@/hooks/useFileRepair';
 
 interface MessageControlPanelProps {
-  searchTerm: string;
-  onSearchChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRefresh: () => void;
   isRefreshing: boolean;
-  onToggleFilters: () => void;
-  showFilters: boolean;
-  onFixMimeTypes: () => void;
-  onRepairStoragePaths: () => void;
-  onFixInvalidFileIds?: () => void;
-  onRepairAll?: () => void; // New handler for repair all
+  messageCount: number;
+  stats: MessageProcessingStats;
 }
 
-export const MessageControlPanel: React.FC<MessageControlPanelProps> = ({
-  searchTerm,
-  onSearchChange,
-  onRefresh,
-  isRefreshing,
-  onToggleFilters,
-  showFilters,
-  onFixMimeTypes,
-  onRepairStoragePaths,
-  onFixInvalidFileIds,
-  onRepairAll
-}) => {
+export function MessageControlPanel({ 
+  onRefresh, 
+  isRefreshing, 
+  messageCount,
+  stats 
+}: MessageControlPanelProps) {
+  const { 
+    repairFiles, 
+    isRepairing
+  } = useFileRepair();
+
   return (
-    <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
-      <div className="flex-1 w-full md:w-auto">
-        <Input
-          placeholder="Search messages..."
-          value={searchTerm}
-          onChange={onSearchChange}
-          className="w-full"
-        />
-      </div>
-      
-      <div className="flex flex-wrap gap-2 justify-end">
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={onToggleFilters}
-        >
-          <Filter className="h-4 w-4 mr-1" />
-          {showFilters ? 'Hide Filters' : 'Show Filters'}
-        </Button>
-        
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={onFixMimeTypes}
-        >
-          <FileText className="h-4 w-4 mr-1" />
-          Fix MIME Types
-        </Button>
-        
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={onRepairStoragePaths}
-        >
-          <FolderSync className="h-4 w-4 mr-1" />
-          Repair Paths
-        </Button>
-        
-        {onFixInvalidFileIds && (
+    <Card className="p-4">
+      <div className="flex flex-wrap gap-2 justify-between items-center">
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={onRefresh}
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+
           <Button 
             variant="outline" 
             size="sm"
-            onClick={onFixInvalidFileIds}
+            onClick={() => repairFiles('all')}
+            disabled={isRepairing}
           >
-            <FileX className="h-4 w-4 mr-1" />
-            Fix Invalid Files
+            <Wrench className="mr-2 h-4 w-4" />
+            Repair Files
           </Button>
-        )}
-        
-        {onRepairAll && (
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={onRepairAll}
-          >
-            <Tool className="h-4 w-4 mr-1" />
-            Repair All
-          </Button>
-        )}
-        
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={onRefresh}
-          disabled={isRefreshing}
-        >
-          <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-          {isRefreshing ? 'Refreshing...' : 'Refresh'}
-        </Button>
+        </div>
+
+        <div className="text-sm text-muted-foreground">
+          Showing {messageCount} message{messageCount !== 1 ? 's' : ''}
+        </div>
       </div>
-    </div>
+    </Card>
   );
-};
+}

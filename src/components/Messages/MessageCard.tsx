@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,13 +22,14 @@ export const MessageCard: React.FC<MessageCardProps> = ({
     analyzed_content,
     processing_state,
     created_at,
-    error_message,
-    retry_count
+    error_message
   } = message;
 
   const handleRetry = async () => {
     await onRetryProcessing(id);
   };
+
+  const isError = message.processing_state === 'error';
 
   return (
     <Card className="w-full">
@@ -50,14 +50,9 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                 Error: {error_message}
               </div>
             )}
-            {retry_count && retry_count > 0 && (
-              <div className="text-xs text-orange-500 dark:text-orange-400">
-                Retried: {retry_count} times
-              </div>
-            )}
           </div>
           <div className="flex items-center space-x-2">
-            {processing_state === 'error' && (
+            {isError && (
               <button 
                 onClick={handleRetry}
                 disabled={processAllLoading}

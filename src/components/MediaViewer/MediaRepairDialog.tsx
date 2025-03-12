@@ -175,6 +175,11 @@ export function MediaRepairDialog({ open, onOpenChange, initialMessages = [], in
     }
   };
 
+  const hasError = (state: ProcessingState | null | undefined) => {
+    if (!state) return false;
+    return state === 'error';
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleCloseDialog}>
       <DialogContent className="sm:max-w-[725px] max-h-[90vh] flex flex-col">
