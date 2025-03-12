@@ -4,6 +4,7 @@ import { MessageList } from './MessageList';
 import { MessageControlPanel } from './MessageControlPanel';
 import { useMediaGroups } from '@/hooks/useMediaGroups';
 import { Spinner } from '../ui/spinner';
+import { useCaptionSync } from '@/hooks/useCaptionSync';
 
 export function MessageListContainer() {
   const {
@@ -14,9 +15,11 @@ export function MessageListContainer() {
     isRefetching
   } = useMediaGroups();
 
+  const { forceSyncMessageGroup } = useCaptionSync();
+
   const onRetryProcessing = async (messageId: string) => {
-    console.log("Retry processing for message:", messageId);
-    // In a real implementation, this would call an API to retry processing
+    await forceSyncMessageGroup(messageId);
+    refetch();
   };
 
   return (

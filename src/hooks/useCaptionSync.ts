@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
-import { Message, AnalyzedContent } from '@/types';
+import { Message } from '@/types/MessagesTypes';
 
 export function useCaptionSync() {
   const [isSyncing, setIsSyncing] = useState<Record<string, boolean>>({});
@@ -22,9 +22,6 @@ export function useCaptionSync() {
       console.log(`Syncing media group content for message ${message.id}`, {
         media_group_id: message.media_group_id,
         has_caption: !!message.caption,
-        // We can check updated_at vs created_at to determine if a message was likely edited
-        edited: message.updated_at && message.created_at && 
-                new Date(message.updated_at) > new Date(message.created_at)
       });
       
       if (!message.media_group_id) {
@@ -35,7 +32,7 @@ export function useCaptionSync() {
       // Generate correlation ID
       const correlationId = crypto.randomUUID();
       
-      // Force immediate media group sync
+      // Use our new simplified edge function for media group sync
       const { data, error } = await supabase.functions.invoke(
         'xdelo_sync_media_group',
         {
@@ -57,7 +54,7 @@ export function useCaptionSync() {
       
       toast({
         title: "Media Group Synced",
-        description: `Successfully synced content to ${data?.data?.updated_count || 0} related media`,
+        description: `Successfully synced content to ${data?.synced_count || 0} related media`,
       });
       
       return data;
@@ -180,7 +177,6 @@ export function useCaptionSync() {
 
   /**
    * Force synchronization for a message that may have been missed
-   * in normal sync processes (edited channel posts, etc.)
    */
   const forceSyncMessageGroup = async (messageId: string) => {
     try {

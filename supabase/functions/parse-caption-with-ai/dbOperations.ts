@@ -1,3 +1,4 @@
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { ParsedContent } from '../_shared/captionParser.ts';
 
@@ -29,15 +30,6 @@ export async function updateMessageWithAnalysis(
   isForceUpdate: boolean = false
 ) {
   try {
-    // Begin transaction with the consolidated function
-    const { data: txResult, error: txError } = await supabaseClient.rpc(
-      'xdelo_begin_transaction'
-    );
-    
-    if (txError) {
-      console.warn('Could not use transaction helper, continuing with standard update');
-    }
-    
     // Determine if we need to save old content for edit history
     let oldAnalyzedContent = [];
     
@@ -73,7 +65,7 @@ export async function updateMessageWithAnalysis(
       });
     }
     
-    // Always use 'completed' as the processing state, regardless of partial success flag
+    // Always use 'completed' as the processing state
     const processingState = 'completed';
     
     // Update message with analyzed content using direct update
@@ -115,17 +107,36 @@ export async function updateMessageWithAnalysis(
       }
     );
     
-    // If part of a media group, sync the content to other messages
+    // If part of a media group, sync the content to other messages using our new edge function
     if (existingMessage?.media_group_id) {
       try {
-        await syncMediaGroupContent(
-          existingMessage.media_group_id,
-          messageId,
-          existingMessage?.correlation_id || 'no-correlation-id',
-          parsedContent.parsing_metadata.is_edit || false
+        const response = await fetch(
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+            },
+            body: JSON.stringify({
+              mediaGroupId: existingMessage.media_group_id,
+              sourceMessageId: messageId,
+              correlationId: existingMessage?.correlation_id || 'no-correlation-id',
+              forceSync: true,
+              syncEditHistory: parsedContent.parsing_metadata.is_edit || false
+            })
+          }
         );
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Edge function sync failed: ${errorText || response.statusText}`);
+        }
+        
+        return await response.json();
       } catch (syncError) {
-        console.error(`Warning: Media group sync failed but message was updated: ${syncError.message}`);
+        console.error(`Error syncing media group content: ${syncError.message}`);
+        throw syncError;
       }
     }
     
@@ -149,47 +160,31 @@ export async function syncMediaGroupContent(
   isEdit: boolean = false
 ) {
   try {
-    // Use the consolidated media group sync function
-    const { data, error } = await supabaseClient.rpc(
-      'xdelo_sync_media_group_content',
+    // Use our new edge function for media group sync
+    const response = await fetch(
+      `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
       {
-        p_media_group_id: mediaGroupId,
-        p_source_message_id: sourceMessageId,
-        p_correlation_id: correlationId,
-        p_force_sync: true,
-        p_sync_edit_history: isEdit
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+        },
+        body: JSON.stringify({
+          mediaGroupId,
+          sourceMessageId,
+          correlationId,
+          forceSync: true,
+          syncEditHistory: isEdit
+        })
       }
     );
     
-    if (error) {
-      // Try the fallback method with the edge function
-      const response = await fetch(
-        `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-          },
-          body: JSON.stringify({
-            mediaGroupId,
-            sourceMessageId,
-            correlationId,
-            forceSync: true,
-            syncEditHistory: isEdit
-          })
-        }
-      );
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Edge function sync failed: ${errorText || response.statusText}`);
-      }
-      
-      return await response.json();
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Edge function sync failed: ${errorText || response.statusText}`);
     }
     
-    return data;
+    return await response.json();
   } catch (error) {
     console.error(`Error syncing media group content: ${error.message}`);
     throw error;
