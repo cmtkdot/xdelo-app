@@ -30,11 +30,19 @@ export function MessageListContainer() {
       });
       
       await forceSyncMessageGroup(messageId);
-      // Don't directly await refetch since it returns QueryObserverResult
+      
+      // Fix type error: handle the Promise returned by refetch() properly
       refetch().then(() => {
         toast({
           title: "Processing Complete",
           description: "Message has been processed and synchronized.",
+        });
+      }).catch(err => {
+        console.error("Error refetching after sync:", err);
+        toast({
+          title: "Refetch Failed",
+          description: "Message was processed but refresh failed.",
+          variant: "destructive",
         });
       });
     } catch (error) {

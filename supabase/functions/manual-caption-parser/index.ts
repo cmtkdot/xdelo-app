@@ -61,11 +61,11 @@ async function handleCaptionParsing(request: AnalysisRequest) {
       is_edit: isEdit,
     };
     
-    if (request.triggerSource) {
+    if (request.trigger_source) {
       // Add additional metadata that might be useful but not part of the core type
       parsedContent.parsing_metadata = {
         ...parsingMetadata,
-        trigger_source: request.triggerSource
+        trigger_source: request.trigger_source
       };
     } else {
       parsedContent.parsing_metadata = parsingMetadata;
@@ -180,7 +180,7 @@ serve(async (req) => {
       isEdit: request.isEdit,
       hasCaption: !!request.caption,
       correlationId: request.correlationId,
-      trigger_source: request.triggerSource
+      trigger_source: request.trigger_source
     });
 
     // Process the caption
