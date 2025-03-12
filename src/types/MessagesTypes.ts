@@ -2,7 +2,7 @@
 import { Database } from '@/integrations/supabase/types';
 import { Json } from '@/integrations/supabase/types';
 
-// Updated ProcessingState to match the simplified database enum
+// ProcessingState matches the simplified database enum
 export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error';
 
 // Add MessageProcessingStats type for the message queue hook
@@ -83,4 +83,3 @@ export interface MessageApiResponse {
   data: Message[] | null;
   error: Error | null;
 }
-

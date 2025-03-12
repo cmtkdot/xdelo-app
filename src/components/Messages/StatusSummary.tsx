@@ -1,32 +1,55 @@
 
 import React from 'react';
 import { Clock, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
-import { StatusCard } from './StatusCard';
+import { Card } from "@/components/ui/card";
+import { MessageProcessingStats } from '@/types/MessagesTypes';
 
 interface StatusSummaryProps {
-  pendingCount: number;
-  processingCount: number;
-  completedCount: number;
-  errorCount: number;
+  stats: MessageProcessingStats;
 }
 
-export const StatusSummary: React.FC<StatusSummaryProps> = ({
-  pendingCount,
-  processingCount,
-  completedCount,
-  errorCount
-}) => {
+export function StatusSummary({ stats }: StatusSummaryProps) {
+  const pendingCount = stats?.state_counts?.pending || 0;
+  const processingCount = stats?.state_counts?.processing || 0;
+  const completedCount = stats?.state_counts?.completed || 0;
+  const errorCount = stats?.state_counts?.error || 0;
+  
   return (
-    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-4">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold">Message Processing Status</h2>
-      </div>
+    <Card className="p-4 mb-4">
+      <h3 className="text-lg font-medium mb-2">Message Processing Status</h3>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatusCard title="Pending" count={pendingCount} icon={<Clock className="w-5 h-5 text-yellow-500" />} />
-        <StatusCard title="Processing" count={processingCount} icon={<ArrowRight className="w-5 h-5 text-blue-500" />} />
-        <StatusCard title="Completed" count={completedCount} icon={<CheckCircle className="w-5 h-5 text-green-500" />} />
-        <StatusCard title="Error" count={errorCount} icon={<AlertCircle className="w-5 h-5 text-red-500" />} />
+        <div className="flex items-center gap-2">
+          <Clock className="w-5 h-5 text-yellow-500" />
+          <div>
+            <div className="text-sm font-medium">Pending</div>
+            <div className="text-2xl font-bold">{pendingCount}</div>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <ArrowRight className="w-5 h-5 text-blue-500" />
+          <div>
+            <div className="text-sm font-medium">Processing</div>
+            <div className="text-2xl font-bold">{processingCount}</div>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <CheckCircle className="w-5 h-5 text-green-500" />
+          <div>
+            <div className="text-sm font-medium">Completed</div>
+            <div className="text-2xl font-bold">{completedCount}</div>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 text-red-500" />
+          <div>
+            <div className="text-sm font-medium">Error</div>
+            <div className="text-2xl font-bold">{errorCount}</div>
+          </div>
+        </div>
       </div>
-    </div>
+    </Card>
   );
-};
+}

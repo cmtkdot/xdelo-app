@@ -19,9 +19,7 @@ export function MessageListContainer() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatusSummary stats={stats} />
-      </div>
+      <StatusSummary stats={stats} />
 
       <MessageControlPanel
         onRefresh={handleRefresh}

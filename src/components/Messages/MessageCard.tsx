@@ -1,8 +1,9 @@
+
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RefreshCw } from 'lucide-react';
-import { Message } from '@/types';
+import { Message } from '@/types/MessagesTypes';
 import { formatDate } from '@/lib/utils';
 
 interface MessageCardProps {
