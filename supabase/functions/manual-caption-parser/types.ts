@@ -1,36 +1,16 @@
 
-// Types for manual caption parser
-
-export interface ParsedContent {
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string | null;
-  purchase_date?: string | null;
-  quantity?: number | null;
-  notes?: string;
+export interface AnalysisRequest {
+  messageId: string;
   caption?: string;
-  parsing_metadata: {
-    method: 'manual';
-    timestamp: string;
-    partial_success?: boolean;
-    missing_fields?: string[];
-    quantity_pattern?: string;
-    used_fallback?: boolean;
-    original_caption?: string;
-    is_edit?: boolean;
-    edit_timestamp?: string;
-  };
-  sync_metadata?: {
-    media_group_id?: string;
-    sync_source_message_id?: string;
-    sync_timestamp?: string;
-  };
+  media_group_id?: string;
+  correlationId?: string;
+  isEdit?: boolean;
+  trigger_source?: string;
 }
 
 export interface MediaGroupResult {
   success: boolean;
-  synced_count?: number;
-  source_message_id?: string;
-  reason?: string;
+  synced_count: number;
+  media_group_id: string;
   error?: string;
 }

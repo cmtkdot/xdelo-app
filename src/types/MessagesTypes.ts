@@ -52,14 +52,16 @@ export interface Message {
   redownload_flagged_at?: string;
   redownload_completed_at?: string;
   file_id_expires_at?: string;
-  telegram_date: string;
-  is_bot: boolean;
-  message_type: string;
-  from_id: number;
+  telegram_date?: string;
+  is_bot?: boolean;
+  message_type?: string;
+  from_id?: number;
   is_duplicate?: boolean;
   duplicate_reference_id?: string;
   redownload_attempts?: number;
   correlation_id?: string;
+  retry_count?: number;
+  last_error_at?: string;
 }
 
 export interface MessageApiResponse {

@@ -8,7 +8,7 @@ import { useCaptionSync } from '@/hooks/useCaptionSync';
 
 export function MessageListContainer() {
   const {
-    data: messages,
+    data: mediaGroups,
     isLoading,
     error,
     refetch,
@@ -17,17 +17,20 @@ export function MessageListContainer() {
 
   const { forceSyncMessageGroup } = useCaptionSync();
 
+  // Convert the grouped messages object to an array for rendering
+  const messages = mediaGroups ? Object.values(mediaGroups).flatMap(group => group) : [];
+
   const onRetryProcessing = async (messageId: string) => {
     await forceSyncMessageGroup(messageId);
-    refetch();
+    await refetch();
   };
 
   return (
     <div className="space-y-4">
       <MessageControlPanel
-        onRefresh={refetch}
+        onRefresh={() => refetch()}
         isRefreshing={isRefetching}
-        messageCount={messages?.length || 0}
+        messageCount={messages.length}
       />
 
       {isLoading ? (
@@ -40,7 +43,7 @@ export function MessageListContainer() {
         </div>
       ) : (
         <MessageList 
-          messages={messages || []}
+          messages={messages}
           onRefresh={() => refetch()}
           onRetryProcessing={onRetryProcessing}
           processAllLoading={isRefetching}

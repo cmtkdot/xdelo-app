@@ -107,7 +107,7 @@ export async function updateMessageWithAnalysis(
       }
     );
     
-    // If part of a media group, sync the content to other messages using our new edge function
+    // If part of a media group, sync the content to other messages using our simplified edge function
     if (existingMessage?.media_group_id) {
       try {
         const response = await fetch(
@@ -160,7 +160,7 @@ export async function syncMediaGroupContent(
   isEdit: boolean = false
 ) {
   try {
-    // Use our new edge function for media group sync
+    // Use our simplified edge function for media group sync
     const response = await fetch(
       `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
       {

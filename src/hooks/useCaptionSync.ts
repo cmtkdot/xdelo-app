@@ -32,7 +32,7 @@ export function useCaptionSync() {
       // Generate correlation ID
       const correlationId = crypto.randomUUID();
       
-      // Use our new simplified edge function for media group sync
+      // Use our simplified edge function for media group sync
       const { data, error } = await supabase.functions.invoke(
         'xdelo_sync_media_group',
         {
@@ -131,7 +131,7 @@ export function useCaptionSync() {
         caption: newCaption,
         is_original_caption: true,
         processing_state: 'completed'
-      };
+      } as Message;
       
       // Explicitly sync to media group with a small delay 
       // to ensure the analysis has completed
@@ -139,7 +139,7 @@ export function useCaptionSync() {
         // Short timeout to ensure analysis is complete
         setTimeout(async () => {
           try {
-            await syncMediaGroupContent(updatedMessage as Message);
+            await syncMediaGroupContent(updatedMessage);
           } catch (syncError) {
             console.error('Delayed sync error:', syncError);
           }
@@ -192,7 +192,7 @@ export function useCaptionSync() {
       }
       
       // Then trigger a forced sync
-      return await syncMediaGroupContent(message as Message);
+      return await syncMediaGroupContent(message as unknown as Message);
       
     } catch (error: any) {
       console.error('Error in force sync:', error);
