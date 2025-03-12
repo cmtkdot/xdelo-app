@@ -3,6 +3,7 @@ import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { logMessageOperation } from '../utils/logger.ts';
 import { getMediaInfo } from '../utils/mediaUtils.ts';
+import { xdelo_detectMimeType } from '../../_shared/mediaUtils.ts';
 
 // Declare Deno type for Edge Functions
 declare const Deno: {
@@ -60,9 +61,21 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
           previous_analyzed_content: existingMessage.analyzed_content
         });
         
+        // Properly detect MIME type exactly as getMediaInfo does
+        const photo = message.photo ? message.photo[message.photo.length - 1] : null;
+        const video = message.video;
+        const document = message.document;
+        
+        // Detailed MIME type detection consistent with getMediaInfo implementation
+        const detectedMimeType = photo ? 'image/jpeg' : 
+                                 video?.mime_type || (video ? 'video/mp4' : null) ||
+                                 document?.mime_type || 'application/octet-stream';
+                                 
+        console.log(`Detected MIME type for edited message: ${detectedMimeType}`);
+        
         // Use mediaUtils from mediaMessageHandler to process file upload
         // Import shared media utilities to download and upload the new file
-        const { xdelo_downloadMediaFromTelegram, xdelo_uploadMediaToStorage } = 
+        const { xdelo_downloadMediaFromTelegram, xdelo_uploadMediaToStorage, xdelo_validateAndFixStoragePath } = 
           await import('../../_shared/mediaUtils.ts');
         
         // Get bot token from database
@@ -79,7 +92,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         const download = await xdelo_downloadMediaFromTelegram(
           mediaInfo.file_id,
           mediaInfo.file_unique_id,
-          mediaInfo.mime_type || 'application/octet-stream',
+          detectedMimeType, // Use properly detected MIME type
           settings.bot_token
         );
         
@@ -87,11 +100,17 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
           throw new Error(download.error || 'Failed to download new media from Telegram');
         }
         
+        // Generate storage path with properly detected MIME type
+        const storagePath = download.storagePath || xdelo_validateAndFixStoragePath(
+          mediaInfo.file_unique_id, 
+          detectedMimeType
+        );
+        
         // Upload the new media to Supabase storage
         const upload = await xdelo_uploadMediaToStorage(
-          download.storagePath,
+          storagePath,
           download.blob,
-          mediaInfo.mime_type || 'application/octet-stream'
+          detectedMimeType // Use properly detected MIME type
         );
         
         if (!upload.success || !upload.publicUrl) {
@@ -105,7 +124,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
             file_id: mediaInfo.file_id,
             file_unique_id: mediaInfo.file_unique_id,
             file_size: mediaInfo.file_size,
-            mime_type: mediaInfo.mime_type,
+            mime_type: detectedMimeType, // Use properly detected MIME type
             // Don't use file_type, width, height, duration as they may not exist in MediaInfo
             caption: message.caption || '',
             telegram_data: message,
