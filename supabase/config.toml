@@ -52,6 +52,3 @@ verify_jwt = false
 verify_jwt = false
 [functions.xdelo_sync_media_group]
 verify_jwt = false
-
-[functions.delete-telegram]
-verify_jwt = false
