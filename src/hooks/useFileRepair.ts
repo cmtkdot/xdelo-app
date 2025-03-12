@@ -23,6 +23,7 @@ interface StandardizeResponse {
 
 export function useFileRepair() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isRepairing, setIsRepairing] = useState(false);
   const [results, setResults] = useState<StandardizeResponse | null>(null);
   const { toast } = useToast();
 
@@ -45,11 +46,9 @@ export function useFileRepair() {
       setResults(response);
 
       if (response.success) {
-        const fixedCount = response.stats?.fixed || 0;
         toast({
           title: "Storage paths standardized",
-          description: `${fixedCount} file paths were updated successfully.`,
-          variant: "success",
+          description: `${response.stats?.fixed || 0} file paths were updated successfully.`,
         });
       } else {
         toast({
@@ -70,12 +69,6 @@ export function useFileRepair() {
         variant: "destructive",
       });
       
-      setResults({
-        success: false,
-        message: "Error processing request",
-        error: errorMessage
-      });
-      
       return {
         success: false,
         message: "Error processing request",
@@ -86,9 +79,24 @@ export function useFileRepair() {
     }
   };
 
+  const repairFiles = async (mode: 'all' | 'selected', messageIds?: string[]) => {
+    setIsRepairing(true);
+    try {
+      const response = await standardizeStoragePaths({
+        messageIds: mode === 'selected' ? messageIds : undefined,
+        limit: mode === 'all' ? 1000 : undefined
+      });
+      return response;
+    } finally {
+      setIsRepairing(false);
+    }
+  };
+
   return {
     standardizeStoragePaths,
+    repairFiles,
     isLoading,
+    isRepairing,
     results
   };
 }

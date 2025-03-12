@@ -1,11 +1,10 @@
-
 import { useState, useEffect } from 'react';
 import { useSupabase } from '@/integrations/supabase/SupabaseProvider';
 import { Message, MessageProcessingStats, ProcessingState } from '@/types/MessagesTypes';
 import { useToast } from './useToast';
 
 export function useMessageQueue() {
-  const { supabase } = useSupabase();
+  const { supabase: supabaseClient } = useSupabase();
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -23,7 +22,7 @@ export function useMessageQueue() {
 
   const fetchMessages = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('messages')
         .select('*')
         .order('created_at', { ascending: false })
@@ -33,7 +32,6 @@ export function useMessageQueue() {
 
       setMessages(data as Message[]);
       
-      // Calculate stats
       const stateCounts = {
         pending: 0,
         processing: 0,
@@ -75,7 +73,7 @@ export function useMessageQueue() {
 
   const retryMessage = async (messageId: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke('xdelo_reprocess_message', {
+      const { data, error } = await supabaseClient.functions.invoke('xdelo_reprocess_message', {
         body: { messageId }
       });
 

@@ -1,11 +1,67 @@
-
 import { Json } from '@/integrations/supabase/types';
-import { AnalyzedContent } from '@/types';
+import { AnalyzedContent } from './index';
 
-// ProcessingState matches the simplified database enum
 export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error';
 
-// Add MessageProcessingStats type for the message queue hook
+export interface Message {
+  id: string;
+  telegram_message_id?: number;
+  media_group_id?: string;
+  message_caption_id?: string;
+  is_original_caption?: boolean;
+  group_caption_synced?: boolean;
+  caption?: string;
+  file_id?: string;
+  file_unique_id: string;
+  public_url: string;
+  storage_path?: string;
+  mime_type?: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  user_id?: string;
+  processing_state?: ProcessingState;
+  processing_started_at?: string;
+  processing_completed_at?: string;
+  analyzed_content?: AnalyzedContent;
+  telegram_data?: Record<string, unknown>;
+  error_message?: string;
+  error_code?: string;
+  storage_exists?: boolean;
+  storage_path_standardized?: boolean;
+  chat_id?: number;
+  chat_type?: string;
+  chat_title?: string;
+  message_url?: string;
+  purchase_order?: string;
+  glide_row_id?: string;
+  created_at?: string;
+  updated_at?: string;
+  deleted_from_telegram?: boolean;
+  is_forward?: boolean;
+  forward_count?: number;
+  original_message_id?: string;
+  forward_from?: Record<string, unknown>;
+  forward_from_chat?: Record<string, unknown>;
+  forward_chain?: Record<string, unknown>[];
+  old_analyzed_content?: Record<string, unknown>[];
+  needs_redownload?: boolean;
+  redownload_reason?: string;
+  redownload_flagged_at?: string;
+  redownload_completed_at?: string;
+  file_id_expires_at?: string;
+  telegram_date: string;
+  is_bot: boolean;
+  message_type: string;
+  from_id: number;
+}
+
+export interface MessageApiResponse {
+  data: Message[] | null;
+  error: Error | null;
+}
+
 export interface MessageProcessingStats {
   state_counts: {
     pending: number;
@@ -36,58 +92,4 @@ export interface MessageProcessingStats {
     max_processing_seconds: number;
   };
   timestamp?: string;
-}
-
-export interface Message {
-  id: string;
-  telegram_message_id: number;
-  chat_id: number;
-  chat_title: string;
-  chat_type: 'private' | 'group' | 'supergroup' | 'channel';
-  telegram_date: string;
-  mime_type: string | null;
-  caption: string | null;
-  analyzed_content: AnalyzedContent | null;
-  is_bot: boolean;
-  message_type: string;
-  from_id: number | null;
-  from_is_bot: boolean | null;
-  from_first_name: string | null;
-  from_username: string | null;
-  photo: Json | null;
-  video: Json | null;
-  document: Json | null;
-  width: number | null;
-  height: number | null;
-  file_id: string | null;
-  file_unique_id: string | null;
-  file_size: number | null;
-  created_at: string;
-  updated_at: string | null;
-  public_url: string | null;
-  processing_state: ProcessingState;
-  processing_started_at: string | null;
-  processing_completed_at: string | null;
-  media_group_id: string | null;
-  media_unique_file_id: string | null;
-  is_original_caption: boolean | null;
-  group_caption_synced: boolean | null;
-  correlation_id: string | null;
-  error_message: string | null;
-  error_code: string | null;
-  storage_exists: boolean | null;
-  storage_path_standardized: boolean | null;
-  storage_path: string | null;
-  purchase_order?: string;
-  needs_redownload?: boolean;
-  redownload_reason?: string;
-  redownload_flagged_at?: string;
-  redownload_completed_at?: string;
-  file_id_expires_at?: string;
-  duration?: number;
-}
-
-export interface MessageApiResponse {
-  data: Message[] | null;
-  error: Error | null;
 }
