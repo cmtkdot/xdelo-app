@@ -1,78 +1,86 @@
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 
-export interface ProcessingStats {
-  state_counts: {
-    initialized: number;
-    pending: number;
-    processing: number;
-    completed: number;
-    error: number;
-    total_messages: number;
-  };
-  media_group_stats: {
-    unprocessed_with_caption: number;
-    stuck_in_processing: number;
-    stalled_no_media_group: number;
-    orphaned_media_group_messages: number;
-  };
-  timing_stats: {
-    avg_processing_time_seconds: number;
-    oldest_unprocessed_caption_age_hours: number;
-    oldest_stuck_processing_hours: number;
-  };
-  timestamp: string;
+interface MessageProcessingStats {
+  total_messages: number;
+  pending: number;
+  processing: number;
+  completed: number;
+  error: number;
+  partial_success: number;
+  need_attention: number;
+  recently_processed: number;
 }
 
-export function useProcessingStats(autoRefresh = false, refreshInterval = 30000) {
-  const [stats, setStats] = useState<ProcessingStats | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function useProcessingStats(refreshIntervalMs = 10000) {
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const fetchStats = async () => {
+  const fetchProcessingStats = async (): Promise<MessageProcessingStats> => {
     try {
-      setIsLoading(true);
-      setError(null);
+      // Call the RPC function to get processing stats - fixed type issue
+      const { data, error } = await supabase.rpc('xdelo_get_message_processing_stats' as any);
       
-      // Call the custom Postgres function to get processing stats
-      const { data, error } = await supabase.rpc('xdelo_get_message_processing_stats');
+      if (error) {
+        console.error('Error fetching processing stats:', error);
+        throw error;
+      }
       
-      if (error) throw error;
+      // Ensure we have valid data
+      if (!data) {
+        return {
+          total_messages: 0,
+          pending: 0,
+          processing: 0,
+          completed: 0,
+          error: 0,
+          partial_success: 0,
+          need_attention: 0,
+          recently_processed: 0
+        };
+      }
       
-      setStats(data as ProcessingStats);
+      setLastRefresh(new Date());
       return data;
-    } catch (err) {
-      console.error('Error fetching processing stats:', err);
-      setError(err.message);
-      return null;
-    } finally {
-      setIsLoading(false);
+    } catch (error) {
+      console.error('Error in fetchProcessingStats:', error);
+      throw error;
     }
   };
 
-  useEffect(() => {
-    // Initial fetch
-    fetchStats();
-    
-    // Set up auto refresh if enabled
-    let intervalId: number | undefined;
-    if (autoRefresh) {
-      intervalId = window.setInterval(fetchStats, refreshInterval);
+  const { data: stats, isLoading, error, refetch } = useQuery({
+    queryKey: ['processingStats'],
+    queryFn: fetchProcessingStats,
+    refetchInterval: refreshIntervalMs,
+    refetchIntervalInBackground: false
+  });
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await refetch();
+    } finally {
+      setIsRefreshing(false);
     }
-    
-    // Clean up on unmount
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [autoRefresh, refreshInterval]);
+  };
 
   return {
-    stats,
+    stats: stats || {
+      total_messages: 0,
+      pending: 0,
+      processing: 0,
+      completed: 0,
+      error: 0,
+      partial_success: 0,
+      need_attention: 0,
+      recently_processed: 0
+    },
     isLoading,
     error,
-    refreshStats: fetchStats
+    lastRefresh,
+    isRefreshing,
+    handleRefresh
   };
 }

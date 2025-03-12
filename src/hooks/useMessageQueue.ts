@@ -111,7 +111,9 @@ export function useMessageQueue() {
       
       if (error) throw error;
       
-      const resetCount = data?.length || 0;
+      // Fix type handling for the resetCount
+      const resetArray = data as Array<{ message_id: string, previous_state: string, reset_reason: string }> || [];
+      const resetCount = resetArray.length || 0;
       
       toast({
         title: "Reset Completed",
@@ -139,15 +141,17 @@ export function useMessageQueue() {
     try {
       setIsProcessing(true);
       
-      // Call the direct database function for best performance
-      const { data, error } = await supabase.rpc('xdelo_fix_mime_types', {
+      // Call the direct database function for best performance - Fix the RPC call
+      const { data, error } = await supabase.rpc('xdelo_fix_mime_types' as any, {
         p_limit: limit,
         p_only_octet_stream: true
       });
       
       if (error) throw error;
       
-      const fixedCount = data?.length || 0;
+      // Fix type handling for fixedCount
+      const fixedArray = Array.isArray(data) ? data : [];
+      const fixedCount = fixedArray.length || 0;
       
       toast({
         title: "MIME Type Repair",
