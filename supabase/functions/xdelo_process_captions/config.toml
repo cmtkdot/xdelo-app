@@ -1,0 +1,12 @@
+
+project_id = "xjhhehxcxkiumnwbirel"
+template = "typescript"
+memory = 1024
+verify_jwt = false
+entrypoint = "/index.ts"
+
+# Add database trigger to process captions automatically
+[triggers.xdelo_process_captions]
+table = "messages"
+event = "INSERT"
+filter = "caption IS NOT NULL AND caption != ''"

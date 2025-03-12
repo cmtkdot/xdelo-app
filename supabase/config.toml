@@ -31,10 +31,6 @@ verify_jwt = false
 verify_jwt = false
 [functions.redownload-missing-files]
 verify_jwt = false
-[functions.repair-media]
-verify_jwt = false
-[functions.repair-processing-flow]
-verify_jwt = false
 [functions.telegram-webhook]
 verify_jwt = false
 [functions.update-telegram-caption]
@@ -46,6 +42,8 @@ verify_jwt = false
 [functions.xdelo_clear_all_messages]
 verify_jwt = false
 [functions.xdelo_file_repair]
+verify_jwt = false
+[functions.xdelo_process_captions]
 verify_jwt = false
 [functions.xdelo_reprocess_message]
 verify_jwt = false
