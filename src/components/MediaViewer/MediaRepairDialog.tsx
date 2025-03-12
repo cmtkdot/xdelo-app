@@ -43,25 +43,21 @@ export function MediaRepairDialog({ open, onOpenChange, initialMessages = [], in
   const [selectedAll, setSelectedAll] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
-  // Refresh messages when filters change
   useEffect(() => {
     if (open) {
       loadFilteredMessages();
     }
   }, [open, filters]);
 
-  // Update selectedAll state when selection changes
   useEffect(() => {
     setSelectedAll(selectedMessages.length > 0 && selectedMessages.length === availableMessages.length);
   }, [selectedMessages, availableMessages]);
 
-  // Initial message selection if provided
   useEffect(() => {
     if (initialMessages && initialMessages.length > 0) {
       setAvailableMessages(initialMessages);
       selectMessages(initialMessages);
     } else if (initialMessageIds && initialMessageIds.length > 0) {
-      // Load messages by IDs
       const loadMessagesByIds = async () => {
         setLoadingMessages(true);
         try {
@@ -134,7 +130,6 @@ export function MediaRepairDialog({ open, onOpenChange, initialMessages = [], in
       }
     }
     
-    // Reset all states
     clearSelection();
     setActiveTab("select");
     onOpenChange(false);
@@ -143,13 +138,11 @@ export function MediaRepairDialog({ open, onOpenChange, initialMessages = [], in
   const handleAddFilter = (type: keyof RepairFilter, value: any) => {
     setFilters(prev => {
       if (type === 'processingState' || type === 'mimeType') {
-        // For array types, add the value if not already present
         const prevArray = prev[type] || [];
         if (!prevArray.includes(value)) {
           return { ...prev, [type]: [...prevArray, value] };
         }
       } else {
-        // For boolean or other types, just set the value
         return { ...prev, [type]: value };
       }
       return prev;
@@ -159,11 +152,9 @@ export function MediaRepairDialog({ open, onOpenChange, initialMessages = [], in
   const handleRemoveFilter = (type: keyof RepairFilter, value?: any) => {
     setFilters(prev => {
       if (type === 'processingState' || type === 'mimeType') {
-        // For array types, remove the specific value
         const prevArray = prev[type] || [];
         return { ...prev, [type]: prevArray.filter(v => v !== value) };
       } else {
-        // For boolean or other types, reset to default
         return { ...prev, [type]: type === 'limit' ? 100 : false };
       }
     });
@@ -179,7 +170,6 @@ export function MediaRepairDialog({ open, onOpenChange, initialMessages = [], in
       case 'pending': return 'Pending';
       case 'processing': return 'Processing';
       case 'completed': return 'Completed';
-      case 'partial_success': return 'Partial Success';
       case 'error': return 'Error';
       default: return state;
     }
@@ -203,7 +193,6 @@ export function MediaRepairDialog({ open, onOpenChange, initialMessages = [], in
             </TabsTrigger>
           </TabsList>
 
-          {/* Select Messages Tab */}
           <TabsContent value="select" className="flex-1 flex flex-col">
             <div className="flex gap-2 items-center mb-4">
               <Button 
@@ -374,7 +363,6 @@ export function MediaRepairDialog({ open, onOpenChange, initialMessages = [], in
             )}
           </TabsContent>
 
-          {/* Progress Tab */}
           <TabsContent value="progress" className="flex-1 flex flex-col">
             <div className="space-y-4 py-4">
               <div className="text-center mb-4">
@@ -394,7 +382,6 @@ export function MediaRepairDialog({ open, onOpenChange, initialMessages = [], in
             </div>
           </TabsContent>
 
-          {/* Results Tab */}
           <TabsContent value="results" className="flex-1 flex flex-col">
             {results && (
               <div className="space-y-4">

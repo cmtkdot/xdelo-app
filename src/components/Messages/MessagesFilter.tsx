@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -28,7 +27,6 @@ export const MessagesFilter: React.FC<MessagesFilterProps> = ({
     { value: 'pending', label: 'Pending' },
     { value: 'processing', label: 'Processing' },
     { value: 'completed', label: 'Completed' },
-    { value: 'partial_success', label: 'Partial Success' },
     { value: 'error', label: 'Error' }
   ];
 
