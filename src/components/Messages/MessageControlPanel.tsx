@@ -3,21 +3,18 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { RefreshCw, Wrench } from "lucide-react";
-import { MessageProcessingStats } from '@/types/MessagesTypes';
 import { useFileRepair } from '@/hooks/useFileRepair';
 
 interface MessageControlPanelProps {
   onRefresh: () => void;
   isRefreshing: boolean;
   messageCount: number;
-  stats: MessageProcessingStats;
 }
 
 export function MessageControlPanel({ 
   onRefresh, 
   isRefreshing, 
-  messageCount,
-  stats 
+  messageCount
 }: MessageControlPanelProps) {
   const { repairFiles, isRepairing } = useFileRepair();
 

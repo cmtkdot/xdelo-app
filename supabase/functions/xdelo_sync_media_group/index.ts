@@ -1,202 +1,126 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
 
 // Create Supabase client
-const supabase = createClient(
+const supabaseClient = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-serve(async (req) => {
+interface SyncMediaGroupRequest {
+  mediaGroupId: string;
+  sourceMessageId: string;
+  correlationId?: string;
+  forceSync?: boolean;
+  syncEditHistory?: boolean;
+}
+
+Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Parse the request body
-    const { 
-      mediaGroupId, 
-      sourceMessageId, 
-      correlationId = crypto.randomUUID(), 
-      forceSync = false,
-      syncEditHistory = false
-    } = await req.json();
-    
+    const requestData = await req.json() as SyncMediaGroupRequest;
+    const { mediaGroupId, sourceMessageId, correlationId, forceSync = false, syncEditHistory = false } = requestData;
+
     if (!mediaGroupId || !sourceMessageId) {
-      throw new Error('mediaGroupId and sourceMessageId are required');
+      throw new Error('Missing required parameters: mediaGroupId and sourceMessageId are required');
     }
-    
-    console.log(`Processing media group sync for group ${mediaGroupId}, source message ${sourceMessageId}`);
-    
-    // First try to use the database function
-    try {
-      const { data, error } = await supabase.rpc(
-        'xdelo_sync_media_group_content',
-        {
-          p_media_group_id: mediaGroupId,
-          p_source_message_id: sourceMessageId,
-          p_correlation_id: correlationId,
-          p_force_sync: forceSync,
-          p_sync_edit_history: syncEditHistory
-        }
-      );
-      
-      if (error) {
-        if (error.message?.includes('Could not find the function')) {
-          console.warn('Database function not available, falling back to manual sync');
-        } else {
-          throw error;
-        }
-      } else {
-        console.log('Media group sync completed via database function:', data);
-        
-        return new Response(
-          JSON.stringify({
-            success: true,
-            synced_count: data.synced_count || 0,
-            method: 'database_function'
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-    } catch (dbError) {
-      console.error('Database function error:', dbError);
-      // Fall through to manual sync
-    }
-    
-    // Manual sync fallback
-    console.log('Performing manual media group sync');
-    
-    // Get the source message with analyzed content
-    const { data: sourceMessage, error: sourceError } = await supabase
+
+    console.log(`Syncing media group ${mediaGroupId} from source message ${sourceMessageId}`, {
+      forceSync,
+      syncEditHistory,
+      correlationId
+    });
+
+    // First, get the source message with its analyzed content
+    const { data: sourceMessage, error: sourceError } = await supabaseClient
       .from('messages')
-      .select('analyzed_content, caption')
+      .select('analyzed_content, media_group_id, edit_history')
       .eq('id', sourceMessageId)
       .single();
-      
-    if (sourceError || !sourceMessage) {
-      throw new Error(`Could not find source message: ${sourceError?.message || 'Not found'}`);
-    }
     
+    if (sourceError || !sourceMessage) {
+      throw new Error(`Source message not found: ${sourceError?.message || 'No data returned'}`);
+    }
+
     if (!sourceMessage.analyzed_content) {
       throw new Error('Source message has no analyzed content to sync');
     }
-    
-    // Add sync metadata to the content
-    const syncedContent = {
-      ...sourceMessage.analyzed_content,
-      sync_metadata: {
-        ...sourceMessage.analyzed_content.sync_metadata,
-        media_group_id: mediaGroupId,
-        sync_source_message_id: sourceMessageId,
-        sync_timestamp: new Date().toISOString(),
-        sync_correlation_id: correlationId
-      }
+
+    if (sourceMessage.media_group_id !== mediaGroupId) {
+      throw new Error(`Source message ${sourceMessageId} is not part of media group ${mediaGroupId}`);
+    }
+
+    // Prepare update data
+    const updateData: Record<string, any> = {
+      analyzed_content: sourceMessage.analyzed_content,
+      processing_state: 'completed',
+      processing_completed_at: new Date().toISOString(),
+      group_caption_synced: true,
+      updated_at: new Date().toISOString()
     };
-    
-    // Get all messages in the group except the source
-    const { data: groupMessages, error: groupError } = await supabase
+
+    // Include edit history if requested
+    if (syncEditHistory && sourceMessage.edit_history) {
+      updateData.edit_history = sourceMessage.edit_history;
+    }
+
+    // Update all other messages in the group
+    const { data: updateResult, error: updateError } = await supabaseClient
       .from('messages')
-      .select('id, caption, analyzed_content')
+      .update(updateData)
       .eq('media_group_id', mediaGroupId)
-      .neq('id', sourceMessageId);
-      
-    if (groupError) {
-      throw new Error(`Error fetching group messages: ${groupError.message}`);
+      .neq('id', sourceMessageId)
+      .select('id');
+
+    if (updateError) {
+      throw new Error(`Failed to update media group messages: ${updateError.message}`);
     }
-    
-    if (!groupMessages || groupMessages.length === 0) {
-      return new Response(
-        JSON.stringify({
-          success: true,
-          synced_count: 0,
-          method: 'manual_sync',
-          message: 'No other messages in group to sync'
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    // Prepare updates for all other messages in the group
-    const updatePromises = groupMessages.map(async (message) => {
-      const updates = {
-        analyzed_content: syncedContent,
-        processing_state: 'completed',
-        processing_completed_at: new Date().toISOString(),
-        group_caption_synced: true,
-        is_original_caption: false,
-        message_caption_id: sourceMessageId,
-        updated_at: new Date().toISOString()
-      };
-      
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update(updates)
-        .eq('id', message.id);
-        
-      return { id: message.id, success: !updateError, error: updateError?.message };
-    });
-    
-    // Execute all updates
-    const results = await Promise.all(updatePromises);
-    const successCount = results.filter(r => r.success).length;
-    
-    // Log the operation
-    await supabase.from('unified_audit_logs').insert({
-      event_type: 'media_group_sync_completed',
+
+    // Log the sync operation
+    await supabaseClient.from('unified_audit_logs').insert({
+      event_type: 'media_group_content_synced',
       entity_id: sourceMessageId,
-      correlation_id: correlationId,
+      correlation_id: correlationId || crypto.randomUUID(),
       metadata: {
         media_group_id: mediaGroupId,
-        synced_count: successCount,
-        total_count: groupMessages.length,
-        method: 'manual_edge_function',
-        force_sync: forceSync,
-        sync_edit_history: syncEditHistory,
-        results
+        synced_messages: updateResult?.length || 0,
+        source_message_id: sourceMessageId,
+        forced_sync: forceSync,
+        synced_edit_history: syncEditHistory,
+        timestamp: new Date().toISOString()
       },
       event_timestamp: new Date().toISOString()
     });
-    
+
     return new Response(
       JSON.stringify({
         success: true,
-        synced_count: successCount,
-        total_count: groupMessages.length,
-        method: 'manual_edge_function',
-        results
+        synced_count: updateResult?.length || 0,
+        media_group_id: mediaGroupId,
+        source_message_id: sourceMessageId
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      }
     );
   } catch (error) {
     console.error('Error syncing media group:', error);
     
-    // Log the error
-    try {
-      const { mediaGroupId, sourceMessageId, correlationId } = await req.json();
-      
-      await supabase.from('unified_audit_logs').insert({
-        event_type: 'media_group_sync_error',
-        entity_id: sourceMessageId || 'unknown',
-        correlation_id: correlationId || crypto.randomUUID(),
-        error_message: error.message,
-        metadata: {
-          media_group_id: mediaGroupId,
-          error_stack: error.stack,
-          timestamp: new Date().toISOString()
-        },
-        event_timestamp: new Date().toISOString()
-      });
-    } catch (logError) {
-      console.error('Error logging failure:', logError);
-    }
-    
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      JSON.stringify({
+        success: false,
+        error: error.message
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      }
     );
   }
 });

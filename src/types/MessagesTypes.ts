@@ -66,35 +66,3 @@ export interface MessageApiResponse {
   data: Message[] | null;
   error: Error | null;
 }
-
-export interface MessageProcessingStats {
-  state_counts: {
-    pending: number;
-    processing: number;
-    completed: number;
-    error: number;
-    total_messages: number;
-  };
-  media_group_stats?: {
-    unprocessed_with_caption?: number;
-    stuck_in_processing?: number;
-    stalled_no_media_group?: number;
-    orphaned_media_group_messages?: number;
-  };
-  timing_stats?: {
-    avg_processing_time_seconds?: number;
-    oldest_unprocessed_caption_age_hours?: number;
-    oldest_stuck_processing_hours?: number;
-  };
-  media_type_counts?: {
-    photo_count: number;
-    video_count: number;
-    document_count: number;
-    other_count: number;
-  };
-  processing_stats?: {
-    avg_processing_seconds: number;
-    max_processing_seconds: number;
-  };
-  timestamp?: string;
-}

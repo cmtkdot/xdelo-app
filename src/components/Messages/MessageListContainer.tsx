@@ -3,7 +3,6 @@ import React from 'react';
 import { MessageList } from './MessageList';
 import { MessageControlPanel } from './MessageControlPanel';
 import { useMediaGroups } from '@/hooks/useMediaGroups';
-import { StatusSummary } from './StatusSummary';
 import { Spinner } from '../ui/spinner';
 
 export function MessageListContainer() {
@@ -15,27 +14,6 @@ export function MessageListContainer() {
     isRefetching
   } = useMediaGroups();
 
-  const stats = {
-    state_counts: {
-      pending: 0,
-      processing: 0,
-      completed: messages?.length || 0,
-      error: 0,
-      total_messages: messages?.length || 0
-    },
-    media_type_counts: {
-      photo_count: 0,
-      video_count: 0,
-      document_count: 0,
-      other_count: 0
-    },
-    processing_stats: {
-      avg_processing_seconds: 0,
-      max_processing_seconds: 0
-    },
-    timestamp: new Date().toISOString()
-  };
-
   const onRetryProcessing = async (messageId: string) => {
     console.log("Retry processing for message:", messageId);
     // In a real implementation, this would call an API to retry processing
@@ -43,13 +21,10 @@ export function MessageListContainer() {
 
   return (
     <div className="space-y-4">
-      <StatusSummary stats={stats} />
-
       <MessageControlPanel
         onRefresh={refetch}
         isRefreshing={isRefetching}
         messageCount={messages?.length || 0}
-        stats={stats}
       />
 
       {isLoading ? (
@@ -65,7 +40,7 @@ export function MessageListContainer() {
           messages={messages || []}
           onRefresh={() => refetch()}
           onRetryProcessing={onRetryProcessing}
-          stats={stats}
+          processAllLoading={isRefetching}
         />
       )}
     </div>

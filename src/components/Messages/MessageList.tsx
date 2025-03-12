@@ -1,8 +1,7 @@
 
 import React from 'react';
-import type { Message, MessageProcessingStats } from '@/types/MessagesTypes';
+import type { Message } from '@/types/MessagesTypes';
 import { Spinner } from '@/components/ui/spinner';
-import { StatusSummary } from './StatusSummary';
 import { MessageCard } from './MessageCard';
 
 interface MessageListProps {
@@ -11,7 +10,6 @@ interface MessageListProps {
   onRetryProcessing?: (messageId: string) => Promise<void>;
   onRefresh?: () => Promise<void>;
   processAllLoading?: boolean;
-  stats?: MessageProcessingStats;
 }
 
 export const MessageList: React.FC<MessageListProps> = ({
@@ -19,8 +17,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   isLoading,
   onRetryProcessing = async () => {},
   onRefresh,
-  processAllLoading = false,
-  stats
+  processAllLoading = false
 }) => {
   if (isLoading) {
     return (
@@ -41,7 +38,6 @@ export const MessageList: React.FC<MessageListProps> = ({
 
   return (
     <div className="space-y-6">
-      {stats && <StatusSummary stats={stats} />}
       <div className="space-y-4">
         {messages.map(message => (
           <MessageCard 
