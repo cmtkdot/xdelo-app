@@ -1520,6 +1520,261 @@ export type Database = {
         }
         Relationships: []
       }
+      make_automation_rules: {
+        Row: {
+          actions: Json
+          conditions: Json
+          created_at: string | null
+          description: string | null
+          event_type: Database["public"]["Enums"]["make_event_type"]
+          id: string
+          is_active: boolean | null
+          name: string
+          priority: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string | null
+          description?: string | null
+          event_type: Database["public"]["Enums"]["make_event_type"]
+          id?: string
+          is_active?: boolean | null
+          name: string
+          priority?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string | null
+          description?: string | null
+          event_type?: Database["public"]["Enums"]["make_event_type"]
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          priority?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      make_debug_events: {
+        Row: {
+          data: Json | null
+          event_type: string
+          id: string
+          level: string | null
+          session_id: string | null
+          timestamp: string | null
+        }
+        Insert: {
+          data?: Json | null
+          event_type: string
+          id?: string
+          level?: string | null
+          session_id?: string | null
+          timestamp?: string | null
+        }
+        Update: {
+          data?: Json | null
+          event_type?: string
+          id?: string
+          level?: string | null
+          session_id?: string | null
+          timestamp?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "make_debug_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "make_debug_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      make_debug_sessions: {
+        Row: {
+          config: Json | null
+          end_time: string | null
+          id: string
+          name: string
+          notes: string | null
+          start_time: string | null
+          status: string | null
+          webhook_id: string | null
+        }
+        Insert: {
+          config?: Json | null
+          end_time?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          start_time?: string | null
+          status?: string | null
+          webhook_id?: string | null
+        }
+        Update: {
+          config?: Json | null
+          end_time?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          start_time?: string | null
+          status?: string | null
+          webhook_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "make_debug_sessions_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "make_webhook_configs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      make_event_logs: {
+        Row: {
+          completed_at: string | null
+          context: Json | null
+          created_at: string | null
+          duration_ms: number | null
+          error_message: string | null
+          event_type: string
+          id: string
+          payload: Json | null
+          request_headers: Json | null
+          response_body: string | null
+          response_code: number | null
+          response_headers: Json | null
+          severity: string | null
+          status: Database["public"]["Enums"]["make_log_status"]
+          tags: string[] | null
+          webhook_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          context?: Json | null
+          created_at?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          event_type: string
+          id?: string
+          payload?: Json | null
+          request_headers?: Json | null
+          response_body?: string | null
+          response_code?: number | null
+          response_headers?: Json | null
+          severity?: string | null
+          status?: Database["public"]["Enums"]["make_log_status"]
+          tags?: string[] | null
+          webhook_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          context?: Json | null
+          created_at?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          request_headers?: Json | null
+          response_body?: string | null
+          response_code?: number | null
+          response_headers?: Json | null
+          severity?: string | null
+          status?: Database["public"]["Enums"]["make_log_status"]
+          tags?: string[] | null
+          webhook_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "make_event_logs_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "make_webhook_configs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      make_test_payloads: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          event_type: string
+          id: string
+          is_template: boolean | null
+          name: string
+          payload: Json
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          event_type: string
+          id?: string
+          is_template?: boolean | null
+          name: string
+          payload: Json
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          event_type?: string
+          id?: string
+          is_template?: boolean | null
+          name?: string
+          payload?: Json
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      make_webhook_configs: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          event_types: string[]
+          field_selection: Json | null
+          id: string
+          is_active: boolean | null
+          name: string
+          payload_template: Json | null
+          transformation_code: string | null
+          updated_at: string | null
+          url: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          event_types: string[]
+          field_selection?: Json | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          payload_template?: Json | null
+          transformation_code?: string | null
+          updated_at?: string | null
+          url: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          event_types?: string[]
+          field_selection?: Json | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          payload_template?: Json | null
+          transformation_code?: string | null
+          updated_at?: string | null
+          url?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
@@ -1567,6 +1822,7 @@ export type Database = {
           last_error_at: string | null
           last_processing_attempt: string | null
           media_group_id: string | null
+          media_group_sync: string | null
           media_type: string | null
           message_caption_id: string | null
           message_url: string | null
@@ -1659,6 +1915,7 @@ export type Database = {
           last_error_at?: string | null
           last_processing_attempt?: string | null
           media_group_id?: string | null
+          media_group_sync?: string | null
           media_type?: string | null
           message_caption_id?: string | null
           message_url?: string | null
@@ -1751,6 +2008,7 @@ export type Database = {
           last_error_at?: string | null
           last_processing_attempt?: string | null
           media_group_id?: string | null
+          media_group_sync?: string | null
           media_type?: string | null
           message_caption_id?: string | null
           message_url?: string | null
@@ -2770,6 +3028,13 @@ export type Database = {
         }
         Returns: Json
       }
+      get_make_event_status_summary: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          status: string
+          count: number
+        }[]
+      }
       get_monthly_revenue_analysis: {
         Args: {
           p_year?: number
@@ -2902,6 +3167,21 @@ export type Database = {
             }
             Returns: unknown
           }
+      make_clean_event_logs: {
+        Args: {
+          older_than: string
+          webhook_id?: string
+          status?: string
+        }
+        Returns: number
+      }
+      make_log_webhook_test: {
+        Args: {
+          webhook_id: string
+          payload: Json
+        }
+        Returns: string
+      }
       manually_create_invoice_from_estimate: {
         Args: {
           p_estimate_id: string
@@ -2943,6 +3223,12 @@ export type Database = {
           p_notes?: string
         }
         Returns: string
+      }
+      reorder_make_automation_rules: {
+        Args: {
+          rule_ids: string[]
+        }
+        Returns: undefined
       }
       repair_data_issues: {
         Args: Record<PropertyKey, never>
@@ -3501,6 +3787,15 @@ export type Database = {
         | "message_processing_error"
         | "message_processing_started"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
+      make_event_type:
+        | "message_received"
+        | "channel_joined"
+        | "channel_left"
+        | "user_joined"
+        | "user_left"
+        | "media_received"
+        | "command_received"
+      make_log_status: "pending" | "success" | "failed"
       message_operation_type:
         | "message_create"
         | "message_update"

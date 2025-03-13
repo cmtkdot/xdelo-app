@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { useLocation, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/Theme/ThemeToggle";
 import { cn } from "@/lib/utils";
 import { motion } from 'framer-motion';
+import { useIsMobile } from "@/hooks/useMobile";
 
 interface NavItem {
   name: string;
@@ -37,6 +39,7 @@ interface NavItem {
 export const AppSidebar = () => {
   const location = useLocation();
   const [expanded, setExpanded] = useState(false);
+  const isMobile = useIsMobile();
 
   const navItems: NavItem[] = [
     { name: "Dashboard", Icon: Home, path: "/", group: "main" },
@@ -57,6 +60,58 @@ export const AppSidebar = () => {
     await supabase.auth.signOut();
   };
 
+  // In mobile mode, don't use hover effects and always show full sidebar
+  if (isMobile) {
+    return (
+      <div className="w-full">
+        <div className="flex flex-col py-4">
+          <div className="flex items-center justify-center h-12 px-4 mb-2">
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">XDELO</h1>
+          </div>
+
+          <nav className="space-y-1">
+            {navItems.map((item) => {
+              const isActive = location.pathname === item.path;
+              const Icon = item.Icon;
+              
+              return (
+                <React.Fragment key={item.path}>
+                  {item.divider && <div className="h-px bg-gray-200 dark:bg-gray-800 my-3 mx-2" />}
+                  <Link
+                    to={item.path}
+                    className={cn(
+                      "flex items-center px-4 py-3 text-sm font-medium rounded-md transition-all",
+                      isActive 
+                        ? "bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-200" 
+                        : "text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
+                    )}
+                  >
+                    <Icon className={cn(
+                      "flex-shrink-0 w-5 h-5 mr-3",
+                      isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-400 dark:text-gray-400"
+                    )} />
+                    <span>{item.name}</span>
+                  </Link>
+                </React.Fragment>
+              );
+            })}
+          </nav>
+
+          <div className="mt-auto px-2 pt-4">
+            <button
+              onClick={handleLogout}
+              className="flex items-center w-full px-4 py-3 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              <LogOut className="flex-shrink-0 w-5 h-5 mr-3 text-gray-400 dark:text-gray-400" />
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop version with expandable sidebar
   return (
     <div 
       className={cn(

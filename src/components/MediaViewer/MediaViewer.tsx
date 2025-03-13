@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Message } from '@/types/MessagesTypes';
 import { MediaItem } from '@/types';
@@ -9,6 +10,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/generalUtils';
 import { messageToMediaItem } from './types';
 import { MediaFixButton } from './MediaFixButton';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 interface MediaViewerProps {
   isOpen: boolean;
@@ -24,7 +26,7 @@ interface MediaViewerProps {
 export const MediaViewer = ({
   isOpen,
   onClose,
-  currentGroup,
+  currentGroup = [], // Provide default empty array
   onPrevious,
   onNext,
   hasPrevious = false,
@@ -33,7 +35,9 @@ export const MediaViewer = ({
 }: MediaViewerProps) => {
   const [showTools, setShowTools] = useState(false);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const { isMobile } = useBreakpoint();
 
+  // Guard against null or undefined currentGroup
   if (!currentGroup || !Array.isArray(currentGroup) || currentGroup.length === 0) {
     return null;
   }
@@ -112,13 +116,14 @@ export const MediaViewer = ({
             </div>
           </div>
           
-          <div className="p-4 bg-muted/10 border-b flex justify-between">
-            <div className="flex gap-2">
+          <div className="p-4 bg-muted/10 border-b flex flex-wrap justify-between gap-2">
+            <div className="flex flex-wrap gap-2">
               {publicUrl && (
                 <a href={publicUrl} target="_blank" rel="noopener noreferrer">
                   <Button variant="outline" size="sm" className="flex gap-2 items-center">
                     <FileText className="h-4 w-4" />
-                    <span>View Original File</span>
+                    <span className="hidden sm:inline">View Original File</span>
+                    <span className="sm:hidden">File</span>
                   </Button>
                 </a>
               )}
@@ -127,7 +132,8 @@ export const MediaViewer = ({
                 <a href={telegramUrl} target="_blank" rel="noopener noreferrer">
                   <Button variant="outline" size="sm" className="flex gap-2 items-center">
                     <ExternalLink className="h-4 w-4" />
-                    <span>Open in Telegram</span>
+                    <span className="hidden sm:inline">Open in Telegram</span>
+                    <span className="sm:hidden">Telegram</span>
                   </Button>
                 </a>
               )}
@@ -138,77 +144,77 @@ export const MediaViewer = ({
             )}
           </div>
 
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             {mainMedia?.caption && <div className="p-4 bg-secondary/5 rounded-lg mb-4">
-                <p className="text-muted-foreground whitespace-pre-wrap text-lg font-semibold text-center">{mainMedia.caption}</p>
+                <p className="text-muted-foreground whitespace-pre-wrap text-base sm:text-lg font-semibold text-center">{mainMedia.caption}</p>
               </div>}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {mainMedia?.purchase_order && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
-                  <Tag className="w-5 h-5 text-primary" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+              {mainMedia?.purchase_order && <div className="bg-secondary/10 rounded-lg p-3 sm:p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Tag className="w-5 h-5 text-primary shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-muted-foreground">Order ID</p>
-                    <p className="text-base font-medium truncate">{mainMedia.purchase_order}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Order ID</p>
+                    <p className="text-sm sm:text-base font-medium truncate">{mainMedia.purchase_order}</p>
                   </div>
                 </div>}
               
-              {analyzedContent?.product_name && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
-                  <Tag className="w-5 h-5 text-primary" />
+              {analyzedContent?.product_name && <div className="bg-secondary/10 rounded-lg p-3 sm:p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Tag className="w-5 h-5 text-primary shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-muted-foreground">Product</p>
-                    <p className="text-base font-medium truncate">{analyzedContent.product_name}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Product</p>
+                    <p className="text-sm sm:text-base font-medium truncate">{analyzedContent.product_name}</p>
                   </div>
                 </div>}
               
-              {analyzedContent?.quantity && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
-                  <Package className="w-5 h-5 text-primary" />
+              {analyzedContent?.quantity && <div className="bg-secondary/10 rounded-lg p-3 sm:p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Package className="w-5 h-5 text-primary shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-muted-foreground">Quantity</p>
-                    <p className="text-base font-medium truncate">{analyzedContent.quantity}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Quantity</p>
+                    <p className="text-sm sm:text-base font-medium truncate">{analyzedContent.quantity}</p>
                   </div>
                 </div>}
 
-              {analyzedContent?.vendor_uid && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
-                  <Tag className="w-5 h-5 text-primary" />
+              {analyzedContent?.vendor_uid && <div className="bg-secondary/10 rounded-lg p-3 sm:p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Tag className="w-5 h-5 text-primary shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-muted-foreground">Vendor</p>
-                    <p className="text-base font-medium truncate">{analyzedContent.vendor_uid}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Vendor</p>
+                    <p className="text-sm sm:text-base font-medium truncate">{analyzedContent.vendor_uid}</p>
                   </div>
                 </div>}
               
-              {analyzedContent?.product_code && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
-                  <Tag className="w-5 h-5 text-primary" />
+              {analyzedContent?.product_code && <div className="bg-secondary/10 rounded-lg p-3 sm:p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Tag className="w-5 h-5 text-primary shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-muted-foreground">Product Code</p>
-                    <p className="text-base font-medium truncate">{analyzedContent.product_code}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Product Code</p>
+                    <p className="text-sm sm:text-base font-medium truncate">{analyzedContent.product_code}</p>
                   </div>
                 </div>}
 
-              {analyzedContent?.purchase_date && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
-                  <Calendar className="w-5 h-5 text-primary" />
+              {analyzedContent?.purchase_date && <div className="bg-secondary/10 rounded-lg p-3 sm:p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Calendar className="w-5 h-5 text-primary shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-muted-foreground">Purchase Date</p>
-                    <p className="text-base font-medium truncate">
+                    <p className="text-xs sm:text-sm text-muted-foreground">Purchase Date</p>
+                    <p className="text-sm sm:text-base font-medium truncate">
                       {formatDate(analyzedContent.purchase_date)}
                     </p>
                   </div>
                 </div>}
               
-              {analyzedContent?.unit_price && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
-                  <Tag className="w-5 h-5 text-primary" />
+              {analyzedContent?.unit_price && <div className="bg-secondary/10 rounded-lg p-3 sm:p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Tag className="w-5 h-5 text-primary shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-muted-foreground">Unit Price</p>
-                    <p className="text-base font-medium truncate">
+                    <p className="text-xs sm:text-sm text-muted-foreground">Unit Price</p>
+                    <p className="text-sm sm:text-base font-medium truncate">
                       ${analyzedContent.unit_price.toFixed(2)}
                     </p>
                   </div>
                 </div>}
               
-              {analyzedContent?.total_price && <div className="bg-secondary/10 rounded-lg p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
-                  <Tag className="w-5 h-5 text-primary" />
+              {analyzedContent?.total_price && <div className="bg-secondary/10 rounded-lg p-3 sm:p-4 flex items-center space-x-3 hover:bg-secondary/20 transition-colors">
+                  <Tag className="w-5 h-5 text-primary shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-muted-foreground">Total Price</p>
-                    <p className="text-base font-medium truncate">
+                    <p className="text-xs sm:text-sm text-muted-foreground">Total Price</p>
+                    <p className="text-sm sm:text-base font-medium truncate">
                       ${analyzedContent.total_price.toFixed(2)}
                     </p>
                   </div>

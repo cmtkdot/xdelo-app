@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -112,6 +113,56 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+  
+  /* Responsive typography */
+  h1 {
+    @apply text-2xl sm:text-3xl font-bold;
+  }
+  h2 {
+    @apply text-xl sm:text-2xl font-semibold;
+  }
+  h3 {
+    @apply text-lg sm:text-xl font-medium;
+  }
+  
+  /* Better touch targets for mobile */
+  button, a, input, select, textarea {
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  }
+}
+
+/* Safe area insets for mobile devices */
+@supports(padding: max(0px)) {
+  body {
+    padding-left: min(0vmin, env(safe-area-inset-left));
+    padding-right: min(0vmin, env(safe-area-inset-right));
+    padding-bottom: min(0vmin, env(safe-area-inset-bottom));
+  }
+  
+  .has-safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* Mobile-first responsive adjustments */
+.mobile-full {
+  @apply w-full sm:w-auto;
+}
+
+.mobile-stack {
+  @apply flex flex-col sm:flex-row gap-2;
+}
+
+.mobile-touch-target {
+  @apply min-h-[44px] min-w-[44px] flex items-center justify-center;
+}
+
+.mobile-card {
+  @apply p-3 sm:p-4 md:p-6;
+}
+
+.mobile-spacing {
+  @apply space-y-3 sm:space-y-4 md:space-y-6;
 }
 
 /* Custom styles for media gallery */
@@ -177,7 +228,7 @@
 
 /* Container styles */
 .content-container {
-  @apply bg-card rounded-lg border shadow-sm p-4;
+  @apply bg-card rounded-lg border shadow-sm p-3 sm:p-4;
 }
 
 .sidebar-container {
@@ -220,7 +271,33 @@
   animation: slideUp 0.3s ease-out;
 }
 
+/* Mobile-specific utility classes */
+.with-bottom-nav {
+  @apply pb-16;
+}
 
+.full-height {
+  min-height: calc(100vh - var(--header-height, 56px));
+}
+
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+  @apply overflow-y-auto;
+}
+
+.pull-to-refresh {
+  @apply relative overflow-hidden;
+}
+
+.pull-to-refresh::before {
+  content: "";
+  @apply absolute top-0 left-0 right-0 h-16 -translate-y-full flex items-center justify-center bg-muted/20 transition-transform;
+}
+
+.pill-button {
+  @apply rounded-full px-4 py-1.5 text-sm font-medium bg-muted/50 hover:bg-muted/70 
+  dark:bg-muted/30 dark:hover:bg-muted/50 transition-colors;
+}
 
 @layer base {
   * {
