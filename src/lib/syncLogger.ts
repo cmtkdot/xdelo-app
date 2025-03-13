@@ -1,116 +1,95 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
-/**
- * Logging utility for tracking operations using the unified audit logging system
- * This module provides client-side functions that integrate with the server-side
- * unified_audit_logs table through the log-operation edge function
- */
+// Event types for logging operations
+export type SyncEventType = 
+  | "sync_started" 
+  | "sync_completed" 
+  | "sync_error" 
+  | "sync_warning"
+  | "sync_message_processed"
+  | "sync_message_skipped";
 
-export type LogLevel = 'info' | 'warn' | 'error';
-
-export interface LogMetadata {
-  [key: string]: unknown;
-}
-
-/**
- * Log a deletion operation
- * @param messageId The ID of the message being deleted
- * @param source The source of the deletion (telegram, database, both)
- * @param metadata Additional metadata about the deletion
- */
-export async function logDeletion(
-  messageId: string,
-  source: 'telegram' | 'database' | 'both',
-  metadata: LogMetadata = {}
-): Promise<void> {
-  // Log to console for immediate feedback
-  console.log(JSON.stringify({
-    operation: 'deletion',
-    message_id: messageId,
-    source,
-    timestamp: new Date().toISOString(),
-    ...metadata
-  }, null, 2));
-  
+// Add missing functions that are referenced in other files
+export const logDeletion = async (
+  entityId: string,
+  metadata: Record<string, any> = {}
+): Promise<void> => {
   try {
-    // Call the edge function to log the deletion
-    await supabase.functions.invoke('log-operation', {
-      body: {
-        operation: 'deletion',
-        messageId,
-        source,
-        metadata
+    await supabase.from('unified_audit_logs').insert({
+      entity_id: entityId,
+      event_type: "message_deleted",
+      metadata: {
+        ...metadata,
+        timestamp: new Date().toISOString(),
+        source: 'web_client'
       }
     });
   } catch (error) {
-    console.error('Failed to log deletion:', error);
+    console.error('Error logging deletion:', error);
   }
-}
+};
 
-/**
- * Log a message operation
- * @param operation The type of operation being performed
- * @param messageId The ID of the message
- * @param metadata Additional metadata about the operation
- */
-export async function logMessageOperation(
-  operation: 'create' | 'update' | 'analyze' | 'sync',
-  messageId: string,
-  metadata: LogMetadata = {}
-): Promise<void> {
-  // Log to console for immediate feedback
-  console.log(JSON.stringify({
-    operation,
-    message_id: messageId,
-    timestamp: new Date().toISOString(),
-    ...metadata
-  }, null, 2));
-  
+export const logMessageOperation = async (
+  operation: string,
+  entityId: string,
+  metadata: Record<string, any> = {}
+): Promise<void> => {
   try {
-    // Call the edge function to log the operation
-    await supabase.functions.invoke('log-operation', {
-      body: {
-        operation,
-        messageId,
-        metadata
+    await supabase.from('unified_audit_logs').insert({
+      entity_id: entityId,
+      event_type: `message_${operation}`,
+      metadata: {
+        ...metadata,
+        timestamp: new Date().toISOString(),
+        source: 'web_client'
       }
     });
   } catch (error) {
-    console.error(`Failed to log ${operation}:`, error);
+    console.error('Error logging message operation:', error);
   }
-}
+};
 
-/**
- * Log a user action
- * @param action The action being performed
- * @param userId The ID of the user performing the action
- * @param metadata Additional metadata about the action
- */
-export async function logUserAction(
-  action: string,
-  userId: string,
-  metadata: LogMetadata = {}
-): Promise<void> {
-  // Log to console for immediate feedback
-  console.log(JSON.stringify({
-    action,
-    user_id: userId,
-    timestamp: new Date().toISOString(),
-    ...metadata
-  }, null, 2));
-  
+export const logSyncOperation = async (
+  operation: string,
+  entityId: string,
+  metadata: Record<string, any> = {}
+): Promise<void> => {
   try {
-    // Call the edge function to log the user action
-    await supabase.functions.invoke('log-operation', {
-      body: {
-        operation: 'user_action',
-        action,
-        userId,
-        metadata
+    // Use a valid event_type from the allowed list
+    const eventType: SyncEventType = `sync_${operation}` as SyncEventType;
+    
+    await supabase.from('unified_audit_logs').insert({
+      entity_id: entityId,
+      event_type: eventType,
+      metadata: {
+        ...metadata,
+        timestamp: new Date().toISOString(),
+        source: 'web_client'
       }
     });
   } catch (error) {
-    console.error('Failed to log user action:', error);
+    console.error('Error logging sync operation:', error);
   }
-}
+};
+
+export const logSyncWarning = async (
+  entityId: string,
+  message: string,
+  metadata: Record<string, any> = {}
+): Promise<void> => {
+  try {
+    await supabase.from('unified_audit_logs').insert({
+      entity_id: entityId,
+      event_type: "sync_warning" as SyncEventType,
+      metadata: {
+        message,
+        ...metadata,
+        timestamp: new Date().toISOString(),
+        source: 'web_client'
+      }
+    });
+  } catch (error) {
+    console.error('Error logging sync warning:', error);
+  }
+};

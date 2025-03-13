@@ -1,5 +1,4 @@
 {
-  "include": ["src", "supabase/functions/**/*.ts"],
   "compilerOptions": {
     "target": "ESNext",
     "useDefineForClassFields": true,
@@ -26,5 +25,7 @@
     "allowImportingTsExtensions": true,
     "noUnusedParameters": false,
     "noUnusedLocals": false
-  }
+  },
+  "include": ["src"],
+  "exclude": ["supabase/functions"]
 }

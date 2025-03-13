@@ -38,8 +38,8 @@ export const useMediaGroups = () => {
           processing_state: item.processing_state as ProcessingState || undefined,
           processing_started_at: item.processing_started_at || undefined,
           processing_completed_at: item.processing_completed_at || undefined,
-          analyzed_content: item.analyzed_content || {},
-          telegram_data: item.telegram_data || {},
+          analyzed_content: item.analyzed_content ? JSON.parse(JSON.stringify(item.analyzed_content)) : {},
+          telegram_data: item.telegram_data ? JSON.parse(JSON.stringify(item.telegram_data)) : {},
           error_message: item.error_message || undefined,
           chat_id: item.chat_id || undefined,
           chat_type: item.chat_type || undefined,
@@ -49,7 +49,7 @@ export const useMediaGroups = () => {
           is_original_caption: item.is_original_caption || false,
           group_caption_synced: item.group_caption_synced || false,
           storage_exists: Boolean(item.storage_exists),
-          storage_path_standardized: item.storage_path_standardized || ''
+          storage_path_standardized: Boolean(item.storage_path_standardized),
         };
         return message;
       });
