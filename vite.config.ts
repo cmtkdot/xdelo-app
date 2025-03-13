@@ -10,9 +10,7 @@ export default defineConfig(({ mode }) => ({
       fastRefresh: true,
       // Babel config for better React optimization
       babel: {
-        plugins: [
-          // Only include essential babel plugins
-        ]
+        plugins: []
       }
     }),
     // Only use component tagger in development mode
@@ -133,7 +131,6 @@ export default defineConfig(({ mode }) => ({
       'clsx',
       'tailwind-merge'
     ],
-    // Skip pre-bundling for large packages that aren't used frequently
     exclude: []
   },
   

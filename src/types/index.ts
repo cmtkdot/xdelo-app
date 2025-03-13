@@ -1,7 +1,8 @@
+
 // Re-export ProcessingState and Message types
 export type { Message, ProcessingState } from './MessagesTypes';
 
-// SyncStatus definition remains the same
+// SyncStatus definition
 export type SyncStatus = 'pending' | 'synced' | 'failed' | 'queued';
 
 export interface AnalyzedContent {

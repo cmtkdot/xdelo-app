@@ -10,8 +10,3 @@ SUPABASE_SERVICE_ROLE_KEY = "env(SUPABASE_SERVICE_ROLE_KEY)"
 # Default settings for all functions
 [global]
 verify_jwt = false  # Default to no JWT verification, enable on per-function basis for protected routes
-
-# Function-specific overrides can be added below
-# Example:
-# [functions.user-protected-function]
-# verify_jwt = true
