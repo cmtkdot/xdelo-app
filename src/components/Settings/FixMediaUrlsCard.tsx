@@ -13,6 +13,7 @@ export function FixMediaUrlsCard() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [limit, setLimit] = useState<number>(100);
   const [dryRun, setDryRun] = useState<boolean>(false);
+  const [onlyImages, setOnlyImages] = useState<boolean>(true);
   const [results, setResults] = useState<any>(null);
 
   const handleFixMediaUrls = async () => {
@@ -21,7 +22,8 @@ export function FixMediaUrlsCard() {
       const { data, error } = await supabase.functions.invoke('xdelo_fix_media_urls', {
         body: { 
           limit, 
-          dryRun 
+          dryRun, 
+          onlyImages 
         }
       });
       
@@ -68,13 +70,23 @@ export function FixMediaUrlsCard() {
                 onChange={(e) => setLimit(parseInt(e.target.value) || 100)}
               />
             </div>
-            <div className="flex items-end space-x-2 h-full pb-0.5">
-              <Checkbox 
-                id="dryRun" 
-                checked={dryRun}
-                onCheckedChange={(checked) => setDryRun(!!checked)}
-              />
-              <Label htmlFor="dryRun" className="text-sm cursor-pointer">Dry run (don't make changes)</Label>
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2 mb-2">
+                <Checkbox 
+                  id="dryRun" 
+                  checked={dryRun}
+                  onCheckedChange={(checked) => setDryRun(!!checked)}
+                />
+                <Label htmlFor="dryRun" className="text-sm cursor-pointer">Dry run (don't make changes)</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="onlyImages" 
+                  checked={onlyImages}
+                  onCheckedChange={(checked) => setOnlyImages(!!checked)}
+                />
+                <Label htmlFor="onlyImages" className="text-sm cursor-pointer">Fix only images</Label>
+              </div>
             </div>
           </div>
         </div>
@@ -97,6 +109,7 @@ export function FixMediaUrlsCard() {
                     <div key={i} className="border-t pt-1 mt-1 first:border-t-0 first:pt-0 first:mt-0">
                       <div>ID: {item.id.substring(0, 8)}...</div>
                       <div className="truncate">New URL: {item.new_url}</div>
+                      <div className="text-xs text-muted-foreground">Type: {item.mime_type}</div>
                     </div>
                   ))}
                 </div>
@@ -117,7 +130,7 @@ export function FixMediaUrlsCard() {
               Processing...
             </>
           ) : (
-            "Fix Media URLs"
+            onlyImages ? "Fix Image URLs" : "Fix Media URLs"
           )}
         </Button>
       </CardFooter>

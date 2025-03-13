@@ -4,12 +4,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
+import { Loader2, Image } from "lucide-react";
 import { toast } from "sonner";
 import { FixMediaUrlsCard } from "./FixMediaUrlsCard";
 
 export function DangerZoneCard() {
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isFixingImages, setIsFixingImages] = useState<boolean>(false);
 
   const handleClearAllMessages = async () => {
     setIsDeleting(true);
@@ -30,6 +31,31 @@ export function DangerZoneCard() {
     }
   };
 
+  const handleQuickFixImages = async () => {
+    setIsFixingImages(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('xdelo_fix_media_urls', {
+        body: { 
+          limit: 200, 
+          dryRun: false,
+          onlyImages: true
+        }
+      });
+      
+      if (error) {
+        throw error;
+      }
+      
+      toast.success(`Successfully fixed ${data.results.fixed} image URLs`);
+      console.log('Fix images result:', data);
+    } catch (error) {
+      console.error('Error fixing images:', error);
+      toast.error('Failed to fix images: ' + (error?.message || 'Unknown error'));
+    } finally {
+      setIsFixingImages(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <FixMediaUrlsCard />
@@ -42,6 +68,22 @@ export function DangerZoneCard() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-4 mb-4">
+            <Button 
+              variant="outline" 
+              className="flex items-center gap-2"
+              onClick={handleQuickFixImages}
+              disabled={isFixingImages}
+            >
+              {isFixingImages ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Image className="h-4 w-4" />
+              )}
+              Quick Fix Images
+            </Button>
+          </div>
+          
           <div className="space-y-2">
             <p className="text-sm font-medium">Clear All Messages</p>
             <p className="text-sm text-muted-foreground">

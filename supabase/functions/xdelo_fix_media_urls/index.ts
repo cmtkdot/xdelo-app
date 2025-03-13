@@ -19,26 +19,29 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     const requestData = await req.json();
-    const { limit = 1000, dryRun = false } = requestData;
+    const { limit = 1000, dryRun = false, onlyImages = false } = requestData;
 
     // 1. Check if bucket is public
-    const { data: bucketData, error: bucketError } = await supabase
-      .from('storage')
-      .select('public')
-      .eq('name', 'telegram-media')
-      .single();
+    const { data: bucketData, error: bucketError } = await supabase.rpc('xdelo_execute_sql_query', {
+      p_query: `
+        SELECT public FROM storage.buckets WHERE name = 'telegram-media';
+      `,
+      p_params: []
+    });
 
     // If bucket doesn't exist or isn't public, make it public
-    if (bucketError || !bucketData?.public) {
+    if (bucketError || !bucketData?.[0]?.public) {
       console.log('Setting telegram-media bucket to public');
-      await supabase.rpc('xdelo_execute_sql_query', {
-        p_query: `
-          UPDATE storage.buckets 
-          SET public = true 
-          WHERE name = 'telegram-media';
-        `,
-        p_params: []
-      });
+      if (!dryRun) {
+        await supabase.rpc('xdelo_execute_sql_query', {
+          p_query: `
+            UPDATE storage.buckets 
+            SET public = true 
+            WHERE name = 'telegram-media';
+          `,
+          p_params: []
+        });
+      }
     }
 
     // 2. Make sure RLS policy exists
@@ -54,27 +57,36 @@ serve(async (req) => {
 
     if (policyError || !policyData || policyData.length === 0) {
       console.log('Creating RLS policy for telegram-media bucket');
-      await supabase.rpc('xdelo_execute_sql_query', {
-        p_query: `
-          CREATE POLICY "Public Access to Telegram Media" 
-          ON storage.objects 
-          FOR SELECT
-          USING (bucket_id = 'telegram-media');
-        `,
-        p_params: []
-      });
+      if (!dryRun) {
+        await supabase.rpc('xdelo_execute_sql_query', {
+          p_query: `
+            CREATE POLICY "Public Access to Telegram Media" 
+            ON storage.objects 
+            FOR SELECT
+            USING (bucket_id = 'telegram-media');
+          `,
+          p_params: []
+        });
+      }
     }
 
     // 3. Fix all the URLs for the files
     // Get base URL for storage
     const baseUrl = supabaseUrl.replace(/\/$/, '') + '/storage/v1/object/public/telegram-media';
     
-    // Get messages that need fixing
-    const { data: messages, error: messagesError } = await supabase
+    // Build query to get messages that need fixing
+    let query = supabase
       .from('messages')
       .select('id, file_unique_id, mime_type, storage_path, public_url')
       .is('deleted_from_telegram', false)
-      .not('storage_path', 'is', null)
+      .not('storage_path', 'is', null);
+    
+    // Add filter for only images if specified
+    if (onlyImages) {
+      query = query.like('mime_type', 'image/%');
+    }
+    
+    const { data: messages, error: messagesError } = await query
       .order('created_at', { ascending: false })
       .limit(limit);
     
@@ -105,6 +117,18 @@ serve(async (req) => {
             continue;
           }
           
+          // Check if file exists in storage
+          const { data: fileExists } = await supabase
+            .storage
+            .from('telegram-media')
+            .getPublicUrl(message.storage_path);
+          
+          if (!fileExists) {
+            console.log(`File doesn't exist in storage: ${message.storage_path}`);
+            results.errors++;
+            continue;
+          }
+          
           // Determine content disposition based on MIME type
           const isViewable = message.mime_type && (
             message.mime_type.startsWith('image/') || 
@@ -115,7 +139,7 @@ serve(async (req) => {
           
           const contentDisposition = isViewable ? 'inline' : 'attachment';
           
-          // Fix metadata in storage.objects
+          // Fix metadata in storage.objects - this is critical for images
           await supabase.rpc('xdelo_execute_sql_query', {
             p_query: `
               UPDATE storage.objects
@@ -138,6 +162,7 @@ serve(async (req) => {
               public_url: newPublicUrl,
               mime_type_verified: true,
               content_disposition: contentDisposition,
+              storage_exists: true,
               updated_at: new Date().toISOString()
             })
             .eq('id', message.id);
@@ -167,6 +192,7 @@ serve(async (req) => {
         metadata: {
           ...results,
           dry_run: dryRun,
+          only_images: onlyImages,
           timestamp: new Date().toISOString()
         },
         correlation_id: crypto.randomUUID()
