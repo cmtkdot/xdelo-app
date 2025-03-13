@@ -6,6 +6,8 @@ interface RepairMediaOptions {
   messageIds: string[];
   fixContentTypes?: boolean;
   forceRedownload?: boolean;
+  mediaGroupId?: string;
+  limit?: number;
 }
 
 export function useUnifiedMediaRepair() {
@@ -15,7 +17,9 @@ export function useUnifiedMediaRepair() {
   const repairMedia = async ({
     messageIds,
     fixContentTypes = true,
-    forceRedownload = false
+    forceRedownload = false,
+    mediaGroupId,
+    limit
   }: RepairMediaOptions) => {
     if (!messageIds.length) return { success: false, message: 'No message IDs provided' };
     
@@ -30,7 +34,9 @@ export function useUnifiedMediaRepair() {
             messageIds,
             options: {
               fixContentTypes,
-              forceRedownload
+              forceRedownload,
+              mediaGroupId,
+              limit
             }
           }
         }

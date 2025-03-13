@@ -14,6 +14,7 @@ export enum LogEventType {
   MESSAGE_DELETED = 'message:deleted',
   MESSAGE_PROCESSED = 'message:processed',
   MESSAGE_PROCESSING_FAILED = 'message:processing_failed',
+  MESSAGE_REPROCESSED = 'message:reprocessed',
   
   // Media events
   MEDIA_UPLOADED = 'media:uploaded',
@@ -29,5 +30,11 @@ export enum LogEventType {
   // API events
   API_REQUEST = 'api:request',
   API_RESPONSE = 'api:response',
-  API_ERROR = 'api:error'
+  API_ERROR = 'api:error',
+  
+  // Sync events
+  SYNC_STARTED = 'sync:started',
+  SYNC_COMPLETED = 'sync:completed',
+  SYNC_FAILED = 'sync:failed',
+  SYNC_PRODUCTS = 'sync:products'
 }

@@ -1,6 +1,8 @@
-import type { SyncStatus } from "@/types";
 
-export interface GlProduct {
+import type { SyncStatus } from "@/types";
+import type { GlProduct as BaseGlProduct } from "@/types/entities/Product";
+
+export interface GlProduct extends Omit<BaseGlProduct, 'name' | 'createdAt'> {
   id: string;
   main_new_product_name: string;
   main_vendor_product_name: string;

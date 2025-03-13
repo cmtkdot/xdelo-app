@@ -1,12 +1,15 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { LogEventType } from '@/types';
+import { LogEventType } from '@/types/api/LogEventType';
+
+// Re-export LogEventType for direct imports
+export { LogEventType };
 
 /**
  * Logs an event to the unified_audit_logs table
  */
 export async function logEvent(
-  eventType: LogEventType,
+  eventType: LogEventType | string,
   entityId: string,
   metadata: Record<string, any> = {},
   previousState?: Record<string, any>,
@@ -56,4 +59,18 @@ export function logUserAction(
       }
     );
   }
+}
+
+// Add logSyncOperation for compatibility
+export async function logSyncOperation(
+  eventType: LogEventType | string,
+  entityId: string,
+  metadata: Record<string, any> = {},
+  includeTimestamp: boolean = true
+) {
+  if (includeTimestamp) {
+    metadata.timestamp = new Date().toISOString();
+  }
+  
+  return logEvent(eventType, entityId, metadata);
 }

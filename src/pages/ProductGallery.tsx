@@ -11,7 +11,7 @@ import { ProductPagination } from "@/components/ProductGallery/ProductPagination
 import ProductFilters from "@/components/ProductGallery/ProductFilters";
 import { useMediaGroups } from "@/hooks/useMediaGroups";
 import { useVendors } from "@/hooks/useVendors";
-import { logMessageOperation } from "@/lib/syncLogger";
+import { logEvent, LogEventType } from "@/lib/logUtils";
 import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { isSameDay, isWithinInterval, parseISO } from "date-fns";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
@@ -64,13 +64,17 @@ const ProductGallery = () => {
           const messageData = payload.new as Message;
           if (messageData?.file_unique_id && messageData?.id) {
             try {
-              await logMessageOperation('sync', messageData.id, {
-                event: payload.eventType,
-                table: 'messages',
-                file_unique_id: messageData.file_unique_id,
-                chat_id: messageData.chat_id,
-                media_group_id: messageData.media_group_id
-              });
+              await logEvent(
+                LogEventType.MESSAGE_UPDATED,
+                messageData.id,
+                {
+                  event: payload.eventType,
+                  table: 'messages',
+                  file_unique_id: messageData.file_unique_id,
+                  chat_id: messageData.chat_id,
+                  media_group_id: messageData.media_group_id
+                }
+              );
             } catch (error) {
               console.error('Error logging sync:', error);
             }
@@ -87,10 +91,14 @@ const ProductGallery = () => {
 
   const handleEdit = async (media: Message) => {
     try {
-      await logMessageOperation('update', media.id, {
-        action: 'start_edit',
-        media_group_id: media.media_group_id
-      });
+      await logEvent(
+        LogEventType.USER_ACTION,
+        media.id,
+        {
+          action: 'start_edit',
+          media_group_id: media.media_group_id
+        }
+      );
       setEditItem(media);
     } catch (error) {
       console.error('Error logging edit operation:', error);

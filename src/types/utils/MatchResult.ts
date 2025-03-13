@@ -11,4 +11,15 @@ export interface MatchResult {
       score: number;
     };
   };
+  
+  // Additional fields for extended functionality
+  id?: string;
+  message_id?: string;
+  product_id?: string;
+  confidence?: number;
+  matchType?: string;
+  details?: {
+    matchedFields: string[];
+    confidence: number;
+  };
 }

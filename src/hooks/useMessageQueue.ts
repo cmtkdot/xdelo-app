@@ -27,15 +27,13 @@ export function useMessageQueue() {
 
       setResults(data);
       toast({
-        title: 'Processing complete',
-        description: `Processed ${data.processed_count || 0} messages.`
+        description: `Processing complete: Processed ${data.processed_count || 0} messages.`
       });
       
       return data;
     } catch (error) {
       toast({
-        title: 'Processing failed',
-        description: error.message,
+        description: `Processing failed: ${error.message}`,
         variant: 'destructive'
       });
       console.error('Processing error:', error);

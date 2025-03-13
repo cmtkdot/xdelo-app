@@ -23,6 +23,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/Theme/ThemeToggle";
 import { cn } from "@/lib/utils";
+import { motion } from 'framer-motion';
 
 interface NavItem {
   name: string;

@@ -6,6 +6,7 @@ import { GLProductGrid } from "@/components/GlProducts/GLProductGrid";
 import { GLProductFilters } from "@/components/GlProducts/GLProductFilters";
 import { supabase } from "@/integrations/supabase/client";
 import { GlProduct, convertToGlProduct } from '@/types/GlProducts';
+import { GlProduct as EntityGlProduct } from '@/types/entities/Product';
 
 const GlProducts = () => {
   const [search, setSearch] = useState("");
@@ -67,7 +68,7 @@ const GlProducts = () => {
           : valueB - valueA;
       });
 
-      return productsWithImages;
+      return productsWithImages as unknown as EntityGlProduct[];
     },
   });
 

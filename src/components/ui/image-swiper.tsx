@@ -38,13 +38,15 @@ export function ImageSwiper({
     }
     
     return [...media].sort((a, b) => {
-      // First, check if mime_type exists
-      const aIsImage = a.mime_type?.startsWith('image') || false;
-      const bIsImage = b.mime_type?.startsWith('image') || false;
+      // First, check if mimeType exists
+      const aIsImage = a.mimeType?.startsWith('image') || a.mime_type?.startsWith('image') || false;
+      const bIsImage = b.mimeType?.startsWith('image') || b.mime_type?.startsWith('image') || false;
       
       // If mime_type is missing, try to infer from URL
-      const aHasImageExt = a.public_url?.match(/\.(jpg|jpeg|png|gif)$/i);
-      const bHasImageExt = b.public_url?.match(/\.(jpg|jpeg|png|gif)$/i);
+      const aUrl = a.url || a.public_url || '';
+      const bUrl = b.url || b.public_url || '';
+      const aHasImageExt = aUrl.match(/\.(jpg|jpeg|png|gif)$/i);
+      const bHasImageExt = bUrl.match(/\.(jpg|jpeg|png|gif)$/i);
       
       const aIsLikelyImage = aIsImage || !!aHasImageExt;
       const bIsLikelyImage = bIsImage || !!bHasImageExt;
@@ -55,8 +57,8 @@ export function ImageSwiper({
   }, [media]);
 
   const currentMedia = sortedMedia[mediaIndex];
-  const isVideo = currentMedia?.mime_type?.startsWith("video/") || 
-                 (currentMedia?.public_url && /\.(mp4|mov|webm|avi)$/i.test(currentMedia.public_url));
+  const isVideo = (currentMedia?.mimeType || currentMedia?.mime_type)?.startsWith("video/") || 
+                 ((currentMedia?.url || currentMedia?.public_url) && /\.(mp4|mov|webm|avi)$/i.test(currentMedia?.url || currentMedia?.public_url || ''));
 
   React.useEffect(() => {
     if (onIndexChange) {
@@ -73,8 +75,8 @@ export function ImageSwiper({
   React.useEffect(() => {
     if (isHovered && !showNavigation) {
       const videoIndex = sortedMedia.findIndex(m => 
-        m.mime_type?.startsWith('video/') || 
-        (m.public_url && /\.(mp4|mov|webm|avi)$/i.test(m.public_url))
+        (m.mimeType || m.mime_type)?.startsWith('video/') || 
+        ((m.url || m.public_url) && /\.(mp4|mov|webm|avi)$/i.test(m.url || m.public_url || ''))
       );
       if (videoIndex !== -1) {
         setMediaIndex(videoIndex);
@@ -123,11 +125,15 @@ export function ImageSwiper({
     )
   }
 
-  const productName = currentMedia.analyzed_content?.product_name || 'Untitled Product';
+  const productName = currentMedia.title || 
+                      currentMedia.analyzed_content?.product_name || 
+                      'Untitled Product';
+  
   let formattedDate = '';
   
   try {
-    formattedDate = format(new Date(currentMedia.created_at), 'MMM d, yyyy');
+    const dateStr = currentMedia.uploadedAt || currentMedia.created_at || '';
+    formattedDate = dateStr ? format(new Date(dateStr), 'MMM d, yyyy') : 'Unknown date';
   } catch (e) {
     formattedDate = 'Unknown date';
   }
@@ -193,7 +199,7 @@ export function ImageSwiper({
       {isVideo ? (
         <video
           ref={videoRef}
-          src={currentMedia.public_url}
+          src={currentMedia.url || currentMedia.public_url}
           className="h-full w-full object-cover"
           loop
           muted
@@ -203,7 +209,7 @@ export function ImageSwiper({
         />
       ) : (
         <img 
-          src={currentMedia.public_url} 
+          src={currentMedia.url || currentMedia.public_url} 
           alt={productName}
           className="h-full w-full object-cover" 
           onError={() => handleMediaError('image')}
