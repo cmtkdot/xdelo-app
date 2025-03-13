@@ -1582,7 +1582,6 @@ export type Database = {
           parsed_product_code: string | null
           parsed_purchase_date: string | null
           parsed_quantity: number | null
-          parsed_total_price: number | null
           parsed_unit_price: number | null
           parsed_vendor_uid: string | null
           processing_attempts: number | null
@@ -1675,7 +1674,6 @@ export type Database = {
           parsed_product_code?: string | null
           parsed_purchase_date?: string | null
           parsed_quantity?: number | null
-          parsed_total_price?: number | null
           parsed_unit_price?: number | null
           parsed_vendor_uid?: string | null
           processing_attempts?: number | null
@@ -1768,7 +1766,6 @@ export type Database = {
           parsed_product_code?: string | null
           parsed_purchase_date?: string | null
           parsed_quantity?: number | null
-          parsed_total_price?: number | null
           parsed_unit_price?: number | null
           parsed_vendor_uid?: string | null
           processing_attempts?: number | null

@@ -3,7 +3,7 @@
  * Result of a matching operation
  */
 export interface MatchResult {
-  // Core match properties
+  // Core match properties (required)
   isMatch: boolean;
   score: number;
   matches: {

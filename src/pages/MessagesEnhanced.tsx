@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/integrations/supabase/client";
@@ -21,7 +22,8 @@ import {
   PanelRight, 
   BarChart3, 
   X,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import { EnhancedMessagesHeader } from '@/components/EnhancedMessages/EnhancedMessagesHeader';
 import { MessageGridView } from '@/components/EnhancedMessages/MessageGridView';
@@ -29,7 +31,7 @@ import { MessageListView } from '@/components/EnhancedMessages/MessageListView';
 import { EnhancedFiltersPanel } from '@/components/EnhancedMessages/EnhancedFiltersPanel';
 import { MessageDetailsPanel } from '@/components/EnhancedMessages/MessageDetailsPanel';
 import { MessageAnalyticsPanel } from '@/components/EnhancedMessages/MessageAnalyticsPanel';
-import { useMessageAnalytics } from '@/hooks/useMessageAnalytics';
+import { messageToMediaItem } from '@/lib/mediaUtils';
 import { cn } from '@/lib/utils';
 import { useMessagesStore } from '@/hooks/useMessagesStore';
 
@@ -49,6 +51,8 @@ export interface EnhancedMessageFilterState {
 }
 
 const MessagesEnhanced = () => {
+  console.log('MessagesEnhanced component rendering');
+  
   // Initialize the global state
   const { 
     filters, setFilters,
@@ -66,6 +70,7 @@ const MessagesEnhanced = () => {
   const [editDialogMessage, setEditDialogMessage] = useState<Message | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [errorState, setErrorState] = useState<Error | null>(null);
 
   // Fetch data using existing hooks
   const { data: mediaGroups, isLoading, error, refetch } = useMediaGroups();
@@ -80,75 +85,105 @@ const MessagesEnhanced = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Log any errors for debugging
+  useEffect(() => {
+    if (error) {
+      console.error('Error in MessagesEnhanced:', error);
+      setErrorState(error as Error);
+    }
+  }, [error]);
+
+  // Debug the mediaGroups data
+  useEffect(() => {
+    console.log('mediaGroups updated:', mediaGroups ? Object.keys(mediaGroups).length : 'null');
+  }, [mediaGroups]);
+
   // Memoize the filtered messages to avoid recalculation
   const filteredMessages = useMemo(() => {
-    // Return an array of message groups based on the current filters
-    const groups = Object.values(mediaGroups || {});
-    
-    // Apply all filters
-    return groups.filter(group => {
-      // Filter logic for various criteria
-      const mainMessage = group[0];
-      if (!mainMessage) return false;
+    try {
+      console.log('Calculating filteredMessages, mediaGroups:', mediaGroups ? Object.keys(mediaGroups).length : 'null');
+      
+      // Return an array of message groups based on the current filters
+      const groups = Object.values(mediaGroups || {});
+      
+      // Apply all filters
+      return groups.filter(group => {
+        try {
+          // Filter logic for various criteria
+          const mainMessage = group[0];
+          if (!mainMessage) return false;
 
-      // Search filter
-      if (filters.search && mainMessage.caption) {
-        const searchLower = filters.search.toLowerCase();
-        const captionMatch = mainMessage.caption.toLowerCase().includes(searchLower);
-        const productMatch = mainMessage.analyzed_content?.product_name?.toLowerCase().includes(searchLower);
-        const vendorMatch = mainMessage.analyzed_content?.vendor_uid?.toLowerCase().includes(searchLower);
-        
-        if (!captionMatch && !productMatch && !vendorMatch) return false;
-      }
-      
-      // Processing state filter
-      if (filters.processingStates.length > 0) {
-        if (!mainMessage.processing_state || 
-           !filters.processingStates.includes(mainMessage.processing_state as ProcessingState)) {
+          // Search filter
+          if (filters.search && mainMessage.caption) {
+            const searchLower = filters.search.toLowerCase();
+            const captionMatch = mainMessage.caption.toLowerCase().includes(searchLower);
+            const productMatch = mainMessage.analyzed_content?.product_name?.toLowerCase().includes(searchLower);
+            const vendorMatch = mainMessage.analyzed_content?.vendor_uid?.toLowerCase().includes(searchLower);
+            
+            if (!captionMatch && !productMatch && !vendorMatch) return false;
+          }
+          
+          // Processing state filter
+          if (filters.processingStates.length > 0) {
+            if (!mainMessage.processing_state || 
+              !filters.processingStates.includes(mainMessage.processing_state as ProcessingState)) {
+              return false;
+            }
+          }
+          
+          // Date range filter
+          if (filters.dateRange) {
+            const messageDate = new Date(mainMessage.created_at);
+            if (messageDate < filters.dateRange.from || messageDate > filters.dateRange.to) {
+              return false;
+            }
+          }
+          
+          // Media type filter
+          if (filters.mediaTypes.length > 0) {
+            const mediaType = mainMessage.mime_type?.split('/')[0] || 'unknown';
+            if (!filters.mediaTypes.includes(mediaType)) {
+              return false;
+            }
+          }
+          
+          // Vendor filter
+          if (filters.vendors.length > 0) {
+            const vendor = mainMessage.analyzed_content?.vendor_uid;
+            if (!vendor || !filters.vendors.includes(vendor)) {
+              return false;
+            }
+          }
+          
+          // Chat source filter
+          if (filters.chatSources.length > 0) {
+            const chatSource = `${mainMessage.chat_id}-${mainMessage.chat_type}`;
+            if (!filters.chatSources.includes(chatSource)) {
+              return false;
+            }
+          }
+          
+          return true;
+        } catch (err) {
+          console.error('Error filtering group:', err);
           return false;
         }
-      }
-      
-      // Date range filter
-      if (filters.dateRange) {
-        const messageDate = new Date(mainMessage.created_at);
-        if (messageDate < filters.dateRange.from || messageDate > filters.dateRange.to) {
-          return false;
-        }
-      }
-      
-      // Media type filter
-      if (filters.mediaTypes.length > 0) {
-        const mediaType = mainMessage.mime_type?.split('/')[0] || 'unknown';
-        if (!filters.mediaTypes.includes(mediaType)) {
-          return false;
-        }
-      }
-      
-      // Vendor filter
-      if (filters.vendors.length > 0) {
-        const vendor = mainMessage.analyzed_content?.vendor_uid;
-        if (!vendor || !filters.vendors.includes(vendor)) {
-          return false;
-        }
-      }
-      
-      // Chat source filter
-      if (filters.chatSources.length > 0) {
-        const chatSource = `${mainMessage.chat_id}-${mainMessage.chat_type}`;
-        if (!filters.chatSources.includes(chatSource)) {
-          return false;
-        }
-      }
-      
-      return true;
-    });
+      });
+    } catch (err) {
+      console.error('Error in filteredMessages:', err);
+      return [];
+    }
   }, [mediaGroups, filters]);
 
   // Calculate pagination
   const paginatedMessages = useMemo(() => {
-    const startIndex = (filters.page - 1) * filters.itemsPerPage;
-    return filteredMessages.slice(startIndex, startIndex + filters.itemsPerPage);
+    try {
+      const startIndex = (filters.page - 1) * filters.itemsPerPage;
+      return filteredMessages.slice(startIndex, startIndex + filters.itemsPerPage);
+    } catch (err) {
+      console.error('Error in paginatedMessages:', err);
+      return [];
+    }
   }, [filteredMessages, filters.page, filters.itemsPerPage]);
 
   // Handle message selection
@@ -294,10 +329,27 @@ const MessagesEnhanced = () => {
     setIsEditDialogOpen(true);
   };
 
-  const handleDeleteMessage = async (message: Message) => {
+  const handleDeleteMessage = (message: Message) => {
     setSelectedMessage(message);
     setIsDeleteDialogOpen(true);
   };
+
+  // If there's a critical error, show error state
+  if (errorState) {
+    return (
+      <div className="container mx-auto py-6 space-y-6">
+        <div className="bg-red-50 border border-red-200 rounded-md p-6 text-center">
+          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-red-700 mb-2">Error Loading Messages</h3>
+          <p className="text-red-600 mb-4">{errorState.message}</p>
+          <Button onClick={() => window.location.reload()} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Reload Page
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-6 space-y-6">

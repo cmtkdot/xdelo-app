@@ -6,44 +6,57 @@ export function useMediaGroups() {
   return useQuery({
     queryKey: ['media-groups'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('v_messages_compatibility')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500);
+      try {
+        console.log('Fetching media groups...');
+        const { data, error } = await supabase
+          .from('v_messages_compatibility')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(500);
 
-      if (error) throw error;
-
-      // Transform data into media groups
-      const mediaGroups: Record<string, Message[]> = {};
-
-      // Process each message
-      (data || []).forEach((message: any) => {
-        const groupId = message.media_group_id || `single-${message.id}`;
-        
-        if (!mediaGroups[groupId]) {
-          mediaGroups[groupId] = [];
+        if (error) {
+          console.error('Error fetching media groups:', error);
+          throw error;
         }
-        
-        mediaGroups[groupId].push(message as Message);
-      });
 
-      // Sort media groups - keep most recent first
-      Object.values(mediaGroups).forEach(group => {
-        group.sort((a, b) => {
-          // If we have telegram_message_id, sort by that
-          if (a.telegram_message_id && b.telegram_message_id) {
-            return a.telegram_message_id - b.telegram_message_id;
+        console.log('Received data:', data?.length || 0, 'messages');
+
+        // Transform data into media groups
+        const mediaGroups: Record<string, Message[]> = {};
+
+        // Process each message
+        (data || []).forEach((message: any) => {
+          const groupId = message.media_group_id || `single-${message.id}`;
+          
+          if (!mediaGroups[groupId]) {
+            mediaGroups[groupId] = [];
           }
           
-          // Otherwise sort by created_at
-          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-          return dateA - dateB;
+          mediaGroups[groupId].push(message as Message);
         });
-      });
 
-      return mediaGroups;
+        console.log('Created', Object.keys(mediaGroups).length, 'media groups');
+
+        // Sort media groups - keep most recent first
+        Object.values(mediaGroups).forEach(group => {
+          group.sort((a, b) => {
+            // If we have telegram_message_id, sort by that
+            if (a.telegram_message_id && b.telegram_message_id) {
+              return a.telegram_message_id - b.telegram_message_id;
+            }
+            
+            // Otherwise sort by created_at
+            const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return dateA - dateB;
+          });
+        });
+
+        return mediaGroups;
+      } catch (error) {
+        console.error('Error in useMediaGroups hook:', error);
+        throw error;
+      }
     },
     staleTime: 1 * 60 * 1000, // 1 minute
   });

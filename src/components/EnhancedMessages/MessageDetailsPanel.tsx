@@ -20,6 +20,20 @@ export function MessageDetailsPanel({
 }: MessageDetailsPanelProps) {
   const { toast } = useToast();
 
+  // Safety check for empty message
+  if (!message) {
+    return (
+      <Card className="h-full overflow-y-auto">
+        <CardHeader>
+          <CardTitle>Message Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">No message selected</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const handleCopyId = () => {
     navigator.clipboard.writeText(message.id);
     toast({ 
@@ -51,6 +65,16 @@ export function MessageDetailsPanel({
     );
   };
 
+  // Safely format the creation date
+  let formattedDate = 'Unknown date';
+  try {
+    if (message.created_at) {
+      formattedDate = formatDate(new Date(message.created_at));
+    }
+  } catch (e) {
+    console.error('Error formatting date:', e);
+  }
+
   return (
     <Card className="h-full overflow-y-auto">
       <CardHeader>
@@ -75,7 +99,7 @@ export function MessageDetailsPanel({
             {message.analyzed_content?.product_name || 'Untitled Product'}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {formatDate(new Date(message.created_at || ''))}
+            {formattedDate}
           </p>
         </div>
 
