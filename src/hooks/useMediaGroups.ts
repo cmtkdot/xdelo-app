@@ -2,6 +2,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Message, ProcessingState, AnalyzedContent } from "@/types";
+import { logEvent, LogEventType } from "@/lib/logUtils";
 
 interface GroupedMessages {
   [key: string]: Message[];
@@ -66,27 +67,69 @@ export const useMediaGroups = () => {
         return message;
       });
       
-      // Group messages by media_group_id
-      const groupedMessages: GroupedMessages = typedMessages.reduce((groups, message) => {
-        const groupId = message.media_group_id || message.id;
-        if (!groups[groupId]) {
-          groups[groupId] = [];
+      try {
+        // Log the media groups fetch operation
+        await logEvent(
+          LogEventType.MEDIA_GROUP_FETCH,
+          'media-groups-query',
+          {
+            messageCount: typedMessages.length,
+            timestamp: new Date().toISOString()
+          }
+        );
+      } catch (logError) {
+        console.error("Error logging media group fetch:", logError);
+      }
+      
+      // Group messages by media_group_id with validation
+      const groupedMessages: GroupedMessages = {};
+      
+      typedMessages.forEach(message => {
+        // Determine the correct group identifier
+        // Use media_group_id if it exists and is valid, otherwise use message.id as fallback
+        const groupId = message.media_group_id && message.media_group_id.trim() !== '' 
+          ? message.media_group_id 
+          : message.id;
+          
+        if (!groupedMessages[groupId]) {
+          groupedMessages[groupId] = [];
         }
-        groups[groupId].push(message);
         
-        // Sort messages within group to ensure consistent order
-        groups[groupId].sort((a, b) => {
+        // Ensure we don't add duplicate messages to the same group
+        const isDuplicate = groupedMessages[groupId].some(m => m.id === message.id);
+        if (!isDuplicate) {
+          groupedMessages[groupId].push(message);
+        }
+      });
+      
+      // Sort messages within each group for consistent display
+      Object.keys(groupedMessages).forEach(groupId => {
+        // First, prioritize messages with original captions
+        groupedMessages[groupId].sort((a, b) => {
+          // First priority: is_original_caption flag
           if (a.is_original_caption && !b.is_original_caption) return -1;
           if (!a.is_original_caption && b.is_original_caption) return 1;
+          
+          // Second priority: has caption
+          const aHasCaption = !!a.caption;
+          const bHasCaption = !!b.caption;
+          if (aHasCaption && !bHasCaption) return -1;
+          if (!aHasCaption && bHasCaption) return 1;
+          
+          // Third priority: has analyzed content
+          const aHasAnalyzedContent = !!a.analyzed_content;
+          const bHasAnalyzedContent = !!b.analyzed_content;
+          if (aHasAnalyzedContent && !bHasAnalyzedContent) return -1;
+          if (!aHasAnalyzedContent && bHasAnalyzedContent) return 1;
+          
+          // Last resort: sort by date (newest first)
           return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
         });
-        
-        return groups;
-      }, {} as GroupedMessages);
+      });
 
       return groupedMessages;
     },
-    staleTime: 60000, // Increase stale time to 1 minute for better performance
+    staleTime: 60000, // 1 minute stale time for better performance
     refetchOnWindowFocus: true,
     retry: 3
   });

@@ -1,90 +1,56 @@
-
 export enum LogEventType {
-  // Message events
-  MESSAGE_CREATED = "message_created",
-  MESSAGE_UPDATED = "message_updated",
-  MESSAGE_DELETED = "message_deleted",
-  MESSAGE_ANALYZED = "message_analyzed",
-  MESSAGE_PROCESSED = "message_processed",
+  // System operations
+  SYSTEM_STARTUP = "SYSTEM_STARTUP",
+  SYSTEM_SHUTDOWN = "SYSTEM_SHUTDOWN",
+  SYSTEM_ERROR = "SYSTEM_ERROR",
+  SYSTEM_REPAIR = "SYSTEM_REPAIR",
+  SYSTEM_CONFIG_CHANGE = "SYSTEM_CONFIG_CHANGE",
   
-  // Webhook events
-  WEBHOOK_RECEIVED = "webhook_received",
+  // User actions
+  USER_LOGIN = "USER_LOGIN",
+  USER_LOGOUT = "USER_LOGOUT",
+  USER_REGISTER = "USER_REGISTER",
+  USER_UPDATE = "USER_UPDATE",
+  USER_DELETE = "USER_DELETE",
+  USER_PASSWORD_RESET = "USER_PASSWORD_RESET",
   
-  // Media group events
-  MEDIA_GROUP_SYNCED = "media_group_synced",
-  MEDIA_GROUP_HISTORY_SYNCED = "media_group_history_synced",
+  // Message operations
+  MESSAGE_CREATED = "MESSAGE_CREATED",
+  MESSAGE_UPDATED = "MESSAGE_UPDATED",
+  MESSAGE_DELETED = "MESSAGE_DELETED",
+  MESSAGE_REPROCESSED = "MESSAGE_REPROCESSED",
   
-  // Edit events
-  MESSAGE_EDITED = "message_edited",
+  // Media operations
+  MEDIA_UPLOAD = "MEDIA_UPLOAD",
+  MEDIA_DOWNLOAD = "MEDIA_DOWNLOAD",
+  MEDIA_DELETE = "MEDIA_DELETE",
+  MEDIA_REPAIR = "MEDIA_REPAIR",
+  MEDIA_GROUP_SYNC = "MEDIA_GROUP_SYNC",
+  MEDIA_GROUP_FETCH = "MEDIA_GROUP_FETCH",
   
-  // Caption events
-  CAPTION_PROCESSED = "caption_processed",
-  CAPTION_ANALYSIS_STARTED = "caption_analysis_started",
-  CAPTION_ANALYSIS_COMPLETED = "caption_analysis_completed",
-  CAPTION_ANALYSIS_FAILED = "caption_analysis_failed",
+  // Telegram operations
+  TELEGRAM_WEBHOOK = "TELEGRAM_WEBHOOK",
+  TELEGRAM_BOT_UPDATE = "TELEGRAM_BOT_UPDATE",
+  TELEGRAM_MESSAGE_DELETE = "TELEGRAM_MESSAGE_DELETE",
   
-  // Storage events
-  STORAGE_FILE_UPLOADED = "storage_file_uploaded",
-  STORAGE_FILE_DELETED = "storage_file_deleted",
-  STORAGE_FILE_VERIFIED = "storage_file_verified",
-  STORAGE_FILE_MISSING = "storage_file_missing",
-  STORAGE_PATH_UPDATED = "storage_path_updated",
+  // Processing operations
+  PROCESSING_STATE_CHANGED = "PROCESSING_STATE_CHANGED",
+  CAPTION_ANALYZED = "CAPTION_ANALYZED",
+  CAPTION_PARSED = "CAPTION_PARSED",
   
-  // Auth events
-  USER_SIGNED_IN = "user_signed_in",
-  USER_SIGNED_OUT = "user_signed_out",
+  // Sync operations
+  SYNC_STARTED = "SYNC_STARTED",
+  SYNC_COMPLETED = "SYNC_COMPLETED",
+  SYNC_FAILED = "SYNC_FAILED",
+  SYNC_PRODUCTS = "SYNC_PRODUCTS",
   
-  // User action events
-  USER_ACTION = "user_action",
+  // API operations
+  API_REQUEST = "API_REQUEST",
+  API_RESPONSE = "API_RESPONSE",
+  API_ERROR = "API_ERROR",
   
-  // System events
-  SYSTEM_ERROR = "system_error",
-  SYSTEM_WARNING = "system_warning",
-  WARNING = "warning",
-  SYSTEM_INFO = "system_info",
-  SYSTEM_REPAIR = "system_repair",
-  SYSTEM_MAINTENANCE = "system_maintenance",
-  
-  // Processing events
-  PROCESSING_STATE_CHANGED = "processing_state_changed",
-  MESSAGE_QUEUED = "message_queued",
-  MESSAGE_DEQUEUED = "message_dequeued",
-  QUEUE_PROCESSING_STARTED = "queue_processing_started",
-  QUEUE_PROCESSING_COMPLETED = "queue_processing_completed",
-  QUEUE_PROCESSING_FAILED = "queue_processing_failed",
-  
-  // Redownload events
-  REDOWNLOAD_REQUESTED = "redownload_requested",
-  REDOWNLOAD_SUCCEEDED = "redownload_succeeded",
-  REDOWNLOAD_FAILED = "redownload_failed",
-  
-  // AI events
-  AI_ANALYSIS_REQUESTED = "ai_analysis_requested",
-  AI_ANALYSIS_SUCCEEDED = "ai_analysis_succeeded",
-  AI_ANALYSIS_FAILED = "ai_analysis_failed",
-  
-  // Media repair events
-  MEDIA_REPAIR_STARTED = "media_repair_started",
-  MEDIA_REPAIR_COMPLETED = "media_repair_completed",
-  MEDIA_REPAIR_FAILED = "media_repair_failed",
-  
-  // Content disposition events
-  CONTENT_DISPOSITION_UPDATED = "content_disposition_updated",
-  
-  // Path standardization events
-  PATH_STANDARDIZATION_STARTED = "path_standardization_started",
-  PATH_STANDARDIZATION_COMPLETED = "path_standardization_completed",
-  PATH_STANDARDIZATION_FAILED = "path_standardization_failed",
-  
-  // Message processing events
-  MESSAGE_PROCESSING_STARTED = "message_processing_started",
-  MESSAGE_PROCESSING_ERROR = "message_processing_error",
-  
-  // Sync events
-  SYNC_PRODUCTS = "sync_products",
-  SYNC_STARTED = "sync_started",
-  SYNC_COMPLETED = "sync_completed",
-  SYNC_FAILED = "sync_failed"
+  // Other operations
+  STORAGE_OPERATION = "STORAGE_OPERATION",
+  DATABASE_OPERATION = "DATABASE_OPERATION",
+  SYSTEM_MAINTENANCE = "SYSTEM_MAINTENANCE"
 }
-
-export default LogEventType;

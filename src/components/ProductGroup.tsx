@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,6 +6,7 @@ import { FileEdit, Eye, Trash2 } from "lucide-react";
 import { Message } from "@/types";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { useTelegramOperations } from '@/hooks/useTelegramOperations';
+import { getMainMediaFromGroup } from '@/components/MediaViewer/types';
 
 interface ProductGroupProps {
   group: Message[];
@@ -21,8 +23,17 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
   onDelete,
   isDeleting
 }) => {
-  const mainMedia = group.find(m => m.caption) || group[0];
+  const mainMedia = getMainMediaFromGroup(group);
   const { isProcessing } = useTelegramOperations();
+
+  if (!mainMedia) return null;
+
+  // Determine if this is a video based on mime type or filename
+  const isVideo = mainMedia.mime_type?.startsWith('video/') || 
+                 (mainMedia.public_url && /\.(mp4|mov|webm|avi)$/i.test(mainMedia.public_url));
+
+  // Get the product name from analyzed content if available
+  const productName = mainMedia.analyzed_content?.product_name || 'No product name';
 
   const handleDelete = async (deleteTelegram: boolean) => {
     if (!mainMedia) return;
@@ -33,12 +44,21 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
     <Card>
       <CardContent className="p-2">
         <AspectRatio ratio={1 / 1}>
-          {mainMedia.mime_type?.startsWith('video/') ? (
-            <video src={mainMedia.public_url} className="w-full h-full object-cover rounded-md" />
+          {isVideo ? (
+            <video 
+              src={mainMedia.public_url} 
+              className="w-full h-full object-cover rounded-md" 
+              preload="metadata"
+              onError={(e) => {
+                const target = e.target as HTMLVideoElement;
+                // Set a fallback or placeholder for failed videos
+                console.error("Video failed to load:", mainMedia.public_url);
+              }}
+            />
           ) : (
             <img
               src={mainMedia.public_url}
-              alt={mainMedia.caption || 'Media'}
+              alt={mainMedia.caption || productName}
               className="w-full h-full object-cover rounded-md"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
@@ -48,7 +68,14 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
             />
           )}
         </AspectRatio>
-        <p className="text-sm mt-2 truncate">{mainMedia.caption || 'No caption'}</p>
+        <p className="text-sm mt-2 truncate font-medium">
+          {productName}
+        </p>
+        {mainMedia.caption && (
+          <p className="text-xs text-gray-500 mt-1 truncate">
+            {mainMedia.caption}
+          </p>
+        )}
       </CardContent>
       <CardFooter className="flex justify-between items-center p-2">
         <div className="space-x-1">

@@ -1,8 +1,9 @@
+
 'use client'
 
 import * as React from 'react'
 import { motion, useMotionValue } from 'framer-motion'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MediaItem } from '@/types'
 import { cn } from '@/lib/utils'
@@ -27,22 +28,35 @@ export function ImageSwiper({
   const [mediaIndex, setMediaIndex] = React.useState(0);
   const [isHovered, setIsHovered] = React.useState(false);
   const [lastNonVideoIndex, setLastNonVideoIndex] = React.useState(0);
+  const [mediaError, setMediaError] = React.useState<string | null>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
-  const firstVideoIndex = React.useMemo(() => {
-    return media.findIndex(m => m.mime_type?.startsWith('video/'));
-  }, [media]);
-
+  // Sort media to prioritize images over videos
   const sortedMedia = React.useMemo(() => {
+    if (!media || !Array.isArray(media) || media.length === 0) {
+      return [];
+    }
+    
     return [...media].sort((a, b) => {
+      // First, check if mime_type exists
       const aIsImage = a.mime_type?.startsWith('image') || false;
       const bIsImage = b.mime_type?.startsWith('image') || false;
-      return bIsImage ? 1 : aIsImage ? -1 : 0;
+      
+      // If mime_type is missing, try to infer from URL
+      const aHasImageExt = a.public_url?.match(/\.(jpg|jpeg|png|gif)$/i);
+      const bHasImageExt = b.public_url?.match(/\.(jpg|jpeg|png|gif)$/i);
+      
+      const aIsLikelyImage = aIsImage || !!aHasImageExt;
+      const bIsLikelyImage = bIsImage || !!bHasImageExt;
+      
+      // Prioritize images
+      return bIsLikelyImage ? 1 : aIsLikelyImage ? -1 : 0;
     });
   }, [media]);
 
   const currentMedia = sortedMedia[mediaIndex];
-  const isVideo = currentMedia?.mime_type?.startsWith("video/");
+  const isVideo = currentMedia?.mime_type?.startsWith("video/") || 
+                 (currentMedia?.public_url && /\.(mp4|mov|webm|avi)$/i.test(currentMedia.public_url));
 
   React.useEffect(() => {
     if (onIndexChange) {
@@ -58,7 +72,10 @@ export function ImageSwiper({
 
   React.useEffect(() => {
     if (isHovered && !showNavigation) {
-      const videoIndex = sortedMedia.findIndex(m => m.mime_type?.startsWith('video/'));
+      const videoIndex = sortedMedia.findIndex(m => 
+        m.mime_type?.startsWith('video/') || 
+        (m.public_url && /\.(mp4|mov|webm|avi)$/i.test(m.public_url))
+      );
       if (videoIndex !== -1) {
         setMediaIndex(videoIndex);
       }
@@ -71,7 +88,10 @@ export function ImageSwiper({
     if (isVideo && videoRef.current) {
       if (isHovered) {
         videoRef.current.currentTime = 0;
-        videoRef.current.play().catch(console.error);
+        videoRef.current.play().catch(error => {
+          console.error("Video playback error:", error);
+          setMediaError("Failed to play video");
+        });
       } else {
         videoRef.current.pause();
       }
@@ -80,12 +100,19 @@ export function ImageSwiper({
 
   const handleNext = (e?: React.MouseEvent) => {
     e?.stopPropagation();
+    setMediaError(null);
     setMediaIndex((prev) => (prev + 1) % sortedMedia.length);
   };
 
   const handlePrev = (e?: React.MouseEvent) => {
     e?.stopPropagation();
+    setMediaError(null);
     setMediaIndex((prev) => (prev - 1 + sortedMedia.length) % sortedMedia.length);
+  };
+
+  // Media error handler
+  const handleMediaError = (type: 'image' | 'video') => {
+    setMediaError(`Failed to load ${type}`);
   };
 
   if (!sortedMedia?.length) {
@@ -96,6 +123,15 @@ export function ImageSwiper({
     )
   }
 
+  const productName = currentMedia.analyzed_content?.product_name || 'Untitled Product';
+  let formattedDate = '';
+  
+  try {
+    formattedDate = format(new Date(currentMedia.created_at), 'MMM d, yyyy');
+  } catch (e) {
+    formattedDate = 'Unknown date';
+  }
+
   return (
     <div
       className={cn("group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-black/90", className)}
@@ -104,22 +140,23 @@ export function ImageSwiper({
       onClick={onClick}
       {...props}
     >
-      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 via-black/50 to-transparent p-4">
-        <h3 className="text-xl font-semibold text-white">
-          {sortedMedia[mediaIndex].analyzed_content?.product_name || 'Untitled Product'}
+      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 via-black/50 to-transparent p-4 z-10">
+        <h3 className="text-xl font-semibold text-white truncate">
+          {productName}
         </h3>
         <p className="text-sm text-gray-300">
-          {format(new Date(sortedMedia[mediaIndex].created_at), 'MMM d, yyyy')}
+          {formattedDate}
         </p>
       </div>
-      <div className="absolute bottom-2 w-full flex justify-center">
+      
+      <div className="absolute bottom-2 w-full flex justify-center z-10">
         <div className="flex min-w-9 items-center justify-center rounded-md bg-black/80 px-2 py-0.5 text-xs text-white opacity-100 transition-opacity">
           {mediaIndex + 1}/{sortedMedia.length}
         </div>
       </div>
 
       {showNavigation && (
-        <div className="absolute left-5 top-1/2 -translate-y-1/2">
+        <div className="absolute left-5 top-1/2 -translate-y-1/2 z-10">
           <Button
             variant="ghost"
             size="icon"
@@ -130,8 +167,9 @@ export function ImageSwiper({
           </Button>
         </div>
       )}
+      
       {showNavigation && (
-        <div className="absolute right-5 top-1/2 -translate-y-1/2">
+        <div className="absolute right-5 top-1/2 -translate-y-1/2 z-10">
           <Button
             variant="ghost"
             size="icon"
@@ -143,6 +181,15 @@ export function ImageSwiper({
         </div>
       )}
 
+      {mediaError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20">
+          <div className="bg-black/80 text-white px-4 py-3 rounded-md flex items-center">
+            <AlertCircle className="h-5 w-5 mr-2" />
+            <span>{mediaError}</span>
+          </div>
+        </div>
+      )}
+
       {isVideo ? (
         <video
           ref={videoRef}
@@ -151,13 +198,15 @@ export function ImageSwiper({
           loop
           muted
           playsInline
-          autoPlay={true}
+          autoPlay={isHovered}
+          onError={() => handleMediaError('video')}
         />
       ) : (
         <img 
           src={currentMedia.public_url} 
-          alt={sortedMedia[mediaIndex].analyzed_content?.product_name || 'Product image'}
+          alt={productName}
           className="h-full w-full object-cover" 
+          onError={() => handleMediaError('image')}
         />
       )}
     </div>
