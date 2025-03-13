@@ -106,10 +106,7 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     host: '::',
     cors: true, 
-    hmr: {
-      protocol: 'wss',
-      clientPort: 443
-    },
+    hmr: true,
     // Allow lovable project domain for development
     allowedHosts: [
       'localhost',
