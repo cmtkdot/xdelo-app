@@ -1,52 +1,46 @@
+import React from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
+import {
+  Home,
+  MessageSquare,
+  Image as ImageIcon,
+  FileText,
+  Settings,
+} from "lucide-react";
 
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { useIsMobile } from '@/hooks/useMobile';
-import { cn } from '@/lib/utils';
-import { Home, MessageSquare, Image, Settings, PanelTopOpen } from 'lucide-react';
-
-export function MobileBottomNav() {
+export const MobileBottomNav = () => {
   const location = useLocation();
-  const isMobile = useIsMobile();
-  
-  // Only show on mobile
-  if (!isMobile) return null;
-  
+  const navigate = useNavigate();
+
   const navItems = [
-    { name: 'Home', path: '/', icon: Home },
-    { name: 'Messages', path: '/messages', icon: MessageSquare },
-    { name: 'Enhanced', path: '/messages-enhanced', icon: PanelTopOpen },
-    { name: 'Gallery', path: '/gallery', icon: Image },
-    { name: 'Settings', path: '/settings', icon: Settings }
+    { name: "Home", Icon: Home, path: "/" },
+    { name: "Messages", Icon: MessageSquare, path: "/messages" },
+    { name: "Gallery", Icon: ImageIcon, path: "/gallery" },
+    { name: "AI Chat", Icon: FileText, path: "/ai-chat" },
+    { name: "Settings", Icon: Settings, path: "/settings" },
   ];
-  
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border has-safe-area-bottom">
-      <div className="grid grid-cols-5 h-16">
-        {navItems.map(item => {
+    <div className="fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 md:hidden z-40">
+      <div className="grid grid-cols-5 h-full">
+        {navItems.map((item) => {
           const isActive = location.pathname === item.path;
-          const Icon = item.icon;
-          
           return (
-            <Link
+            <button
               key={item.path}
-              to={item.path}
               className={cn(
-                'flex flex-col items-center justify-center transition-colors mobile-touch-target',
-                isActive
-                  ? 'text-primary'
-                  : 'text-muted-foreground hover:text-foreground'
+                "flex flex-col items-center justify-center space-y-1",
+                isActive ? "text-primary" : "text-muted-foreground"
               )}
+              onClick={() => navigate(item.path)}
             >
-              <Icon className={cn(
-                'h-5 w-5 mb-1',
-                isActive ? 'text-primary' : 'text-muted-foreground'
-              )} />
+              <item.Icon className="w-5 h-5" />
               <span className="text-xs font-medium">{item.name}</span>
-            </Link>
+            </button>
           );
         })}
       </div>
     </div>
   );
-}
+};

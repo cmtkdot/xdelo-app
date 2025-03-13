@@ -9,6 +9,8 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import { supabase } from "./integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 import Auth from "./pages/Auth";
+import { MobileBottomNav } from "./components/Layout/MobileBottomNav";
+import { useIsMobile } from "./hooks/useMobile";
 
 // Lazy load page components for better performance
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -129,13 +131,14 @@ function App() {
                       <NavigationProvider>
                         <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
                           <AppSidebar />
-                          <main className="transition-all duration-300 ease-in-out md:pl-16 min-h-screen pt-[4rem] md:pt-4">
+                          <main className="transition-all duration-300 ease-in-out md:pl-16 min-h-screen pt-[4rem] md:pt-4 pb-20 md:pb-4">
                             <div className="container py-6 px-4 mx-auto">
                               <Suspense fallback={<PageLoader />}>
                                 <Outlet />
                               </Suspense>
                             </div>
                           </main>
+                          <MobileBottomNav />
                         </div>
                       </NavigationProvider>
                     </ProtectedRoute>
