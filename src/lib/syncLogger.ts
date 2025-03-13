@@ -1,7 +1,7 @@
 
-import { logOperation, logMessageOperation, logSystemEvent } from "./unifiedLogger";
+import { supabase } from "@/integrations/supabase/client";
 
-// Event types for logging operations (for backward compatibility)
+// Event types for logging operations
 export type SyncEventType = 
   | "sync_started" 
   | "sync_completed" 
@@ -10,103 +10,86 @@ export type SyncEventType =
   | "sync_message_processed"
   | "sync_message_skipped";
 
-// Map the old sync event types to new unified event types
-const syncEventTypeMap = {
-  "sync_started": "processing_started",
-  "sync_completed": "processing_completed",
-  "sync_error": "processing_error",
-  "sync_warning": "system_warning",
-  "sync_message_processed": "message_analyzed",
-  "sync_message_skipped": "processing_state_changed"
-};
-
-/**
- * @deprecated Use logOperation from unifiedLogger.ts instead
- */
+// Add missing functions that are referenced in other files
 export const logDeletion = async (
   entityId: string,
   metadata: Record<string, any> = {}
 ): Promise<void> => {
-  await logMessageOperation("deleted", entityId, metadata);
+  try {
+    await supabase.from('unified_audit_logs').insert({
+      entity_id: entityId,
+      event_type: "message_deleted",
+      metadata: {
+        ...metadata,
+        timestamp: new Date().toISOString(),
+        source: 'web_client'
+      }
+    });
+  } catch (error) {
+    console.error('Error logging deletion:', error);
+  }
 };
 
-/**
- * @deprecated Use logMessageOperation from unifiedLogger.ts instead
- */
 export const logMessageOperation = async (
   operation: string,
   entityId: string,
   metadata: Record<string, any> = {}
 ): Promise<void> => {
-  // Map the old operations to new event types
-  let eventType;
-  
-  switch (operation) {
-    case "created":
-    case "updated":
-    case "deleted":
-    case "analyzed":
-      eventType = `message_${operation}`;
-      break;
-    default:
-      eventType = "user_action";
-      metadata = { ...metadata, legacy_operation: operation };
+  try {
+    await supabase.from('unified_audit_logs').insert({
+      entity_id: entityId,
+      event_type: `message_${operation}`,
+      metadata: {
+        ...metadata,
+        timestamp: new Date().toISOString(),
+        source: 'web_client'
+      }
+    });
+  } catch (error) {
+    console.error('Error logging message operation:', error);
   }
-  
-  await logOperation({
-    entityId,
-    eventType: eventType as any,
-    metadata: {
-      ...metadata,
-      source: 'legacy_logger'
-    }
-  });
 };
 
-/**
- * @deprecated Use logSyncOperation from unifiedLogger.ts instead
- */
 export const logSyncOperation = async (
   operation: string,
   entityId: string,
   metadata: Record<string, any> = {}
 ): Promise<void> => {
-  // Map the old sync operations to new event types
-  let eventType;
-  
-  if (operation === "sync" || operation === "media_group") {
-    eventType = "media_group_synced";
-  } else if (operation === "caption") {
-    eventType = "caption_synced";
-  } else if (operation.startsWith("sync_")) {
-    eventType = syncEventTypeMap[operation as SyncEventType] || "system_info";
-  } else {
-    eventType = "system_info";
-    metadata = { ...metadata, legacy_operation: operation };
+  try {
+    // Use a valid event_type from the allowed list
+    const eventType: SyncEventType = `sync_${operation}` as SyncEventType;
+    
+    await supabase.from('unified_audit_logs').insert({
+      entity_id: entityId,
+      event_type: eventType,
+      metadata: {
+        ...metadata,
+        timestamp: new Date().toISOString(),
+        source: 'web_client'
+      }
+    });
+  } catch (error) {
+    console.error('Error logging sync operation:', error);
   }
-  
-  await logOperation({
-    entityId,
-    eventType: eventType as any,
-    metadata: {
-      ...metadata,
-      legacy_sync_operation: operation,
-      source: 'legacy_sync_logger'
-    }
-  });
 };
 
-/**
- * @deprecated Use logSystemEvent from unifiedLogger.ts instead
- */
 export const logSyncWarning = async (
   entityId: string,
   message: string,
   metadata: Record<string, any> = {}
 ): Promise<void> => {
-  await logSystemEvent("warning", message, {
-    ...metadata,
-    entity_id: entityId,
-    source: 'legacy_sync_logger'
-  });
+  try {
+    await supabase.from('unified_audit_logs').insert({
+      entity_id: entityId,
+      event_type: "sync_warning" as SyncEventType,
+      metadata: {
+        message,
+        ...metadata,
+        timestamp: new Date().toISOString(),
+        source: 'web_client'
+      }
+    });
+  } catch (error) {
+    console.error('Error logging sync warning:', error);
+  }
 };

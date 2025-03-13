@@ -6,7 +6,6 @@ import { useMediaGroups } from '@/hooks/useMediaGroups';
 import { Spinner } from '../ui/spinner';
 import { useCaptionSync } from '@/hooks/useCaptionSync';
 import { useToast } from '@/hooks/useToast';
-import { logProcessingOperation } from '@/lib/unifiedLogger';
 
 export function MessageListContainer() {
   const {
@@ -25,12 +24,6 @@ export function MessageListContainer() {
 
   const onRetryProcessing = async (messageId: string): Promise<void> => {
     try {
-      // Log the start of processing
-      await logProcessingOperation("started", messageId, {
-        action: "manual_retry",
-        source: "message_list"
-      });
-      
       toast({
         title: "Processing Message",
         description: "Analyzing caption and syncing with media group...",
@@ -43,12 +36,6 @@ export function MessageListContainer() {
       // Wrap refetch() in void to match the expected return type
       void refetch();
       
-      // Log successful completion
-      await logProcessingOperation("completed", messageId, {
-        action: "manual_retry",
-        source: "message_list"
-      });
-      
       // Success case handling after refetch completes
       toast({
         title: "Processing Complete",
@@ -57,13 +44,6 @@ export function MessageListContainer() {
       });
     } catch (error: any) {
       console.error("Error retrying processing:", error);
-      
-      // Log the error
-      await logProcessingOperation("error", messageId, {
-        action: "manual_retry",
-        source: "message_list"
-      }, error.message);
-      
       toast({
         title: "Processing Failed",
         description: error.message || "An error occurred during processing",

@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { ImageSwiper } from "@/components/ui/image-swiper";
 import { Message } from "@/types/MessagesTypes";
@@ -21,7 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import { logMessageOperation } from "@/lib/unifiedLogger";
+import { logDeletion } from "@/lib/syncLogger";
 
 interface ProductGroupProps {
   group: Message[];
@@ -44,13 +45,15 @@ export function ProductGroup({ group, onEdit, onDelete, onView, isDeleting }: Pr
   const handleDeleteClick = async (deleteTelegram: boolean) => {
     try {
       setIsDeleting_(true);
-      // Log the deletion operation with the unified logger
-      await logMessageOperation("deleted", mainMedia.id, {
-        deletion_type: deleteTelegram ? 'both' : 'database_only',
-        group_id: mainMedia.media_group_id || 'none',
-        product_name: mainMedia.analyzed_content?.product_name,
-        item_count: group.length
-      });
+      // Log the deletion operation
+      await logDeletion(
+        mainMedia.id,
+        deleteTelegram ? 'both' : 'database',
+        { 
+          group_id: mainMedia.media_group_id || 'none',
+          product_name: mainMedia.analyzed_content?.product_name
+        }
+      );
       await onDelete(mainMedia, deleteTelegram);
     } finally {
       setIsDeleting_(false);

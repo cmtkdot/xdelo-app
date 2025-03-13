@@ -1,4 +1,3 @@
-
 import type { Database } from '../integrations/supabase/types';
 
 // Database types
@@ -9,48 +8,6 @@ export type DbGlProduct = Database['public']['Tables']['gl_products']['Row'];
 
 // Enums from database
 export type ProcessingState = Database['public']['Enums']['processing_state_type'];
-
-// Unified logging system types
-export type UnifiedEventType = 
-  // Message lifecycle events
-  | "message_created"
-  | "message_updated" 
-  | "message_deleted"
-  | "message_analyzed"
-  
-  // Processing events
-  | "processing_started"
-  | "processing_completed"
-  | "processing_error"
-  | "processing_state_changed"
-  
-  // Sync events
-  | "media_group_synced"
-  | "caption_synced"
-  
-  // Storage events
-  | "file_uploaded"
-  | "file_deleted"
-  | "storage_repaired"
-  
-  // User actions
-  | "user_action"
-  
-  // System events
-  | "system_error"
-  | "system_warning"
-  | "system_info";
-
-export interface LogOperationOptions {
-  entityId: string;
-  eventType: UnifiedEventType;
-  metadata?: Record<string, any>;
-  previousState?: Record<string, any>;
-  newState?: Record<string, any>;
-  errorMessage?: string;
-  correlationId?: string;
-  userId?: string;
-}
 
 // Sync types
 export interface SyncMetadata {

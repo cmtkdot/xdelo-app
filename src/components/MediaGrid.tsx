@@ -1,7 +1,5 @@
-
 import { Message } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
-import { logMessageOperation } from "@/lib/unifiedLogger";
 
 interface MediaGridProps {
   mediaGroups: { [key: string]: Message[] };
@@ -24,15 +22,8 @@ export const MediaGrid = ({
 }: MediaGridProps) => {
   const groupsArray = Object.values(mediaGroups);
 
-  // Create a dummy Promise-based delete function that logs the operation
+  // Create a dummy Promise-based delete function that resolves immediately
   const handleDelete = async (media: Message, deleteTelegram: boolean): Promise<void> => {
-    await logMessageOperation("deleted", media.id, {
-      media_group_id: media.media_group_id || 'none',
-      delete_telegram: deleteTelegram,
-      component: 'MediaGrid',
-      is_dummy_handler: true
-    });
-    
     return Promise.resolve();
   };
 

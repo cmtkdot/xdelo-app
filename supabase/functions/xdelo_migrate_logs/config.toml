@@ -1,8 +1,0 @@
-
-# Config for the xdelo_migrate_logs function
-
-# Allow this function to be called from the browser
-verify_jwt = false
-
-# Allow this function to make network requests
-allowed_http_hosts = ["*"]
