@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import LogEventType from "@/types/api/LogEventType";
+import { LogEventType } from "@/types/api/LogEventType";
 
 export { LogEventType };
 
@@ -18,7 +18,7 @@ export interface LogEventOptions {
 }
 
 export async function logEvent(
-  eventType: LogEventType,
+  eventType: LogEventType | string,
   entityId: string,
   metadata: any = {},
   options: Partial<LogEventOptions> = {}
@@ -30,7 +30,7 @@ export async function logEvent(
     const { data, error } = await supabase
       .from("unified_audit_logs")
       .insert({
-        event_type: eventType,
+        event_type: String(eventType), // Convert enum to string
         entity_id: entityId,
         metadata: metadata,
         event_timestamp: timestamp,
@@ -54,10 +54,41 @@ export async function logEvent(
   }
 }
 
-export function getEventTypeLabel(eventType: LogEventType): string {
+export function getEventTypeLabel(eventType: LogEventType | string): string {
   // Convert from enum value (e.g., MESSAGE_CREATED) to readable text (e.g., "Message Created")
-  return eventType
+  return String(eventType)
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(" ");
 }
+
+// Add helper for message operations
+export const logMessageOperation = async (
+  eventType: LogEventType | string,
+  messageId: string,
+  details: any = {}
+) => {
+  return logEvent(
+    eventType,
+    messageId,
+    details
+  );
+};
+
+// Add helper for sync operations
+export const logSyncOperation = async (
+  operation: LogEventType | string,
+  entityId: string,
+  metadata: any = {},
+  success: boolean = true,
+  errorMessage?: string
+) => {
+  return logEvent(
+    operation,
+    entityId,
+    metadata,
+    {
+      error_message: errorMessage
+    }
+  );
+};

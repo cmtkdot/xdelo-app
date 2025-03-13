@@ -5,6 +5,7 @@ export enum LogEventType {
   MESSAGE_UPDATED = "message_updated",
   MESSAGE_DELETED = "message_deleted",
   MESSAGE_ANALYZED = "message_analyzed",
+  MESSAGE_PROCESSED = "message_processed",
   
   // Webhook events
   WEBHOOK_RECEIVED = "webhook_received",
@@ -33,9 +34,13 @@ export enum LogEventType {
   USER_SIGNED_IN = "user_signed_in",
   USER_SIGNED_OUT = "user_signed_out",
   
+  // User action events
+  USER_ACTION = "user_action",
+  
   // System events
   SYSTEM_ERROR = "system_error",
   SYSTEM_WARNING = "system_warning",
+  WARNING = "warning",
   SYSTEM_INFO = "system_info",
   SYSTEM_REPAIR = "system_repair",
   SYSTEM_MAINTENANCE = "system_maintenance",
@@ -73,6 +78,7 @@ export enum LogEventType {
   
   // Message processing events
   MESSAGE_PROCESSING_STARTED = "message_processing_started",
+  MESSAGE_PROCESSING_ERROR = "message_processing_error",
   
   // Sync events
   SYNC_PRODUCTS = "sync_products",

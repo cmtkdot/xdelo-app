@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { SyncLogsTable } from "./SyncLogsTable";
 import { useQuery } from "@tanstack/react-query";
 import { SyncLog } from "./types";
-import { logSyncOperation, LogEventType } from "@/lib/logUtils";
+import { logEvent, LogEventType } from "@/lib/logUtils";
 
 export const SyncCard = () => {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -17,13 +17,31 @@ export const SyncCard = () => {
     queryKey: ["sync_logs"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("gl_sync_logs")
+        .from("unified_audit_logs")
         .select("*")
-        .order("created_at", { ascending: false })
+        .in('event_type', [
+          LogEventType.SYNC_STARTED, 
+          LogEventType.SYNC_COMPLETED, 
+          LogEventType.SYNC_FAILED,
+          LogEventType.SYNC_PRODUCTS
+        ])
+        .order("event_timestamp", { ascending: false })
         .limit(20);
 
       if (error) throw error;
-      return data as SyncLog[];
+      
+      // Transform to expected format
+      const transformedData = data.map(log => ({
+        id: log.id,
+        table_name: log.metadata?.table_name || 'system',
+        operation: log.event_type,
+        status: log.event_type === LogEventType.SYNC_COMPLETED ? 'success' : 
+                log.event_type === LogEventType.SYNC_FAILED ? 'error' : 'pending',
+        error_message: log.error_message,
+        created_at: log.event_timestamp
+      }));
+      
+      return transformedData as SyncLog[];
     },
   });
 
@@ -33,14 +51,13 @@ export const SyncCard = () => {
       
       // Log sync operation start
       const syncId = `sync_${Date.now()}`;
-      await logSyncOperation(
-        'sync_products',
+      await logEvent(
+        LogEventType.SYNC_STARTED,
         syncId,
         {
           initiated_by: 'user',
           trigger_source: 'manual'
-        },
-        true
+        }
       );
       
       // Using a POST request to the edge function instead of direct RPC
@@ -53,14 +70,13 @@ export const SyncCard = () => {
       if (error) throw error;
 
       // Log sync operation complete
-      await logSyncOperation(
-        'sync_products',
+      await logEvent(
+        LogEventType.SYNC_COMPLETED,
         syncId,
         {
           status: 'success',
           sync_match_id: data?.id
-        },
-        true
+        }
       );
 
       toast({
@@ -74,14 +90,15 @@ export const SyncCard = () => {
       console.error('Sync error:', error);
       
       // Log sync operation error
-      await logSyncOperation(
-        'sync_products',
+      await logEvent(
+        LogEventType.SYNC_FAILED,
         `sync_${Date.now()}`,
         {
           error: error.message
         },
-        false,
-        error.message
+        {
+          error_message: error.message
+        }
       );
       
       toast({

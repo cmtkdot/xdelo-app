@@ -47,8 +47,8 @@ export function MediaFixButton({
             onComplete();
           }
         }}
-        initialMessageIds={messageIds}
-        initialMessages={messages}
+        messageIds={messageIds}
+        messages={messages}
         onComplete={onComplete}
       />
     </>

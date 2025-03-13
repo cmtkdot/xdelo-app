@@ -24,42 +24,43 @@ export interface SyncLogOptions {
   metadata?: any;
 }
 
+// Helper function to check if a table exists
+const tableExists = async (tableName: string): Promise<boolean> => {
+  try {
+    const { count, error } = await supabase
+      .from('pg_tables')
+      .select('count(*)', { count: 'exact', head: true })
+      .eq('tablename', tableName);
+    
+    return !error && count > 0;
+  } catch (err) {
+    console.error(`Error checking if table ${tableName} exists:`, err);
+    return false;
+  }
+};
+
 export async function createSyncLog(
   operation: string,
   details: any = {},
   options: SyncLogOptions = {}
 ) {
   try {
-    const { data, error } = await supabase
-      .from("sync_logs")
-      .insert({
-        operation,
-        status: "pending",
-        details,
-        user_id: options.userId,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Failed to create sync log:", error);
-    }
-
-    // Also log to unified audit logs
+    // Log to unified audit logs
+    const eventType = getEventTypeFromOperation(operation);
     await logEvent(
-      LogEventType.SYNC_STARTED,
-      data?.id || "unknown",
+      eventType,
+      'sync-' + new Date().getTime(),
       {
         operation,
         details,
-        status: "pending",
+        status: 'pending',
       },
       {
         user_id: options.userId,
       }
     );
 
-    return { success: !error, data, error };
+    return { success: true, error: null };
   } catch (err) {
     console.error("Error in createSyncLog:", err);
     return { success: false, error: err };
@@ -73,23 +74,7 @@ export async function updateSyncLog(
   errorMessage?: string
 ) {
   try {
-    const { data, error } = await supabase
-      .from("sync_logs")
-      .update({
-        status,
-        details,
-        updated_at: new Date().toISOString(),
-        error_message: errorMessage,
-      })
-      .eq("id", id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Failed to update sync log:", error);
-    }
-
-    // Also log to unified audit logs
+    // Log to unified audit logs
     const eventType = status === "success" 
       ? LogEventType.SYNC_COMPLETED 
       : status === "error" 
@@ -106,7 +91,7 @@ export async function updateSyncLog(
       }
     );
 
-    return { success: !error, data, error };
+    return { success: true, error: null };
   } catch (err) {
     console.error("Error in updateSyncLog:", err);
     return { success: false, error: err };
@@ -115,19 +100,60 @@ export async function updateSyncLog(
 
 export async function getSyncLogs(limit = 10) {
   try {
+    // Attempt to use unified_audit_logs instead
     const { data, error } = await supabase
-      .from("sync_logs")
+      .from("unified_audit_logs")
       .select("*")
-      .order("created_at", { ascending: false })
+      .in('event_type', [
+        LogEventType.SYNC_STARTED,
+        LogEventType.SYNC_COMPLETED,
+        LogEventType.SYNC_FAILED,
+        LogEventType.SYNC_PRODUCTS
+      ])
+      .order("event_timestamp", { ascending: false })
       .limit(limit);
 
     if (error) {
       console.error("Failed to fetch sync logs:", error);
     }
 
-    return { success: !error, data, error };
+    // Transform the data to match the expected format
+    const transformedData = data ? data.map(log => ({
+      id: log.id,
+      operation: log.event_type,
+      status: getStatusFromEventType(log.event_type),
+      details: log.metadata,
+      created_at: log.event_timestamp,
+      updated_at: log.event_timestamp,
+      error_message: log.error_message,
+      user_id: log.user_id
+    })) : [];
+
+    return { success: !error, data: transformedData, error };
   } catch (err) {
     console.error("Error in getSyncLogs:", err);
     return { success: false, error: err };
   }
 }
+
+// Helper functions
+function getEventTypeFromOperation(operation: string): LogEventType {
+  switch (operation) {
+    case 'sync_products': return LogEventType.SYNC_PRODUCTS;
+    case 'sync_started': return LogEventType.SYNC_STARTED;
+    case 'sync_completed': return LogEventType.SYNC_COMPLETED;
+    case 'sync_failed': return LogEventType.SYNC_FAILED;
+    default: return LogEventType.SYNC_STARTED;
+  }
+}
+
+function getStatusFromEventType(eventType: string): "pending" | "success" | "error" {
+  switch (eventType) {
+    case LogEventType.SYNC_COMPLETED: return "success";
+    case LogEventType.SYNC_FAILED: return "error";
+    default: return "pending";
+  }
+}
+
+// Re-export logMessageOperation for backward compatibility
+export const logMessageOperation = logEvent;

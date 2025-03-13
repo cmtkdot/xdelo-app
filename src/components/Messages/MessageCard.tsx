@@ -8,8 +8,7 @@ import { Spinner } from '@/components/ui/spinner';
 import type { Message } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { useMediaOperations } from '@/hooks/useMediaOperations';
-import { logMessageOperation } from '@/lib/syncLogger';
-import { LogEventType } from '@/types/api/LogEventType';
+import { logEvent, LogEventType } from '@/lib/logUtils';
 
 interface MessageCardProps {
   message: Message;
@@ -41,11 +40,15 @@ export const MessageCard: React.FC<MessageCardProps> = ({
     
     try {
       // Log the retry attempt
-      await logMessageOperation(LogEventType.USER_ACTION, id, {
-        action: 'retry_processing',
-        previous_state: processing_state,
-        error_message
-      });
+      await logEvent(
+        LogEventType.USER_ACTION,
+        id,
+        {
+          action: 'retry_processing',
+          previous_state: processing_state,
+          error_message
+        }
+      );
       
       // Try the provided retry function first
       await onRetryProcessing(id);
@@ -53,10 +56,14 @@ export const MessageCard: React.FC<MessageCardProps> = ({
       console.error('Error in primary retry, attempting repair:', error);
       
       // Log the fallback to repair
-      await logMessageOperation(LogEventType.USER_ACTION, id, {
-        action: 'fallback_to_repair',
-        error: error instanceof Error ? error.message : String(error)
-      });
+      await logEvent(
+        LogEventType.USER_ACTION,
+        id,
+        {
+          action: 'fallback_to_repair',
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
       
       // Fall back to repair if the retry function fails
       await repairMediaBatch([id]);

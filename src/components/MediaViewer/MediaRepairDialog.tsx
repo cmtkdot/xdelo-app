@@ -8,11 +8,14 @@ import { AlertCircle, CheckCircle2, Wrench } from "lucide-react";
 import type { Message } from '@/types/MessagesTypes';
 import { useUnifiedMediaRepair } from '@/hooks/useUnifiedMediaRepair';
 
-interface MediaRepairDialogProps {
+export interface MediaRepairDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialMessages?: Message[];
   initialMessageIds?: string[];
+  mediaGroupId?: string;
+  messages?: Message[];
+  messageIds?: string[];
   onComplete?: () => void;
 }
 
@@ -21,6 +24,9 @@ export function MediaRepairDialog({
   onOpenChange,
   initialMessages = [],
   initialMessageIds = [],
+  mediaGroupId,
+  messages = [],
+  messageIds = [],
   onComplete
 }: MediaRepairDialogProps) {
   const [repairing, setRepairing] = useState(false);
@@ -37,21 +43,24 @@ export function MediaRepairDialog({
     isRepairing
   } = useUnifiedMediaRepair();
 
-  // Combine message IDs from both props
-  const messageIds = [
+  // Combine message IDs from both props for backward compatibility
+  const combinedMessageIds = [
     ...initialMessageIds,
-    ...(initialMessages?.map(m => m.id) || [])
+    ...messageIds,
+    ...(initialMessages?.map(m => m.id) || []),
+    ...(messages?.map(m => m.id) || [])
   ].filter(Boolean);
 
   const handleRepairAll = async () => {
-    if (messageIds.length === 0) return;
+    if (combinedMessageIds.length === 0 && !mediaGroupId) return;
     
     try {
       setRepairing(true);
       setProgress(10);
       
       const repairResult = await repairMedia({ 
-        messageIds, 
+        messageIds: combinedMessageIds,
+        mediaGroupId,
         checkStorageOnly: false 
       });
       
@@ -69,8 +78,8 @@ export function MediaRepairDialog({
       } else {
         setResult({
           successful: 0,
-          failed: messageIds.length,
-          total: messageIds.length,
+          failed: combinedMessageIds.length,
+          total: combinedMessageIds.length,
           errors: [repairResult.error || 'Unknown error occurred']
         });
       }
@@ -82,8 +91,8 @@ export function MediaRepairDialog({
       console.error('Error repairing media:', error);
       setResult({
         successful: 0,
-        failed: messageIds.length,
-        total: messageIds.length,
+        failed: combinedMessageIds.length,
+        total: combinedMessageIds.length,
         errors: [error.message || 'Unknown error occurred']
       });
     } finally {
@@ -144,15 +153,17 @@ export function MediaRepairDialog({
                     Repair Options
                   </h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    {messageIds.length > 0 
-                      ? `Repair ${messageIds.length} selected media file${messageIds.length !== 1 ? 's' : ''}`
-                      : 'No media files selected for repair'}
+                    {combinedMessageIds.length > 0 
+                      ? `Repair ${combinedMessageIds.length} selected media file${combinedMessageIds.length !== 1 ? 's' : ''}`
+                      : mediaGroupId 
+                        ? 'Repair all files in the media group'
+                        : 'No media files selected for repair'}
                   </p>
                   
                   <div className="space-y-2">
                     <Button 
                       onClick={handleRepairAll} 
-                      disabled={messageIds.length === 0 || repairing || isRepairing}
+                      disabled={(combinedMessageIds.length === 0 && !mediaGroupId) || repairing || isRepairing}
                       className="w-full"
                     >
                       {repairing && <Spinner className="mr-2" size="sm" />}

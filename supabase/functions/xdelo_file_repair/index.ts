@@ -7,9 +7,13 @@ import { Message } from "../_shared/types.ts";
 interface FileRepairOptions {
   messageIds?: string[];
   mediaGroupId?: string;
+  limit?: number;
+  forceRedownload?: boolean;
+  fixContentType?: boolean;
   fixContentDisposition?: boolean;
   fixStoragePaths?: boolean;
   fixMimeTypes?: boolean;
+  checkStorageOnly?: boolean;
   dryRun?: boolean;
 }
 
@@ -56,7 +60,8 @@ async function fixContentDisposition(message: Message, dryRun = false) {
     return {
       success: false,
       message_id: message.id,
-      error: 'Missing mime type or storage path'
+      action: 'failed',
+      reason: 'Missing mime type or storage path'
     };
   }
   
@@ -86,11 +91,25 @@ async function fixContentDisposition(message: Message, dryRun = false) {
         .eq('id', message.id);
       
       if (dbError) throw dbError;
+      
+      // Log the repair action
+      await supabaseClient
+        .from('unified_audit_logs')
+        .insert({
+          event_type: 'content_disposition_updated',
+          entity_id: message.id,
+          metadata: {
+            disposition,
+            mime_type: message.mime_type,
+            storage_path: message.storage_path
+          }
+        });
     }
     
     return {
       success: true,
       message_id: message.id,
+      action: 'repaired',
       disposition,
       dry_run: dryRun
     };
@@ -98,7 +117,95 @@ async function fixContentDisposition(message: Message, dryRun = false) {
     return {
       success: false,
       message_id: message.id,
+      action: 'failed',
       error: error.message
+    };
+  }
+}
+
+/**
+ * Verify storage exists for a message
+ */
+async function verifyStorage(message: Message, dryRun = false) {
+  if (!message.storage_path) {
+    return {
+      success: false,
+      message_id: message.id,
+      action: 'failed',
+      reason: 'Missing storage path'
+    };
+  }
+  
+  try {
+    // Check if file exists in storage
+    const { data, error } = await supabaseClient.storage
+      .from('telegram-media')
+      .getPublicUrl(message.storage_path);
+    
+    if (error) throw error;
+    
+    if (!dryRun) {
+      // Update the message to mark storage as verified
+      await supabaseClient
+        .from('messages')
+        .update({
+          storage_exists: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', message.id);
+      
+      // Log the verification
+      await supabaseClient
+        .from('unified_audit_logs')
+        .insert({
+          event_type: 'storage_file_verified',
+          entity_id: message.id,
+          metadata: {
+            storage_path: message.storage_path,
+            public_url: data.publicUrl
+          }
+        });
+    }
+    
+    return {
+      success: true,
+      message_id: message.id,
+      action: 'verified',
+      public_url: data.publicUrl
+    };
+  } catch (error) {
+    if (!dryRun) {
+      // Mark file as needing redownload
+      await supabaseClient
+        .from('messages')
+        .update({
+          storage_exists: false,
+          needs_redownload: true,
+          redownload_reason: 'File not found in storage',
+          redownload_flagged_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', message.id);
+      
+      // Log the missing file
+      await supabaseClient
+        .from('unified_audit_logs')
+        .insert({
+          event_type: 'storage_file_missing',
+          entity_id: message.id,
+          metadata: {
+            storage_path: message.storage_path,
+            error: error.message
+          }
+        });
+    }
+    
+    return {
+      success: false,
+      message_id: message.id,
+      action: 'failed',
+      error: error.message,
+      reason: 'File not found in storage'
     };
   }
 }
@@ -110,9 +217,9 @@ async function repairFiles(options: FileRepairOptions) {
   const results = {
     success: true,
     processed: 0,
-    successful: 0,
+    repaired: 0,
+    verified: 0,
     failed: 0,
-    errors: [] as any[],
     details: [] as any[]
   };
   
@@ -149,13 +256,18 @@ async function repairFiles(options: FileRepairOptions) {
     messages = data || [];
   } else {
     // No specific messages requested, use a limited set that need repair
-    const { data, error } = await supabaseClient
+    const query = supabaseClient
       .from('messages')
-      .select('*')
-      .is('content_disposition', null)
-      .is('storage_exists', true)
-      .is('mime_type_verified', false)
-      .limit(100);
+      .select('*');
+    
+    if (options.checkStorageOnly) {
+      query.or('storage_exists.is.null,storage_exists.eq.false');
+    } else {
+      query.or('content_disposition.is.null,mime_type_verified.is.null,mime_type_verified.eq.false');
+    }
+    
+    const limit = options.limit || 50;
+    const { data, error } = await query.limit(limit);
     
     if (error) {
       return {
@@ -172,16 +284,27 @@ async function repairFiles(options: FileRepairOptions) {
     results.processed++;
     
     try {
-      if (options.fixContentDisposition) {
-        const fixResult = await fixContentDisposition(message, options.dryRun);
-        results.details.push(fixResult);
+      // First verify storage exists
+      const storageResult = await verifyStorage(message, options.dryRun);
+      results.details.push(storageResult);
+      
+      if (storageResult.success) {
+        results.verified++;
         
-        if (fixResult.success) {
-          results.successful++;
-        } else {
-          results.failed++;
-          results.errors.push(fixResult);
+        // Now fix content disposition if needed
+        if ((options.fixContentType || options.fixContentDisposition) && 
+            (!message.content_disposition || !message.mime_type_verified)) {
+          const fixResult = await fixContentDisposition(message, options.dryRun);
+          results.details.push(fixResult);
+          
+          if (fixResult.success) {
+            results.repaired++;
+          } else {
+            results.failed++;
+          }
         }
+      } else {
+        results.failed++;
       }
       
       // Add other repair functionality as needed
@@ -189,14 +312,28 @@ async function repairFiles(options: FileRepairOptions) {
       
     } catch (error) {
       results.failed++;
-      results.errors.push({
+      results.details.push({
         message_id: message.id,
+        action: 'failed',
         error: error.message
       });
     }
   }
   
-  results.success = results.failed === 0;
+  // Log overall repair operation
+  await supabaseClient
+    .from('unified_audit_logs')
+    .insert({
+      event_type: 'media_repair_completed',
+      entity_id: 'repair-session-' + Date.now(),
+      metadata: {
+        processed: results.processed,
+        repaired: results.repaired,
+        verified: results.verified,
+        failed: results.failed,
+        options
+      }
+    });
   
   return results;
 }
@@ -220,6 +357,22 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("Error:", error.message);
+    
+    // Log the error
+    try {
+      await supabaseClient
+        .from('unified_audit_logs')
+        .insert({
+          event_type: 'media_repair_failed',
+          entity_id: 'repair-session-' + Date.now(),
+          metadata: {
+            error: error.message
+          },
+          error_message: error.message
+        });
+    } catch (e) {
+      console.error("Failed to log error:", e);
+    }
     
     return new Response(
       JSON.stringify({ success: false, error: error.message }),

@@ -1,10 +1,10 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '../integrations/supabase/types';
-import { logSyncOperation as logSyncOp, LogEventType } from './logUtils';
+import { logEvent, LogEventType } from './logUtils';
 
 /**
- * @deprecated Use logSyncOperation from logUtils.ts instead
+ * @deprecated Use logEvent from logUtils.ts instead
  * This function is maintained for backward compatibility
  */
 export async function xdelo_logSyncOperation(
@@ -16,18 +16,18 @@ export async function xdelo_logSyncOperation(
 ) {
   try {
     // Map string operation to LogEventType when possible
-    let eventType: LogEventType;
+    let eventType: LogEventType | string;
     
     // Try to convert string operation to LogEventType
     try {
       eventType = operation as LogEventType;
     } catch (err) {
-      // Fallback to WARNING if conversion fails
-      eventType = LogEventType.WARNING;
+      // Fallback to general warning if conversion fails
+      eventType = LogEventType.SYSTEM_WARNING;
     }
     
     // Use the new consolidated logging system
-    await logSyncOp(
+    await logEvent(
       eventType,
       details.id || 'system',
       {
@@ -36,8 +36,9 @@ export async function xdelo_logSyncOperation(
         table_name: details.table_name || 'system',
         glide_id: details.glide_id || null
       },
-      success,
-      error
+      {
+        error_message: error
+      }
     );
   } catch (err) {
     console.error('Failed to log sync operation:', err);
@@ -45,7 +46,7 @@ export async function xdelo_logSyncOperation(
 }
 
 /**
- * @deprecated Use logSyncOperation from logUtils.ts instead
+ * @deprecated Use logEvent from logUtils.ts instead
  * This function is maintained for backward compatibility
  */
 export async function xdelo_logSyncOperationBatch(
@@ -68,7 +69,7 @@ export async function xdelo_logSyncOperationBatch(
 }
 
 /**
- * @deprecated Use logSyncOperation from logUtils.ts instead
+ * @deprecated Use logEvent from logUtils.ts instead
  * This function is maintained for backward compatibility
  */
 export async function xdelo_logSyncWarning(
@@ -76,15 +77,16 @@ export async function xdelo_logSyncWarning(
   message: string,
   details: Record<string, any>
 ) {
-  await logSyncOp(
-    LogEventType.WARNING,
+  await logEvent(
+    LogEventType.SYSTEM_WARNING,
     details.id || 'system',
     {
       message,
       ...details
     },
-    false,
-    message
+    {
+      error_message: message
+    }
   );
 }
 
