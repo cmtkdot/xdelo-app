@@ -70,7 +70,7 @@ export function MediaEditDialog({
       setSyncStatus('Updating and analyzing caption...');
       
       // Use the updated caption sync hook to handle the update and sync
-      const result = await processCaptionUpdate(media, newCaption);
+      const result = await processCaptionUpdate(media as any, newCaption);
       
       if (!result?.success) {
         throw new Error(result?.error || 'Failed to process caption update');

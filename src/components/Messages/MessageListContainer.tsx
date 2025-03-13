@@ -30,8 +30,7 @@ export function MessageListContainer() {
         variant: "default"
       });
       
-      // Fix: Pass an object with messageId property
-      await forceSyncMessageGroup({ messageId });
+      await forceSyncMessageGroup(messageId);
       
       // Wrap refetch() in void to match the expected return type
       void refetch();
