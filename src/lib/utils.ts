@@ -1,6 +1,7 @@
 
-import { Message } from "@/types/MessagesTypes";
-import { AnalyzedContent } from "@/types";
+import { Message } from "@/types/entities/Message";
+import { AnalyzedContent } from "@/types/utils/AnalyzedContent";
+import { MediaItem } from "@/types/ui/MediaViewer";
 
 // Common formatters
 export function formatDate(date: Date): string {
@@ -11,7 +12,10 @@ export function formatDate(date: Date): string {
   });
 }
 
-export const messageToMediaItem = (message: Message) => {
+/**
+ * Converts a Message to a MediaItem for use in the MediaViewer
+ */
+export const messageToMediaItem = (message: Message): MediaItem => {
   return {
     id: message.id,
     public_url: message.public_url || '',

@@ -1,4 +1,3 @@
 
-// Import and re-export types from our consolidated files
+// Simply re-export from our main types index
 export * from './types/index';
-export * from './types/MessagesTypes';
