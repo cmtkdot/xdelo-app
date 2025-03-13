@@ -53,7 +53,8 @@ export default defineConfig(({ mode }) => ({
     // Allow lovable project domain for development
     allowedHosts: [
       'localhost',
-      '*.lovableproject.com'
+      '*.lovableproject.com',
+      '79512fb5-8301-4d61-9349-6769d5c8295b.lovableproject.com'
     ]
   },
   optimizeDeps: {
