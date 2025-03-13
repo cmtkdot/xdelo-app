@@ -39,8 +39,8 @@ export function ImageSwiper({
     
     return [...media].sort((a, b) => {
       // First, check if mimeType exists
-      const aIsImage = a.mimeType?.startsWith('image') || (a.mime_type && a.mime_type.startsWith('image')) || false;
-      const bIsImage = b.mimeType?.startsWith('image') || (b.mime_type && b.mime_type.startsWith('image')) || false;
+      const aIsImage = (a.mimeType || a.mime_type || '').startsWith('image') || false;
+      const bIsImage = (b.mimeType || b.mime_type || '').startsWith('image') || false;
       
       // If mime_type is missing, try to infer from URL
       const aUrl = a.url || a.public_url || '';

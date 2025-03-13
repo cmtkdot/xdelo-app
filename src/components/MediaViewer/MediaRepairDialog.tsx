@@ -105,7 +105,9 @@ export function MediaRepairDialog({
       setRepairing(true);
       setProgress(10);
       
+      // Pass empty messageIds array to meet the interface requirements
       await repairMedia({ 
+        messageIds: [],
         limit: 100,
         checkStorageOnly: true 
       });

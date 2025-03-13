@@ -63,6 +63,9 @@ const MessagesEnhanced = () => {
   const [currentGroup, setCurrentGroup] = useState<Message[]>([]);
   const [groupIndex, setGroupIndex] = useState(0);
   const [filtersVisible, setFiltersVisible] = useState(false);
+  const [editDialogMessage, setEditDialogMessage] = useState<Message | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   // Fetch data using existing hooks
   const { data: mediaGroups, isLoading, error, refetch } = useMediaGroups();
@@ -286,6 +289,16 @@ const MessagesEnhanced = () => {
     };
   }, []);
 
+  const handleEditMessage = (message: Message) => {
+    setEditDialogMessage(message);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDeleteMessage = async (message: Message) => {
+    setSelectedMessage(message);
+    setIsDeleteDialogOpen(true);
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <EnhancedMessagesHeader 
@@ -436,11 +449,13 @@ const MessagesEnhanced = () => {
         {/* Details panel - conditionally rendered */}
         {detailsOpen && (
           <div className="col-span-1 xl:col-span-2 h-[calc(100vh-12rem)]">
-            <MessageDetailsPanel
-              selectedMessage={selectedMessage}
-              onEditMessage={handleEditMessage}
-              onDeleteMessage={handleDeleteMessage}
-            />
+            {selectedMessage && (
+              <MessageDetailsPanel 
+                message={selectedMessage} 
+                onEdit={handleEditMessage}
+                onDelete={handleDeleteMessage}
+              />
+            )}
           </div>
         )}
       </div>

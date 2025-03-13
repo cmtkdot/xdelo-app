@@ -1,6 +1,6 @@
 
 // Re-export toast from sonner for convenience
-import { toast, ToasterProps, Toast } from "sonner";
+import { toast, ToasterProps } from "sonner";
 
 export interface ToastProps {
   title?: string;

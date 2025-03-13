@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface RepairMediaOptions {
-  messageIds: string[];
+  messageIds?: string[];
   fixContentTypes?: boolean;
   forceRedownload?: boolean;
   mediaGroupId?: string;
@@ -16,7 +16,7 @@ export function useUnifiedMediaRepair() {
   const [error, setError] = useState<Error | null>(null);
 
   const repairMedia = async ({
-    messageIds,
+    messageIds = [],
     fixContentTypes = true,
     forceRedownload = false,
     mediaGroupId,

@@ -23,4 +23,5 @@ export interface MatchResult {
     confidence: number;
   };
   match_fields?: string[];
+  match_date?: string;
 }
