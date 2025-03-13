@@ -1,10 +1,10 @@
-
 import { Message } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
 
 interface MediaGridProps {
   mediaGroups: { [key: string]: Message[] };
   onEdit: (media: Message) => void;
+  onView?: (group: Message[]) => void;
   onPrevious?: () => void;
   onNext?: () => void;
   hasPrevious?: boolean;
@@ -14,6 +14,7 @@ interface MediaGridProps {
 export const MediaGrid = ({ 
   mediaGroups,
   onEdit,
+  onView,
   onPrevious,
   onNext,
   hasPrevious,
@@ -33,7 +34,7 @@ export const MediaGrid = ({
           key={group[0].id}
           group={group}
           onEdit={onEdit}
-          onView={() => {}}
+          onView={onView ? () => onView(group) : undefined}
           onDelete={handleDelete}
         />
       ))}

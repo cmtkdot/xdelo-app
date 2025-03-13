@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:dev": "vite build --mode development",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
@@ -47,7 +48,6 @@
     "framer-motion": "^10.18.0",
     "input-otp": "^1.0.7",
     "lucide-react": "^0.462.0",
-    "next-themes": "^0.2.1",
     "react": "^18.2.0",
     "react-day-picker": "^8.10.0",
     "react-dom": "^18.2.0",

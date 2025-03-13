@@ -1,11 +1,10 @@
-
 'use client'
 
 import * as React from 'react'
 import { motion, useMotionValue } from 'framer-motion'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { MediaItem } from '@/types'
+import { MediaItem } from '@/components/MediaViewer/types'
 import { cn } from '@/lib/utils'
 import { format } from "date-fns";
 
@@ -14,6 +13,7 @@ interface ImageSwiperProps extends React.HTMLAttributes<HTMLDivElement> {
   showNavigation?: boolean;
   className?: string;
   onIndexChange?: (index: number) => void;
+  onClick?: () => void;
 }
 
 export function ImageSwiper({ 
@@ -21,6 +21,7 @@ export function ImageSwiper({
   className, 
   showNavigation, 
   onIndexChange,
+  onClick,
   ...props 
 }: ImageSwiperProps) {
   const [mediaIndex, setMediaIndex] = React.useState(0);
@@ -107,6 +108,7 @@ export function ImageSwiper({
       className={cn("group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-black/90", className)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onClick={onClick}
       {...props}
     >
       {/* Product info overlay */}
