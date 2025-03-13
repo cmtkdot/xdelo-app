@@ -21,7 +21,7 @@ export const ProductGrid = ({
   isDeleting = false
 }: ProductGridProps) => {
   // Guard against undefined products
-  if (!Array.isArray(products)) {
+  if (!products || !Array.isArray(products)) {
     return null;
   }
 

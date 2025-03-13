@@ -83,7 +83,7 @@ export function MessageDetailsPanel({
           <Badge variant={message.processing_state === 'completed' ? 'success' : 
                           message.processing_state === 'error' ? 'destructive' : 
                           'secondary'}>
-            {message.processing_state}
+            {message.processing_state || 'unknown'}
           </Badge>
           {message.is_forward && (
             <Badge variant="outline">Forwarded</Badge>
@@ -126,7 +126,7 @@ export function MessageDetailsPanel({
           
           <div>
             <span className="font-medium">Chat</span>
-            <p>{message.chat_title || message.chat_id}</p>
+            <p>{message.chat_title || message.chat_id || 'Unknown'}</p>
           </div>
           
           {message.file_unique_id && (

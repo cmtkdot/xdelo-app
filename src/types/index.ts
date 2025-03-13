@@ -9,7 +9,7 @@ export type { AnalyzedContent } from './utils/AnalyzedContent';
 export type { MatchResult } from './utils/MatchResult';
 export type { MessageProcessingStats } from './utils/MessageProcessingStats';
 export type { FilterValues } from './ui/FilterValues';
-export type { MediaItem } from './entities/MediaItem';
+export type { MediaItem } from './ui/MediaViewer';
 export type { Message } from './entities/Message';
 export type { GlProduct } from './entities/Product';
 export { LogEventType } from './api/LogEventType';

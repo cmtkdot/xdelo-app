@@ -30,13 +30,18 @@ export function ImageSwiper({
   const [mediaError, setMediaError] = React.useState<string | null>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
+  // Safety check for empty or invalid media
+  const validMedia = React.useMemo(() => {
+    return Array.isArray(media) && media.length > 0 ? media : [];
+  }, [media]);
+
   // Sort media to prioritize images over videos
   const sortedMedia = React.useMemo(() => {
-    if (!media || !Array.isArray(media) || media.length === 0) {
+    if (validMedia.length === 0) {
       return [];
     }
     
-    return [...media].sort((a, b) => {
+    return [...validMedia].sort((a, b) => {
       // First, check if mimeType exists, using either property name
       const aIsImage = a.mime_type?.startsWith('image') || false;
       const bIsImage = b.mime_type?.startsWith('image') || false;
@@ -53,12 +58,31 @@ export function ImageSwiper({
       // Prioritize images
       return bIsLikelyImage ? 1 : aIsLikelyImage ? -1 : 0;
     });
-  }, [media]);
+  }, [validMedia]);
 
-  const currentMedia = sortedMedia[mediaIndex];
+  // Check if we have any media to display
+  if (sortedMedia.length === 0) {
+    return (
+      <div className="group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
+        <span className="text-gray-400">No media available</span>
+      </div>
+    );
+  }
+
+  const currentMedia = sortedMedia[mediaIndex] || sortedMedia[0];
+  
+  // Safety check for currentMedia
+  if (!currentMedia) {
+    return (
+      <div className="group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
+        <span className="text-gray-400">Media not available</span>
+      </div>
+    );
+  }
+  
   // Use either new or legacy property names
-  const mediaUrl = currentMedia?.public_url || '';
-  const mediaMimeType = currentMedia?.mime_type || '';
+  const mediaUrl = currentMedia.public_url || '';
+  const mediaMimeType = currentMedia.mime_type || '';
   const isVideo = mediaMimeType.startsWith("video/") || 
                  (mediaUrl && /\.(mp4|mov|webm|avi)$/i.test(mediaUrl));
 
@@ -119,14 +143,6 @@ export function ImageSwiper({
   const handleMediaError = (type: 'image' | 'video') => {
     setMediaError(`Failed to load ${type}`);
   };
-
-  if (!sortedMedia?.length) {
-    return (
-      <div className="group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
-        <span className="text-gray-400">No media available</span>
-      </div>
-    );
-  }
 
   // Get title from either the title property or analyzed_content
   const productName = currentMedia.caption || 

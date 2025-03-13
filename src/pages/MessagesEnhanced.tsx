@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/integrations/supabase/client";
@@ -104,12 +103,18 @@ const MessagesEnhanced = () => {
     try {
       console.log('Calculating filteredMessages, mediaGroups:', mediaGroups ? Object.keys(mediaGroups).length : 'null');
       
+      // If mediaGroups is null/undefined, return an empty array to avoid errors
+      if (!mediaGroups) return [];
+      
       // Return an array of message groups based on the current filters
-      const groups = Object.values(mediaGroups || {});
+      const groups = Object.values(mediaGroups);
       
       // Apply all filters
       return groups.filter(group => {
         try {
+          // Skip empty groups
+          if (!group || group.length === 0) return false;
+          
           // Filter logic for various criteria
           const mainMessage = group[0];
           if (!mainMessage) return false;
@@ -134,7 +139,7 @@ const MessagesEnhanced = () => {
           
           // Date range filter
           if (filters.dateRange) {
-            const messageDate = new Date(mainMessage.created_at);
+            const messageDate = new Date(mainMessage.created_at || '');
             if (messageDate < filters.dateRange.from || messageDate > filters.dateRange.to) {
               return false;
             }
@@ -179,6 +184,9 @@ const MessagesEnhanced = () => {
   // Calculate pagination
   const paginatedMessages = useMemo(() => {
     try {
+      // Return empty array if filteredMessages is empty
+      if (!filteredMessages || filteredMessages.length === 0) return [];
+      
       const startIndex = (filters.page - 1) * filters.itemsPerPage;
       return filteredMessages.slice(startIndex, startIndex + filters.itemsPerPage);
     } catch (err) {
@@ -356,7 +364,7 @@ const MessagesEnhanced = () => {
     <div className="container mx-auto py-6 space-y-6">
       <EnhancedMessagesHeader 
         title="Enhanced Messages"
-        totalMessages={filteredMessages.length}
+        totalMessages={filteredMessages?.length || 0}
         onRefresh={handleDataRefresh}
         isLoading={isLoading}
       />
@@ -502,27 +510,33 @@ const MessagesEnhanced = () => {
         {/* Details panel - conditionally rendered */}
         {detailsOpen && (
           <div className="col-span-1 xl:col-span-2 h-[calc(100vh-12rem)]">
-            {selectedMessage && (
+            {selectedMessage ? (
               <MessageDetailsPanel 
                 message={selectedMessage} 
                 onEdit={handleEditMessage}
                 onDelete={handleDeleteMessage}
               />
+            ) : (
+              <div className="border rounded-md p-4 h-full flex items-center justify-center">
+                <p className="text-muted-foreground">Select a message to view details</p>
+              </div>
             )}
           </div>
         )}
       </div>
       
       {/* Media Viewer Dialog */}
-      <MediaViewer
-        isOpen={viewerOpen}
-        onClose={() => setViewerOpen(false)}
-        currentGroup={currentGroup}
-        onPrevious={handlePreviousGroup}
-        onNext={handleNextGroup}
-        hasPrevious={groupIndex > 0}
-        hasNext={groupIndex < filteredMessages.length - 1}
-      />
+      {viewerOpen && (
+        <MediaViewer
+          isOpen={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+          currentGroup={currentGroup}
+          onPrevious={handlePreviousGroup}
+          onNext={handleNextGroup}
+          hasPrevious={groupIndex > 0}
+          hasNext={groupIndex < filteredMessages.length - 1}
+        />
+      )}
     </div>
   );
 };
