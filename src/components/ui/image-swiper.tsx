@@ -38,12 +38,12 @@ export function ImageSwiper({
     
     return [...media].sort((a, b) => {
       // First, check if mimeType exists, using either property name
-      const aIsImage = a.mimeType?.startsWith('image') || a.mime_type?.startsWith('image') || false;
-      const bIsImage = b.mimeType?.startsWith('image') || b.mime_type?.startsWith('image') || false;
+      const aIsImage = a.mime_type?.startsWith('image') || false;
+      const bIsImage = b.mime_type?.startsWith('image') || false;
       
       // If mime type is missing, try to infer from URL
-      const aUrl = a.url || a.public_url || '';
-      const bUrl = b.url || b.public_url || '';
+      const aUrl = a.public_url || '';
+      const bUrl = b.public_url || '';
       const aHasImageExt = aUrl.match(/\.(jpg|jpeg|png|gif)$/i);
       const bHasImageExt = bUrl.match(/\.(jpg|jpeg|png|gif)$/i);
       
@@ -57,8 +57,8 @@ export function ImageSwiper({
 
   const currentMedia = sortedMedia[mediaIndex];
   // Use either new or legacy property names
-  const mediaUrl = currentMedia?.url || currentMedia?.public_url || '';
-  const mediaMimeType = currentMedia?.mimeType || currentMedia?.mime_type || '';
+  const mediaUrl = currentMedia?.public_url || '';
+  const mediaMimeType = currentMedia?.mime_type || '';
   const isVideo = mediaMimeType.startsWith("video/") || 
                  (mediaUrl && /\.(mp4|mov|webm|avi)$/i.test(mediaUrl));
 
@@ -77,8 +77,8 @@ export function ImageSwiper({
   React.useEffect(() => {
     if (isHovered && !showNavigation) {
       const videoIndex = sortedMedia.findIndex(m => {
-        const mimeType = m.mimeType || m.mime_type || '';
-        const url = m.url || m.public_url || '';
+        const mimeType = m.mime_type || '';
+        const url = m.public_url || '';
         return mimeType.startsWith('video/') || (url && /\.(mp4|mov|webm|avi)$/i.test(url));
       });
       if (videoIndex !== -1) {
@@ -129,7 +129,7 @@ export function ImageSwiper({
   }
 
   // Get title from either the title property or analyzed_content
-  const productName = currentMedia.title || 
+  const productName = currentMedia.caption || 
                       (currentMedia.analyzed_content?.product_name) || 
                       'Untitled Product';
   
@@ -137,7 +137,7 @@ export function ImageSwiper({
   let formattedDate = '';
   
   try {
-    const dateStr = currentMedia.uploadedAt || currentMedia.created_at || '';
+    const dateStr = currentMedia.created_at || '';
     formattedDate = dateStr ? format(new Date(dateStr), 'MMM d, yyyy') : 'Unknown date';
   } catch (e) {
     formattedDate = 'Unknown date';

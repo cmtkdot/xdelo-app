@@ -1,6 +1,6 @@
 
 import type { Message } from "@/types/entities/Message";
-import type { MediaItem } from "@/types/entities/MediaItem";
+import type { MediaItem } from "@/types/ui/MediaViewer";
 
 export function messageToMediaItem(message: Message): MediaItem {
   // Set default mime_type based on file extension if not provided

@@ -71,6 +71,8 @@ const MessagesEnhanced = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [errorState, setErrorState] = useState<Error | null>(null);
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   // Fetch data using existing hooks
   const { data: mediaGroups, isLoading, error, refetch } = useMediaGroups();
@@ -80,7 +82,6 @@ const MessagesEnhanced = () => {
     sortBy: filters.sortField,
     sortOrder: filters.sortOrder
   });
-  const { data: analyticsData, isLoading: analyticsLoading } = useMessageAnalytics();
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
