@@ -4,7 +4,7 @@ import * as React from 'react'
 import { motion, useMotionValue } from 'framer-motion'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { MediaItem } from '@/components/MediaViewer/types'
+import { MediaItem } from '@/types'
 import { cn } from '@/lib/utils'
 import { format } from "date-fns";
 
@@ -29,7 +29,6 @@ export function ImageSwiper({
   const [lastNonVideoIndex, setLastNonVideoIndex] = React.useState(0);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
-  // Find first video in the media array
   const firstVideoIndex = React.useMemo(() => {
     return media.findIndex(m => m.mime_type?.startsWith('video/'));
   }, [media]);
@@ -45,35 +44,29 @@ export function ImageSwiper({
   const currentMedia = sortedMedia[mediaIndex];
   const isVideo = currentMedia?.mime_type?.startsWith("video/");
 
-  // Notify parent of index changes
   React.useEffect(() => {
     if (onIndexChange) {
       onIndexChange(mediaIndex);
     }
   }, [mediaIndex, onIndexChange]);
 
-  // Store the last non-video index when changing media
   React.useEffect(() => {
     if (!isVideo) {
       setLastNonVideoIndex(mediaIndex);
     }
   }, [mediaIndex, isVideo]);
 
-  // Handle hover state changes
   React.useEffect(() => {
-    if (isHovered && !showNavigation) { // Only auto-switch to video when not in navigation mode
-      // Find first video in the group
+    if (isHovered && !showNavigation) {
       const videoIndex = sortedMedia.findIndex(m => m.mime_type?.startsWith('video/'));
       if (videoIndex !== -1) {
         setMediaIndex(videoIndex);
       }
-    } else if (!isHovered && !showNavigation) { // Only switch back when not in navigation mode
-      // Return to last non-video index when leaving hover
+    } else if (!isHovered && !showNavigation) {
       setMediaIndex(lastNonVideoIndex);
     }
   }, [isHovered, sortedMedia, lastNonVideoIndex, showNavigation]);
 
-  // Handle video playback
   React.useEffect(() => {
     if (isVideo && videoRef.current) {
       if (isHovered) {
@@ -111,7 +104,6 @@ export function ImageSwiper({
       onClick={onClick}
       {...props}
     >
-      {/* Product info overlay */}
       <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 via-black/50 to-transparent p-4">
         <h3 className="text-xl font-semibold text-white">
           {sortedMedia[mediaIndex].analyzed_content?.product_name || 'Untitled Product'}

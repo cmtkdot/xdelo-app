@@ -27,16 +27,18 @@ export function MessageListContainer() {
       toast({
         title: "Processing Message",
         description: "Analyzing caption and syncing with media group...",
+        variant: "default"
       });
       
       await forceSyncMessageGroup(messageId);
       
-      // Handle the refetch result properly
-      refetch().then(() => {
+      // Handle the refetch appropriately
+      await refetch().then(() => {
         // Success case handling
         toast({
           title: "Processing Complete",
           description: "Message has been processed and synchronized.",
+          variant: "default"
         });
       }).catch(error => {
         console.error("Error refetching data:", error);

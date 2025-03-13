@@ -56,8 +56,20 @@ export interface MessageProcessingStats {
   latest_update: string;
 }
 
+// Export MediaItem type
+export type { MediaItem } from './MediaViewer';
+
 // Export Database type from supabase types
 export type { Database } from '@/integrations/supabase/types';
+
+// Export MatchResult for product matching 
+export interface MatchResult {
+  message_id: string;
+  product_id: string;
+  confidence: number;
+  match_fields: string[];
+  match_date: string;
+}
 
 export * from './GlProducts';
 export * from './MessagesTypes';

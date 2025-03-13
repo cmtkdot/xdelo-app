@@ -39,18 +39,18 @@ export const useMediaGroups = () => {
           processing_state: item.processing_state as ProcessingState || undefined,
           processing_started_at: item.processing_started_at || undefined,
           processing_completed_at: item.processing_completed_at || undefined,
-          analyzed_content: item.analyzed_content || undefined,
-          telegram_data: item.telegram_data as Record<string, unknown> || undefined,
+          analyzed_content: item.analyzed_content || {},
+          telegram_data: item.telegram_data || {},
           error_message: item.error_message || undefined,
           chat_id: item.chat_id || undefined,
           chat_type: item.chat_type || undefined,
           chat_title: item.chat_title || undefined,
-          created_at: item.created_at || undefined,
+          created_at: item.created_at || '',
           updated_at: item.updated_at || undefined,
-          is_original_caption: item.is_original_caption,
-          group_caption_synced: item.group_caption_synced,
-          storage_exists: item.storage_exists,
-          storage_path_standardized: item.storage_path_standardized
+          is_original_caption: item.is_original_caption || false,
+          group_caption_synced: item.group_caption_synced || false,
+          storage_exists: Boolean(item.storage_exists),
+          storage_path_standardized: item.storage_path_standardized || ''
         };
         return message;
       });

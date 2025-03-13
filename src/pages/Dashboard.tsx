@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -6,6 +7,8 @@ import { PageContainer } from "@/components/Layout/PageContainer";
 import { MessagesTable } from "@/components/MessagesTable/MessagesTable";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Toaster } from "@/components/ui/sonner";
 
 const Dashboard = () => {
   const queryClient = useQueryClient();
@@ -161,8 +164,26 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        <MessagesTable messages={messages || []} />
+        <Tabs defaultValue="table" className="w-full">
+          <TabsList className="w-full">
+            <TabsTrigger value="table" className="flex-1">Messages Table</TabsTrigger>
+            <TabsTrigger value="stats" className="flex-1">Stats & Analytics</TabsTrigger>
+          </TabsList>
+          <TabsContent value="table">
+            <Card className="p-4">
+              <h2 className="text-lg font-semibold mb-4">Message Data</h2>
+              <MessagesTable messages={messages || []} />
+            </Card>
+          </TabsContent>
+          <TabsContent value="stats">
+            <Card className="p-4">
+              <h2 className="text-lg font-semibold mb-4">Statistics and Analytics</h2>
+              <p>Detailed analytics will be available here soon.</p>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
+      <Toaster />
     </PageContainer>
   );
 };
