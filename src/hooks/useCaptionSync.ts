@@ -1,9 +1,8 @@
-
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Message, ProcessingState } from "@/types/MessagesTypes";
 import { useToast } from "@/hooks/useToast";
-import { logSyncOperation } from "@/lib/syncLogger";
+import { logSyncOperation, logProcessingOperation, logMessageOperation, logError } from "@/lib/unifiedLogger";
 
 export interface UpdateMessageParams {
   id: string;
@@ -45,8 +44,17 @@ export const useCaptionSync = () => {
 
     if (error) {
       console.error("Error updating message:", error);
+      await logError(id, error, { 
+        operation: "update_message",
+        updates: updates 
+      });
       throw error;
     }
+
+    await logMessageOperation("updated", id, { 
+      updates: updates,
+      source: "useCaptionSync"
+    });
 
     return data as Message;
   };
@@ -54,6 +62,13 @@ export const useCaptionSync = () => {
   // Updated function to handle caption processing through edge function
   const processCaptionUpdate = async (message: ProcessCaptionUpdateParams, newCaption: string): Promise<ProcessCaptionUpdateResult> => {
     try {
+      // Log starting caption update
+      await logSyncOperation("caption", message.id, { 
+        new_caption: newCaption.substring(0, 50) + (newCaption.length > 50 ? '...' : ''),
+        action: "update_caption",
+        media_group_id: message.media_group_id
+      });
+
       // Call the update-telegram-caption edge function
       const { data, error } = await supabase.functions.invoke('update-telegram-caption', {
         body: { 
@@ -64,15 +79,34 @@ export const useCaptionSync = () => {
 
       if (error) {
         console.error("Error processing caption update:", error);
+        await logError(message.id, error, {
+          operation: "update_caption",
+          message_id: message.id,
+          caption_length: newCaption.length
+        });
         throw new Error(error.message || 'Failed to update caption');
       }
 
       // Invalidate queries to refresh the UI after successful update
       queryClient.invalidateQueries({ queryKey: ['media-groups'] });
       
+      // Log successful update
+      await logMessageOperation("updated", message.id, {
+        operation: "caption_updated",
+        media_group_id: message.media_group_id,
+        result: data
+      });
+      
       return { success: true };
     } catch (err: any) {
       console.error("Error in processCaptionUpdate:", err);
+      
+      // Log the error
+      await logError(message.id, err, {
+        operation: "process_caption_update",
+        media_group_id: message.media_group_id
+      });
+      
       return { 
         success: false,
         error: err.message || 'Unknown error occurred during caption update'
@@ -100,6 +134,12 @@ export const useCaptionSync = () => {
 
   // Function to sync caption to the media group
   const syncCaptionToMediaGroup = async (messageId: string): Promise<void> => {
+    // Log sync started
+    await logSyncOperation("media_group", messageId, { 
+      action: "sync_caption_to_group",
+      source: "syncCaptionToMediaGroup"
+    });
+
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .select('*')
@@ -108,6 +148,9 @@ export const useCaptionSync = () => {
 
     if (messageError) {
       console.error("Error fetching message:", messageError);
+      await logError(messageId, messageError, { 
+        operation: "sync_caption_fetch_message"
+      });
       throw new Error(`Failed to fetch message: ${messageError.message}`);
     }
 
@@ -151,6 +194,13 @@ export const useCaptionSync = () => {
         throw new Error(`Failed to update media group messages: ${updateError.message}`);
       }
     }
+
+    // Log successful sync
+    await logSyncOperation("media_group", messageId, {
+      action: "sync_caption_completed",
+      media_group_id: currentMessage.media_group_id || currentMessage.id,
+      message_count: messagesToUpdate?.length || 0
+    });
   };
 
   // Mutation for syncing caption to media group
@@ -176,22 +226,12 @@ export const useCaptionSync = () => {
   const forceSyncMessageGroup = async (params: CaptionSyncParams): Promise<void> => {
     const { messageId, force = false } = params;
     
-    // Fetch the message
-    const { data: messageData, error: messageError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('id', messageId)
-      .single();
-
-    if (messageError) {
-      console.error("Error fetching message:", messageError);
-      throw new Error(`Failed to fetch message: ${messageError.message}`);
-    }
-
-    const message = messageData as Message;
-    const mediaGroupId = message.media_group_id || message.id;
-
-    // Call the edge function to sync the media group
+    // Log sync started
+    await logSyncOperation("media_group", messageId, {
+      action: "force_sync_group",
+      force: force
+    });
+    
     const { data, error } = await supabase.functions.invoke('xdelo_sync_media_group', {
       body: { 
         message_id: messageId,
@@ -202,19 +242,21 @@ export const useCaptionSync = () => {
 
     if (error) {
       console.error("Error invoking sync media group function:", error);
+      await logError(messageId, error, {
+        operation: "force_sync_group",
+        media_group_id: mediaGroupId,
+        force: force
+      });
       throw new Error(`Failed to sync media group: ${error.message}`);
     }
 
-    // Log the sync operation
-    try {
-      await logSyncOperation('sync', messageId, {
-        media_group_id: mediaGroupId,
-        message_count: data?.synced_count || 0,
-        force: force
-      });
-    } catch (logError) {
-      console.error("Error logging sync operation:", logError);
-    }
+    // Log the sync operation with the new logger
+    await logSyncOperation("media_group", messageId, {
+      media_group_id: mediaGroupId,
+      message_count: data?.synced_count || 0,
+      force: force,
+      result: data
+    });
   };
 
   // Mutation for force syncing a message group
@@ -238,6 +280,11 @@ export const useCaptionSync = () => {
 
   // Function to process a single message
   const processSingleMessage = async (messageId: string): Promise<void> => {
+    // Log processing started
+    await logProcessingOperation("started", messageId, {
+      action: "process_single_message"
+    });
+    
     // Call edge function to reprocess the message
     const { data, error } = await supabase.functions.invoke('xdelo_reprocess_message', {
       body: { 
@@ -247,18 +294,17 @@ export const useCaptionSync = () => {
 
     if (error) {
       console.error("Error reprocessing message:", error);
+      await logError(messageId, error, {
+        operation: "process_single_message"
+      });
       throw new Error(`Failed to reprocess message: ${error.message}`);
     }
 
-    // Log the reprocess operation
-    try {
-      await logSyncOperation('reprocess', messageId, {
-        result: data,
-        timestamp: new Date().toISOString()
-      });
-    } catch (logError) {
-      console.error("Error logging reprocess operation:", logError);
-    }
+    // Log the successful reprocessing
+    await logProcessingOperation("completed", messageId, {
+      result: data,
+      timestamp: new Date().toISOString()
+    });
   };
 
   // Mutation for processing a single message
@@ -322,7 +368,7 @@ export const useCaptionSync = () => {
 
     // Log batch processing results
     try {
-      await logSyncOperation('batch_process', 'batch', {
+      await logSyncOperation("batch_process", 'batch', {
         total: messages.length,
         results: results,
         timestamp: new Date().toISOString()
