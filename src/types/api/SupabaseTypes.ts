@@ -8,8 +8,6 @@ export type DbMessageUpdate = Database['public']['Tables']['messages']['Update']
 export type DbGlProduct = Database['public']['Tables']['gl_products']['Row'];
 export type DbOtherMessage = Database['public']['Tables']['other_messages']['Row'];
 export type DbUnifiedAuditLog = Database['public']['Tables']['unified_audit_logs']['Row'];
-export type DbMessageOperationLog = Database['public']['Tables']['message_operations_log']['Row'];
-export type DbWebhookLog = Database['public']['Tables']['webhook_logs']['Row'];
 
 // Function return types
 export type StorageOperationResult = {
@@ -29,5 +27,5 @@ export type ApiResponse<T = any> = {
   status: number;
 };
 
-// Export for backward compatibility
-export { Database } from '../../integrations/supabase/types';
+// Export type for backward compatibility
+export type { Database } from '../../integrations/supabase/types';

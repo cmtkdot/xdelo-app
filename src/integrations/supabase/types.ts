@@ -3167,19 +3167,39 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_log_message_operation: {
+      xdelo_log_message_operation:
+        | {
+            Args: {
+              p_operation: string
+              p_message_id: string
+              p_details: Json
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_operation_type: Database["public"]["Enums"]["message_operation_type"]
+              p_source_message_id: string
+              p_target_message_id?: string
+              p_correlation_id?: string
+              p_telegram_message_id?: number
+              p_chat_id?: number
+              p_metadata?: Json
+              p_user_id?: string
+              p_error_message?: string
+            }
+            Returns: string
+          }
+      xdelo_log_operation: {
         Args: {
-          p_operation_type: Database["public"]["Enums"]["message_operation_type"]
-          p_source_message_id: string
-          p_target_message_id?: string
-          p_correlation_id?: string
-          p_telegram_message_id?: number
-          p_chat_id?: number
+          p_event_type: string
+          p_entity_id: string
           p_metadata?: Json
-          p_user_id?: string
+          p_previous_state?: Json
+          p_new_state?: Json
           p_error_message?: string
         }
-        Returns: string
+        Returns: undefined
       }
       xdelo_log_webhook_event: {
         Args: {

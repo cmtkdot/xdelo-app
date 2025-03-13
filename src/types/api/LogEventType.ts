@@ -32,5 +32,12 @@ export enum LogEventType {
   NON_MEDIA_MESSAGE = 'non_media_message_created',
   PROCESSING_STATE_CHANGED = 'processing_state_changed',
   WEBHOOK_RECEIVED = 'webhook_received',
-  SYSTEM = 'system'
+  SYSTEM = 'system',
+  
+  // Additional event types from database
+  WARNING = 'warning',
+  ERROR = 'error',
+  INFO = 'info',
+  DEBUG = 'debug',
+  EDGE_FUNCTION_ERROR = 'edge_function_error'
 }

@@ -31,7 +31,7 @@ export async function logMessageOperation(
       eventType = LogEventType.MESSAGE_ERROR;
       break;
     case 'warning':
-      eventType = action; // Keep as is for backward compatibility
+      eventType = LogEventType.WARNING;
       break;
     default:
       eventType = action; // Use the action string as fallback
@@ -47,12 +47,14 @@ export async function logMessageOperation(
   return logMessageEvent(eventType, messageId, enhancedMetadata);
 }
 
-// Export the old functions for backward compatibility
-export { logSyncOperation, LogEventType };
+// Export the consolidated logging functions for backward compatibility
+export { logEvent, logMessageEvent, logSyncOperation, LogEventType };
 
 // Default export for backward compatibility
 export default {
   logMessageOperation,
+  logMessageEvent,
   logSyncOperation,
+  logEvent,
   LogEventType
 };

@@ -8,7 +8,6 @@
     "dev:type-check": "tsc --noEmit --watch",
     "build": "tsc && vite build",
     "build:dev": "vite build --mode development",
-
     "build:analyze": "vite build --mode analyze",
     "preview": "vite preview",
     "test": "vitest",
@@ -69,7 +68,7 @@
     "sonner": "^1.4.0",
     "tailwind-merge": "^2.2.1",
     "tailwindcss-animate": "^1.0.7",
-    "uuid": "^9.0.1",
+    "uuid": "^11.1.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {

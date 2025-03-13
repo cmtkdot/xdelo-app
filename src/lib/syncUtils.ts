@@ -1,16 +1,14 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '../integrations/supabase/types';
-
-// Import the consolidated logging functions
-import { logSyncOperation, LogEventType } from './logUtils';
+import { logSyncOperation as logSyncOp, LogEventType } from './logUtils';
 
 /**
  * @deprecated Use logSyncOperation from logUtils.ts instead
  * This function is maintained for backward compatibility
  */
 export async function xdelo_logSyncOperation(
-  supabase: SupabaseClient<Database>,
+  supabase: any, // Changed to any to avoid TS errors with old references
   operation: string,
   details: Record<string, any>,
   success: boolean,
@@ -18,8 +16,8 @@ export async function xdelo_logSyncOperation(
 ) {
   try {
     // Use the new consolidated logging system
-    await logSyncOperation(
-      operation,
+    await logSyncOp(
+      operation as LogEventType,
       details.id || 'system',
       {
         operation,
@@ -40,7 +38,7 @@ export async function xdelo_logSyncOperation(
  * This function is maintained for backward compatibility
  */
 export async function xdelo_logSyncOperationBatch(
-  supabase: SupabaseClient<Database>,
+  supabase: any, // Changed to any to avoid TS errors with old references
   operations: Array<{
     operation: string;
     details: Record<string, any>;
@@ -59,16 +57,16 @@ export async function xdelo_logSyncOperationBatch(
 }
 
 /**
- * @deprecated Use logMessageEvent from logUtils.ts instead
+ * @deprecated Use logSyncOperation from logUtils.ts instead
  * This function is maintained for backward compatibility
  */
 export async function xdelo_logSyncWarning(
-  supabase: SupabaseClient<Database>,
+  supabase: any, // Changed to any to avoid TS errors with old references
   message: string,
   details: Record<string, any>
 ) {
-  await logSyncOperation(
-    'warning',
+  await logSyncOp(
+    LogEventType.WARNING,
     details.id || 'system',
     {
       message,
@@ -83,3 +81,6 @@ export async function xdelo_logSyncWarning(
 export const logSyncOperation = xdelo_logSyncOperation;
 export const logSyncOperationBatch = xdelo_logSyncOperationBatch;
 export const logSyncWarning = xdelo_logSyncWarning;
+
+// Re-export the new LogEventType for convenience
+export { LogEventType };
