@@ -6,7 +6,7 @@ import { logEvent, logMessageEvent, logSyncOperation, LogEventType } from "./log
  * This function is maintained for backward compatibility
  */
 export async function logMessageOperation(
-  action: string,
+  action: string | LogEventType,
   messageId: string,
   metadata?: Record<string, any>,
   level: string = "info"
@@ -14,34 +14,38 @@ export async function logMessageOperation(
   // Map the legacy action to the new LogEventType
   let eventType: LogEventType | string;
   
-  switch (action) {
-    case 'update':
-      eventType = LogEventType.MESSAGE_UPDATED;
-      break;
-    case 'delete':
-      eventType = LogEventType.MESSAGE_DELETED;
-      break;
-    case 'process':
-      eventType = LogEventType.MESSAGE_PROCESSED;
-      break;
-    case 'analyze':
-      eventType = LogEventType.MESSAGE_ANALYZED;
-      break;
-    case 'error':
-      eventType = LogEventType.MESSAGE_ERROR;
-      break;
-    case 'warning':
-      eventType = LogEventType.WARNING;
-      break;
-    default:
-      eventType = action; // Use the action string as fallback
+  if (typeof action === 'string') {
+    switch (action) {
+      case 'update':
+        eventType = LogEventType.MESSAGE_UPDATED;
+        break;
+      case 'delete':
+        eventType = LogEventType.MESSAGE_DELETED;
+        break;
+      case 'process':
+        eventType = LogEventType.MESSAGE_PROCESSED;
+        break;
+      case 'analyze':
+        eventType = LogEventType.MESSAGE_ANALYZED;
+        break;
+      case 'error':
+        eventType = LogEventType.MESSAGE_ERROR;
+        break;
+      case 'warning':
+        eventType = LogEventType.WARNING;
+        break;
+      default:
+        eventType = action; // Use the action string as fallback
+    }
+  } else {
+    eventType = action; // Already a LogEventType
   }
   
   // Add the level to metadata for backward compatibility
   const enhancedMetadata = {
     ...(metadata || {}),
     level,
-    legacy_action: action
+    legacy_action: typeof action === 'string' ? action : null
   };
   
   return logMessageEvent(eventType, messageId, enhancedMetadata);

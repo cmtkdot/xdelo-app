@@ -8,7 +8,8 @@ import { Spinner } from '@/components/ui/spinner';
 import type { Message } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { useMediaOperations } from '@/hooks/useMediaOperations';
-import { logMessageOperation, LogEventType } from '@/lib/syncLogger';
+import { logMessageOperation } from '@/lib/syncLogger';
+import { LogEventType } from '@/types/api/LogEventType';
 
 interface MessageCardProps {
   message: Message;

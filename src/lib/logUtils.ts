@@ -1,7 +1,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { v4 as uuidv4 } from 'uuid';
-import type { LogEventType } from '@/types/api/LogEventType';
+import { LogEventType } from '@/types/api/LogEventType';
 
 /**
  * Centralized logging function that logs events to the unified_audit_logs table
@@ -91,6 +91,24 @@ export async function logSyncOperation(
 }
 
 /**
- * Re-export LogEventType enum for convenience
+ * Specialized logging function for system repair operations
  */
+export async function logSystemRepair(
+  operation: LogEventType | string,
+  entityId: string,
+  metadata: Record<string, any> = {},
+  success: boolean = true,
+  errorMessage?: string
+): Promise<{ success: boolean; logId?: string }> {
+  // Enhance metadata with repair-specific context
+  const enhancedMetadata = {
+    ...metadata,
+    entity_type: 'system_repair',
+    repair_success: success,
+    timestamp: new Date().toISOString()
+  };
+  
+  return logEvent(LogEventType.SYSTEM_REPAIR, entityId, enhancedMetadata, null, null, errorMessage);
+}
+
 export { LogEventType };

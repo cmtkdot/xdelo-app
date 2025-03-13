@@ -3,7 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Message, ProcessingState } from "@/types/MessagesTypes";
 import { useToast } from "@/hooks/useToast";
-import { logSyncOperation } from "@/lib/syncLogger";
+import { logSyncOperation } from "@/lib/logUtils";
+import { LogEventType } from "@/types/api/LogEventType";
 
 export interface UpdateMessageParams {
   id: string;
@@ -151,6 +152,18 @@ export const useCaptionSync = () => {
         throw new Error(`Failed to update media group messages: ${updateError.message}`);
       }
     }
+    
+    // Log the sync operation
+    await logSyncOperation(
+      LogEventType.SYNC_COMPLETED,
+      messageId,
+      {
+        action: 'sync_caption',
+        media_group_id: mediaGroupId,
+        messages_updated: updates?.length || 0
+      },
+      true
+    );
   };
 
   // Mutation for syncing caption to media group
@@ -207,11 +220,16 @@ export const useCaptionSync = () => {
 
     // Log the sync operation
     try {
-      await logSyncOperation('sync', messageId, {
-        media_group_id: mediaGroupId,
-        message_count: data?.synced_count || 0,
-        force: force
-      });
+      await logSyncOperation(
+        LogEventType.SYNC_COMPLETED,
+        messageId,
+        {
+          media_group_id: mediaGroupId,
+          message_count: data?.synced_count || 0,
+          force: force
+        },
+        true
+      );
     } catch (logError) {
       console.error("Error logging sync operation:", logError);
     }
@@ -252,10 +270,15 @@ export const useCaptionSync = () => {
 
     // Log the reprocess operation
     try {
-      await logSyncOperation('reprocess', messageId, {
-        result: data,
-        timestamp: new Date().toISOString()
-      });
+      await logSyncOperation(
+        LogEventType.MESSAGE_PROCESSED,
+        messageId,
+        {
+          result: data,
+          timestamp: new Date().toISOString()
+        },
+        true
+      );
     } catch (logError) {
       console.error("Error logging reprocess operation:", logError);
     }
@@ -322,11 +345,17 @@ export const useCaptionSync = () => {
 
     // Log batch processing results
     try {
-      await logSyncOperation('batch_process', 'batch', {
-        total: messages.length,
-        results: results,
-        timestamp: new Date().toISOString()
-      });
+      await logSyncOperation(
+        LogEventType.SYNC_COMPLETED,
+        'batch',
+        {
+          action: 'batch_process',
+          total: messages.length,
+          results: results,
+          timestamp: new Date().toISOString()
+        },
+        true
+      );
     } catch (logError) {
       console.error("Error logging batch processing:", logError);
     }

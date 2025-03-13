@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
-import { logSystemRepair, LogEventType } from '@/lib/logUtils';
+import { logEvent, LogEventType } from '@/lib/logUtils';
 
 /**
  * Hook for general processing system repair operations
@@ -25,24 +25,26 @@ export function useProcessingRepair() {
       const operationId = `repair_${Date.now()}`;
       
       // Log start of repair
-      await logSystemRepair(
-        operationName, 
+      await logEvent(
+        LogEventType.SYSTEM_REPAIR, 
         operationId, 
-        { status: 'started' }, 
-        true
+        { 
+          operation: operationName,
+          status: 'started' 
+        }
       );
       
       const result = await operation();
       
       // Log successful repair
-      await logSystemRepair(
-        operationName, 
+      await logEvent(
+        LogEventType.SYSTEM_REPAIR, 
         operationId, 
         { 
+          operation: operationName,
           status: 'completed', 
           result 
-        }, 
-        true
+        }
       );
       
       toast({
@@ -59,11 +61,15 @@ export function useProcessingRepair() {
       console.error(`Error during ${operationName}:`, error);
       
       // Log failed repair
-      await logSystemRepair(
-        operationName, 
+      await logEvent(
+        LogEventType.SYSTEM_REPAIR, 
         `repair_${Date.now()}`, 
-        { status: 'failed' }, 
-        false, 
+        { 
+          operation: operationName,
+          status: 'failed' 
+        },
+        undefined,
+        undefined,
         error.message
       );
       

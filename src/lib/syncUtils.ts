@@ -8,7 +8,7 @@ import { logSyncOperation as logSyncOp, LogEventType } from './logUtils';
  * This function is maintained for backward compatibility
  */
 export async function xdelo_logSyncOperation(
-  supabase: any, // Changed to any to avoid TS errors with old references
+  _supabase: any, // Changed to any to avoid TS errors with old references
   operation: string,
   details: Record<string, any>,
   success: boolean,
@@ -17,7 +17,7 @@ export async function xdelo_logSyncOperation(
   try {
     // Use the new consolidated logging system
     await logSyncOp(
-      operation as LogEventType,
+      operation,
       details.id || 'system',
       {
         operation,
@@ -38,7 +38,7 @@ export async function xdelo_logSyncOperation(
  * This function is maintained for backward compatibility
  */
 export async function xdelo_logSyncOperationBatch(
-  supabase: any, // Changed to any to avoid TS errors with old references
+  _supabase: any, // Changed to any to avoid TS errors with old references
   operations: Array<{
     operation: string;
     details: Record<string, any>;
@@ -49,7 +49,7 @@ export async function xdelo_logSyncOperationBatch(
   try {
     // Process each operation individually using the new system
     for (const op of operations) {
-      await xdelo_logSyncOperation(supabase, op.operation, op.details, op.success, op.error);
+      await xdelo_logSyncOperation(_supabase, op.operation, op.details, op.success, op.error);
     }
   } catch (err) {
     console.error('Failed to log sync operations batch:', err);
@@ -61,7 +61,7 @@ export async function xdelo_logSyncOperationBatch(
  * This function is maintained for backward compatibility
  */
 export async function xdelo_logSyncWarning(
-  supabase: any, // Changed to any to avoid TS errors with old references
+  _supabase: any, // Changed to any to avoid TS errors with old references
   message: string,
   details: Record<string, any>
 ) {

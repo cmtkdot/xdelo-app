@@ -3,7 +3,8 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types/MessagesTypes';
 import { useToast } from '@/hooks/useToast';
-import { logMessageOperation, LogEventType } from '@/lib/syncLogger';
+import { logMessageOperation } from '@/lib/syncLogger';
+import { LogEventType } from '@/types/api/LogEventType';
 
 export function useTelegramOperations() {
   const [isProcessing, setIsProcessing] = useState(false);
