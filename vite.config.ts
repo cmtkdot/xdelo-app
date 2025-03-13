@@ -1,3 +1,4 @@
+
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
@@ -51,12 +52,12 @@ export default defineConfig(({ mode }) => {
     
     build: {
       outDir: 'dist',
-      sourcemap: mode === 'development',
+      sourcemap: isProd ? false : 'inline',
       minify: isProd ? 'terser' : false,
-      target: 'es2020', // Better browser compatibility
-      assetsInlineLimit: 4096, // 4kb - optimize for http/2
-      chunkSizeWarningLimit: 1000, // Increase warning limit
-      reportCompressedSize: !isAnalyze, // Disable on analyze for speed
+      target: 'es2020',
+      assetsInlineLimit: 4096,
+      chunkSizeWarningLimit: 1000,
+      reportCompressedSize: !isAnalyze,
       terserOptions: {
         compress: {
           drop_console: isProd,
@@ -69,7 +70,6 @@ export default defineConfig(({ mode }) => {
       },
       rollupOptions: {
         onwarn(warning, warn) {
-          // Suppress circular dependency warnings
           if (warning.code === 'CIRCULAR_DEPENDENCY') return;
           warn(warning);
         },
@@ -165,7 +165,7 @@ export default defineConfig(({ mode }) => {
       host: '::',
       cors: true, 
       hmr: {
-        timeout: 10000, // Increase HMR timeout for slower connections
+        timeout: 10000,
       },
       // Allow lovable project domain for development
       allowedHosts: [
@@ -205,6 +205,9 @@ export default defineConfig(({ mode }) => {
       jsxFactory: 'React.createElement',
       jsxFragment: 'React.Fragment',
       jsxInject: `import React from 'react'`
-    }
+    },
+    
+    // Add cache
+    cacheDir: '.vite'
   };
 });

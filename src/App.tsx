@@ -5,21 +5,24 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from "react-router-dom";
 import { SupabaseProvider } from "./integrations/supabase/SupabaseProvider";
 import { ThemeProvider } from "./components/Theme/ThemeProvider";
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { supabase } from "./integrations/supabase/client";
-import { Session } from "@supabase/supabase-js";
+import type { Session } from "@supabase/supabase-js";
 import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
-import MessagesPage from "./pages/Messages";
-import ProductGallery from "./pages/ProductGallery";
-import MediaTable from "./pages/MediaTable";
-import AIChat from "./pages/AIChat";
-import Settings from "./pages/Settings";
-import AudioUpload from "./pages/AudioUpload";
-import NotFound from "./pages/NotFound";
-import PublicGallery from "./pages/PublicGallery";
+
+// Lazy load page components for better performance
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const MessagesPage = lazy(() => import("./pages/Messages"));
+const ProductGallery = lazy(() => import("./pages/ProductGallery"));
+const MediaTable = lazy(() => import("./pages/MediaTable"));
+const AIChat = lazy(() => import("./pages/AIChat"));
+const Settings = lazy(() => import("./pages/Settings"));
+const AudioUpload = lazy(() => import("./pages/AudioUpload"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const PublicGallery = lazy(() => import("./pages/PublicGallery"));
+const SqlConsole = lazy(() => import('./pages/SqlConsole'));
+
 import { AppSidebar } from "./components/Layout/AppSidebar";
-import SqlConsole from './pages/SqlConsole';
 
 interface ApiError extends Error {
   status?: number;
@@ -44,6 +47,13 @@ const queryClient = new QueryClient({
     }
   }
 });
+
+// Loading component for Suspense fallback
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+  </div>
+);
 
 const ProtectedRoute = ({
   children
@@ -87,9 +97,7 @@ const ProtectedRoute = ({
   }, [navigate]);
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-      </div>;
+    return <PageLoader />;
   }
 
   if (!session) {
@@ -109,14 +117,20 @@ function App() {
               <Router>
                 <Routes>
                   <Route path="/auth" element={<Auth />} />
-                  <Route path="/p/:id" element={<PublicGallery />} />
+                  <Route path="/p/:id" element={
+                    <Suspense fallback={<PageLoader />}>
+                      <PublicGallery />
+                    </Suspense>
+                  } />
                   <Route element={
                     <ProtectedRoute>
                       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
                         <AppSidebar />
                         <main className="transition-all duration-300 ease-in-out pl-16 min-h-screen">
                           <div className="container py-6 px-4 mx-auto">
-                            <Outlet />
+                            <Suspense fallback={<PageLoader />}>
+                              <Outlet />
+                            </Suspense>
                           </div>
                         </main>
                       </div>

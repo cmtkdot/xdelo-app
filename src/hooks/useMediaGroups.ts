@@ -1,7 +1,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Message, ProcessingState } from "@/types/MessagesTypes";
+import type { Message, ProcessingState } from "@/types/MessagesTypes";
 
 interface GroupedMessages {
   [key: string]: Message[];
@@ -35,7 +35,7 @@ export const useMediaGroups = () => {
           width: item.width || undefined,
           height: item.height || undefined,
           user_id: item.user_id || undefined,
-          processing_state: item.processing_state as ProcessingState || undefined,
+          processing_state: (item.processing_state as ProcessingState) || undefined,
           processing_started_at: item.processing_started_at || undefined,
           processing_completed_at: item.processing_completed_at || undefined,
           analyzed_content: item.analyzed_content ? JSON.parse(JSON.stringify(item.analyzed_content)) : {},
@@ -85,10 +85,9 @@ export const useMediaGroups = () => {
         return groups;
       }, {} as GroupedMessages);
 
-      console.log('Total groups:', Object.keys(groupedMessages).length);
       return groupedMessages;
     },
-    staleTime: 1000,
+    staleTime: 1000 * 60, // 1 minute
     refetchOnWindowFocus: true,
     retry: 3
   });

@@ -40,42 +40,82 @@ export function generateCorrelationId(): string {
   return `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
+// Batch log operations to reduce database calls
+let logQueue: Array<{
+  table: string;
+  data: Record<string, any>;
+}> = [];
+
+let queueTimeout: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Process the log queue
+ */
+async function processLogQueue(): Promise<void> {
+  if (logQueue.length === 0) return;
+  
+  const currentQueue = [...logQueue];
+  logQueue = [];
+  
+  try {
+    // Group by table
+    const tableGroups: Record<string, Record<string, any>[]> = {};
+    
+    for (const item of currentQueue) {
+      if (!tableGroups[item.table]) {
+        tableGroups[item.table] = [];
+      }
+      tableGroups[item.table].push(item.data);
+    }
+    
+    // Process each table group
+    await Promise.all(
+      Object.entries(tableGroups).map(async ([table, items]) => {
+        const { error } = await supabase.from(table).insert(items);
+        if (error) {
+          console.error(`Failed to log to ${table}:`, error);
+        }
+      })
+    );
+  } catch (error) {
+    console.error('Error processing log queue:', error);
+  }
+}
+
+/**
+ * Queue a log operation
+ */
+function queueLogOperation(table: string, data: Record<string, any>): void {
+  logQueue.push({ table, data });
+  
+  if (queueTimeout) {
+    clearTimeout(queueTimeout);
+  }
+  
+  queueTimeout = setTimeout(processLogQueue, 500);
+}
+
 /**
  * Logs an operation related to a message
- * 
- * @param operation The operation type (from LogEventType enum)
- * @param entityId The ID of the message or entity
- * @param metadata Additional metadata about the operation
  */
 export async function logMessageOperation(
   operation: LogEventType | string,
   entityId: string,
   metadata: Record<string, any> = {}
 ): Promise<void> {
-  try {
-    // Using type assertion to ensure the event_type is accepted by the database
-    await supabase
-      .from('unified_audit_logs')
-      .insert({
-        event_type: operation.toString() as any,
-        entity_id: entityId,
-        metadata: {
-          ...metadata,
-          logged_from: 'client',
-          timestamp: new Date().toISOString()
-        }
-      });
-  } catch (error) {
-    console.error(`Failed to log message operation:`, error);
-  }
+  queueLogOperation('unified_audit_logs', {
+    event_type: operation.toString() as any,
+    entity_id: entityId,
+    metadata: {
+      ...metadata,
+      logged_from: 'client',
+      timestamp: new Date().toISOString()
+    }
+  });
 }
 
 /**
  * Logs a sync operation (backward compatibility function)
- * 
- * @param syncType The type of sync event
- * @param entityId The ID of the entity being synced
- * @param metadata Additional metadata about the sync
  */
 export async function logSyncOperation(
   syncType: LegacySyncEventType,
@@ -98,32 +138,20 @@ export async function logSyncOperation(
       eventType = syncType;
   }
   
-  try {
-    // Using type assertion to ensure the event_type is accepted by the database
-    await supabase
-      .from('unified_audit_logs')
-      .insert({
-        event_type: eventType as any,
-        entity_id: entityId,
-        metadata: {
-          ...metadata,
-          original_event_type: syncType,
-          logged_from: 'client',
-          timestamp: new Date().toISOString()
-        }
-      });
-  } catch (error) {
-    console.error(`Failed to log sync operation:`, error);
-  }
+  queueLogOperation('unified_audit_logs', {
+    event_type: eventType as any,
+    entity_id: entityId,
+    metadata: {
+      ...metadata,
+      original_event_type: syncType,
+      logged_from: 'client',
+      timestamp: new Date().toISOString()
+    }
+  });
 }
 
 /**
  * Logs a user action
- * 
- * @param action The action performed
- * @param entityId The ID of the entity affected
- * @param userId The ID of the user performing the action
- * @param metadata Additional action details
  */
 export async function logUserAction(
   action: string,
@@ -131,34 +159,21 @@ export async function logUserAction(
   userId?: string,
   metadata: Record<string, any> = {}
 ): Promise<void> {
-  try {
-    // Using type assertion to ensure the event_type is accepted by the database
-    await supabase
-      .from('unified_audit_logs')
-      .insert({
-        event_type: LogEventType.USER_ACTION.toString() as any,
-        entity_id: entityId,
-        user_id: userId,
-        metadata: {
-          ...metadata,
-          action,
-          logged_from: 'client',
-          timestamp: new Date().toISOString()
-        }
-      });
-  } catch (error) {
-    console.error(`Failed to log user action:`, error);
-  }
+  queueLogOperation('unified_audit_logs', {
+    event_type: LogEventType.USER_ACTION.toString() as any,
+    entity_id: entityId,
+    user_id: userId,
+    metadata: {
+      ...metadata,
+      action,
+      logged_from: 'client',
+      timestamp: new Date().toISOString()
+    }
+  });
 }
 
 /**
  * Logs events through the edge function (for more complex events)
- * 
- * @param operation The operation type
- * @param entityId The entity ID
- * @param source The source of the log
- * @param action The specific action
- * @param metadata Additional metadata
  */
 export async function logOperationViaEdgeFunction(
   operation: string,
@@ -170,7 +185,7 @@ export async function logOperationViaEdgeFunction(
   try {
     const userId = (await supabase.auth.getUser())?.data?.user?.id;
     
-    const { data, error } = await supabase.functions.invoke('log-operation', {
+    const { error } = await supabase.functions.invoke('log-operation', {
       body: {
         eventType: operation,
         entityId: entityId,
@@ -200,4 +215,13 @@ export async function logSyncEvent(
   details: Record<string, any> = {}
 ): Promise<void> {
   return logSyncOperation(syncType, entityId, details);
+}
+
+// Make sure to process any remaining logs before the page unloads
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    if (logQueue.length > 0) {
+      processLogQueue();
+    }
+  });
 }
