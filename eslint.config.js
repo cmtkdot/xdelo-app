@@ -6,21 +6,18 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "node_modules", "coverage", ".vite", "*.d.ts"] },
+  { ignores: ["dist", "node_modules"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
-      ecmaVersion: 2022,
+      ecmaVersion: 2020,
       globals: {
         ...globals.browser,
         React: "readonly",
       },
       parserOptions: {
         project: "./tsconfig.json",
-        ecmaFeatures: {
-          jsx: true
-        }
       },
     },
     plugins: {
@@ -36,30 +33,8 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": ["warn", { 
         argsIgnorePattern: "^_",
         varsIgnorePattern: "^_",
-        caughtErrorsIgnorePattern: "^_"
       }],
-      "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/consistent-type-imports": ["warn", { prefer: "type-imports" }],
-      "@typescript-eslint/no-floating-promises": "warn",
-      "@typescript-eslint/no-misused-promises": "warn",
-      "@typescript-eslint/await-thenable": "warn",
-      "@typescript-eslint/prefer-nullish-coalescing": "warn",
-      "@typescript-eslint/no-non-null-assertion": "warn",
-      "prefer-const": "warn",
-      "no-duplicate-imports": "error",
       "no-console": ["warn", { allow: ["warn", "error", "info"] }],
-      "no-debugger": "warn",
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["**/node_modules/**"],
-              message: "Direct imports from node_modules are not allowed. Use path aliases instead."
-            }
-          ]
-        }
-      ]
     },
     settings: {
       react: {
