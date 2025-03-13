@@ -20,7 +20,7 @@ export const useMediaGroups = () => {
 
       // Cast the database results to Message type with proper type handling
       const typedMessages = (data || []).map(item => {
-        // Explicit typing to ensure all properties are properly handled
+        // Create a safely typed message object from the raw data
         const message: Message = {
           id: item.id || '',
           file_unique_id: item.file_unique_id || '',
@@ -48,18 +48,22 @@ export const useMediaGroups = () => {
           updated_at: item.updated_at || undefined,
           is_original_caption: item.is_original_caption || false,
           group_caption_synced: item.group_caption_synced || false,
-          // For TypeScript casting, we need to handle potential undefined values properly
-          storage_exists: item.storage_exists !== undefined 
-            ? (typeof item.storage_exists === 'boolean' 
-                ? item.storage_exists 
-                : Boolean(item.storage_exists))
-            : undefined,
-          storage_path_standardized: item.storage_path_standardized !== undefined
-            ? (typeof item.storage_path_standardized === 'boolean'
-                ? item.storage_path_standardized
-                : Boolean(item.storage_path_standardized))
-            : undefined,
         };
+
+        // Handle properties that might not be in the type definition
+        // but could be present in the database response
+        if ('storage_exists' in item) {
+          (message as any).storage_exists = typeof item.storage_exists === 'boolean' 
+            ? item.storage_exists 
+            : Boolean(item.storage_exists);
+        }
+        
+        if ('storage_path_standardized' in item) {
+          (message as any).storage_path_standardized = typeof item.storage_path_standardized === 'boolean'
+            ? item.storage_path_standardized
+            : Boolean(item.storage_path_standardized);
+        }
+        
         return message;
       });
       
