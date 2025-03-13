@@ -11,6 +11,8 @@ interface MobileFormRowProps {
   error?: string;
   description?: string;
   fullWidth?: boolean;
+  required?: boolean;
+  touchFriendly?: boolean;
 }
 
 export function MobileFormRow({
@@ -20,33 +22,47 @@ export function MobileFormRow({
   children,
   error,
   description,
-  fullWidth = false
+  fullWidth = false,
+  required = false,
+  touchFriendly = true
 }: MobileFormRowProps) {
   return (
     <div className={cn(
       "space-y-2",
       fullWidth ? "w-full" : "",
+      touchFriendly ? "mb-4" : "", // Add more margin for touch-friendly spacing
       className
     )}>
       <div className="flex flex-col space-y-1">
         <Label 
           htmlFor={htmlFor} 
-          className="text-sm font-medium"
+          className={cn(
+            "text-sm font-medium flex items-center",
+            touchFriendly ? "text-base" : "text-sm" // Larger text for touch devices
+          )}
         >
           {label}
+          {required && <span className="text-destructive ml-1">*</span>}
         </Label>
         
         {description && (
-          <p className="text-xs text-muted-foreground">
+          <p className={cn(
+            "text-muted-foreground",
+            touchFriendly ? "text-sm" : "text-xs"
+          )}>
             {description}
           </p>
         )}
       </div>
       
-      {children}
+      <div className={cn(
+        touchFriendly ? "min-h-[44px]" : "" // Ensure minimum touch target height
+      )}>
+        {children}
+      </div>
       
       {error && (
-        <p className="text-xs text-destructive">
+        <p className="text-xs text-destructive animate-shake">
           {error}
         </p>
       )}

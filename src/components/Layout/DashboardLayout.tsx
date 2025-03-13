@@ -1,19 +1,44 @@
 
-import React, { useState } from "react";
+import React, { useEffect } from "react";
 import { Header } from "./Header";
 import { AppSidebar } from "./AppSidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
 import { MobileDrawer } from "./MobileDrawer";
+import { useNavigation } from "@/hooks/useNavigation";
+import { useTouchInteraction } from "@/hooks/useTouchInteraction";
+import { MobileBottomNav } from "./MobileBottomNav";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
+  title?: string;
+  showBottomNav?: boolean;
 }
 
-export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
+export const DashboardLayout = ({ 
+  children, 
+  title,
+  showBottomNav = true
+}: DashboardLayoutProps) => {
   const isMobile = useIsMobile();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isOpen, openNavigation, closeNavigation, setTitle } = useNavigation();
+  
+  // Set page title when provided
+  useEffect(() => {
+    if (title) {
+      setTitle(title);
+    }
+  }, [title, setTitle]);
+  
+  // Setup swipe gestures for mobile
+  const { bindTouchHandlers } = useTouchInteraction({
+    onSwipeRight: () => {
+      if (isMobile) {
+        openNavigation();
+      }
+    },
+    swipeThreshold: 50,
+    preventScrollingWhenSwiping: false
+  });
   
   return (
     <div className="min-h-screen bg-background">
@@ -22,26 +47,20 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       <div className="flex min-h-[calc(100vh-4rem)] relative">
         {!isMobile && <AppSidebar />}
         
-        <main className="flex-1 p-4 md:p-6 w-full overflow-auto">
-          {isMobile && (
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="mb-4 -ml-2"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <Menu className="h-6 w-6" />
-              <span className="sr-only">Open menu</span>
-            </Button>
+        <main 
+          className={cn(
+            "flex-1 p-4 md:p-6 w-full overflow-auto",
+            isMobile && showBottomNav && "pb-20"
           )}
-          
+          {...(isMobile ? bindTouchHandlers : {})}
+        >
           {children}
         </main>
         
         {isMobile && (
           <MobileDrawer
-            isOpen={sidebarOpen}
-            onClose={() => setSidebarOpen(false)}
+            isOpen={isOpen}
+            onClose={closeNavigation}
             position="left"
           >
             <div className="py-4">
@@ -50,6 +69,8 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           </MobileDrawer>
         )}
       </div>
+      
+      {isMobile && showBottomNav && <MobileBottomNav />}
     </div>
   );
 };

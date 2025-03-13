@@ -1,13 +1,7 @@
 
 import React, { useState } from "react";
-import { useLocation, Link } from "react-router-dom";
+import { useLocation, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import {
   Home,
   MessageSquare,
@@ -23,10 +17,10 @@ import {
   Zap
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { ThemeToggle } from "@/components/Theme/ThemeToggle";
 import { cn } from "@/lib/utils";
-import { motion } from 'framer-motion';
 import { useIsMobile } from "@/hooks/useMobile";
+import { useNavigation } from "@/hooks/useNavigation";
+import { useToast } from "@/hooks/useToast";
 
 interface NavItem {
   name: string;
@@ -38,8 +32,11 @@ interface NavItem {
 
 export const AppSidebar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
   const isMobile = useIsMobile();
+  const { closeNavigation } = useNavigation();
+  const { toast } = useToast();
 
   const navItems: NavItem[] = [
     { name: "Dashboard", Icon: Home, path: "/", group: "main" },
@@ -56,8 +53,27 @@ export const AppSidebar = () => {
     { name: "Settings", Icon: Settings, path: "/settings", group: "settings", divider: true },
   ];
 
+  const handleNavigate = (path: string) => {
+    if (isMobile) {
+      closeNavigation();
+    }
+    navigate(path);
+  };
+
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+      toast({ 
+        title: "Logged out successfully", 
+        variant: "default" 
+      });
+    } catch (error) {
+      toast({ 
+        title: "Error signing out", 
+        description: "Please try again.", 
+        variant: "destructive" 
+      });
+    }
   };
 
   // In mobile mode, don't use hover effects and always show full sidebar
@@ -69,7 +85,7 @@ export const AppSidebar = () => {
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">XDELO</h1>
           </div>
 
-          <nav className="space-y-1">
+          <nav className="space-y-1 touch-scroll max-h-[70vh]">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path;
               const Icon = item.Icon;
@@ -77,34 +93,33 @@ export const AppSidebar = () => {
               return (
                 <React.Fragment key={item.path}>
                   {item.divider && <div className="h-px bg-gray-200 dark:bg-gray-800 my-3 mx-2" />}
-                  <Link
-                    to={item.path}
+                  <Button
+                    variant={isActive ? "secondary" : "ghost"}
                     className={cn(
-                      "flex items-center px-4 py-3 text-sm font-medium rounded-md transition-all",
-                      isActive 
-                        ? "bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-200" 
-                        : "text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
+                      "flex items-center w-full justify-start px-4 py-3 text-sm font-medium rounded-md transition-all mobile-touch-target h-auto min-h-[44px]",
                     )}
+                    onClick={() => handleNavigate(item.path)}
                   >
                     <Icon className={cn(
                       "flex-shrink-0 w-5 h-5 mr-3",
-                      isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-400 dark:text-gray-400"
+                      isActive ? "text-primary" : "text-muted-foreground"
                     )} />
                     <span>{item.name}</span>
-                  </Link>
+                  </Button>
                 </React.Fragment>
               );
             })}
           </nav>
 
           <div className="mt-auto px-2 pt-4">
-            <button
+            <Button
+              variant="ghost"
+              className="flex items-center w-full justify-start px-4 py-3 text-sm font-medium mobile-touch-target h-auto min-h-[44px]"
               onClick={handleLogout}
-              className="flex items-center w-full px-4 py-3 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
             >
-              <LogOut className="flex-shrink-0 w-5 h-5 mr-3 text-gray-400 dark:text-gray-400" />
+              <LogOut className="flex-shrink-0 w-5 h-5 mr-3 text-muted-foreground" />
               <span>Logout</span>
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -137,50 +152,43 @@ export const AppSidebar = () => {
             const Icon = item.Icon;
             
             return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  "flex items-center px-2 py-2 text-sm font-medium rounded-md transition-all duration-150 ease-in-out group",
-                  isActive 
-                    ? "bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-200" 
-                    : "text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
-                )}
-              >
-                <Icon className={cn(
-                  "flex-shrink-0 w-6 h-6 mr-3 transition-colors duration-150",
-                  isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-400 group-hover:text-gray-500 dark:text-gray-400"
-                )} />
-                <motion.span
-                  initial={false}
-                  animate={{ opacity: expanded ? 1 : 0, width: expanded ? 'auto' : 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="whitespace-nowrap overflow-hidden"
+              <React.Fragment key={item.path}>
+                {item.divider && expanded && <div className="h-px bg-gray-200 dark:bg-gray-800 my-3 mx-2" />}
+                <Button
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={cn(
+                    "flex items-center px-2 py-2 text-sm font-medium rounded-md transition-all duration-150 ease-in-out group w-full justify-start",
+                  )}
+                  onClick={() => handleNavigate(item.path)}
                 >
-                  {item.name}
-                </motion.span>
-              </Link>
+                  <Icon className={cn(
+                    "flex-shrink-0 w-6 h-6 transition-colors duration-150",
+                    isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                  )} />
+                  {expanded && (
+                    <span className="ml-3 transition-opacity duration-150">
+                      {item.name}
+                    </span>
+                  )}
+                </Button>
+              </React.Fragment>
             );
           })}
         </nav>
 
         <div className="px-2">
-          <button
+          <Button
+            variant="ghost"
+            className="w-full flex items-center justify-start"
             onClick={handleLogout}
-            className={cn(
-              "flex items-center w-full px-2 py-2 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800 transition-all duration-150 ease-in-out group",
-            )}
           >
-            <LogOut className="flex-shrink-0 w-6 h-6 mr-3 text-gray-400 group-hover:text-gray-500 dark:text-gray-400" />
-            <motion.span
-              initial={false}
-              animate={{ opacity: expanded ? 1 : 0, width: expanded ? 'auto' : 0 }}
-              transition={{ duration: 0.2 }}
-              className="whitespace-nowrap overflow-hidden"
-            >
-              Logout
-            </motion.span>
-          </button>
+            <LogOut className="flex-shrink-0 w-6 h-6 text-muted-foreground group-hover:text-foreground" />
+            {expanded && (
+              <span className="ml-3 transition-opacity duration-150">
+                Logout
+              </span>
+            )}
+          </Button>
         </div>
       </div>
     </div>
