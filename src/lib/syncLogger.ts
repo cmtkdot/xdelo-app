@@ -24,20 +24,17 @@ export interface SyncLogOptions {
   metadata?: any;
 }
 
-// Helper function to check if a table exists
-const tableExists = async (tableName: string): Promise<boolean> => {
+// Helper function to check if a table exists - commented out for now to fix type errors
+/*const tableExists = async (tableName: string): Promise<boolean> => {
   try {
-    const { count, error } = await supabase
-      .from('pg_tables')
-      .select('count(*)', { count: 'exact', head: true })
-      .eq('tablename', tableName);
-    
-    return !error && count > 0;
+    // Using RPC call instead of direct table query to avoid type issues
+    const { data, error } = await supabase.rpc('check_table_exists', { table_name: tableName });
+    return !error && !!data;
   } catch (err) {
     console.error(`Error checking if table ${tableName} exists:`, err);
     return false;
   }
-};
+};*/
 
 export async function createSyncLog(
   operation: string,
@@ -82,7 +79,7 @@ export async function updateSyncLog(
         : LogEventType.SYNC_STARTED;
 
     await logEvent(
-      eventType,
+      String(eventType),
       id,
       {
         status,
@@ -105,10 +102,10 @@ export async function getSyncLogs(limit = 10) {
       .from("unified_audit_logs")
       .select("*")
       .in('event_type', [
-        LogEventType.SYNC_STARTED,
-        LogEventType.SYNC_COMPLETED,
-        LogEventType.SYNC_FAILED,
-        LogEventType.SYNC_PRODUCTS
+        String(LogEventType.SYNC_STARTED),
+        String(LogEventType.SYNC_COMPLETED),
+        String(LogEventType.SYNC_FAILED),
+        String(LogEventType.SYNC_PRODUCTS)
       ])
       .order("event_timestamp", { ascending: false })
       .limit(limit);
@@ -137,20 +134,20 @@ export async function getSyncLogs(limit = 10) {
 }
 
 // Helper functions
-function getEventTypeFromOperation(operation: string): LogEventType {
+function getEventTypeFromOperation(operation: string): LogEventType | string {
   switch (operation) {
     case 'sync_products': return LogEventType.SYNC_PRODUCTS;
     case 'sync_started': return LogEventType.SYNC_STARTED;
     case 'sync_completed': return LogEventType.SYNC_COMPLETED;
     case 'sync_failed': return LogEventType.SYNC_FAILED;
-    default: return LogEventType.SYNC_STARTED;
+    default: return operation;
   }
 }
 
 function getStatusFromEventType(eventType: string): "pending" | "success" | "error" {
   switch (eventType) {
-    case LogEventType.SYNC_COMPLETED: return "success";
-    case LogEventType.SYNC_FAILED: return "error";
+    case String(LogEventType.SYNC_COMPLETED): return "success";
+    case String(LogEventType.SYNC_FAILED): return "error";
     default: return "pending";
   }
 }
