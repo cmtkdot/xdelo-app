@@ -3,6 +3,7 @@ import React from "react";
 import { cn } from "@/lib/utils";
 import { useNavigation } from "@/hooks/useNavigation";
 import { SidebarToggle } from "./SidebarToggle";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface CollapsibleSidebarProps {
   children: React.ReactNode;
@@ -20,12 +21,14 @@ export function CollapsibleSidebar({ children, className }: CollapsibleSidebarPr
     )}>
       <SidebarToggle />
       
-      <div className={cn(
-        "flex-1 overflow-y-auto px-3",
-        isSidebarCollapsed ? "items-center" : ""
-      )}>
-        {children}
-      </div>
+      <ScrollArea className="flex-1">
+        <div className={cn(
+          "px-3 pb-6",
+          isSidebarCollapsed ? "items-center" : ""
+        )}>
+          {children}
+        </div>
+      </ScrollArea>
     </div>
   );
 }

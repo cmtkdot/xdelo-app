@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import AutomationList from '@/components/make/AutomationList';
@@ -17,6 +18,7 @@ import {
 import { useMakeAutomations } from '@/hooks/useMakeAutomations';
 import AutomationForm from '@/components/make/AutomationForm';
 import { MakeAutomationRule } from '@/types/make';
+import { PageContainer } from '@/components/Layout/PageContainer';
 
 const MakeAutomations = () => {
   const [activeTab, setActiveTab] = useState('automations');
@@ -45,29 +47,42 @@ const MakeAutomations = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col px-6 py-8 md:py-12 max-w-7xl mx-auto">
-      
-      <main className="flex-1 flex flex-col space-y-6">
+    <PageContainer
+      title="Make Automations"
+      breadcrumbs={[
+        { label: 'Dashboard', path: '/' },
+        { label: 'Make Automations', path: '/make-automations' }
+      ]}
+    >
+      <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold">Make Automations</h1>
+          <div className="space-y-1">
+            <h2 className="text-3xl font-bold tracking-tight">Make Automations</h2>
+            <p className="text-muted-foreground">
+              Create automation rules and webhooks to integrate with external systems.
+            </p>
+          </div>
           <Button onClick={handleCreateAutomation}>
             <Plus className="w-4 h-4 mr-2" />
             New Automation
           </Button>
         </div>
 
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
-          <TabsList>
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+          <TabsList className="bg-muted/50 p-1">
             <TabsTrigger value="automations">Automations</TabsTrigger>
             <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
             <TabsTrigger value="events">Event Log</TabsTrigger>
             <TabsTrigger value="test">Test</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="automations" className="space-y-4">
+          <TabsContent value="automations" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Active Automations</CardTitle>
+                <CardDescription>
+                  Manage automation rules that trigger actions based on events.
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <AutomationList onEditRule={handleEditAutomation} />
@@ -75,10 +90,13 @@ const MakeAutomations = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="webhooks" className="space-y-4">
+          <TabsContent value="webhooks" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Webhook Configurations</CardTitle>
+                <CardDescription>
+                  Configure webhooks to send data to external systems.
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <WebhookManager />
@@ -86,10 +104,13 @@ const MakeAutomations = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="events" className="space-y-4">
+          <TabsContent value="events" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Event History</CardTitle>
+                <CardDescription>
+                  View and monitor events processed by the automation system.
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <EventMonitor />
@@ -97,11 +118,11 @@ const MakeAutomations = () => {
             </Card>
           </TabsContent>
           
-          <TabsContent value="test" className="space-y-4">
+          <TabsContent value="test" className="space-y-6">
             <AutomationTestPanel />
           </TabsContent>
         </Tabs>
-      </main>
+      </div>
       
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto">
@@ -118,12 +139,8 @@ const MakeAutomations = () => {
           <AutomationForm rule={currentRule} onClose={handleCloseDialog} />
         </DialogContent>
       </Dialog>
-      
-      <footer className="mt-auto pt-12 pb-6 text-center text-sm text-muted-foreground">
-        <p>Telegram Media Harvester &copy; {new Date().getFullYear()}</p>
-      </footer>
-    </div>
+    </PageContainer>
   );
 };
 
-export default MakeAutomations; 
+export default MakeAutomations;

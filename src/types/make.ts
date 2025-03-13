@@ -1,3 +1,4 @@
+
 export enum MakeEventType {
   MessageReceived = 'message_received',
   ChannelJoined = 'channel_joined',
@@ -5,7 +6,14 @@ export enum MakeEventType {
   UserJoined = 'user_joined',
   UserLeft = 'user_left',
   MediaReceived = 'media_received',
-  CommandReceived = 'command_received'
+  CommandReceived = 'command_received',
+  // New Telegram-specific event types
+  MessageEdited = 'message_edited',
+  MessageDeleted = 'message_deleted',
+  MediaGroupReceived = 'media_group_received',
+  MessageForwarded = 'message_forwarded',
+  CaptionUpdated = 'caption_updated',
+  ProcessingCompleted = 'processing_completed'
 }
 
 export interface MakeCondition {
@@ -44,6 +52,12 @@ export interface MakeWebhookConfig {
   field_selection?: Record<string, any> | null;
   payload_template?: Record<string, any> | null;
   transformation_code?: string | null;
+  headers?: Record<string, string> | null;
+  retry_config?: {
+    max_retries: number;
+    retry_delay: number;
+    exponential_backoff: boolean;
+  } | null;
 }
 
 export interface MakeWebhookLog {
@@ -63,6 +77,29 @@ export interface MakeWebhookLog {
   severity: string | null;
   tags: string[] | null;
   context: Record<string, any> | null;
+  retry_count?: number | null;
+  next_retry_at?: string | null;
+}
+
+// New interface for field mapping with Telegram message data
+export interface MakeFieldMapping {
+  messageField: keyof import('./entities/Message').Message;
+  targetField: string;
+  description: string;
+  dataType: 'string' | 'number' | 'boolean' | 'object' | 'array';
+  isNested?: boolean;
+  example?: any;
+}
+
+// New interface for Telegram-specific webhook templates
+export interface MakeTelegramWebhookTemplate {
+  id: string;
+  name: string;
+  description?: string | null;
+  eventType: MakeEventType;
+  fieldMapping: MakeFieldMapping[];
+  template: Record<string, any>;
+  isDefault?: boolean;
 }
 
 export interface MakeDebugSession {

@@ -3,6 +3,9 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from '@/hooks/useMobile';
 import { useNavigation } from '@/hooks/useNavigation';
 import { useEffect } from 'react';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
+import { ChevronLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface PageContainerProps {
   children: React.ReactNode;
@@ -22,7 +25,7 @@ export function PageContainer({
   showBackButton
 }: PageContainerProps) {
   const isMobile = useIsMobile();
-  const { setTitle, setBreadcrumbs, setShowBackButton, isSidebarCollapsed } = useNavigation();
+  const { setTitle, setBreadcrumbs, setShowBackButton, isSidebarCollapsed, goBack } = useNavigation();
   
   // Set navigation context values
   useEffect(() => {
@@ -35,20 +38,70 @@ export function PageContainer({
     if (typeof showBackButton !== 'undefined') {
       setShowBackButton(showBackButton);
     }
+    
+    // Cleanup
+    return () => {
+      setTitle('');
+      setBreadcrumbs([]);
+      setShowBackButton(false);
+    };
   }, [title, breadcrumbs, showBackButton, setTitle, setBreadcrumbs, setShowBackButton]);
   
   return (
     <div 
       className={cn(
-        "mx-auto w-full transition-all duration-300",
-        noPadding ? "" : isMobile ? "px-4 py-4" : "container px-4 py-8",
+        "w-full h-full flex flex-col transition-all duration-300",
+        noPadding ? "" : isMobile ? "px-4 py-4" : "container px-4 py-6",
         className
       )}
     >
-      {title && !isMobile && (
-        <h1 className="text-2xl font-bold mb-4">{title}</h1>
+      {/* Page header with title and breadcrumbs */}
+      {(title || breadcrumbs?.length || showBackButton) && !isMobile && (
+        <div className="mb-6 flex flex-col gap-2">
+          {/* Breadcrumbs */}
+          {breadcrumbs && breadcrumbs.length > 0 && (
+            <Breadcrumb className="mb-2">
+              <BreadcrumbList>
+                {breadcrumbs.map((crumb, index) => {
+                  const isLast = index === breadcrumbs.length - 1;
+                  return (
+                    <React.Fragment key={index}>
+                      {isLast ? (
+                        <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                      ) : (
+                        <BreadcrumbItem>
+                          <BreadcrumbLink href={crumb.path}>{crumb.label}</BreadcrumbLink>
+                        </BreadcrumbItem>
+                      )}
+                      {!isLast && <BreadcrumbSeparator />}
+                    </React.Fragment>
+                  );
+                })}
+              </BreadcrumbList>
+            </Breadcrumb>
+          )}
+          
+          {/* Title and back button */}
+          <div className="flex items-center gap-3">
+            {showBackButton && (
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={goBack}
+                className="h-8 w-8"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            )}
+            {title && (
+              <h1 className="text-2xl font-bold">{title}</h1>
+            )}
+          </div>
+        </div>
       )}
-      {children}
+      
+      {/* Page content */}
+      <div className="flex-1">{children}</div>
     </div>
   );
 }
