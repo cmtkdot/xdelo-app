@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from "react-router-dom";
 import { SupabaseProvider } from "./integrations/supabase/SupabaseProvider";
 import { ThemeProvider } from "./components/Theme/ThemeProvider";
+import { NavigationProvider } from "./components/Layout/NavigationProvider";
 import { useState, useEffect, lazy, Suspense } from "react";
 import { supabase } from "./integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
@@ -125,16 +126,18 @@ function App() {
                   } />
                   <Route element={
                     <ProtectedRoute>
-                      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-                        <AppSidebar />
-                        <main className="transition-all duration-300 ease-in-out pl-16 min-h-screen">
-                          <div className="container py-6 px-4 mx-auto">
-                            <Suspense fallback={<PageLoader />}>
-                              <Outlet />
-                            </Suspense>
-                          </div>
-                        </main>
-                      </div>
+                      <NavigationProvider>
+                        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+                          <AppSidebar />
+                          <main className="transition-all duration-300 ease-in-out md:pl-16 min-h-screen pt-[4rem] md:pt-4">
+                            <div className="container py-6 px-4 mx-auto">
+                              <Suspense fallback={<PageLoader />}>
+                                <Outlet />
+                              </Suspense>
+                            </div>
+                          </main>
+                        </div>
+                      </NavigationProvider>
                     </ProtectedRoute>
                   }>
                     <Route path="/" element={<Dashboard />} />
