@@ -70,7 +70,10 @@ export interface MatchResult {
   confidence: number;
   match_fields: string[];
   match_date: string;
+  id?: string; // Added to fix type error
 }
+
+export type SyncEventType = "sync_started" | "sync_completed" | "sync_error" | string;
 
 export * from './GlProducts';
 export * from './MessagesTypes';

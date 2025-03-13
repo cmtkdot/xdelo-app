@@ -22,7 +22,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
 }) => {
   const { 
     isProcessing,
-    repairAllIssues 
+    repairMediaBatch 
   } = useMediaOperations();
   
   const { 
@@ -43,7 +43,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
     } catch (error) {
       console.error('Error in primary retry, attempting repair:', error);
       // Fall back to repair if the retry function fails
-      await repairAllIssues([id]);
+      await repairMediaBatch([id]);
     }
   };
 

@@ -274,6 +274,11 @@ export function useMediaOperations() {
       setIsProcessing(false);
     }
   }, [addProcessingMessageId, removeProcessingMessageId, toast]);
+  
+  // Repair all issues for a message - this is a comprehensive repair that handles multiple aspects
+  const repairAllIssues = useCallback(async (messageIds: string[]): Promise<RepairResult> => {
+    return repairMediaBatch(messageIds);
+  }, [repairMediaBatch]);
 
   return {
     // State
@@ -288,5 +293,6 @@ export function useMediaOperations() {
     standardizeStoragePaths,
     fixMediaUrls,
     repairMediaBatch,
+    repairAllIssues,
   };
 }

@@ -1,3 +1,4 @@
+
 import { Message } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
 
@@ -23,7 +24,7 @@ export const MediaGrid = ({
   const groupsArray = Object.values(mediaGroups);
 
   // Create a dummy Promise-based delete function that resolves immediately
-  const handleDelete = async (media: Message, deleteTelegram: boolean): Promise<void> => {
+  const handleDelete = async (media: Message): Promise<void> => {
     return Promise.resolve();
   };
 
@@ -40,4 +41,4 @@ export const MediaGrid = ({
       ))}
     </div>
   );
-};
+}

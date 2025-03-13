@@ -1,172 +1,88 @@
-
-import { useState } from "react";
-import { ImageSwiper } from "@/components/ui/image-swiper";
-import { Message } from "@/types/MessagesTypes";
-import { MediaItem } from "@/types";
-import { buttonVariants } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil, Trash2, ExternalLink } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
-import { logDeletion } from "@/lib/syncLogger";
+import React from 'react';
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { FileEdit, Eye, Trash2 } from "lucide-react";
+import { Message } from "@/types";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { useTelegramOperations } from '@/hooks/useTelegramOperations';
 
 interface ProductGroupProps {
   group: Message[];
   onEdit: (media: Message) => void;
+  onView?: () => void;
   onDelete: (media: Message, deleteTelegram: boolean) => Promise<void>;
-  onView: (group: Message[]) => void;
   isDeleting?: boolean;
 }
 
-export function ProductGroup({ group, onEdit, onDelete, onView, isDeleting }: ProductGroupProps) {
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [deleteTelegram, setDeleteTelegram] = useState(false);
-  const [isDeleting_, setIsDeleting_] = useState(false);
+export const ProductGroup: React.FC<ProductGroupProps> = ({ 
+  group, 
+  onEdit, 
+  onView, 
+  onDelete,
+  isDeleting
+}) => {
+  const mainMedia = group.find(m => m.caption) || group[0];
+  const { isProcessing } = useTelegramOperations();
 
-  if (!group || group.length === 0) return null;
-
-  const mainMedia = group.find((m) => m.caption) || group[0];
-  if (!mainMedia) return null;
-
-  const handleDeleteClick = async (deleteTelegram: boolean) => {
-    try {
-      setIsDeleting_(true);
-      // Log the deletion operation
-      await logDeletion(
-        mainMedia.id,
-        deleteTelegram ? 'both' : 'database',
-        { 
-          group_id: mainMedia.media_group_id || 'none',
-          product_name: mainMedia.analyzed_content?.product_name
-        }
-      );
-      await onDelete(mainMedia, deleteTelegram);
-    } finally {
-      setIsDeleting_(false);
-      setShowDeleteDialog(false);
-    }
+  const handleDelete = async (deleteTelegram: boolean) => {
+    if (!mainMedia) return;
+    await onDelete(mainMedia, deleteTelegram);
   };
-  
-  // Updated handleView to pass the entire group
-  const handleViewClick = () => {
-    onView(group);
-  };
-
-  // Convert Message[] to MediaItem[] for ImageSwiper with file_unique_id
-  const mediaItems = group.map(message => ({
-    id: message.id,
-    public_url: message.public_url,
-    mime_type: message.mime_type,
-    file_unique_id: message.file_unique_id || message.id,
-    created_at: message.created_at || new Date().toISOString(),
-    analyzed_content: message.analyzed_content
-  }));
-
-  // Function to get product name with proper fallback
-  const getProductName = () => {
-    return mainMedia.analyzed_content?.product_name || "Untitled";
-  };
-
-  // Check if product is untitled
-  const isUntitled = getProductName() === "Untitled";
 
   return (
-    <div className="group relative bg-white dark:bg-gray-950 rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-      <div className="aspect-square overflow-hidden">
-        <ImageSwiper
-          media={mediaItems}
-          onClick={handleViewClick}
-          className="w-full h-full object-cover cursor-pointer"
-        />
-      </div>
-
-      <div className="p-4">
-        <div className="flex justify-between items-start mb-2">
-          <h3 className="text-sm font-medium leading-none truncate max-w-[80%]">
-            {getProductName()}
-          </h3>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              className={cn(
-                buttonVariants({ variant: "ghost", size: "icon" }),
-                "h-8 w-8 p-0"
-              )}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-              <span className="sr-only">Open menu</span>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEdit(mainMedia)}>
-                <Pencil className="mr-2 h-4 w-4" /> Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowDeleteDialog(true)}>
-                <Trash2 className="mr-2 h-4 w-4" /> Delete
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleViewClick}>
-                <ExternalLink className="mr-2 h-4 w-4" /> View
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        <div className="space-y-1">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {mainMedia.analyzed_content?.vendor_uid || "No vendor"}
-          </p>
-          {mainMedia.analyzed_content?.product_code && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {mainMedia.analyzed_content.product_code}
-            </p>
+    <Card>
+      <CardContent className="p-2">
+        <AspectRatio ratio={1 / 1}>
+          {mainMedia.mime_type?.startsWith('video/') ? (
+            <video src={mainMedia.public_url} className="w-full h-full object-cover rounded-md" />
+          ) : (
+            <img
+              src={mainMedia.public_url}
+              alt={mainMedia.caption || 'Media'}
+              className="w-full h-full object-cover rounded-md"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.src = '/placeholder.svg';
+                target.classList.add('bg-gray-200');
+              }}
+            />
           )}
-          {isUntitled && mainMedia.caption && (
-            <p className="text-sm italic text-gray-500 dark:text-gray-400 mt-2 line-clamp-2">
-              "{mainMedia.caption}"
-            </p>
+        </AspectRatio>
+        <p className="text-sm mt-2 truncate">{mainMedia.caption || 'No caption'}</p>
+      </CardContent>
+      <CardFooter className="flex justify-between items-center p-2">
+        <div className="space-x-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onEdit(mainMedia)}
+            disabled={isProcessing}
+          >
+            <FileEdit className="w-4 h-4 mr-2" />
+            Edit
+          </Button>
+          {onView && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onView}
+              disabled={isProcessing}
+            >
+              <Eye className="w-4 h-4 mr-2" />
+              View
+            </Button>
           )}
         </div>
-      </div>
-
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Product</AlertDialogTitle>
-            <AlertDialogDescription>
-              Do you want to delete this product from both Telegram and the database, or just from the database?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => handleDeleteClick(true)}
-              className="bg-red-600 hover:bg-red-700"
-              disabled={isDeleting_ || isDeleting}
-            >
-              {isDeleting_ && deleteTelegram ? "Deleting..." : "Delete from Both"}
-            </AlertDialogAction>
-            <AlertDialogAction
-              onClick={() => handleDeleteClick(false)}
-              className="bg-yellow-600 hover:bg-yellow-700"
-              disabled={isDeleting_ || isDeleting}
-            >
-              {isDeleting_ && !deleteTelegram ? "Deleting..." : "Delete from Database Only"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={() => handleDelete(false)}
+          disabled={isDeleting || isProcessing}
+        >
+          <Trash2 className="w-4 h-4 mr-2" />
+          Delete
+        </Button>
+      </CardFooter>
+    </Card>
   );
-}
+};
