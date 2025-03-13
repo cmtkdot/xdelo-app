@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/integrations/supabase/client";
@@ -458,22 +457,7 @@ const MessagesEnhanced = () => {
         <MediaViewer
           isOpen={viewerOpen}
           onClose={() => setViewerOpen(false)}
-          mediaItems={currentGroup.map(msg => ({
-            id: msg.id,
-            public_url: msg.public_url || '',
-            mime_type: msg.mime_type,
-            file_unique_id: msg.file_unique_id,
-            analyzed_content: msg.analyzed_content,
-            created_at: msg.created_at || '',
-            caption: msg.caption,
-            width: msg.width,
-            height: msg.height,
-            file_size: msg.file_size,
-            duration: msg.duration,
-            content_disposition: msg.content_disposition,
-            storage_path: msg.storage_path,
-            processing_state: msg.processing_state
-          }))}
+          currentGroup={currentGroup}
           onNext={handleNextGroup}
           onPrevious={handlePreviousGroup}
           hasNext={groupIndex < (filteredMessages?.length || 0) - 1}
