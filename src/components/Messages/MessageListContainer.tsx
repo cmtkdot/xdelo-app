@@ -26,8 +26,7 @@ export function MessageListContainer() {
     try {
       toast({
         title: "Processing Message",
-        description: "Analyzing caption and syncing with media group...",
-        variant: "default"
+        description: "Analyzing caption and syncing with media group..."
       });
       
       // Fix: Pass an object with messageId property
@@ -39,15 +38,14 @@ export function MessageListContainer() {
       // Success case handling after refetch completes
       toast({
         title: "Processing Complete",
-        description: "Message has been processed and synchronized.",
-        variant: "default"
+        description: "Message has been processed and synchronized."
       });
     } catch (error: any) {
       console.error("Error retrying processing:", error);
       toast({
         title: "Processing Failed",
         description: error.message || "An error occurred during processing",
-        variant: "destructive",
+        variant: "destructive"
       });
     }
   };

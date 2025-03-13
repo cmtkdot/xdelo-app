@@ -35,6 +35,7 @@ export function MessageDetailsPanel({
   const handleCopyId = () => {
     navigator.clipboard.writeText(selectedMessage.id);
     toast({ 
+      title: "Success",
       description: "Message ID copied to clipboard"
     });
   };
@@ -43,6 +44,7 @@ export function MessageDetailsPanel({
     if (selectedMessage.message_url) {
       navigator.clipboard.writeText(selectedMessage.message_url);
       toast({ 
+        title: "Success",
         description: "Message URL copied to clipboard"
       });
     }

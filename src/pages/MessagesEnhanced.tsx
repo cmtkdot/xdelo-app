@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/integrations/supabase/client";
@@ -436,26 +435,12 @@ const MessagesEnhanced = () => {
         
         {/* Details panel - conditionally rendered */}
         {detailsOpen && (
-          <div className="w-96 ml-6 border rounded-md p-4 h-[calc(100vh-12rem)] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-medium">Details</h3>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setDetailsOpen(false)}
-                className="h-6 w-6 p-0"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            {selectedMessage ? (
-              <MessageDetailsPanel message={selectedMessage} />
-            ) : (
-              <div className="p-4 text-center text-muted-foreground">
-                Select a message to view details
-              </div>
-            )}
+          <div className="col-span-1 xl:col-span-2 h-[calc(100vh-12rem)]">
+            <MessageDetailsPanel
+              selectedMessage={selectedMessage}
+              onEditMessage={handleEditMessage}
+              onDeleteMessage={handleDeleteMessage}
+            />
           </div>
         )}
       </div>

@@ -8,6 +8,7 @@ interface RepairMediaOptions {
   forceRedownload?: boolean;
   mediaGroupId?: string;
   limit?: number;
+  checkStorageOnly?: boolean;
 }
 
 export function useUnifiedMediaRepair() {
@@ -19,9 +20,10 @@ export function useUnifiedMediaRepair() {
     fixContentTypes = true,
     forceRedownload = false,
     mediaGroupId,
-    limit
+    limit,
+    checkStorageOnly = false
   }: RepairMediaOptions) => {
-    if (!messageIds.length) return { success: false, message: 'No message IDs provided' };
+    if (!messageIds.length && !mediaGroupId && !checkStorageOnly) return { success: false, message: 'No message IDs provided' };
     
     try {
       setIsRepairing(true);
@@ -36,7 +38,8 @@ export function useUnifiedMediaRepair() {
               fixContentTypes,
               forceRedownload,
               mediaGroupId,
-              limit
+              limit,
+              checkStorageOnly
             }
           }
         }

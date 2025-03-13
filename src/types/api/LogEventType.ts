@@ -7,6 +7,8 @@ export enum LogEventType {
   SYSTEM_STARTUP = 'system:startup',
   SYSTEM_SHUTDOWN = 'system:shutdown',
   SYSTEM_ERROR = 'system:error',
+  SYSTEM_WARNING = 'system:warning',
+  SYSTEM_REPAIR = 'system:repair',
   
   // Message events
   MESSAGE_CREATED = 'message:created',
@@ -21,6 +23,9 @@ export enum LogEventType {
   MEDIA_DOWNLOADED = 'media:downloaded',
   MEDIA_PROCESSED = 'media:processed',
   MEDIA_REDOWNLOADED = 'media:redownloaded',
+  MEDIA_REPAIR_STARTED = 'media:repair_started',
+  MEDIA_REPAIR_COMPLETED = 'media:repair_completed',
+  MEDIA_REPAIR_FAILED = 'media:repair_failed',
   
   // User events
   USER_LOGIN = 'user:login',

@@ -18,14 +18,40 @@ export function formatDate(date: Date): string {
 export const messageToMediaItem = (message: Message): MediaItem => {
   return {
     id: message.id,
-    public_url: message.public_url || '',
-    mime_type: message.mime_type || '',
-    file_unique_id: message.file_unique_id || '',
-    created_at: message.created_at || new Date().toISOString(),
-    analyzed_content: message.analyzed_content as AnalyzedContent || undefined,
+    url: message.public_url || '',
+    type: getMediaType(message.mime_type || ''),
+    mimeType: message.mime_type || '',
+    thumbnail: (message.mime_type || '').startsWith('image/') ? message.public_url : undefined,
+    width: message.width,
+    height: message.height,
+    title: message.analyzed_content?.product_name || message.caption,
+    description: message.caption,
+    fileSize: message.file_size,
+    duration: message.duration,
+    uploadedAt: message.created_at || new Date().toISOString(),
+    // Legacy properties for compatibility
+    public_url: message.public_url,
+    mime_type: message.mime_type,
+    file_unique_id: message.file_unique_id,
+    analyzed_content: message.analyzed_content,
+    created_at: message.created_at,
     caption: message.caption
   };
 };
+
+/**
+ * Helper function to determine media type from MIME type
+ */
+function getMediaType(mimeType: string): 'image' | 'video' | 'document' | 'audio' | 'unknown' {
+  if (!mimeType) return 'unknown';
+  
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  if (mimeType.startsWith('application/')) return 'document';
+  
+  return 'unknown';
+}
 
 // Export from generalUtils
 export { cn } from './generalUtils';

@@ -25,4 +25,7 @@ export interface MediaItem {
   analyzed_content?: AnalyzedContent;
   created_at?: string;
   caption?: string;
+  content_disposition?: 'inline' | 'attachment';
+  storage_path?: string;
+  processing_state?: string;
 }

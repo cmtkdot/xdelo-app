@@ -22,4 +22,5 @@ export interface MatchResult {
     matchedFields: string[];
     confidence: number;
   };
+  match_fields?: string[];
 }
