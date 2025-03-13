@@ -3048,6 +3048,16 @@ export type Database = {
         }
         Returns: string
       }
+      xdelo_fix_public_urls: {
+        Args: {
+          p_limit?: number
+        }
+        Returns: {
+          message_id: string
+          old_url: string
+          new_url: string
+        }[]
+      }
       xdelo_flag_file_for_redownload: {
         Args: {
           p_message_id: string

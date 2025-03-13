@@ -25,6 +25,11 @@ export function xdelo_validateAndFixStoragePath(fileUniqueId: string, mimeType: 
     const filenameParts = originalFilename.split('.');
     if (filenameParts.length > 1) {
       extension = filenameParts.pop()?.toLowerCase() || 'bin';
+      
+      // Standardize on common extensions
+      if (extension === 'jpeg') extension = 'jpg';
+      if (extension === 'mpeg') extension = 'mp3';
+      if (extension === 'quicktime') extension = 'mov';
     }
   }
   
@@ -34,12 +39,14 @@ export function xdelo_validateAndFixStoragePath(fileUniqueId: string, mimeType: 
     if (parts.length === 2) {
       extension = parts[1].split(';')[0]; // Remove parameters like charset
       
-      // Handle special cases
-      if (extension === 'jpeg' || extension === 'jpg') {
-        extension = 'jpg'; // Standardize on jpg
-      } else if (extension === 'quicktime') {
-        extension = 'mov';
-      }
+      // Standardize extensions based on MIME type
+      if (extension === 'jpeg') extension = 'jpg';
+      if (extension === 'mpeg') extension = 'mp3';
+      if (extension === 'quicktime') extension = 'mov';
+      if (extension === 'x-matroska') extension = 'mkv';
+      if (extension === 'vnd.openxmlformats-officedocument.wordprocessingml.document') extension = 'docx';
+      if (extension === 'vnd.openxmlformats-officedocument.spreadsheetml.sheet') extension = 'xlsx';
+      if (extension === 'vnd.openxmlformats-officedocument.presentationml.presentation') extension = 'pptx';
     }
   }
   
@@ -68,10 +75,10 @@ export function xdelo_detectMimeType(fileUniqueId: string, existingMimeType: str
     }
   }
   
-  // Try to infer from storage path if available
+  // Try to infer from file unique ID if it has an extension
   const extension = fileUniqueId.split('.').pop()?.toLowerCase();
   
-  if (extension) {
+  if (extension && extension !== fileUniqueId.toLowerCase()) {
     const mimeType = getMimeTypeFromExtension(extension);
     if (mimeType) return mimeType;
   }
@@ -89,9 +96,13 @@ function getMimeTypeFromExtension(extension: string): string | null {
     'png': 'image/png',
     'gif': 'image/gif',
     'webp': 'image/webp',
+    'svg': 'image/svg+xml',
     'mp4': 'video/mp4',
     'mov': 'video/quicktime',
     'qt': 'video/quicktime',
+    'mkv': 'video/x-matroska',
+    'webm': 'video/webm',
+    'avi': 'video/x-msvideo',
     'mp3': 'audio/mpeg',
     'wav': 'audio/wav',
     'ogg': 'audio/ogg',
@@ -100,18 +111,22 @@ function getMimeTypeFromExtension(extension: string): string | null {
     'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'xls': 'application/vnd.ms-excel',
     'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'ppt': 'application/vnd.ms-powerpoint',
+    'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     'txt': 'text/plain',
     'md': 'text/markdown',
     'json': 'application/json',
-    'tgs': 'application/x-tgsticker'
+    'tgs': 'application/x-tgsticker',
+    'zip': 'application/zip',
+    'rar': 'application/x-rar-compressed',
+    '7z': 'application/x-7z-compressed'
   };
   
   return extension in mimeTypeMap ? mimeTypeMap[extension] : null;
 }
 
 /**
- * Download media file from Telegram
- * Preserves original file metadata
+ * Download media file from Telegram with improved metadata handling
  */
 export async function xdelo_downloadMediaFromTelegram(
   fileId: string, 
@@ -125,6 +140,7 @@ export async function xdelo_downloadMediaFromTelegram(
   error?: string; 
   mimeType?: string;
   originalFilename?: string;
+  fileMetadata?: any;
 }> {
   try {
     console.log(`Getting file path for file ID: ${fileId}`);
@@ -160,7 +176,7 @@ export async function xdelo_downloadMediaFromTelegram(
       throw new Error(`Failed to download file: ${fileDownloadResponse.statusText} (Status: ${fileDownloadResponse.status})`);
     }
     
-    // Convert to blob with proper mime type
+    // Get content type from response headers
     const contentType = fileDownloadResponse.headers.get('content-type');
     const detectedMimeType = contentType && contentType !== 'application/octet-stream' 
       ? contentType 
@@ -180,7 +196,12 @@ export async function xdelo_downloadMediaFromTelegram(
       blob: fileBlob, 
       storagePath,
       mimeType: detectedMimeType,
-      originalFilename
+      originalFilename,
+      fileMetadata: {
+        originalPath: filePath,
+        size: fileBlob.size,
+        telegramInfo: fileInfo.result
+      }
     };
   } catch (error) {
     console.error('Error downloading media from Telegram:', error);
@@ -237,6 +258,7 @@ export async function xdelo_uploadMediaToStorage(
         .update({
           public_url: publicUrl,
           storage_exists: true,
+          storage_path_standardized: true,
           updated_at: new Date().toISOString()
         })
         .eq('id', messageId);

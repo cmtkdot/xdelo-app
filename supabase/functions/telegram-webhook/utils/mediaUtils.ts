@@ -6,7 +6,6 @@ import {
   xdelo_getUploadOptions,
   xdelo_detectMimeType,
   xdelo_validateAndFixStoragePath,
-  xdelo_validateAndFixStoragePath as validateStoragePath,
   xdelo_downloadMediaFromTelegram,
   xdelo_uploadMediaToStorage
 } from '../../_shared/mediaUtils.ts';

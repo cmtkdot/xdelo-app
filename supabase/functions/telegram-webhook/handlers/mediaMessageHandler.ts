@@ -76,7 +76,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
 }
 
 /**
- * Handle edited media messages
+ * Handle edited media messages with improved storage path handling
  */
 async function xdelo_handleEditedMediaMessage(
   message: TelegramMessage, 
@@ -120,28 +120,49 @@ async function xdelo_handleEditedMediaMessage(
     if (mediaChanged && TELEGRAM_BOT_TOKEN) {
       console.log(`[${correlationId}] Media changed in edited message ${message.message_id}, processing new media`);
       
-      // Use our shared utility to process the media
-      const processResult = await xdelo_processMessageMedia(
-        supabaseClient,
-        message,
+      // Use improved media download with better metadata handling
+      const downloadResult = await xdelo_downloadMediaFromTelegram(
         mediaContent.file_id,
         mediaContent.file_unique_id,
-        TELEGRAM_BOT_TOKEN,
+        mediaContent.mime_type || 'application/octet-stream',
+        TELEGRAM_BOT_TOKEN
+      );
+      
+      if (!downloadResult.success || !downloadResult.blob) {
+        throw new Error(`Failed to download edited media: ${downloadResult.error}`);
+      }
+      
+      // Upload to storage with standardized path
+      const uploadResult = await xdelo_uploadMediaToStorage(
+        downloadResult.storagePath || `${mediaContent.file_unique_id}.bin`,
+        downloadResult.blob,
+        downloadResult.mimeType || mediaContent.mime_type || 'application/octet-stream',
         existingMessage.id
       );
       
-      if (!processResult.success) {
-        throw new Error(`Failed to process edited media: ${processResult.error}`);
+      if (!uploadResult.success) {
+        throw new Error(`Failed to upload edited media: ${uploadResult.error}`);
       }
       
-      mediaInfo = processResult.fileInfo;
+      mediaInfo = {
+        file_id: mediaContent.file_id,
+        file_unique_id: mediaContent.file_unique_id,
+        mime_type: downloadResult.mimeType,
+        mime_type_original: mediaContent.mime_type,
+        storage_path: downloadResult.storagePath,
+        public_url: uploadResult.publicUrl,
+        width: mediaContent.width,
+        height: mediaContent.height,
+        duration: message.video?.duration,
+        file_size: downloadResult.blob.size
+      };
     }
     
     // Prepare update data
     const updateData: Record<string, any> = {
       caption: message.caption,
       telegram_data: message,
-      edit_date: new Date(message.edit_date * 1000).toISOString(),
+      edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
       edit_history: editHistory,
       edit_count: (existingMessage.edit_count || 0) + 1,
       is_edited: true,
@@ -165,6 +186,7 @@ async function xdelo_handleEditedMediaMessage(
         mime_type: mediaInfo.mime_type,
         mime_type_original: mediaInfo.mime_type_original,
         storage_path: mediaInfo.storage_path,
+        public_url: mediaInfo.public_url,
         width: mediaInfo.width,
         height: mediaInfo.height,
         duration: mediaInfo.duration,
@@ -232,7 +254,7 @@ async function xdelo_handleEditedMediaMessage(
 }
 
 /**
- * Handle new media messages
+ * Handle new media messages with improved storage path handling
  */
 async function xdelo_handleNewMediaMessage(
   message: TelegramMessage, 
@@ -282,6 +304,7 @@ async function xdelo_handleNewMediaMessage(
       analyzed_content: captionChanged ? null : existingMedia.analyzed_content,
       updated_at: new Date().toISOString(),
       is_duplicate: true,
+      duplicate_reference_id: existingMedia.id,
       // Clear any error state on successful update
       error_message: null,
       error_code: null
@@ -335,22 +358,16 @@ async function xdelo_handleNewMediaMessage(
     );
   }
 
-  // Process media for new message using our improved function
+  // Process media for new message with improved approach
   const telegramFile = message.photo ? 
     message.photo[message.photo.length - 1] : 
     message.video || message.document;
   
-  // Extract original filename if available
-  const originalFilename = message.document?.file_name || message.video?.file_name;
-  
-  // Get original MIME type from Telegram
-  const originalMimeType = message.document?.mime_type || message.video?.mime_type;
-  
-  // Download the file from Telegram with improved handling
+  // Download the file with improved metadata handling
   const downloadResult = await xdelo_downloadMediaFromTelegram(
     telegramFile.file_id,
     telegramFile.file_unique_id,
-    originalMimeType || 'application/octet-stream',
+    telegramFile.mime_type || 'application/octet-stream',
     TELEGRAM_BOT_TOKEN
   );
   
@@ -358,11 +375,11 @@ async function xdelo_handleNewMediaMessage(
     throw new Error(`Failed to download file from Telegram: ${downloadResult.error || 'Unknown error'}`);
   }
   
-  // Upload to Supabase Storage with improved handling
+  // Upload to Supabase Storage with standardized path
   const uploadResult = await xdelo_uploadMediaToStorage(
     downloadResult.storagePath || `${telegramFile.file_unique_id}.bin`,
     downloadResult.blob,
-    downloadResult.mimeType || originalMimeType || 'application/octet-stream'
+    downloadResult.mimeType || telegramFile.mime_type || 'application/octet-stream'
   );
   
   if (!uploadResult.success) {
@@ -393,14 +410,14 @@ async function xdelo_handleNewMediaMessage(
     media_group_id: message.media_group_id,
     file_id: telegramFile.file_id,
     file_unique_id: telegramFile.file_unique_id,
-    mime_type: downloadResult.mimeType || originalMimeType || 'application/octet-stream',
-    mime_type_original: originalMimeType,
+    mime_type: downloadResult.mimeType || telegramFile.mime_type || 'application/octet-stream',
+    mime_type_original: telegramFile.mime_type,
     storage_path: downloadResult.storagePath || `${telegramFile.file_unique_id}.bin`,
     public_url: uploadResult.publicUrl, // Use the URL returned by Supabase
     width: telegramFile.width,
     height: telegramFile.height,
     duration: message.video?.duration,
-    file_size: telegramFile.file_size,
+    file_size: telegramFile.file_size || downloadResult.blob.size,
     correlation_id: context.correlationId,
     processing_state: message.caption ? 'pending' : 'initialized',
     is_edited_channel_post: context.isChannelPost,
@@ -440,7 +457,9 @@ async function xdelo_handleNewMediaMessage(
         chat_id: message.chat.id,
         file_unique_id: telegramFile.file_unique_id,
         media_group_id: message.media_group_id,
-        is_forwarded: !!messageInput.forward_info
+        is_forwarded: !!messageInput.forward_info,
+        storage_path: downloadResult.storagePath,
+        mime_type: downloadResult.mimeType
       },
       correlation_id: correlationId
     });
