@@ -48,8 +48,9 @@ export const useMediaGroups = () => {
           updated_at: item.updated_at || undefined,
           is_original_caption: item.is_original_caption || false,
           group_caption_synced: item.group_caption_synced || false,
-          storage_exists: Boolean(item.storage_exists),
-          storage_path_standardized: Boolean(item.storage_path_standardized),
+          // Handle these properties with proper type conversion
+          storage_exists: typeof item.storage_exists === 'boolean' ? item.storage_exists : Boolean(item.storage_exists),
+          storage_path_standardized: typeof item.storage_path_standardized === 'boolean' ? item.storage_path_standardized : Boolean(item.storage_path_standardized),
         };
         return message;
       });

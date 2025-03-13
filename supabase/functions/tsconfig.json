@@ -14,7 +14,8 @@
     "resolveJsonModule": true,
     "noEmit": true,
     "allowJs": true,
-    "checkJs": false
+    "checkJs": false,
+    "noImplicitAny": false
   },
   "include": ["./**/*.ts"],
   "exclude": ["node_modules"]

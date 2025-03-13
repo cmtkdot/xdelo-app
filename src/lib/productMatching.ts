@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Message, MatchResult, AnalyzedContent } from "@/types";
@@ -82,6 +83,8 @@ const findMatches = async (
           message_id: messageId,
           product_id: product.id,
           confidence,
+          match_fields: matchedFields,
+          match_date: new Date().toISOString(),
           matchType: 'automatic',
           details: {
             matchedFields,
@@ -167,11 +170,12 @@ const logSyncOperation = async (
 ) => {
   try {
     await client
-      .from('sync_logs')
+      .from('unified_audit_logs')
       .insert({
-        operation_type: operation,
-        status: 'completed',
-        details
+        event_type: operation,
+        entity_id: details.entityId || details.id || details.messageId || details.recordId || crypto.randomUUID(),
+        metadata: details,
+        created_at: new Date().toISOString()
       });
   } catch (error) {
     console.error('Error logging sync operation:', error);

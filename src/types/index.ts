@@ -70,7 +70,9 @@ export interface MatchResult {
   confidence: number;
   match_fields: string[];
   match_date: string;
-  id?: string; // Added to fix type error
+  id?: string;
+  matchType?: string;
+  details?: Record<string, any>;
 }
 
 // Removed SyncLogEntry, WebhookLogEntry, GlSyncLog, and SyncEventType exports

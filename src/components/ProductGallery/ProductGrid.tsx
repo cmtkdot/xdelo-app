@@ -50,7 +50,7 @@ export const ProductGrid = ({
             group={group}
             onEdit={onEdit}
             onDelete={onDelete}
-            onView={onView}
+            onView={() => onView(group)}
             isDeleting={isDeleting}
           />
         );

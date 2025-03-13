@@ -56,7 +56,7 @@ export async function logMessageOperation(
     await supabase
       .from('unified_audit_logs')
       .insert({
-        event_type: operation,
+        event_type: operation.toString(),
         entity_id: entityId,
         metadata: {
           ...metadata,
@@ -85,13 +85,13 @@ export async function logSyncOperation(
   let eventType: string;
   switch (syncType) {
     case "sync_started":
-      eventType = LogEventType.SYNC_STARTED;
+      eventType = LogEventType.SYNC_STARTED.toString();
       break;
     case "sync_completed":
-      eventType = LogEventType.SYNC_COMPLETED;
+      eventType = LogEventType.SYNC_COMPLETED.toString();
       break;
     case "sync_error":
-      eventType = LogEventType.SYNC_ERROR;
+      eventType = LogEventType.SYNC_ERROR.toString();
       break;
     default:
       eventType = syncType;
@@ -133,7 +133,7 @@ export async function logUserAction(
     await supabase
       .from('unified_audit_logs')
       .insert({
-        event_type: LogEventType.USER_ACTION,
+        event_type: LogEventType.USER_ACTION.toString(),
         entity_id: entityId,
         user_id: userId,
         metadata: {
@@ -169,12 +169,12 @@ export async function logOperationViaEdgeFunction(
     
     const { data, error } = await supabase.functions.invoke('log-operation', {
       body: {
-        operation,
-        messageId: entityId,
-        source,
-        action,
-        userId,
+        eventType: operation,
+        entityId: entityId,
         metadata: {
+          source,
+          action,
+          userId,
           ...metadata,
           timestamp: new Date().toISOString(),
           correlationId: metadata.correlationId || generateCorrelationId()
