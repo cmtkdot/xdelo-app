@@ -15,7 +15,10 @@
     "noEmit": true,
     "allowJs": true,
     "checkJs": false,
-    "noImplicitAny": false
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "preserveConstEnums": true
   },
   "include": ["./**/*.ts"],
   "exclude": ["node_modules"]

@@ -6,7 +6,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "node_modules"] },
+  { ignores: ["dist", "node_modules", "coverage", ".vite"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -18,6 +18,9 @@ export default tseslint.config(
       },
       parserOptions: {
         project: "./tsconfig.json",
+        ecmaFeatures: {
+          jsx: true
+        }
       },
     },
     plugins: {
@@ -33,8 +36,12 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": ["warn", { 
         argsIgnorePattern: "^_",
         varsIgnorePattern: "^_",
+        caughtErrorsIgnorePattern: "^_"
       }],
       "no-console": ["warn", { allow: ["warn", "error", "info"] }],
+      "no-debugger": "warn",
+      "prefer-const": "warn",
+      "no-duplicate-imports": "error"
     },
     settings: {
       react: {
