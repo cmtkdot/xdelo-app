@@ -8,7 +8,7 @@ interface MessageListProps {
   messages: Message[];
   isLoading?: boolean;
   onRetryProcessing?: (messageId: string) => Promise<void>;
-  onRefresh?: () => Promise<void>;
+  onRefresh?: () => void;
   processAllLoading?: boolean;
 }
 

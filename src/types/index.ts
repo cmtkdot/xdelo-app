@@ -57,8 +57,8 @@ export interface MessageProcessingStats {
   latest_update: string;
 }
 
-// Export MediaItem type
-export type { MediaItem } from './MediaViewer';
+// Export MediaItem type directly
+export { type MediaItem } from './MediaViewer';
 
 // Export Database type from supabase types
 export type { Database } from '@/integrations/supabase/types';

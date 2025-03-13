@@ -22,7 +22,7 @@ export function MessageListContainer() {
   // Convert the grouped messages object to an array for rendering
   const messages = mediaGroups ? Object.values(mediaGroups).flatMap(group => group) : [];
 
-  const onRetryProcessing = async (messageId: string) => {
+  const onRetryProcessing = async (messageId: string): Promise<void> => {
     try {
       toast({
         title: "Processing Message",
@@ -32,8 +32,8 @@ export function MessageListContainer() {
       
       await forceSyncMessageGroup(messageId);
       
-      // Handle the refetch appropriately - void the Promise to match the expected return type
-      await refetch();
+      // Wrap refetch() in void to match the expected return type
+      void refetch();
       
       // Success case handling after refetch completes
       toast({
