@@ -25,7 +25,7 @@ export function xdelo_standardizeMimeType(telegramData: any): string {
   if (!telegramData) return 'application/octet-stream';
   
   // Simplified MIME type detection focusing on main categories
-  if (telegramData.photo) return 'image/jpeg';
+  if (telegramData.photo) return 'image/jpg';
   if (telegramData.video) return 'video/mp4';
   
   // For documents, trust Telegram's MIME type if available
