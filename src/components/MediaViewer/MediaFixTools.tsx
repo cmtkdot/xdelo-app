@@ -12,10 +12,10 @@ interface MediaFixButtonsProps {
 }
 
 export function MediaFixTools({ message, onEdit }: MediaFixButtonsProps) {
-  const { reuploadMedia, isUploading } = useMediaReupload();
+  const { xdelo_reuploadMediaFromTelegram, isProcessing } = useMediaReupload();
 
   const handleReupload = async () => {
-    await reuploadMedia(message.id);
+    await xdelo_reuploadMediaFromTelegram(message.id);
   };
 
   const handleDownload = () => {
@@ -42,10 +42,10 @@ export function MediaFixTools({ message, onEdit }: MediaFixButtonsProps) {
         variant="outline"
         size="sm"
         onClick={handleReupload}
-        disabled={isUploading}
+        disabled={isProcessing}
         title="Reupload file from Telegram"
       >
-        <RefreshCcw className={`h-4 w-4 mr-2 ${isUploading ? 'animate-spin' : ''}`} />
+        <RefreshCcw className={`h-4 w-4 mr-2 ${isProcessing ? 'animate-spin' : ''}`} />
         Reupload
       </Button>
       
