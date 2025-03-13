@@ -17,8 +17,8 @@ export function MigrationButton() {
       <div className="flex flex-col space-y-2">
         <h3 className="text-lg font-semibold">Run URL Migration</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          This will update storage paths and public URLs for media files using standardized formats.
-          It ensures consistent path generation across the application.
+          This will update storage paths and public URLs for media files using the standardized format.
+          The trigger will automatically set the correct public URL based on the storage path.
         </p>
       </div>
       
@@ -36,7 +36,7 @@ export function MigrationButton() {
         ) : (
           <>
             <Database className="h-4 w-4" />
-            Run Storage Path Standardization
+            Standardize Storage Paths
           </>
         )}
       </Button>

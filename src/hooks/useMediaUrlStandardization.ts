@@ -18,23 +18,27 @@ export function useMediaUrlStandardization() {
     try {
       setIsStandardizing(true);
       
-      const { data, error } = await supabase.functions.invoke('xdelo_standardize_urls', {
-        body: { limit }
+      const { data, error } = await supabase.functions.invoke('xdelo_standardize_storage_paths', {
+        body: { 
+          limit,
+          dryRun: false,
+          updatePublicUrls: true
+        }
       });
 
       if (error) throw error;
       
       const result = {
         success: true,
-        updatedCount: data.updated_count,
+        updatedCount: data.stats?.fixed || 0,
         correlationId: data.correlation_id
       };
       
       setResults(result);
       
       toast({
-        title: 'URL standardization complete',
-        description: `Successfully standardized ${data.updated_count} media URLs`
+        title: 'Storage path standardization complete',
+        description: `Successfully standardized ${data.stats?.fixed || 0} storage paths and URLs`
       });
       
       return result;
@@ -47,7 +51,7 @@ export function useMediaUrlStandardization() {
       setResults(errorResult);
       
       toast({
-        title: 'URL standardization failed',
+        title: 'Storage path standardization failed',
         description: error.message,
         variant: 'destructive'
       });

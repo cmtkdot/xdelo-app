@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from '../_shared/cors.ts';
 import { Database } from '../_shared/types.ts';
@@ -45,6 +46,61 @@ async function verifyFileExists(storagePath: string, bucket: string = 'telegram-
   }
 }
 
+// Create a trigger function that automatically sets public_url based on storage_path
+async function createPublicUrlTrigger() {
+  try {
+    const triggerSql = `
+      -- First, create the trigger function if it doesn't exist
+      CREATE OR REPLACE FUNCTION xdelo_set_public_url()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NEW.storage_path IS NOT NULL AND NEW.storage_path != '' THEN
+          NEW.public_url = 'https://xjhhehxcxkiumnwbirel.supabase.co/storage/v1/object/public/telegram-media/' || NEW.storage_path;
+          NEW.storage_path_standardized = TRUE;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      -- Then, create the trigger if it doesn't exist
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_trigger 
+          WHERE tgname = 'set_public_url' 
+          AND tgrelid = 'messages'::regclass
+        ) THEN
+          CREATE TRIGGER set_public_url
+          BEFORE INSERT OR UPDATE OF storage_path
+          ON messages
+          FOR EACH ROW
+          EXECUTE FUNCTION xdelo_set_public_url();
+        END IF;
+      END $$;
+
+      -- Remove any old functions for URL generation that are no longer needed
+      DROP FUNCTION IF EXISTS public.generate_public_url(text, text);
+      DROP FUNCTION IF EXISTS public.xdelo_construct_public_url(text, text);
+      DROP FUNCTION IF EXISTS public.xdelo_ensure_app_settings_exists(text);
+    `;
+
+    const { error } = await supabase.rpc('xdelo_execute_sql_query', {
+      p_query: triggerSql
+    });
+
+    if (error) {
+      log('error', 'Failed to create public_url trigger', { error: error.message });
+      return false;
+    }
+
+    log('info', 'Successfully created public_url trigger');
+    return true;
+  } catch (error) {
+    log('error', 'Error creating public_url trigger', { error: error.message });
+    return false;
+  }
+}
+
 // Main handler for standardizing storage paths
 Deno.serve(async (req) => {
   // Handle CORS for preflight requests
@@ -54,11 +110,16 @@ Deno.serve(async (req) => {
 
   try {
     // Parse request body
-    const { limit = 100, dryRun = false, messageIds = [] } = await req.json();
+    const { limit = 100, dryRun = false, messageIds = [], updatePublicUrls = true } = await req.json();
     
     // Validate inputs
     if (limit < 1 || limit > 1000) {
       throw new Error('Limit must be between 1 and 1000');
+    }
+
+    // Create the trigger function for public_url if needed
+    if (updatePublicUrls) {
+      await createPublicUrlTrigger();
     }
 
     log('info', 'Starting storage path standardization', { limit, dryRun, messageIds });
@@ -129,7 +190,7 @@ async function processStoragePaths(
   } else {
     // Otherwise prioritize messages with issues in their URLs
     query = query
-      .or('public_url.is.null,public_url.eq.')
+      .or('storage_path_standardized.is.null,storage_path_standardized.eq.false')
       .order('created_at', { ascending: false })
       .limit(limit);
   }
@@ -182,7 +243,6 @@ async function processStoragePaths(
         // Check if file already exists at the new path
         const newPathExists = await verifyFileExists(standardizedPath);
         
-        let publicUrl = '';
         let needsUpdate = true;
         
         if (!newPathExists && oldPathExists) {
@@ -194,8 +254,6 @@ async function processStoragePaths(
               await supabase.storage
                 .from('telegram-media')
                 .copy(message.storage_path, standardizedPath);
-              
-              publicUrl = `${supabaseUrl}/storage/v1/object/public/telegram-media/${standardizedPath}`;
             } catch (copyError) {
               log('error', `Error copying file`, { 
                 from: message.storage_path, 
@@ -220,8 +278,6 @@ async function processStoragePaths(
               messageId: message.id,
               dryRun: true
             });
-            
-            publicUrl = `${supabaseUrl}/storage/v1/object/public/telegram-media/${standardizedPath}`;
           }
         } else if (!newPathExists && !oldPathExists) {
           // File doesn't exist in either location
@@ -249,7 +305,6 @@ async function processStoragePaths(
           continue;
         } else if (newPathExists) {
           // File already exists at new path
-          publicUrl = `${supabaseUrl}/storage/v1/object/public/telegram-media/${standardizedPath}`;
           log('info', `File already exists at standardized path`, { 
             messageId: message.id,
             path: standardizedPath
@@ -262,8 +317,6 @@ async function processStoragePaths(
             .from('messages')
             .update({
               storage_path: standardizedPath,
-              public_url: publicUrl,
-              storage_path_standardized: true,
               storage_exists: true,
               updated_at: new Date().toISOString()
             })
@@ -275,8 +328,7 @@ async function processStoragePaths(
           success: true,
           dryRun,
           old_path: message.storage_path,
-          new_path: standardizedPath,
-          new_url: publicUrl
+          new_path: standardizedPath
         });
         
         results.fixed++;
@@ -306,42 +358,14 @@ async function processStoragePaths(
           
           results.needs_redownload++;
         } else {
-          // Check if public URL is correct
-          const expectedPublicUrl = `${supabaseUrl}/storage/v1/object/public/telegram-media/${standardizedPath}`;
+          results.details.push({
+            message_id: message.id,
+            success: true,
+            status: 'already_correct',
+            path: standardizedPath
+          });
           
-          if (message.public_url !== expectedPublicUrl) {
-            if (!dryRun) {
-              await supabase
-                .from('messages')
-                .update({
-                  public_url: expectedPublicUrl,
-                  storage_exists: true,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', message.id);
-            }
-            
-            results.details.push({
-              message_id: message.id,
-              success: true,
-              dryRun,
-              status: 'url_fixed',
-              path: standardizedPath,
-              old_url: message.public_url,
-              new_url: expectedPublicUrl
-            });
-            
-            results.fixed++;
-          } else {
-            results.details.push({
-              message_id: message.id,
-              success: true,
-              status: 'already_correct',
-              path: standardizedPath
-            });
-            
-            results.skipped++;
-          }
+          results.skipped++;
         }
       }
     } catch (messageError) {

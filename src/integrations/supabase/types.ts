@@ -3259,6 +3259,12 @@ export type Database = {
         }
         Returns: undefined
       }
+      xdelo_standardize_file_extension: {
+        Args: {
+          p_mime_type: string
+        }
+        Returns: string
+      }
       xdelo_standardize_storage_path: {
         Args: {
           p_file_unique_id: string
@@ -3282,6 +3288,13 @@ export type Database = {
           p_sync_edit_history?: boolean
         }
         Returns: Json
+      }
+      xdelo_test_file_extensions: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          mime_type: string
+          extension: string
+        }[]
       }
       xdelo_update_message_processing_state: {
         Args: {
