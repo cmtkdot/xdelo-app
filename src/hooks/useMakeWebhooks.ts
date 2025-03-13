@@ -1,3 +1,4 @@
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MakeWebhookConfig, MakeEventType } from '@/types/make';
@@ -10,6 +11,18 @@ export function useMakeWebhooks() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // Helper function to transform database records to the expected type
+  const transformWebhookData = (data: any[]): MakeWebhookConfig[] => {
+    return data.map(webhook => ({
+      ...webhook,
+      field_selection: webhook.field_selection || null,
+      payload_template: webhook.payload_template || null,
+      transformation_code: webhook.transformation_code || null,
+      headers: webhook.headers || null,
+      retry_config: webhook.retry_config || null
+    }));
+  };
+
   // Fetch all webhooks
   const useWebhooks = (enabled = true) => 
     useQuery({
@@ -21,7 +34,7 @@ export function useMakeWebhooks() {
           .order('created_at', { ascending: false });
         
         if (error) throw error;
-        return data;
+        return transformWebhookData(data);
       },
       enabled,
     });
@@ -38,7 +51,7 @@ export function useMakeWebhooks() {
           .order('created_at', { ascending: false });
         
         if (error) throw error;
-        return data;
+        return transformWebhookData(data);
       },
       enabled,
     });
@@ -53,7 +66,7 @@ export function useMakeWebhooks() {
         .single();
       
       if (error) throw error;
-      return data;
+      return transformWebhookData([data])[0];
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['make-webhooks'] });
@@ -82,7 +95,7 @@ export function useMakeWebhooks() {
         .single();
       
       if (error) throw error;
-      return data;
+      return transformWebhookData([data])[0];
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['make-webhooks'] });
@@ -111,7 +124,7 @@ export function useMakeWebhooks() {
         .single();
       
       if (error) throw error;
-      return data;
+      return transformWebhookData([data])[0];
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['make-webhooks'] });
@@ -194,4 +207,4 @@ export function useMakeWebhooks() {
     deleteWebhook,
     testWebhook
   };
-} 
+}

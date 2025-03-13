@@ -41,7 +41,7 @@ interface WebhookFormState {
 }
 
 // Render a badge with proper children prop
-const renderBadge = (children: React.ReactNode, variant: string = "default", className: string = "") => {
+const renderBadge = (children: React.ReactNode, variant: "default" | "destructive" | "outline" | "secondary" | "success" | "warning" = "default", className: string = "") => {
   return (
     <Badge variant={variant} className={className}>
       {children}
@@ -430,4 +430,4 @@ const WebhookManager = () => {
   );
 };
 
-export default WebhookManager; 
+export default WebhookManager;

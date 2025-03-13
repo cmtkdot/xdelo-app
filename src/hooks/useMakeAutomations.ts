@@ -1,3 +1,4 @@
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MakeAutomationRule, MakeEventType } from '@/types/make';
@@ -21,13 +22,19 @@ export function useMakeAutomations() {
           .order('priority', { ascending: false });
         
         if (error) throw error;
-        return data;
+        
+        // Convert the database JSON fields to proper TypeScript objects
+        return data.map(rule => ({
+          ...rule,
+          conditions: Array.isArray(rule.conditions) ? rule.conditions : [],
+          actions: Array.isArray(rule.actions) ? rule.actions : []
+        }));
       },
       enabled,
     });
 
   // Fetch automation rules by event type
-  const useAutomationRulesByEventType = (eventType: MakeEventType, enabled = true) =>
+  const useAutomationRulesByEventType = (eventType: string, enabled = true) =>
     useQuery({
       queryKey: ['make-automation-rules', eventType],
       queryFn: async (): Promise<MakeAutomationRule[]> => {
@@ -38,7 +45,13 @@ export function useMakeAutomations() {
           .order('priority', { ascending: false });
         
         if (error) throw error;
-        return data;
+        
+        // Convert the database JSON fields to proper TypeScript objects
+        return data.map(rule => ({
+          ...rule,
+          conditions: Array.isArray(rule.conditions) ? rule.conditions : [],
+          actions: Array.isArray(rule.actions) ? rule.actions : []
+        }));
       },
       enabled,
     });
@@ -46,14 +59,31 @@ export function useMakeAutomations() {
   // Create a new automation rule
   const createAutomationRule = useMutation({
     mutationFn: async (rule: Omit<MakeAutomationRule, 'id' | 'created_at' | 'updated_at'>) => {
+      // Convert rule to format the database expects
+      const dbRule = {
+        name: rule.name,
+        description: rule.description,
+        event_type: rule.event_type,
+        conditions: rule.conditions,
+        actions: rule.actions,
+        is_active: rule.is_active,
+        priority: rule.priority
+      };
+      
       const { data, error } = await supabase
         .from('make_automation_rules')
-        .insert(rule)
+        .insert(dbRule)
         .select()
         .single();
       
       if (error) throw error;
-      return data;
+      
+      // Convert back to MakeAutomationRule
+      return {
+        ...data,
+        conditions: Array.isArray(data.conditions) ? data.conditions : [],
+        actions: Array.isArray(data.actions) ? data.actions : []
+      };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['make-automation-rules'] });
@@ -74,15 +104,39 @@ export function useMakeAutomations() {
   // Update an automation rule
   const updateAutomationRule = useMutation({
     mutationFn: async (rule: Partial<MakeAutomationRule> & { id: string }) => {
+      // Extract only the fields that can be updated
+      const updateData = {
+        name: rule.name,
+        description: rule.description,
+        event_type: rule.event_type,
+        conditions: rule.conditions,
+        actions: rule.actions,
+        is_active: rule.is_active,
+        priority: rule.priority
+      };
+      
+      // Remove undefined fields
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key as keyof typeof updateData] === undefined) {
+          delete updateData[key as keyof typeof updateData];
+        }
+      });
+      
       const { data, error } = await supabase
         .from('make_automation_rules')
-        .update(rule)
+        .update(updateData)
         .eq('id', rule.id)
         .select()
         .single();
       
       if (error) throw error;
-      return data;
+      
+      // Convert back to MakeAutomationRule
+      return {
+        ...data,
+        conditions: Array.isArray(data.conditions) ? data.conditions : [],
+        actions: Array.isArray(data.actions) ? data.actions : []
+      };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['make-automation-rules'] });
@@ -111,7 +165,13 @@ export function useMakeAutomations() {
         .single();
       
       if (error) throw error;
-      return data;
+      
+      // Convert back to MakeAutomationRule
+      return {
+        ...data,
+        conditions: Array.isArray(data.conditions) ? data.conditions : [],
+        actions: Array.isArray(data.actions) ? data.actions : []
+      };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['make-automation-rules'] });
@@ -249,4 +309,4 @@ export function useMakeAutomations() {
     reorderAutomationRules,
     testAutomationRule,
   };
-} 
+}

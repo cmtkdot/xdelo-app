@@ -65,10 +65,7 @@ const AutomationList = ({ onEditRule }: AutomationListProps) => {
     }
     
     setRules(newRules);
-    reorderAutomationRules.mutate(newRules.map((rule, index) => ({
-      id: rule.id,
-      priority: newRules.length - index // Higher priority for lower index
-    })));
+    reorderAutomationRules.mutate(newRules.map(rule => rule.id));
   };
   
   const handleDragEnd = (result: any) => {
@@ -79,10 +76,7 @@ const AutomationList = ({ onEditRule }: AutomationListProps) => {
     items.splice(result.destination.index, 0, reorderedItem);
     
     setRules(items);
-    reorderAutomationRules.mutate(items.map((rule, index) => ({
-      id: rule.id,
-      priority: items.length - index // Higher priority for lower index
-    })));
+    reorderAutomationRules.mutate(items.map(rule => rule.id));
   };
 
   if (isLoading) {
@@ -188,4 +182,4 @@ const AutomationList = ({ onEditRule }: AutomationListProps) => {
   );
 };
 
-export default AutomationList; 
+export default AutomationList;

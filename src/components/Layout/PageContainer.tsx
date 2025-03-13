@@ -1,4 +1,5 @@
 
+import React from "react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from '@/hooks/useMobile';
 import { useNavigation } from '@/hooks/useNavigation';
@@ -6,6 +7,7 @@ import { useEffect } from 'react';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from 'react-router-dom';
 
 interface PageContainerProps {
   children: React.ReactNode;
@@ -25,7 +27,12 @@ export function PageContainer({
   showBackButton
 }: PageContainerProps) {
   const isMobile = useIsMobile();
-  const { setTitle, setBreadcrumbs, setShowBackButton, isSidebarCollapsed, goBack } = useNavigation();
+  const { setTitle, setBreadcrumbs, setShowBackButton, isSidebarCollapsed } = useNavigation();
+  const navigate = useNavigate();
+  
+  const goBack = () => {
+    navigate(-1);
+  };
   
   // Set navigation context values
   useEffect(() => {

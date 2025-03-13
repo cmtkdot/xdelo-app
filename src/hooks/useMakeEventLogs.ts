@@ -1,36 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { MakeWebhookLog } from '@/types/make';
 import { useToast } from '@/hooks/useToast';
-
-interface EventLogParams {
-  eventType?: string | null;
-  status?: 'success' | 'failed' | 'pending' | null;
-  webhookId?: string | null;
-  limit?: number;
-  offset?: number;
-  startDate?: string;
-  endDate?: string;
-  tags?: string[];
-}
-
-export interface MakeEventLog {
-  id: string;
-  webhook_id?: string | null;
-  event_type: string;
-  payload: any;
-  status: 'success' | 'failed' | 'pending';
-  error_message?: string | null;
-  request_headers?: any;
-  response_code?: number | null;
-  response_body?: string | null;
-  response_headers?: any;
-  duration_ms?: number | null;
-  completed_at?: string | null;
-  created_at: string;
-  tags?: string[] | null;
-  context?: any;
-  severity?: string | null;
-}
+import { useState } from 'react';
 
 /**
  * Hook to manage Make event logs
@@ -39,192 +11,118 @@ export function useMakeEventLogs() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Fetch event logs with filtering
-  const useEventLogs = (params: EventLogParams = {}) => {
-    const { 
-      eventType, 
-      status, 
-      webhookId, 
-      limit = 50, 
-      offset = 0,
-      startDate,
-      endDate,
-      tags
-    } = params;
-    
-    return useQuery({
-      queryKey: ['make-event-logs', { eventType, status, webhookId, limit, offset, startDate, endDate, tags }],
-      queryFn: async (): Promise<MakeEventLog[]> => {
+  // State for pagination
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
+
+  // State for filtering
+  const [timeFilter, setTimeFilter] = useState<{ from?: string; to?: string } | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [eventTypeFilter, setEventTypeFilter] = useState<string | null>(null);
+  const [webhookIdFilter, setWebhookIdFilter] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState<string | null>(null);
+
+  // Fetch all event logs with pagination and filtering
+  const useEventLogs = (enabled = true) =>
+    useQuery({
+      queryKey: [
+        'make-event-logs',
+        page,
+        pageSize,
+        timeFilter?.from,
+        timeFilter?.to,
+        statusFilter,
+        eventTypeFilter,
+        webhookIdFilter,
+        searchTerm,
+      ],
+      queryFn: async (): Promise<MakeWebhookLog[]> => {
         let query = supabase
-          .from('make_event_logs')
+          .from('make_webhook_logs')
           .select('*')
           .order('created_at', { ascending: false })
-          .range(offset, offset + limit - 1);
-        
-        if (eventType) {
-          query = query.eq('event_type', eventType);
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        // Apply time filter
+        if (timeFilter?.from) {
+          query = query.gte('created_at', timeFilter.from);
         }
-        
-        if (status) {
-          query = query.eq('status', status);
-        }
-        
-        if (webhookId) {
-          query = query.eq('webhook_id', webhookId);
+        if (timeFilter?.to) {
+          query = query.lte('created_at', timeFilter.to);
         }
 
-        if (startDate) {
-          query = query.gte('created_at', startDate);
+        // Apply status filter
+        if (statusFilter) {
+          query = query.eq('status', statusFilter);
         }
 
-        if (endDate) {
-          query = query.lte('created_at', endDate);
+        // Apply event type filter
+        if (eventTypeFilter) {
+          query = query.eq('event_type', eventTypeFilter);
         }
 
-        if (tags && tags.length > 0) {
-          query = query.contains('tags', tags);
+        // Apply webhook ID filter
+        if (webhookIdFilter) {
+          query = query.eq('webhook_id', webhookIdFilter);
         }
-        
+
+        // Apply search term filter
+        if (searchTerm) {
+          query = query.ilike('payload', `%${searchTerm}%`);
+        }
+
         const { data, error } = await query;
-        
+
         if (error) throw error;
         return data;
       },
-      refetchInterval: 5000, // Auto-refresh every 5 seconds
+      enabled,
     });
-  };
 
-  // Get a count of event logs with filters
-  const useEventLogsCount = (params: Omit<EventLogParams, 'limit' | 'offset'> = {}) => {
-    const { eventType, status, webhookId, startDate, endDate, tags } = params;
-    
-    return useQuery({
-      queryKey: ['make-event-logs-count', { eventType, status, webhookId, startDate, endDate, tags }],
-      queryFn: async (): Promise<number> => {
-        let query = supabase
-          .from('make_event_logs')
-          .select('id', { count: 'exact', head: true });
-        
-        if (eventType) {
-          query = query.eq('event_type', eventType);
-        }
-        
-        if (status) {
-          query = query.eq('status', status);
-        }
-        
-        if (webhookId) {
-          query = query.eq('webhook_id', webhookId);
-        }
-
-        if (startDate) {
-          query = query.gte('created_at', startDate);
-        }
-
-        if (endDate) {
-          query = query.lte('created_at', endDate);
-        }
-
-        if (tags && tags.length > 0) {
-          query = query.contains('tags', tags);
-        }
-        
-        const { count, error } = await query;
-        
-        if (error) throw error;
-        return count || 0;
-      },
-    });
-  };
-
-  // Get event log by ID
-  const useEventLog = (id: string) => 
+  // Fetch event log by ID
+  const useEventLog = (id: string, enabled = true) =>
     useQuery({
-      queryKey: ['make-event-log', id],
-      queryFn: async (): Promise<MakeEventLog> => {
+      queryKey: ['make-event-logs', id],
+      queryFn: async (): Promise<MakeWebhookLog | null> => {
         const { data, error } = await supabase
-          .from('make_event_logs')
+          .from('make_webhook_logs')
           .select('*')
           .eq('id', id)
           .single();
-        
+
         if (error) throw error;
         return data;
       },
-      enabled: !!id,
+      enabled,
     });
 
-  // Get recent event status summary
-  const useEventStatusSummary = () =>
+  // Fetch event logs by webhook ID
+  const useEventLogsByWebhookId = (webhookId: string, enabled = true) =>
     useQuery({
-      queryKey: ['make-event-status-summary'],
-      queryFn: async () => {
-        const { data, error } = await supabase.rpc('get_make_event_status_summary');
-        
-        if (error) throw error;
-        return data as { status: string; count: number }[];
-      },
-      refetchInterval: 5000, // Auto-refresh every 5 seconds
-    });
+      queryKey: ['make-event-logs', 'webhook', webhookId],
+      queryFn: async (): Promise<MakeWebhookLog[]> => {
+        const { data, error } = await supabase
+          .from('make_webhook_logs')
+          .select('*')
+          .eq('webhook_id', webhookId)
+          .order('created_at', { ascending: false });
 
-  // Clear event logs
-  const clearEventLogs = useMutation({
-    mutationFn: async (params: { olderThan?: Date; webhookId?: string; status?: string }) => {
-      const olderThan = params.olderThan ? params.olderThan.toISOString() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      
-      const { data, error } = await supabase.rpc('make_clean_event_logs', {
-        older_than: olderThan,
-        webhook_id: params.webhookId || null,
-        status: params.status || null
-      });
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['make-event-logs'] });
-      queryClient.invalidateQueries({ queryKey: ['make-event-logs-count'] });
-      queryClient.invalidateQueries({ queryKey: ['make-event-status-summary'] });
-      toast({
-        title: 'Success',
-        description: `${data} event logs cleared`,
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: 'Error',
-        description: `Failed to clear event logs: ${error.message}`,
-        variant: 'destructive',
-      });
-    },
-  });
+        if (error) throw error;
+        return data;
+      },
+      enabled,
+    });
 
   // Retry a failed webhook event
-  const retryFailedEvent = useMutation({
-    mutationFn: async (eventId: string) => {
-      // Get the original event data
-      const { data: eventData, error: eventError } = await supabase
-        .from('make_event_logs')
-        .select('*')
-        .eq('id', eventId)
-        .single();
-      
-      if (eventError) throw eventError;
-      
-      // Create a new event with the same payload
-      const { data, error } = await supabase.functions.invoke('make_rule_engine', {
+  const retryWebhookEvent = useMutation({
+    mutationFn: async (logId: string) => {
+      // Implement retry logic via edge function call
+      const { data, error } = await supabase.functions.invoke('make-webhook-retry', {
         body: {
-          event_type: eventData.event_type,
-          payload: eventData.payload,
-          retry_of: eventId,
-          context: {
-            is_retry: true,
-            original_event_id: eventId,
-            ...eventData.context
-          }
-        }
+          logId,
+        },
       });
-      
+
       if (error) throw error;
       return data;
     },
@@ -232,24 +130,93 @@ export function useMakeEventLogs() {
       queryClient.invalidateQueries({ queryKey: ['make-event-logs'] });
       toast({
         title: 'Success',
-        description: 'Event retry initiated',
+        description: 'Webhook event retried',
       });
     },
     onError: (error) => {
       toast({
         title: 'Error',
-        description: `Failed to retry event: ${error.message}`,
+        description: `Failed to retry webhook event: ${error.message}`,
         variant: 'destructive',
       });
     },
   });
 
+  // Fetch total count of event logs
+  const useEventLogsCount = (enabled = true) =>
+    useQuery({
+      queryKey: ['make-event-logs', 'count'],
+      queryFn: async (): Promise<number> => {
+        let query = supabase
+          .from('make_webhook_logs')
+          .select('*', { count: 'exact' });
+
+        // Apply time filter
+        if (timeFilter?.from) {
+          query = query.gte('created_at', timeFilter.from);
+        }
+        if (timeFilter?.to) {
+          query = query.lte('created_at', timeFilter.to);
+        }
+
+        // Apply status filter
+        if (statusFilter) {
+          query = query.eq('status', statusFilter);
+        }
+
+        // Apply event type filter
+        if (eventTypeFilter) {
+          query = query.eq('event_type', eventTypeFilter);
+        }
+
+        // Apply webhook ID filter
+        if (webhookIdFilter) {
+          query = query.eq('webhook_id', webhookIdFilter);
+        }
+
+         // Apply search term filter
+         if (searchTerm) {
+          query = query.ilike('payload', `%${searchTerm}%`);
+        }
+
+        const { count, error } = await query;
+
+        if (error) throw error;
+        return count || 0;
+      },
+      enabled,
+    });
+
+  // Clear all filters
+  const clearFilters = () => {
+    setTimeFilter(null);
+    setStatusFilter(null);
+    setEventTypeFilter(null);
+    setWebhookIdFilter(null);
+    setSearchTerm(null);
+    setPage(0);
+  };
+
   return {
     useEventLogs,
-    useEventLogsCount,
     useEventLog,
-    useEventStatusSummary,
-    clearEventLogs,
-    retryFailedEvent
+    useEventLogsByWebhookId,
+    retryWebhookEvent,
+    useEventLogsCount,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    timeFilter,
+    setTimeFilter,
+    statusFilter,
+    setStatusFilter,
+    eventTypeFilter,
+    setEventTypeFilter,
+    webhookIdFilter,
+    setWebhookIdFilter,
+    searchTerm,
+    setSearchTerm,
+    clearFilters,
   };
-} 
+}

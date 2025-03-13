@@ -72,7 +72,7 @@ const AutomationForm = ({ rule, onClose }: AutomationFormProps) => {
       setFormState({
         name: rule.name || '',
         description: rule.description || '',
-        event_type: rule.event_type || MakeEventType.MessageReceived,
+        event_type: rule.event_type as MakeEventType || MakeEventType.MessageReceived,
         is_active: rule.is_active ?? true,
         priority: rule.priority ?? 0,
         conditions: rule.conditions || [{ field: '', operator: 'equals', value: '' }],
@@ -202,7 +202,7 @@ const AutomationForm = ({ rule, onClose }: AutomationFormProps) => {
               <Label htmlFor="event-type">Event Type</Label>
               <Select
                 value={formState.event_type}
-                onValueChange={(value) => handleInputChange('event_type', value)}
+                onValueChange={(value) => handleInputChange('event_type', value as MakeEventType)}
               >
                 <SelectTrigger id="event-type">
                   <SelectValue placeholder="Select event type" />
@@ -317,7 +317,7 @@ const AutomationForm = ({ rule, onClose }: AutomationFormProps) => {
                     <Label htmlFor={`condition-${index}-value`}>Value</Label>
                     <Input
                       id={`condition-${index}-value`}
-                      value={condition.value}
+                      value={String(condition.value)}
                       onChange={(e) => handleConditionChange(index, 'value', e.target.value)}
                       placeholder="Enter comparison value"
                     />
@@ -462,4 +462,4 @@ const AutomationForm = ({ rule, onClose }: AutomationFormProps) => {
   );
 };
 
-export default AutomationForm; 
+export default AutomationForm;
