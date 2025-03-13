@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
-import { useContentDisposition } from '@/hooks/useContentDisposition';
+import { useMediaOperations } from '@/hooks/useMediaOperations';
 import { Message } from '@/types/MessagesTypes';
 
 interface ContentDispositionFixButtonProps {
@@ -11,11 +11,11 @@ interface ContentDispositionFixButtonProps {
 }
 
 export function ContentDispositionFixButton({ message, className }: ContentDispositionFixButtonProps) {
-  const { fixContentDisposition, isProcessing } = useContentDisposition();
-  const isLoading = isProcessing[message.id];
+  const { fixContentDispositionForMessage, processingMessageIds } = useMediaOperations();
+  const isLoading = processingMessageIds[message.id];
 
   const handleFix = async () => {
-    await fixContentDisposition(message);
+    await fixContentDispositionForMessage(message);
   };
 
   // Only show button for media files without verified MIME type

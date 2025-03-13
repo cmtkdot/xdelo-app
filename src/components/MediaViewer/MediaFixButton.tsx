@@ -9,9 +9,17 @@ interface MediaFixButtonProps {
   messages?: Message[];
   messageIds?: string[];
   onComplete?: () => void;
+  variant?: "default" | "outline" | "secondary";
+  size?: "default" | "sm" | "lg";
 }
 
-export function MediaFixButton({ messages, messageIds, onComplete }: MediaFixButtonProps) {
+export function MediaFixButton({ 
+  messages, 
+  messageIds, 
+  onComplete,
+  variant = "outline",
+  size = "sm"
+}: MediaFixButtonProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const handleOpenDialog = () => {
@@ -32,8 +40,8 @@ export function MediaFixButton({ messages, messageIds, onComplete }: MediaFixBut
   return (
     <>
       <Button 
-        variant="outline" 
-        size="sm"
+        variant={variant} 
+        size={size}
         onClick={handleOpenDialog}
         title="Open media repair tool to fix issues with media files"
       >
@@ -51,6 +59,7 @@ export function MediaFixButton({ messages, messageIds, onComplete }: MediaFixBut
         }}
         initialMessageIds={messageIds}
         initialMessages={messages}
+        onComplete={handleComplete}
       />
     </>
   );

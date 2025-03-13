@@ -2,9 +2,12 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
+import { Spinner } from '@/components/ui/spinner';
 import type { Message } from '@/types/MessagesTypes';
 import { formatDate } from '@/lib/utils';
+import { useMediaOperations } from '@/hooks/useMediaOperations';
 
 interface MessageCardProps {
   message: Message;
@@ -18,6 +21,11 @@ export const MessageCard: React.FC<MessageCardProps> = ({
   processAllLoading = false
 }) => {
   const { 
+    isProcessing,
+    repairAllIssues 
+  } = useMediaOperations();
+  
+  const { 
     id,
     caption,
     analyzed_content,
@@ -27,11 +35,21 @@ export const MessageCard: React.FC<MessageCardProps> = ({
   } = message;
 
   const handleRetry = async () => {
-    await onRetryProcessing(id);
+    if (isProcessing) return;
+    
+    try {
+      // Try the provided retry function first
+      await onRetryProcessing(id);
+    } catch (error) {
+      console.error('Error in primary retry, attempting repair:', error);
+      // Fall back to repair if the retry function fails
+      await repairAllIssues([id]);
+    }
   };
 
   const isError = message.processing_state === 'error';
   const productDetails = analyzed_content ? (analyzed_content as any)?.product_name : null;
+  const isLoading = processAllLoading || isProcessing;
 
   return (
     <Card className="w-full">
@@ -57,14 +75,20 @@ export const MessageCard: React.FC<MessageCardProps> = ({
           </div>
           <div className="flex items-center space-x-2">
             {isError && (
-              <button 
+              <Button 
                 onClick={handleRetry}
-                disabled={processAllLoading}
-                className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-4 py-2"
+                disabled={isLoading}
+                variant="outline"
+                size="sm"
+                className="h-8 px-2"
               >
-                <RefreshCw className="w-4 h-4 mr-2" />
+                {isLoading ? (
+                  <Spinner size="sm" className="mr-1" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-1" />
+                )}
                 Retry
-              </button>
+              </Button>
             )}
             <Badge variant="secondary">{processing_state}</Badge>
           </div>
@@ -72,4 +96,4 @@ export const MessageCard: React.FC<MessageCardProps> = ({
       </CardContent>
     </Card>
   );
-};
+}

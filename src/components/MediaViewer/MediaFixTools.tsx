@@ -3,8 +3,7 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { FileDown, RefreshCcw, FileEdit } from "lucide-react";
 import { Message } from "@/types/MessagesTypes";
-import { useMediaReupload } from "@/hooks/useMediaReupload";
-import { ContentDispositionFixButton } from "./ContentDispositionFixButton";
+import { useMediaOperations } from '@/hooks/useMediaOperations';
 
 interface MediaFixButtonsProps {
   message: Message;
@@ -12,10 +11,10 @@ interface MediaFixButtonsProps {
 }
 
 export function MediaFixTools({ message, onEdit }: MediaFixButtonsProps) {
-  const { xdelo_reuploadMediaFromTelegram, isProcessing } = useMediaReupload();
+  const { reuploadMediaFromTelegram, isProcessing } = useMediaOperations();
 
   const handleReupload = async () => {
-    await xdelo_reuploadMediaFromTelegram(message.id);
+    await reuploadMediaFromTelegram(message.id);
   };
 
   const handleDownload = () => {
@@ -35,8 +34,6 @@ export function MediaFixTools({ message, onEdit }: MediaFixButtonsProps) {
         <FileDown className="h-4 w-4 mr-2" />
         Download
       </Button>
-      
-      <ContentDispositionFixButton message={message} />
       
       <Button
         variant="outline"

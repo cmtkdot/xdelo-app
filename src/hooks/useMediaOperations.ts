@@ -6,12 +6,39 @@ import { Message } from '@/types';
 
 export function useMediaOperations() {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingMessageIds, setProcessingMessageIds] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
+
+  // Helper to handle processing state for individual messages
+  const startProcessing = (messageId?: string) => {
+    setIsProcessing(true);
+    if (messageId) {
+      setProcessingMessageIds(prev => ({ ...prev, [messageId]: true }));
+    }
+  };
+
+  const stopProcessing = (messageId?: string) => {
+    if (messageId) {
+      setProcessingMessageIds(prev => {
+        const updated = { ...prev };
+        delete updated[messageId];
+        
+        // If no more messages are processing, set global flag to false
+        if (Object.keys(updated).length === 0) {
+          setIsProcessing(false);
+        }
+        return updated;
+      });
+    } else {
+      setIsProcessing(false);
+      setProcessingMessageIds({});
+    }
+  };
 
   // Reupload media from Telegram with correct MIME type
   const reuploadMediaFromTelegram = async (messageId: string) => {
     try {
-      setIsProcessing(true);
+      startProcessing(messageId);
       
       const { data, error } = await supabase.functions.invoke(
         'repair-media',
@@ -47,14 +74,14 @@ export function useMediaOperations() {
       
       throw error;
     } finally {
-      setIsProcessing(false);
+      stopProcessing(messageId);
     }
   };
 
   // Fix MIME types for a batch of messages
   const fixMimeTypes = async (messageIds: string[]) => {
     try {
-      setIsProcessing(true);
+      startProcessing();
       
       const { data, error } = await supabase.functions.invoke(
         'repair-media',
@@ -89,14 +116,14 @@ export function useMediaOperations() {
       
       throw error;
     } finally {
-      setIsProcessing(false);
+      stopProcessing();
     }
   };
 
   // Fix content disposition for media files
   const fixContentDisposition = async (messageIds?: string[]) => {
     try {
-      setIsProcessing(true);
+      startProcessing();
       const { data, error } = await supabase.functions.invoke('repair-media', {
         body: { 
           action: 'fix_content_disposition',
@@ -121,14 +148,14 @@ export function useMediaOperations() {
       });
       throw error;
     } finally {
-      setIsProcessing(false);
+      stopProcessing();
     }
   };
 
   // Check and validate file exists in storage
   const validateFileExists = async (messageId: string) => {
     try {
-      setIsProcessing(true);
+      startProcessing(messageId);
       
       const { data, error } = await supabase.functions.invoke(
         'repair-media',
@@ -164,14 +191,14 @@ export function useMediaOperations() {
       
       return false;
     } finally {
-      setIsProcessing(false);
+      stopProcessing(messageId);
     }
   };
 
   // Repair storage paths for messages
   const repairStoragePaths = async (messageIds?: string[]) => {
     try {
-      setIsProcessing(true);
+      startProcessing();
       const { data, error } = await supabase.functions.invoke('repair-media', {
         body: { 
           action: 'repair_storage_paths',
@@ -196,14 +223,14 @@ export function useMediaOperations() {
       });
       throw error;
     } finally {
-      setIsProcessing(false);
+      stopProcessing();
     }
   };
 
   // Recover file metadata for messages
   const recoverFileMetadata = async (messageIds: string[]) => {
     try {
-      setIsProcessing(true);
+      startProcessing();
       const { data, error } = await supabase.functions.invoke('repair-media', {
         body: { 
           action: 'recover_metadata',
@@ -228,14 +255,14 @@ export function useMediaOperations() {
       });
       throw error;
     } finally {
-      setIsProcessing(false);
+      stopProcessing();
     }
   };
 
   // Redownload file from a media group
   const redownloadFromMediaGroup = async (messageId: string, mediaGroupId?: string) => {
     try {
-      setIsProcessing(true);
+      startProcessing(messageId);
       const { data, error } = await supabase.functions.invoke('redownload-from-media-group', {
         body: { messageId, mediaGroupId }
       });
@@ -257,14 +284,14 @@ export function useMediaOperations() {
       });
       throw error;
     } finally {
-      setIsProcessing(false);
+      stopProcessing(messageId);
     }
   };
 
   // Repair all issues at once
   const repairAllIssues = async (messageIds: string[]) => {
     try {
-      setIsProcessing(true);
+      startProcessing();
       const { data, error } = await supabase.functions.invoke('repair-media', {
         body: { 
           action: 'repair_all',
@@ -295,14 +322,14 @@ export function useMediaOperations() {
       });
       throw error;
     } finally {
-      setIsProcessing(false);
+      stopProcessing();
     }
   };
 
   // Standardize storage paths
   const standardizeStoragePaths = async (limit: number = 100) => {
     try {
-      setIsProcessing(true);
+      startProcessing();
       
       const { data, error } = await supabase.functions.invoke(
         'xdelo_standardize_storage_paths',
@@ -334,12 +361,93 @@ export function useMediaOperations() {
       
       throw error;
     } finally {
-      setIsProcessing(false);
+      stopProcessing();
+    }
+  };
+
+  // Fix content disposition for a specific message
+  const fixContentDispositionForMessage = async (message: Message) => {
+    try {
+      startProcessing(message.id);
+      
+      const { data, error } = await supabase.functions.invoke('xdelo_fix_content_disposition', {
+        body: { messageId: message.id }
+      });
+
+      if (error) throw error;
+      
+      if (data.success) {
+        toast({
+          title: 'Fixed content disposition',
+          description: data.message
+        });
+      } else {
+        toast({
+          title: 'Failed to fix content disposition',
+          description: data.message,
+          variant: 'destructive'
+        });
+      }
+      
+      return data;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      toast({
+        title: 'Error fixing content disposition',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+      
+      return {
+        success: false,
+        message: errorMessage
+      };
+    } finally {
+      stopProcessing(message.id);
+    }
+  };
+
+  // Run auto fix for content disposition
+  const runAutoFixContentDisposition = async (limit = 50) => {
+    try {
+      startProcessing();
+      
+      const { data, error } = await supabase.functions.invoke('xdelo_fix_content_disposition', {
+        body: { limit }
+      });
+
+      if (error) throw error;
+      
+      const successCount = data.results?.filter((r: any) => r.success).length || 0;
+      const totalCount = data.count || 0;
+      
+      toast({
+        title: 'Auto-fix completed',
+        description: `Successfully fixed ${successCount}/${totalCount} messages`
+      });
+      
+      return data;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      toast({
+        title: 'Error with auto fix',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+      
+      return {
+        success: false,
+        message: errorMessage
+      };
+    } finally {
+      stopProcessing();
     }
   };
 
   return {
-    // All operations
+    // Primary operations
     reuploadMediaFromTelegram,
     fixMimeTypes,
     fixContentDisposition,
@@ -349,6 +457,13 @@ export function useMediaOperations() {
     redownloadFromMediaGroup,
     repairAllIssues,
     standardizeStoragePaths,
-    isProcessing
+    
+    // Content disposition specific operations (from useMediaFix)
+    fixContentDispositionForMessage,
+    runAutoFixContentDisposition,
+    
+    // State
+    isProcessing,
+    processingMessageIds
   };
 }
