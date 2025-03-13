@@ -1,53 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-
-/**
- * Unified event types for the logging system
- * These match the event_type values in the unified_audit_logs table
- */
-export type UnifiedEventType = 
-  // Message lifecycle events
-  | "message_created"
-  | "message_updated" 
-  | "message_deleted"
-  | "message_analyzed"
-  
-  // Processing events
-  | "processing_started"
-  | "processing_completed"
-  | "processing_error"
-  | "processing_state_changed"
-  
-  // Sync events
-  | "media_group_synced"
-  | "caption_synced"
-  
-  // Storage events
-  | "file_uploaded"
-  | "file_deleted"
-  | "storage_repaired"
-  
-  // User actions
-  | "user_action"
-  
-  // System events
-  | "system_error"
-  | "system_warning"
-  | "system_info";
-
-/**
- * Options for the logOperation function
- */
-export interface LogOperationOptions {
-  entityId: string;
-  eventType: UnifiedEventType;
-  metadata?: Record<string, any>;
-  previousState?: Record<string, any>;
-  newState?: Record<string, any>;
-  errorMessage?: string;
-  correlationId?: string;
-  userId?: string;
-}
+import type { UnifiedEventType, LogOperationOptions } from "@/types/GlobalTypes";
 
 /**
  * Unified logging function that logs all operations to the unified_audit_logs table

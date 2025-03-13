@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
-import { logSyncOperation } from '@/lib/syncUtils';
+import { logOperation } from '@/lib/unifiedLogger';
 
 /**
  * Hook for general processing system repair operations
@@ -30,15 +30,15 @@ export function useProcessingRepair() {
       });
       
       // Log the successful repair operation
-      await logSyncOperation(
-        supabase as any,
-        operationName,
-        {
+      await logOperation({
+        entityId: 'system',
+        eventType: 'processing_completed',
+        metadata: {
+          operation: operationName,
           result,
           timestamp: new Date().toISOString()
-        },
-        true
-      );
+        }
+      });
       
       return { 
         success: true, 
@@ -55,16 +55,15 @@ export function useProcessingRepair() {
       });
       
       // Log the failed repair attempt
-      await logSyncOperation(
-        supabase as any,
-        operationName,
-        {
-          error: error.message,
+      await logOperation({
+        entityId: 'system',
+        eventType: 'processing_error',
+        metadata: {
+          operation: operationName,
           timestamp: new Date().toISOString()
         },
-        false,
-        error.message
-      );
+        errorMessage: error.message
+      });
       
       throw error;
     } finally {
