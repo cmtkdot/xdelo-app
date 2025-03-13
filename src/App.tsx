@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -22,6 +21,7 @@ const AudioUpload = lazy(() => import("./pages/AudioUpload"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicGallery = lazy(() => import("./pages/PublicGallery"));
 const SqlConsole = lazy(() => import('./pages/SqlConsole'));
+const MakeAutomations = lazy(() => import('./pages/MakeAutomations'));
 
 import { AppSidebar } from "./components/Layout/AppSidebar";
 
@@ -146,6 +146,7 @@ function App() {
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/audio-upload" element={<AudioUpload />} />
                     <Route path="/sql-console" element={<SqlConsole />} />
+                    <Route path="/make-automations" element={<MakeAutomations />} />
                     <Route path="*" element={<NotFound />} />
                   </Route>
                 </Routes>

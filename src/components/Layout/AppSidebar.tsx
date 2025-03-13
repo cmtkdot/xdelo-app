@@ -18,7 +18,8 @@ import {
   Music,
   Database,
   PanelTopOpen,
-  LucideIcon
+  LucideIcon,
+  Zap
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/Theme/ThemeToggle";
@@ -47,6 +48,7 @@ export const AppSidebar = () => {
     { name: "SQL Console", Icon: Database, path: "/sql-console", group: "data" },
     { name: "AI Chat", Icon: FileText, path: "/ai-chat", group: "data" },
     { name: "Audio Upload", Icon: Music, path: "/audio-upload", group: "data" },
+    { name: "Make Automations", Icon: Zap, path: "/make-automations", group: "data" },
     
     { name: "Settings", Icon: Settings, path: "/settings", group: "settings", divider: true },
   ];
