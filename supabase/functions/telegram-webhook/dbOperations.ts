@@ -103,7 +103,7 @@ export async function createMessage(
     if (messageData.file_unique_id) {
       const { data: existingFile } = await supabase
         .from('messages')
-        .select('id, file_unique_id, storage_path, telegram_message_id, chat_id')
+        .select('id, file_unique_id, storage_path, telegram_message_id, chat_id, public_url')
         .eq('file_unique_id', messageData.file_unique_id)
         .maybeSingle();
 
@@ -135,7 +135,9 @@ export async function createMessage(
       }
     }
 
-    // Prepare message data with consistent format - remove public_url
+    // Prepare message data with consistent format
+    // Use the public_url directly from messageData
+    // This will now be properly set by the mediaUtils.ts uploadMediaToStorage function
     const safeMessageData = {
       telegram_message_id: messageData.telegram_message_id,
       chat_id: messageData.chat_id,
@@ -151,6 +153,7 @@ export async function createMessage(
       height: messageData.height,
       duration: messageData.duration,
       storage_path: messageData.storage_path,
+      public_url: messageData.public_url, // Use the URL set by the uploader
       correlation_id: correlationId,
       processing_state: 'pending' as ProcessingState,
       telegram_data: messageData.telegram_data,

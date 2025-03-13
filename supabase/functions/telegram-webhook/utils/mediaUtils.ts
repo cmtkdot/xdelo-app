@@ -1,11 +1,12 @@
+
 import { logMessageOperation } from './logger.ts';
 import { supabaseClient as supabase } from '../../_shared/supabase.ts';
 import { 
   xdelo_isViewableMimeType, 
   xdelo_getUploadOptions,
   xdelo_detectMimeType,
-  xdelo_validateStoragePath,
   xdelo_validateAndFixStoragePath,
+  xdelo_validateAndFixStoragePath as validateStoragePath,
   xdelo_downloadMediaFromTelegram,
   xdelo_uploadMediaToStorage
 } from '../../_shared/mediaUtils.ts';
@@ -144,23 +145,25 @@ export const redownloadMissingFile = async (message: MessageRecord): Promise<{su
       throw new Error(downloadResult.error || 'Failed to download media from Telegram');
     }
     
-    // Upload to storage using shared utility
+    // Upload to storage using shared utility with message ID for direct update
     const uploadResult = await xdelo_uploadMediaToStorage(
       downloadResult.storagePath,
       downloadResult.blob,
-      message.mime_type || 'application/octet-stream'
+      downloadResult.mimeType || message.mime_type || 'application/octet-stream',
+      message.id // Pass message ID for direct update
     );
     
     if (!uploadResult.success) {
       throw new Error(uploadResult.error || 'Failed to upload media to storage');
     }
     
-    // Update the message record - note we're not setting public_url
+    // Update the message record with minimal fields since public_url is updated by uploadMediaToStorage
     const { error: updateError } = await supabase
       .from('messages')
       .update({
         file_id: message.file_id,
         storage_path: downloadResult.storagePath,
+        mime_type: downloadResult.mimeType || message.mime_type,
         error_message: null,
         error_code: null, 
         needs_redownload: false,
@@ -182,7 +185,8 @@ export const redownloadMissingFile = async (message: MessageRecord): Promise<{su
       data: {
         messageId: message.id,
         storagePath: downloadResult.storagePath,
-        fileSize: downloadResult.blob.size
+        fileSize: downloadResult.blob.size,
+        publicUrl: uploadResult.publicUrl
       }
     };
   } catch (error) {

@@ -1,223 +1,176 @@
-
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from '../_shared/cors.ts';
 
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+// Create Supabase client
+const supabaseClient = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+);
 
+interface FixUrlsOptions {
+  limit?: number;
+  specific_ids?: string[];
+  batch_size?: number;
+  force_update?: boolean;
+}
+
+/**
+ * Updates public_url for messages with storage paths but missing or invalid URLs
+ */
+async function handleRequest(req: Request): Promise<Response> {
   try {
+    const correlationId = crypto.randomUUID();
+    console.log(`[${correlationId}] Starting public URL fix operation`);
+    
+    // Get options from request body
+    const options: FixUrlsOptions = await req.json().catch(() => ({}));
+    const limit = options.limit || 500;
+    const batchSize = options.batch_size || 100;
+    const specificIds = options.specific_ids || [];
+    const forceUpdate = options.force_update || false;
+    
+    console.log(`Processing with options: limit=${limit}, batchSize=${batchSize}, specificIds=${specificIds.length}, forceUpdate=${forceUpdate}`);
+    
+    // Get the Supabase URL
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error('Missing Supabase credentials');
+    if (!supabaseUrl) {
+      throw new Error('SUPABASE_URL environment variable is not set');
     }
     
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const requestData = await req.json();
-    const { limit = 1000, dryRun = false, onlyImages = false } = requestData;
-
-    // 1. Check if bucket is public
-    const { data: bucketData, error: bucketError } = await supabase.rpc('xdelo_execute_sql_query', {
-      p_query: `
-        SELECT public FROM storage.buckets WHERE name = 'telegram-media';
-      `,
-      p_params: []
-    });
-
-    // If bucket doesn't exist or isn't public, make it public
-    if (bucketError || !bucketData?.[0]?.public) {
-      console.log('Setting telegram-media bucket to public');
-      if (!dryRun) {
-        await supabase.rpc('xdelo_execute_sql_query', {
-          p_query: `
-            UPDATE storage.buckets 
-            SET public = true 
-            WHERE name = 'telegram-media';
-          `,
-          p_params: []
-        });
+    // Process in batches
+    let processed = 0;
+    let updated = 0;
+    let failed = 0;
+    const results = [];
+    
+    while (processed < limit) {
+      // Build query to find messages needing URL updates
+      let query = supabaseClient
+        .from('messages')
+        .select('id, storage_path, public_url, file_unique_id')
+        .is('deleted_from_telegram', false)
+        .is('storage_path', 'not.null')
+        .not('storage_path', 'eq', '');
+        
+      if (specificIds.length > 0) {
+        // If specific IDs provided, use those
+        query = query.in('id', specificIds);
+      } else if (!forceUpdate) {
+        // Otherwise look for missing or invalid URLs
+        query = query.or('public_url.is.null,public_url.eq.,public_url.not.ilike.%storage/v1/object/public/%');
       }
-    }
-
-    // 2. Make sure RLS policy exists
-    const { data: policyData, error: policyError } = await supabase.rpc('xdelo_execute_sql_query', {
-      p_query: `
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'objects' 
-        AND schemaname = 'storage' 
-        AND policyname = 'Public Access to Telegram Media'
-      `,
-      p_params: []
-    });
-
-    if (policyError || !policyData || policyData.length === 0) {
-      console.log('Creating RLS policy for telegram-media bucket');
-      if (!dryRun) {
-        await supabase.rpc('xdelo_execute_sql_query', {
-          p_query: `
-            CREATE POLICY "Public Access to Telegram Media" 
-            ON storage.objects 
-            FOR SELECT
-            USING (bucket_id = 'telegram-media');
-          `,
-          p_params: []
-        });
+      
+      // Apply limit for this batch
+      query = query.limit(Math.min(batchSize, limit - processed));
+      
+      const { data: messages, error } = await query;
+      
+      if (error) {
+        throw new Error(`Database query failed: ${error.message}`);
       }
-    }
-
-    // 3. Fix all the URLs for the files
-    // Get base URL for storage
-    const baseUrl = supabaseUrl.replace(/\/$/, '') + '/storage/v1/object/public/telegram-media';
-    
-    // Build query to get messages that need fixing
-    let query = supabase
-      .from('messages')
-      .select('id, file_unique_id, mime_type, storage_path, public_url')
-      .is('deleted_from_telegram', false)
-      .not('storage_path', 'is', null);
-    
-    // Add filter for only images if specified
-    if (onlyImages) {
-      query = query.like('mime_type', 'image/%');
-    }
-    
-    const { data: messages, error: messagesError } = await query
-      .order('created_at', { ascending: false })
-      .limit(limit);
-    
-    if (messagesError) {
-      throw messagesError;
-    }
-    
-    console.log(`Found ${messages.length} messages to process`);
-    
-    const results = {
-      processed: 0,
-      fixed: 0,
-      skipped: 0,
-      errors: 0
-    };
-    
-    const fixResults = [];
-    
-    // Process each message to fix URLs
-    if (!dryRun) {
+      
+      if (!messages || messages.length === 0) {
+        console.log(`No more messages to process after ${processed} records`);
+        break;
+      }
+      
+      console.log(`Processing batch of ${messages.length} messages`);
+      
+      // Update each message
       for (const message of messages) {
         try {
-          results.processed++;
-          
-          // Skip if already has correct URL
-          if (message.public_url && message.public_url.startsWith(baseUrl)) {
-            results.skipped++;
+          if (!message.storage_path) {
+            console.log(`Skipping message ${message.id} - no storage path`);
+            failed++;
             continue;
           }
           
-          // Check if file exists in storage
-          const { data: fileExists } = await supabase
+          // Generate the proper public URL using Supabase's built-in function
+          const { data: { publicUrl } } = supabaseClient
             .storage
             .from('telegram-media')
             .getPublicUrl(message.storage_path);
           
-          if (!fileExists) {
-            console.log(`File doesn't exist in storage: ${message.storage_path}`);
-            results.errors++;
-            continue;
-          }
-          
-          // Determine content disposition based on MIME type
-          const isViewable = message.mime_type && (
-            message.mime_type.startsWith('image/') || 
-            message.mime_type.startsWith('video/') || 
-            message.mime_type.startsWith('audio/') || 
-            message.mime_type === 'application/pdf'
-          );
-          
-          const contentDisposition = isViewable ? 'inline' : 'attachment';
-          
-          // Fix metadata in storage.objects - this is critical for images
-          await supabase.rpc('xdelo_execute_sql_query', {
-            p_query: `
-              UPDATE storage.objects
-              SET metadata = jsonb_build_object(
-                'contentType', $1,
-                'cacheControl', '3600',
-                'contentDisposition', $2
-              )
-              WHERE bucket_id = 'telegram-media' AND name = $3
-            `,
-            p_params: [message.mime_type || 'application/octet-stream', contentDisposition, message.storage_path]
-          });
-          
-          // Update message with correct public URL
-          const newPublicUrl = `${baseUrl}/${message.storage_path}`;
-          
-          await supabase
+          // Update the message
+          const { error: updateError } = await supabaseClient
             .from('messages')
             .update({
-              public_url: newPublicUrl,
-              mime_type_verified: true,
-              content_disposition: contentDisposition,
+              public_url: publicUrl,
               storage_exists: true,
               updated_at: new Date().toISOString()
             })
             .eq('id', message.id);
-          
-          fixResults.push({
+            
+          if (updateError) {
+            console.error(`Failed to update message ${message.id}: ${updateError.message}`);
+            failed++;
+            results.push({
+              id: message.id,
+              success: false,
+              error: updateError.message
+            });
+          } else {
+            updated++;
+            results.push({
+              id: message.id,
+              success: true,
+              old_url: message.public_url || 'none',
+              new_url: publicUrl
+            });
+          }
+        } catch (messageError) {
+          console.error(`Error processing message ${message.id}: ${messageError.message}`);
+          failed++;
+          results.push({
             id: message.id,
-            old_url: message.public_url,
-            new_url: newPublicUrl,
-            mime_type: message.mime_type,
-            content_disposition: contentDisposition
+            success: false,
+            error: messageError.message
           });
-          
-          results.fixed++;
-        } catch (error) {
-          console.error(`Error fixing message ${message.id}:`, error);
-          results.errors++;
         }
+      }
+      
+      processed += messages.length;
+      
+      if (messages.length < batchSize) {
+        // No more messages to process
+        break;
       }
     }
     
-    // Log the operation
-    await supabase
-      .from('unified_audit_logs')
-      .insert({
-        event_type: 'media_urls_fixed',
-        entity_id: 'system',
-        metadata: {
-          ...results,
-          dry_run: dryRun,
-          only_images: onlyImages,
-          timestamp: new Date().toISOString()
-        },
-        correlation_id: crypto.randomUUID()
-      });
-    
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: `Processed ${results.processed} files, fixed ${results.fixed}, skipped ${results.skipped}, errors ${results.errors}`,
-        results,
-        details: fixResults.slice(0, 10) // Return first 10 fixed entries
+      JSON.stringify({
+        success: true,
+        processed,
+        updated,
+        failed,
+        results: results.slice(0, 100), // Only return the first 100 results to avoid huge responses
+        correlation_id: correlationId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error fixing media URLs:', error);
-    
+    console.error('Error fixing public URLs:', error);
     return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      JSON.stringify({
+        success: false,
+        error: error.message
       }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
+}
+
+// Handle OPTIONS for CORS
+function handleOptions(req: Request): Response {
+  return new Response('ok', { headers: corsHeaders });
+}
+
+// Main entry point
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return handleOptions(req);
+  }
+  
+  return await handleRequest(req);
 });

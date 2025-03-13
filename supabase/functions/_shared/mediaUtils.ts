@@ -11,23 +11,32 @@ const supabaseClient = createClient(
 
 /**
  * Standardize and fix a storage path based on file_unique_id and mime_type
+ * Preserves original extension when possible
  */
-export function xdelo_validateAndFixStoragePath(fileUniqueId: string, mimeType: string): string {
+export function xdelo_validateAndFixStoragePath(fileUniqueId: string, mimeType: string, originalFilename?: string): string {
   if (!fileUniqueId) {
     throw new Error('File unique ID is required');
   }
   
-  // Extract extension from mime type
+  // Try to get extension from original filename first
   let extension = 'bin';
   
-  if (mimeType) {
+  if (originalFilename) {
+    const filenameParts = originalFilename.split('.');
+    if (filenameParts.length > 1) {
+      extension = filenameParts.pop()?.toLowerCase() || 'bin';
+    }
+  }
+  
+  // If no extension from filename, extract from mime type
+  if (extension === 'bin' && mimeType) {
     const parts = mimeType.split('/');
     if (parts.length === 2) {
-      extension = parts[1];
+      extension = parts[1].split(';')[0]; // Remove parameters like charset
       
       // Handle special cases
       if (extension === 'jpeg' || extension === 'jpg') {
-        extension = 'jpeg';
+        extension = 'jpg'; // Standardize on jpg
       } else if (extension === 'quicktime') {
         extension = 'mov';
       }
@@ -40,7 +49,7 @@ export function xdelo_validateAndFixStoragePath(fileUniqueId: string, mimeType: 
 /**
  * Detect correct MIME type from file content or extension
  */
-export function xdelo_detectMimeType(fileUniqueId: string, existingMimeType: string | null = null): string {
+export function xdelo_detectMimeType(fileUniqueId: string, existingMimeType: string | null = null, originalFilename?: string): string {
   if (!fileUniqueId) {
     return 'application/octet-stream';
   }
@@ -50,49 +59,59 @@ export function xdelo_detectMimeType(fileUniqueId: string, existingMimeType: str
     return existingMimeType;
   }
   
+  // Try to infer from original filename first if available
+  if (originalFilename) {
+    const extension = originalFilename.split('.').pop()?.toLowerCase();
+    if (extension) {
+      const mimeType = getMimeTypeFromExtension(extension);
+      if (mimeType) return mimeType;
+    }
+  }
+  
   // Try to infer from storage path if available
   const extension = fileUniqueId.split('.').pop()?.toLowerCase();
   
   if (extension) {
-    switch (extension) {
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      case 'gif':
-        return 'image/gif';
-      case 'webp':
-        return 'image/webp';
-      case 'mp4':
-        return 'video/mp4';
-      case 'mov':
-      case 'qt':
-        return 'video/quicktime';
-      case 'mp3':
-        return 'audio/mpeg';
-      case 'wav':
-        return 'audio/wav';
-      case 'ogg':
-        return 'audio/ogg';
-      case 'pdf':
-        return 'application/pdf';
-      case 'doc':
-      case 'docx':
-        return 'application/msword';
-      case 'xls':
-      case 'xlsx':
-        return 'application/vnd.ms-excel';
-      default:
-        return 'application/octet-stream';
-    }
+    const mimeType = getMimeTypeFromExtension(extension);
+    if (mimeType) return mimeType;
   }
   
   return existingMimeType || 'application/octet-stream';
 }
 
 /**
+ * Get MIME type from file extension
+ */
+function getMimeTypeFromExtension(extension: string): string | null {
+  const mimeTypeMap: Record<string, string> = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'mp4': 'video/mp4',
+    'mov': 'video/quicktime',
+    'qt': 'video/quicktime',
+    'mp3': 'audio/mpeg',
+    'wav': 'audio/wav',
+    'ogg': 'audio/ogg',
+    'pdf': 'application/pdf',
+    'doc': 'application/msword',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls': 'application/vnd.ms-excel',
+    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'txt': 'text/plain',
+    'md': 'text/markdown',
+    'json': 'application/json',
+    'tgs': 'application/x-tgsticker'
+  };
+  
+  return extension in mimeTypeMap ? mimeTypeMap[extension] : null;
+}
+
+/**
  * Download media file from Telegram
+ * Preserves original file metadata
  */
 export async function xdelo_downloadMediaFromTelegram(
   fileId: string, 
@@ -105,6 +124,7 @@ export async function xdelo_downloadMediaFromTelegram(
   storagePath?: string; 
   error?: string; 
   mimeType?: string;
+  originalFilename?: string;
 }> {
   try {
     console.log(`Getting file path for file ID: ${fileId}`);
@@ -128,6 +148,9 @@ export async function xdelo_downloadMediaFromTelegram(
     const filePath = fileInfo.result.file_path;
     console.log(`Got file path: ${filePath}`);
     
+    // Extract original filename from path if available
+    const originalFilename = filePath.split('/').pop();
+    
     // Then download the file
     const fileDownloadResponse = await fetch(
       `https://api.telegram.org/file/bot${botToken}/${filePath}`
@@ -147,16 +170,17 @@ export async function xdelo_downloadMediaFromTelegram(
     const fileData = await fileDownloadResponse.blob();
     const fileBlob = new Blob([fileData], { type: detectedMimeType });
     
-    // Generate storage path
-    const storagePath = xdelo_validateAndFixStoragePath(fileUniqueId, detectedMimeType);
+    // Generate storage path using original filename when possible
+    const storagePath = xdelo_validateAndFixStoragePath(fileUniqueId, detectedMimeType, originalFilename);
     
-    console.log(`Successfully downloaded ${fileBlob.size} bytes with type ${detectedMimeType}, path: ${storagePath}`);
+    console.log(`Successfully downloaded ${fileBlob.size} bytes with type ${detectedMimeType}, path: ${storagePath}, original filename: ${originalFilename || 'unknown'}`);
     
     return { 
       success: true, 
       blob: fileBlob, 
       storagePath,
-      mimeType: detectedMimeType
+      mimeType: detectedMimeType,
+      originalFilename
     };
   } catch (error) {
     console.error('Error downloading media from Telegram:', error);
@@ -168,12 +192,13 @@ export async function xdelo_downloadMediaFromTelegram(
 }
 
 /**
- * Upload media to Supabase Storage
+ * Upload media to Supabase Storage with proper metadata
  */
 export async function xdelo_uploadMediaToStorage(
   storagePath: string,
   fileBlob: Blob,
-  mimeType: string
+  mimeType: string,
+  messageId?: string
 ): Promise<{ success: boolean; publicUrl?: string; error?: string }> {
   try {
     console.log(`Uploading ${fileBlob.size} bytes to ${storagePath} with type ${mimeType}`);
@@ -199,11 +224,27 @@ export async function xdelo_uploadMediaToStorage(
       throw error;
     }
     
-    // Get the public URL
+    // Get the public URL using Supabase's built-in functionality
     const { data: { publicUrl } } = supabaseClient
       .storage
       .from('telegram-media')
       .getPublicUrl(storagePath);
+    
+    // If messageId is provided, update the message record with the public URL
+    if (messageId) {
+      const { error: updateError } = await supabaseClient
+        .from('messages')
+        .update({
+          public_url: publicUrl,
+          storage_exists: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', messageId);
+      
+      if (updateError) {
+        console.warn(`Warning: Failed to update message ${messageId} with public URL: ${updateError.message}`);
+      }
+    }
     
     return { success: true, publicUrl };
   } catch (error) {
