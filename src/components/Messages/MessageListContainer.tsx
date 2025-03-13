@@ -32,21 +32,14 @@ export function MessageListContainer() {
       
       await forceSyncMessageGroup(messageId);
       
-      // Handle the refetch appropriately
-      await refetch().then(() => {
-        // Success case handling
-        toast({
-          title: "Processing Complete",
-          description: "Message has been processed and synchronized.",
-          variant: "default"
-        });
-      }).catch(error => {
-        console.error("Error refetching data:", error);
-        toast({
-          title: "Refresh Failed",
-          description: "Failed to refresh data after processing",
-          variant: "destructive",
-        });
+      // Handle the refetch appropriately - void the Promise to match the expected return type
+      await refetch();
+      
+      // Success case handling after refetch completes
+      toast({
+        title: "Processing Complete",
+        description: "Message has been processed and synchronized.",
+        variant: "default"
       });
     } catch (error: any) {
       console.error("Error retrying processing:", error);
@@ -61,7 +54,7 @@ export function MessageListContainer() {
   return (
     <div className="space-y-4">
       <MessageControlPanel
-        onRefresh={() => refetch()}
+        onRefresh={() => { void refetch(); }}
         isRefreshing={isRefetching}
         messageCount={messages.length}
       />
@@ -77,7 +70,7 @@ export function MessageListContainer() {
       ) : (
         <MessageList 
           messages={messages}
-          onRefresh={() => refetch()}
+          onRefresh={() => { void refetch(); }}
           onRetryProcessing={onRetryProcessing}
           processAllLoading={isRefetching}
         />

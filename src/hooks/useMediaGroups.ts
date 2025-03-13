@@ -34,7 +34,6 @@ export const useMediaGroups = () => {
           file_size: item.file_size || undefined,
           width: item.width || undefined,
           height: item.height || undefined,
-          duration: item.duration || undefined,
           user_id: item.user_id || undefined,
           processing_state: item.processing_state as ProcessingState || undefined,
           processing_started_at: item.processing_started_at || undefined,

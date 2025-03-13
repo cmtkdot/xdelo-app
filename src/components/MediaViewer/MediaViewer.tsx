@@ -1,5 +1,7 @@
+
 import React, { useState } from 'react';
 import { Message } from '@/types/MessagesTypes';
+import { MediaItem } from '@/types';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ImageSwiper } from "@/components/ui/image-swiper";
@@ -76,7 +78,8 @@ export const MediaViewer = ({
     return null;
   }
 
-  const mediaItems = currentGroup.map(message => messageToMediaItem(message));
+  // Use the messageToMediaItem function to ensure consistent type conversion
+  const mediaItems: MediaItem[] = currentGroup.map(message => messageToMediaItem(message));
   const messageIds = currentGroup.map(message => message.id);
   const telegramUrl = getTelegramMessageUrl(currentMedia);
   const publicUrl = currentMedia?.public_url || null;

@@ -1,6 +1,7 @@
 
-// Re-export ProcessingState and Message types
-export type { Message, ProcessingState } from './MessagesTypes';
+// Re-export MessagesTypes
+import { Message, ProcessingState } from './MessagesTypes';
+export type { Message, ProcessingState };
 
 // Define FilterValues type
 export interface FilterValues {

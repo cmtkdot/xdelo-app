@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { ImageSwiper } from "@/components/ui/image-swiper";
 import { Message } from "@/types/MessagesTypes";
+import { MediaItem } from "@/types";
 import { buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -65,11 +66,12 @@ export function ProductGroup({ group, onEdit, onDelete, onView, isDeleting }: Pr
     onView(group);
   };
 
-  // Convert Message[] to MediaItem[] for ImageSwiper
+  // Convert Message[] to MediaItem[] for ImageSwiper with file_unique_id
   const mediaItems = group.map(message => ({
     id: message.id,
     public_url: message.public_url,
     mime_type: message.mime_type,
+    file_unique_id: message.file_unique_id || message.id,
     created_at: message.created_at || new Date().toISOString(),
     analyzed_content: message.analyzed_content
   }));
