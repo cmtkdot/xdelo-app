@@ -65,9 +65,9 @@ export function MediaFixButton({
             handleComplete();
           }
         }}
-        initialMessageIds={messageIds}
-        initialMessages={messages}
-        initialMediaGroupId={mediaGroupId}
+        messageIds={combinedMessageIds}
+        messages={messages}
+        mediaGroupId={mediaGroupId}
         onComplete={handleComplete}
       />
     </>

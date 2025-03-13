@@ -1,26 +1,29 @@
 
-// Main types barrel file - exports all type definitions
-// organized by domain/purpose
+// Re-export all types from multiple files
+// This allows us to import from a single location: import { Type } from '@/types'
 
-// Core entity types
-export * from './entities/Message';
-export * from './entities/Product';
-export * from './entities/MediaItem';
+export * from './GlobalTypes';
+export * from './MessagesTypes';
+export * from './MediaViewer';
 
-// UI related types
-export * from './ui/FilterValues';
-export * from './ui/MediaViewer';
+// Re-export specific types to avoid naming conflicts
+export { MediaItem } from './entities/MediaItem';
+export type { Message } from './entities/Message';
+export type { Product } from './entities/Product';
 
-// API related types
-export * from './api/SupabaseTypes';
-export * from './api/SyncStatus';
+// Export API types
 export * from './api/ProcessingState';
-export * from './api/LogEventType';
+export { LogEventType } from './api/LogEventType';
+export * from './api/SyncStatus';
 
-// Utility types
+// Export utility types
 export * from './utils/AnalyzedContent';
 export * from './utils/MatchResult';
 export * from './utils/MessageProcessingStats';
 
-// Legacy type exports for backward compatibility
+// Export UI types
+export * from './ui/FilterValues';
+export * from './ui/MediaViewer';
+
+// Export compatibility types
 export * from './compatibility';

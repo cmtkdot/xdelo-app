@@ -1,114 +1,63 @@
 
-import { supabase } from '@/integrations/supabase/client';
-import { v4 as uuidv4 } from 'uuid';
-import { LogEventType } from '@/types/api/LogEventType';
+import { supabase } from "@/integrations/supabase/client";
+import LogEventType from "@/types/api/LogEventType";
 
-/**
- * Centralized logging function that logs events to the unified_audit_logs table
- */
+export { LogEventType };
+
+export interface LogEventOptions {
+  entity_id?: string;
+  event_type?: LogEventType | string;
+  metadata?: any;
+  user_id?: string;
+  chat_id?: number;
+  telegram_message_id?: number;
+  correlation_id?: string;
+  previous_state?: any;
+  new_state?: any;
+  error_message?: string;
+}
+
 export async function logEvent(
   eventType: LogEventType,
   entityId: string,
-  metadata: Record<string, any> = {},
-  previousState?: Record<string, any>,
-  newState?: Record<string, any>,
-  errorMessage?: string
-): Promise<{ success: boolean; logId?: string }> {
+  metadata: any = {},
+  options: Partial<LogEventOptions> = {}
+) {
   try {
-    // Generate a correlation ID if not provided
-    const correlationId = metadata?.correlationId || `log-${uuidv4()}`;
+    const timestamp = new Date().toISOString();
     
-    // Add timestamp to metadata if not provided
-    const enhancedMetadata = {
-      ...metadata,
-      timestamp: metadata.timestamp || new Date().toISOString()
-    };
-    
-    // Insert the log entry
+    // Create the log event record
     const { data, error } = await supabase
-      .from('unified_audit_logs')
+      .from("unified_audit_logs")
       .insert({
         event_type: eventType,
         entity_id: entityId,
-        metadata: enhancedMetadata,
-        previous_state: previousState || null,
-        new_state: newState || null,
-        error_message: errorMessage || null,
-        correlation_id: correlationId
-      })
-      .select('id')
-      .single();
-    
+        metadata: metadata,
+        event_timestamp: timestamp,
+        user_id: options.user_id,
+        chat_id: options.chat_id,
+        telegram_message_id: options.telegram_message_id,
+        correlation_id: options.correlation_id,
+        previous_state: options.previous_state,
+        new_state: options.new_state,
+        error_message: options.error_message
+      });
+
     if (error) {
-      console.error('Error logging event:', error);
-      return { success: false };
+      console.error("Failed to log event:", error);
     }
-    
-    return { success: true, logId: data?.id };
+
+    return { success: !error, data, error };
   } catch (err) {
-    console.error('Failed to log event:', err);
-    return { success: false };
+    console.error("Error in logEvent:", err);
+    return { success: false, error: err };
   }
 }
 
-/**
- * Specialized logging function for message-related events
- */
-export async function logMessageEvent(
-  eventType: LogEventType,
-  messageId: string,
-  metadata: Record<string, any> = {},
-  previousState?: Record<string, any>,
-  newState?: Record<string, any>
-): Promise<{ success: boolean; logId?: string }> {
-  // Enhance metadata with message-specific context
-  const enhancedMetadata = {
-    ...metadata,
-    entity_type: 'message'
-  };
-  
-  return logEvent(eventType, messageId, enhancedMetadata, previousState, newState);
+export function getEventTypeLabel(eventType: LogEventType): string {
+  // Convert from enum value (e.g., MESSAGE_CREATED) to readable text (e.g., "Message Created")
+  return eventType
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
 }
-
-/**
- * Specialized logging function for sync operations
- */
-export async function logSyncOperation(
-  operation: LogEventType,
-  entityId: string,
-  metadata: Record<string, any> = {},
-  success: boolean = true,
-  errorMessage?: string
-): Promise<{ success: boolean; logId?: string }> {
-  // Enhance metadata with sync-specific context
-  const enhancedMetadata = {
-    ...metadata,
-    entity_type: 'sync',
-    operation_success: success
-  };
-  
-  return logEvent(operation, entityId, enhancedMetadata, null, null, errorMessage);
-}
-
-/**
- * Specialized logging function for system repair operations
- */
-export async function logSystemRepair(
-  operation: LogEventType,
-  entityId: string,
-  metadata: Record<string, any> = {},
-  success: boolean = true,
-  errorMessage?: string
-): Promise<{ success: boolean; logId?: string }> {
-  // Enhance metadata with repair-specific context
-  const enhancedMetadata = {
-    ...metadata,
-    entity_type: 'system_repair',
-    repair_success: success,
-    timestamp: new Date().toISOString()
-  };
-  
-  return logEvent(LogEventType.SYSTEM_REPAIR, entityId, enhancedMetadata, null, null, errorMessage);
-}
-
-export { LogEventType };

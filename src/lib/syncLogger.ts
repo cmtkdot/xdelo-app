@@ -1,64 +1,133 @@
 
-import { logEvent, logMessageEvent, logSyncOperation, LogEventType } from "./logUtils";
+import { supabase } from "@/integrations/supabase/client";
+import { logEvent, LogEventType } from "./logUtils";
 
-/**
- * @deprecated Use logMessageEvent from logUtils.ts instead
- * This function is maintained for backward compatibility
- */
-export async function logMessageOperation(
-  action: string | LogEventType,
-  messageId: string,
-  metadata?: Record<string, any>,
-  level: string = "info"
-) {
-  // Map the legacy action to the new LogEventType
-  let eventType: LogEventType | string;
-  
-  if (typeof action === 'string') {
-    switch (action) {
-      case 'update':
-        eventType = LogEventType.MESSAGE_UPDATED;
-        break;
-      case 'delete':
-        eventType = LogEventType.MESSAGE_DELETED;
-        break;
-      case 'process':
-        eventType = LogEventType.MESSAGE_PROCESSED;
-        break;
-      case 'analyze':
-        eventType = LogEventType.MESSAGE_ANALYZED;
-        break;
-      case 'error':
-        eventType = LogEventType.MESSAGE_ERROR;
-        break;
-      case 'warning':
-        eventType = LogEventType.WARNING;
-        break;
-      default:
-        eventType = action; // Use the action string as fallback
-    }
-  } else {
-    eventType = action; // Already a LogEventType
-  }
-  
-  // Add the level to metadata for backward compatibility
-  const enhancedMetadata = {
-    ...(metadata || {}),
-    level,
-    legacy_action: typeof action === 'string' ? action : null
+export interface SyncLogEntry {
+  id: string;
+  operation: string;
+  status: "pending" | "success" | "error";
+  details?: any;
+  created_at: string;
+  updated_at: string;
+  error_message?: string;
+  user_id?: string;
+  sync_counts?: {
+    total?: number;
+    processed?: number;
+    succeeded?: number;
+    failed?: number;
   };
-  
-  return logMessageEvent(eventType, messageId, enhancedMetadata);
 }
 
-// Export the consolidated logging functions for backward compatibility
-export { logEvent, logMessageEvent, logSyncOperation, LogEventType };
+export interface SyncLogOptions {
+  userId?: string;
+  metadata?: any;
+}
 
-// Default export for backward compatibility
-export default {
-  logMessageOperation,
-  logMessageEvent,
-  logSyncOperation,
-  logEvent,
-  LogEventType
-};
+export async function createSyncLog(
+  operation: string,
+  details: any = {},
+  options: SyncLogOptions = {}
+) {
+  try {
+    const { data, error } = await supabase
+      .from("sync_logs")
+      .insert({
+        operation,
+        status: "pending",
+        details,
+        user_id: options.userId,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Failed to create sync log:", error);
+    }
+
+    // Also log to unified audit logs
+    await logEvent(
+      LogEventType.SYNC_STARTED,
+      data?.id || "unknown",
+      {
+        operation,
+        details,
+        status: "pending",
+      },
+      {
+        user_id: options.userId,
+      }
+    );
+
+    return { success: !error, data, error };
+  } catch (err) {
+    console.error("Error in createSyncLog:", err);
+    return { success: false, error: err };
+  }
+}
+
+export async function updateSyncLog(
+  id: string,
+  status: "pending" | "success" | "error",
+  details: any = {},
+  errorMessage?: string
+) {
+  try {
+    const { data, error } = await supabase
+      .from("sync_logs")
+      .update({
+        status,
+        details,
+        updated_at: new Date().toISOString(),
+        error_message: errorMessage,
+      })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Failed to update sync log:", error);
+    }
+
+    // Also log to unified audit logs
+    const eventType = status === "success" 
+      ? LogEventType.SYNC_COMPLETED 
+      : status === "error" 
+        ? LogEventType.SYNC_FAILED 
+        : LogEventType.SYNC_STARTED;
+
+    await logEvent(
+      eventType,
+      id,
+      {
+        status,
+        details,
+        error_message: errorMessage,
+      }
+    );
+
+    return { success: !error, data, error };
+  } catch (err) {
+    console.error("Error in updateSyncLog:", err);
+    return { success: false, error: err };
+  }
+}
+
+export async function getSyncLogs(limit = 10) {
+  try {
+    const { data, error } = await supabase
+      .from("sync_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error("Failed to fetch sync logs:", error);
+    }
+
+    return { success: !error, data, error };
+  } catch (err) {
+    console.error("Error in getSyncLogs:", err);
+    return { success: false, error: err };
+  }
+}

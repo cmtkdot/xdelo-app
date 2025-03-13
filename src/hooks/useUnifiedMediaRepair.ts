@@ -2,7 +2,8 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
-import { logEvent, LogEventType } from '@/lib/logUtils';
+import { logEvent } from '@/lib/logUtils';
+import LogEventType from '@/types/api/LogEventType';
 
 interface RepairOptions {
   messageIds?: string[];
@@ -38,7 +39,7 @@ export function useUnifiedMediaRepair() {
 
       // Log the start of the repair operation
       await logEvent(
-        LogEventType.SYSTEM_REPAIR,
+        LogEventType.MEDIA_REPAIR_STARTED,
         'unified-media-repair',
         {
           operation: 'unified_media_repair',
@@ -76,7 +77,7 @@ export function useUnifiedMediaRepair() {
 
       // Log the completion of the repair
       await logEvent(
-        LogEventType.SYSTEM_REPAIR,
+        LogEventType.MEDIA_REPAIR_COMPLETED,
         'unified-media-repair',
         {
           operation: 'unified_media_repair',
@@ -105,7 +106,7 @@ export function useUnifiedMediaRepair() {
 
       // Log the error
       await logEvent(
-        LogEventType.SYSTEM_REPAIR,
+        LogEventType.MEDIA_REPAIR_FAILED,
         'unified-media-repair',
         {
           operation: 'unified_media_repair',
