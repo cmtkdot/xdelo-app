@@ -23,14 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 .windsurfrules
-package-lock.json
 supabase/.temp/cli-latest
-package-lock.json
-package-lock.json
 .dockerignore
 docker-compose.yml
 Dockerfile
 src/env.d.ts
-tsconfig.app.json
 tsconfig.app.json
 supabase/.branches/_current_branch
