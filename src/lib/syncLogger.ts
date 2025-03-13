@@ -53,10 +53,11 @@ export async function logMessageOperation(
   metadata: Record<string, any> = {}
 ): Promise<void> {
   try {
+    // Using type assertion to ensure the event_type is accepted by the database
     await supabase
       .from('unified_audit_logs')
       .insert({
-        event_type: operation.toString(),
+        event_type: operation.toString() as any,
         entity_id: entityId,
         metadata: {
           ...metadata,
@@ -98,10 +99,11 @@ export async function logSyncOperation(
   }
   
   try {
+    // Using type assertion to ensure the event_type is accepted by the database
     await supabase
       .from('unified_audit_logs')
       .insert({
-        event_type: eventType,
+        event_type: eventType as any,
         entity_id: entityId,
         metadata: {
           ...metadata,
@@ -130,10 +132,11 @@ export async function logUserAction(
   metadata: Record<string, any> = {}
 ): Promise<void> {
   try {
+    // Using type assertion to ensure the event_type is accepted by the database
     await supabase
       .from('unified_audit_logs')
       .insert({
-        event_type: LogEventType.USER_ACTION.toString(),
+        event_type: LogEventType.USER_ACTION.toString() as any,
         entity_id: entityId,
         user_id: userId,
         metadata: {

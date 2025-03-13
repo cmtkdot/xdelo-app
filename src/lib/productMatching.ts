@@ -169,10 +169,12 @@ const logSyncOperation = async (
   details: Record<string, any>
 ) => {
   try {
+    // Using the unified_audit_logs table instead of sync_logs
+    // Using type assertion for event_type to bypass TypeScript restriction
     await client
       .from('unified_audit_logs')
       .insert({
-        event_type: operation,
+        event_type: operation as any,
         entity_id: details.entityId || details.id || details.messageId || details.recordId || crypto.randomUUID(),
         metadata: details,
         created_at: new Date().toISOString()

@@ -48,9 +48,17 @@ export const useMediaGroups = () => {
           updated_at: item.updated_at || undefined,
           is_original_caption: item.is_original_caption || false,
           group_caption_synced: item.group_caption_synced || false,
-          // Handle these properties with proper type conversion
-          storage_exists: typeof item.storage_exists === 'boolean' ? item.storage_exists : Boolean(item.storage_exists),
-          storage_path_standardized: typeof item.storage_path_standardized === 'boolean' ? item.storage_path_standardized : Boolean(item.storage_path_standardized),
+          // For TypeScript casting, we need to handle potential undefined values properly
+          storage_exists: item.storage_exists !== undefined 
+            ? (typeof item.storage_exists === 'boolean' 
+                ? item.storage_exists 
+                : Boolean(item.storage_exists))
+            : undefined,
+          storage_path_standardized: item.storage_path_standardized !== undefined
+            ? (typeof item.storage_path_standardized === 'boolean'
+                ? item.storage_path_standardized
+                : Boolean(item.storage_path_standardized))
+            : undefined,
         };
         return message;
       });
