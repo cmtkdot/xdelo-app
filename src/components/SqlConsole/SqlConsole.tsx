@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
 import { useSqlQuery } from '@/hooks/useSqlQuery';
+import { MigrationButton } from './MigrationButton';
 
 export function SqlConsole() {
   const [sqlQuery, setSqlQuery] = useState('');
@@ -84,7 +85,7 @@ export function SqlConsole() {
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full space-y-6">
       <Card className="w-full">
         <CardHeader>
           <CardTitle>SQL Console</CardTitle>
@@ -148,6 +149,9 @@ export function SqlConsole() {
           </CardFooter>
         )}
       </Card>
+      
+      {/* Add the migration button component */}
+      <MigrationButton />
     </div>
   );
 }

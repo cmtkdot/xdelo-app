@@ -9,7 +9,7 @@ const supabaseClient = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-// SQL script to drop deprecated functions
+// SQL script to drop deprecated functions 
 const sqlScript = `
 -- Drop deprecated functions that deal with URL generation
 DROP FUNCTION IF EXISTS public.generate_public_url(text, text);
