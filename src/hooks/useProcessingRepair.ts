@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
-import { logSyncOperation } from '@/lib/syncUtils';
+import { logMessageOperation, LogEventType } from '@/lib/syncLogger';
 
 /**
  * Hook for general processing system repair operations
@@ -22,23 +22,29 @@ export function useProcessingRepair() {
     try {
       setIsRepairing(true);
       
+      const operationId = `repair_${Date.now()}`;
+      
+      // Log start of repair
+      await logMessageOperation(LogEventType.SYSTEM_REPAIR, operationId, {
+        operation: operationName,
+        status: 'started',
+        timestamp: new Date().toISOString()
+      });
+      
       const result = await operation();
+      
+      // Log successful repair
+      await logMessageOperation(LogEventType.SYSTEM_REPAIR, operationId, {
+        operation: operationName,
+        status: 'completed',
+        result,
+        timestamp: new Date().toISOString()
+      });
       
       toast({
         title: successMessage,
         description: `Operation completed successfully.`
       });
-      
-      // Log the successful repair operation
-      await logSyncOperation(
-        supabase as any,
-        operationName,
-        {
-          result,
-          timestamp: new Date().toISOString()
-        },
-        true
-      );
       
       return { 
         success: true, 
@@ -48,23 +54,19 @@ export function useProcessingRepair() {
     } catch (error: any) {
       console.error(`Error during ${operationName}:`, error);
       
+      // Log failed repair
+      await logMessageOperation(LogEventType.SYSTEM_REPAIR, `repair_${Date.now()}`, {
+        operation: operationName,
+        status: 'failed',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+      
       toast({
         title: "Repair Failed",
         description: error.message || `Failed to complete ${operationName}`,
         variant: "destructive"
       });
-      
-      // Log the failed repair attempt
-      await logSyncOperation(
-        supabase as any,
-        operationName,
-        {
-          error: error.message,
-          timestamp: new Date().toISOString()
-        },
-        false,
-        error.message
-      );
       
       throw error;
     } finally {

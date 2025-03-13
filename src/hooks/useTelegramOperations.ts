@@ -1,8 +1,9 @@
+
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types/MessagesTypes';
 import { useToast } from '@/hooks/useToast';
-import { logMessageOperation } from '@/lib/syncLogger';
+import { logMessageOperation, LogEventType } from '@/lib/syncLogger';
 
 export function useTelegramOperations() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -13,7 +14,7 @@ export function useTelegramOperations() {
       setIsProcessing(true);
       
       // Log the operation
-      await logMessageOperation('delete', message.id, {
+      await logMessageOperation(LogEventType.MESSAGE_DELETED, message.id, {
         delete_from_telegram: deleteTelegram,
         file_unique_id: message.file_unique_id,
         media_group_id: message.media_group_id
@@ -55,7 +56,8 @@ export function useTelegramOperations() {
       setIsProcessing(true);
       
       // Log the operation
-      await logMessageOperation('forward', message.id, {
+      await logMessageOperation(LogEventType.USER_ACTION, message.id, {
+        action: 'forward',
         target_chat_id: chatId,
         file_unique_id: message.file_unique_id
       });
@@ -94,7 +96,7 @@ export function useTelegramOperations() {
       setIsProcessing(true);
       
       // Log the operation
-      await logMessageOperation('reprocess', messageId, {
+      await logMessageOperation(LogEventType.USER_ACTION, messageId, {
         action: 'manual_reprocess'
       });
       

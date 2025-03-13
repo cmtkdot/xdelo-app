@@ -73,7 +73,7 @@ export interface MatchResult {
   id?: string; // Added to fix type error
 }
 
-export type SyncEventType = "sync_started" | "sync_completed" | "sync_error" | string;
+// Removed SyncEventType export as it's now provided by LogEventType in syncLogger
 
 export * from './GlProducts';
 export * from './MessagesTypes';

@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { SyncLogsTable } from "./SyncLogsTable";
 import { useQuery } from "@tanstack/react-query";
 import { SyncLog } from "./types";
+import { logMessageOperation, LogEventType } from "@/lib/syncLogger";
 
 export const SyncCard = () => {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -29,6 +30,14 @@ export const SyncCard = () => {
   const triggerSync = async () => {
     try {
       setIsSyncing(true);
+      
+      // Log sync operation start
+      const syncId = `sync_${Date.now()}`;
+      await logMessageOperation(LogEventType.SYNC_STARTED, syncId, {
+        initiated_by: 'user',
+        trigger_source: 'manual'
+      });
+      
       // Using a POST request to the edge function instead of direct RPC
       const { data, error } = await supabase
         .from('sync_matches')
@@ -37,6 +46,12 @@ export const SyncCard = () => {
         .single();
       
       if (error) throw error;
+
+      // Log sync operation complete
+      await logMessageOperation(LogEventType.SYNC_COMPLETED, syncId, {
+        status: 'success',
+        sync_match_id: data?.id
+      });
 
       toast({
         title: "Success",
@@ -47,6 +62,12 @@ export const SyncCard = () => {
       await refetchLogs();
     } catch (error: any) {
       console.error('Sync error:', error);
+      
+      // Log sync operation error
+      await logMessageOperation(LogEventType.SYNC_ERROR, `sync_${Date.now()}`, {
+        error: error.message
+      });
+      
       toast({
         title: "Error",
         description: `Failed to trigger sync: ${error.message}`,

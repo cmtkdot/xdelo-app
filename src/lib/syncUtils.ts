@@ -2,8 +2,12 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '../integrations/supabase/types';
 
+// Import the consolidated logging functions
+import { logMessageOperation, LogEventType } from './syncLogger';
+
 /**
- * Logs a single sync operation to the sync_logs table
+ * @deprecated Use logMessageOperation from syncLogger.ts instead
+ * This function is maintained for backward compatibility
  */
 export async function xdelo_logSyncOperation(
   supabase: SupabaseClient<Database>,
@@ -13,13 +17,13 @@ export async function xdelo_logSyncOperation(
   error?: string
 ) {
   try {
-    // Insert directly to the gl_sync_logs table instead of using RPC function
-    await supabase.from('gl_sync_logs').insert({
-      operation: operation,
-      status: success ? 'success' : 'error',
-      record_id: details.id || 'system',
+    // Use the new consolidated logging system
+    const eventType = success ? LogEventType.SYNC_COMPLETED : LogEventType.SYNC_ERROR;
+    await logMessageOperation(eventType, details.id || 'system', {
+      operation,
+      details,
+      error_message: error,
       table_name: details.table_name || 'system',
-      error_message: error || null,
       glide_id: details.glide_id || null
     });
   } catch (err) {
@@ -28,7 +32,8 @@ export async function xdelo_logSyncOperation(
 }
 
 /**
- * Logs multiple sync operations in a single batch insert
+ * @deprecated Use logMessageOperation from syncLogger.ts instead
+ * This function is maintained for backward compatibility
  */
 export async function xdelo_logSyncOperationBatch(
   supabase: SupabaseClient<Database>,
@@ -40,36 +45,28 @@ export async function xdelo_logSyncOperationBatch(
   }>
 ) {
   try {
-    // Use batch insert for multiple operations
-    const syncLogs = operations.map(op => ({
-      operation: op.operation,
-      status: op.success ? 'success' : 'error',
-      record_id: op.details.id || 'system',
-      table_name: op.details.table_name || 'system',
-      error_message: op.error || null,
-      glide_id: op.details.glide_id || null
-    }));
-    
-    await supabase.from('gl_sync_logs').insert(syncLogs);
+    // Process each operation individually using the new system
+    for (const op of operations) {
+      await xdelo_logSyncOperation(supabase, op.operation, op.details, op.success, op.error);
+    }
   } catch (err) {
     console.error('Failed to log sync operations batch:', err);
   }
 }
 
 /**
- * Logs a warning message to the sync_logs table
+ * @deprecated Use logMessageOperation from syncLogger.ts instead
+ * This function is maintained for backward compatibility
  */
 export async function xdelo_logSyncWarning(
   supabase: SupabaseClient<Database>,
   message: string,
   details: Record<string, any>
 ) {
-  await xdelo_logSyncOperation(
-    supabase,
-    'warning',
-    { message, ...details },
-    true
-  );
+  await logMessageOperation('warning', details.id || 'system', {
+    message,
+    ...details
+  });
 }
 
 // Export the old function names for backward compatibility
