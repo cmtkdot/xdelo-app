@@ -172,7 +172,7 @@ const WebhookDataEditor: React.FC<WebhookDataEditorProps> = ({
               <CardHeader>
                 <CardTitle>Payload Template</CardTitle>
                 <CardDescription>
-                  Create a custom JSON template for the webhook payload. Use {{field.path}} syntax to reference fields.
+                  Create a custom JSON template for the webhook payload. Use {'{{'}<span>field.path</span>{'}}'}  syntax to reference fields.
                 </CardDescription>
               </CardHeader>
               <CardContent>
