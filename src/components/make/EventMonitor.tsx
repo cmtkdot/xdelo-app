@@ -32,7 +32,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Pagination } from '@/components/ui/pagination';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink } from '@/components/ui/pagination';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/useToast';
 import {
@@ -51,6 +51,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import EventDetailMenu from './EventDetailMenu';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -203,6 +204,13 @@ const EventMonitor: React.FC = () => {
         (event.error_message && event.error_message.toLowerCase().includes(searchValue.toLowerCase()))
       )
     : events;
+
+  // Add this wrapper function to handle the type mismatch
+  const handleReplayEvent = (event: MakeEventLog) => {
+    if (event && event.id) {
+      handleRetryEvent(event.id);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -468,7 +476,7 @@ const EventMonitor: React.FC = () => {
                             title="Retry"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleRetryEvent(event.id);
+                              handleReplayEvent(event);
                             }}
                           >
                             <RefreshCw className="h-4 w-4" />
@@ -496,11 +504,22 @@ const EventMonitor: React.FC = () => {
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex justify-center mt-4">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={handlePageChange}
-              />
+              <nav className="flex justify-center">
+                <Pagination>
+                  <PaginationContent>
+                    {Array.from({ length: totalPages }).map((_, index) => (
+                      <PaginationItem key={index}>
+                        <PaginationLink
+                          isActive={currentPage === index + 1}
+                          onClick={() => handlePageChange(index + 1)}
+                        >
+                          {index + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                  </PaginationContent>
+                </Pagination>
+              </nav>
             </div>
           )}
         </>
@@ -536,14 +555,12 @@ const EventMonitor: React.FC = () => {
                 )}
               </div>
               
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => downloadEventAsJson(currentEvent)}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Download JSON
-              </Button>
+              <div className="flex items-center gap-2">
+                <EventDetailMenu 
+                  event={currentEvent} 
+                  onReplayEvent={currentEvent.status === 'failed' ? handleReplayEvent : undefined} 
+                />
+              </div>
             </div>
             
             <div className="text-sm text-muted-foreground space-y-1">
