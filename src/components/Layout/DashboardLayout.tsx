@@ -7,6 +7,7 @@ import { MobileDrawer } from "./MobileDrawer";
 import { useNavigation } from "@/hooks/useNavigation";
 import { useTouchInteraction } from "@/hooks/useTouchInteraction";
 import { MobileBottomNav } from "./MobileBottomNav";
+import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;

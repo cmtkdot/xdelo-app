@@ -22,7 +22,7 @@ export function PageContainer({
   showBackButton
 }: PageContainerProps) {
   const isMobile = useIsMobile();
-  const { setTitle, setBreadcrumbs, setShowBackButton } = useNavigation();
+  const { setTitle, setBreadcrumbs, setShowBackButton, isSidebarCollapsed } = useNavigation();
   
   // Set navigation context values
   useEffect(() => {
@@ -40,7 +40,7 @@ export function PageContainer({
   return (
     <div 
       className={cn(
-        "mx-auto w-full",
+        "mx-auto w-full transition-all duration-300",
         noPadding ? "" : isMobile ? "px-4 py-4" : "container px-4 py-8",
         className
       )}

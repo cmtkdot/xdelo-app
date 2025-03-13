@@ -15,6 +15,9 @@ type NavigationState = {
   setShowBackButton: (show: boolean) => void;
   breadcrumbs: { label: string; path: string }[];
   setBreadcrumbs: (breadcrumbs: { label: string; path: string }[]) => void;
+  isSidebarCollapsed: boolean;
+  toggleSidebar: () => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
 };
 
 export const useNavigationStore = create<NavigationState>((set) => ({
@@ -28,6 +31,9 @@ export const useNavigationStore = create<NavigationState>((set) => ({
   setShowBackButton: (show) => set({ showBackButton: show }),
   breadcrumbs: [],
   setBreadcrumbs: (breadcrumbs) => set({ breadcrumbs }),
+  isSidebarCollapsed: false,
+  toggleSidebar: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
+  setSidebarCollapsed: (collapsed) => set({ isSidebarCollapsed: collapsed }),
 }));
 
 export function useNavigation() {
@@ -42,6 +48,9 @@ export function useNavigation() {
     setShowBackButton,
     breadcrumbs,
     setBreadcrumbs,
+    isSidebarCollapsed,
+    toggleSidebar,
+    setSidebarCollapsed,
   } = useNavigationStore();
   
   const location = useLocation();
@@ -65,5 +74,8 @@ export function useNavigation() {
     setShowBackButton,
     breadcrumbs,
     setBreadcrumbs,
+    isSidebarCollapsed,
+    toggleSidebar,
+    setSidebarCollapsed,
   };
 }
