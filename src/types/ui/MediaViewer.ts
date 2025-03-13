@@ -3,11 +3,15 @@ import type { AnalyzedContent } from '../utils/AnalyzedContent';
 
 /**
  * Media item type used by the MediaViewer component
+ * Includes both new properties and legacy properties for backward compatibility
  */
 export interface MediaItem {
+  // Core properties
   id: string;
   url: string;
   type: 'image' | 'video' | 'document' | 'audio' | 'unknown';
+  
+  // Standard properties
   thumbnail?: string;
   width?: number;
   height?: number;
@@ -18,7 +22,7 @@ export interface MediaItem {
   duration?: number;
   uploadedAt?: string;
   
-  // Legacy properties for compatibility
+  // Legacy properties for backward compatibility
   public_url?: string;
   mime_type?: string;
   file_unique_id?: string;
@@ -28,4 +32,5 @@ export interface MediaItem {
   content_disposition?: 'inline' | 'attachment';
   storage_path?: string;
   processing_state?: string;
+  file_size?: number;
 }

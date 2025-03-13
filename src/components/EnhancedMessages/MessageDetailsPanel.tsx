@@ -8,32 +8,20 @@ import { Message } from '@/types';
 import { formatDate } from '@/lib/utils';
 
 interface MessageDetailsPanelProps {
-  selectedMessage: Message | null;
-  onEditMessage?: (message: Message) => void;
-  onDeleteMessage?: (message: Message) => void;
+  message: Message;
+  onEdit?: (message: Message) => void;
+  onDelete?: (message: Message) => void;
 }
 
 export function MessageDetailsPanel({
-  selectedMessage,
-  onEditMessage,
-  onDeleteMessage
+  message,
+  onEdit,
+  onDelete
 }: MessageDetailsPanelProps) {
   const { toast } = useToast();
 
-  if (!selectedMessage) {
-    return (
-      <Card className="h-full flex items-center justify-center">
-        <CardContent>
-          <p className="text-muted-foreground text-center">
-            Select a message to view details
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   const handleCopyId = () => {
-    navigator.clipboard.writeText(selectedMessage.id);
+    navigator.clipboard.writeText(message.id);
     toast({ 
       title: "Success",
       description: "Message ID copied to clipboard"
@@ -41,8 +29,8 @@ export function MessageDetailsPanel({
   };
 
   const handleCopyMessageUrl = () => {
-    if (selectedMessage.message_url) {
-      navigator.clipboard.writeText(selectedMessage.message_url);
+    if (message.message_url) {
+      navigator.clipboard.writeText(message.message_url);
       toast({ 
         title: "Success",
         description: "Message URL copied to clipboard"
@@ -51,13 +39,13 @@ export function MessageDetailsPanel({
   };
 
   const renderAnalyzedContent = () => {
-    if (!selectedMessage.analyzed_content) return null;
+    if (!message.analyzed_content) return null;
     
     return (
       <div className="space-y-2 mt-4">
         <h4 className="font-medium text-sm">Analyzed Content</h4>
         <div className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
-          <pre>{JSON.stringify(selectedMessage.analyzed_content, null, 2)}</pre>
+          <pre>{JSON.stringify(message.analyzed_content, null, 2)}</pre>
         </div>
       </div>
     );
@@ -68,15 +56,15 @@ export function MessageDetailsPanel({
       <CardHeader>
         <CardTitle>Message Details</CardTitle>
         <div className="flex space-x-2 mt-2">
-          <Badge variant={selectedMessage.processing_state === 'completed' ? 'success' : 
-                          selectedMessage.processing_state === 'error' ? 'destructive' : 
+          <Badge variant={message.processing_state === 'completed' ? 'success' : 
+                          message.processing_state === 'error' ? 'destructive' : 
                           'secondary'}>
-            {selectedMessage.processing_state}
+            {message.processing_state}
           </Badge>
-          {selectedMessage.is_forward && (
+          {message.is_forward && (
             <Badge variant="outline">Forwarded</Badge>
           )}
-          {selectedMessage.media_group_id && (
+          {message.media_group_id && (
             <Badge variant="outline">Group</Badge>
           )}
         </div>
@@ -84,17 +72,17 @@ export function MessageDetailsPanel({
       <CardContent className="space-y-4">
         <div>
           <h3 className="text-lg font-medium">
-            {selectedMessage.analyzed_content?.product_name || 'Untitled Product'}
+            {message.analyzed_content?.product_name || 'Untitled Product'}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {formatDate(new Date(selectedMessage.created_at || ''))}
+            {formatDate(new Date(message.created_at || ''))}
           </p>
         </div>
 
-        {selectedMessage.caption && (
+        {message.caption && (
           <div>
             <h4 className="font-medium text-sm mb-1">Caption</h4>
-            <p className="text-sm bg-muted p-2 rounded-md">{selectedMessage.caption}</p>
+            <p className="text-sm bg-muted p-2 rounded-md">{message.caption}</p>
           </div>
         )}
 
@@ -102,7 +90,7 @@ export function MessageDetailsPanel({
           <div>
             <span className="font-medium">ID</span>
             <div className="flex items-center gap-1">
-              <span className="text-xs truncate">{selectedMessage.id}</span>
+              <span className="text-xs truncate">{message.id}</span>
               <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleCopyId}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
@@ -114,36 +102,36 @@ export function MessageDetailsPanel({
           
           <div>
             <span className="font-medium">Chat</span>
-            <p>{selectedMessage.chat_title || selectedMessage.chat_id}</p>
+            <p>{message.chat_title || message.chat_id}</p>
           </div>
           
-          {selectedMessage.file_unique_id && (
+          {message.file_unique_id && (
             <div>
               <span className="font-medium">File ID</span>
-              <p className="truncate">{selectedMessage.file_unique_id}</p>
+              <p className="truncate">{message.file_unique_id}</p>
             </div>
           )}
           
-          {selectedMessage.media_group_id && (
+          {message.media_group_id && (
             <div>
               <span className="font-medium">Media Group</span>
-              <p className="truncate">{selectedMessage.media_group_id}</p>
+              <p className="truncate">{message.media_group_id}</p>
             </div>
           )}
           
-          {selectedMessage.mime_type && (
+          {message.mime_type && (
             <div>
               <span className="font-medium">MIME Type</span>
-              <p>{selectedMessage.mime_type}</p>
+              <p>{message.mime_type}</p>
             </div>
           )}
           
-          {selectedMessage.message_url && (
+          {message.message_url && (
             <div className="col-span-2">
               <span className="font-medium">Telegram URL</span>
               <div className="flex items-center gap-1">
-                <a href={selectedMessage.message_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 truncate hover:underline">
-                  {selectedMessage.message_url}
+                <a href={message.message_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 truncate hover:underline">
+                  {message.message_url}
                 </a>
                 <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleCopyMessageUrl}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -159,14 +147,14 @@ export function MessageDetailsPanel({
         {renderAnalyzedContent()}
 
         <div className="flex space-x-2 pt-4">
-          {onEditMessage && (
-            <Button variant="outline" onClick={() => onEditMessage(selectedMessage)}>
+          {onEdit && (
+            <Button variant="outline" onClick={() => onEdit(message)}>
               Edit
             </Button>
           )}
           
-          {onDeleteMessage && (
-            <Button variant="destructive" onClick={() => onDeleteMessage(selectedMessage)}>
+          {onDelete && (
+            <Button variant="destructive" onClick={() => onDelete(message)}>
               Delete
             </Button>
           )}
