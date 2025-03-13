@@ -11,6 +11,7 @@ import type { AnalyzedContent } from './utils/AnalyzedContent';
 import type { MatchResult } from './utils/MatchResult';
 import type { FilterValues } from './ui/FilterValues';
 import type { MessageProcessingStats } from './utils/MessageProcessingStats';
+import type { StorageOperationResult, ApiResponse } from './api/SupabaseTypes';
 
 // Legacy types for backward compatibility
 export type {
@@ -22,7 +23,9 @@ export type {
   AnalyzedContent,
   MatchResult,
   FilterValues,
-  MessageProcessingStats
+  MessageProcessingStats,
+  StorageOperationResult,
+  ApiResponse
 };
 
 // Create a compatibility type for legacy code

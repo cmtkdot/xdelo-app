@@ -40,10 +40,26 @@ export default tseslint.config(
       }],
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/consistent-type-imports": ["warn", { prefer: "type-imports" }],
+      "@typescript-eslint/no-floating-promises": "warn",
+      "@typescript-eslint/no-misused-promises": "warn",
+      "@typescript-eslint/await-thenable": "warn",
+      "@typescript-eslint/prefer-nullish-coalescing": "warn",
+      "@typescript-eslint/no-non-null-assertion": "warn",
+      "prefer-const": "warn",
+      "no-duplicate-imports": "error",
       "no-console": ["warn", { allow: ["warn", "error", "info"] }],
       "no-debugger": "warn",
-      "prefer-const": "warn",
-      "no-duplicate-imports": "error"
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/node_modules/**"],
+              message: "Direct imports from node_modules are not allowed. Use path aliases instead."
+            }
+          ]
+        }
+      ]
     },
     settings: {
       react: {

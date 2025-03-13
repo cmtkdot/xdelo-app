@@ -1,7 +1,7 @@
 
-import { Message } from "@/types/entities/Message";
-import { AnalyzedContent } from "@/types/utils/AnalyzedContent";
-import { MediaItem } from "@/types/entities/MediaItem";
+import type { Message } from "@/types/entities/Message";
+import type { AnalyzedContent } from "@/types/utils/AnalyzedContent";
+import type { MediaItem } from "@/types/entities/MediaItem";
 
 export { MediaItem };
 
@@ -13,6 +13,13 @@ export function messageToMediaItem(message: Message): MediaItem {
     file_unique_id: message.file_unique_id || '',
     created_at: message.created_at || new Date().toISOString(),
     analyzed_content: message.analyzed_content || undefined,
-    caption: message.caption
+    caption: message.caption,
+    width: message.width,
+    height: message.height,
+    file_size: message.file_size,
+    duration: message.duration,
+    content_disposition: message.content_disposition,
+    storage_path: message.storage_path,
+    processing_state: message.processing_state
   };
 }

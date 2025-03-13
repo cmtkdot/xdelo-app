@@ -27,7 +27,9 @@ export default defineConfig(({ mode }) => {
           presets: [
             ['@babel/preset-env', { targets: 'defaults' }]
           ],
-        }
+        },
+        // Enable Fast Refresh - improves developer experience
+        fastRefresh: true,
       }),
       
       // Only use component tagger in development mode
@@ -47,6 +49,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
+        '@shared': path.resolve(__dirname, './supabase/functions/_shared'),
       },
     },
     
@@ -58,6 +61,10 @@ export default defineConfig(({ mode }) => {
       assetsInlineLimit: 4096,
       chunkSizeWarningLimit: 1000,
       reportCompressedSize: !isAnalyze,
+      cssCodeSplit: true, // Split CSS into chunks for better caching
+      modulePreload: {
+        polyfill: true, // Add module preload polyfill
+      },
       terserOptions: {
         compress: {
           drop_console: isProd,
@@ -155,7 +162,11 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules/')) {
               return 'vendor';
             }
-          }
+          },
+          // Optimize chunk loading
+          entryFileNames: isProd ? 'assets/[name].[hash].js' : 'assets/[name].js',
+          chunkFileNames: isProd ? 'assets/[name].[hash].js' : 'assets/[name].js',
+          assetFileNames: isProd ? 'assets/[name].[hash].[ext]' : 'assets/[name].[ext]',
         }
       }
     },
@@ -193,6 +204,10 @@ export default defineConfig(({ mode }) => {
       exclude: [],
       esbuildOptions: {
         target: 'es2020',
+        supported: {
+          'top-level-await': true
+        },
+        plugins: []
       }
     },
     
@@ -204,10 +219,27 @@ export default defineConfig(({ mode }) => {
       // Improved JSX transformation
       jsxFactory: 'React.createElement',
       jsxFragment: 'React.Fragment',
-      jsxInject: `import React from 'react'`
+      jsxInject: `import React from 'react'`,
+      treeShaking: true,
     },
     
     // Add cache
-    cacheDir: '.vite'
+    cacheDir: '.vite',
+    
+    // Improved worker handling
+    worker: {
+      format: 'es',
+      plugins: []
+    },
+    
+    // Improve asset handling
+    assetsInclude: ['**/*.svg', '**/*.png', '**/*.jpg', '**/*.jpeg', '**/*.gif', '**/*.webp'],
+    
+    // Suspense integration
+    experimental: {
+      renderBuiltUrl(filename: string) {
+        return `/${filename}`;
+      }
+    }
   };
 });

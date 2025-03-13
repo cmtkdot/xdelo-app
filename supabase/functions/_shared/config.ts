@@ -26,6 +26,8 @@ export const CONFIG = {
     PROCESSING_TIMEOUT: 'Operation timed out',
     AUTHORIZATION_FAILED: 'Authorization failed',
     RATE_LIMIT_EXCEEDED: 'Rate limit exceeded',
+    STORAGE_NOT_AVAILABLE: 'Storage service unavailable',
+    STORAGE_FILE_NOT_FOUND: 'File not found in storage',
   },
   
   // Success messages
@@ -33,6 +35,7 @@ export const CONFIG = {
     MEDIA_GROUP_SYNCED: 'Media group successfully synchronized',
     CAPTION_PROCESSED: 'Caption processed successfully',
     STORAGE_FILE_VALIDATED: 'Storage file validated',
+    MEDIA_DOWNLOADED: 'Media successfully downloaded',
   },
   
   // Function names (for logging)
@@ -41,6 +44,8 @@ export const CONFIG = {
     CAPTION_PROCESSOR: 'direct-caption-processor',
     MEDIA_GROUP_REPAIR: 'direct-media-group-repair',
     STORAGE_VALIDATOR: 'validate-storage-files',
+    FILE_REPAIR: 'xdelo_file_repair',
+    CONTENT_DISPOSITION: 'xdelo_fix_content_disposition',
   },
 
   // Storage buckets
@@ -54,7 +59,20 @@ export const CONFIG = {
   API: {
     TELEGRAM_API: 'https://api.telegram.org',
     DEFAULT_TIMEOUT_MS: 10000,
-  }
+  },
+  
+  // Logging levels
+  LOG_LEVELS: {
+    DEBUG: 0,
+    INFO: 1,
+    WARN: 2,
+    ERROR: 3,
+  },
+  
+  // Current log level (can be overridden with env var)
+  CURRENT_LOG_LEVEL: process.env.LOG_LEVEL ? 
+    parseInt(process.env.LOG_LEVEL) : 
+    (process.env.NODE_ENV === 'production' ? 1 : 0),
 };
 
 export default CONFIG;

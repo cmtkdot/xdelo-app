@@ -18,7 +18,10 @@
     "noImplicitAny": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "preserveConstEnums": true
+    "preserveConstEnums": true,
+    "paths": {
+      "@shared/*": ["./_shared/*"]
+    }
   },
   "include": ["./**/*.ts"],
   "exclude": ["node_modules"]

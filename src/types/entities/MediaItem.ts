@@ -12,4 +12,11 @@ export interface MediaItem {
   created_at: string;
   caption?: string;
   analyzed_content?: AnalyzedContent;
+  width?: number;
+  height?: number;
+  file_size?: number;
+  duration?: number;
+  content_disposition?: 'inline' | 'attachment';
+  storage_path?: string;
+  processing_state?: string;
 }
