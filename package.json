@@ -7,6 +7,8 @@
     "dev": "vite",
     "dev:type-check": "tsc --noEmit --watch",
     "build": "tsc && vite build",
+    "build:dev": "vite build --mode development",
+
     "build:analyze": "vite build --mode analyze",
     "preview": "vite preview",
     "test": "vitest",
