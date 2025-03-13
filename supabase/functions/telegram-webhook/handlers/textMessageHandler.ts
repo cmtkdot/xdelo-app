@@ -1,89 +1,116 @@
 
-import { supabaseClient } from '../../_shared/supabase.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
-import { createNonMediaMessage } from '../dbOperations.ts';
-import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
 
-export async function xdelo_logMessageOperation(
-  operationType: string,
+// Create Supabase client
+const supabaseClient = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  }
+);
+
+export async function xdelo_logProcessingEvent(
+  eventType: string,
+  entityId: string,
   correlationId: string,
-  metadata: Record<string, unknown>
+  metadata: Record<string, unknown>,
+  errorMessage?: string
 ) {
-  return await xdelo_logProcessingEvent(
-    `message_${operationType}`,
-    metadata.telegram_message_id?.toString() || 'unknown',
-    correlationId,
-    metadata
-  );
+  try {
+    await supabaseClient.from('unified_audit_logs').insert({
+      event_type: eventType,
+      entity_id: entityId,
+      metadata: {
+        ...metadata,
+        timestamp: new Date().toISOString()
+      },
+      error_message: errorMessage,
+      correlation_id: correlationId,
+      event_timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error(`Error logging event: ${eventType}`, error);
+  }
 }
 
 export async function handleOtherMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
-    const { isChannelPost, isForwarded, correlationId, isEdit } = context;
+    const { isChannelPost, isForwarded, correlationId } = context;
     
-    const logger = {
-      error: (message: string, error: unknown) => console.error(`[${correlationId}] ${message}`, error),
-      info: (message: string, data?: unknown) => console.log(`[${correlationId}] ${message}`, data)
-    };
+    // Log the start of message processing
+    console.log(`[${correlationId}] Processing non-media message ${message.message_id} in chat ${message.chat.id}`);
     
-    // Use createNonMediaMessage from dbOperations
-    const result = await createNonMediaMessage(
-      supabaseClient,
-      {
+    // Store message data in the other_messages table
+    const { data, error } = await supabaseClient
+      .from('other_messages')
+      .insert({
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         chat_type: message.chat.type,
         chat_title: message.chat.title,
-        message_type: isEdit ? 'edited_message' : 'message',
+        message_type: isChannelPost ? 'channel_post' : 'message',
+        message_text: message.text || message.caption || '',
         telegram_data: message,
-        correlation_id: correlationId,
-        is_forward: isForwarded,
-        message_text: message.caption || message.text || '',
         processing_state: 'completed',
-        edit_count: 0,
-        created_at: new Date().toISOString()
-      },
-      logger
-    );
-
-    if (!result.success) {
-      throw new Error(result.error_message || 'Failed to create non-media message');
+        is_forward: isForwarded,
+        correlation_id: correlationId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select('id')
+      .single();
+      
+    if (error) {
+      throw error;
     }
-
-    // Log success using standardized logging
-    await xdelo_logMessageOperation('created', correlationId, {
-      message_type: 'text',
-      telegram_message_id: message.message_id,
-      chat_id: message.chat.id,
-      is_forwarded: isForwarded,
-      entity_id: result.id
-    });
-
-    console.log(`[${correlationId}] Text message ${message.message_id} processed successfully`);
-
-    return new Response(
-      JSON.stringify({ success: true, correlationId }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  } catch (error) {
-    console.error(`[${correlationId}] Error handling text message:`, error);
     
-    // Log error using shared logging
+    // Log successful processing
     await xdelo_logProcessingEvent(
-      'message_processing_failed',
-      'unknown',
+      "message_created",
+      data.id,
       correlationId,
       {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
-        handler_type: 'text_message'
+        message_type: 'text',
+        is_forward: isForwarded
+      }
+    );
+    
+    console.log(`[${correlationId}] Successfully processed text message ${message.message_id}`);
+    
+    return new Response(
+      JSON.stringify({ success: true, messageId: data.id, correlationId }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error(`Error processing non-media message:`, error);
+    
+    // Log the error
+    await xdelo_logProcessingEvent(
+      "message_processing_error",
+      "system",
+      context.correlationId,
+      {
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        handler_type: 'other_message'
       },
-      error.message || 'Unknown error in text message handler'
+      error.message
     );
     
     return new Response(
-      JSON.stringify({ error: error.message, correlationId }),
+      JSON.stringify({ 
+        success: false, 
+        error: error.message || 'Unknown error processing message',
+        correlationId: context.correlationId
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
@@ -91,98 +118,110 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
 
 export async function handleEditedMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
-    const { correlationId, previousMessage } = context;
+    const { correlationId, isEdit } = context;
     
-    if (!previousMessage) {
-      throw new Error('Previous message is required for editing');
+    if (!isEdit) {
+      throw new Error('Invalid context for edited message handler');
     }
     
-    // Check if message has media
+    console.log(`[${correlationId}] Processing edited message ${message.message_id} in chat ${message.chat.id}`);
+    
+    // Check if this has media
     if (message.photo || message.video || message.document) {
-      // Import dynamically to avoid circular dependencies
+      // Import mediaMessageHandler dynamically to avoid circular dependencies
       const { handleMediaMessage } = await import('./mediaMessageHandler.ts');
-      return await handleMediaMessage(message, { ...context, isEdit: true });
+      return await handleMediaMessage(message, context);
     }
     
-    // Handle non-media edited message
+    // Look up the original message in other_messages
     const { data: existingMessage } = await supabaseClient
       .from('other_messages')
       .select('*')
-      .eq('telegram_message_id', previousMessage.message_id)
+      .eq('telegram_message_id', message.message_id)
       .eq('chat_id', message.chat.id)
       .single();
-
-    if (existingMessage) {
-      const messageText = message.caption || message.text || '';
       
+    if (existingMessage) {
       // Prepare edit history
       let editHistory = existingMessage.edit_history || [];
       editHistory.push({
         timestamp: new Date().toISOString(),
         previous_text: existingMessage.message_text,
-        new_text: messageText,
+        new_text: message.text || message.caption || '',
         edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
       });
       
+      // Update the message
       const { error } = await supabaseClient
         .from('other_messages')
         .update({
-          message_text: messageText,
-          is_edited: true,
+          message_text: message.text || message.caption || '',
           telegram_data: message,
           updated_at: new Date().toISOString(),
-          correlation_id: context.correlationId,
           edit_history: editHistory,
           edit_count: (existingMessage.edit_count || 0) + 1,
           edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
         })
         .eq('id', existingMessage.id);
-
-      if (error) throw error;
-
-      // Log the edit using standardized logging
-      try {
-        await xdelo_logMessageOperation(
-          'edit',
-          context.correlationId,
-          {
-            message: `Text message ${message.message_id} edited in chat ${message.chat.id}`,
-            telegram_message_id: message.message_id,
-            chat_id: message.chat.id,
-            entity_id: existingMessage.id,
-            edit_type: 'text_edit'
-          }
-        );
-      } catch (logError) {
-        console.error('Error logging edit operation:', logError);
+        
+      if (error) {
+        throw error;
       }
-
+      
+      // Log edit operation
+      await xdelo_logProcessingEvent(
+        "message_edited",
+        existingMessage.id,
+        correlationId,
+        {
+          telegram_message_id: message.message_id,
+          chat_id: message.chat.id,
+          edit_type: 'text_message'
+        }
+      );
+      
+      console.log(`[${correlationId}] Successfully updated edited message ${message.message_id}`);
+      
       return new Response(
-        JSON.stringify({ success: true }),
+        JSON.stringify({ 
+          success: true, 
+          messageId: existingMessage.id, 
+          correlationId,
+          action: 'updated'
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    } else {
+      console.log(`[${correlationId}] Original message not found, creating new record`);
+      
+      // If original message not found, create a new one
+      return await handleOtherMessage(message, {
+        ...context,
+        isEdit: false // Treat as a new message
+      });
     }
-    
-    // If we didn't find an existing message, treat it as a new message
-    return await handleOtherMessage(message, context);
   } catch (error) {
-    console.error('Error handling edited message:', error);
+    console.error(`Error handling edited message:`, error);
     
-    // Log error using shared logging
+    // Log the error
     await xdelo_logProcessingEvent(
-      'message_processing_failed',
-      'unknown',
+      "message_processing_error",
+      "system",
       context.correlationId,
       {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         handler_type: 'edited_message'
       },
-      error.message || 'Unknown error in edited message handler'
+      error.message
     );
     
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        success: false, 
+        error: error.message || 'Unknown error processing edited message',
+        correlationId: context.correlationId
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

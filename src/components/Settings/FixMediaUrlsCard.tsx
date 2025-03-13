@@ -53,7 +53,7 @@ export function FixMediaUrlsCard() {
       <CardHeader className="pb-3">
         <CardTitle className="text-blue-500">Fix Media URLs</CardTitle>
         <CardDescription>
-          Fix public URLs and metadata for media files to ensure they are publicly viewable
+          Fix public URLs and metadata for media files to ensure they are properly viewable in the browser
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
