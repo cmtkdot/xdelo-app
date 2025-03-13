@@ -1,3 +1,4 @@
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
@@ -9,7 +10,12 @@ export default defineConfig(({ mode }) => ({
     react({
       // Babel config for better React optimization
       babel: {
-        plugins: []
+        plugins: [
+          mode === 'production' && [
+            'transform-remove-console',
+            { exclude: ['error', 'warn'] }
+          ]
+        ].filter(Boolean)
       }
     }),
     // Only use component tagger in development mode
@@ -106,13 +112,18 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     host: '::',
     cors: true, 
-    hmr: true,
+    hmr: {
+      timeout: 5000, // Increase HMR timeout for slower connections
+    },
     // Allow lovable project domain for development
     allowedHosts: [
       'localhost',
       '*.lovableproject.com',
       '79512fb5-8301-4d61-9349-6769d5c8295b.lovableproject.com'
-    ]
+    ],
+    watch: {
+      ignored: ['**/node_modules/**', '**/dist/**', '**/coverage/**']
+    }
   },
   
   optimizeDeps: {
@@ -125,7 +136,8 @@ export default defineConfig(({ mode }) => ({
       '@tanstack/react-query',
       'class-variance-authority',
       'clsx',
-      'tailwind-merge'
+      'tailwind-merge',
+      'sonner'
     ],
     exclude: []
   },

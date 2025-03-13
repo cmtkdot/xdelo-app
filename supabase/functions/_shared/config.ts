@@ -1,7 +1,11 @@
 
 export const CONFIG = {
   // General settings
-  DEBUG: process.env.DEBUG === 'true',
+  DEBUG: process.env.DEBUG === 'true' || process.env.NODE_ENV !== 'production',
+  
+  // Environment detection
+  IS_PRODUCTION: process.env.APP_ENV === 'production' || process.env.NODE_ENV === 'production',
+  IS_DEV: process.env.APP_ENV === 'development' || process.env.NODE_ENV === 'development',
   
   // Retry settings
   MAX_RETRY_COUNT: 3,
@@ -37,6 +41,19 @@ export const CONFIG = {
     CAPTION_PROCESSOR: 'direct-caption-processor',
     MEDIA_GROUP_REPAIR: 'direct-media-group-repair',
     STORAGE_VALIDATOR: 'validate-storage-files',
+  },
+
+  // Storage buckets
+  STORAGE: {
+    TELEGRAM_MEDIA_BUCKET: 'telegram-media',
+    AUDIO_UPLOADS_BUCKET: 'audio-uploads',
+    PUBLIC_BUCKET: 'public',
+  },
+  
+  // API endpoints
+  API: {
+    TELEGRAM_API: 'https://api.telegram.org',
+    DEFAULT_TIMEOUT_MS: 10000,
   }
 };
 

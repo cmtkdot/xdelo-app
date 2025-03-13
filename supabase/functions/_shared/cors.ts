@@ -2,8 +2,9 @@
 // Standard CORS headers for Edge Functions
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-correlation-id',
+  'Access-Control-Max-Age': '86400', // 24 hours caching for preflight requests
 };
 
 /**
@@ -29,17 +30,22 @@ export function createCorsResponse(
 ): Response {
   const { status = 200, headers = {} } = options;
   
-  return new Response(
-    typeof body === 'string' ? body : JSON.stringify(body),
-    {
-      status,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json',
-        ...headers
-      }
+  const contentType = typeof body === 'string' 
+    ? 'text/plain'
+    : 'application/json';
+    
+  const responseBody = typeof body === 'string' 
+    ? body 
+    : JSON.stringify(body);
+    
+  return new Response(responseBody, {
+    status,
+    headers: {
+      ...corsHeaders,
+      'Content-Type': contentType,
+      ...headers
     }
-  );
+  });
 }
 
 /**
@@ -50,4 +56,11 @@ export function handleOptionsRequest(): Response {
     status: 204,
     headers: corsHeaders
   });
+}
+
+/**
+ * Helper to check if request is a preflight request
+ */
+export function isPreflightRequest(request: Request): boolean {
+  return request.method === 'OPTIONS';
 }

@@ -1,85 +1,141 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createHandler } from '../_shared/baseHandler.ts';
+import { createSupabaseClient } from '../_shared/supabase.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+interface LogRequest {
+  eventType: string;
+  entityId: string;
+  previousState?: Record<string, unknown>;
+  newState?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  errorMessage?: string;
+  correlationId?: string;
+}
 
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+// Define allowed event types for type checking
+const ALLOWED_EVENT_TYPES = [
+  // Message events
+  'message_created',
+  'message_updated',
+  'message_deleted',
+  'message_processed',
+  'message_analyzed',
+  'message_error',
+  
+  // Media processing events
+  'media_uploaded',
+  'media_downloaded',
+  'media_error',
+  'media_repaired',
+  
+  // Sync events
+  'sync_started',
+  'sync_completed',
+  'sync_error',
+  'product_matched',
+  
+  // User actions
+  'user_action',
+  'system_repair',
+  
+  // Legacy events (for backward compatibility)
+  'duplicate_file_detected',
+  'non_media_message_created',
+  'processing_state_changed',
+  'webhook_received',
+  'system'
+];
 
-  try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+export default createHandler(async (req: Request) => {
+  // Parse request body
+  const { 
+    eventType, 
+    entityId, 
+    previousState, 
+    newState, 
+    metadata = {}, 
+    errorMessage,
+    correlationId = crypto.randomUUID()
+  } = await req.json() as LogRequest;
+  
+  // Validate request
+  if (!eventType) {
+    return new Response(
+      JSON.stringify({ error: 'Event type is required' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
     );
-
-    const { operation, messageId, source, action, userId, metadata } = await req.json();
-    
-    // Generate a correlation ID if not provided
-    const correlationId = metadata?.correlationId || `log_${crypto.randomUUID()}`;
-    
-    // Map the operation to an event type for the unified_audit_logs table
-    let eventType;
-    switch (operation) {
-      case 'deletion':
-        eventType = 'message_deleted';
-        break;
-      case 'create':
-        eventType = 'message_created';
-        break;
-      case 'update':
-        eventType = 'message_updated';
-        break;
-      case 'analyze':
-        eventType = 'message_analyzed';
-        break;
-      case 'sync':
-        eventType = 'media_group_synced';
-        break;
-      case 'user_action':
-        eventType = 'user_action';
-        break;
-      default:
-        eventType = 'webhook_received'; // Default fallback
-    }
-    
-    // Insert the log entry into the unified_audit_logs table
-    const { data, error } = await supabaseClient
+  }
+  
+  if (!entityId) {
+    return new Response(
+      JSON.stringify({ error: 'Entity ID is required' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+  
+  // Add correlation ID and timestamp to metadata
+  const enhancedMetadata = {
+    ...metadata,
+    logged_at: new Date().toISOString(),
+    correlation_id: correlationId,
+  };
+  
+  // Add error message to metadata if provided
+  if (errorMessage) {
+    enhancedMetadata.error_message = errorMessage;
+  }
+  
+  // Create Supabase client
+  const supabase = createSupabaseClient();
+  
+  try {
+    // Insert log entry
+    const { data, error } = await supabase
       .from('unified_audit_logs')
       .insert({
         event_type: eventType,
-        entity_id: messageId || userId, // Use messageId or userId as the entity ID
-        metadata: {
-          ...metadata,
-          source,
-          action,
-          operation,
-          logged_from: 'frontend'
-        },
-        correlation_id: correlationId,
-        user_id: userId
-      });
+        entity_id: entityId,
+        previous_state: previousState,
+        new_state: newState,
+        metadata: enhancedMetadata,
+        error_message: errorMessage,
+        correlation_id: correlationId
+      })
+      .select('id')
+      .single();
     
     if (error) {
       console.error('Error logging operation:', error);
-      throw error;
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: error.message,
+          correlationId
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
     }
     
     return new Response(
-      JSON.stringify({ success: true, correlation_id: correlationId }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        success: true,
+        logId: data.id,
+        correlationId,
+        timestamp: enhancedMetadata.logged_at
+      }),
+      { headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Exception logging operation:', error);
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      JSON.stringify({ 
+        success: false, 
+        error: error.message,
+        correlationId
+      }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 });

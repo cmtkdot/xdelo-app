@@ -1,20 +1,41 @@
 
-import { corsHeaders, handleOptionsRequest, createCorsResponse } from './cors.ts';
+import { corsHeaders, handleOptionsRequest, createCorsResponse, isPreflightRequest } from './cors.ts';
 
 type EdgeFunctionHandler = (req: Request) => Promise<Response>;
+
+interface HandlerOptions {
+  enableCors?: boolean;
+  enableMetrics?: boolean;
+  enableLogging?: boolean;
+  requireAuth?: boolean;
+}
+
+const defaultOptions: HandlerOptions = {
+  enableCors: true,
+  enableMetrics: true,
+  enableLogging: true,
+  requireAuth: false,
+};
 
 /**
  * Creates a standardized handler function for edge functions
  */
-export function createHandler(handlerFn: EdgeFunctionHandler): (req: Request) => Promise<Response> {
+export function createHandler(
+  handlerFn: EdgeFunctionHandler,
+  options: Partial<HandlerOptions> = {}
+): (req: Request) => Promise<Response> {
+  // Merge options with defaults
+  const config = { ...defaultOptions, ...options };
+  
   return async (req: Request) => {
     // Handle CORS preflight requests
-    if (req.method === 'OPTIONS') {
+    if (config.enableCors && isPreflightRequest(req)) {
       return handleOptionsRequest();
     }
 
     try {
-      const correlationId = crypto.randomUUID();
+      // Generate a correlation ID for request tracking
+      const correlationId = req.headers.get('x-correlation-id') || crypto.randomUUID();
       const startTime = Date.now();
       
       // Add correlation ID to headers for logging
@@ -29,28 +50,59 @@ export function createHandler(handlerFn: EdgeFunctionHandler): (req: Request) =>
         redirect: req.redirect
       });
       
+      // Log the request if enabled
+      if (config.enableLogging) {
+        console.log(`[${correlationId}] ${req.method} ${new URL(req.url).pathname}`);
+      }
+      
+      // Check authentication if required
+      if (config.requireAuth) {
+        const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+        if (!token) {
+          return createCorsResponse({ 
+            error: 'Missing authorization token',
+            success: false 
+          }, { status: 401 });
+        }
+        
+        // Token validation would go here
+        // For now, we just check its presence
+      }
+      
       // Call the handler function
       const response = await handlerFn(enhancedRequest);
       
       // Calculate duration
       const duration = Date.now() - startTime;
       
-      // Clone the response to add headers
+      if (!config.enableCors) {
+        return response;
+      }
+      
+      // Add performance metrics headers if enabled
+      const enhancedHeaders: Record<string, string> = {};
+      
+      if (config.enableMetrics) {
+        enhancedHeaders['X-Correlation-ID'] = correlationId;
+        enhancedHeaders['X-Processing-Time'] = `${duration}ms`;
+        enhancedHeaders['X-Function-Version'] = '1.0';
+      }
+      
+      // Clone the response with CORS headers
       const enhancedResponse = new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
-        headers: new Headers(response.headers)
+        headers: {
+          ...Object.fromEntries(response.headers.entries()),
+          ...corsHeaders,
+          ...enhancedHeaders
+        }
       });
       
-      // Add performance metrics headers
-      enhancedResponse.headers.set('X-Correlation-ID', correlationId);
-      enhancedResponse.headers.set('X-Processing-Time', `${duration}ms`);
-      enhancedResponse.headers.set('X-Function-Version', '1.0');
-      
-      // Ensure CORS headers are applied
-      Object.entries(corsHeaders).forEach(([key, value]) => {
-        enhancedResponse.headers.set(key, value);
-      });
+      // Log the response if enabled
+      if (config.enableLogging) {
+        console.log(`[${correlationId}] Completed in ${duration}ms with status ${response.status}`);
+      }
       
       return enhancedResponse;
       
@@ -72,15 +124,11 @@ export function createHandler(handlerFn: EdgeFunctionHandler): (req: Request) =>
  * Type-safe wrapper for HTTP methods
  */
 export function createMethodHandler<T>(
-  methods: { [K in 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH']?: (req: Request, body?: T) => Promise<Response> }
+  methods: { [K in 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH']?: (req: Request, body?: T) => Promise<Response> },
+  options: Partial<HandlerOptions> = {}
 ): EdgeFunctionHandler {
-  return async (req: Request) => {
+  return createHandler(async (req: Request) => {
     const method = req.method.toUpperCase();
-    
-    // Handle OPTIONS separately
-    if (method === 'OPTIONS') {
-      return handleOptionsRequest();
-    }
     
     // Check if method is supported
     const handler = methods[method as keyof typeof methods];
@@ -114,5 +162,37 @@ export function createMethodHandler<T>(
         errorType: error.name || 'UnknownError'
       }, { status: 500 });
     }
-  };
+  }, options);
+}
+
+/**
+ * Helper to create a simple success response
+ */
+export function createSuccessResponse(data: any, message?: string): Response {
+  return createCorsResponse({
+    success: true,
+    data,
+    message,
+    timestamp: new Date().toISOString()
+  });
+}
+
+/**
+ * Helper to create a simple error response
+ */
+export function createErrorResponse(
+  error: Error | string, 
+  status = 500, 
+  additionalData: Record<string, any> = {}
+): Response {
+  const errorMessage = typeof error === 'string' ? error : error.message;
+  const errorType = typeof error === 'string' ? 'Error' : error.name;
+  
+  return createCorsResponse({
+    success: false,
+    error: errorMessage,
+    errorType,
+    timestamp: new Date().toISOString(),
+    ...additionalData
+  }, { status });
 }
