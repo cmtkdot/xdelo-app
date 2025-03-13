@@ -7,4 +7,3 @@ verify_jwt = true
 
 [functions.xdelo_standardize_storage_paths.jwt]
 optional = true
-
