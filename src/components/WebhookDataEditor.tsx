@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -355,7 +356,7 @@ export default function WebhookDataEditor({
                   <CardTitle>Payload Template</CardTitle>
                   <CardDescription>
                     Design a custom structure for the webhook payload with variable substitution.
-                    Use {{field.path}} syntax to reference fields from the original payload.
+                    Use {'{{field.path}}'} syntax to reference fields from the original payload.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -445,4 +446,4 @@ delete payload.secretKey;`}
       </div>
     </div>
   );
-} 
+}
