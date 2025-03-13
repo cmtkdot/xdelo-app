@@ -3181,15 +3181,6 @@ export type Database = {
         }
         Returns: string
       }
-      xdelo_log_sync_operation: {
-        Args: {
-          p_operation: string
-          p_details: Json
-          p_success: boolean
-          p_error?: string
-        }
-        Returns: undefined
-      }
       xdelo_log_webhook_event: {
         Args: {
           p_event_type: string

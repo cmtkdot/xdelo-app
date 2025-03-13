@@ -73,7 +73,7 @@ export interface MatchResult {
   id?: string; // Added to fix type error
 }
 
-// Removed SyncEventType export as it's now provided by LogEventType in syncLogger
+// Removed SyncLogEntry, WebhookLogEntry, GlSyncLog, and SyncEventType exports
 
 export * from './GlProducts';
 export * from './MessagesTypes';
