@@ -80,6 +80,16 @@ const findMatches = async (
 
       if (confidence > 0) {
         matches.push({
+          // Required core properties
+          isMatch: true,
+          score: confidence,
+          matches: {
+            product_name: {
+              value: product.main_new_product_name || '',
+              score: matchedFields.includes('product_name') ? confidence : 0
+            }
+          },
+          // Additional properties
           id: product.id,
           message_id: messageId,
           product_id: product.id,

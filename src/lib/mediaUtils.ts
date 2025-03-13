@@ -51,7 +51,8 @@ export function messageToMediaItem(message: Message): MediaItem {
     caption: message.caption,
     content_disposition: message.content_disposition,
     storage_path: message.storage_path,
-    processing_state: message.processing_state
+    processing_state: message.processing_state,
+    file_size: message.file_size
   };
 }
 

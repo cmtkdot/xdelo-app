@@ -2,7 +2,6 @@
 'use client'
 
 import * as React from 'react'
-import { motion, useMotionValue } from 'framer-motion'
 import { ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MediaItem } from '@/types'
@@ -38,11 +37,11 @@ export function ImageSwiper({
     }
     
     return [...media].sort((a, b) => {
-      // First, check if mimeType exists
-      const aIsImage = (a.mimeType || a.mime_type || '').startsWith('image') || false;
-      const bIsImage = (b.mimeType || b.mime_type || '').startsWith('image') || false;
+      // First, check if mimeType exists, using either property name
+      const aIsImage = a.mimeType?.startsWith('image') || a.mime_type?.startsWith('image') || false;
+      const bIsImage = b.mimeType?.startsWith('image') || b.mime_type?.startsWith('image') || false;
       
-      // If mime_type is missing, try to infer from URL
+      // If mime type is missing, try to infer from URL
       const aUrl = a.url || a.public_url || '';
       const bUrl = b.url || b.public_url || '';
       const aHasImageExt = aUrl.match(/\.(jpg|jpeg|png|gif)$/i);
@@ -57,6 +56,7 @@ export function ImageSwiper({
   }, [media]);
 
   const currentMedia = sortedMedia[mediaIndex];
+  // Use either new or legacy property names
   const mediaUrl = currentMedia?.url || currentMedia?.public_url || '';
   const mediaMimeType = currentMedia?.mimeType || currentMedia?.mime_type || '';
   const isVideo = mediaMimeType.startsWith("video/") || 
@@ -130,7 +130,7 @@ export function ImageSwiper({
 
   // Get title from either the title property or analyzed_content
   const productName = currentMedia.title || 
-                      (currentMedia.analyzed_content ? currentMedia.analyzed_content.product_name : null) || 
+                      (currentMedia.analyzed_content?.product_name) || 
                       'Untitled Product';
   
   // Get date from either uploadedAt or created_at
