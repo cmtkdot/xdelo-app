@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from '../_shared/cors.ts';
 import { Database } from '../_shared/types.ts';
@@ -60,6 +61,11 @@ Deno.serve(async (req) => {
     if (limit < 1 || limit > 1000) {
       throw new Error('Limit must be between 1 and 1000');
     }
+
+    // Store Supabase URL in app_settings if not exists
+    await supabase.rpc('xdelo_ensure_app_settings_exists', {
+      p_supabase_url: supabaseUrl
+    });
 
     log('info', 'Starting storage path standardization', { limit, dryRun, messageIds });
 
@@ -129,7 +135,7 @@ async function processStoragePaths(
   } else {
     // Otherwise prioritize messages with issues in their URLs
     query = query
-      .or('public_url.is.null,public_url.eq.')
+      .or('public_url.is.null,public_url.eq.,public_url.like.%.jpeg')
       .order('created_at', { ascending: false })
       .limit(limit);
   }
