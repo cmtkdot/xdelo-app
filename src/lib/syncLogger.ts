@@ -31,10 +31,10 @@ export async function createSyncLog(
 ) {
   try {
     // Map string operation to LogEventType when possible
-    let eventType: LogEventType | string;
+    let eventType: string;
     
     // Try to get the corresponding LogEventType
-    switch (operation) {
+    switch (operation.toLowerCase()) {
       case 'sync_products': 
         eventType = LogEventType.SYNC_PRODUCTS;
         break;
@@ -48,7 +48,8 @@ export async function createSyncLog(
         eventType = LogEventType.SYNC_FAILED;
         break;
       default: 
-        eventType = operation;
+        // Convert to lowercase for consistency
+        eventType = operation.toLowerCase();
     }
 
     // Log to unified audit logs
@@ -80,7 +81,7 @@ export async function updateSyncLog(
 ) {
   try {
     // Determine the appropriate event type based on status
-    let eventType: LogEventType;
+    let eventType: string;
     
     if (status === "success") {
       eventType = LogEventType.SYNC_COMPLETED;
@@ -110,16 +111,19 @@ export async function updateSyncLog(
 
 export async function getSyncLogs(limit = 10) {
   try {
+    // Convert enum values to strings for the database query
+    const eventTypes = [
+      LogEventType.SYNC_STARTED,
+      LogEventType.SYNC_COMPLETED, 
+      LogEventType.SYNC_FAILED,
+      LogEventType.SYNC_PRODUCTS
+    ];
+    
     // Attempt to use unified_audit_logs instead
     const { data, error } = await supabase
       .from("unified_audit_logs")
       .select("*")
-      .in('event_type', [
-        LogEventType.SYNC_STARTED.toString(),
-        LogEventType.SYNC_COMPLETED.toString(),
-        LogEventType.SYNC_FAILED.toString(),
-        LogEventType.SYNC_PRODUCTS.toString()
-      ])
+      .in('event_type', eventTypes)
       .order("event_timestamp", { ascending: false })
       .limit(limit);
 
@@ -147,20 +151,20 @@ export async function getSyncLogs(limit = 10) {
 }
 
 // Helper functions
-function getEventTypeFromOperation(operation: string): LogEventType | string {
-  switch (operation) {
+function getEventTypeFromOperation(operation: string): string {
+  switch (operation.toLowerCase()) {
     case 'sync_products': return LogEventType.SYNC_PRODUCTS;
     case 'sync_started': return LogEventType.SYNC_STARTED;
     case 'sync_completed': return LogEventType.SYNC_COMPLETED;
     case 'sync_failed': return LogEventType.SYNC_FAILED;
-    default: return operation;
+    default: return operation.toLowerCase();
   }
 }
 
 function getStatusFromEventType(eventType: string): "pending" | "success" | "error" {
   switch (eventType) {
-    case LogEventType.SYNC_COMPLETED.toString(): return "success";
-    case LogEventType.SYNC_FAILED.toString(): return "error";
+    case LogEventType.SYNC_COMPLETED: return "success";
+    case LogEventType.SYNC_FAILED: return "error";
     default: return "pending";
   }
 }

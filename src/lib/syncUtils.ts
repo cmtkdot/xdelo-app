@@ -16,11 +16,13 @@ export async function xdelo_logSyncOperation(
 ) {
   try {
     // Map string operation to LogEventType when possible
-    let eventType: LogEventType | string;
+    let eventType: string;
     
     // Try to convert string operation to LogEventType
     if (operation.toUpperCase() in LogEventType) {
-      eventType = operation.toUpperCase() as keyof typeof LogEventType;
+      // Get the corresponding lowercase value from the enum
+      const enumKey = operation.toUpperCase() as keyof typeof LogEventType;
+      eventType = LogEventType[enumKey];
     } else {
       // Fallback to system warning if conversion fails
       eventType = LogEventType.SYSTEM_WARNING;
