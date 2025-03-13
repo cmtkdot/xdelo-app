@@ -94,7 +94,18 @@ export function xdelo_detectMimeType(fileUniqueId: string, existingMimeType: str
 /**
  * Download media file from Telegram
  */
-export async function xdelo_downloadMediaFromTelegram(fileId: string, botToken: string): Promise<{ data: Uint8Array; error?: null } | { data?: null; error: string }> {
+export async function xdelo_downloadMediaFromTelegram(
+  fileId: string, 
+  fileUniqueId: string,
+  mimeType: string,
+  botToken: string
+): Promise<{ 
+  success: boolean; 
+  blob?: Blob; 
+  storagePath?: string; 
+  error?: string; 
+  mimeType?: string;
+}> {
   try {
     console.log(`Getting file path for file ID: ${fileId}`);
     
@@ -126,14 +137,33 @@ export async function xdelo_downloadMediaFromTelegram(fileId: string, botToken: 
       throw new Error(`Failed to download file: ${fileDownloadResponse.statusText} (Status: ${fileDownloadResponse.status})`);
     }
     
-    // Convert to bytes
-    const fileData = new Uint8Array(await fileDownloadResponse.arrayBuffer());
-    console.log(`Successfully downloaded ${fileData.length} bytes`);
+    // Convert to blob with proper mime type
+    const contentType = fileDownloadResponse.headers.get('content-type');
+    const detectedMimeType = contentType && contentType !== 'application/octet-stream' 
+      ? contentType 
+      : mimeType;
+      
+    // Create a blob with the correct mime type
+    const fileData = await fileDownloadResponse.blob();
+    const fileBlob = new Blob([fileData], { type: detectedMimeType });
     
-    return { data: fileData };
+    // Generate storage path
+    const storagePath = xdelo_validateAndFixStoragePath(fileUniqueId, detectedMimeType);
+    
+    console.log(`Successfully downloaded ${fileBlob.size} bytes with type ${detectedMimeType}, path: ${storagePath}`);
+    
+    return { 
+      success: true, 
+      blob: fileBlob, 
+      storagePath,
+      mimeType: detectedMimeType
+    };
   } catch (error) {
     console.error('Error downloading media from Telegram:', error);
-    return { error: error.message || 'Unknown error downloading file' };
+    return { 
+      success: false, 
+      error: error.message || 'Unknown error downloading file' 
+    };
   }
 }
 
@@ -141,17 +171,21 @@ export async function xdelo_downloadMediaFromTelegram(fileId: string, botToken: 
  * Upload media to Supabase Storage
  */
 export async function xdelo_uploadMediaToStorage(
-  fileData: Uint8Array, 
-  storagePath: string, 
+  storagePath: string,
+  fileBlob: Blob,
   mimeType: string
-): Promise<{ url: string; error?: null } | { url?: null; error: string }> {
+): Promise<{ success: boolean; publicUrl?: string; error?: string }> {
   try {
-    console.log(`Uploading ${fileData.length} bytes to ${storagePath} with type ${mimeType}`);
+    console.log(`Uploading ${fileBlob.size} bytes to ${storagePath} with type ${mimeType}`);
     
-    // Set upload options with proper content type
+    // Determine if file should be viewable in browser
+    const isViewable = xdelo_isViewableMimeType(mimeType);
+    
+    // Set upload options with proper content type and disposition
     const options = {
       cacheControl: '3600',
       contentType: mimeType || 'application/octet-stream',
+      contentDisposition: isViewable ? 'inline' : 'attachment',
       upsert: true
     };
     
@@ -159,7 +193,7 @@ export async function xdelo_uploadMediaToStorage(
     const { error } = await supabaseClient
       .storage
       .from('telegram-media')
-      .upload(storagePath, fileData, options);
+      .upload(storagePath, fileBlob, options);
     
     if (error) {
       throw error;
@@ -171,10 +205,13 @@ export async function xdelo_uploadMediaToStorage(
       .from('telegram-media')
       .getPublicUrl(storagePath);
     
-    return { url: publicUrl };
+    return { success: true, publicUrl };
   } catch (error) {
     console.error('Error uploading media to storage:', error);
-    return { error: error.message || 'Unknown error uploading file' };
+    return { 
+      success: false, 
+      error: error.message || 'Unknown error uploading file' 
+    };
   }
 }
 
@@ -196,7 +233,8 @@ export function xdelo_isViewableMimeType(mimeType: string): boolean {
     'video/quicktime',
     'audio/mpeg',
     'audio/ogg',
-    'audio/wav'
+    'audio/wav',
+    'application/pdf'
   ];
   
   return viewableMimeTypes.includes(mimeType);
@@ -205,10 +243,18 @@ export function xdelo_isViewableMimeType(mimeType: string): boolean {
 /**
  * Get appropriate upload options based on file type
  */
-export function xdelo_getUploadOptions(mimeType: string): { cacheControl: string; contentType: string; upsert: boolean } {
+export function xdelo_getUploadOptions(mimeType: string): { 
+  cacheControl: string; 
+  contentType: string; 
+  contentDisposition: string;
+  upsert: boolean 
+} {
+  const isViewable = xdelo_isViewableMimeType(mimeType);
+  
   return {
     cacheControl: '3600',
     contentType: mimeType || 'application/octet-stream',
+    contentDisposition: isViewable ? 'inline' : 'attachment',
     upsert: true
   };
 }
