@@ -167,12 +167,14 @@ const MessagesEnhanced = () => {
     setCurrentGroup(messageGroup);
     setViewerOpen(true);
     
-    const index = filteredMessages.findIndex(group => 
-      group && group[0] && messageGroup[0] && group[0].id === messageGroup[0].id
-    );
-    
-    if (index !== -1) {
-      setGroupIndex(index);
+    if (filteredMessages) {
+      const index = filteredMessages.findIndex(group => 
+        group && group[0] && messageGroup[0] && group[0].id === messageGroup[0].id
+      );
+      
+      if (index !== -1) {
+        setGroupIndex(index);
+      }
     }
     
     if (messageGroup[0]) {
@@ -189,7 +191,7 @@ const MessagesEnhanced = () => {
   };
 
   const handlePreviousGroup = () => {
-    if (filteredMessages && groupIndex > 0) {
+    if (filteredMessages && Array.isArray(filteredMessages) && groupIndex > 0) {
       const prevIndex = groupIndex - 1;
       const prevGroup = filteredMessages[prevIndex];
       if (prevGroup) {
@@ -200,7 +202,7 @@ const MessagesEnhanced = () => {
   };
 
   const handleNextGroup = () => {
-    if (filteredMessages && groupIndex < filteredMessages.length - 1) {
+    if (filteredMessages && Array.isArray(filteredMessages) && groupIndex < filteredMessages.length - 1) {
       const nextIndex = groupIndex + 1;
       const nextGroup = filteredMessages[nextIndex];
       if (nextGroup) {
@@ -460,7 +462,7 @@ const MessagesEnhanced = () => {
           currentGroup={currentGroup}
           onNext={handleNextGroup}
           onPrevious={handlePreviousGroup}
-          hasNext={groupIndex < (filteredMessages?.length || 0) - 1}
+          hasNext={filteredMessages && Array.isArray(filteredMessages) && groupIndex < filteredMessages.length - 1}
           hasPrevious={groupIndex > 0}
         />
       )}

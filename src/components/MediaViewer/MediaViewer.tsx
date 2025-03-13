@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Message } from '@/types/MessagesTypes';
 import { MediaItem } from '@/types';
@@ -35,8 +34,12 @@ export const MediaViewer = ({
   const [showTools, setShowTools] = useState(false);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
+  if (!currentGroup || !Array.isArray(currentGroup) || currentGroup.length === 0) {
+    return null;
+  }
+
   const mainMedia = currentGroup?.find(media => media?.is_original_caption) || currentGroup?.[0];
-  const analyzedContent = mainMedia?.analyzed_content;
+  const analyzedContent = mainMedia?.analyzed_content || {};
   const currentMedia = currentGroup?.[activeMediaIndex] || mainMedia;
 
   const formatDate = (dateString?: string) => {
@@ -74,13 +77,10 @@ export const MediaViewer = ({
     return `https://t.me/c/${message.chat_id.toString().replace("-100", "")}/${message.telegram_message_id}`;
   };
 
-  if (!currentGroup || currentGroup.length === 0) {
-    return null;
-  }
-
-  // Use the messageToMediaItem function to ensure consistent type conversion
-  const mediaItems: MediaItem[] = currentGroup.map(message => messageToMediaItem(message));
-  const messageIds = currentGroup.map(message => message.id);
+  const mediaItems: MediaItem[] = Array.isArray(currentGroup) 
+    ? currentGroup.map(message => message ? messageToMediaItem(message) : null).filter(Boolean) as MediaItem[]
+    : [];
+  const messageIds = Array.isArray(currentGroup) ? currentGroup.map(message => message?.id).filter(Boolean) : [];
   const telegramUrl = getTelegramMessageUrl(currentMedia);
   const publicUrl = currentMedia?.public_url || null;
 
