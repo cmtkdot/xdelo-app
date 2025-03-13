@@ -3,4 +3,8 @@ project_id = "xjhhehxcxkiumnwbirel"
 name = "xdelo_standardize_storage_paths"
 description = "Standardizes storage paths for media files"
 version = 1
-verify_jwt = false
+verify_jwt = true
+
+[functions.xdelo_standardize_storage_paths.jwt]
+optional = true
+
