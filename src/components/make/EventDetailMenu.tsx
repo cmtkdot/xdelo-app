@@ -8,7 +8,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Copy, Download, MoreVertical, PlayCircle } from 'lucide-react';
 import { MakeEventLog } from '@/hooks/useMakeEventLogs';
-import { toast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/useToast';
 
 interface EventDetailMenuProps {
   event: MakeEventLog;
@@ -19,6 +19,8 @@ const EventDetailMenu: React.FC<EventDetailMenuProps> = ({
   event,
   onReplayEvent 
 }) => {
+  const { toast } = useToast();
+
   const copyEventToClipboard = () => {
     try {
       const eventData = JSON.stringify(event, null, 2);
