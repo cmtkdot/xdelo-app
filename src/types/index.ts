@@ -2,6 +2,17 @@
 // Re-export ProcessingState and Message types
 export type { Message, ProcessingState } from './MessagesTypes';
 
+// Define FilterValues type
+export interface FilterValues {
+  search: string;
+  vendors: string[];
+  sortOrder: "asc" | "desc";
+  sortField: "created_at" | "purchase_date";
+  showUntitled?: boolean;
+  dateRange?: { from: Date; to: Date } | null;
+  processingState?: ProcessingState[];
+}
+
 // SyncStatus definition
 export type SyncStatus = 'pending' | 'synced' | 'failed' | 'queued';
 
@@ -44,6 +55,9 @@ export interface MessageProcessingStats {
   };
   latest_update: string;
 }
+
+// Export Database type from supabase types
+export type { Database } from '@/integrations/supabase/types';
 
 export * from './GlProducts';
 export * from './MessagesTypes';

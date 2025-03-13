@@ -31,12 +31,19 @@ export function MessageListContainer() {
       
       await forceSyncMessageGroup(messageId);
       
-      // Handle the refetch result without expecting void
-      await refetch().then(() => {
+      // Handle the refetch result properly
+      refetch().then(() => {
         // Success case handling
         toast({
           title: "Processing Complete",
           description: "Message has been processed and synchronized.",
+        });
+      }).catch(error => {
+        console.error("Error refetching data:", error);
+        toast({
+          title: "Refresh Failed",
+          description: "Failed to refresh data after processing",
+          variant: "destructive",
         });
       });
     } catch (error: any) {

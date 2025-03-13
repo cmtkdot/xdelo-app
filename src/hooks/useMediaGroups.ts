@@ -27,17 +27,10 @@ export const useMediaGroups = () => {
           public_url: item.public_url || '',
           telegram_message_id: item.telegram_message_id || undefined,
           media_group_id: item.media_group_id || undefined,
-          message_caption_id: item.message_caption_id || undefined,
-          is_original_caption: item.is_original_caption || undefined,
-          group_caption_synced: item.group_caption_synced || undefined,
           caption: item.caption || undefined,
           file_id: item.file_id || undefined,
           storage_path: item.storage_path || undefined,
           mime_type: item.mime_type || undefined,
-          mime_type_verified: item.mime_type_verified || undefined,
-          mime_type_original: item.mime_type_original || undefined,
-          content_disposition: item.content_disposition as 'inline' | 'attachment' || undefined,
-          storage_metadata: item.storage_metadata || undefined,
           file_size: item.file_size || undefined,
           width: item.width || undefined,
           height: item.height || undefined,
@@ -49,16 +42,15 @@ export const useMediaGroups = () => {
           analyzed_content: item.analyzed_content || undefined,
           telegram_data: item.telegram_data as Record<string, unknown> || undefined,
           error_message: item.error_message || undefined,
-          error_code: item.error_code || undefined,
-          storage_exists: item.storage_exists,
-          storage_path_standardized: item.storage_path_standardized,
           chat_id: item.chat_id || undefined,
           chat_type: item.chat_type || undefined,
           chat_title: item.chat_title || undefined,
           created_at: item.created_at || undefined,
           updated_at: item.updated_at || undefined,
-          is_forward: item.is_forward || undefined,
-          correlation_id: item.correlation_id || undefined
+          is_original_caption: item.is_original_caption,
+          group_caption_synced: item.group_caption_synced,
+          storage_exists: item.storage_exists,
+          storage_path_standardized: item.storage_path_standardized
         };
         return message;
       });

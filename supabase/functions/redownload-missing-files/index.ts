@@ -1,11 +1,10 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { 
-  xdelo_isViewableMimeType, 
-  xdelo_getUploadOptions,
-  xdelo_detectMimeType,
-  xdelo_validateStoragePath 
+  xdelo_getFileInfo, 
+  xdelo_downloadFile, 
+  xdelo_validateAndFixStoragePath,
+  xdelo_getStandardFilename 
 } from "../_shared/mediaUtils.ts";
 import { supabaseClient as supabase } from "../_shared/supabase.ts";
 

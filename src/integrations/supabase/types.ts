@@ -3113,13 +3113,6 @@ export type Database = {
           forward_count: number
         }[]
       }
-      xdelo_get_or_create_file_url: {
-        Args: {
-          p_file_unique_id: string
-          p_mime_type?: string
-        }
-        Returns: string
-      }
       xdelo_handle_duplicate_detection: {
         Args: {
           p_file_unique_id: string
