@@ -1,3 +1,4 @@
+
 import { SupabaseClient } from "@supabase/supabase-js";
 import { corsHeaders } from "./cors.ts";
 
@@ -127,6 +128,69 @@ export function xdelo_getUploadOptions(mimeType: string): Record<string, any> {
   };
 }
 
+/**
+ * Enhanced fetch function with exponential backoff retry logic
+ * @param url The URL to fetch
+ * @param options Fetch options
+ * @param maxRetries Maximum number of retry attempts
+ * @param retryDelay Initial delay between retries in ms
+ * @returns The fetch response
+ */
+async function xdelo_fetchWithRetry(
+  url: string,
+  options: RequestInit = {},
+  maxRetries: number = 3,
+  initialRetryDelay: number = 500
+): Promise<Response> {
+  let retryCount = 0;
+  let retryDelay = initialRetryDelay;
+  let lastError: Error | null = null;
+  
+  while (retryCount < maxRetries) {
+    try {
+      // Add timeout to avoid hanging requests using AbortController
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const enhancedOptions = {
+        ...options,
+        signal: controller.signal
+      };
+      
+      const response = await fetch(url, enhancedOptions);
+      clearTimeout(timeoutId);
+      
+      // Check if response is OK (status 200-299)
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status} - ${response.statusText}`);
+      }
+      
+      return response;
+    } catch (error) {
+      lastError = error;
+      retryCount++;
+      
+      // Log the retry attempt
+      console.warn(`Fetch attempt ${retryCount}/${maxRetries} failed for ${url}: ${error.message}`);
+      
+      // If we've reached max retries, throw the last error
+      if (retryCount >= maxRetries) {
+        console.error(`All ${maxRetries} retry attempts failed for ${url}`);
+        throw new Error(`Failed after ${maxRetries} attempts: ${error.message}`);
+      }
+      
+      // Wait with exponential backoff before retrying
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+      
+      // Exponential backoff with jitter to avoid thundering herd
+      retryDelay = retryDelay * 2 * (0.9 + Math.random() * 0.2);
+    }
+  }
+  
+  // This should never execute but TypeScript needs it
+  throw lastError || new Error('Unknown error during fetch');
+}
+
 // Improved function to find existing file
 export async function xdelo_findExistingFile(
   supabase: SupabaseClient,
@@ -213,13 +277,39 @@ export async function xdelo_uploadMediaToStorage(
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.38.4');
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Upload the file
-    const { error } = await supabase.storage
-      .from(bucket)
-      .upload(storagePath, fileData, uploadOptions);
+    // Upload the file with retry for network stability
+    let uploadError = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const { error } = await supabase.storage
+          .from(bucket)
+          .upload(storagePath, fileData, uploadOptions);
+          
+        if (!error) {
+          uploadError = null;
+          break;
+        }
+        
+        uploadError = error;
+        console.warn(`Upload attempt ${attempt}/3 failed for ${storagePath}: ${error.message}`);
+        
+        // Wait with exponential backoff before retrying
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt - 1)));
+        }
+      } catch (err) {
+        uploadError = err;
+        console.warn(`Upload attempt ${attempt}/3 failed for ${storagePath}: ${err.message}`);
+        
+        // Wait with exponential backoff before retrying
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt - 1)));
+        }
+      }
+    }
     
-    if (error) {
-      throw new Error(`Storage upload failed: ${error.message}`);
+    if (uploadError) {
+      throw new Error(`Storage upload failed after 3 attempts: ${uploadError.message}`);
     }
 
     // Construct public URL
@@ -270,15 +360,19 @@ export async function xdelo_downloadMediaFromTelegram(
       throw new Error('Telegram bot token is required');
     }
     
-    // Get file info from Telegram
-    const fileInfoResponse = await fetch(
-      `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${fileId}`,
-      { headers: corsHeaders }
-    );
+    console.log(`Fetching file info for ${fileId}\n`);
     
-    if (!fileInfoResponse.ok) {
-      throw new Error(`Failed to get file info from Telegram: ${await fileInfoResponse.text()}`);
-    }
+    // Get file info from Telegram with retry logic
+    const fileInfoResponse = await xdelo_fetchWithRetry(
+      `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${fileId}`,
+      { 
+        method: 'GET',
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
     
     const fileInfo = await fileInfoResponse.json();
     
@@ -286,17 +380,27 @@ export async function xdelo_downloadMediaFromTelegram(
       throw new Error(`Telegram API error: ${JSON.stringify(fileInfo)}`);
     }
     
-    // Download file from Telegram
-    const fileDataResponse = await fetch(
-      `https://api.telegram.org/file/bot${telegramBotToken}/${fileInfo.result.file_path}`,
-      { headers: corsHeaders }
-    );
-    
-    if (!fileDataResponse.ok) {
-      throw new Error(`Failed to download file from Telegram: ${await fileDataResponse.text()}`);
+    if (!fileInfo.result?.file_path) {
+      throw new Error(`Invalid file info response from Telegram: ${JSON.stringify(fileInfo)}`);
     }
     
+    console.log(`Downloading file from path ${fileInfo.result.file_path}`);
+    
+    // Download file from Telegram with retry logic
+    const fileDataResponse = await xdelo_fetchWithRetry(
+      `https://api.telegram.org/file/bot${telegramBotToken}/${fileInfo.result.file_path}`,
+      { 
+        method: 'GET',
+        headers: corsHeaders
+      }
+    );
+    
     const fileData = await fileDataResponse.blob();
+    
+    // Validate the downloaded data
+    if (!fileData || fileData.size === 0) {
+      throw new Error('Downloaded empty file from Telegram');
+    }
     
     // Generate storage path
     const storagePath = xdelo_generateStoragePath(fileUniqueId, mimeType);
@@ -429,7 +533,7 @@ export async function xdelo_processMessageMedia(
       width: media?.width,
       height: media?.height,
       duration: telegramData.video?.duration,
-      file_size: media?.file_size
+      file_size: media?.file_size || downloadResult.blob.size
     };
     
     // Step 7: If messageId provided but not yet updated (because we didn't pass it to uploadMediaToStorage)
@@ -461,3 +565,38 @@ export async function xdelo_processMessageMedia(
     };
   }
 }
+
+// Track rate limits for Telegram API to avoid hitting limits
+const rateLimitTracker = {
+  lastRequestTime: 0,
+  requestCount: 0,
+  reset() {
+    this.lastRequestTime = Date.now();
+    this.requestCount = 0;
+  },
+  async throttle() {
+    const now = Date.now();
+    const elapsed = now - this.lastRequestTime;
+    
+    // If it's been more than a minute, reset the counter
+    if (elapsed > 60000) {
+      this.reset();
+      return;
+    }
+    
+    // Telegram's rate limit is roughly 30 requests per second
+    // We'll be conservative and limit to 20 per second
+    this.requestCount++;
+    
+    if (this.requestCount > 20) {
+      // Wait until the next second before proceeding
+      const waitTime = Math.max(1000 - elapsed, 100);
+      console.log(`Rate limit approaching, waiting ${waitTime}ms before next request`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      this.reset();
+    }
+  }
+};
+
+// Export rate limit tracker for other modules to use
+export { rateLimitTracker };

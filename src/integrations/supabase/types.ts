@@ -3380,6 +3380,7 @@ export type Database = {
         | "media_group_version_updated"
         | "system_configuration_updated"
         | "message_processing_error"
+        | "message_processing_started"
       client_type: "Vendor" | "Customer" | "Customer & Vendor"
       message_operation_type:
         | "message_create"

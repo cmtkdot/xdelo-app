@@ -7,7 +7,8 @@ import {
   xdelo_detectMimeType,
   xdelo_validateAndFixStoragePath,
   xdelo_downloadMediaFromTelegram,
-  xdelo_uploadMediaToStorage
+  xdelo_uploadMediaToStorage,
+  xdelo_processMessageMedia
 } from '../../_shared/mediaUtils.ts';
 
 // Declare Deno type for Edge Functions
@@ -40,7 +41,7 @@ export const redownloadMissingFile = async (message: MessageRecord): Promise<{su
       throw new Error('Missing file_id or file_unique_id for redownload');
     }
     
-    // Use our shared utility to download the media
+    // Use our shared utility to download the media with improved retry logic
     const downloadResult = await xdelo_downloadMediaFromTelegram(
       message.file_id,
       message.file_unique_id,
@@ -63,6 +64,17 @@ export const redownloadMissingFile = async (message: MessageRecord): Promise<{su
     if (!uploadResult.success) {
       throw new Error(uploadResult.error || 'Failed to upload media to storage');
     }
+    
+    // Log the redownload success
+    await logMessageOperation(
+      'media_redownloaded',
+      message.id,
+      {
+        file_unique_id: message.file_unique_id,
+        storage_path: downloadResult.storagePath,
+        file_size: downloadResult.blob.size
+      }
+    );
     
     // Update the message record with minimal fields since public_url is updated by uploadMediaToStorage
     const { error: updateError } = await supabase
@@ -110,6 +122,16 @@ export const redownloadMissingFile = async (message: MessageRecord): Promise<{su
           last_error_at: new Date().toISOString()
         })
         .eq('id', message.id);
+      
+      // Log the error
+      await logMessageOperation(
+        'error',
+        message.id,
+        {
+          operation: 'redownload',
+          error: error.message
+        }
+      );
     } catch (updateError) {
       console.error('Failed to update error state:', updateError);
     }
@@ -119,4 +141,15 @@ export const redownloadMissingFile = async (message: MessageRecord): Promise<{su
       message: error.message || 'Unknown error during retry download'
     };
   }
+};
+
+// Export all functions from the shared mediaUtils.ts for backward compatibility
+export { 
+  xdelo_isViewableMimeType, 
+  xdelo_getUploadOptions,
+  xdelo_detectMimeType,
+  xdelo_validateAndFixStoragePath,
+  xdelo_downloadMediaFromTelegram,
+  xdelo_uploadMediaToStorage,
+  xdelo_processMessageMedia
 };

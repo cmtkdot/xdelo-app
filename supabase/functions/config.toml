@@ -60,3 +60,5 @@ verify_jwt = false
 verify_jwt = false
 [functions.xdelo_sync_media_group]
 verify_jwt = false
+[functions.xdelo_unified_media_repair]
+verify_jwt = false

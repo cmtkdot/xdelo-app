@@ -17,7 +17,10 @@ import {
 export { 
   xdelo_getExtensionFromMimeType,
   xdelo_verifyFileExists,
-  xdelo_findExistingFile
+  xdelo_findExistingFile,
+  xdelo_processMessageMedia,
+  xdelo_downloadMediaFromTelegram,
+  xdelo_uploadMediaToStorage
 };
 
 // Legacy function - redirects to improved version in mediaUtils.ts
@@ -52,30 +55,52 @@ export async function xdelo_uploadFileToStorage(
   };
 }
 
-// Legacy function - redirects to improved version in mediaUtils.ts
-export async function xdelo_processMessageMedia(
+// Update message processing state - a utility function that's used in various places
+export async function xdelo_updateMessageProcessingState(
   supabase: SupabaseClient,
-  telegramData: any,
-  fileId: string,
-  fileUniqueId: string,
-  telegramBotToken: string,
-  messageId?: string
-): Promise<{ 
-  success: boolean; 
-  isDuplicate: boolean; 
-  fileInfo: any; 
-  error?: string 
-}> {
-  return xdelo_processMessageMedia(
-    telegramData,
-    fileId,
-    fileUniqueId,
-    telegramBotToken,
-    messageId
-  );
+  messageId: string,
+  state: string,
+  correlationId: string,
+  errorMessage?: string
+) {
+  try {
+    const updates: Record<string, any> = {
+      processing_state: state,
+      updated_at: new Date().toISOString()
+    };
+    
+    if (state === 'completed') {
+      updates.processing_completed_at = new Date().toISOString();
+    } else if (state === 'processing') {
+      updates.processing_started_at = new Date().toISOString();
+    }
+    
+    if (errorMessage) {
+      updates.error_message = errorMessage;
+      updates.last_error_at = new Date().toISOString();
+      updates.retry_count = await supabase.rpc('increment_retry_count', { 
+        p_message_id: messageId 
+      }).single();
+    }
+    
+    const { error } = await supabase
+      .from('messages')
+      .update(updates)
+      .eq('id', messageId);
+      
+    if (error) {
+      console.error(`Error updating message state:`, error);
+      return { success: false, error: error.message };
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error(`Error in xdelo_updateMessageProcessingState:`, error);
+    return { success: false, error: error.message };
+  }
 }
 
-// Utility to repair storage paths in bulk - moved from the old file with some improvements
+// Utility to repair storage paths in bulk
 export async function xdelo_repairStoragePaths(
   supabase: SupabaseClient,
   messageIds?: string[],
@@ -258,50 +283,5 @@ export async function xdelo_repairStoragePaths(
   } catch (error) {
     console.error('Error in repairStoragePaths:', error);
     throw error;
-  }
-}
-
-// Update message processing state - a utility function that's used in various places
-export async function xdelo_updateMessageProcessingState(
-  supabase: SupabaseClient,
-  messageId: string,
-  state: string,
-  correlationId: string,
-  errorMessage?: string
-) {
-  try {
-    const updates: Record<string, any> = {
-      processing_state: state,
-      updated_at: new Date().toISOString()
-    };
-    
-    if (state === 'completed') {
-      updates.processing_completed_at = new Date().toISOString();
-    } else if (state === 'processing') {
-      updates.processing_started_at = new Date().toISOString();
-    }
-    
-    if (errorMessage) {
-      updates.error_message = errorMessage;
-      updates.last_error_at = new Date().toISOString();
-      updates.retry_count = await supabase.rpc('increment_retry_count', { 
-        p_message_id: messageId 
-      }).single();
-    }
-    
-    const { error } = await supabase
-      .from('messages')
-      .update(updates)
-      .eq('id', messageId);
-      
-    if (error) {
-      console.error(`Error updating message state:`, error);
-      return { success: false, error: error.message };
-    }
-    
-    return { success: true };
-  } catch (error) {
-    console.error(`Error in xdelo_updateMessageProcessingState:`, error);
-    return { success: false, error: error.message };
   }
 }
