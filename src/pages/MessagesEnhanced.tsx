@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/integrations/supabase/client";
@@ -218,7 +219,7 @@ const MessagesEnhanced = () => {
       
       toast({
         title: "Data refreshed",
-        description: `${filteredMessages.length} messages loaded`
+        description: `${filteredMessages?.length || 0} messages loaded`
       });
     } catch (error) {
       console.error("Error refreshing data:", error);
@@ -430,4 +431,57 @@ const MessagesEnhanced = () => {
           )}
         </div>
         
-        {
+        {detailsOpen && selectedMessage && (
+          <div className="w-96 ml-6 border rounded-md p-4 h-[calc(100vh-12rem)] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-medium">Message Details</h3>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setDetailsOpen(false)}
+                className="h-6 w-6 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <MessageDetailsPanel 
+              message={selectedMessage} 
+              onEdit={handleEditMessage}
+              onDelete={handleDeleteMessage}
+            />
+          </div>
+        )}
+      </div>
+      
+      {viewerOpen && currentGroup.length > 0 && (
+        <MediaViewer
+          isOpen={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+          mediaItems={currentGroup.map(msg => ({
+            id: msg.id,
+            public_url: msg.public_url || '',
+            mime_type: msg.mime_type,
+            file_unique_id: msg.file_unique_id,
+            analyzed_content: msg.analyzed_content,
+            created_at: msg.created_at || '',
+            caption: msg.caption,
+            width: msg.width,
+            height: msg.height,
+            file_size: msg.file_size,
+            duration: msg.duration,
+            content_disposition: msg.content_disposition,
+            storage_path: msg.storage_path,
+            processing_state: msg.processing_state
+          }))}
+          onNext={handleNextGroup}
+          onPrevious={handlePreviousGroup}
+          hasNext={groupIndex < (filteredMessages?.length || 0) - 1}
+          hasPrevious={groupIndex > 0}
+        />
+      )}
+    </div>
+  );
+};
+
+export default MessagesEnhanced;
