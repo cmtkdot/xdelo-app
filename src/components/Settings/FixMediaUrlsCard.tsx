@@ -23,7 +23,8 @@ export function FixMediaUrlsCard() {
         body: { 
           limit, 
           dryRun, 
-          onlyImages 
+          onlyImages,
+          fixContentDisposition: true // Always fix content-disposition for better browser rendering
         }
       });
       
@@ -43,6 +44,34 @@ export function FixMediaUrlsCard() {
     } catch (error) {
       console.error('Error fixing media URLs:', error);
       toast.error('Failed to fix media URLs: ' + (error?.message || 'Unknown error'));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleFixQuickImages = async () => {
+    setIsProcessing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('xdelo_fix_media_urls', {
+        body: { 
+          limit: 250, 
+          dryRun: false, 
+          onlyImages: true,
+          fixContentDisposition: true,
+          quickFix: true
+        }
+      });
+      
+      if (error) {
+        throw error;
+      }
+      
+      setResults(data);
+      toast.success(`Quick fix completed: ${data.results.fixed} of ${data.results.processed} images fixed`);
+      console.log('Quick fix images result:', data);
+    } catch (error) {
+      console.error('Error fixing images:', error);
+      toast.error('Failed to fix images: ' + (error?.message || 'Unknown error'));
     } finally {
       setIsProcessing(false);
     }
@@ -118,7 +147,7 @@ export function FixMediaUrlsCard() {
           </div>
         )}
       </CardContent>
-      <CardFooter>
+      <CardFooter className="flex flex-wrap gap-2">
         <Button 
           onClick={handleFixMediaUrls} 
           disabled={isProcessing} 
@@ -131,6 +160,22 @@ export function FixMediaUrlsCard() {
             </>
           ) : (
             onlyImages ? "Fix Image URLs" : "Fix Media URLs"
+          )}
+        </Button>
+        
+        <Button
+          onClick={handleFixQuickImages}
+          disabled={isProcessing}
+          variant="outline"
+          className="ml-2"
+        >
+          {isProcessing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            "Quick Fix Images (250)"
           )}
         </Button>
       </CardFooter>

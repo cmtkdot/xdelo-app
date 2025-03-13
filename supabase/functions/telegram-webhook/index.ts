@@ -1,10 +1,10 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
-import { handleOtherMessage, handleEditedMessage } from './handlers/textMessageHandler.ts';
+import { handleOtherMessage } from './handlers/textMessageHandler.ts';
+import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { withErrorHandling, SecurityLevel } from '../_shared/errorHandler.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
 
 // Main handler function wrapped with error handling
@@ -12,18 +12,6 @@ serve(withErrorHandling(
   'telegram-webhook',
   async (req: Request, correlationId: string) => {
     try {
-      // Create Supabase client for database operations
-      const supabaseClient = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-        {
-          auth: {
-            persistSession: false,
-            autoRefreshToken: false
-          }
-        }
-      );
-
       // Log webhook received event using shared utility
       await xdelo_logProcessingEvent(
         "webhook_received",
