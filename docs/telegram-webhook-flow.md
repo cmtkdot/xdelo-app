@@ -1,3 +1,4 @@
+
 # Telegram Webhook Flow Documentation
 
 This document provides a comprehensive overview of the Telegram webhook implementation, including how it handles different types of messages, stores media, manages message edits, tracks forwarded messages, and handles duplicate detection.
@@ -42,10 +43,12 @@ The primary entry point is `index.ts`, which receives all webhook events from Te
 
 Media messages (photos, videos, documents) are processed by `mediaMessageHandler.ts`:
 
-1. **Duplicate Detection**: Checks if the file has been seen before (based on `file_unique_id`) and review if its in the storage -> will still reprocess caption and parsing and media group syncing everytime
-2. **Media Download**: Downloads media from Telegram to Supabase Storage and properly sets the content type for supabase to display public_url for images and videos and uploaded medias
-3. **Database Storage**: Stores metadata in the `messages` table
-4. **Caption Processing**: Extracts product information from captions
+1. **MIME Type Detection**: Accurately determines file type based on Telegram message structure
+2. **Duplicate Detection**: Checks if the file has been seen before (based on `file_unique_id`)
+3. **Media Download**: Downloads media from Telegram to Supabase Storage with proper content-type
+4. **Storage Path Generation**: Creates standardized paths based on file ID and correct extension
+5. **Database Storage**: Stores metadata in the `messages` table
+6. **Caption Processing**: Extracts product information from captions
 
 Media Group handling:
 - Messages with the same `media_group_id` are treated as a group
@@ -62,11 +65,11 @@ Edited messages are processed by `editedMessageHandler.ts`:
    - Edit timestamp
    - Changes in media (if applicable)
 3. **Media Changes**: If media was replaced:
-   - Downloads new media from Telegram
+   - Downloads new media from Telegram with accurate MIME type detection
    - Updates storage and database records
    - Preserves edit history
 4. **Caption**: always reprocess and update caption
-   - reset the caption and parsing and media group syncing logic 
+   - Reset the caption and parsing and media group syncing logic 
    - Updates caption in database set procesing state back to processing if it has a caption
    - Reprocesses caption for product information
    - Synchronizes changes across media groups
@@ -92,21 +95,39 @@ Forwarded messages have special handling:
    - Forward source (user, channel)
 2. **Metadata Storage**: Records forward information in the `forward_info` field
 3. **Relationship Tracking**: Maintains relationships between original and forwarded content
-4. Update the caption and analyzed_content product info with the new info from the forwwarded content if it has a duplicate then sync changes with media group
+4. Update the caption and analyzed_content product info with the new info from the forwarded content if it has a duplicate then sync changes with media group
 
 ## Media Storage & Management
 
 Media files are managed by `mediaUtils.ts`:
 
-1. **Download Process**:
+1. **Enhanced MIME Type Detection**:
+   - Analyzes Telegram message structure for accurate file type identification
+   - Handles all media types: photos, videos, documents, stickers, etc.
+   - Uses fallback detection based on file extensions when needed
+2. **Download Process**:
    - Retrieves file information from Telegram
-   - Downloads the actual file content with proper mime content type decloration for public url sharing of images videos from supabase buckets
+   - Downloads the actual file content with proper MIME type detection
    - Uses retry logic with exponential backoff
    - Handles timeouts and network errors
-2. **Storage Organization**:
+3. **Storage Organization**:
    - Files are stored using their `file_unique_id` as a unique identifier
-   - Standard file extensions based on MIME types
-   - Files are stored in Supabase Storage under `telegram-media` bucket
+   - File extensions are derived from accurate MIME types
+   - Standardized storage paths ensure consistency
+4. **Content Disposition**:
+   - Viewable media (images, videos) set as "inline"
+   - Documents set as "attachment" for downloading
+
+## Media Repair Capabilities
+
+The system includes robust media repair functionality:
+
+1. **Storage Verification**: Checks if files exist in storage
+2. **MIME Type Correction**: Fixes incorrect content types
+3. **Path Standardization**: Ensures consistent path formatting
+4. **Redownload**: Can re-fetch files from Telegram when needed
+5. **Batch Processing**: Can repair individual files or entire media groups
+6. **Content-Type Fixing**: Updates content-disposition for proper display
 
 ## Database Schema
 
@@ -125,11 +146,14 @@ Stores media messages with fields:
 - file_id: string (Telegram file identifier)
 - file_unique_id: string (Telegram's permanent unique file ID)
 - mime_type: string (e.g., image/jpeg, video/mp4)
+- mime_type_original: string (original mime type from Telegram)
+- mime_type_verified: boolean (whether mime type is verified)
 - file_size: int (bytes)
 - width/height: int (for photos/videos)
 - duration: int (for videos, in seconds)
 - storage_path: string (location in Supabase Storage)
 - public_url: string (direct URL to media)
+- content_disposition: string ('inline' or 'attachment')
 - processing_state: enum ('pending', 'processing', 'completed', 'error')
 - analyzed_content: JSON (extracted product data)
 - old_analyzed_content: JSON array (history of product data from edits)
@@ -138,7 +162,9 @@ Stores media messages with fields:
 - edit_history: JSON array (record of edits)
 - edit_count: int (number of edits)
 - needs_redownload: boolean (flag for failed downloads)
+- redownload_reason: string (why redownload is needed)
 - storage_exists: boolean (verification flag)
+- storage_path_standardized: boolean (if path follows standards)
 ```
 
 ### Other Messages Table
@@ -212,89 +238,3 @@ For media groups (multiple files sent together):
 2. **Caption Propagation**: Caption from one message can be applied to all group members
 3. **Shared Analysis**: Product data extracted from caption is synchronized
 4. **Edit Consistency**: Edits to one group member can propagate to others
-
-
-## Processing States
-
-Messages go through several processing states:
-
-1. **Pending**: Initial state after message is received
-2. **Processing**: Active data extraction/analysis
-3. **Completed**: Successfully processed
-4. **Error**: Failed processing with error details
-
-## Workflow Examples
-
-### New Media Message Flow
-
-```mermaid
-sequenceDiagram
-    Telegram->>Webhook: New message with media
-    Webhook->>mediaMessageHandler: Route to handler
-    mediaMessageHandler->>Database: Check for duplicates
-    alt Duplicate Found
-        Database->>mediaMessageHandler: Return existing file info
-    else New File
-        mediaMessageHandler->>Telegram API: Request file information
-        Telegram API->>mediaMessageHandler: Return file path
-        mediaMessageHandler->>Telegram API: Download file
-        mediaMessageHandler->>Storage: Upload file
-        mediaMessageHandler->>Database: Store metadata
-    end
-    mediaMessageHandler->>Caption Processor: Analyze caption
-    Caption Processor->>Database: Store product data
-    mediaMessageHandler->>Webhook: Return success
-    Webhook->>Telegram: Acknowledge receipt
-```
-
-### Edited Message Flow
-
-```mermaid
-sequenceDiagram
-    Telegram->>Webhook: Edited message event
-    Webhook->>editedMessageHandler: Route to handler
-    editedMessageHandler->>Database: Lookup original message
-    Database->>editedMessageHandler: Return message data
-    
-    alt Media Changed
-        editedMessageHandler->>Telegram API: Download new media
-        Telegram API->>editedMessageHandler: Return file
-        editedMessageHandler->>Storage: Upload new file
-        editedMessageHandler->>Database: Update file references
-    else Caption Only Changed
-        editedMessageHandler->>Database: Update caption
-    end
-    
-    editedMessageHandler->>Database: Record edit history
-    editedMessageHandler->>Caption Processor: Reanalyze caption
-    editedMessageHandler->>Media Group Sync: Update group members
-    editedMessageHandler->>Webhook: Return success
-    Webhook->>Telegram: Acknowledge receipt
-```
-
-## How to Extend
-
-### Adding New Message Types
-
-1. Create a new handler in the `handlers` directory
-2. Add routing logic to `index.ts`
-3. Implement required database operations
-
-### Modifying Media Storage
-
-1. Update functions in `mediaUtils.ts`
-2. Adjust storage path generation and file naming logic
-3. Update MIME type handling if needed
-
-### Enhancing Caption Processing
-
-1. Modify direct-caption-processor function
-2. Adjust parsing logic and data extraction
-3. Update `analyzed_content` schema if needed
-
-## Best Practices
-
-1. Always check for duplicate files before downloading
-2. Maintain complete edit history for audit trails
-3. Use correlation IDs for request tracing
-6. Centralize logging for consistent event tracking

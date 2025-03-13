@@ -8,6 +8,7 @@ import { Message } from "@/types/MessagesTypes";
 interface MediaFixButtonProps {
   messages?: Message[];
   messageIds?: string[];
+  mediaGroupId?: string;
   onComplete?: () => void;
   variant?: "default" | "outline" | "secondary";
   size?: "default" | "sm" | "lg";
@@ -16,6 +17,7 @@ interface MediaFixButtonProps {
 export function MediaFixButton({ 
   messages, 
   messageIds, 
+  mediaGroupId,
   onComplete,
   variant = "outline",
   size = "sm"
@@ -38,8 +40,8 @@ export function MediaFixButton({
     ...(messages?.map(m => m.id) || [])
   ].filter(Boolean);
 
-  // Don't render if there are no messages to repair
-  if (combinedMessageIds.length === 0) {
+  // Don't render if there are no messages to repair and no media group ID
+  if (combinedMessageIds.length === 0 && !mediaGroupId) {
     return null;
   }
 
@@ -65,6 +67,7 @@ export function MediaFixButton({
         }}
         initialMessageIds={messageIds}
         initialMessages={messages}
+        initialMediaGroupId={mediaGroupId}
         onComplete={handleComplete}
       />
     </>

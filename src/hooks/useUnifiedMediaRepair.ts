@@ -6,8 +6,12 @@ import { logEvent, LogEventType } from '@/lib/logUtils';
 
 interface RepairOptions {
   messageIds?: string[];
+  mediaGroupId?: string;
   limit?: number;
   checkStorageOnly?: boolean;
+  fixContentTypes?: boolean;
+  storagePathOnly?: boolean;
+  forceRedownload?: boolean;
 }
 
 interface RepairResult {
@@ -20,6 +24,7 @@ interface RepairResult {
     details: any[];
   };
   error?: string;
+  message?: string;
 }
 
 export function useUnifiedMediaRepair() {
@@ -46,8 +51,12 @@ export function useUnifiedMediaRepair() {
       const { data, error } = await supabase.functions.invoke('xdelo_unified_media_repair', {
         body: {
           messageIds: options.messageIds,
+          mediaGroupId: options.mediaGroupId,
           limit: options.limit || 50,
-          checkStorageOnly: options.checkStorageOnly || false
+          checkStorageOnly: options.checkStorageOnly || false,
+          fixContentTypes: options.fixContentTypes || true,
+          storagePathOnly: options.storagePathOnly || false,
+          forceRedownload: options.forceRedownload || false
         }
       });
 
@@ -59,7 +68,8 @@ export function useUnifiedMediaRepair() {
       const result: RepairResult = {
         success: data.success,
         results: data.results,
-        error: data.error
+        error: data.error,
+        message: data.message
       };
 
       setResults(result);
@@ -124,9 +134,36 @@ export function useUnifiedMediaRepair() {
     }
   };
 
+  const checkMediaFiles = async (options: RepairOptions = {}): Promise<RepairResult> => {
+    return repairMedia({
+      ...options,
+      checkStorageOnly: true
+    });
+  };
+
+  const forceRedownload = async (messageIds: string[]): Promise<RepairResult> => {
+    return repairMedia({
+      messageIds,
+      forceRedownload: true,
+      fixContentTypes: true
+    });
+  };
+
+  const repairStoragePaths = async (messageIds?: string[], limit?: number): Promise<RepairResult> => {
+    return repairMedia({
+      messageIds,
+      limit,
+      storagePathOnly: true,
+      fixContentTypes: true
+    });
+  };
+
   return {
     isRepairing,
     results,
-    repairMedia
+    repairMedia,
+    checkMediaFiles,
+    forceRedownload,
+    repairStoragePaths
   };
 }

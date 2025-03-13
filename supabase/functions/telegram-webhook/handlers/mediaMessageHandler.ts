@@ -120,11 +120,15 @@ async function xdelo_handleEditedMediaMessage(
     if (mediaChanged && TELEGRAM_BOT_TOKEN) {
       console.log(`[${correlationId}] Media changed in edited message ${message.message_id}, processing new media`);
       
+      // Detect MIME type from the complete message to ensure accuracy
+      const detectedMimeType = xdelo_detectMimeType(message);
+      console.log(`[${correlationId}] Detected MIME type for edited message: ${detectedMimeType}`);
+      
       // Use improved media download with better metadata handling
       const downloadResult = await xdelo_downloadMediaFromTelegram(
         mediaContent.file_id,
         mediaContent.file_unique_id,
-        mediaContent.mime_type || 'application/octet-stream',
+        detectedMimeType,
         TELEGRAM_BOT_TOKEN
       );
       
@@ -136,7 +140,7 @@ async function xdelo_handleEditedMediaMessage(
       const uploadResult = await xdelo_uploadMediaToStorage(
         downloadResult.storagePath || `${mediaContent.file_unique_id}.bin`,
         downloadResult.blob,
-        downloadResult.mimeType || mediaContent.mime_type || 'application/octet-stream',
+        downloadResult.mimeType || detectedMimeType,
         existingMessage.id
       );
       
@@ -147,8 +151,8 @@ async function xdelo_handleEditedMediaMessage(
       mediaInfo = {
         file_id: mediaContent.file_id,
         file_unique_id: mediaContent.file_unique_id,
-        mime_type: downloadResult.mimeType,
-        mime_type_original: mediaContent.mime_type,
+        mime_type: downloadResult.mimeType || detectedMimeType,
+        mime_type_original: message.document?.mime_type || message.video?.mime_type,
         storage_path: downloadResult.storagePath,
         public_url: uploadResult.publicUrl,
         width: mediaContent.width,
@@ -363,11 +367,15 @@ async function xdelo_handleNewMediaMessage(
     message.photo[message.photo.length - 1] : 
     message.video || message.document;
   
+  // Detect MIME type from the complete message
+  const detectedMimeType = xdelo_detectMimeType(message);
+  console.log(`[${correlationId}] Detected MIME type: ${detectedMimeType} for new message ${message.message_id}`);
+  
   // Download the file with improved metadata handling
   const downloadResult = await xdelo_downloadMediaFromTelegram(
     telegramFile.file_id,
     telegramFile.file_unique_id,
-    telegramFile.mime_type || 'application/octet-stream',
+    detectedMimeType,
     TELEGRAM_BOT_TOKEN
   );
   
@@ -379,7 +387,8 @@ async function xdelo_handleNewMediaMessage(
   const uploadResult = await xdelo_uploadMediaToStorage(
     downloadResult.storagePath || `${telegramFile.file_unique_id}.bin`,
     downloadResult.blob,
-    downloadResult.mimeType || telegramFile.mime_type || 'application/octet-stream'
+    downloadResult.mimeType || detectedMimeType,
+    // No message ID yet since we haven't created it
   );
   
   if (!uploadResult.success) {
@@ -410,10 +419,10 @@ async function xdelo_handleNewMediaMessage(
     media_group_id: message.media_group_id,
     file_id: telegramFile.file_id,
     file_unique_id: telegramFile.file_unique_id,
-    mime_type: downloadResult.mimeType || telegramFile.mime_type || 'application/octet-stream',
-    mime_type_original: telegramFile.mime_type,
+    mime_type: downloadResult.mimeType || detectedMimeType,
+    mime_type_original: message.document?.mime_type || message.video?.mime_type,
     storage_path: downloadResult.storagePath || `${telegramFile.file_unique_id}.bin`,
-    public_url: uploadResult.publicUrl, // Use the URL returned by Supabase
+    public_url: uploadResult.publicUrl,
     width: telegramFile.width,
     height: telegramFile.height,
     duration: message.video?.duration,
@@ -459,7 +468,9 @@ async function xdelo_handleNewMediaMessage(
         media_group_id: message.media_group_id,
         is_forwarded: !!messageInput.forward_info,
         storage_path: downloadResult.storagePath,
-        mime_type: downloadResult.mimeType
+        mime_type: downloadResult.mimeType || detectedMimeType,
+        document_mime_type: message.document?.mime_type,
+        video_mime_type: message.video?.mime_type
       },
       correlation_id: correlationId
     });

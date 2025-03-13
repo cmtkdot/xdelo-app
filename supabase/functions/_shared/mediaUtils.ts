@@ -1,4 +1,3 @@
-
 import { SupabaseClient } from "@supabase/supabase-js";
 import { corsHeaders } from "./cors.ts";
 
@@ -26,6 +25,8 @@ export function xdelo_getExtensionFromMimeType(mimeType: string): string {
     'image/webp': 'webp',
     'image/svg+xml': 'svg',
     'image/avif': 'avif',
+    'image/bmp': 'bmp',
+    'image/tiff': 'tiff',
     
     // Videos
     'video/mp4': 'mp4',
@@ -33,12 +34,16 @@ export function xdelo_getExtensionFromMimeType(mimeType: string): string {
     'video/quicktime': 'mov',
     'video/x-msvideo': 'avi',
     'video/x-matroska': 'mkv',
+    'video/ogg': 'ogv',
+    'video/mpeg': 'mpg',
     
     // Audio
     'audio/mpeg': 'mp3',
     'audio/ogg': 'ogg',
     'audio/webm': 'weba',
     'audio/wav': 'wav',
+    'audio/aac': 'aac',
+    'audio/flac': 'flac',
     
     // Documents
     'application/pdf': 'pdf',
@@ -47,17 +52,23 @@ export function xdelo_getExtensionFromMimeType(mimeType: string): string {
     'application/vnd.ms-excel': 'xls',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
     'application/x-tgsticker': 'tgs',
+    'application/vnd.ms-powerpoint': 'ppt',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
     
     // Text
     'text/plain': 'txt',
     'text/html': 'html',
     'text/css': 'css',
     'text/javascript': 'js',
+    'text/csv': 'csv',
     
     // Others
     'application/json': 'json',
     'application/xml': 'xml',
-    'application/zip': 'zip'
+    'application/zip': 'zip',
+    'application/gzip': 'gz',
+    'application/x-7z-compressed': '7z',
+    'application/x-rar-compressed': 'rar'
   };
 
   // If we have an exact match, use it
@@ -76,20 +87,39 @@ export function xdelo_getExtensionFromMimeType(mimeType: string): string {
   return 'bin'; // Default fallback
 }
 
-// Improved function to standardize MIME type from Telegram data
+// Improved function to detect and standardize MIME type from Telegram data
 export function xdelo_detectMimeType(telegramData: any): string {
   if (!telegramData) return 'application/octet-stream';
   
+  // Log the telegram data for debugging
+  console.log('Detecting MIME type from telegram data:', JSON.stringify({
+    has_photo: !!telegramData.photo,
+    has_document: !!telegramData.document,
+    has_video: !!telegramData.video,
+    document_mime_type: telegramData.document?.mime_type,
+    video_mime_type: telegramData.video?.mime_type
+  }));
+  
   // Handle photo (always JPEG from Telegram)
-  if (telegramData.photo) return 'image/jpeg';
+  if (telegramData.photo && telegramData.photo.length > 0) {
+    return 'image/jpeg';
+  }
   
   // Use mime_type from document if available
-  if (telegramData.document?.mime_type) return telegramData.document.mime_type;
+  if (telegramData.document?.mime_type) {
+    // Log the document MIME type being used
+    console.log(`Using document mime_type: ${telegramData.document.mime_type}`);
+    return telegramData.document.mime_type;
+  }
   
   // Use mime_type from video if available
-  if (telegramData.video?.mime_type) return telegramData.video.mime_type;
+  if (telegramData.video?.mime_type) {
+    // Log the video MIME type being used
+    console.log(`Using video mime_type: ${telegramData.video.mime_type}`);
+    return telegramData.video.mime_type;
+  }
   
-  // Handle other media types
+  // Handle other media types with specific detection
   if (telegramData.video) return 'video/mp4';
   if (telegramData.audio) return telegramData.audio.mime_type || 'audio/mpeg';
   if (telegramData.voice) return 'audio/ogg';
@@ -97,13 +127,20 @@ export function xdelo_detectMimeType(telegramData: any): string {
   if (telegramData.sticker?.is_animated) return 'application/x-tgsticker';
   if (telegramData.sticker) return 'image/webp';
   
+  // If we made it here without finding a MIME type, log a warning
+  console.warn('Could not detect MIME type from telegram data, falling back to octet-stream');
+  
   // Default fallback
   return 'application/octet-stream';
 }
 
 // Standardize storage path generation
 export function xdelo_generateStoragePath(fileUniqueId: string, mimeType: string): string {
-  const extension = xdelo_getExtensionFromMimeType(mimeType);
+  if (!fileUniqueId) {
+    throw new Error('Missing file_unique_id for storage path generation');
+  }
+  
+  const extension = xdelo_getExtensionFromMimeType(mimeType || 'application/octet-stream');
   return `${fileUniqueId}.${extension}`;
 }
 
@@ -262,6 +299,8 @@ export async function xdelo_uploadMediaToStorage(
   bucket: string = 'telegram-media'
 ): Promise<{ success: boolean; error?: string; publicUrl?: string }> {
   try {
+    console.log(`Uploading file to storage: ${storagePath} with MIME type: ${mimeType}`);
+    
     // Get correct upload options based on mime type
     const uploadOptions = xdelo_getUploadOptions(mimeType);
     
@@ -314,6 +353,7 @@ export async function xdelo_uploadMediaToStorage(
 
     // Construct public URL
     const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}`;
+    console.log(`File uploaded successfully, public URL: ${publicUrl}`);
     
     // If messageId provided, update the message with the public URL
     if (messageId) {
@@ -402,14 +442,44 @@ export async function xdelo_downloadMediaFromTelegram(
       throw new Error('Downloaded empty file from Telegram');
     }
     
+    // Try to detect MIME type from file extension if not provided
+    let detectedMimeType = mimeType;
+    if (!detectedMimeType || detectedMimeType === 'application/octet-stream') {
+      // Extract extension from file_path
+      const extension = fileInfo.result.file_path.split('.').pop()?.toLowerCase();
+      if (extension) {
+        // Map common extensions back to MIME types
+        const extensionMimeMap: Record<string, string> = {
+          'jpg': 'image/jpeg',
+          'jpeg': 'image/jpeg',
+          'png': 'image/png',
+          'gif': 'image/gif',
+          'webp': 'image/webp',
+          'mp4': 'video/mp4',
+          'mov': 'video/quicktime',
+          'pdf': 'application/pdf',
+          'doc': 'application/msword',
+          'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'xls': 'application/vnd.ms-excel',
+          'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        };
+        
+        if (extensionMimeMap[extension]) {
+          detectedMimeType = extensionMimeMap[extension];
+          console.log(`Detected MIME type from file extension: ${detectedMimeType}`);
+        }
+      }
+    }
+    
     // Generate storage path
-    const storagePath = xdelo_generateStoragePath(fileUniqueId, mimeType);
+    const storagePath = xdelo_generateStoragePath(fileUniqueId, detectedMimeType);
+    console.log(`Generated storage path: ${storagePath} with MIME type: ${detectedMimeType}`);
     
     return {
       success: true,
       blob: fileData,
       storagePath,
-      mimeType
+      mimeType: detectedMimeType
     };
   } catch (error) {
     console.error('Error downloading media from Telegram:', error);
@@ -493,6 +563,7 @@ export async function xdelo_processMessageMedia(
     
     // Step 3: Determine MIME type
     const mimeType = xdelo_detectMimeType(telegramData);
+    console.log(`Detected MIME type: ${mimeType} for file ${fileUniqueId}`);
     
     // Step 4: Download file from Telegram
     const downloadResult = await xdelo_downloadMediaFromTelegram(
@@ -510,7 +581,7 @@ export async function xdelo_processMessageMedia(
     const uploadResult = await xdelo_uploadMediaToStorage(
       downloadResult.storagePath,
       downloadResult.blob,
-      mimeType,
+      downloadResult.mimeType || mimeType,
       messageId // Pass messageId for direct update
     );
     
@@ -526,7 +597,7 @@ export async function xdelo_processMessageMedia(
     const fileInfo = {
       storage_path: downloadResult.storagePath,
       public_url: uploadResult.publicUrl,
-      mime_type: mimeType,
+      mime_type: downloadResult.mimeType || mimeType,
       mime_type_original: telegramData.video?.mime_type || telegramData.document?.mime_type,
       file_id: fileId,
       file_unique_id: fileUniqueId,
