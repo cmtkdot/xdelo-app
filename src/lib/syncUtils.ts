@@ -15,9 +15,20 @@ export async function xdelo_logSyncOperation(
   error?: string
 ) {
   try {
+    // Map string operation to LogEventType when possible
+    let eventType: LogEventType;
+    
+    // Try to convert string operation to LogEventType
+    try {
+      eventType = operation as LogEventType;
+    } catch (err) {
+      // Fallback to WARNING if conversion fails
+      eventType = LogEventType.WARNING;
+    }
+    
     // Use the new consolidated logging system
     await logSyncOp(
-      operation,
+      eventType,
       details.id || 'system',
       {
         operation,

@@ -1,4 +1,3 @@
-
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
@@ -14,21 +13,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
-      // React plugin with better optimization settings
+      // React plugin with simpler configuration
       react({
-        babel: {
-          plugins: [
-            isProd && [
-              'transform-remove-console',
-              { exclude: ['error', 'warn', 'info'] }
-            ]
-          ].filter(Boolean),
-          // Add better optimization options
-          presets: [
-            ['@babel/preset-env', { targets: 'defaults' }]
-          ],
-        },
-        // Enable Fast Refresh - improves developer experience
+        // Remove complex Babel configuration to avoid issues
         fastRefresh: true,
       }),
       
@@ -56,7 +43,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       sourcemap: isProd ? false : 'inline',
-      minify: isProd ? 'terser' : false,
+      minify: isProd ? 'esbuild' : false, // Changed from 'terser' to 'esbuild'
       target: 'es2020',
       assetsInlineLimit: 4096,
       chunkSizeWarningLimit: 1000,
@@ -64,16 +51,6 @@ export default defineConfig(({ mode }) => {
       cssCodeSplit: true, // Split CSS into chunks for better caching
       modulePreload: {
         polyfill: true, // Add module preload polyfill
-      },
-      terserOptions: {
-        compress: {
-          drop_console: isProd,
-          drop_debugger: isProd,
-          pure_funcs: isProd ? ['console.log', 'console.debug'] : []
-        },
-        format: {
-          comments: false
-        }
       },
       rollupOptions: {
         onwarn(warning, warn) {
@@ -211,7 +188,7 @@ export default defineConfig(({ mode }) => {
       }
     },
     
-    // Better error overlay
+    // Use esbuild instead of Babel
     esbuild: {
       logOverride: { 
         'this-is-undefined-in-esm': 'silent' 
@@ -221,6 +198,8 @@ export default defineConfig(({ mode }) => {
       jsxFragment: 'React.Fragment',
       jsxInject: `import React from 'react'`,
       treeShaking: true,
+      // Add drop for console.log in production
+      drop: isProd ? ['console'] : [],
     },
     
     // Add cache

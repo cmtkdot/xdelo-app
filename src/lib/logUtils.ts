@@ -7,7 +7,7 @@ import { LogEventType } from '@/types/api/LogEventType';
  * Centralized logging function that logs events to the unified_audit_logs table
  */
 export async function logEvent(
-  eventType: LogEventType | string,
+  eventType: LogEventType,
   entityId: string,
   metadata: Record<string, any> = {},
   previousState?: Record<string, any>,
@@ -55,7 +55,7 @@ export async function logEvent(
  * Specialized logging function for message-related events
  */
 export async function logMessageEvent(
-  eventType: LogEventType | string,
+  eventType: LogEventType,
   messageId: string,
   metadata: Record<string, any> = {},
   previousState?: Record<string, any>,
@@ -74,7 +74,7 @@ export async function logMessageEvent(
  * Specialized logging function for sync operations
  */
 export async function logSyncOperation(
-  operation: LogEventType | string,
+  operation: LogEventType,
   entityId: string,
   metadata: Record<string, any> = {},
   success: boolean = true,
@@ -94,7 +94,7 @@ export async function logSyncOperation(
  * Specialized logging function for system repair operations
  */
 export async function logSystemRepair(
-  operation: LogEventType | string,
+  operation: LogEventType,
   entityId: string,
   metadata: Record<string, any> = {},
   success: boolean = true,
