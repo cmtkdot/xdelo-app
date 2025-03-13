@@ -1,7 +1,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Message, ProcessingState } from "@/types";
+import type { Message, ProcessingState, AnalyzedContent } from "@/types";
 
 interface GroupedMessages {
   [key: string]: Message[];
@@ -38,8 +38,8 @@ export const useMediaGroups = () => {
           processing_state: (item.processing_state as ProcessingState) || undefined,
           processing_started_at: item.processing_started_at || undefined,
           processing_completed_at: item.processing_completed_at || undefined,
-          analyzed_content: item.analyzed_content || {},
-          telegram_data: item.telegram_data || {},
+          analyzed_content: item.analyzed_content as AnalyzedContent || undefined,
+          telegram_data: item.telegram_data as Record<string, unknown> || {},
           error_message: item.error_message || undefined,
           chat_id: item.chat_id || undefined,
           chat_type: item.chat_type || undefined,

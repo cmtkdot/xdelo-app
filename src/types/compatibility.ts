@@ -4,7 +4,7 @@
 
 import type { Message } from './entities/Message';
 import type { GlProduct } from './entities/Product';
-import type { MediaItem } from './ui/MediaViewer';
+import type { MediaItem } from './entities/MediaItem';
 import type { ProcessingState } from './api/ProcessingState';
 import type { SyncStatus } from './api/SyncStatus';
 import type { AnalyzedContent } from './utils/AnalyzedContent';
