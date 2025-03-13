@@ -15,6 +15,7 @@ export * from './ui/MediaViewer';
 export * from './api/SupabaseTypes';
 export * from './api/SyncStatus';
 export * from './api/ProcessingState';
+export * from './api/LogEventType';
 
 // Utility types
 export * from './utils/AnalyzedContent';

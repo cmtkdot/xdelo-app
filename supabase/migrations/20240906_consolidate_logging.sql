@@ -41,6 +41,26 @@ EXCEPTION
 END;
 $$;
 
+-- Update legacy functions to use the new consolidated logging
+CREATE OR REPLACE FUNCTION xdelo_log_message_operation(
+  p_operation TEXT,
+  p_message_id UUID,
+  p_details JSONB
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Call the consolidated logging function
+  PERFORM xdelo_log_operation(
+    p_operation,
+    p_message_id,
+    p_details
+  );
+END;
+$$;
+
 -- Drop redundant logging functions
 DROP FUNCTION IF EXISTS xdelo_log_sync_operation(text, uuid, jsonb, text);
 DROP FUNCTION IF EXISTS xdelo_log_webhook_event(text, uuid, jsonb, text);

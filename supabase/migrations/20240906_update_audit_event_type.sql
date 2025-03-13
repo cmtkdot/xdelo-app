@@ -33,7 +33,8 @@ BEGIN
     'non_media_message_created',
     'processing_state_changed',
     'webhook_received',
-    'system'
+    'system',
+    'edge_function_error'
   );
 
   -- Update table to use new type

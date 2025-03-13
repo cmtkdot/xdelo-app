@@ -1,16 +1,18 @@
+
 # Simplified Audit Logging System
 
 ## Architecture Overview
 
 ```mermaid
 graph TD
-    A[Message Events] --> B{Event Type}
-    B -->|Create/Update| C[Unified Audit Logs]
-    B -->|Delete| D[Deleted Messages]
+    A[Application Events] --> B{Event Type}
+    B -->|Message Events| C[Unified Audit Logs]
+    B -->|Media Events| C
+    B -->|Sync Events| C
+    B -->|User Actions| C
+    B -->|System Repairs| C
     C --> E[Audit Trail View]
-    D --> F[Deletion Tracking]
     E --> G[Frontend Dashboard]
-    F --> G
 ```
 
 ## Core Components
@@ -19,99 +21,133 @@ graph TD
 ```sql
 CREATE TABLE unified_audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_type audit_event_type NOT NULL,
-  entity_id UUID NOT NULL, -- Message ID
+  event_type TEXT NOT NULL,
+  entity_id UUID NOT NULL,
   previous_state JSONB,
   new_state JSONB,
   metadata JSONB,
   error_message TEXT,
+  correlation_id UUID,
   event_timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
-### 2. Enhanced Message Processing Flow
+### 2. LogEventType Enum
+The `LogEventType` enum provides standardized event types across the application:
+
+```typescript
+export enum LogEventType {
+  // Message events
+  MESSAGE_CREATED = 'message_created',
+  MESSAGE_UPDATED = 'message_updated',
+  MESSAGE_DELETED = 'message_deleted',
+  // ... more events
+}
+```
+
+## Logging Functions
+
+### Client-Side Logging
+```typescript
+// Log any event
+logEvent({
+  eventType: LogEventType.MESSAGE_UPDATED,
+  entityId: "message-uuid",
+  previousState: { /* old state */ },
+  newState: { /* new state */ },
+  metadata: { /* custom metadata */ }
+});
+
+// Log a message event (simplified)
+logMessageEvent(
+  LogEventType.MESSAGE_UPDATED,
+  "message-uuid",
+  { /* metadata */ }
+);
+
+// Log a sync operation
+logSyncOperation(
+  "sync_products",
+  "entity-uuid",
+  { /* details */ },
+  true // success
+);
+```
+
+### Server-Side Logging
+```typescript
+// In Edge Functions
+xdelo_logProcessingEvent(
+  "message_processed",
+  "message-uuid",
+  "correlation-id",
+  { /* metadata */ }
+);
+
+// In Database Functions
+SELECT xdelo_log_operation(
+  'message_updated',
+  message_id,
+  '{"user": "system"}'::jsonb
+);
+```
+
+## Correlation ID Tracking
+
+All logs include a correlation ID for request tracing:
+
 ```mermaid
 sequenceDiagram
-    participant T as Telegram
-    participant W as Webhook
-    participant D as Database
-    participant A as Audit Logger
+    participant Client
+    participant API
+    participant DB
     
-    T->>W: Message Received
-    W->>D: Create Message
-    D->>A: Log Creation
-    W->>D: Update Message
-    D->>A: Log Update
-    W->>D: Delete Message
-    D->>A: Log Deletion
-    A->>D: Store in unified_audit_logs
+    Client->>API: Request with correlation_id
+    API->>DB: Log with same correlation_id
+    API->>Client: Response with correlation_id
+    Client->>API: New related request
+    API->>DB: Log with same correlation_id
 ```
 
-## Media Handling Audit Trail
+## Migration from Legacy Logging
 
-### File Lifecycle Tracking
-```mermaid
-gantt
-    title Media File Lifecycle
-    dateFormat  YYYY-MM-DD
-    section Storage
-    Uploaded      :a1, 2025-03-12, 1h
-    Processed     :after a1, 2h
-    section Auditing
-    Log Creation  :2025-03-12, 1h
-    Log Analysis  :2025-03-12, 2h
-```
+Legacy logging functions are maintained for backward compatibility:
 
-## Frontend Integration
-
-### Audit Log Query Interface
 ```typescript
-interface AuditLogQuery {
-  messageId?: string;
-  correlationId?: string;
-  startDate?: Date;
-  endDate?: Date;
-  eventTypes?: AuditEventType[];
-}
+// Old way (deprecated but still works)
+logMessageOperation("update", "message-uuid", { /* metadata */ });
 
-const fetchAuditLogs = async (query: AuditLogQuery) => {
-  return supabase
-    .from('unified_audit_logs')
-    .select('*')
-    .filter('entity_id', 'eq', query.messageId)
-    .filter('event_type', 'in', `(${query.eventTypes?.join(',')})`);
-};
-```
-
-## Error Recovery Patterns
-
-```mermaid
-flowchart LR
-    A[Processing Error] --> B{Retry Possible?}
-    B -->|Yes| C[Increment Retry Count]
-    C --> D[Schedule Retry]
-    B -->|No| E[Mark Permanent Failure]
-    E --> F[Alert Monitoring]
+// New way (preferred)
+logMessageEvent(LogEventType.MESSAGE_UPDATED, "message-uuid", { /* metadata */ });
 ```
 
 ## Example Queries
 
-1. Get all edits for a message:
+1. Get all events for a specific entity:
 ```sql
 SELECT * FROM unified_audit_logs
-WHERE event_type = 'message_updated'
-AND entity_id = 'message-uuid'
+WHERE entity_id = 'entity-uuid'
 ORDER BY event_timestamp DESC;
 ```
 
-2. Find failed processing attempts:
+2. Find all errors:
 ```sql
 SELECT * FROM unified_audit_logs
-WHERE event_type = 'processing_error'
-AND metadata->>'correlation_id' = 'cid-1234';
+WHERE error_message IS NOT NULL
+ORDER BY event_timestamp DESC;
 ```
 
-3. Audit trail for media group:
+3. Trace a request using correlation ID:
 ```sql
-SELECT * FROM v_message_audit_trail
-WHERE metadata->>'media_group_id' = 'mg-5678';
+SELECT * FROM unified_audit_logs
+WHERE correlation_id = 'correlation-uuid'
+ORDER BY event_timestamp;
+```
+
+## Best Practices
+
+1. Always include a correlation ID for related operations
+2. Use standard event types from LogEventType enum
+3. Put detailed information in metadata
+4. Include timestamps in metadata for precise timing
+5. For user actions, always include user_id in metadata

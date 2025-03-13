@@ -24,13 +24,18 @@ export async function xdelo_logProcessingEvent(
   errorMessage?: string
 ) {
   try {
+    // Ensure metadata has a timestamp
+    const enhancedMetadata = {
+      ...metadata,
+      timestamp: metadata.timestamp || new Date().toISOString(),
+      correlation_id: correlationId,
+      logged_from: 'edge_function'
+    };
+    
     await supabaseClient.from('unified_audit_logs').insert({
       event_type: eventType,
       entity_id: entityId,
-      metadata: {
-        ...metadata,
-        timestamp: new Date().toISOString()
-      },
+      metadata: enhancedMetadata,
       error_message: errorMessage,
       correlation_id: correlationId,
       event_timestamp: new Date().toISOString()

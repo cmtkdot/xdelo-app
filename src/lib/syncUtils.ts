@@ -3,10 +3,10 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '../integrations/supabase/types';
 
 // Import the consolidated logging functions
-import { logMessageOperation, LogEventType } from './syncLogger';
+import { logSyncOperation, LogEventType } from './logUtils';
 
 /**
- * @deprecated Use logMessageOperation from syncLogger.ts instead
+ * @deprecated Use logSyncOperation from logUtils.ts instead
  * This function is maintained for backward compatibility
  */
 export async function xdelo_logSyncOperation(
@@ -18,21 +18,25 @@ export async function xdelo_logSyncOperation(
 ) {
   try {
     // Use the new consolidated logging system
-    const eventType = success ? LogEventType.SYNC_COMPLETED : LogEventType.SYNC_ERROR;
-    await logMessageOperation(eventType, details.id || 'system', {
+    await logSyncOperation(
       operation,
-      details,
-      error_message: error,
-      table_name: details.table_name || 'system',
-      glide_id: details.glide_id || null
-    });
+      details.id || 'system',
+      {
+        operation,
+        details,
+        table_name: details.table_name || 'system',
+        glide_id: details.glide_id || null
+      },
+      success,
+      error
+    );
   } catch (err) {
     console.error('Failed to log sync operation:', err);
   }
 }
 
 /**
- * @deprecated Use logMessageOperation from syncLogger.ts instead
+ * @deprecated Use logSyncOperation from logUtils.ts instead
  * This function is maintained for backward compatibility
  */
 export async function xdelo_logSyncOperationBatch(
@@ -55,7 +59,7 @@ export async function xdelo_logSyncOperationBatch(
 }
 
 /**
- * @deprecated Use logMessageOperation from syncLogger.ts instead
+ * @deprecated Use logMessageEvent from logUtils.ts instead
  * This function is maintained for backward compatibility
  */
 export async function xdelo_logSyncWarning(
@@ -63,10 +67,16 @@ export async function xdelo_logSyncWarning(
   message: string,
   details: Record<string, any>
 ) {
-  await logMessageOperation('warning', details.id || 'system', {
-    message,
-    ...details
-  });
+  await logSyncOperation(
+    'warning',
+    details.id || 'system',
+    {
+      message,
+      ...details
+    },
+    false,
+    message
+  );
 }
 
 // Export the old function names for backward compatibility

@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
-import { logMessageOperation, LogEventType } from '@/lib/syncLogger';
+import { logSystemRepair, LogEventType } from '@/lib/logUtils';
 
 /**
  * Hook for general processing system repair operations
@@ -25,21 +25,25 @@ export function useProcessingRepair() {
       const operationId = `repair_${Date.now()}`;
       
       // Log start of repair
-      await logMessageOperation(LogEventType.SYSTEM_REPAIR, operationId, {
-        operation: operationName,
-        status: 'started',
-        timestamp: new Date().toISOString()
-      });
+      await logSystemRepair(
+        operationName, 
+        operationId, 
+        { status: 'started' }, 
+        true
+      );
       
       const result = await operation();
       
       // Log successful repair
-      await logMessageOperation(LogEventType.SYSTEM_REPAIR, operationId, {
-        operation: operationName,
-        status: 'completed',
-        result,
-        timestamp: new Date().toISOString()
-      });
+      await logSystemRepair(
+        operationName, 
+        operationId, 
+        { 
+          status: 'completed', 
+          result 
+        }, 
+        true
+      );
       
       toast({
         title: successMessage,
@@ -55,12 +59,13 @@ export function useProcessingRepair() {
       console.error(`Error during ${operationName}:`, error);
       
       // Log failed repair
-      await logMessageOperation(LogEventType.SYSTEM_REPAIR, `repair_${Date.now()}`, {
-        operation: operationName,
-        status: 'failed',
-        error: error.message,
-        timestamp: new Date().toISOString()
-      });
+      await logSystemRepair(
+        operationName, 
+        `repair_${Date.now()}`, 
+        { status: 'failed' }, 
+        false, 
+        error.message
+      );
       
       toast({
         title: "Repair Failed",

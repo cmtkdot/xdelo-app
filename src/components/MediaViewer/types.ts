@@ -2,8 +2,6 @@
 import type { Message } from "@/types/entities/Message";
 import type { MediaItem } from "@/types/entities/MediaItem";
 
-export { MediaItem };
-
 export function messageToMediaItem(message: Message): MediaItem {
   return {
     id: message.id,

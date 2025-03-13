@@ -12,6 +12,7 @@ import type { MatchResult } from './utils/MatchResult';
 import type { FilterValues } from './ui/FilterValues';
 import type { MessageProcessingStats } from './utils/MessageProcessingStats';
 import type { StorageOperationResult, ApiResponse } from './api/SupabaseTypes';
+import type { LogEventType } from './api/LogEventType';
 
 // Legacy types for backward compatibility
 export type {
@@ -25,7 +26,8 @@ export type {
   FilterValues,
   MessageProcessingStats,
   StorageOperationResult,
-  ApiResponse
+  ApiResponse,
+  LogEventType
 };
 
 // Clean up legacy exports

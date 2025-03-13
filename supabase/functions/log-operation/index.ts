@@ -12,40 +12,6 @@ interface LogRequest {
   correlationId?: string;
 }
 
-// Define allowed event types for type checking
-const ALLOWED_EVENT_TYPES = [
-  // Message events
-  'message_created',
-  'message_updated',
-  'message_deleted',
-  'message_processed',
-  'message_analyzed',
-  'message_error',
-  
-  // Media processing events
-  'media_uploaded',
-  'media_downloaded',
-  'media_error',
-  'media_repaired',
-  
-  // Sync events
-  'sync_started',
-  'sync_completed',
-  'sync_error',
-  'product_matched',
-  
-  // User actions
-  'user_action',
-  'system_repair',
-  
-  // Legacy events (for backward compatibility)
-  'duplicate_file_detected',
-  'non_media_message_created',
-  'processing_state_changed',
-  'webhook_received',
-  'system'
-];
-
 export default createHandler(async (req: Request) => {
   // Parse request body
   const { 
@@ -78,6 +44,7 @@ export default createHandler(async (req: Request) => {
     ...metadata,
     logged_at: new Date().toISOString(),
     correlation_id: correlationId,
+    logged_from: 'edge_function'
   };
   
   // Add error message to metadata if provided
