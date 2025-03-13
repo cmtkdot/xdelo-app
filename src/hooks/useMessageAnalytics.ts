@@ -77,13 +77,13 @@ export function useMessageAnalytics() {
       const oneMonthAgo = subMonths(now, 1);
       
       // Media group tracking
-      const mediaGroups = new Map<string, Message[]>();
+      const mediaGroups = new Map<string, any[]>();
       
       // Vendor tracking
       const vendors = new Map<string, number>();
       
       // Process each message
-      messages.forEach((message: Message) => {
+      messages.forEach((message: any) => {
         // Media type stats
         if (message.mime_type) {
           if (message.mime_type.startsWith('image/')) {

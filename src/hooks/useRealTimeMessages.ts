@@ -1,76 +1,62 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Message, ProcessingState } from '@/types';
-import { toast } from 'sonner';
 
-interface UseRealTimeMessagesOptions {
+interface UseRealTimeMessagesProps {
   limit?: number;
-  filter?: string;
   processingState?: ProcessingState[];
-  sortBy?: string;
+  sortBy?: 'created_at' | 'updated_at' | 'purchase_date';
   sortOrder?: 'asc' | 'desc';
-  showForwarded?: boolean;
-  showEdited?: boolean;
 }
 
-export function useRealTimeMessages({ 
-  limit = 20, 
-  filter = '',
-  processingState,
-  sortBy = 'updated_at',
-  sortOrder = 'desc',
-  showForwarded = false,
-  showEdited = false
-}: UseRealTimeMessagesOptions = {}) {
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+export function useRealTimeMessages({
+  limit = 100,
+  processingState = [],
+  sortBy = 'created_at',
+  sortOrder = 'desc'
+}: UseRealTimeMessagesProps = {}) {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
-  const {
-    data: messages = [],
-    isLoading,
-    refetch,
-    error
-  } = useQuery({
-    queryKey: ['messages', limit, filter, processingState, sortBy, sortOrder, showForwarded, showEdited],
-    queryFn: async () => {
-      try {
-        let query = supabase
-          .from('messages')
-          .select('*')
-          .order(sortBy || 'updated_at', { ascending: sortOrder === 'asc' })
-          .limit(limit);
-          
-        if (filter) {
-          query = query.or(`caption.ilike.%${filter}%,analyzed_content->product_name.ilike.%${filter}%,analyzed_content->vendor_uid.ilike.%${filter}%,telegram_message_id.eq.${!isNaN(parseInt(filter)) ? filter : 0},chat_title.ilike.%${filter}%`);
-        }
-        
-        if (processingState && processingState.length > 0) {
-          query = query.in('processing_state', processingState);
-        }
-        
-        if (showForwarded) {
-          query = query.eq('is_forward', true);
-        }
-        
-        if (showEdited) {
-          query = query.not('old_analyzed_content', 'is', null);
-        }
-        
-        const { data, error } = await query;
-          
-        if (error) throw error;
-        return data as Message[];
-      } catch (error) {
-        console.error('Error fetching messages:', error);
-        throw error;
+  const fetchMessages = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      let query = supabase
+        .from('v_messages_compatibility')
+        .select('*')
+        .order(sortBy, { ascending: sortOrder === 'asc' })
+        .limit(limit);
+      
+      if (processingState && processingState.length > 0) {
+        query = query.in('processing_state', processingState);
       }
-    },
-    staleTime: 5000,
-  });
+      
+      const { data, error: queryError } = await query;
+      
+      if (queryError) {
+        throw queryError;
+      }
+      
+      setMessages(data as Message[]);
+    } catch (err: any) {
+      console.error('Error fetching messages:', err);
+      setError(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [limit, processingState, sortBy, sortOrder]);
+
+  const handleRefresh = useCallback(async () => {
+    await fetchMessages();
+  }, [fetchMessages]);
 
   useEffect(() => {
-    const channel = supabase
+    fetchMessages();
+    
+    const subscription = supabase
       .channel('messages-changes')
       .on(
         'postgres_changes',
@@ -80,36 +66,20 @@ export function useRealTimeMessages({
           table: 'messages'
         },
         (payload) => {
-          console.log('Real-time update received:', payload);
-          refetch();
+          fetchMessages();
         }
       )
       .subscribe();
-
+    
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(subscription);
     };
-  }, [refetch]);
-
-  const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    try {
-      await refetch();
-      setLastRefresh(new Date());
-    } catch (error) {
-      console.error('Error refreshing messages:', error);
-      toast.error("Failed to refresh messages");
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [refetch]);
+  }, [fetchMessages]);
 
   return {
     messages,
     isLoading,
-    isRefreshing,
-    lastRefresh,
-    handleRefresh,
-    error
+    error,
+    handleRefresh
   };
 }

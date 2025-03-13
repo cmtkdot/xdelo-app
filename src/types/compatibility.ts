@@ -1,34 +1,57 @@
 
-// This file maintains backward compatibility with old type imports
-// to avoid breaking changes during refactoring
-
-import type { Message } from './entities/Message';
-import type { GlProduct } from './entities/Product';
-import type { MediaItem } from './entities/MediaItem';
+/**
+ * Type definitions for compatibility with existing database views
+ * and APIs that may not align perfectly with our main types
+ */
 import type { ProcessingState } from './api/ProcessingState';
-import type { SyncStatus } from './api/SyncStatus';
-import type { AnalyzedContent } from './utils/AnalyzedContent';
-import type { MatchResult } from './utils/MatchResult';
-import type { FilterValues } from './ui/FilterValues';
-import type { MessageProcessingStats } from './utils/MessageProcessingStats';
-import type { StorageOperationResult, ApiResponse } from './api/SupabaseTypes';
-import type { LogEventType } from './api/LogEventType';
 
-// Legacy types for backward compatibility
-export type {
-  Message,
-  GlProduct,
-  MediaItem,
-  ProcessingState,
-  SyncStatus,
-  AnalyzedContent,
-  MatchResult,
-  FilterValues,
-  MessageProcessingStats,
-  StorageOperationResult,
-  ApiResponse,
-  LogEventType
-};
+export interface LegacyMessage {
+  id: string;
+  telegram_message_id?: number;
+  media_group_id?: string;
+  caption?: string;
+  file_id?: string;
+  file_unique_id?: string;
+  public_url: string;
+  mime_type?: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  processing_state?: ProcessingState;
+  analyzed_content?: Record<string, any>;
+  telegram_data?: Record<string, any>;
+  created_at?: string;
+  updated_at?: string;
+  chat_id?: number;
+  chat_type?: string;
+  chat_title?: string;
+  is_forward?: boolean;
+  edit_count?: number;
+  forward_info?: Record<string, any>;
+  edit_history?: Record<string, any>[];
+}
 
-// Clean up legacy exports
-export * from './entities/Product';
+export interface LegacyMessageResponse {
+  data: LegacyMessage[] | null;
+  error: Error | null;
+}
+
+export interface LegacyProduct {
+  id: string;
+  product_name: string;
+  product_code?: string;
+  vendor_uid?: string;
+  quantity?: number;
+  unit_price?: number;
+  total_price?: number;
+  purchase_date?: string;
+  notes?: string;
+  message_id: string;
+  created_at: string;
+  updated_at?: string;
+  media_url: string;
+  mime_type?: string;
+  width?: number;
+  height?: number;
+}

@@ -13,6 +13,7 @@ import Auth from "./pages/Auth";
 // Lazy load page components for better performance
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const MessagesPage = lazy(() => import("./pages/Messages"));
+const MessagesEnhanced = lazy(() => import("./pages/MessagesEnhanced"));
 const ProductGallery = lazy(() => import("./pages/ProductGallery"));
 const MediaTable = lazy(() => import("./pages/MediaTable"));
 const AIChat = lazy(() => import("./pages/AIChat"));
@@ -138,6 +139,7 @@ function App() {
                   }>
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/messages" element={<MessagesPage />} />
+                    <Route path="/messages-enhanced" element={<MessagesEnhanced />} />
                     <Route path="/gallery" element={<ProductGallery />} />
                     <Route path="/media-table" element={<MediaTable />} />
                     <Route path="/ai-chat" element={<AIChat />} />

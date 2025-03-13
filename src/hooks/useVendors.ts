@@ -1,42 +1,40 @@
 
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { AnalyzedContent } from "@/types";
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
-export const useVendors = () => {
+export function useVendors() {
   return useQuery({
     queryKey: ['vendors'],
     queryFn: async () => {
-      try {
-        // Use the compatibility view for consistent field naming
-        const { data, error } = await supabase
-          .from("v_messages_compatibility")
-          .select('analyzed_content, vendor_name')
-          .not('analyzed_content', 'is', null)
-          .is('is_original_caption', true);
+      const { data, error } = await supabase
+        .rpc('get_distinct_vendors', {})
+        .order('vendor', { ascending: true });
 
-        if (error) throw error;
-
-        const uniqueVendors = new Set<string>();
-        data.forEach((item) => {
-          // First check the direct vendor_name field from the view
-          if (item.vendor_name) {
-            uniqueVendors.add(item.vendor_name);
-          } else if (item.analyzed_content) {
-            // Safely access vendor_uid from analyzed_content
-            const analyzedContent = item.analyzed_content as AnalyzedContent;
-            if (analyzedContent && analyzedContent.vendor_uid) {
-              uniqueVendors.add(analyzedContent.vendor_uid);
-            }
+      if (error) throw error;
+      
+      // If the RPC function doesn't exist yet, fall back to a simple query
+      if (!data) {
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('v_messages_compatibility')
+          .select('analyzed_content->vendor_uid')
+          .not('analyzed_content->vendor_uid', 'is', null);
+        
+        if (fallbackError) throw fallbackError;
+        
+        // Extract unique vendor values
+        const vendors = new Set<string>();
+        
+        fallbackData?.forEach(row => {
+          if (row.analyzed_content?.vendor_uid) {
+            vendors.add(row.analyzed_content.vendor_uid as string);
           }
         });
-
-        return Array.from(uniqueVendors).sort();
-      } catch (error) {
-        console.error("Error fetching vendors:", error);
-        return [];
+        
+        return Array.from(vendors).sort();
       }
+      
+      return data.map(item => item.vendor);
     },
-    initialData: []
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
-};
+}

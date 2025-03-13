@@ -31,6 +31,7 @@ import {
   FileDown,
   FileUp
 } from 'lucide-react';
+import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import {
@@ -56,7 +57,11 @@ export const EnhancedFiltersPanel: React.FC = () => {
   const [selectedVendors, setSelectedVendors] = useState<string[]>(filters.vendors);
   const [mediaTypes, setMediaTypes] = useState<string[]>(filters.mediaTypes);
   const [showGroups, setShowGroups] = useState(filters.showGroups);
-  const [date, setDate] = useState<{ from: Date; to: Date } | null>(filters.dateRange);
+  const [date, setDate] = useState<DateRange | undefined>(
+    filters.dateRange 
+      ? { from: filters.dateRange.from, to: filters.dateRange.to } 
+      : undefined
+  );
   const [vendorPopoverOpen, setVendorPopoverOpen] = useState(false);
   const [presetName, setPresetName] = useState('');
   
@@ -81,7 +86,9 @@ export const EnhancedFiltersPanel: React.FC = () => {
       vendors: selectedVendors,
       mediaTypes,
       showGroups,
-      dateRange: date,
+      dateRange: date && date.from && date.to 
+        ? { from: date.from, to: date.to } 
+        : null,
     });
     setPage(1);
   };
@@ -93,7 +100,7 @@ export const EnhancedFiltersPanel: React.FC = () => {
     setSelectedVendors([]);
     setMediaTypes([]);
     setShowGroups(true);
-    setDate(null);
+    setDate(undefined);
     
     setFilters({
       ...filters,
@@ -117,7 +124,9 @@ export const EnhancedFiltersPanel: React.FC = () => {
       vendors: selectedVendors,
       mediaTypes,
       showGroups,
-      dateRange: date,
+      dateRange: date && date.from && date.to 
+        ? { from: date.from, to: date.to } 
+        : null,
     });
     
     setPresetName('');
@@ -128,12 +137,14 @@ export const EnhancedFiltersPanel: React.FC = () => {
     const preset = loadPreset(name);
     if (!preset) return;
     
-    setSearchTerm(preset.search);
-    setProcessingStates(preset.processingStates);
-    setSelectedVendors(preset.vendors);
-    setMediaTypes(preset.mediaTypes);
-    setShowGroups(preset.showGroups);
-    setDate(preset.dateRange);
+    setSearchTerm(preset.search || '');
+    setProcessingStates(preset.processingStates || []);
+    setSelectedVendors(preset.vendors || []);
+    setMediaTypes(preset.mediaTypes || []);
+    setShowGroups(preset.showGroups ?? true);
+    setDate(preset.dateRange 
+      ? { from: preset.dateRange.from, to: preset.dateRange.to } 
+      : undefined);
     
     setFilters({
       ...filters,
@@ -149,7 +160,9 @@ export const EnhancedFiltersPanel: React.FC = () => {
     setSelectedVendors(filters.vendors);
     setMediaTypes(filters.mediaTypes);
     setShowGroups(filters.showGroups);
-    setDate(filters.dateRange);
+    setDate(filters.dateRange 
+      ? { from: filters.dateRange.from, to: filters.dateRange.to } 
+      : undefined);
   }, [filters]);
   
   // Auto-apply filters when certain options change

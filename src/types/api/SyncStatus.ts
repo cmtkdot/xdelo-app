@@ -1,5 +1,10 @@
 
 /**
- * Represents the synchronization status of an entity
+ * Status of a data synchronization operation
  */
-export type SyncStatus = 'pending' | 'synced' | 'failed' | 'queued';
+export type SyncStatus =
+  | 'not_started'
+  | 'in_progress'
+  | 'completed'
+  | 'failed'
+  | 'partial';

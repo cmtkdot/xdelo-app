@@ -1,23 +1,62 @@
 
-import type { AnalyzedContent } from '../utils/AnalyzedContent';
-import type { ProcessingState } from '../api/ProcessingState';
-
-/**
- * MediaItem entity represents a media file stored in the system
- */
 export interface MediaItem {
   id: string;
-  public_url: string;
-  mime_type?: string;
-  file_unique_id: string;
-  created_at: string;
-  caption?: string;
-  analyzed_content?: AnalyzedContent;
+  url: string;
+  type: 'image' | 'video' | 'document' | 'audio' | 'unknown';
+  thumbnail?: string;
   width?: number;
   height?: number;
-  file_size?: number;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+  fileSize?: number;
   duration?: number;
-  content_disposition?: 'inline' | 'attachment';
-  storage_path?: string;
-  processing_state?: ProcessingState;
+  uploadedAt?: string;
+}
+
+export class MediaItem implements MediaItem {
+  constructor(
+    id: string,
+    url: string,
+    type: 'image' | 'video' | 'document' | 'audio' | 'unknown',
+    options: Omit<MediaItem, 'id' | 'url' | 'type'> = {}
+  ) {
+    this.id = id;
+    this.url = url;
+    this.type = type;
+    Object.assign(this, options);
+  }
+
+  static fromMessage(message: any): MediaItem {
+    let type: 'image' | 'video' | 'document' | 'audio' | 'unknown' = 'unknown';
+    
+    if (message.mime_type) {
+      if (message.mime_type.startsWith('image/')) {
+        type = 'image';
+      } else if (message.mime_type.startsWith('video/')) {
+        type = 'video';
+      } else if (message.mime_type.startsWith('audio/')) {
+        type = 'audio';
+      } else if (message.mime_type.startsWith('application/')) {
+        type = 'document';
+      }
+    }
+    
+    return new MediaItem(
+      message.id,
+      message.public_url,
+      type,
+      {
+        thumbnail: type === 'image' ? message.public_url : undefined,
+        width: message.width,
+        height: message.height,
+        title: message.analyzed_content?.product_name || message.caption,
+        description: message.caption,
+        mimeType: message.mime_type,
+        fileSize: message.file_size,
+        duration: message.duration,
+        uploadedAt: message.created_at
+      }
+    );
+  }
 }

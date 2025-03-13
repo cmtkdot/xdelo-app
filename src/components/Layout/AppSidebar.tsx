@@ -1,31 +1,54 @@
-
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState } from "react";
+import { useLocation, Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import {
-  LayoutDashboard,
-  MessageCircle,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Home,
   MessageSquare,
-  Package,
-  Bot,
+  Image as ImageIcon,
+  PanelLeft,
+  FileText,
   Settings,
-  LogOut
-} from 'lucide-react';
-import { cn } from '@/lib/generalUtils';
-import { motion } from 'framer-motion';
-import { supabase } from '@/integrations/supabase/client';
+  LogOut,
+  Music,
+  Database,
+  PanelTopOpen,
+  LucideIcon
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { ThemeToggle } from "@/components/Theme/ThemeToggle";
+import { cn } from "@/lib/utils";
 
-const menuItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-  { icon: MessageCircle, label: 'Messages', path: '/messages' },
-  { icon: MessageSquare, label: 'Product Gallery', path: '/gallery' },
-  { icon: Package, label: 'Vendors', path: '/vendors' },
-  { icon: Bot, label: 'AI Chat', path: '/ai-chat' },
-  { icon: Settings, label: 'Settings', path: '/settings' },
-];
+interface NavItem {
+  name: string;
+  Icon: LucideIcon;
+  path: string;
+  group?: 'main' | 'data' | 'settings';
+  divider?: boolean;
+}
 
-export function AppSidebar() {
+export const AppSidebar = () => {
   const location = useLocation();
-  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const navItems: NavItem[] = [
+    { name: "Dashboard", Icon: Home, path: "/", group: "main" },
+    { name: "Messages", Icon: MessageSquare, path: "/messages", group: "main" },
+    { name: "Enhanced Messages", Icon: PanelTopOpen, path: "/messages-enhanced", group: "main" },
+    { name: "Gallery", Icon: ImageIcon, path: "/gallery", group: "main" },
+    
+    { name: "Media Table", Icon: PanelLeft, path: "/media-table", group: "data", divider: true },
+    { name: "SQL Console", Icon: Database, path: "/sql-console", group: "data" },
+    { name: "AI Chat", Icon: FileText, path: "/ai-chat", group: "data" },
+    { name: "Audio Upload", Icon: Music, path: "/audio-upload", group: "data" },
+    
+    { name: "Settings", Icon: Settings, path: "/settings", group: "settings", divider: true },
+  ];
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -35,15 +58,15 @@ export function AppSidebar() {
     <div 
       className={cn(
         "fixed left-0 top-0 h-full bg-white dark:bg-gray-900 transition-all duration-300 ease-in-out z-50",
-        isExpanded ? "w-64" : "w-16",
+        expanded ? "w-64" : "w-16",
         "border-r border-gray-200 dark:border-gray-800"
       )}
-      onMouseEnter={() => setIsExpanded(true)}
-      onMouseLeave={() => setIsExpanded(false)}
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
     >
       <div className="flex flex-col h-full py-4">
         <div className="flex items-center justify-center h-16 px-4">
-          {isExpanded ? (
+          {expanded ? (
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">XDELO</h1>
           ) : (
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">X</h1>
@@ -51,9 +74,9 @@ export function AppSidebar() {
         </div>
 
         <nav className="flex-1 px-2 space-y-1">
-          {menuItems.map((item) => {
+          {navItems.map((item) => {
             const isActive = location.pathname === item.path;
-            const Icon = item.icon;
+            const Icon = item.Icon;
             
             return (
               <Link
@@ -72,11 +95,11 @@ export function AppSidebar() {
                 )} />
                 <motion.span
                   initial={false}
-                  animate={{ opacity: isExpanded ? 1 : 0, width: isExpanded ? 'auto' : 0 }}
+                  animate={{ opacity: expanded ? 1 : 0, width: expanded ? 'auto' : 0 }}
                   transition={{ duration: 0.2 }}
                   className="whitespace-nowrap overflow-hidden"
                 >
-                  {item.label}
+                  {item.name}
                 </motion.span>
               </Link>
             );
@@ -93,7 +116,7 @@ export function AppSidebar() {
             <LogOut className="flex-shrink-0 w-6 h-6 mr-3 text-gray-400 group-hover:text-gray-500 dark:text-gray-400" />
             <motion.span
               initial={false}
-              animate={{ opacity: isExpanded ? 1 : 0, width: isExpanded ? 'auto' : 0 }}
+              animate={{ opacity: expanded ? 1 : 0, width: expanded ? 'auto' : 0 }}
               transition={{ duration: 0.2 }}
               className="whitespace-nowrap overflow-hidden"
             >
@@ -104,4 +127,4 @@ export function AppSidebar() {
       </div>
     </div>
   );
-}
+};
