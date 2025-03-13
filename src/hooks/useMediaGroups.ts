@@ -1,3 +1,4 @@
+
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types';
@@ -21,11 +22,13 @@ export function useMediaGroups() {
 
         console.log('Received data:', data?.length || 0, 'messages');
 
-        // Transform data into media groups
+        // Transform data into media groups with defensive programming
         const mediaGroups: Record<string, Message[]> = {};
 
-        // Process each message
+        // Process each message with null checks
         (data || []).forEach((message: any) => {
+          if (!message) return; // Skip null/undefined messages
+          
           const groupId = message.media_group_id || `single-${message.id}`;
           
           if (!mediaGroups[groupId]) {
@@ -52,10 +55,12 @@ export function useMediaGroups() {
           });
         });
 
-        return mediaGroups;
+        // Return empty object instead of undefined if no data
+        return mediaGroups || {};
       } catch (error) {
         console.error('Error in useMediaGroups hook:', error);
-        throw error;
+        // Return empty object on error rather than throwing
+        return {};
       }
     },
     staleTime: 1 * 60 * 1000, // 1 minute

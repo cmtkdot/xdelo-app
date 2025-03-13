@@ -1,6 +1,7 @@
+
 import { Message } from "@/types/entities/Message";
 import { AnalyzedContent } from "@/types/utils/AnalyzedContent";
-import { MediaItem } from "@/types/ui/MediaViewer";
+import { MediaItem } from "@/types/entities/MediaItem";
 
 // Common formatters
 export function formatDate(date: Date): string {
@@ -15,18 +16,41 @@ export function formatDate(date: Date): string {
  * Converts a Message to a MediaItem for use in the MediaViewer
  */
 export const messageToMediaItem = (message: Message): MediaItem => {
+  // Determine media type from mime_type
+  let type: 'image' | 'video' | 'document' | 'audio' | 'unknown' = 'unknown';
+  
+  if (message.mime_type) {
+    if (message.mime_type.startsWith('image/')) {
+      type = 'image';
+    } else if (message.mime_type.startsWith('video/')) {
+      type = 'video';
+    } else if (message.mime_type.startsWith('audio/')) {
+      type = 'audio';
+    } else if (message.mime_type.startsWith('application/')) {
+      type = 'document';
+    }
+  }
+  
   return {
     id: message.id,
     public_url: message.public_url || '',
-    mime_type: message.mime_type || '',
-    file_unique_id: message.file_unique_id,
-    analyzed_content: message.analyzed_content,
-    created_at: message.created_at || new Date().toISOString(),
-    caption: message.caption,
+    type: type,
+    thumbnail: type === 'image' ? message.public_url : undefined,
     width: message.width,
     height: message.height,
-    file_size: message.file_size,
+    title: message.analyzed_content?.product_name || message.caption,
+    description: message.caption,
+    mimeType: message.mime_type,
+    fileSize: message.file_size,
     duration: message.duration,
+    uploadedAt: message.created_at,
+    // Include legacy fields for compatibility
+    mime_type: message.mime_type,
+    file_unique_id: message.file_unique_id,
+    analyzed_content: message.analyzed_content,
+    created_at: message.created_at,
+    caption: message.caption,
+    file_size: message.file_size,
     content_disposition: message.content_disposition,
     storage_path: message.storage_path,
     processing_state: message.processing_state

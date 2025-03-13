@@ -49,7 +49,6 @@ export interface EnhancedMessageFilterState {
 }
 
 const MessagesEnhanced = () => {
-  // Initialize the global state
   const { 
     filters, setFilters,
     selectedMessage, setSelectedMessage,
@@ -58,7 +57,6 @@ const MessagesEnhanced = () => {
     refreshData 
   } = useMessagesStore();
 
-  // Local UI state
   const [viewerOpen, setViewerOpen] = useState(false);
   const [currentGroup, setCurrentGroup] = useState<Message[]>([]);
   const [groupIndex, setGroupIndex] = useState(0);
@@ -67,8 +65,7 @@ const MessagesEnhanced = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  // Fetch data using existing hooks
-  const { data: mediaGroups, isLoading, error, refetch } = useMediaGroups();
+  const { data: mediaGroups = {}, isLoading, error, refetch } = useMediaGroups();
   const { messages: realtimeMessages, handleRefresh } = useRealTimeMessages({
     limit: 100,
     processingState: filters.processingStates,
@@ -80,18 +77,17 @@ const MessagesEnhanced = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Memoize the filtered messages to avoid recalculation
   const filteredMessages = useMemo(() => {
-    // Return an array of message groups based on the current filters
-    const groups = Object.values(mediaGroups || {});
+    if (!mediaGroups) return [];
     
-    // Apply all filters
+    const groups = Object.values(mediaGroups);
+    
     return groups.filter(group => {
-      // Filter logic for various criteria
+      if (!group || group.length === 0) return false;
+      
       const mainMessage = group[0];
       if (!mainMessage) return false;
 
-      // Search filter
       if (filters.search && mainMessage.caption) {
         const searchLower = filters.search.toLowerCase();
         const captionMatch = mainMessage.caption.toLowerCase().includes(searchLower);
@@ -101,7 +97,6 @@ const MessagesEnhanced = () => {
         if (!captionMatch && !productMatch && !vendorMatch) return false;
       }
       
-      // Processing state filter
       if (filters.processingStates.length > 0) {
         if (!mainMessage.processing_state || 
            !filters.processingStates.includes(mainMessage.processing_state as ProcessingState)) {
@@ -109,7 +104,6 @@ const MessagesEnhanced = () => {
         }
       }
       
-      // Date range filter
       if (filters.dateRange) {
         const messageDate = new Date(mainMessage.created_at);
         if (messageDate < filters.dateRange.from || messageDate > filters.dateRange.to) {
@@ -117,7 +111,6 @@ const MessagesEnhanced = () => {
         }
       }
       
-      // Media type filter
       if (filters.mediaTypes.length > 0) {
         const mediaType = mainMessage.mime_type?.split('/')[0] || 'unknown';
         if (!filters.mediaTypes.includes(mediaType)) {
@@ -125,7 +118,6 @@ const MessagesEnhanced = () => {
         }
       }
       
-      // Vendor filter
       if (filters.vendors.length > 0) {
         const vendor = mainMessage.analyzed_content?.vendor_uid;
         if (!vendor || !filters.vendors.includes(vendor)) {
@@ -133,7 +125,6 @@ const MessagesEnhanced = () => {
         }
       }
       
-      // Chat source filter
       if (filters.chatSources.length > 0) {
         const chatSource = `${mainMessage.chat_id}-${mainMessage.chat_type}`;
         if (!filters.chatSources.includes(chatSource)) {
@@ -145,22 +136,20 @@ const MessagesEnhanced = () => {
     });
   }, [mediaGroups, filters]);
 
-  // Calculate pagination
   const paginatedMessages = useMemo(() => {
+    if (!filteredMessages || filteredMessages.length === 0) return [];
+    
     const startIndex = (filters.page - 1) * filters.itemsPerPage;
     return filteredMessages.slice(startIndex, startIndex + filters.itemsPerPage);
   }, [filteredMessages, filters.page, filters.itemsPerPage]);
 
-  // Handle message selection
   const handleMessageSelect = (message: Message) => {
     setSelectedMessage(message);
     
-    // Open the details panel if it's not already open
     if (!detailsOpen) {
       setDetailsOpen(true);
     }
     
-    // Log the selection
     logEvent(
       LogEventType.USER_ACTION,
       message.id,
@@ -172,54 +161,55 @@ const MessagesEnhanced = () => {
     );
   };
 
-  // Handle message view
   const handleMessageView = (messageGroup: Message[]) => {
     if (!messageGroup || messageGroup.length === 0) return;
     
     setCurrentGroup(messageGroup);
     setViewerOpen(true);
     
-    // Find the index of the current group
     const index = filteredMessages.findIndex(group => 
-      group[0] && messageGroup[0] && group[0].id === messageGroup[0].id
+      group && group[0] && messageGroup[0] && group[0].id === messageGroup[0].id
     );
     
     if (index !== -1) {
       setGroupIndex(index);
     }
     
-    // Log the view
-    logEvent(
-      LogEventType.USER_ACTION,
-      messageGroup[0].id,
-      {
-        action: 'view_message_group',
-        group_size: messageGroup.length,
-        media_group_id: messageGroup[0].media_group_id
-      }
-    );
+    if (messageGroup[0]) {
+      logEvent(
+        LogEventType.USER_ACTION,
+        messageGroup[0].id,
+        {
+          action: 'view_message_group',
+          group_size: messageGroup.length,
+          media_group_id: messageGroup[0].media_group_id
+        }
+      );
+    }
   };
 
-  // Handle viewer navigation
   const handlePreviousGroup = () => {
-    if (groupIndex > 0) {
+    if (filteredMessages && groupIndex > 0) {
       const prevIndex = groupIndex - 1;
       const prevGroup = filteredMessages[prevIndex];
-      setCurrentGroup(prevGroup);
-      setGroupIndex(prevIndex);
+      if (prevGroup) {
+        setCurrentGroup(prevGroup);
+        setGroupIndex(prevIndex);
+      }
     }
   };
 
   const handleNextGroup = () => {
-    if (groupIndex < filteredMessages.length - 1) {
+    if (filteredMessages && groupIndex < filteredMessages.length - 1) {
       const nextIndex = groupIndex + 1;
       const nextGroup = filteredMessages[nextIndex];
-      setCurrentGroup(nextGroup);
-      setGroupIndex(nextIndex);
+      if (nextGroup) {
+        setCurrentGroup(nextGroup);
+        setGroupIndex(nextIndex);
+      }
     }
   };
 
-  // Handle refresh
   const handleDataRefresh = async () => {
     try {
       await refetch();
@@ -240,7 +230,6 @@ const MessagesEnhanced = () => {
     }
   };
 
-  // Subscribe to real-time updates
   useEffect(() => {
     const channel = supabase
       .channel('messages-changes')
@@ -253,7 +242,6 @@ const MessagesEnhanced = () => {
         },
         (payload) => {
           console.log('Real-time update received:', payload);
-          // Invalidate queries to refresh data
           queryClient.invalidateQueries({ queryKey: ['media-groups'] });
           queryClient.invalidateQueries({ queryKey: ['messages'] });
           queryClient.invalidateQueries({ queryKey: ['message-analytics'] });
@@ -266,7 +254,6 @@ const MessagesEnhanced = () => {
     };
   }, [queryClient]);
 
-  // Subscribe to unified_audit_logs for real-time updates on operations
   useEffect(() => {
     const channel = supabase
       .channel('audit-logs-changes')
@@ -279,7 +266,6 @@ const MessagesEnhanced = () => {
         },
         (payload) => {
           console.log('Audit log update received:', payload);
-          // We could show a notification or update specific parts of the UI based on log type
         }
       )
       .subscribe();
@@ -303,7 +289,7 @@ const MessagesEnhanced = () => {
     <div className="container mx-auto py-6 space-y-6">
       <EnhancedMessagesHeader 
         title="Enhanced Messages"
-        totalMessages={filteredMessages.length}
+        totalMessages={filteredMessages?.length || 0}
         onRefresh={handleDataRefresh}
         isLoading={isLoading}
       />
@@ -375,7 +361,6 @@ const MessagesEnhanced = () => {
       </div>
       
       <div className="flex">
-        {/* Analytics panel - conditionally rendered */}
         {analyticsOpen && (
           <div className="w-72 mr-6 border rounded-md p-4 h-[calc(100vh-12rem)] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
@@ -402,7 +387,6 @@ const MessagesEnhanced = () => {
           </div>
         )}
         
-        {/* Main content area */}
         <div className="flex-1">
           {isLoading ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -419,7 +403,7 @@ const MessagesEnhanced = () => {
                 Retry
               </Button>
             </div>
-          ) : filteredMessages.length === 0 ? (
+          ) : !filteredMessages || filteredMessages.length === 0 ? (
             <div className="p-8 text-center">
               <h3 className="text-xl font-semibold mb-2">No messages found</h3>
               <p className="text-muted-foreground">Try adjusting your filters or refreshing the data.</p>
@@ -446,32 +430,4 @@ const MessagesEnhanced = () => {
           )}
         </div>
         
-        {/* Details panel - conditionally rendered */}
-        {detailsOpen && (
-          <div className="col-span-1 xl:col-span-2 h-[calc(100vh-12rem)]">
-            {selectedMessage && (
-              <MessageDetailsPanel 
-                message={selectedMessage} 
-                onEdit={handleEditMessage}
-                onDelete={handleDeleteMessage}
-              />
-            )}
-          </div>
-        )}
-      </div>
-      
-      {/* Media Viewer Dialog */}
-      <MediaViewer
-        isOpen={viewerOpen}
-        onClose={() => setViewerOpen(false)}
-        currentGroup={currentGroup}
-        onPrevious={handlePreviousGroup}
-        onNext={handleNextGroup}
-        hasPrevious={groupIndex > 0}
-        hasNext={groupIndex < filteredMessages.length - 1}
-      />
-    </div>
-  );
-};
-
-export default MessagesEnhanced;
+        {
