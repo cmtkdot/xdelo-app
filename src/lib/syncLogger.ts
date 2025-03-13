@@ -24,18 +24,6 @@ export interface SyncLogOptions {
   metadata?: any;
 }
 
-// Helper function to check if a table exists - commented out for now to fix type errors
-/*const tableExists = async (tableName: string): Promise<boolean> => {
-  try {
-    // Using RPC call instead of direct table query to avoid type issues
-    const { data, error } = await supabase.rpc('check_table_exists', { table_name: tableName });
-    return !error && !!data;
-  } catch (err) {
-    console.error(`Error checking if table ${tableName} exists:`, err);
-    return false;
-  }
-};*/
-
 export async function createSyncLog(
   operation: string,
   details: any = {},
@@ -79,7 +67,7 @@ export async function updateSyncLog(
         : LogEventType.SYNC_STARTED;
 
     await logEvent(
-      String(eventType),
+      eventType,
       id,
       {
         status,
@@ -102,10 +90,10 @@ export async function getSyncLogs(limit = 10) {
       .from("unified_audit_logs")
       .select("*")
       .in('event_type', [
-        String(LogEventType.SYNC_STARTED),
-        String(LogEventType.SYNC_COMPLETED),
-        String(LogEventType.SYNC_FAILED),
-        String(LogEventType.SYNC_PRODUCTS)
+        LogEventType.SYNC_STARTED.toString(),
+        LogEventType.SYNC_COMPLETED.toString(),
+        LogEventType.SYNC_FAILED.toString(),
+        LogEventType.SYNC_PRODUCTS.toString()
       ])
       .order("event_timestamp", { ascending: false })
       .limit(limit);
@@ -146,8 +134,8 @@ function getEventTypeFromOperation(operation: string): LogEventType | string {
 
 function getStatusFromEventType(eventType: string): "pending" | "success" | "error" {
   switch (eventType) {
-    case String(LogEventType.SYNC_COMPLETED): return "success";
-    case String(LogEventType.SYNC_FAILED): return "error";
+    case LogEventType.SYNC_COMPLETED.toString(): return "success";
+    case LogEventType.SYNC_FAILED.toString(): return "error";
     default: return "pending";
   }
 }

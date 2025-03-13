@@ -41,7 +41,7 @@ export async function logEvent(
         previous_state: options.previous_state,
         new_state: options.new_state,
         error_message: options.error_message
-      } as any); // Using 'as any' to bypass the type checking for now
+      } as any); // Using 'as any' to bypass the type checking
 
     if (error) {
       console.error("Failed to log event:", error);

@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { useToast } from "@/hooks/useToast";
 import { reprocessMessage } from '@/lib/api';
@@ -51,9 +52,7 @@ export const useProcessingRepair = (): UseProcessingRepairResult => {
           {
             action: 'reprocess_message',
             status: 'failed',
-            options: { forceRedownload, reanalyzeCaption }
-          },
-          {
+            options: { forceRedownload, reanalyzeCaption },
             error_message: response.error
           }
         );
@@ -92,9 +91,7 @@ export const useProcessingRepair = (): UseProcessingRepairResult => {
         {
           action: 'reprocess_message',
           status: 'exception',
-          options: { forceRedownload, reanalyzeCaption }
-        },
-        {
+          options: { forceRedownload, reanalyzeCaption },
           error_message: errorMessage
         }
       );

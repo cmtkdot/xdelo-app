@@ -1,6 +1,8 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
-import { MatchResult } from "@/types";
+import { AnalyzedContent, MatchResult } from "@/types";
+import { SupabaseClient } from "@supabase/supabase-js";
 
 const similarityThreshold = 0.7;
 
