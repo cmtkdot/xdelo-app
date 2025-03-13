@@ -19,10 +19,10 @@ export async function xdelo_logSyncOperation(
     let eventType: LogEventType | string;
     
     // Try to convert string operation to LogEventType
-    try {
-      eventType = operation as LogEventType;
-    } catch (err) {
-      // Fallback to general warning if conversion fails
+    if (operation.toUpperCase() in LogEventType) {
+      eventType = operation.toUpperCase() as keyof typeof LogEventType;
+    } else {
+      // Fallback to system warning if conversion fails
       eventType = LogEventType.SYSTEM_WARNING;
     }
     

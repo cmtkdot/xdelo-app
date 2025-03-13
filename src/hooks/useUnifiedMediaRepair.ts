@@ -1,9 +1,7 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
-import { logEvent } from '@/lib/logUtils';
-import LogEventType from '@/types/api/LogEventType';
+import { logEvent, LogEventType } from '@/lib/logUtils';
 
 interface RepairOptions {
   messageIds?: string[];

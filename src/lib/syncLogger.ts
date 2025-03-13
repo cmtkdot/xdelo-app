@@ -30,8 +30,28 @@ export async function createSyncLog(
   options: SyncLogOptions = {}
 ) {
   try {
+    // Map string operation to LogEventType when possible
+    let eventType: LogEventType | string;
+    
+    // Try to get the corresponding LogEventType
+    switch (operation) {
+      case 'sync_products': 
+        eventType = LogEventType.SYNC_PRODUCTS;
+        break;
+      case 'sync_started': 
+        eventType = LogEventType.SYNC_STARTED;
+        break;
+      case 'sync_completed': 
+        eventType = LogEventType.SYNC_COMPLETED;
+        break;
+      case 'sync_failed': 
+        eventType = LogEventType.SYNC_FAILED;
+        break;
+      default: 
+        eventType = operation;
+    }
+
     // Log to unified audit logs
-    const eventType = getEventTypeFromOperation(operation);
     await logEvent(
       eventType,
       'sync-' + new Date().getTime(),
@@ -59,13 +79,18 @@ export async function updateSyncLog(
   errorMessage?: string
 ) {
   try {
-    // Log to unified audit logs
-    const eventType = status === "success" 
-      ? LogEventType.SYNC_COMPLETED 
-      : status === "error" 
-        ? LogEventType.SYNC_FAILED 
-        : LogEventType.SYNC_STARTED;
+    // Determine the appropriate event type based on status
+    let eventType: LogEventType;
+    
+    if (status === "success") {
+      eventType = LogEventType.SYNC_COMPLETED;
+    } else if (status === "error") {
+      eventType = LogEventType.SYNC_FAILED;
+    } else {
+      eventType = LogEventType.SYNC_STARTED;
+    }
 
+    // Log to unified audit logs
     await logEvent(
       eventType,
       id,

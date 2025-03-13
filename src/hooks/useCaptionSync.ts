@@ -1,4 +1,3 @@
-
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Message, ProcessingState } from "@/types/MessagesTypes";
@@ -271,7 +270,7 @@ export const useCaptionSync = () => {
     // Log the reprocess operation
     try {
       await logSyncOperation(
-        LogEventType.MESSAGE_PROCESSED,
+        LogEventType.MESSAGE_REPROCESSED,
         messageId,
         {
           result: data,
