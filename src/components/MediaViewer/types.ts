@@ -1,6 +1,16 @@
 
 import { Message } from "@/types/MessagesTypes";
-import { AnalyzedContent, MediaItem } from "@/types";
+import { AnalyzedContent } from "@/types";
+
+export interface MediaItem {
+  id: string;
+  public_url: string;
+  mime_type: string;
+  file_unique_id: string;
+  created_at: string;
+  analyzed_content?: AnalyzedContent;
+  caption?: string;
+}
 
 export function messageToMediaItem(message: Message): MediaItem {
   return {
