@@ -1,8 +1,8 @@
+
 import { useState } from "react";
 import { useToast } from "@/hooks/useToast";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
-import { Message } from "@/types/MessagesTypes";
-import { AnalyzedContent } from "@/types";
+import { Message, AnalyzedContent } from "@/types";
 
 export interface EditableMessage extends Message {
   isEditing: boolean;

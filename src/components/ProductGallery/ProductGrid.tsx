@@ -1,5 +1,5 @@
 
-import { Message } from "@/types/MessagesTypes";
+import { Message } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
 import { cn } from "@/lib/utils";
 

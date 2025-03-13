@@ -4,7 +4,7 @@ import { TableCell, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Edit2, Save, X, Trash2 } from "lucide-react";
-import { Message } from "@/types/MessagesTypes";
+import { Message, AnalyzedContent } from "@/types";
 
 interface MessageRowProps {
   message: Message;
@@ -14,7 +14,7 @@ interface MessageRowProps {
   onSave: (id: string) => void;
   onDelete: (message: Message) => void;
   onCaptionChange: (id: string, value: string) => void;
-  onAnalyzedContentChange: (id: string, field: keyof Message['analyzed_content'], value: string | number) => void;
+  onAnalyzedContentChange: (id: string, field: keyof AnalyzedContent, value: string | number) => void;
   onMediaClick: (message: Message) => void;
   isProcessing: boolean;
 }

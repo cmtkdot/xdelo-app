@@ -1,6 +1,6 @@
 
 import React from 'react';
-import type { Message } from '@/types/MessagesTypes';
+import type { Message } from '@/types';
 import { Spinner } from '@/components/ui/spinner';
 import { MessageCard } from './MessageCard';
 

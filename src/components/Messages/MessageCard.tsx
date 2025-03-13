@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
-import type { Message } from '@/types/MessagesTypes';
+import type { Message } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { useMediaOperations } from '@/hooks/useMediaOperations';
 import { logMessageOperation, LogEventType } from '@/lib/syncLogger';

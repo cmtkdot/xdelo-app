@@ -1,9 +1,9 @@
 
-import type { Message as BaseMessage } from "@/types";
+import type { Message } from "@/types";
 import type { ProcessingState } from "@/types/api/ProcessingState";
 import type { AnalyzedContent } from "@/types/utils/AnalyzedContent";
 
-export type Message = BaseMessage;
+export type { Message };
 
 export interface MessageUpdatePayload {
   id: string;

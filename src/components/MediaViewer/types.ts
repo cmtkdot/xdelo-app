@@ -1,6 +1,5 @@
 
 import type { Message } from "@/types/entities/Message";
-import type { AnalyzedContent } from "@/types/utils/AnalyzedContent";
 import type { MediaItem } from "@/types/entities/MediaItem";
 
 export { MediaItem };

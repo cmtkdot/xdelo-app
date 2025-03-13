@@ -1,5 +1,6 @@
 
 import type { AnalyzedContent } from '../utils/AnalyzedContent';
+import type { ProcessingState } from '../api/ProcessingState';
 
 /**
  * MediaItem entity represents a media file stored in the system
@@ -18,5 +19,5 @@ export interface MediaItem {
   duration?: number;
   content_disposition?: 'inline' | 'attachment';
   storage_path?: string;
-  processing_state?: string;
+  processing_state?: ProcessingState;
 }

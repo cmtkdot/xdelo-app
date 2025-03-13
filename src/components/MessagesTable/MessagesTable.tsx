@@ -2,7 +2,7 @@
 import React from "react";
 import { Table, TableBody } from "@/components/ui/table";
 import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
-import { Message } from "@/types/MessagesTypes";
+import { Message } from "@/types";
 import { MessagesTableHeader } from "./TableComponents/MessagesTableHeader";
 import { MessageRow } from "./TableComponents/MessageRow";
 import { DeleteConfirmationDialog } from "./TableComponents/DeleteConfirmationDialog";
