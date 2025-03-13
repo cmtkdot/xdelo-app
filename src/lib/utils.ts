@@ -1,4 +1,3 @@
-
 import { Message } from "@/types/entities/Message";
 import { AnalyzedContent } from "@/types/utils/AnalyzedContent";
 import { MediaItem } from "@/types/ui/MediaViewer";
@@ -18,24 +17,19 @@ export function formatDate(date: Date): string {
 export const messageToMediaItem = (message: Message): MediaItem => {
   return {
     id: message.id,
-    url: message.public_url || '',
-    type: getMediaType(message.mime_type || ''),
-    mimeType: message.mime_type || '',
-    thumbnail: (message.mime_type || '').startsWith('image/') ? message.public_url : undefined,
-    width: message.width,
-    height: message.height,
-    title: message.analyzed_content?.product_name || message.caption,
-    description: message.caption,
-    fileSize: message.file_size,
-    duration: message.duration,
-    uploadedAt: message.created_at || new Date().toISOString(),
-    // Legacy properties for compatibility
-    public_url: message.public_url,
-    mime_type: message.mime_type,
+    public_url: message.public_url || '',
+    mime_type: message.mime_type || '',
     file_unique_id: message.file_unique_id,
     analyzed_content: message.analyzed_content,
-    created_at: message.created_at,
-    caption: message.caption
+    created_at: message.created_at || new Date().toISOString(),
+    caption: message.caption,
+    width: message.width,
+    height: message.height,
+    file_size: message.file_size,
+    duration: message.duration,
+    content_disposition: message.content_disposition,
+    storage_path: message.storage_path,
+    processing_state: message.processing_state
   };
 };
 

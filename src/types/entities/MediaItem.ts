@@ -1,7 +1,7 @@
 
 export interface MediaItem {
   id: string;
-  url: string;
+  public_url: string;
   type: 'image' | 'video' | 'document' | 'audio' | 'unknown';
   thumbnail?: string;
   width?: number;
@@ -12,17 +12,27 @@ export interface MediaItem {
   fileSize?: number;
   duration?: number;
   uploadedAt?: string;
+  // Also include legacy fields for compatibility
+  mime_type?: string;
+  file_unique_id?: string;
+  analyzed_content?: any;
+  created_at?: string;
+  caption?: string;
+  file_size?: number;
+  content_disposition?: 'inline' | 'attachment';
+  storage_path?: string;
+  processing_state?: string;
 }
 
 export class MediaItem implements MediaItem {
   constructor(
     id: string,
-    url: string,
+    public_url: string,
     type: 'image' | 'video' | 'document' | 'audio' | 'unknown',
-    options: Omit<MediaItem, 'id' | 'url' | 'type'> = {}
+    options: Omit<MediaItem, 'id' | 'public_url' | 'type'> = {}
   ) {
     this.id = id;
-    this.url = url;
+    this.public_url = public_url;
     this.type = type;
     Object.assign(this, options);
   }
@@ -55,7 +65,17 @@ export class MediaItem implements MediaItem {
         mimeType: message.mime_type,
         fileSize: message.file_size,
         duration: message.duration,
-        uploadedAt: message.created_at
+        uploadedAt: message.created_at,
+        // Include legacy fields
+        mime_type: message.mime_type,
+        file_unique_id: message.file_unique_id,
+        analyzed_content: message.analyzed_content,
+        created_at: message.created_at,
+        caption: message.caption,
+        file_size: message.file_size,
+        content_disposition: message.content_disposition,
+        storage_path: message.storage_path,
+        processing_state: message.processing_state
       }
     );
   }
