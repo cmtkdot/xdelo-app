@@ -3,13 +3,30 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Database } from "lucide-react";
-import { useMediaUrlStandardization } from '@/hooks/useMediaUrlStandardization';
+import { useMediaOperations } from '@/hooks/useMediaOperations';
 
 export function MigrationButton() {
-  const { standardizeUrls, isStandardizing, results } = useMediaUrlStandardization();
+  const { standardizeStoragePaths, isProcessing } = useMediaOperations();
+  const [results, setResults] = React.useState<{
+    success: boolean;
+    updatedCount?: number;
+    error?: string;
+  } | null>(null);
 
   const handleRunMigration = async () => {
-    await standardizeUrls(500);
+    try {
+      const result = await standardizeStoragePaths(500);
+      setResults({
+        success: result.success,
+        updatedCount: result.successful,
+        error: result.message
+      });
+    } catch (error) {
+      setResults({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
   };
 
   return (
@@ -24,11 +41,11 @@ export function MigrationButton() {
       
       <Button
         onClick={handleRunMigration}
-        disabled={isStandardizing}
+        disabled={isProcessing}
         className="w-full flex items-center justify-center gap-2"
         variant="default"
       >
-        {isStandardizing ? (
+        {isProcessing ? (
           <>
             <Spinner className="h-4 w-4" />
             Running Migration...

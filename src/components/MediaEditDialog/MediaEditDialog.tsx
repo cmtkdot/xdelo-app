@@ -9,14 +9,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/useToast"
-import { supabase } from '@/integrations/supabase/client';
 import { useCaptionSync } from '@/hooks/useCaptionSync';
 
 interface MediaEditDialogProps {
@@ -25,7 +22,6 @@ interface MediaEditDialogProps {
   onOpenChange: (open: boolean) => void;
   onClose?: () => void;
   onSave?: (newCaption: string) => void;
-  onDelete?: (mediaId: string, deleteTelegram: boolean) => Promise<void>;
   onSuccess?: () => void;
 }
 
@@ -35,12 +31,10 @@ export function MediaEditDialog({
   onOpenChange, 
   onClose,
   onSave, 
-  onDelete, 
   onSuccess 
 }: MediaEditDialogProps) {
   const [newCaption, setNewCaption] = useState(media?.caption || "");
   const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const { toast } = useToast();
@@ -143,8 +137,8 @@ export function MediaEditDialog({
           )}
         </div>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isSaving || isDeleting}>Cancel</AlertDialogCancel>
-          <Button type="submit" onClick={handleSave} disabled={isSaving || isDeleting}>
+          <AlertDialogCancel disabled={isSaving}>Cancel</AlertDialogCancel>
+          <Button type="submit" onClick={handleSave} disabled={isSaving}>
             {isSaving ? "Saving..." : "Save changes"}
           </Button>
         </AlertDialogFooter>

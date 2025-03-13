@@ -15,7 +15,7 @@ export function ContentDispositionFixButton({ message, className }: ContentDispo
   const isLoading = processingMessageIds[message.id];
 
   const handleFix = async () => {
-    await fixContentDispositionForMessage(message);
+    await fixContentDispositionForMessage(message.id);
   };
 
   // Only show button for media files without verified MIME type

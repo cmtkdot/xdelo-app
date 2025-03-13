@@ -33,7 +33,7 @@ export function MediaRepairDialog({
   } | null>(null);
 
   const { 
-    repairAllIssues,
+    repairMediaBatch,
     standardizeStoragePaths,
     isProcessing
   } = useMediaOperations();
@@ -51,14 +51,14 @@ export function MediaRepairDialog({
       setRepairing(true);
       setProgress(10);
       
-      const data = await repairAllIssues(messageIds);
+      const result = await repairMediaBatch(messageIds);
       setProgress(100);
       
       setResult({
-        successful: data.results?.successful || 0,
-        failed: data.results?.failed || 0,
+        successful: result.successful || 0,
+        failed: result.failed || 0,
         total: messageIds.length,
-        errors: data.results?.errors
+        errors: result.errors
       });
       
       if (onComplete) {

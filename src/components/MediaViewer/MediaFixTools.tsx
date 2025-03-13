@@ -5,13 +5,14 @@ import { FileDown, RefreshCcw, FileEdit } from "lucide-react";
 import { Message } from "@/types/MessagesTypes";
 import { useMediaOperations } from '@/hooks/useMediaOperations';
 
-interface MediaFixButtonsProps {
+interface MediaFixToolsProps {
   message: Message;
   onEdit?: () => void;
 }
 
-export function MediaFixTools({ message, onEdit }: MediaFixButtonsProps) {
-  const { reuploadMediaFromTelegram, isProcessing } = useMediaOperations();
+export function MediaFixTools({ message, onEdit }: MediaFixToolsProps) {
+  const { reuploadMediaFromTelegram, processingMessageIds } = useMediaOperations();
+  const isLoading = processingMessageIds[message.id];
 
   const handleReupload = async () => {
     await reuploadMediaFromTelegram(message.id);
@@ -39,10 +40,10 @@ export function MediaFixTools({ message, onEdit }: MediaFixButtonsProps) {
         variant="outline"
         size="sm"
         onClick={handleReupload}
-        disabled={isProcessing}
+        disabled={isLoading}
         title="Reupload file from Telegram"
       >
-        <RefreshCcw className={`h-4 w-4 mr-2 ${isProcessing ? 'animate-spin' : ''}`} />
+        <RefreshCcw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
         Reupload
       </Button>
       

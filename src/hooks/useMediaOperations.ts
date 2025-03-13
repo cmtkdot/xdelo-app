@@ -1,469 +1,292 @@
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from './useToast';
-import { Message } from '@/types';
+import { Message } from '@/types/MessagesTypes';
+import { useToast } from '@/hooks/useToast';
+
+// Define common return types for repair operations
+interface RepairResult {
+  success: boolean;
+  successful?: number;
+  failed?: number;
+  errors?: string[];
+  message?: string;
+}
 
 export function useMediaOperations() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessageIds, setProcessingMessageIds] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
-  // Helper to handle processing state for individual messages
-  const startProcessing = (messageId?: string) => {
-    setIsProcessing(true);
-    if (messageId) {
-      setProcessingMessageIds(prev => ({ ...prev, [messageId]: true }));
-    }
-  };
+  // Add a message ID to the processing state
+  const addProcessingMessageId = useCallback((id: string) => {
+    setProcessingMessageIds(prev => ({ ...prev, [id]: true }));
+  }, []);
 
-  const stopProcessing = (messageId?: string) => {
-    if (messageId) {
-      setProcessingMessageIds(prev => {
-        const updated = { ...prev };
-        delete updated[messageId];
-        
-        // If no more messages are processing, set global flag to false
-        if (Object.keys(updated).length === 0) {
-          setIsProcessing(false);
-        }
-        return updated;
-      });
-    } else {
-      setIsProcessing(false);
-      setProcessingMessageIds({});
-    }
-  };
+  // Remove a message ID from the processing state
+  const removeProcessingMessageId = useCallback((id: string) => {
+    setProcessingMessageIds(prev => {
+      const updated = { ...prev };
+      delete updated[id];
+      return updated;
+    });
+  }, []);
 
-  // Reupload media from Telegram with correct MIME type
-  const reuploadMediaFromTelegram = async (messageId: string) => {
+  // Fix content disposition for a single message
+  const fixContentDispositionForMessage = useCallback(async (messageId: string): Promise<RepairResult> => {
     try {
-      startProcessing(messageId);
+      addProcessingMessageId(messageId);
       
-      const { data, error } = await supabase.functions.invoke(
-        'repair-media',
-        {
-          body: { 
-            action: 'reupload_from_telegram',
-            messageIds: [messageId],
-            options: {
-              forceRedownload: true,
-              updateMimeType: true,
-              fixContentDisposition: true
-            }
-          }
-        }
-      );
+      const { data, error } = await supabase.functions.invoke('xdelo_fix_content_disposition', {
+        body: { messageId }
+      });
       
-      if (error) throw error;
+      if (error) throw new Error(error.message);
       
       toast({
-        title: "Media Reuploaded",
-        description: `Successfully reuploaded media for message ${messageId.substring(0, 8)}.`
+        title: 'Content Disposition Fixed',
+        description: 'File metadata has been updated successfully.',
       });
       
-      return data;
-    } catch (error) {
-      console.error('Error reuploading media from Telegram:', error);
-      
-      toast({
-        title: "Reupload Failed",
-        description: error.message || "Failed to reupload media",
-        variant: "destructive"
-      });
-      
-      throw error;
-    } finally {
-      stopProcessing(messageId);
-    }
-  };
-
-  // Fix MIME types for a batch of messages
-  const fixMimeTypes = async (messageIds: string[]) => {
-    try {
-      startProcessing();
-      
-      const { data, error } = await supabase.functions.invoke(
-        'repair-media',
-        {
-          body: { 
-            action: 'fix_mime_types',
-            messageIds,
-            options: {
-              updateDatabase: true,
-              updateStorageMetadata: true
-            }
-          }
-        }
-      );
-      
-      if (error) throw error;
-      
-      toast({
-        title: "MIME Types Fixed",
-        description: `Fixed MIME types for ${data.updated || 0} messages.`
-      });
-      
-      return data;
-    } catch (error) {
-      console.error('Error fixing MIME types:', error);
-      
-      toast({
-        title: "Fix Failed",
-        description: error.message || "Failed to fix MIME types",
-        variant: "destructive"
-      });
-      
-      throw error;
-    } finally {
-      stopProcessing();
-    }
-  };
-
-  // Fix content disposition for media files
-  const fixContentDisposition = async (messageIds?: string[]) => {
-    try {
-      startProcessing();
-      const { data, error } = await supabase.functions.invoke('repair-media', {
-        body: { 
-          action: 'fix_content_disposition',
-          messageIds 
-        }
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: `Fixed content disposition for ${data.data.successful} files. ${data.data.failed} failed.`
-      });
-
-      return data;
+      return { success: true, message: 'Content disposition fixed successfully' };
     } catch (error) {
       console.error('Error fixing content disposition:', error);
+      
       toast({
-        title: "Error",
-        description: "Failed to fix content disposition",
-        variant: "destructive"
+        title: 'Error',
+        description: 'Failed to fix content disposition. Please try again.',
+        variant: 'destructive',
       });
-      throw error;
+      
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
     } finally {
-      stopProcessing();
+      removeProcessingMessageId(messageId);
     }
-  };
+  }, [addProcessingMessageId, removeProcessingMessageId, toast]);
 
-  // Check and validate file exists in storage
-  const validateFileExists = async (messageId: string) => {
+  // Reupload media from Telegram
+  const reuploadMediaFromTelegram = useCallback(async (messageId: string): Promise<RepairResult> => {
     try {
-      startProcessing(messageId);
+      addProcessingMessageId(messageId);
       
-      const { data, error } = await supabase.functions.invoke(
-        'repair-media',
-        {
-          body: { 
-            action: 'validate_storage',
-            messageIds: [messageId]
-          }
-        }
-      );
-      
-      if (error) throw error;
-      
-      const exists = data.exists || false;
-      
-      toast({
-        title: "Storage Validation",
-        description: exists 
-          ? "Media file exists in storage" 
-          : "Media file not found in storage",
-        variant: exists ? "default" : "destructive"
+      const { data, error } = await supabase.functions.invoke('xdelo_reprocess_message', {
+        body: { messageId, force: true }
       });
       
-      return exists;
+      if (error) throw new Error(error.message);
+      
+      toast({
+        title: 'Media Reuploaded',
+        description: 'File has been successfully reuploaded from Telegram.',
+      });
+      
+      return { success: true, message: 'Media reuploaded successfully' };
     } catch (error) {
-      console.error('Error validating file existence:', error);
+      console.error('Error reuploading media:', error);
       
       toast({
-        title: "Validation Failed",
-        description: error.message || "Failed to validate storage",
-        variant: "destructive"
+        title: 'Error',
+        description: 'Failed to reupload media. Please try again.',
+        variant: 'destructive',
       });
       
-      return false;
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
     } finally {
-      stopProcessing(messageId);
+      removeProcessingMessageId(messageId);
     }
-  };
+  }, [addProcessingMessageId, removeProcessingMessageId, toast]);
 
-  // Repair storage paths for messages
-  const repairStoragePaths = async (messageIds?: string[]) => {
+  // Standardize storage paths for multiple messages
+  const standardizeStoragePaths = useCallback(async (limit: number = 100): Promise<RepairResult> => {
     try {
-      startProcessing();
-      const { data, error } = await supabase.functions.invoke('repair-media', {
-        body: { 
-          action: 'repair_storage_paths',
-          messageIds 
-        }
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: `Repaired storage paths for ${data.data.repaired || 0} files`
-      });
-
-      return data;
-    } catch (error) {
-      console.error('Error repairing storage paths:', error);
-      toast({
-        title: "Error",
-        description: "Failed to repair storage paths",
-        variant: "destructive"
-      });
-      throw error;
-    } finally {
-      stopProcessing();
-    }
-  };
-
-  // Recover file metadata for messages
-  const recoverFileMetadata = async (messageIds: string[]) => {
-    try {
-      startProcessing();
-      const { data, error } = await supabase.functions.invoke('repair-media', {
-        body: { 
-          action: 'recover_metadata',
-          messageIds 
-        }
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: `Recovered metadata for ${data.recovered} files`
-      });
-
-      return data;
-    } catch (error) {
-      console.error('Error recovering file metadata:', error);
-      toast({
-        title: "Error",
-        description: "Failed to recover file metadata",
-        variant: "destructive"
-      });
-      throw error;
-    } finally {
-      stopProcessing();
-    }
-  };
-
-  // Redownload file from a media group
-  const redownloadFromMediaGroup = async (messageId: string, mediaGroupId?: string) => {
-    try {
-      startProcessing(messageId);
-      const { data, error } = await supabase.functions.invoke('redownload-from-media-group', {
-        body: { messageId, mediaGroupId }
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Media file redownloaded successfully"
-      });
-
-      return data;
-    } catch (error) {
-      console.error('Error redownloading file:', error);
-      toast({
-        title: "Error",
-        description: "Failed to redownload media file",
-        variant: "destructive"
-      });
-      throw error;
-    } finally {
-      stopProcessing(messageId);
-    }
-  };
-
-  // Repair all issues at once
-  const repairAllIssues = async (messageIds: string[]) => {
-    try {
-      startProcessing();
-      const { data, error } = await supabase.functions.invoke('repair-media', {
-        body: { 
-          action: 'repair_all',
-          messageIds,
-          options: {
-            fixContentDisposition: true,
-            fixMimeTypes: true,
-            repairStoragePaths: true,
-            recoverMetadata: true
-          }
-        }
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: `Repaired ${data.results.successful} of ${messageIds.length} messages`
-      });
-
-      return data;
-    } catch (error) {
-      console.error('Error repairing media issues:', error);
-      toast({
-        title: "Error",
-        description: "Failed to repair media issues",
-        variant: "destructive"
-      });
-      throw error;
-    } finally {
-      stopProcessing();
-    }
-  };
-
-  // Standardize storage paths
-  const standardizeStoragePaths = async (limit: number = 100) => {
-    try {
-      startProcessing();
+      setIsProcessing(true);
       
-      const { data, error } = await supabase.functions.invoke(
-        'xdelo_standardize_storage_paths',
-        {
-          body: { 
-            limit, 
-            dryRun: false,
-            updatePublicUrls: true
-          }
-        }
-      );
-      
-      if (error) throw error;
-      
-      toast({
-        title: "Storage Paths Standardized",
-        description: `Standardized ${data.stats.fixed} paths, ${data.stats.skipped} already correct, ${data.stats.needs_redownload} need redownload.`
+      const { data, error } = await supabase.functions.invoke('xdelo_standardize_storage_paths', {
+        body: { limit }
       });
       
-      return data;
+      if (error) throw new Error(error.message);
+      
+      toast({
+        title: 'Storage Paths Standardized',
+        description: `Successfully standardized paths for ${data?.processed || 0} files.`,
+      });
+      
+      return { 
+        success: true, 
+        successful: data?.processed || 0,
+        message: 'Storage paths standardized successfully'
+      };
     } catch (error) {
       console.error('Error standardizing storage paths:', error);
       
       toast({
-        title: "Operation Failed",
-        description: error.message || "Failed to standardize storage paths",
-        variant: "destructive"
+        title: 'Error',
+        description: 'Failed to standardize storage paths. Please try again.',
+        variant: 'destructive',
       });
       
-      throw error;
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
     } finally {
-      stopProcessing();
+      setIsProcessing(false);
     }
-  };
-
-  // Fix content disposition for a specific message
-  const fixContentDispositionForMessage = async (message: Message) => {
+  }, [toast]);
+  
+  // Fix media URLs
+  const fixMediaUrls = useCallback(async (limit: number = 100): Promise<RepairResult> => {
     try {
-      startProcessing(message.id);
+      setIsProcessing(true);
       
-      const { data, error } = await supabase.functions.invoke('xdelo_fix_content_disposition', {
-        body: { messageId: message.id }
+      const { data, error } = await supabase.functions.invoke('xdelo_fix_media_urls', {
+        body: { limit }
       });
-
-      if (error) throw error;
       
-      if (data.success) {
+      if (error) throw new Error(error.message);
+      
+      toast({
+        title: 'Media URLs Fixed',
+        description: `Successfully fixed ${data?.processed || 0} media URLs.`,
+      });
+      
+      return { 
+        success: true, 
+        successful: data?.processed || 0,
+        message: 'Media URLs fixed successfully'
+      };
+    } catch (error) {
+      console.error('Error fixing media URLs:', error);
+      
+      toast({
+        title: 'Error',
+        description: 'Failed to fix media URLs. Please try again.',
+        variant: 'destructive',
+      });
+      
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [toast]);
+  
+  // Repair a batch of media messages
+  const repairMediaBatch = useCallback(async (messageIds: string[]): Promise<RepairResult> => {
+    if (!messageIds.length) {
+      return { 
+        success: false, 
+        message: 'No messages to repair'
+      };
+    }
+    
+    try {
+      setIsProcessing(true);
+      
+      // Group messageIds into batches of 10 to avoid timeout issues
+      const batchSize = 10;
+      const batches = [];
+      for (let i = 0; i < messageIds.length; i += batchSize) {
+        batches.push(messageIds.slice(i, i + batchSize));
+      }
+      
+      let successful = 0;
+      let failed = 0;
+      const errors: string[] = [];
+      
+      // Process each batch sequentially
+      for (const batch of batches) {
+        for (const messageId of batch) {
+          addProcessingMessageId(messageId);
+        }
+        
+        try {
+          const { data, error } = await supabase.functions.invoke('xdelo_file_repair', {
+            body: { messageIds: batch }
+          });
+          
+          if (error) throw new Error(error.message);
+          
+          successful += data?.results?.successful || 0;
+          failed += data?.results?.failed || 0;
+          
+          if (data?.results?.errors && data.results.errors.length) {
+            errors.push(...data.results.errors);
+          }
+        } catch (error) {
+          console.error(`Error processing batch:`, error);
+          failed += batch.length;
+          errors.push(error instanceof Error ? error.message : 'Unknown batch error');
+        } finally {
+          // Clear processing state for the batch
+          for (const messageId of batch) {
+            removeProcessingMessageId(messageId);
+          }
+        }
+      }
+      
+      if (successful > 0) {
         toast({
-          title: 'Fixed content disposition',
-          description: data.message
+          title: 'Media Repair Completed',
+          description: `Successfully repaired ${successful} of ${messageIds.length} files.`,
+          variant: failed > 0 ? 'default' : 'default',
         });
       } else {
         toast({
-          title: 'Failed to fix content disposition',
-          description: data.message,
-          variant: 'destructive'
+          title: 'Media Repair Failed',
+          description: 'Could not repair any files. Please try again.',
+          variant: 'destructive',
         });
       }
       
-      return data;
+      return {
+        success: successful > 0,
+        successful,
+        failed,
+        errors,
+        message: `Repaired ${successful} of ${messageIds.length} files`
+      };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Error repairing media batch:', error);
       
       toast({
-        title: 'Error fixing content disposition',
-        description: errorMessage,
-        variant: 'destructive'
+        title: 'Error',
+        description: 'Failed to repair media. Please try again.',
+        variant: 'destructive',
       });
       
-      return {
+      return { 
         success: false,
-        message: errorMessage
+        failed: messageIds.length,
+        errors: [error instanceof Error ? error.message : 'Unknown error occurred'],
+        message: 'Failed to repair media batch'
       };
     } finally {
-      stopProcessing(message.id);
+      setIsProcessing(false);
     }
-  };
-
-  // Run auto fix for content disposition
-  const runAutoFixContentDisposition = async (limit = 50) => {
-    try {
-      startProcessing();
-      
-      const { data, error } = await supabase.functions.invoke('xdelo_fix_content_disposition', {
-        body: { limit }
-      });
-
-      if (error) throw error;
-      
-      const successCount = data.results?.filter((r: any) => r.success).length || 0;
-      const totalCount = data.count || 0;
-      
-      toast({
-        title: 'Auto-fix completed',
-        description: `Successfully fixed ${successCount}/${totalCount} messages`
-      });
-      
-      return data;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      
-      toast({
-        title: 'Error with auto fix',
-        description: errorMessage,
-        variant: 'destructive'
-      });
-      
-      return {
-        success: false,
-        message: errorMessage
-      };
-    } finally {
-      stopProcessing();
-    }
-  };
+  }, [addProcessingMessageId, removeProcessingMessageId, toast]);
 
   return {
-    // Primary operations
-    reuploadMediaFromTelegram,
-    fixMimeTypes,
-    fixContentDisposition,
-    validateFileExists,
-    repairStoragePaths,
-    recoverFileMetadata,
-    redownloadFromMediaGroup,
-    repairAllIssues,
-    standardizeStoragePaths,
-    
-    // Content disposition specific operations (from useMediaFix)
-    fixContentDispositionForMessage,
-    runAutoFixContentDisposition,
-    
     // State
     isProcessing,
-    processingMessageIds
+    processingMessageIds,
+    
+    // Single message operations
+    fixContentDispositionForMessage,
+    reuploadMediaFromTelegram,
+    
+    // Batch operations
+    standardizeStoragePaths,
+    fixMediaUrls,
+    repairMediaBatch,
   };
 }
