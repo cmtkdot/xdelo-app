@@ -6,7 +6,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Progress } from "@/components/ui/progress";
 import { AlertCircle, CheckCircle2, Wrench } from "lucide-react";
 import type { Message } from '@/types/MessagesTypes';
-import { useMediaOperations } from '@/hooks/useMediaOperations';
+import { useUnifiedMediaRepair } from '@/hooks/useUnifiedMediaRepair';
 
 interface MediaRepairDialogProps {
   open: boolean;
@@ -33,10 +33,9 @@ export function MediaRepairDialog({
   } | null>(null);
 
   const { 
-    repairMediaBatch,
-    standardizeStoragePaths,
-    isProcessing
-  } = useMediaOperations();
+    repairMedia,
+    isRepairing
+  } = useUnifiedMediaRepair();
 
   // Combine message IDs from both props
   const messageIds = [
@@ -51,15 +50,30 @@ export function MediaRepairDialog({
       setRepairing(true);
       setProgress(10);
       
-      const result = await repairMediaBatch(messageIds);
+      const repairResult = await repairMedia({ 
+        messageIds, 
+        checkStorageOnly: false 
+      });
+      
       setProgress(100);
       
-      setResult({
-        successful: result.successful || 0,
-        failed: result.failed || 0,
-        total: messageIds.length,
-        errors: result.errors
-      });
+      if (repairResult.success && repairResult.results) {
+        setResult({
+          successful: repairResult.results.repaired + repairResult.results.verified,
+          failed: repairResult.results.failed,
+          total: repairResult.results.processed,
+          errors: repairResult.results.details
+            .filter(d => d.action === 'failed')
+            .map(d => d.error || d.reason)
+        });
+      } else {
+        setResult({
+          successful: 0,
+          failed: messageIds.length,
+          total: messageIds.length,
+          errors: [repairResult.error || 'Unknown error occurred']
+        });
+      }
       
       if (onComplete) {
         onComplete();
@@ -82,7 +96,11 @@ export function MediaRepairDialog({
       setRepairing(true);
       setProgress(10);
       
-      await standardizeStoragePaths(100);
+      await repairMedia({ 
+        limit: 100,
+        checkStorageOnly: true 
+      });
+      
       setProgress(100);
       
       if (onComplete) {
@@ -134,7 +152,7 @@ export function MediaRepairDialog({
                   <div className="space-y-2">
                     <Button 
                       onClick={handleRepairAll} 
-                      disabled={messageIds.length === 0 || repairing || isProcessing}
+                      disabled={messageIds.length === 0 || repairing || isRepairing}
                       className="w-full"
                     >
                       {repairing && <Spinner className="mr-2" size="sm" />}
@@ -143,12 +161,12 @@ export function MediaRepairDialog({
                     
                     <Button 
                       onClick={handleStandardizePaths} 
-                      disabled={repairing || isProcessing}
+                      disabled={repairing || isRepairing}
                       variant="outline" 
                       className="w-full"
                     >
-                      {isProcessing && <Spinner className="mr-2" size="sm" />}
-                      Standardize All Storage Paths
+                      {isRepairing && <Spinner className="mr-2" size="sm" />}
+                      Verify All Storage Files
                     </Button>
                   </div>
                 </div>

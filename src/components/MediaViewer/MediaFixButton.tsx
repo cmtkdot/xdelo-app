@@ -32,8 +32,14 @@ export function MediaFixButton({
     }
   };
 
-  // We can't show if there are no messages or messageIds
-  if ((!messages || messages.length === 0) && (!messageIds || messageIds.length === 0)) {
+  // Combine message IDs from both props
+  const combinedMessageIds = [
+    ...(messageIds || []),
+    ...(messages?.map(m => m.id) || [])
+  ].filter(Boolean);
+
+  // Don't render if there are no messages to repair
+  if (combinedMessageIds.length === 0) {
     return null;
   }
 

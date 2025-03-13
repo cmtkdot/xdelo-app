@@ -100,11 +100,9 @@ export function useUnifiedMediaRepair() {
         {
           operation: 'unified_media_repair',
           options,
-          status: 'failed'
-        },
-        undefined,
-        undefined,
-        error.message
+          status: 'failed',
+          error: error.message
+        }
       );
 
       // Show error toast

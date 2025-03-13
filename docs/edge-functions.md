@@ -10,7 +10,7 @@ This document provides an overview of all active edge functions in the project, 
 **Dependencies**:
 - `_shared/cors.ts`
 - `telegram-webhook/handlers/` (various handlers)
-- `telegram-webhook/utils/mediaUtils.ts`
+- `_shared/mediaUtils.ts`
 
 ### parse-caption-with-ai
 **Purpose**: Analyzes message captions with AI to extract product information
@@ -39,21 +39,23 @@ This document provides an overview of all active edge functions in the project, 
 
 ## Media Management Functions
 
-### redownload-missing-files
+### xdelo_unified_media_repair
+**Purpose**: Comprehensive media file repair and validation utility
+**Dependencies**:
+- `_shared/mediaUtils.ts`
+- Telegram Bot API
+- Storage bucket: `telegram-media`
+- Database tables: `messages`
+
+### redownload-missing-files (Legacy)
 **Purpose**: Attempts to recover media files from Telegram
 **Dependencies**:
 - Telegram Bot API
 - `_shared/mediaUtils.ts`
 - Storage bucket: `telegram-media`
 
-### xdelo_file_repair
+### xdelo_file_repair (Legacy)
 **Purpose**: Repairs file storage issues like invalid content-type
-**Dependencies**:
-- `_shared/mediaUtils.ts`
-- Storage bucket: `telegram-media`
-
-### xdelo_fix_content_disposition
-**Purpose**: Fixes content disposition headers for media files
 **Dependencies**:
 - `_shared/mediaUtils.ts`
 - Storage bucket: `telegram-media`
@@ -64,25 +66,6 @@ This document provides an overview of all active edge functions in the project, 
 - `_shared/supabase.ts`
 - Database tables: `messages`
 - Storage bucket: `telegram-media`
-
-### xdelo_standardize_urls
-**Purpose**: Standardizes public URLs for media files
-**Dependencies**:
-- `_shared/standardHandler.ts`
-- Database function: `xdelo_fix_public_urls`
-
-### xdelo_fix_media_urls
-**Purpose**: Legacy function to repair broken media URLs
-**Dependencies**:
-- `_shared/cors.ts`
-- Database tables: `messages`
-
-### cleanup-storage-on-delete
-**Purpose**: Removes storage files when messages are deleted
-**Dependencies**:
-- `_shared/cors.ts`
-- Storage bucket: `telegram-media`
-- Database triggers: `on_message_deleted`
 
 ### media-management
 **Purpose**: Provides API for frontend media operations
@@ -154,13 +137,6 @@ This document provides an overview of all active edge functions in the project, 
 - `_shared/supabase.ts`
 - Database function: `xdelo_clear_all_messages`
 
-### xdelo_execute_sql
-**Purpose**: Runs SQL queries via edge function
-**Dependencies**:
-- `_shared/cors.ts`
-- `_shared/errorHandler.ts`
-- Database function: `xdelo_execute_sql_query`
-
 ### log-operation
 **Purpose**: Logs frontend operations to audit system
 **Dependencies**:
@@ -192,15 +168,17 @@ This document provides an overview of all active edge functions in the project, 
 - OpenAI API
 - `_shared/cors.ts`
 
-## Database Maintenance Functions
-
-### xdelo_cleanup_db_functions
-**Purpose**: Cleans up deprecated database functions
-**Dependencies**:
-- `_shared/cors.ts`
-- Database function: `xdelo_execute_sql_query`
-
 ## Shared Libraries
+
+### _shared/mediaUtils.ts
+**Purpose**: Centralized utilities for media file operations
+**Used by**: All media handling functions, `telegram-webhook`
+**Key Features**:
+- Media download with retry logic
+- File type detection and validation
+- Storage path standardization
+- Content disposition management
+- Rate limiting for Telegram API
 
 ### _shared/supabase.ts
 **Purpose**: Standardized Supabase client for edge functions
@@ -213,26 +191,6 @@ This document provides an overview of all active edge functions in the project, 
 ### _shared/captionParser.ts
 **Purpose**: Shared logic for parsing message captions
 **Used by**: `manual-caption-parser`, `parse-caption-with-ai`
-
-### _shared/mediaUtils.ts
-**Purpose**: Utilities for media file operations
-**Used by**: Media management functions, `telegram-webhook`
-
-### _shared/databaseOperations.ts
-**Purpose**: Common database operations
-**Used by**: Message processing functions
-
-### _shared/standardHandler.ts
-**Purpose**: Standardized request handler with error handling
-**Used by**: Several edge functions
-
-### _shared/errorHandler.ts
-**Purpose**: Error handling utilities
-**Used by**: Several edge functions
-
-### _shared/jwt-verification.ts
-**Purpose**: JWT token verification for authenticated endpoints
-**Used by**: Protected edge functions
 
 ## Migration Strategy
 
