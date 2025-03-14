@@ -772,6 +772,7 @@ export type Database = {
           rowids_accountsid: string | null
           sb_accounts_id: string | null
           sb_estimates_id: string | null
+          sb_pdf_generated_at: string | null
           sb_pdf_storage_path: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
@@ -797,6 +798,7 @@ export type Database = {
           rowids_accountsid?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
+          sb_pdf_generated_at?: string | null
           sb_pdf_storage_path?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
@@ -822,6 +824,7 @@ export type Database = {
           rowids_accountsid?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
+          sb_pdf_generated_at?: string | null
           sb_pdf_storage_path?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
@@ -966,6 +969,7 @@ export type Database = {
           pdf_url: string | null
           rowid_accntrowid: string | null
           sb_accounts_id: string | null
+          sb_pdf_generated_at: string | null
           sb_pdf_storage_path: string | null
           sb_pdf_updated_at: string | null
           sb_pdf_url: string | null
@@ -995,6 +999,7 @@ export type Database = {
           pdf_url?: string | null
           rowid_accntrowid?: string | null
           sb_accounts_id?: string | null
+          sb_pdf_generated_at?: string | null
           sb_pdf_storage_path?: string | null
           sb_pdf_updated_at?: string | null
           sb_pdf_url?: string | null
@@ -1024,6 +1029,7 @@ export type Database = {
           pdf_url?: string | null
           rowid_accntrowid?: string | null
           sb_accounts_id?: string | null
+          sb_pdf_generated_at?: string | null
           sb_pdf_storage_path?: string | null
           sb_pdf_updated_at?: string | null
           sb_pdf_url?: string | null
@@ -1034,6 +1040,42 @@ export type Database = {
           share_view_count?: number | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      gl_relationship_audit_log: {
+        Row: {
+          changed_at: string | null
+          changed_by: string | null
+          glide_column: string
+          id: string
+          new_value: string | null
+          old_value: string | null
+          record_id: string
+          source_table: string
+          supabase_column: string
+        }
+        Insert: {
+          changed_at?: string | null
+          changed_by?: string | null
+          glide_column: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          record_id: string
+          source_table: string
+          supabase_column: string
+        }
+        Update: {
+          changed_at?: string | null
+          changed_by?: string | null
+          glide_column?: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          record_id?: string
+          source_table?: string
+          supabase_column?: string
         }
         Relationships: []
       }
@@ -3158,6 +3200,16 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_relationship_health_metrics: {
+        Row: {
+          last_checked: string | null
+          source_table: string | null
+          tables_with_issues: number | null
+          total_missing_mappings: number | null
+          total_relationships: number | null
+        }
+        Relationships: []
+      }
       xan_relationship_health: {
         Row: {
           glide_column: string | null
@@ -3479,6 +3531,10 @@ export type Database = {
           record_count: number
         }[]
       }
+      schedule_relationship_maintenance: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       schedule_sync_check: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -3517,6 +3573,17 @@ export type Database = {
       sync_glide_configuration: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      validate_table_relationships: {
+        Args: {
+          p_table_name: string
+        }
+        Returns: {
+          issue_type: string
+          glide_column: string
+          supabase_column: string
+          affected_records: number
+        }[]
       }
       vector_avg: {
         Args: {

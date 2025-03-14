@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { Separator } from '@/components/ui/separator';
-import { Filter } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import { ProcessingState } from '@/types';
 import { useVendors } from '@/hooks/useVendors';
@@ -15,8 +14,8 @@ import { VendorFilter } from './Filters/VendorFilter';
 import { DateRangeFilter } from './Filters/DateRangeFilter';
 import { ShowGroupsFilter } from './Filters/ShowGroupsFilter';
 import { FilterPresets } from './Filters/FilterPresets';
-import { FilterActions } from './Filters/FilterActions';
 import { FilterImportExport } from './Filters/FilterImportExport';
+import { FilterHeader } from './Filters/FilterHeader';
 
 export const EnhancedFiltersPanel: React.FC = () => {
   const { data: vendors = [] } = useVendors();
@@ -174,17 +173,10 @@ export const EnhancedFiltersPanel: React.FC = () => {
 
   return (
     <div className="py-2 h-full flex flex-col">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-medium flex items-center">
-          <Filter className="h-4 w-4 mr-2" />
-          Filters
-        </h3>
-        
-        <FilterActions 
-          clearFilters={clearFilters}
-          applyFilters={applyFilters}
-        />
-      </div>
+      <FilterHeader 
+        clearFilters={clearFilters}
+        applyFilters={applyFilters}
+      />
 
       <div className="space-y-4 flex-1 overflow-y-auto pr-1">
         {/* Search Filter */}
