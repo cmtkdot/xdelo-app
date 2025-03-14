@@ -1,4 +1,3 @@
-
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ProcessingState } from '@/types';
@@ -103,7 +102,12 @@ export const useMessagesStore = create<MessagesState>()(
         const newPresets = { ...state.presetFilters };
         delete newPresets[name];
         return { presetFilters: newPresets };
-      })
+      }),
+      
+      currentView: 'grid',
+      toggleView: () => set(state => ({ 
+        currentView: state.currentView === 'grid' ? 'list' : 'grid' 
+      }))
     }),
     {
       name: 'enhanced-messages-storage'

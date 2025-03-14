@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/useToast';
 import { useMessagesStore } from '@/hooks/useMessagesStore';
@@ -11,17 +11,21 @@ import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useFilteredMessages } from '@/hooks/useFilteredMessages';
 import { ResponsiveContainer } from '@/components/ui/responsive-container';
 import { useIsMobile } from '@/hooks/useMobile';
+import { EnhancedMessagesHeader } from '@/components/EnhancedMessages/EnhancedMessagesHeader';
 
 const MessagesEnhanced = () => {
   const { 
     detailsOpen = false, 
-    analyticsOpen = false
+    analyticsOpen = false,
+    toggleView,
+    currentView
   } = useMessagesStore() || {};
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { refetch } = useFilteredMessages() || {};
+  const { filteredMessages, refetch, isLoading, total } = useFilteredMessages() || {};
   const isMobile = useIsMobile();
+  const [filtersPanelOpen, setFiltersPanelOpen] = useState(false);
   
   // Setup handlers for message interactions
   const {
@@ -65,14 +69,34 @@ const MessagesEnhanced = () => {
     }
   };
 
+  const toggleFiltersPanel = () => {
+    setFiltersPanelOpen(prev => !prev);
+  };
+
   return (
     <ResponsiveContainer 
       mobilePadding={isMobile ? "sm" : "md"}
-      className="py-4 space-y-4"
+      className="py-4 space-y-4 bg-background"
       maxWidth="full"
     >
       {/* Header with refresh button */}
-      <MessageFiltersHeader onRefresh={handleDataRefresh} />
+      <EnhancedMessagesHeader
+        title="Enhanced Messages"
+        totalMessages={total || 0}
+        onRefresh={handleDataRefresh}
+        isLoading={isLoading}
+        onToggleFilters={toggleFiltersPanel}
+        onToggleView={toggleView}
+        currentView={currentView || 'grid'}
+        filtersCount={0}
+      />
+      
+      {/* Filter header with basic controls */}
+      <MessageFiltersHeader 
+        onRefresh={handleDataRefresh} 
+        isFiltersPanelOpen={filtersPanelOpen}
+        onToggleFiltersPanel={toggleFiltersPanel}
+      />
       
       {/* Main content area with filters, message grid/list, and panels */}
       <MessagesLayout 
