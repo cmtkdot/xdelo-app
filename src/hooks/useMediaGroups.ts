@@ -1,4 +1,3 @@
-
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types';
@@ -59,12 +58,11 @@ export function useMediaGroups() {
         const messageGroups: Message[][] = Object.values(mediaGroups);
         
         // Return the array of message groups (Message[][]) 
-        // instead of the object for proper typing
         return messageGroups;
       } catch (error) {
         console.error('Error in useMediaGroups hook:', error);
-        // Return empty array on error rather than throwing or empty object
-        return [];
+        // Return empty array on error rather than empty object
+        return [] as Message[][];
       }
     },
     staleTime: 1 * 60 * 1000, // 1 minute

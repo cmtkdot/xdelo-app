@@ -46,9 +46,14 @@ const ProductGallery = () => {
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: mediaGroups = {}, isLoading } = useMediaGroups();
+  const { data: mediaGroupsData = [], isLoading } = useMediaGroups();
   const { data: vendors = [] } = useVendors();
   const { handleDelete, isProcessing } = useTelegramOperations();
+
+  // Ensure mediaGroups is properly typed as Message[][]
+  const mediaGroups = useMemo(() => {
+    return Array.isArray(mediaGroupsData) ? mediaGroupsData : [] as Message[][];
+  }, [mediaGroupsData]);
 
   useEffect(() => {
     const channel = supabase
@@ -114,6 +119,7 @@ const ProductGallery = () => {
     setViewerOpen(true);
     
     const groupIndex = paginatedProducts.findIndex(g => {
+      if (!g || !Array.isArray(g) || g.length === 0) return false;
       return g[0]?.id === group[0]?.id;
     });
     
@@ -127,7 +133,10 @@ const ProductGallery = () => {
       const prevIndex = currentGroupIndex - 1;
       setCurrentGroupIndex(prevIndex);
       // Make a shallow copy to avoid type conflicts
-      setCurrentViewGroup([...paginatedProducts[prevIndex]]);
+      const group = paginatedProducts[prevIndex];
+      if (group && Array.isArray(group)) {
+        setCurrentViewGroup([...group]);
+      }
     }
   };
 
@@ -136,16 +145,21 @@ const ProductGallery = () => {
       const nextIndex = currentGroupIndex + 1;
       setCurrentGroupIndex(nextIndex);
       // Make a shallow copy to avoid type conflicts
-      setCurrentViewGroup([...paginatedProducts[nextIndex]]);
+      const group = paginatedProducts[nextIndex];
+      if (group && Array.isArray(group)) {
+        setCurrentViewGroup([...group]);
+      }
     }
   };
 
   const filteredProducts = useMemo(() => {
-    let filtered = Object.values(mediaGroups);
+    let filtered = [...mediaGroups];
     
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(group => {
+        if (!group || !Array.isArray(group) || group.length === 0) return false;
+        
         const mainMedia = group.find(m => m.caption) || group[0];
         if (!mainMedia) return false;
         
@@ -163,14 +177,20 @@ const ProductGallery = () => {
     
     if (filters.vendors && filters.vendors.length > 0) {
       filtered = filtered.filter(group => {
+        if (!group || !Array.isArray(group) || group.length === 0) return false;
+        
         const mainMedia = group.find(m => m.caption) || group[0];
-        const ac = mainMedia?.analyzed_content as AnalyzedContent | null;
-        return mainMedia && hasProperty(ac, 'vendor_uid') && filters.vendors?.includes(ac.vendor_uid);
+        if (!mainMedia) return false;
+        
+        const ac = mainMedia.analyzed_content as AnalyzedContent | null;
+        return hasProperty(ac, 'vendor_uid') && filters.vendors?.includes(ac.vendor_uid);
       });
     }
     
     if (filters.dateRange && filters.dateRange.from && filters.dateRange.to) {
       filtered = filtered.filter(group => {
+        if (!group || !Array.isArray(group) || group.length === 0) return false;
+        
         const mainMedia = group.find(m => m.caption) || group[0];
         if (!mainMedia) return false;
         
@@ -192,6 +212,8 @@ const ProductGallery = () => {
     
     if (!filters.showUntitled) {
       filtered = filtered.filter(group => {
+        if (!group || !Array.isArray(group) || group.length === 0) return false;
+        
         const mainMedia = group.find(m => m.caption) || group[0];
         if (!mainMedia) return false;
         
@@ -203,6 +225,9 @@ const ProductGallery = () => {
     }
     
     filtered.sort((a, b) => {
+      if (!a || !Array.isArray(a) || a.length === 0) return 1;
+      if (!b || !Array.isArray(b) || b.length === 0) return -1;
+      
       const mainMediaA = a.find(m => m.caption) || a[0];
       const mainMediaB = b.find(m => m.caption) || b[0];
       
@@ -292,7 +317,7 @@ const ProductGallery = () => {
           </div>
         
           <ProductGrid
-            products={paginatedProducts}
+            products={paginatedProducts as Message[][]}
             onEdit={handleEdit}
             onDelete={handleDelete}
             onView={handleView}
