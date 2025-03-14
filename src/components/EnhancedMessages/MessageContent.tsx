@@ -71,11 +71,18 @@ export function MessageContent({
     // Check if it's a nested array (Message[][])
     if (paginatedMessages.length > 0 && Array.isArray(paginatedMessages[0])) {
       // First cast to unknown then to the correct type for safe conversion
-      return (paginatedMessages as unknown as Message[][]).flatMap(group => group);
+      const flattenedMessages = (paginatedMessages as unknown as Message[][]).flatMap(group => {
+        // Ensure each group is an array and not empty
+        if (Array.isArray(group) && group.length > 0) {
+          return group;
+        }
+        return [];
+      });
+      return flattenedMessages;
     }
     
     // It's already a flat array
-    return paginatedMessages as Message[];
+    return paginatedMessages as unknown as Message[];
   }, [paginatedMessages]);
 
   if (!messages.length) {
