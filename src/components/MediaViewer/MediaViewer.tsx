@@ -142,7 +142,9 @@ export const MediaViewer = ({
             {mediaItems.length > 1 ? (
               <Carousel 
                 className="w-full h-full"
-                onSelect={(index) => setActiveMediaIndex(index)}
+                // FIX: Use the correct type for the onSelect handler
+                // It expects a number, not an event
+                onSelect={(index) => handleMediaChange(index)}
               >
                 <CarouselContent className="h-full">
                   {mediaItems.map((item, index) => (
