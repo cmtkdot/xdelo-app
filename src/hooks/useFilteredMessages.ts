@@ -7,21 +7,35 @@ import { useMessagesStore } from './useMessagesStore';
 export function useFilteredMessages() {
   const { filters } = useMessagesStore();
   
+  // Ensure filters is properly initialized with default values
+  const safeFilters = {
+    processingStates: filters?.processingStates || [],
+    search: filters?.search || '',
+    sortField: filters?.sortField || 'created_at',
+    sortOrder: filters?.sortOrder || 'desc',
+    dateRange: filters?.dateRange || null,
+    mediaTypes: filters?.mediaTypes || [],
+    vendors: filters?.vendors || [],
+    chatSources: filters?.chatSources || [],
+    page: filters?.page || 1,
+    itemsPerPage: filters?.itemsPerPage || 20
+  };
+  
   // Fetch messages with the filters applied
   const { 
-    groupedMessages: mediaGroups, 
-    isLoading, 
-    error, 
+    groupedMessages: mediaGroups = [], 
+    isLoading = false, 
+    error = null, 
     refetch,
-    isRefetching
+    isRefetching = false
   } = useEnhancedMessages({
     grouped: true,
     limit: 500,
-    processingStates: filters.processingStates,
-    searchTerm: filters.search,
-    sortBy: filters.sortField,
-    sortOrder: filters.sortOrder
-  });
+    processingStates: safeFilters.processingStates,
+    searchTerm: safeFilters.search,
+    sortBy: safeFilters.sortField,
+    sortOrder: safeFilters.sortOrder
+  }) || {};
   
   // Apply additional client-side filtering
   const filteredMessages = useMemo(() => {
@@ -42,30 +56,30 @@ export function useFilteredMessages() {
         if (!mainMessage) return false;
 
         // Additional filtering beyond what useEnhancedMessages provides
-        if (filters.dateRange) {
+        if (safeFilters.dateRange) {
           const messageDate = new Date(mainMessage.created_at || '');
-          if (messageDate < filters.dateRange.from || messageDate > filters.dateRange.to) {
+          if (messageDate < safeFilters.dateRange.from || messageDate > safeFilters.dateRange.to) {
             return false;
           }
         }
         
-        if (filters.mediaTypes.length > 0) {
+        if (safeFilters.mediaTypes && safeFilters.mediaTypes.length > 0) {
           const mediaType = mainMessage.mime_type?.split('/')[0] || 'unknown';
-          if (!filters.mediaTypes.includes(mediaType)) {
+          if (!safeFilters.mediaTypes.includes(mediaType)) {
             return false;
           }
         }
         
-        if (filters.vendors.length > 0) {
+        if (safeFilters.vendors && safeFilters.vendors.length > 0) {
           const vendor = mainMessage.analyzed_content?.vendor_uid;
-          if (!vendor || !filters.vendors.includes(vendor)) {
+          if (!vendor || !safeFilters.vendors.includes(vendor)) {
             return false;
           }
         }
         
-        if (filters.chatSources.length > 0) {
+        if (safeFilters.chatSources && safeFilters.chatSources.length > 0) {
           const chatSource = `${mainMessage.chat_id}-${mainMessage.chat_type}`;
-          if (!filters.chatSources.includes(chatSource)) {
+          if (!safeFilters.chatSources.includes(chatSource)) {
             return false;
           }
         }
@@ -76,7 +90,7 @@ export function useFilteredMessages() {
       console.error('Error in filtering messages:', err);
       return [] as Message[][];
     }
-  }, [mediaGroups, filters]);
+  }, [mediaGroups, safeFilters]);
 
   // Paginate the filtered messages
   const paginatedMessages = useMemo(() => {
@@ -90,9 +104,9 @@ export function useFilteredMessages() {
       return [] as Message[][];
     }
     
-    const startIndex = (filters.page - 1) * filters.itemsPerPage;
-    return filteredMessages.slice(startIndex, startIndex + filters.itemsPerPage);
-  }, [filteredMessages, filters.page, filters.itemsPerPage]);
+    const startIndex = (safeFilters.page - 1) * safeFilters.itemsPerPage;
+    return filteredMessages.slice(startIndex, startIndex + safeFilters.itemsPerPage);
+  }, [filteredMessages, safeFilters.page, safeFilters.itemsPerPage]);
 
   return {
     filteredMessages,

@@ -32,23 +32,28 @@ export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
     setAnalyticsOpen 
   } = useMessagesStore();
   
-  const { total, isLoading } = useFilteredMessages();
+  const { total = 0, isLoading = false } = useFilteredMessages() || {};
   const [filtersVisible, setFiltersVisible] = React.useState(false);
 
+  // Safely handle potential undefined properties
+  const processingStatesLength = filters?.processingStates?.length || 0;
+  const vendorsLength = filters?.vendors?.length || 0;
+  const mediaTypesLength = filters?.mediaTypes?.length || 0;
+  
   const hasActiveFilters = !!(
-    filters.search || 
-    filters.processingStates.length > 0 || 
-    filters.vendors.length > 0 || 
-    filters.mediaTypes.length > 0 || 
-    filters.dateRange
+    filters?.search || 
+    processingStatesLength > 0 || 
+    vendorsLength > 0 || 
+    mediaTypesLength > 0 || 
+    filters?.dateRange
   );
 
   const activeFilterCount = (
-    (filters.search ? 1 : 0) + 
-    filters.processingStates.length + 
-    filters.vendors.length + 
-    filters.mediaTypes.length + 
-    (filters.dateRange ? 1 : 0)
+    (filters?.search ? 1 : 0) + 
+    processingStatesLength + 
+    vendorsLength + 
+    mediaTypesLength + 
+    (filters?.dateRange ? 1 : 0)
   );
 
   return (
@@ -90,7 +95,7 @@ export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
           </Button>
           
           <Tabs 
-            defaultValue={filters.view} 
+            defaultValue={filters?.view || 'grid'} 
             className="w-auto" 
             onValueChange={(value) => setFilters({ ...filters, view: value as 'grid' | 'list' })}
           >

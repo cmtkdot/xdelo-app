@@ -12,10 +12,10 @@ import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 
 const MessagesEnhanced = () => {
   const { 
-    detailsOpen, 
-    analyticsOpen,
+    detailsOpen = false, 
+    analyticsOpen = false,
     refreshData 
-  } = useMessagesStore();
+  } = useMessagesStore() || {};
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -29,7 +29,7 @@ const MessagesEnhanced = () => {
     handleNextGroup,
     handleEditMessage,
     handleDeleteMessage
-  } = useMessageViewHandlers();
+  } = useMessageViewHandlers() || {};
   
   // Setup realtime updates
   useRealtimeUpdates({
@@ -45,12 +45,14 @@ const MessagesEnhanced = () => {
   // Handle data refresh
   const handleDataRefresh = async () => {
     try {
-      await refreshData();
-      
-      toast({
-        title: "Data refreshed",
-        description: "Messages have been refreshed"
-      });
+      if (refreshData) {
+        await refreshData();
+        
+        toast({
+          title: "Data refreshed",
+          description: "Messages have been refreshed"
+        });
+      }
     } catch (error) {
       console.error("Error refreshing data:", error);
       toast({
@@ -80,9 +82,7 @@ const MessagesEnhanced = () => {
       </MessagesLayout>
       
       {/* Media viewer modal */}
-      {viewerState.isOpen && (
-        viewerState.Viewer
-      )}
+      {viewerState?.isOpen && viewerState.Viewer}
     </div>
   );
 };
