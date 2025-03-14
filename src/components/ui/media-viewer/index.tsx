@@ -14,6 +14,7 @@ import { ProductDetails } from './product-details';
 import { cn } from '@/lib/utils';
 import { getMainMediaFromGroup } from '@/components/MediaViewer/utils/mediaHelpers';
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { X } from 'lucide-react';
 
 interface MediaViewerProps {
@@ -66,7 +67,7 @@ export function MediaViewer({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent 
         className={cn(
-          "p-0 max-w-4xl w-[95vw] md:h-auto h-[95vh] max-h-[90vh] overflow-hidden flex flex-col",
+          "p-0 max-w-6xl w-[95vw] h-[90vh] max-h-[90vh] overflow-hidden flex flex-col md:flex-row",
           className
         )}
       >
@@ -81,8 +82,8 @@ export function MediaViewer({
           </Button>
         </DialogClose>
 
-        {/* Main content area */}
-        <div className="flex flex-col h-full">
+        {/* Left column: Media display */}
+        <div className="w-full md:w-3/5 flex flex-col h-full">
           {/* Media display area */}
           <div className="flex-grow overflow-hidden bg-black">
             <MediaCarousel 
@@ -103,11 +104,15 @@ export function MediaViewer({
             onToggleTools={handleToggleTools} 
             messageIds={messageIds}
           />
-
-          {/* Product information section */}
-          <div className="bg-background border-t p-4 max-h-[30vh] overflow-y-auto">
-            <ProductDetails mainMedia={mainMedia} />
-          </div>
+        </div>
+        
+        {/* Right column: Product information */}
+        <div className="w-full md:w-2/5 border-t md:border-t-0 md:border-l h-[40vh] md:h-full">
+          <ScrollArea className="h-full">
+            <div className="p-4">
+              <ProductDetails mainMedia={mainMedia} />
+            </div>
+          </ScrollArea>
         </div>
       </DialogContent>
     </Dialog>

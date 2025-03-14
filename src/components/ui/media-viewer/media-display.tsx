@@ -7,6 +7,7 @@ import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
+import { AspectRatio } from '@/components/ui/aspect-ratio';
 
 interface MediaDisplayProps {
   message: Message;
@@ -45,7 +46,7 @@ export function MediaDisplay({ message, className }: MediaDisplayProps) {
   };
 
   return (
-    <div className={cn("relative w-full h-full flex items-center justify-center bg-black", className)}>
+    <div className={cn("relative max-w-full max-h-full flex items-center justify-center bg-black", className)}>
       {/* Loading state */}
       {isLoading && !error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 z-10">

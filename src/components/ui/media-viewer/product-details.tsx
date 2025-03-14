@@ -75,7 +75,7 @@ export function ProductDetails({ mainMedia, className }: ProductDetailsProps) {
       
       {/* Product details */}
       {hasProductDetails && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2">
           {analyzedContent.product_code && (
             <div className="flex items-center space-x-2 p-2 rounded-md bg-muted/10">
               <Tag className="h-4 w-4 text-primary" />
@@ -116,25 +116,27 @@ export function ProductDetails({ mainMedia, className }: ProductDetailsProps) {
             </div>
           )}
           
-          {analyzedContent.unit_price && (
-            <div className="flex items-center space-x-2 p-2 rounded-md bg-muted/10">
-              <DollarSign className="h-4 w-4 text-primary" />
-              <div>
-                <p className="text-xs text-muted-foreground">Unit Price</p>
-                <p className="text-sm font-medium">${analyzedContent.unit_price.toFixed(2)}</p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            {analyzedContent.unit_price && (
+              <div className="flex items-center space-x-2 p-2 rounded-md bg-muted/10 flex-1">
+                <DollarSign className="h-4 w-4 text-primary" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Unit Price</p>
+                  <p className="text-sm font-medium">${analyzedContent.unit_price.toFixed(2)}</p>
+                </div>
               </div>
-            </div>
-          )}
-          
-          {analyzedContent.total_price && (
-            <div className="flex items-center space-x-2 p-2 rounded-md bg-muted/10">
-              <DollarSign className="h-4 w-4 text-primary" />
-              <div>
-                <p className="text-xs text-muted-foreground">Total Price</p>
-                <p className="text-sm font-medium">${analyzedContent.total_price.toFixed(2)}</p>
+            )}
+            
+            {analyzedContent.total_price && (
+              <div className="flex items-center space-x-2 p-2 rounded-md bg-muted/10 flex-1">
+                <DollarSign className="h-4 w-4 text-primary" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Total Price</p>
+                  <p className="text-sm font-medium">${analyzedContent.total_price.toFixed(2)}</p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
       

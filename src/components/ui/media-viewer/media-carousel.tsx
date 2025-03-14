@@ -98,14 +98,14 @@ export function MediaCarousel({
   };
 
   return (
-    <div className={cn("relative h-full", className)}>
+    <div className={cn("relative h-full flex items-center justify-center", className)}>
       {mediaItems.length === 1 ? (
-        <div className="h-full">
-          <MediaDisplay message={mediaItems[0]} />
+        <div className="h-full w-full max-h-[calc(90vh-80px)] md:max-h-[calc(90vh-50px)] flex items-center justify-center">
+          <MediaDisplay message={mediaItems[0]} className="max-h-full" />
         </div>
       ) : (
         <Carousel
-          className="h-full"
+          className="h-full w-full"
           setApi={setApi}
           opts={{
             startIndex: activeIndex,
@@ -114,8 +114,10 @@ export function MediaCarousel({
         >
           <CarouselContent className="h-full">
             {mediaItems.map((message, index) => (
-              <CarouselItem key={message.id || index} className="h-full">
-                <MediaDisplay message={message} />
+              <CarouselItem key={message.id || index} className="h-full flex items-center justify-center">
+                <div className="max-h-[calc(90vh-80px)] md:max-h-[calc(90vh-50px)] w-full flex items-center justify-center">
+                  <MediaDisplay message={message} />
+                </div>
               </CarouselItem>
             ))}
           </CarouselContent>
