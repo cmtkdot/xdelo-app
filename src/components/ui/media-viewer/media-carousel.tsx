@@ -124,13 +124,13 @@ export function MediaCarousel({
 
   return (
     <div 
-      className={cn("relative h-full flex items-center justify-center", className)} 
+      className={cn("relative h-full w-full flex items-center justify-center bg-background/5", className)} 
       {...bindTouchHandlers}
     >
       {mediaItems.length === 1 ? (
         // Single item display without carousel
         <div className="h-full w-full flex items-center justify-center">
-          <MediaDisplay message={mediaItems[0]} className="max-h-full" />
+          <MediaDisplay message={mediaItems[0]} className="max-h-[85vh] md:max-h-[85vh]" />
         </div>
       ) : (
         // Multiple items carousel
@@ -146,8 +146,8 @@ export function MediaCarousel({
           <CarouselContent className="h-full">
             {mediaItems.map((message, index) => (
               <CarouselItem key={message.id || index} className="h-full flex items-center justify-center">
-                <div className="w-full h-full flex items-center justify-center">
-                  <MediaDisplay message={message} />
+                <div className="w-full h-full flex items-center justify-center p-2">
+                  <MediaDisplay message={message} className="max-h-[85vh] md:max-h-[85vh]" />
                 </div>
               </CarouselItem>
             ))}
@@ -155,16 +155,16 @@ export function MediaCarousel({
           
           <CarouselPrevious 
             onClick={handleExternalPrevious}
-            className="left-2 bg-black/40 text-white hover:bg-black/60 border-none"
+            className="left-2 bg-background/40 hover:bg-background/60 border-none"
           />
           
           <CarouselNext 
             onClick={handleExternalNext}
-            className="right-2 bg-black/40 text-white hover:bg-black/60 border-none"
+            className="right-2 bg-background/40 hover:bg-background/60 border-none"
           />
           
           {/* Image counter indicator */}
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white px-2 py-1 rounded-md text-xs">
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-background/60 px-2 py-1 rounded-md text-xs">
             {activeIndex + 1} / {mediaItems.length}
           </div>
         </Carousel>
@@ -175,7 +175,7 @@ export function MediaCarousel({
         <Button
           variant="ghost"
           size="icon"
-          className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/40 text-white hover:bg-black/60 z-20"
+          className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-background/40 hover:bg-background/60 z-20"
           onClick={onPrevious}
           aria-label="Previous group"
         >
@@ -187,7 +187,7 @@ export function MediaCarousel({
         <Button
           variant="ghost"
           size="icon"
-          className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/40 text-white hover:bg-black/60 z-20"
+          className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-background/40 hover:bg-background/60 z-20"
           onClick={onNext}
           aria-label="Next group"
         >

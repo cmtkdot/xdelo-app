@@ -15,7 +15,8 @@ import { cn } from '@/lib/utils';
 import { getMainMediaFromGroup } from '@/components/MediaViewer/utils/mediaHelpers';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { X, MoreHorizontal, Info } from 'lucide-react';
+import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
+import { X, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { useIsMobile } from '@/hooks/useMobile';
 
 interface MediaViewerProps {
@@ -70,11 +71,44 @@ export function MediaViewer({
     setShowDetails(!showDetails);
   };
 
+  // Mobile detail drawer component
+  const MobileDetailsSheet = () => (
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="flex items-center gap-1 bg-background/40 hover:bg-background/60 rounded-full px-3 py-1"
+        >
+          <Info className="h-4 w-4" />
+          <span>Details</span>
+          <ChevronUp className="h-4 w-4" />
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="bottom" className="h-[80vh] pt-8 rounded-t-xl">
+        <SheetClose className="absolute right-4 top-4 z-50">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8 rounded-full"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </SheetClose>
+        <ScrollArea className="h-full py-1">
+          <div className="p-4">
+            <ProductDetails mainMedia={mainMedia} />
+          </div>
+        </ScrollArea>
+      </SheetContent>
+    </Sheet>
+  );
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent 
         className={cn(
-          "p-0 max-w-6xl w-[95vw] h-[90vh] max-h-[90vh] overflow-hidden flex flex-col md:flex-row gap-0",
+          "p-0 max-w-6xl w-[95vw] h-[90vh] max-h-[90vh] overflow-hidden flex flex-col md:flex-row gap-0 bg-background/95 backdrop-blur-md", 
           className
         )}
       >
@@ -83,23 +117,11 @@ export function MediaViewer({
           <Button 
             variant="ghost" 
             size="icon" 
-            className="h-8 w-8 rounded-full bg-black/40 text-white hover:bg-black/60"
+            className="h-8 w-8 rounded-full bg-background/40 hover:bg-background/60"
           >
             <X className="h-4 w-4" />
           </Button>
         </DialogClose>
-
-        {/* Mobile-only details toggle button */}
-        {isMobile && (
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="absolute left-4 top-4 z-50 h-8 w-8 rounded-full bg-black/40 text-white hover:bg-black/60"
-            onClick={handleToggleDetails}
-          >
-            <Info className="h-4 w-4" />
-          </Button>
-        )}
 
         {/* Left column: Media display */}
         <div className={cn(
@@ -107,7 +129,7 @@ export function MediaViewer({
           !isMobile && "md:w-3/5"
         )}>
           {/* Media display area */}
-          <div className="flex-grow bg-black overflow-hidden">
+          <div className="flex-grow overflow-hidden relative">
             <MediaCarousel 
               mediaItems={currentGroup}
               activeIndex={activeMediaIndex}
@@ -117,6 +139,13 @@ export function MediaViewer({
               onPrevious={onPrevious}
               onNext={onNext}
             />
+            
+            {/* Mobile-only detail sheet trigger at bottom of screen */}
+            {isMobile && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
+                <MobileDetailsSheet />
+              </div>
+            )}
           </div>
           
           {/* Toolbar with actions */}
@@ -128,23 +157,9 @@ export function MediaViewer({
           />
         </div>
         
-        {/* Right column: Product information */}
-        {(!isMobile || showDetails) && (
-          <div className={cn(
-            "border-t md:border-t-0 md:border-l bg-background/95",
-            isMobile ? "absolute inset-0 z-40 h-full" : "w-full md:w-2/5 h-full"
-          )}>
-            {/* Mobile-only close details button */}
-            {isMobile && showDetails && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-4 top-4 z-50 h-8 w-8 rounded-full"
-                onClick={handleToggleDetails}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
+        {/* Right column: Product information (desktop only) */}
+        {!isMobile && (
+          <div className="border-t md:border-t-0 md:border-l bg-background/95 w-full md:w-2/5 h-full">
             <ScrollArea className="h-full">
               <div className="p-4">
                 <ProductDetails mainMedia={mainMedia} />
