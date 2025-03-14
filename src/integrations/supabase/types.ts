@@ -1002,6 +1002,51 @@ export type Database = {
         }
         Relationships: []
       }
+      gl_relationship_definitions: {
+        Row: {
+          created_at: string
+          description: string | null
+          glide_column: string
+          id: string
+          is_active: boolean
+          reference_glide_column: string
+          reference_id_column: string
+          reference_table: string
+          relationship_type: string
+          source_table: string
+          supabase_column: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          glide_column: string
+          id?: string
+          is_active?: boolean
+          reference_glide_column?: string
+          reference_id_column?: string
+          reference_table: string
+          relationship_type?: string
+          source_table: string
+          supabase_column: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          glide_column?: string
+          id?: string
+          is_active?: boolean
+          reference_glide_column?: string
+          reference_id_column?: string
+          reference_table?: string
+          relationship_type?: string
+          source_table?: string
+          supabase_column?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       gl_secure_links: {
         Row: {
           actual_path: string
@@ -3442,6 +3487,24 @@ export type Database = {
         Returns: {
           entity_type: string
           records_updated: number
+        }[]
+      }
+      xan_repair_data_relationships: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          type: string
+          entity: string
+          count: number
+        }[]
+      }
+      xan_repair_data_relationships_from_defs: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          source_table: string
+          glide_column: string
+          supabase_column: string
+          reference_table: string
+          fixed_count: number
         }[]
       }
       xan_repair_entity_relationships: {

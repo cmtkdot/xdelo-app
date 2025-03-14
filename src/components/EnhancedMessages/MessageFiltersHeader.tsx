@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { EnhancedFiltersPanel } from './EnhancedFiltersPanel';
 import { EnhancedMessagesHeader } from './EnhancedMessagesHeader';
-import { useMessagesStore } from '@/hooks/useMessagesStore';
+import { useMessagesStore, FilterState } from '@/hooks/useMessagesStore';
 import { useFilteredMessages } from '@/hooks/useFilteredMessages';
 import { cn } from '@/lib/utils';
 
@@ -23,20 +23,42 @@ interface MessageFiltersHeaderProps {
 }
 
 export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
-  const messagesStore = useMessagesStore() || {};
-  
-  // Create default filters object with all required properties
-  const defaultFilters = {
-    search: '',
-    processingStates: [],
-    mediaTypes: [],
-    vendors: [],
-    dateRange: null,
-    view: 'grid' as 'grid' | 'list'
+  // Create a complete default state that matches MessagesState interface
+  const defaultState = {
+    filters: {
+      search: '',
+      processingStates: [],
+      mediaTypes: [],
+      vendors: [],
+      dateRange: null,
+      showGroups: true,
+      chatSources: [],
+      page: 1,
+      itemsPerPage: 20,
+      view: 'grid' as const,
+      sortField: 'created_at' as const,
+      sortOrder: 'desc' as const,
+    },
+    selectedMessage: null,
+    detailsOpen: false,
+    analyticsOpen: false,
+    presetFilters: {},
+    setFilters: () => {},
+    setSelectedMessage: () => {},
+    setDetailsOpen: () => {},
+    setAnalyticsOpen: () => {},
+    setPage: () => {},
+    refreshData: async () => {},
+    savePreset: () => {},
+    loadPreset: () => null,
+    deletePreset: () => {},
   };
   
+  // Merge the actual store with defaults for type safety
+  const messagesStore = { ...defaultState, ...useMessagesStore() };
+  
   const { 
-    filters = defaultFilters, 
+    filters,
     setFilters,
     detailsOpen, 
     setDetailsOpen,
@@ -47,7 +69,6 @@ export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
   const { total = 0, isLoading = false } = useFilteredMessages() || {};
   const [filtersVisible, setFiltersVisible] = React.useState(false);
 
-  // Now TypeScript knows these properties exist on our filters object
   const processingStatesLength = filters.processingStates?.length || 0;
   const vendorsLength = filters.vendors?.length || 0;
   const mediaTypesLength = filters.mediaTypes?.length || 0;
@@ -69,10 +90,8 @@ export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
   );
 
   // Define safe handler for setting filters
-  const handleSetFilters = (newFilters: any) => {
-    if (setFilters) {
-      setFilters({...filters, ...newFilters});
-    }
+  const handleSetFilters = (newFilters: Partial<FilterState>) => {
+    setFilters({...filters, ...newFilters});
   };
 
   return (
@@ -107,7 +126,7 @@ export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
             variant="outline" 
             size="sm" 
             className={cn("gap-2", analyticsOpen ? "bg-secondary" : "")}
-            onClick={() => setAnalyticsOpen && setAnalyticsOpen(!analyticsOpen)}
+            onClick={() => setAnalyticsOpen(!analyticsOpen)}
           >
             <BarChart3 className="h-4 w-4" />
             Analytics
@@ -147,7 +166,7 @@ export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
             variant="outline" 
             size="sm" 
             className={cn("gap-2", detailsOpen ? "bg-secondary" : "")}
-            onClick={() => setDetailsOpen && setDetailsOpen(!detailsOpen)}
+            onClick={() => setDetailsOpen(!detailsOpen)}
           >
             <PanelRight className="h-4 w-4" />
             Details
