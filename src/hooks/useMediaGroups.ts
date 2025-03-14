@@ -55,12 +55,16 @@ export function useMediaGroups() {
           });
         });
 
-        // Return empty object instead of undefined if no data
-        return mediaGroups || {};
+        // Convert the record to an array of arrays for MessageGridView
+        const messageGroups: Message[][] = Object.values(mediaGroups);
+        
+        // Return the array of message groups (Message[][]) 
+        // instead of the object for proper typing
+        return messageGroups;
       } catch (error) {
         console.error('Error in useMediaGroups hook:', error);
-        // Return empty object on error rather than throwing
-        return {};
+        // Return empty array on error rather than throwing or empty object
+        return [];
       }
     },
     staleTime: 1 * 60 * 1000, // 1 minute

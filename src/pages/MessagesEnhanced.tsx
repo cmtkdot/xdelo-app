@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/integrations/supabase/client";
@@ -65,7 +66,7 @@ const MessagesEnhanced = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  const { data: mediaGroups = {}, isLoading, error, refetch } = useMediaGroups();
+  const { data: mediaGroups = [], isLoading, error, refetch } = useMediaGroups();
   const { messages: realtimeMessages, handleRefresh } = useRealTimeMessages({
     limit: 100,
     processingState: filters.processingStates,
@@ -78,12 +79,15 @@ const MessagesEnhanced = () => {
   const queryClient = useQueryClient();
 
   const filteredMessages = useMemo(() => {
-    if (!mediaGroups) return [];
+    if (!mediaGroups || !Array.isArray(mediaGroups)) {
+      console.warn('mediaGroups is not an array or is empty', mediaGroups);
+      return [];
+    }
     
-    const groups = Object.values(mediaGroups);
-    
-    return groups.filter(group => {
-      if (!group || group.length === 0) return false;
+    return mediaGroups.filter(group => {
+      if (!group || !Array.isArray(group) || group.length === 0) {
+        return false;
+      }
       
       const mainMessage = group[0];
       if (!mainMessage) return false;
@@ -105,7 +109,7 @@ const MessagesEnhanced = () => {
       }
       
       if (filters.dateRange) {
-        const messageDate = new Date(mainMessage.created_at);
+        const messageDate = new Date(mainMessage.created_at || '');
         if (messageDate < filters.dateRange.from || messageDate > filters.dateRange.to) {
           return false;
         }
@@ -137,7 +141,9 @@ const MessagesEnhanced = () => {
   }, [mediaGroups, filters]);
 
   const paginatedMessages = useMemo(() => {
-    if (!filteredMessages || filteredMessages.length === 0) return [];
+    if (!filteredMessages || !Array.isArray(filteredMessages) || filteredMessages.length === 0) {
+      return [];
+    }
     
     const startIndex = (filters.page - 1) * filters.itemsPerPage;
     return filteredMessages.slice(startIndex, startIndex + filters.itemsPerPage);
@@ -287,6 +293,14 @@ const MessagesEnhanced = () => {
     setIsDeleteDialogOpen(true);
   };
 
+  // Debug log for troubleshooting
+  useEffect(() => {
+    console.log('mediaGroups type:', Array.isArray(mediaGroups) ? 'array' : typeof mediaGroups);
+    console.log('mediaGroups length:', Array.isArray(mediaGroups) ? mediaGroups.length : 'N/A');
+    console.log('filteredMessages length:', filteredMessages?.length || 0);
+    console.log('paginatedMessages length:', paginatedMessages?.length || 0);
+  }, [mediaGroups, filteredMessages, paginatedMessages]);
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <EnhancedMessagesHeader 
@@ -405,7 +419,7 @@ const MessagesEnhanced = () => {
                 Retry
               </Button>
             </div>
-          ) : !filteredMessages || filteredMessages.length === 0 ? (
+          ) : !filteredMessages || !Array.isArray(filteredMessages) || filteredMessages.length === 0 ? (
             <div className="p-8 text-center">
               <h3 className="text-xl font-semibold mb-2">No messages found</h3>
               <p className="text-muted-foreground">Try adjusting your filters or refreshing the data.</p>

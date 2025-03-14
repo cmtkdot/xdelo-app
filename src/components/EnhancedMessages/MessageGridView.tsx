@@ -22,19 +22,31 @@ export const MessageGridView: React.FC<MessageGridViewProps> = ({
   onView,
   selectedId
 }) => {
+  // Add defensive check to ensure messages is an array
+  if (!messages || !Array.isArray(messages)) {
+    console.error('MessageGridView: messages is not an array', messages);
+    return <div>No messages to display</div>;
+  }
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-      {messages.map((group) => {
-        // Skip empty groups
-        if (!group || group.length === 0) return null;
+      {messages.map((group, groupIndex) => {
+        // Skip empty groups with a debug log
+        if (!group || !Array.isArray(group) || group.length === 0) {
+          console.warn(`Skipping empty or invalid group at index ${groupIndex}`, group);
+          return null;
+        }
         
         // Get main message for display
         const mainMessage = group[0];
-        if (!mainMessage) return null;
+        if (!mainMessage) {
+          console.warn(`No main message found in group at index ${groupIndex}`, group);
+          return null;
+        }
         
         // Determine if this is a video
         const isVideo = mainMessage.mime_type?.startsWith('video/') || 
-                        (mainMessage.public_url && /\.(mp4|mov|webm|avi)$/i.test(mainMessage.public_url));
+                       (mainMessage.public_url && /\.(mp4|mov|webm|avi)$/i.test(mainMessage.public_url));
         
         // Get product name or use caption as fallback
         const productName = mainMessage.analyzed_content?.product_name || mainMessage.caption || 'Untitled';
