@@ -18,7 +18,8 @@ export function useFilteredMessages() {
     vendors: filters.vendors || [],
     chatSources: filters.chatSources || [],
     page: filters.page || 1,
-    itemsPerPage: filters.itemsPerPage || 20
+    itemsPerPage: filters.itemsPerPage || 20,
+    view: filters.view || 'grid'
   };
   
   // Fetch messages with the base filters applied via API
@@ -30,7 +31,7 @@ export function useFilteredMessages() {
     isRefetching = false
   } = useEnhancedMessages({
     grouped: true,
-    limit: 500,
+    limit: 500, // Increased limit to ensure we have enough data after client-side filtering
     processingStates: safeFilters.processingStates,
     searchTerm: safeFilters.search,
     sortBy: safeFilters.sortField,

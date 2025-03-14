@@ -1,12 +1,13 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Eye, Edit, Trash2, FileX } from 'lucide-react';
+import { Eye, Edit, Trash2, FileX, Play } from 'lucide-react';
 import { Message } from '@/types';
 import { useIsMobile } from '@/hooks/useMobile';
 import { cn } from '@/lib/utils';
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface MessageGridViewProps {
   messages: Message[];
@@ -27,6 +28,8 @@ export function MessageGridView({
 }: MessageGridViewProps) {
   const isMobile = useIsMobile();
   const [mediaErrors, setMediaErrors] = useState<Record<string, boolean>>({});
+  const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
+  const [videoThumbnails, setVideoThumbnails] = useState<Record<string, string>>({});
   
   const getProcessingStateColor = (state: string) => {
     switch (state) {
@@ -42,6 +45,7 @@ export function MessageGridView({
   const handleMediaError = (messageId: string) => {
     console.log(`Media load error for message: ${messageId}`);
     setMediaErrors(prev => ({ ...prev, [messageId]: true }));
+    setLoadingStates(prev => ({ ...prev, [messageId]: false }));
   };
 
   // Determine if a message is a video based on mime type or URL pattern
@@ -49,6 +53,68 @@ export function MessageGridView({
     return message.mime_type?.startsWith('video/') || 
            (message.public_url && /\.(mp4|mov|webm|avi)$/i.test(message.public_url));
   };
+
+  // Generate video thumbnail
+  const generateVideoThumbnail = (message: Message) => {
+    if (!message.public_url || videoThumbnails[message.id]) return;
+    
+    setLoadingStates(prev => ({ ...prev, [message.id]: true }));
+    
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.src = message.public_url;
+    video.muted = true;
+    video.preload = 'metadata';
+    
+    // Try to seek to the middle or start of the video
+    const seekTo = message.duration ? message.duration / 2 : 1;
+    
+    video.addEventListener('loadedmetadata', () => {
+      video.currentTime = seekTo;
+    });
+    
+    video.addEventListener('seeked', () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth || 320;
+        canvas.height = video.videoHeight || 240;
+        
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const thumbnailUrl = canvas.toDataURL('image/jpeg', 0.7);
+          
+          setVideoThumbnails(prev => ({ ...prev, [message.id]: thumbnailUrl }));
+          setLoadingStates(prev => ({ ...prev, [message.id]: false }));
+        } else {
+          handleMediaError(message.id);
+        }
+      } catch (err) {
+        console.error('Error generating thumbnail:', err);
+        handleMediaError(message.id);
+      }
+    });
+    
+    video.addEventListener('error', () => {
+      handleMediaError(message.id);
+    });
+    
+    // Set a timeout to prevent hanging on load issues
+    setTimeout(() => {
+      if (loadingStates[message.id]) {
+        handleMediaError(message.id);
+      }
+    }, 5000);
+  };
+
+  // Generate thumbnails for visible videos
+  useEffect(() => {
+    messages.forEach(message => {
+      if (isVideoMessage(message) && !videoThumbnails[message.id] && !mediaErrors[message.id]) {
+        generateVideoThumbnail(message);
+      }
+    });
+  }, [messages]);
 
   if (!messages || messages.length === 0) {
     return (
@@ -79,39 +145,77 @@ export function MessageGridView({
           onClick={() => onSelect(message)}
         >
           <div className="relative aspect-square overflow-hidden bg-muted/20">
-            {message.public_url && !mediaErrors[message.id] ? (
-              isVideoMessage(message) ? (
-                // Video thumbnail with poster or first frame
-                <div className="w-full h-full relative">
-                  <video 
-                    className="w-full h-full object-cover"
-                    src={message.public_url}
-                    preload="metadata"
-                    poster="/placeholder.svg"
-                    onError={() => handleMediaError(message.id)}
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Badge className="bg-black/70 text-white">Video</Badge>
+            {loadingStates[message.id] && (
+              <div className="absolute inset-0 flex items-center justify-center bg-background/40 z-10">
+                <Skeleton className="h-full w-full absolute" />
+              </div>
+            )}
+            
+            {isVideoMessage(message) ? (
+              // Video thumbnail
+              <div className="w-full h-full relative">
+                {videoThumbnails[message.id] && !mediaErrors[message.id] ? (
+                  <>
+                    <img 
+                      src={videoThumbnails[message.id]} 
+                      alt={message.caption || 'Video thumbnail'} 
+                      className="w-full h-full object-cover"
+                      onError={() => handleMediaError(message.id)}
+                    />
+                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                      <div className="rounded-full bg-black/50 p-3 backdrop-blur-sm">
+                        <Play className="h-6 w-6 text-white" fill="white" />
+                      </div>
+                    </div>
+                    <Badge className="absolute top-2 right-2 bg-black/70 text-white">
+                      {message.duration ? `${Math.floor(message.duration)}s` : 'Video'}
+                    </Badge>
+                  </>
+                ) : !mediaErrors[message.id] ? (
+                  // Attempt to generate thumbnail
+                  <div className="flex flex-col items-center justify-center h-full" 
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         if (!loadingStates[message.id]) {
+                           generateVideoThumbnail(message);
+                         }
+                       }}>
+                    <Play className="h-10 w-10 text-muted-foreground mb-2" />
+                    <span className="text-muted-foreground text-xs text-center px-2">
+                      {loadingStates[message.id] ? 'Loading preview...' : 'Click to load preview'}
+                    </span>
                   </div>
-                </div>
-              ) : (
-                // Image
+                ) : (
+                  // Error fallback
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <FileX className="h-8 w-8 text-muted-foreground mb-2" />
+                    <span className="text-muted-foreground text-xs text-center px-2">
+                      Video preview failed
+                    </span>
+                    <Badge className="mt-2">Video</Badge>
+                  </div>
+                )}
+              </div>
+            ) : (
+              // Regular image
+              message.public_url && !mediaErrors[message.id] ? (
                 <img 
                   src={message.public_url} 
                   alt={message.caption || 'Media'} 
                   className="w-full h-full object-cover"
                   loading="lazy"
+                  onLoad={() => setLoadingStates(prev => ({ ...prev, [message.id]: false }))}
                   onError={() => handleMediaError(message.id)}
                 />
+              ) : (
+                // Error or no media fallback
+                <div className="flex flex-col items-center justify-center h-full bg-muted/30">
+                  <FileX className="h-8 w-8 text-muted-foreground mb-2" />
+                  <span className="text-muted-foreground text-xs text-center px-2">
+                    {mediaErrors[message.id] ? 'Media failed to load' : 'No media available'}
+                  </span>
+                </div>
               )
-            ) : (
-              // Error or no media fallback
-              <div className="flex flex-col items-center justify-center h-full bg-muted/30">
-                <FileX className="h-8 w-8 text-muted-foreground mb-2" />
-                <span className="text-muted-foreground text-xs text-center px-2">
-                  {mediaErrors[message.id] ? 'Media failed to load' : 'No media available'}
-                </span>
-              </div>
             )}
             
             {/* Action overlay */}

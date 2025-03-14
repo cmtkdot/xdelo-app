@@ -2056,6 +2056,7 @@ export type Database = {
           telegram_message_id: number | null
           update_id: string | null
           updated_at: string
+          user_id: string | null
           vendor_uid: string | null
           width: number | null
         }
@@ -2145,6 +2146,7 @@ export type Database = {
           telegram_message_id?: number | null
           update_id?: string | null
           updated_at?: string
+          user_id?: string | null
           vendor_uid?: string | null
           width?: number | null
         }
@@ -2234,6 +2236,7 @@ export type Database = {
           telegram_message_id?: number | null
           update_id?: string | null
           updated_at?: string
+          user_id?: string | null
           vendor_uid?: string | null
           width?: number | null
         }
@@ -3840,14 +3843,30 @@ export type Database = {
         }
         Returns: Json
       }
-      xdelo_construct_telegram_message_url: {
-        Args: {
-          chat_type: Database["public"]["Enums"]["telegram_chat_type"]
-          chat_id: number
-          message_id: string
-        }
-        Returns: string
-      }
+      xdelo_construct_telegram_message_url:
+        | {
+            Args: {
+              chat_id: number
+              message_id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              chat_type: Database["public"]["Enums"]["telegram_chat_type"]
+              chat_id: number
+              id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_chat_type: string
+              p_chat_id: number
+              p_id: string
+            }
+            Returns: string
+          }
       xdelo_fail_message_processing: {
         Args: {
           p_message_id: string

@@ -28,7 +28,8 @@ export function MessageContent({
     paginatedMessages, 
     isLoading, 
     error, 
-    refetch 
+    refetch,
+    total
   } = useFilteredMessages();
 
   const handleDataRefresh = () => {
@@ -58,7 +59,7 @@ export function MessageContent({
     );
   }
 
-  // Extract messages from pagination groups
+  // Extract messages from pagination groups safely
   const extractMessages = (messageGroups: Message[][]) => {
     if (!messageGroups || !Array.isArray(messageGroups) || messageGroups.length === 0) {
       return [];
