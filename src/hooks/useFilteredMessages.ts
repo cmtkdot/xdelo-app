@@ -33,7 +33,7 @@ export function useFilteredMessages() {
     itemsPerPage: filters.itemsPerPage || 20
   };
   
-  // Fetch messages with the filters applied
+  // Fetch messages with the base filters applied via API
   const { 
     groupedMessages: mediaGroups = [], 
     isLoading = false, 
@@ -49,7 +49,7 @@ export function useFilteredMessages() {
     sortOrder: safeFilters.sortOrder
   }) || {};
   
-  // Apply additional client-side filtering
+  // Apply additional client-side filtering that can't be done in the initial query
   const filteredMessages = useMemo(() => {
     // Defensive check
     if (!Array.isArray(mediaGroups)) {
@@ -67,21 +67,26 @@ export function useFilteredMessages() {
         const mainMessage = group[0];
         if (!mainMessage) return false;
 
-        // Additional filtering beyond what useEnhancedMessages provides
-        if (safeFilters.dateRange) {
+        // Date range filtering
+        if (safeFilters.dateRange?.from && safeFilters.dateRange?.to) {
           const messageDate = new Date(mainMessage.created_at || '');
           if (messageDate < safeFilters.dateRange.from || messageDate > safeFilters.dateRange.to) {
             return false;
           }
         }
         
+        // Media type filtering
         if (safeFilters.mediaTypes && safeFilters.mediaTypes.length > 0) {
-          const mediaType = mainMessage.mime_type?.split('/')[0] || 'unknown';
-          if (!safeFilters.mediaTypes.includes(mediaType)) {
+          if (!mainMessage.mime_type) return false;
+          
+          // Extract the main type from MIME type (e.g., "image/jpeg" -> "image")
+          const mainType = mainMessage.mime_type.split('/')[0];
+          if (!safeFilters.mediaTypes.includes(mainType)) {
             return false;
           }
         }
         
+        // Vendor filtering
         if (safeFilters.vendors && safeFilters.vendors.length > 0) {
           const vendor = mainMessage.analyzed_content?.vendor_uid;
           if (!vendor || !safeFilters.vendors.includes(vendor)) {
@@ -89,6 +94,7 @@ export function useFilteredMessages() {
           }
         }
         
+        // Chat source filtering
         if (safeFilters.chatSources && safeFilters.chatSources.length > 0) {
           const chatSource = `${mainMessage.chat_id}-${mainMessage.chat_type}`;
           if (!safeFilters.chatSources.includes(chatSource)) {

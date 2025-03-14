@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from '@/hooks/useToast';
 import { useMessagesStore } from '@/hooks/useMessagesStore';
 import { useMessageViewHandlers } from '@/hooks/useMessageViewHandlers';
@@ -9,21 +8,17 @@ import { MessagesLayout } from '@/components/EnhancedMessages/MessagesLayout';
 import { MessageFiltersHeader } from '@/components/EnhancedMessages/MessageFiltersHeader';
 import { MessageContent } from '@/components/EnhancedMessages/MessageContent';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
+import { useFilteredMessages } from '@/hooks/useFilteredMessages';
 
 const MessagesEnhanced = () => {
-  const messagesStore = useMessagesStore();
-  
-  // Provide default values for all properties
   const { 
     detailsOpen = false, 
-    analyticsOpen = false,
-    refreshData = async () => {
-      console.log("Default refresh function called");
-    }
-  } = messagesStore || {};
+    analyticsOpen = false
+  } = useMessagesStore() || {};
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { refetch } = useFilteredMessages() || {};
   
   // Setup handlers for message interactions
   const {
@@ -41,8 +36,7 @@ const MessagesEnhanced = () => {
     tables: ['messages', 'unified_audit_logs'],
     onUpdate: () => {
       console.log('Real-time update received');
-      queryClient.invalidateQueries({ queryKey: ['media-groups'] });
-      queryClient.invalidateQueries({ queryKey: ['messages'] });
+      queryClient.invalidateQueries({ queryKey: ['enhanced-messages'] });
       queryClient.invalidateQueries({ queryKey: ['message-analytics'] });
     }
   });
@@ -50,8 +44,8 @@ const MessagesEnhanced = () => {
   // Handle data refresh
   const handleDataRefresh = async () => {
     try {
-      if (refreshData) {
-        await refreshData();
+      if (refetch) {
+        await refetch();
         
         toast({
           title: "Data refreshed",

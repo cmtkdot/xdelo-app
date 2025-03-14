@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -23,9 +23,11 @@ interface MessageFiltersHeaderProps {
 }
 
 export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
-  // Create a complete default state that matches MessagesState interface
-  const defaultState = {
-    filters: {
+  const [filtersVisible, setFiltersVisible] = useState(false);
+  
+  // Get the messages store
+  const { 
+    filters = {
       search: '',
       processingStates: [],
       mediaTypes: [],
@@ -39,36 +41,16 @@ export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
       sortField: 'created_at' as const,
       sortOrder: 'desc' as const,
     },
-    selectedMessage: null,
-    detailsOpen: false,
-    analyticsOpen: false,
-    presetFilters: {},
-    setFilters: () => {},
-    setSelectedMessage: () => {},
-    setDetailsOpen: () => {},
-    setAnalyticsOpen: () => {},
-    setPage: () => {},
-    refreshData: async () => {},
-    savePreset: () => {},
-    loadPreset: () => null,
-    deletePreset: () => {},
-  };
-  
-  // Merge the actual store with defaults for type safety
-  const messagesStore = { ...defaultState, ...useMessagesStore() };
-  
-  const { 
-    filters,
-    setFilters,
-    detailsOpen, 
-    setDetailsOpen,
-    analyticsOpen, 
-    setAnalyticsOpen 
-  } = messagesStore;
+    setFilters = () => {},
+    detailsOpen = false, 
+    setDetailsOpen = () => {},
+    analyticsOpen = false, 
+    setAnalyticsOpen = () => {}
+  } = useMessagesStore();
   
   const { total = 0, isLoading = false } = useFilteredMessages() || {};
-  const [filtersVisible, setFiltersVisible] = React.useState(false);
 
+  // Calculate active filters
   const processingStatesLength = filters.processingStates?.length || 0;
   const vendorsLength = filters.vendors?.length || 0;
   const mediaTypesLength = filters.mediaTypes?.length || 0;
@@ -133,7 +115,7 @@ export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
           </Button>
           
           <Tabs 
-            defaultValue={filters.view || 'grid'} 
+            value={filters.view} 
             className="w-auto" 
             onValueChange={(value) => handleSetFilters({ view: value as 'grid' | 'list' })}
           >

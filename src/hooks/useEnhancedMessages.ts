@@ -1,3 +1,4 @@
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -78,7 +79,7 @@ export function useEnhancedMessages({
         
         // Add search filter if provided
         if (searchTerm) {
-          query = query.ilike('caption', `%${searchTerm}%`);
+          query = query.or(`caption.ilike.%${searchTerm}%,analyzed_content->product_name.ilike.%${searchTerm}%`);
         }
         
         // Execute the query

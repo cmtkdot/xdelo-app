@@ -767,9 +767,12 @@ export type Database = {
           main_processed: string | null
           main_submitted_timestamp: string | null
           main_user_email: string | null
+          pdf_generated_at: string | null
+          pdf_url: string | null
           rowids_accountsid: string | null
           sb_accounts_id: string | null
           sb_estimates_id: string | null
+          sb_pdf_storage_path: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
@@ -789,9 +792,12 @@ export type Database = {
           main_processed?: string | null
           main_submitted_timestamp?: string | null
           main_user_email?: string | null
+          pdf_generated_at?: string | null
+          pdf_url?: string | null
           rowids_accountsid?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
+          sb_pdf_storage_path?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
@@ -811,9 +817,12 @@ export type Database = {
           main_processed?: string | null
           main_submitted_timestamp?: string | null
           main_user_email?: string | null
+          pdf_generated_at?: string | null
+          pdf_url?: string | null
           rowids_accountsid?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
+          sb_pdf_storage_path?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
@@ -849,7 +858,10 @@ export type Database = {
           rowid_purchase_order_row_id: string | null
           rowid_vpay_row_id: string | null
           sb_accounts_id: string | null
+          sb_pdf_updated_at: string | null
+          sb_pdf_url: string | null
           sb_purchase_orders_id: string | null
+          sb_vpay_id: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
@@ -882,7 +894,10 @@ export type Database = {
           rowid_purchase_order_row_id?: string | null
           rowid_vpay_row_id?: string | null
           sb_accounts_id?: string | null
+          sb_pdf_updated_at?: string | null
+          sb_pdf_url?: string | null
           sb_purchase_orders_id?: string | null
+          sb_vpay_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
@@ -915,11 +930,22 @@ export type Database = {
           rowid_purchase_order_row_id?: string | null
           rowid_vpay_row_id?: string | null
           sb_accounts_id?: string | null
+          sb_pdf_updated_at?: string | null
+          sb_pdf_url?: string | null
           sb_purchase_orders_id?: string | null
+          sb_vpay_id?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gl_products_sb_vpay_id_fkey"
+            columns: ["sb_vpay_id"]
+            isOneToOne: false
+            referencedRelation: "gl_vendor_payments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gl_purchase_orders: {
         Row: {
@@ -936,8 +962,11 @@ export type Database = {
           main_po_total: number | null
           main_purchase_order_uid: string | null
           main_purchase_order_uid_from_product: string | null
+          pdf_generated_at: string | null
+          pdf_url: string | null
           rowid_accntrowid: string | null
           sb_accounts_id: string | null
+          sb_pdf_storage_path: string | null
           sb_pdf_updated_at: string | null
           sb_pdf_url: string | null
           secure_share_id: string | null
@@ -962,8 +991,11 @@ export type Database = {
           main_po_total?: number | null
           main_purchase_order_uid?: string | null
           main_purchase_order_uid_from_product?: string | null
+          pdf_generated_at?: string | null
+          pdf_url?: string | null
           rowid_accntrowid?: string | null
           sb_accounts_id?: string | null
+          sb_pdf_storage_path?: string | null
           sb_pdf_updated_at?: string | null
           sb_pdf_url?: string | null
           secure_share_id?: string | null
@@ -988,8 +1020,11 @@ export type Database = {
           main_po_total?: number | null
           main_purchase_order_uid?: string | null
           main_purchase_order_uid_from_product?: string | null
+          pdf_generated_at?: string | null
+          pdf_url?: string | null
           rowid_accntrowid?: string | null
           sb_accounts_id?: string | null
+          sb_pdf_storage_path?: string | null
           sb_pdf_updated_at?: string | null
           sb_pdf_url?: string | null
           secure_share_id?: string | null
@@ -2698,6 +2733,84 @@ export type Database = {
           },
         ]
       }
+      xan_relationship_definitions: {
+        Row: {
+          created_at: string
+          description: string | null
+          glide_column: string
+          id: string
+          is_active: boolean
+          reference_glide_column: string
+          reference_id_column: string
+          reference_table: string
+          relationship_type: string
+          source_table: string
+          supabase_column: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          glide_column: string
+          id?: string
+          is_active?: boolean
+          reference_glide_column?: string
+          reference_id_column?: string
+          reference_table: string
+          relationship_type?: string
+          source_table: string
+          supabase_column: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          glide_column?: string
+          id?: string
+          is_active?: boolean
+          reference_glide_column?: string
+          reference_id_column?: string
+          reference_table?: string
+          relationship_type?: string
+          source_table?: string
+          supabase_column?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      xan_relationship_validation_history: {
+        Row: {
+          checked_at: string
+          glide_column: string
+          id: string
+          missing_count: number
+          notes: string | null
+          repaired_count: number | null
+          supabase_column: string
+          table_name: string
+        }
+        Insert: {
+          checked_at?: string
+          glide_column: string
+          id?: string
+          missing_count: number
+          notes?: string | null
+          repaired_count?: number | null
+          supabase_column: string
+          table_name: string
+        }
+        Update: {
+          checked_at?: string
+          glide_column?: string
+          id?: string
+          missing_count?: number
+          notes?: string | null
+          repaired_count?: number | null
+          supabase_column?: string
+          table_name?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       messages_view: {
@@ -3042,6 +3155,17 @@ export type Database = {
           updated_at?: string | null
           vendor_uid?: string | null
           width?: number | null
+        }
+        Relationships: []
+      }
+      xan_relationship_health: {
+        Row: {
+          glide_column: string | null
+          last_sync_time: string | null
+          missing_mappings: number | null
+          source_table: string | null
+          supabase_column: string | null
+          valid_mappings: number | null
         }
         Relationships: []
       }
@@ -3437,6 +3561,10 @@ export type Database = {
         }
         Returns: number
       }
+      xan_build_relationship_health_view: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       xan_categorize_sync_error: {
         Args: {
           error_message: string
@@ -3447,11 +3575,24 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      xan_count_by_status_and_table: {
+        Args: {
+          p_table_name: string
+        }
+        Returns: {
+          status: string
+          count: number
+        }[]
+      }
       xan_fetch_glide_products: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
       xan_fetch_glide_tables: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      xan_fix_relationship_definitions: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
@@ -3514,6 +3655,10 @@ export type Database = {
           records_updated: number
         }[]
       }
+      xan_store_relationship_validation_history: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       xan_sync_glide_configuration: {
         Args: {
           table_name: string
@@ -3531,6 +3676,16 @@ export type Database = {
         Returns: {
           entity_type: string
           invalid_references: number
+        }[]
+      }
+      xan_validate_relationships: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          table_name: string
+          glide_column: string
+          supabase_column: string
+          missing_count: number
+          last_checked: string
         }[]
       }
       xdelo_check_media_group_content: {
