@@ -1,4 +1,3 @@
-
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,7 +48,6 @@ const MediaTable = () => {
           file_unique_id,
           public_url,
           mime_type,
-          file_size,
           width,
           height,
           duration,
