@@ -20,6 +20,9 @@ interface DateRangeFilterProps {
 }
 
 export function DateRangeFilter({ date, setDate, applyFilters }: DateRangeFilterProps) {
+  // Handle null values as undefined for consistency
+  const safeDate = date || undefined;
+  
   return (
     <div className="space-y-2">
       <Label>Date Range</Label>
@@ -29,18 +32,18 @@ export function DateRangeFilter({ date, setDate, applyFilters }: DateRangeFilter
             variant="outline"
             className={cn(
               "w-full justify-start text-left font-normal",
-              !date && "text-muted-foreground"
+              !safeDate?.from && "text-muted-foreground"
             )}
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
-            {date?.from ? (
-              date.to ? (
+            {safeDate?.from ? (
+              safeDate.to ? (
                 <>
-                  {format(date.from, "LLL dd, y")} -{" "}
-                  {format(date.to, "LLL dd, y")}
+                  {format(safeDate.from, "LLL dd, y")} -{" "}
+                  {format(safeDate.to, "LLL dd, y")}
                 </>
               ) : (
-                format(date.from, "LLL dd, y")
+                format(safeDate.from, "LLL dd, y")
               )
             ) : (
               <span>Pick a date range</span>
@@ -50,7 +53,7 @@ export function DateRangeFilter({ date, setDate, applyFilters }: DateRangeFilter
         <PopoverContent className="w-auto p-0">
           <Calendar
             mode="range"
-            selected={date || undefined}
+            selected={safeDate}
             onSelect={setDate}
             initialFocus
           />
@@ -67,13 +70,13 @@ export function DateRangeFilter({ date, setDate, applyFilters }: DateRangeFilter
         </PopoverContent>
       </Popover>
       
-      {date && (
+      {safeDate && (
         <Button 
           variant="ghost" 
           size="sm" 
           className="mt-1 h-7 px-2 text-xs" 
           onClick={() => {
-            setDate(null);
+            setDate(undefined);
             applyFilters();
           }}
         >

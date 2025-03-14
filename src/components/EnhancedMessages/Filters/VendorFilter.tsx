@@ -27,12 +27,16 @@ interface VendorFilterProps {
 }
 
 export function VendorFilter({ 
-  vendors, 
-  selectedVendors, 
+  vendors = [], 
+  selectedVendors = [], 
   setSelectedVendors,
   applyFilters
 }: VendorFilterProps) {
   const [vendorPopoverOpen, setVendorPopoverOpen] = useState(false);
+  
+  // Ensure arrays are valid
+  const safeVendors = Array.isArray(vendors) ? vendors : [];
+  const safeSelectedVendors = Array.isArray(selectedVendors) ? selectedVendors : [];
   
   return (
     <div className="space-y-2">
@@ -45,9 +49,9 @@ export function VendorFilter({
             aria-expanded={vendorPopoverOpen}
             className="w-full justify-between"
           >
-            {selectedVendors.length === 0
+            {safeSelectedVendors.length === 0
               ? "Select vendors..."
-              : `${selectedVendors.length} vendor${selectedVendors.length !== 1 ? 's' : ''} selected`}
+              : `${safeSelectedVendors.length} vendor${safeSelectedVendors.length !== 1 ? 's' : ''} selected`}
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
@@ -57,22 +61,22 @@ export function VendorFilter({
             <CommandList>
               <CommandEmpty>No vendors found.</CommandEmpty>
               <CommandGroup>
-                {vendors.map((vendor) => (
+                {safeVendors.map((vendor) => (
                   <CommandItem
                     key={vendor}
                     value={vendor}
                     onSelect={() => {
                       setSelectedVendors(
-                        selectedVendors.includes(vendor)
-                          ? selectedVendors.filter((v) => v !== vendor)
-                          : [...selectedVendors, vendor]
+                        safeSelectedVendors.includes(vendor)
+                          ? safeSelectedVendors.filter((v) => v !== vendor)
+                          : [...safeSelectedVendors, vendor]
                       );
                     }}
                   >
                     <Check
                       className={cn(
                         "mr-2 h-4 w-4",
-                        selectedVendors.includes(vendor)
+                        safeSelectedVendors.includes(vendor)
                           ? "opacity-100"
                           : "opacity-0"
                       )}
@@ -99,15 +103,15 @@ export function VendorFilter({
         </PopoverContent>
       </Popover>
       
-      {selectedVendors.length > 0 && (
+      {safeSelectedVendors.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-2">
-          {selectedVendors.map((vendor) => (
+          {safeSelectedVendors.map((vendor) => (
             <Badge key={vendor} variant="secondary" className="gap-1">
               {vendor}
               <X
                 className="h-3 w-3 cursor-pointer"
                 onClick={() => {
-                  setSelectedVendors(selectedVendors.filter((v) => v !== vendor));
+                  setSelectedVendors(safeSelectedVendors.filter((v) => v !== vendor));
                 }}
               />
             </Badge>

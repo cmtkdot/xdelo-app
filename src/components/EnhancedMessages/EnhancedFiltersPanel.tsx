@@ -19,16 +19,36 @@ import { FilterHeader } from './Filters/FilterHeader';
 
 export const EnhancedFiltersPanel: React.FC = () => {
   const { data: vendors = [] } = useVendors();
-  const { filters, setFilters, setPage, presetFilters, savePreset, loadPreset } = useMessagesStore();
+  const { 
+    filters = {
+      search: '',
+      processingStates: [],
+      mediaTypes: [],
+      dateRange: null,
+      vendors: [],
+      showGroups: true,
+      chatSources: [],
+      page: 1,
+      itemsPerPage: 20,
+      view: 'grid',
+      sortField: 'created_at',
+      sortOrder: 'desc',
+    }, 
+    setFilters = () => {}, 
+    setPage = () => {}, 
+    presetFilters = {}, 
+    savePreset = () => {}, 
+    loadPreset = () => null 
+  } = useMessagesStore();
   
-  // Filter states
-  const [searchTerm, setSearchTerm] = useState(filters.search);
-  const [processingStates, setProcessingStates] = useState<ProcessingState[]>(filters.processingStates);
-  const [selectedVendors, setSelectedVendors] = useState<string[]>(filters.vendors);
-  const [mediaTypes, setMediaTypes] = useState<string[]>(filters.mediaTypes);
-  const [showGroups, setShowGroups] = useState(filters.showGroups);
+  // Filter states - ensure they have default values
+  const [searchTerm, setSearchTerm] = useState(filters.search || '');
+  const [processingStates, setProcessingStates] = useState<ProcessingState[]>(filters.processingStates || []);
+  const [selectedVendors, setSelectedVendors] = useState<string[]>(filters.vendors || []);
+  const [mediaTypes, setMediaTypes] = useState<string[]>(filters.mediaTypes || []);
+  const [showGroups, setShowGroups] = useState(filters.showGroups !== false);
   const [date, setDate] = useState<DateRange | undefined>(
-    filters.dateRange 
+    filters.dateRange && filters.dateRange.from && filters.dateRange.to
       ? { from: filters.dateRange.from, to: filters.dateRange.to } 
       : undefined
   );
@@ -99,7 +119,7 @@ export const EnhancedFiltersPanel: React.FC = () => {
     setSelectedVendors(preset.vendors || []);
     setMediaTypes(preset.mediaTypes || []);
     setShowGroups(preset.showGroups ?? true);
-    setDate(preset.dateRange 
+    setDate(preset.dateRange && preset.dateRange.from && preset.dateRange.to
       ? { from: preset.dateRange.from, to: preset.dateRange.to } 
       : undefined);
     
@@ -137,13 +157,26 @@ export const EnhancedFiltersPanel: React.FC = () => {
       reader.onload = (event) => {
         try {
           const importedFilters = JSON.parse(event.target?.result as string);
-          setFilters(importedFilters);
-          setSearchTerm(importedFilters.search || '');
-          setProcessingStates(importedFilters.processingStates || []);
-          setSelectedVendors(importedFilters.vendors || []);
-          setMediaTypes(importedFilters.mediaTypes || []);
-          setShowGroups(importedFilters.showGroups ?? true);
-          setDate(importedFilters.dateRange);
+          // Ensure we have valid defaults for any missing properties
+          const safeFilters = {
+            ...filters,
+            ...importedFilters,
+            search: importedFilters.search || '',
+            processingStates: importedFilters.processingStates || [],
+            vendors: importedFilters.vendors || [],
+            mediaTypes: importedFilters.mediaTypes || [],
+            showGroups: importedFilters.showGroups ?? true
+          };
+          
+          setFilters(safeFilters);
+          setSearchTerm(safeFilters.search);
+          setProcessingStates(safeFilters.processingStates);
+          setSelectedVendors(safeFilters.vendors);
+          setMediaTypes(safeFilters.mediaTypes);
+          setShowGroups(safeFilters.showGroups);
+          setDate(safeFilters.dateRange && safeFilters.dateRange.from && safeFilters.dateRange.to
+            ? { from: safeFilters.dateRange.from, to: safeFilters.dateRange.to }
+            : undefined);
           setPage(1);
         } catch (error) {
           console.error('Failed to parse imported filters:', error);
@@ -156,12 +189,12 @@ export const EnhancedFiltersPanel: React.FC = () => {
 
   // Update local state when filters change
   useEffect(() => {
-    setSearchTerm(filters.search);
-    setProcessingStates(filters.processingStates);
-    setSelectedVendors(filters.vendors);
-    setMediaTypes(filters.mediaTypes);
-    setShowGroups(filters.showGroups);
-    setDate(filters.dateRange 
+    setSearchTerm(filters.search || '');
+    setProcessingStates(filters.processingStates || []);
+    setSelectedVendors(filters.vendors || []);
+    setMediaTypes(filters.mediaTypes || []);
+    setShowGroups(filters.showGroups !== false);
+    setDate(filters.dateRange && filters.dateRange.from && filters.dateRange.to
       ? { from: filters.dateRange.from, to: filters.dateRange.to } 
       : undefined);
   }, [filters]);

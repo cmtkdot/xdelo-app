@@ -25,7 +25,7 @@ interface MessageFiltersHeaderProps {
 export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
   const [filtersVisible, setFiltersVisible] = useState(false);
   
-  // Get the messages store
+  // Get the messages store with defensive default values
   const { 
     filters = {
       search: '',
@@ -46,34 +46,36 @@ export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
     setDetailsOpen = () => {},
     analyticsOpen = false, 
     setAnalyticsOpen = () => {}
-  } = useMessagesStore();
+  } = useMessagesStore() || {};
   
   const { total = 0, isLoading = false } = useFilteredMessages() || {};
 
-  // Calculate active filters
-  const processingStatesLength = filters.processingStates?.length || 0;
-  const vendorsLength = filters.vendors?.length || 0;
-  const mediaTypesLength = filters.mediaTypes?.length || 0;
+  // Calculate active filters with safety checks
+  const processingStatesLength = filters?.processingStates?.length || 0;
+  const vendorsLength = filters?.vendors?.length || 0;
+  const mediaTypesLength = filters?.mediaTypes?.length || 0;
   
   const hasActiveFilters = !!(
-    filters.search || 
+    filters?.search || 
     processingStatesLength > 0 || 
     vendorsLength > 0 || 
     mediaTypesLength > 0 || 
-    filters.dateRange
+    filters?.dateRange
   );
 
   const activeFilterCount = (
-    (filters.search ? 1 : 0) + 
+    (filters?.search ? 1 : 0) + 
     processingStatesLength + 
     vendorsLength + 
     mediaTypesLength + 
-    (filters.dateRange ? 1 : 0)
+    (filters?.dateRange ? 1 : 0)
   );
 
   // Define safe handler for setting filters
   const handleSetFilters = (newFilters: Partial<FilterState>) => {
-    setFilters({...filters, ...newFilters});
+    if (setFilters && filters) {
+      setFilters({...filters, ...newFilters});
+    }
   };
 
   return (
@@ -115,7 +117,7 @@ export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
           </Button>
           
           <Tabs 
-            value={filters.view} 
+            value={filters?.view || 'grid'} 
             className="w-auto" 
             onValueChange={(value) => handleSetFilters({ view: value as 'grid' | 'list' })}
           >

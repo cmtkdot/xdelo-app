@@ -11,9 +11,12 @@ interface ProcessingStateFilterProps {
 }
 
 export function ProcessingStateFilter({ 
-  processingStates, 
+  processingStates = [], 
   setProcessingStates 
 }: ProcessingStateFilterProps) {
+  // Ensure processingStates is always an array
+  const safeProcessingStates = Array.isArray(processingStates) ? processingStates : [];
+  
   const processingStateOptions: ProcessingState[] = [
     'completed', 'processing', 'error', 'pending', 'initialized'
   ];
@@ -25,18 +28,18 @@ export function ProcessingStateFilter({
         {processingStateOptions.map((state) => (
           <Badge
             key={state}
-            variant={processingStates.includes(state) ? "default" : "outline"}
+            variant={safeProcessingStates.includes(state) ? "default" : "outline"}
             className="cursor-pointer"
             onClick={() => {
               setProcessingStates(
-                processingStates.includes(state)
-                  ? processingStates.filter((s) => s !== state)
-                  : [...processingStates, state]
+                safeProcessingStates.includes(state)
+                  ? safeProcessingStates.filter((s) => s !== state)
+                  : [...safeProcessingStates, state]
               );
             }}
           >
             {state}
-            {processingStates.includes(state) && (
+            {safeProcessingStates.includes(state) && (
               <X className="ml-1 h-3 w-3" />
             )}
           </Badge>
