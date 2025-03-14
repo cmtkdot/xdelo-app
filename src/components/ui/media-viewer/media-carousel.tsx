@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from '@/lib/utils';
 import { MediaDisplay } from './media-display';
 import { useTouchInteraction } from '@/hooks/useTouchInteraction';
+import { useIsMobile } from '@/hooks/useMobile';
 import {
   Carousel,
   CarouselContent,
@@ -39,6 +40,7 @@ export function MediaCarousel({
   className
 }: MediaCarouselProps) {
   const [api, setApi] = useState<CarouselApi>();
+  const isMobile = useIsMobile();
   
   // Handle keyboard navigation
   useEffect(() => {
@@ -60,7 +62,7 @@ export function MediaCarousel({
 
     window.addEventListener('keydown', handleKeyDown);
     
-    // Fix: Return a cleanup function that directly removes the event listener
+    // Return a cleanup function
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
