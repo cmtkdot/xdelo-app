@@ -15,15 +15,16 @@ import { EnhancedMessagesHeader } from '@/components/EnhancedMessages/EnhancedMe
 
 const MessagesEnhanced = () => {
   const { 
-    detailsOpen = false, 
-    analyticsOpen = false,
+    detailsOpen,
+    analyticsOpen,
     toggleView,
-    currentView
-  } = useMessagesStore() || {};
+    currentView,
+    filtersCount
+  } = useMessagesStore();
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { filteredMessages, refetch, isLoading, total } = useFilteredMessages() || {};
+  const { filteredMessages, refetch, isLoading, total } = useFilteredMessages();
   const isMobile = useIsMobile();
   const [filtersPanelOpen, setFiltersPanelOpen] = useState(false);
   
@@ -36,7 +37,7 @@ const MessagesEnhanced = () => {
     handleNextGroup,
     handleEditMessage,
     handleDeleteMessage
-  } = useMessageViewHandlers() || {};
+  } = useMessageViewHandlers();
   
   // Setup realtime updates
   useRealtimeUpdates({
@@ -87,8 +88,8 @@ const MessagesEnhanced = () => {
         isLoading={isLoading}
         onToggleFilters={toggleFiltersPanel}
         onToggleView={toggleView}
-        currentView={currentView || 'grid'}
-        filtersCount={0}
+        currentView={currentView}
+        filtersCount={filtersCount}
       />
       
       {/* Filter header with basic controls */}

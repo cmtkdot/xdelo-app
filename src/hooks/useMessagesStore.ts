@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ProcessingState } from '@/types';
@@ -24,14 +25,18 @@ interface MessagesState {
   detailsOpen: boolean;
   analyticsOpen: boolean;
   presetFilters: Record<string, Partial<FilterState>>;
+  currentView: 'grid' | 'list';
+  filtersCount: number;
   
   // Actions
   setFilters: (filters: Partial<FilterState>) => void;
   setSelectedMessage: (message: any | null) => void;
   setDetailsOpen: (open: boolean) => void;
   setAnalyticsOpen: (open: boolean) => void;
+  toggleAnalytics: () => void;
   setPage: (page: number) => void;
   refreshData: () => Promise<void>;
+  toggleView: () => void;
   
   // Preset actions
   savePreset: (name: string, filters: Partial<FilterState>) => void;
@@ -64,16 +69,32 @@ export const useMessagesStore = create<MessagesState>()(
       detailsOpen: false,
       analyticsOpen: false,
       presetFilters: {},
+      currentView: 'grid',
+      filtersCount: 0,
       
-      setFilters: (filters) => set((state) => ({
-        filters: { ...state.filters, ...filters }
-      })),
+      setFilters: (filters) => set((state) => {
+        // Calculate how many filters are active
+        let count = 0;
+        if (filters.search || state.filters.search) count++;
+        if ((filters.processingStates || state.filters.processingStates)?.length > 0) count++;
+        if ((filters.mediaTypes || state.filters.mediaTypes)?.length > 0) count++;
+        if (filters.dateRange || state.filters.dateRange) count++;
+        if ((filters.vendors || state.filters.vendors)?.length > 0) count++;
+        if ((filters.chatSources || state.filters.chatSources)?.length > 0) count++;
+        
+        return {
+          filters: { ...state.filters, ...filters },
+          filtersCount: count
+        };
+      }),
       
       setSelectedMessage: (message) => set({ selectedMessage: message }),
       
       setDetailsOpen: (open) => set({ detailsOpen: open }),
       
       setAnalyticsOpen: (open) => set({ analyticsOpen: open }),
+      
+      toggleAnalytics: () => set((state) => ({ analyticsOpen: !state.analyticsOpen })),
       
       setPage: (page) => set((state) => ({
         filters: { ...state.filters, page }
@@ -104,8 +125,7 @@ export const useMessagesStore = create<MessagesState>()(
         return { presetFilters: newPresets };
       }),
       
-      currentView: 'grid',
-      toggleView: () => set(state => ({ 
+      toggleView: () => set((state) => ({ 
         currentView: state.currentView === 'grid' ? 'list' : 'grid' 
       }))
     }),

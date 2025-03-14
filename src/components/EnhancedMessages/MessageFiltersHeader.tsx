@@ -22,8 +22,8 @@ export function MessageFiltersHeader({
   const { 
     filters,
     filtersCount,
-    toggleAnalytics,
-    analyticsOpen
+    analyticsOpen,
+    toggleAnalytics
   } = useMessagesStore();
   
   const isMobile = useIsMobile();
