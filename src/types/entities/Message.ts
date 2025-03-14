@@ -72,6 +72,7 @@ export interface Message {
   forward_info?: Record<string, unknown>;
   edit_history?: Record<string, unknown>[];
   edit_date?: string;
+  is_edited?: boolean;
 }
 
 export interface MessageApiResponse {

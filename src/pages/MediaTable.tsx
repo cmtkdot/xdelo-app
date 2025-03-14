@@ -49,7 +49,6 @@ const MediaTable = () => {
           file_unique_id,
           public_url,
           mime_type,
-          file_size,
           width,
           height,
           duration,
@@ -73,12 +72,15 @@ const MediaTable = () => {
       
       if (error) throw error;
       
-      // Log some sample data to verify parsing
-      if (data?.length > 0) {
-        console.log('Sample message data:', data[0]);
-      }
+      // Ensure messages have the required fields
+      const safeMessages = (data || []).map(msg => ({
+        id: msg.id,
+        file_unique_id: msg.file_unique_id || `unknown-${msg.id}`,
+        public_url: msg.public_url || '/placeholder.svg',
+        ...msg
+      }));
       
-      return data as Message[];
+      return safeMessages as Message[];
     }
   });
 

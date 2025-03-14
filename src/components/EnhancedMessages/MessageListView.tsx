@@ -48,8 +48,8 @@ export const MessageListView: React.FC<MessageListViewProps> = ({
         
         // Get main message for display
         const mainMessage = group[0];
-        if (!mainMessage) {
-          console.warn(`No main message found in group at index ${groupIndex}`, group);
+        if (!mainMessage || !mainMessage.id) {
+          console.warn(`No valid main message found in group at index ${groupIndex}`, group);
           return null;
         }
         
@@ -64,12 +64,24 @@ export const MessageListView: React.FC<MessageListViewProps> = ({
         // Get product name or use caption as fallback
         const productName = mainMessage.analyzed_content?.product_name || mainMessage.caption || 'Untitled';
         
-        // Format dates
-        const createdDate = mainMessage.created_at ? 
-          format(new Date(mainMessage.created_at), 'MMM d, yyyy h:mm a') : 'Unknown';
+        // Format dates safely
+        let createdDate = 'Unknown';
+        try {
+          if (mainMessage.created_at) {
+            createdDate = format(new Date(mainMessage.created_at), 'MMM d, yyyy h:mm a');
+          }
+        } catch (e) {
+          console.warn('Error formatting created date:', e);
+        }
         
-        const purchaseDate = mainMessage.analyzed_content?.purchase_date ? 
-          format(new Date(mainMessage.analyzed_content.purchase_date), 'MMM d, yyyy') : null;
+        let purchaseDate = null;
+        try {
+          if (mainMessage.analyzed_content?.purchase_date) {
+            purchaseDate = format(new Date(mainMessage.analyzed_content.purchase_date), 'MMM d, yyyy');
+          }
+        } catch (e) {
+          console.warn('Error formatting purchase date:', e);
+        }
         
         // Get edit count
         const hasEdits = mainMessage.edit_count && mainMessage.edit_count > 0;
@@ -92,13 +104,18 @@ export const MessageListView: React.FC<MessageListViewProps> = ({
                 <div className="flex-shrink-0 w-16 h-16 rounded-md border overflow-hidden bg-muted">
                   {mainMessage.mime_type?.startsWith('video/') ? (
                     <video
-                      src={mainMessage.public_url}
+                      src={mainMessage.public_url || ''}
                       className="w-full h-full object-cover"
                       preload="metadata"
+                      onError={(e) => {
+                        console.error("Video failed to load:", mainMessage.public_url);
+                        const target = e.target as HTMLVideoElement;
+                        target.classList.add('bg-muted');
+                      }}
                     />
                   ) : (
                     <img
-                      src={mainMessage.public_url}
+                      src={mainMessage.public_url || '/placeholder.svg'}
                       alt={productName}
                       className="w-full h-full object-cover"
                       onError={(e) => {
@@ -167,7 +184,7 @@ export const MessageListView: React.FC<MessageListViewProps> = ({
                         mainMessage.processing_state === 'processing' ? 'secondary' :
                         'outline'
                       }>
-                        {mainMessage.processing_state}
+                        {mainMessage.processing_state || 'unknown'}
                       </Badge>
                       
                       {group.length > 1 && (

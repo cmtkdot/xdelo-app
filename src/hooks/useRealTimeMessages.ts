@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Message, ProcessingState } from '@/types';
@@ -40,7 +41,16 @@ export function useRealTimeMessages({
         throw queryError;
       }
       
-      setMessages(data as Message[]);
+      // Add validation and default values for required fields
+      const validMessages = (data || []).map((rawMessage: any): Message => ({
+        id: rawMessage.id || `missing-id-${Date.now()}-${Math.random().toString(36).substring(2)}`,
+        file_unique_id: rawMessage.file_unique_id || `missing-file-id-${Date.now()}`,
+        public_url: rawMessage.public_url || '/placeholder.svg',
+        // Include the rest of the message properties
+        ...rawMessage
+      }));
+      
+      setMessages(validMessages);
     } catch (err: any) {
       console.error('Error fetching messages:', err);
       setError(err);

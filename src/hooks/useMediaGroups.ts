@@ -31,9 +31,18 @@ export function useMediaGroups() {
         // Transform data into media groups with defensive programming
         const mediaGroups: Record<string, Message[]> = {};
 
-        // Process each message with null checks
-        data.forEach((message: any) => {
-          if (!message) return; // Skip null/undefined messages
+        // Process each message with null checks and provide default values
+        data.forEach((rawMessage: any) => {
+          if (!rawMessage) return; // Skip null/undefined messages
+          
+          // Ensure required properties have fallback values
+          const message: Message = {
+            id: rawMessage.id || `missing-id-${Date.now()}-${Math.random().toString(36).substring(2)}`,
+            file_unique_id: rawMessage.file_unique_id || `missing-file-id-${Date.now()}`,
+            public_url: rawMessage.public_url || '/placeholder.svg',
+            // Add other required fields with fallbacks as needed
+            ...rawMessage
+          };
           
           const groupId = message.media_group_id || `single-${message.id}`;
           
@@ -41,7 +50,7 @@ export function useMediaGroups() {
             mediaGroups[groupId] = [];
           }
           
-          mediaGroups[groupId].push(message as Message);
+          mediaGroups[groupId].push(message);
         });
 
         console.log('Created', Object.keys(mediaGroups).length, 'media groups');

@@ -39,8 +39,8 @@ export const MessageGridView: React.FC<MessageGridViewProps> = ({
         
         // Get main message for display
         const mainMessage = group[0];
-        if (!mainMessage) {
-          console.warn(`No main message found in group at index ${groupIndex}`, group);
+        if (!mainMessage || !mainMessage.id) {
+          console.warn(`No valid main message found in group at index ${groupIndex}`, group);
           return null;
         }
         
@@ -83,7 +83,7 @@ export const MessageGridView: React.FC<MessageGridViewProps> = ({
                   />
                 ) : (
                   <img
-                    src={mainMessage.public_url}
+                    src={mainMessage.public_url || '/placeholder.svg'}
                     alt={productName}
                     className="w-full h-full object-cover"
                     onError={(e) => {
@@ -106,7 +106,7 @@ export const MessageGridView: React.FC<MessageGridViewProps> = ({
                     mainMessage.processing_state === 'processing' ? 'secondary' :
                     'outline'
                   }>
-                    {mainMessage.processing_state}
+                    {mainMessage.processing_state || 'unknown'}
                   </Badge>
                 </div>
                 
