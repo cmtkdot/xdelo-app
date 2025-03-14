@@ -58,13 +58,25 @@ export function MessageContent({
     );
   }
 
-  // Ensure we have a flat array of messages to pass to our components
-  // Use type assertion to tell TypeScript that we're handling the conversion correctly
-  const messages: Message[] = paginatedMessages && Array.isArray(paginatedMessages) 
-    ? Array.isArray(paginatedMessages[0]) 
-      ? (paginatedMessages as Message[][]).flat() 
-      : (paginatedMessages as Message[])
-    : [];
+  // Safely flatten the messages array with proper type handling
+  const messages: Message[] = (() => {
+    if (!paginatedMessages || !Array.isArray(paginatedMessages)) {
+      return [];
+    }
+    
+    if (paginatedMessages.length === 0) {
+      return [];
+    }
+    
+    // Check if it's a nested array (Message[][])
+    if (Array.isArray(paginatedMessages[0])) {
+      // Use a type assertion after first casting to unknown
+      return (paginatedMessages as unknown as Message[][]).flatMap(group => group);
+    }
+    
+    // It's already a flat array
+    return paginatedMessages as Message[];
+  })();
 
   if (!messages.length) {
     return (
