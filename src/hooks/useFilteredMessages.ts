@@ -5,20 +5,32 @@ import { useEnhancedMessages } from './useEnhancedMessages';
 import { useMessagesStore } from './useMessagesStore';
 
 export function useFilteredMessages() {
-  const { filters } = useMessagesStore();
+  const messagesStore = useMessagesStore();
+  const filters = messagesStore?.filters || {
+    processingStates: [],
+    search: '',
+    sortField: 'created_at',
+    sortOrder: 'desc',
+    dateRange: null,
+    mediaTypes: [],
+    vendors: [],
+    chatSources: [],
+    page: 1,
+    itemsPerPage: 20
+  };
   
   // Ensure filters is properly initialized with default values
   const safeFilters = {
-    processingStates: filters?.processingStates || [],
-    search: filters?.search || '',
-    sortField: filters?.sortField || 'created_at',
-    sortOrder: filters?.sortOrder || 'desc',
-    dateRange: filters?.dateRange || null,
-    mediaTypes: filters?.mediaTypes || [],
-    vendors: filters?.vendors || [],
-    chatSources: filters?.chatSources || [],
-    page: filters?.page || 1,
-    itemsPerPage: filters?.itemsPerPage || 20
+    processingStates: filters.processingStates || [],
+    search: filters.search || '',
+    sortField: filters.sortField || 'created_at',
+    sortOrder: filters.sortOrder || 'desc',
+    dateRange: filters.dateRange || null,
+    mediaTypes: filters.mediaTypes || [],
+    vendors: filters.vendors || [],
+    chatSources: filters.chatSources || [],
+    page: filters.page || 1,
+    itemsPerPage: filters.itemsPerPage || 20
   };
   
   // Fetch messages with the filters applied

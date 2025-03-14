@@ -12,10 +12,14 @@ import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 
 const MessagesEnhanced = () => {
   const messagesStore = useMessagesStore();
+  
+  // Provide default values for all properties
   const { 
     detailsOpen = false, 
     analyticsOpen = false,
-    refreshData 
+    refreshData = async () => {
+      console.log("Default refresh function called");
+    }
   } = messagesStore || {};
   
   const { toast } = useToast();

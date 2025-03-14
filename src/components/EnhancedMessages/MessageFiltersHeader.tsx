@@ -23,43 +23,55 @@ interface MessageFiltersHeaderProps {
 }
 
 export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
+  const messagesStore = useMessagesStore() || {};
+  
+  // Create default filters object with all required properties
+  const defaultFilters = {
+    search: '',
+    processingStates: [],
+    mediaTypes: [],
+    vendors: [],
+    dateRange: null,
+    view: 'grid' as 'grid' | 'list'
+  };
+  
   const { 
-    filters = {}, 
+    filters = defaultFilters, 
     setFilters,
     detailsOpen, 
     setDetailsOpen,
     analyticsOpen, 
     setAnalyticsOpen 
-  } = useMessagesStore() || {};
+  } = messagesStore;
   
   const { total = 0, isLoading = false } = useFilteredMessages() || {};
   const [filtersVisible, setFiltersVisible] = React.useState(false);
 
-  // Safely handle potential undefined properties
-  const processingStatesLength = filters?.processingStates?.length || 0;
-  const vendorsLength = filters?.vendors?.length || 0;
-  const mediaTypesLength = filters?.mediaTypes?.length || 0;
+  // Now TypeScript knows these properties exist on our filters object
+  const processingStatesLength = filters.processingStates?.length || 0;
+  const vendorsLength = filters.vendors?.length || 0;
+  const mediaTypesLength = filters.mediaTypes?.length || 0;
   
   const hasActiveFilters = !!(
-    filters?.search || 
+    filters.search || 
     processingStatesLength > 0 || 
     vendorsLength > 0 || 
     mediaTypesLength > 0 || 
-    filters?.dateRange
+    filters.dateRange
   );
 
   const activeFilterCount = (
-    (filters?.search ? 1 : 0) + 
+    (filters.search ? 1 : 0) + 
     processingStatesLength + 
     vendorsLength + 
     mediaTypesLength + 
-    (filters?.dateRange ? 1 : 0)
+    (filters.dateRange ? 1 : 0)
   );
 
   // Define safe handler for setting filters
   const handleSetFilters = (newFilters: any) => {
     if (setFilters) {
-      setFilters({...(filters || {}), ...newFilters});
+      setFilters({...filters, ...newFilters});
     }
   };
 
@@ -102,7 +114,7 @@ export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
           </Button>
           
           <Tabs 
-            defaultValue={filters?.view || 'grid'} 
+            defaultValue={filters.view || 'grid'} 
             className="w-auto" 
             onValueChange={(value) => handleSetFilters({ view: value as 'grid' | 'list' })}
           >
