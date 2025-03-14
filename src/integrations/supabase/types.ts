@@ -1948,6 +1948,27 @@ export type Database = {
         }
         Relationships: []
       }
+      materialized_view_refresh_log: {
+        Row: {
+          last_refresh: string | null
+          next_refresh: string | null
+          refresh_interval: unknown | null
+          view_name: string
+        }
+        Insert: {
+          last_refresh?: string | null
+          next_refresh?: string | null
+          refresh_interval?: unknown | null
+          view_name: string
+        }
+        Update: {
+          last_refresh?: string | null
+          next_refresh?: string | null
+          refresh_interval?: unknown | null
+          view_name?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
@@ -3026,6 +3047,26 @@ export type Database = {
           },
         ]
       }
+      mv_purchase_order_summary: {
+        Row: {
+          created_at: string | null
+          document_status: string | null
+          id: string | null
+          is_shared: boolean | null
+          main_account_name: string | null
+          main_balance_due: number | null
+          main_po_date: string | null
+          main_po_total: number | null
+          main_purchase_order_uid: string | null
+          payment_status: string | null
+          payments_count: number | null
+          products_count: number | null
+          sb_accounts_id: string | null
+          search_vector: unknown | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
       v_message_forwards: {
         Row: {
           analyzed_content: Json | null
@@ -3517,6 +3558,10 @@ export type Database = {
           p_notes?: string
         }
         Returns: string
+      }
+      refresh_purchase_order_summary: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       reorder_make_automation_rules: {
         Args: {

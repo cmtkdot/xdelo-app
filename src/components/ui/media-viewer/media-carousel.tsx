@@ -58,7 +58,11 @@ export function MediaCarousel({
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    
+    // Fix: Return a function that directly removes the event listener
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [activeIndex, mediaItems.length, onIndexChange, hasPrevious, hasNext, onPrevious, onNext]);
 
   // Sync carousel with active index
