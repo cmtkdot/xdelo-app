@@ -19,4 +19,5 @@ export interface MediaItem {
   content_disposition?: 'inline' | 'attachment';
   storage_path?: string;
   processing_state?: string;
+  type?: 'image' | 'video' | 'document' | 'audio' | 'unknown';
 }
