@@ -58,25 +58,25 @@ export function MessageContent({
     );
   }
 
-  // Safely flatten the messages array with proper type handling
-  const messages: Message[] = (() => {
+  // Safely flatten the messages array with proper type assertions
+  const messages = React.useMemo(() => {
     if (!paginatedMessages || !Array.isArray(paginatedMessages)) {
-      return [];
+      return [] as Message[];
     }
     
     if (paginatedMessages.length === 0) {
-      return [];
+      return [] as Message[];
     }
     
     // Check if it's a nested array (Message[][])
-    if (Array.isArray(paginatedMessages[0])) {
-      // Use a type assertion after first casting to unknown
+    if (paginatedMessages.length > 0 && Array.isArray(paginatedMessages[0])) {
+      // First cast to unknown then to the correct type for safe conversion
       return (paginatedMessages as unknown as Message[][]).flatMap(group => group);
     }
     
     // It's already a flat array
     return paginatedMessages as Message[];
-  })();
+  }, [paginatedMessages]);
 
   if (!messages.length) {
     return (
