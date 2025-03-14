@@ -97,9 +97,9 @@ export function MessageListView({
                 </Badge>
               )}
               
-              {message.analyzed_content?.vendor && (
+              {message.analyzed_content?.vendor_uid && (
                 <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
-                  {message.analyzed_content.vendor}
+                  {message.analyzed_content.vendor_uid}
                 </Badge>
               )}
             </div>

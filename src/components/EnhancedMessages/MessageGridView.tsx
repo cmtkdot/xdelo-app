@@ -135,9 +135,9 @@ export function MessageGridView({
               <span>
                 {new Date(message.created_at).toLocaleDateString()}
               </span>
-              {message.analyzed_content?.vendor && (
+              {message.analyzed_content?.vendor_uid && (
                 <Badge variant="outline" className="text-[9px] h-4 px-1">
-                  {message.analyzed_content.vendor}
+                  {message.analyzed_content.vendor_uid}
                 </Badge>
               )}
             </div>

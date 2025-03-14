@@ -58,7 +58,14 @@ export function MessageContent({
     );
   }
 
-  if (!paginatedMessages || !Array.isArray(paginatedMessages) || paginatedMessages.length === 0) {
+  // Check if paginatedMessages exists and flatten if it's a 2D array
+  const messages = paginatedMessages && Array.isArray(paginatedMessages) 
+    ? Array.isArray(paginatedMessages[0]) 
+      ? paginatedMessages.flat() 
+      : paginatedMessages
+    : [];
+
+  if (!messages.length) {
     return (
       <div className="p-8 text-center">
         <h3 className="text-xl font-semibold mb-2">No messages found</h3>
@@ -71,17 +78,21 @@ export function MessageContent({
     <Tabs value={filters.view} className="w-full">
       <TabsContent value="grid" className="mt-0">
         <MessageGridView 
-          messages={paginatedMessages} 
+          messages={messages} 
           onSelect={onSelect}
           onView={onView}
+          onEdit={onEdit}
+          onDelete={onDelete}
           selectedId={selectedMessage?.id}
         />
       </TabsContent>
       <TabsContent value="list" className="mt-0">
         <MessageListView 
-          messages={paginatedMessages}
+          messages={messages}
           onSelect={onSelect}
           onView={onView}
+          onEdit={onEdit}
+          onDelete={onDelete}
           selectedId={selectedMessage?.id}
         />
       </TabsContent>
