@@ -10,7 +10,7 @@ interface FilterActionsProps {
 
 export function FilterActions({ clearFilters, applyFilters }: FilterActionsProps) {
   return (
-    <>
+    <div className="flex flex-col w-full">
       <div className="flex items-center justify-end">
         <Button 
           variant="outline" 
@@ -28,6 +28,6 @@ export function FilterActions({ clearFilters, applyFilters }: FilterActionsProps
           Apply Filters
         </Button>
       </div>
-    </>
+    </div>
   );
 }

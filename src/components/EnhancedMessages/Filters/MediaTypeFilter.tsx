@@ -9,7 +9,10 @@ interface MediaTypeFilterProps {
   setMediaTypes: (types: string[]) => void;
 }
 
-export function MediaTypeFilter({ mediaTypes, setMediaTypes }: MediaTypeFilterProps) {
+export function MediaTypeFilter({ mediaTypes = [], setMediaTypes }: MediaTypeFilterProps) {
+  // Ensure mediaTypes is always an array, even if it comes in as undefined
+  const safeMediaTypes = Array.isArray(mediaTypes) ? mediaTypes : [];
+  
   const mediaTypeOptions = [
     { value: 'image', label: 'Images', icon: <Image className="h-3 w-3 mr-1" /> },
     { value: 'video', label: 'Videos', icon: <FileVideo className="h-3 w-3 mr-1" /> },
@@ -18,10 +21,10 @@ export function MediaTypeFilter({ mediaTypes, setMediaTypes }: MediaTypeFilterPr
   ];
   
   const toggleMediaType = (value: string) => {
-    if (mediaTypes.includes(value)) {
-      setMediaTypes(mediaTypes.filter(type => type !== value));
+    if (safeMediaTypes.includes(value)) {
+      setMediaTypes(safeMediaTypes.filter(type => type !== value));
     } else {
-      setMediaTypes([...mediaTypes, value]);
+      setMediaTypes([...safeMediaTypes, value]);
     }
   };
   
@@ -32,13 +35,13 @@ export function MediaTypeFilter({ mediaTypes, setMediaTypes }: MediaTypeFilterPr
         {mediaTypeOptions.map((type) => (
           <Badge
             key={type.value}
-            variant={mediaTypes.includes(type.value) ? "default" : "outline"}
+            variant={safeMediaTypes.includes(type.value) ? "default" : "outline"}
             className="cursor-pointer flex items-center"
             onClick={() => toggleMediaType(type.value)}
           >
             {type.icon}
             {type.label}
-            {mediaTypes.includes(type.value) && (
+            {safeMediaTypes.includes(type.value) && (
               <X className="ml-1 h-3 w-3" />
             )}
           </Badge>

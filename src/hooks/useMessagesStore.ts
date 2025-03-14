@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ProcessingState } from '@/types';
@@ -105,17 +106,8 @@ export const useMessagesStore = create<MessagesState>()(
       })
     }),
     {
-      name: 'enhanced-messages-storage',
-      partialize: (state) => ({
-        filters: {
-          view: state.filters.view,
-          itemsPerPage: state.filters.itemsPerPage,
-          sortField: state.filters.sortField,
-          sortOrder: state.filters.sortOrder
-        },
-        presetFilters: state.presetFilters,
-        detailsOpen: state.detailsOpen
-      })
+      name: 'enhanced-messages-storage'
+      // Removed the partialize function to persist the entire store state
     }
   )
 );
