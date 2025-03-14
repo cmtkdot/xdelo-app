@@ -1,7 +1,6 @@
-
 import React from "react";
 import { Table, TableBody } from "@/components/ui/table";
-import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
+import { MediaViewer } from "@/components/ui/media-viewer";
 import { Message } from "@/types";
 import { MessagesTableHeader } from "./TableComponents/MessagesTableHeader";
 import { MessageRow } from "./TableComponents/MessageRow";

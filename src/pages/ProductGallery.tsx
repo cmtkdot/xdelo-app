@@ -15,7 +15,7 @@ import { logEvent, LogEventType } from "@/lib/logUtils";
 import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { isSameDay, isWithinInterval, parseISO } from "date-fns";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
-import { MediaViewer } from "@/components/MediaViewer/MediaViewer";
+import { MediaViewer } from "@/components/ui/media-viewer";
 import { MediaFixButton } from "@/components/ProductGallery/MediaFixButton";
 import { AnalyzedContent } from "@/types";
 

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Message, LogEventType } from '@/types';
 import { logEvent } from '@/lib/logUtils';
 import { useMessagesStore } from './useMessagesStore';
-import { MediaViewer } from '@/components/MediaViewer/MediaViewer';
+import { MediaViewer } from '@/components/ui/media-viewer';
 import { useFilteredMessages } from './useFilteredMessages';
 
 export interface ViewerState {
