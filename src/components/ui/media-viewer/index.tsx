@@ -67,7 +67,7 @@ export function MediaViewer({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent 
         className={cn(
-          "p-0 max-w-6xl w-[95vw] h-[90vh] max-h-[90vh] overflow-hidden flex flex-col md:flex-row",
+          "p-0 max-w-6xl w-[95vw] h-[90vh] max-h-[90vh] overflow-hidden flex flex-col md:flex-row gap-0",
           className
         )}
       >
@@ -85,7 +85,7 @@ export function MediaViewer({
         {/* Left column: Media display */}
         <div className="w-full md:w-3/5 flex flex-col h-full">
           {/* Media display area */}
-          <div className="flex-grow overflow-hidden bg-black">
+          <div className="flex-grow bg-black overflow-hidden">
             <MediaCarousel 
               mediaItems={currentGroup}
               activeIndex={activeMediaIndex}
@@ -107,7 +107,7 @@ export function MediaViewer({
         </div>
         
         {/* Right column: Product information */}
-        <div className="w-full md:w-2/5 border-t md:border-t-0 md:border-l h-[40vh] md:h-full">
+        <div className="w-full md:w-2/5 border-t md:border-t-0 md:border-l h-[40vh] md:h-full bg-background/95">
           <ScrollArea className="h-full">
             <div className="p-4">
               <ProductDetails mainMedia={mainMedia} />

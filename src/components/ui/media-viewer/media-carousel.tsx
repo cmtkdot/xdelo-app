@@ -4,9 +4,10 @@
 import React, { useState, useEffect } from 'react';
 import { Message } from '@/types/MessagesTypes';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from "@/components/ui/button";
 import { cn } from '@/lib/utils';
 import { MediaDisplay } from './media-display';
+import { useTouchInteraction } from '@/hooks/useTouchInteraction';
 import {
   Carousel,
   CarouselContent,
@@ -59,7 +60,7 @@ export function MediaCarousel({
 
     window.addEventListener('keydown', handleKeyDown);
     
-    // Fix: Return a function that directly removes the event listener
+    // Fix: Return a cleanup function that directly removes the event listener
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
@@ -81,10 +82,32 @@ export function MediaCarousel({
     };
     
     api.on("select", onChange);
-    return () => api.off("select", onChange);
+    return () => {
+      api.off("select", onChange);
+    };
   }, [api, onIndexChange]);
 
-  // Handle external navigation
+  // Handle swipe gestures for mobile
+  const { bindTouchHandlers } = useTouchInteraction({
+    onSwipeLeft: () => {
+      if (activeIndex < mediaItems.length - 1) {
+        onIndexChange(activeIndex + 1);
+      } else if (hasNext && onNext) {
+        onNext();
+      }
+    },
+    onSwipeRight: () => {
+      if (activeIndex > 0) {
+        onIndexChange(activeIndex - 1);
+      } else if (hasPrevious && onPrevious) {
+        onPrevious();
+      }
+    },
+    swipeThreshold: 30,
+    preventScrollingWhenSwiping: true
+  });
+
+  // Handle external navigation (between media groups)
   const handleExternalPrevious = () => {
     if (onPrevious && activeIndex === 0 && hasPrevious) {
       onPrevious();
@@ -98,24 +121,30 @@ export function MediaCarousel({
   };
 
   return (
-    <div className={cn("relative h-full flex items-center justify-center", className)}>
+    <div 
+      className={cn("relative h-full flex items-center justify-center", className)} 
+      {...bindTouchHandlers}
+    >
       {mediaItems.length === 1 ? (
-        <div className="h-full w-full max-h-[calc(90vh-80px)] md:max-h-[calc(90vh-50px)] flex items-center justify-center">
+        // Single item display without carousel
+        <div className="h-full w-full flex items-center justify-center">
           <MediaDisplay message={mediaItems[0]} className="max-h-full" />
         </div>
       ) : (
+        // Multiple items carousel
         <Carousel
           className="h-full w-full"
           setApi={setApi}
           opts={{
             startIndex: activeIndex,
-            align: "center"
+            align: "center",
+            loop: false,
           }}
         >
           <CarouselContent className="h-full">
             {mediaItems.map((message, index) => (
               <CarouselItem key={message.id || index} className="h-full flex items-center justify-center">
-                <div className="max-h-[calc(90vh-80px)] md:max-h-[calc(90vh-50px)] w-full flex items-center justify-center">
+                <div className="w-full h-full flex items-center justify-center">
                   <MediaDisplay message={message} />
                 </div>
               </CarouselItem>
@@ -132,6 +161,7 @@ export function MediaCarousel({
             className="right-2 bg-black/40 text-white hover:bg-black/60 border-none"
           />
           
+          {/* Image counter indicator */}
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white px-2 py-1 rounded-md text-xs">
             {activeIndex + 1} / {mediaItems.length}
           </div>
@@ -145,6 +175,7 @@ export function MediaCarousel({
           size="icon"
           className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/40 text-white hover:bg-black/60 z-20"
           onClick={onPrevious}
+          aria-label="Previous group"
         >
           <ChevronLeft className="h-6 w-6" />
         </Button>
@@ -156,6 +187,7 @@ export function MediaCarousel({
           size="icon"
           className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/40 text-white hover:bg-black/60 z-20"
           onClick={onNext}
+          aria-label="Next group"
         >
           <ChevronRight className="h-6 w-6" />
         </Button>
