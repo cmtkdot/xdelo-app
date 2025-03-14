@@ -39,7 +39,17 @@ export function MediaDisplay({
       {mediaItems.length > 1 ? (
         <Carousel 
           className="w-full h-full"
-          onSelect={handleIndexChange}
+          // Fix: Use proper event handler that extracts the index
+          onSelect={(event) => {
+            const api = event.target;
+            // Get the current index from the carousel API
+            if (api && typeof api.selectedScrollSnap === 'function') {
+              const index = api.selectedScrollSnap();
+              if (typeof index === 'number') {
+                handleIndexChange(index);
+              }
+            }
+          }}
           defaultIndex={initialIndex}
         >
           <CarouselContent className="h-full">
