@@ -1,9 +1,9 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Eye, Edit, Trash2 } from 'lucide-react';
+import { Eye, Edit, Trash2, FileX } from 'lucide-react';
 import { Message } from '@/types';
 import { useIsMobile } from '@/hooks/useMobile';
 import { cn } from '@/lib/utils';
@@ -26,6 +26,7 @@ export function MessageGridView({
   selectedId
 }: MessageGridViewProps) {
   const isMobile = useIsMobile();
+  const [mediaErrors, setMediaErrors] = useState<Record<string, boolean>>({});
   
   const getProcessingStateColor = (state: string) => {
     switch (state) {
@@ -35,6 +36,18 @@ export function MessageGridView({
       case 'error': return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300';
       default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800/40 dark:text-gray-300';
     }
+  };
+
+  // Handle media load error
+  const handleMediaError = (messageId: string) => {
+    console.log(`Media load error for message: ${messageId}`);
+    setMediaErrors(prev => ({ ...prev, [messageId]: true }));
+  };
+
+  // Determine if a message is a video based on mime type or URL pattern
+  const isVideoMessage = (message: Message) => {
+    return message.mime_type?.startsWith('video/') || 
+           (message.public_url && /\.(mp4|mov|webm|avi)$/i.test(message.public_url));
   };
 
   return (
@@ -54,16 +67,38 @@ export function MessageGridView({
           onClick={() => onSelect(message)}
         >
           <div className="relative aspect-square overflow-hidden bg-muted/20">
-            {message.public_url ? (
-              <img 
-                src={message.public_url} 
-                alt={message.caption || 'Media'} 
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
+            {message.public_url && !mediaErrors[message.id] ? (
+              isVideoMessage(message) ? (
+                // Video thumbnail with poster or first frame
+                <div className="w-full h-full relative">
+                  <video 
+                    className="w-full h-full object-cover"
+                    src={message.public_url}
+                    preload="metadata"
+                    poster="/placeholder.svg"
+                    onError={() => handleMediaError(message.id)}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Badge className="bg-black/70 text-white">Video</Badge>
+                  </div>
+                </div>
+              ) : (
+                // Image
+                <img 
+                  src={message.public_url} 
+                  alt={message.caption || 'Media'} 
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  onError={() => handleMediaError(message.id)}
+                />
+              )
             ) : (
-              <div className="flex items-center justify-center h-full">
-                <span className="text-muted-foreground text-sm">No image</span>
+              // Error or no media fallback
+              <div className="flex flex-col items-center justify-center h-full bg-muted/30">
+                <FileX className="h-8 w-8 text-muted-foreground mb-2" />
+                <span className="text-muted-foreground text-xs text-center px-2">
+                  {mediaErrors[message.id] ? 'Media failed to load' : 'No media available'}
+                </span>
               </div>
             )}
             

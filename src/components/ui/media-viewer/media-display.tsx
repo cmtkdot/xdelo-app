@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { Message } from '@/types/MessagesTypes';
-import { AlertCircle, RefreshCw, ZoomIn, ZoomOut, X } from 'lucide-react';
+import { AlertCircle, RefreshCw, ZoomIn, ZoomOut, X, Film } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
@@ -46,10 +46,15 @@ export function MediaDisplay({ message, className }: MediaDisplayProps) {
   };
 
   const handleLoadSuccess = () => {
+    console.log(`Media loaded successfully: ${message.id}`);
     setIsLoading(false);
   };
 
   const handleLoadError = (type: 'image' | 'video') => {
+    console.error(`Failed to load ${type} for message: ${message.id}`, {
+      url: message.public_url,
+      mimeType: message.mime_type
+    });
     setIsLoading(false);
     setError(`Failed to load ${type}`);
   };
@@ -72,6 +77,7 @@ export function MediaDisplay({ message, className }: MediaDisplayProps) {
         onLoadedData={handleLoadSuccess}
         onError={() => handleLoadError('video')}
         controlsList="nodownload"
+        poster="/placeholder.svg"
       />
     </AspectRatio>
   );
@@ -132,6 +138,11 @@ export function MediaDisplay({ message, className }: MediaDisplayProps) {
           <div className="bg-background/90 px-6 py-4 rounded-lg shadow-lg flex flex-col items-center">
             <AlertCircle className="h-8 w-8 mb-2 text-destructive" />
             <p className="text-center mb-3">{error}</p>
+            {isVideo && (
+              <p className="text-xs text-center mb-3 text-muted-foreground">
+                The video format may not be supported by your browser or the file may be corrupted.
+              </p>
+            )}
             <Button 
               variant="outline" 
               size="sm" 

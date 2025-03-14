@@ -1,8 +1,8 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Eye, Edit, Trash2, MoreHorizontal } from 'lucide-react';
+import { Eye, Edit, Trash2, MoreHorizontal, FileX, Film } from 'lucide-react';
 import { Message } from '@/types';
 import { useIsMobile } from '@/hooks/useMobile';
 import {
@@ -31,6 +31,7 @@ export function MessageListView({
   selectedId
 }: MessageListViewProps) {
   const isMobile = useIsMobile();
+  const [mediaErrors, setMediaErrors] = useState<Record<string, boolean>>({});
   
   const getProcessingStateColor = (state: string) => {
     switch (state) {
@@ -40,6 +41,18 @@ export function MessageListView({
       case 'error': return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300';
       default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800/40 dark:text-gray-300';
     }
+  };
+
+  // Handle media load error
+  const handleMediaError = (messageId: string) => {
+    console.log(`Media load error for message: ${messageId}`);
+    setMediaErrors(prev => ({ ...prev, [messageId]: true }));
+  };
+
+  // Determine if a message is a video
+  const isVideoMessage = (message: Message) => {
+    return message.mime_type?.startsWith('video/') || 
+           (message.public_url && /\.(mp4|mov|webm|avi)$/i.test(message.public_url));
   };
 
   return (
@@ -55,23 +68,45 @@ export function MessageListView({
         >
           {/* Thumbnail */}
           <div 
-            className="w-12 h-12 sm:w-16 sm:h-16 rounded overflow-hidden bg-muted/20 flex-shrink-0"
+            className="w-12 h-12 sm:w-16 sm:h-16 rounded overflow-hidden bg-muted/20 flex-shrink-0 relative"
             onClick={(e) => {
               e.stopPropagation();
               onView([message]);
             }}
           >
-            {message.public_url ? (
-              <img 
-                src={message.public_url} 
-                alt={message.caption || 'Media'} 
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
+            {message.public_url && !mediaErrors[message.id] ? (
+              isVideoMessage(message) ? (
+                // Video thumbnail with overlay icon
+                <div className="w-full h-full relative">
+                  <div className="absolute inset-0 flex items-center justify-center bg-muted/30">
+                    <Film className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                </div>
+              ) : (
+                // Image
+                <img 
+                  src={message.public_url} 
+                  alt={message.caption || 'Media'} 
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  onError={() => handleMediaError(message.id)}
+                />
+              )
             ) : (
+              // Error or no media fallback
               <div className="flex items-center justify-center h-full">
-                <span className="text-muted-foreground text-xs">No image</span>
+                <FileX className="h-5 w-5 text-muted-foreground" />
               </div>
+            )}
+            
+            {/* Video indicator badge */}
+            {isVideoMessage(message) && !mediaErrors[message.id] && (
+              <Badge 
+                variant="secondary" 
+                className="absolute top-0 right-0 text-[8px] px-1 py-0 h-4"
+              >
+                Video
+              </Badge>
             )}
           </div>
           
