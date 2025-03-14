@@ -1,7 +1,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { MakeAutomationRule, MakeEventType } from '@/types/make';
+import { MakeAutomationRule, MakeEventType, MakeCondition, MakeAction } from '@/types/make';
 import { useToast } from '@/hooks/useToast';
 
 /**
@@ -11,24 +11,42 @@ export function useMakeAutomations() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // Helper function to convert DB records to MakeAutomationRule
+  const transformAutomationRules = (data: any[]): MakeAutomationRule[] => {
+    return data.map(rule => ({
+      id: rule.id,
+      name: rule.name,
+      description: rule.description || null,
+      event_type: rule.event_type as MakeEventType | string,
+      conditions: Array.isArray(rule.conditions) ? rule.conditions.map((c: any) => ({
+        field: c.field,
+        operator: c.operator,
+        value: c.value
+      })) : [],
+      actions: Array.isArray(rule.actions) ? rule.actions.map((a: any) => ({
+        type: a.type,
+        config: a.config || {}
+      })) : [],
+      is_active: rule.is_active ?? false,
+      priority: rule.priority ?? 0,
+      created_at: rule.created_at || null,
+      updated_at: rule.updated_at || null
+    }));
+  };
+
   // Fetch all automation rules
   const useAutomationRules = (enabled = true) => 
     useQuery({
       queryKey: ['make-automation-rules'],
       queryFn: async (): Promise<MakeAutomationRule[]> => {
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
           .from('make_automation_rules')
           .select('*')
           .order('priority', { ascending: false });
         
         if (error) throw error;
         
-        // Convert the database JSON fields to proper TypeScript objects
-        return data.map(rule => ({
-          ...rule,
-          conditions: Array.isArray(rule.conditions) ? rule.conditions : [],
-          actions: Array.isArray(rule.actions) ? rule.actions : []
-        }));
+        return transformAutomationRules(data);
       },
       enabled,
     });
@@ -38,7 +56,7 @@ export function useMakeAutomations() {
     useQuery({
       queryKey: ['make-automation-rules', eventType],
       queryFn: async (): Promise<MakeAutomationRule[]> => {
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
           .from('make_automation_rules')
           .select('*')
           .eq('event_type', eventType)
@@ -46,14 +64,9 @@ export function useMakeAutomations() {
         
         if (error) throw error;
         
-        // Convert the database JSON fields to proper TypeScript objects
-        return data.map(rule => ({
-          ...rule,
-          conditions: Array.isArray(rule.conditions) ? rule.conditions : [],
-          actions: Array.isArray(rule.actions) ? rule.actions : []
-        }));
+        return transformAutomationRules(data);
       },
-      enabled,
+      enabled: !!eventType && enabled,
     });
 
   // Create a new automation rule
@@ -70,7 +83,7 @@ export function useMakeAutomations() {
         priority: rule.priority
       };
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('make_automation_rules')
         .insert(dbRule)
         .select()
@@ -79,11 +92,7 @@ export function useMakeAutomations() {
       if (error) throw error;
       
       // Convert back to MakeAutomationRule
-      return {
-        ...data,
-        conditions: Array.isArray(data.conditions) ? data.conditions : [],
-        actions: Array.isArray(data.actions) ? data.actions : []
-      };
+      return transformAutomationRules([data])[0];
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['make-automation-rules'] });
@@ -95,7 +104,7 @@ export function useMakeAutomations() {
     onError: (error) => {
       toast({
         title: 'Error',
-        description: `Failed to create automation rule: ${error.message}`,
+        description: `Failed to create automation rule: ${error instanceof Error ? error.message : String(error)}`,
         variant: 'destructive',
       });
     },
@@ -105,24 +114,17 @@ export function useMakeAutomations() {
   const updateAutomationRule = useMutation({
     mutationFn: async (rule: Partial<MakeAutomationRule> & { id: string }) => {
       // Extract only the fields that can be updated
-      const updateData = {
-        name: rule.name,
-        description: rule.description,
-        event_type: rule.event_type,
-        conditions: rule.conditions,
-        actions: rule.actions,
-        is_active: rule.is_active,
-        priority: rule.priority
-      };
+      const updateData: any = {};
       
-      // Remove undefined fields
-      Object.keys(updateData).forEach(key => {
-        if (updateData[key as keyof typeof updateData] === undefined) {
-          delete updateData[key as keyof typeof updateData];
-        }
-      });
+      if (rule.name !== undefined) updateData.name = rule.name;
+      if (rule.description !== undefined) updateData.description = rule.description;
+      if (rule.event_type !== undefined) updateData.event_type = rule.event_type;
+      if (rule.conditions !== undefined) updateData.conditions = rule.conditions;
+      if (rule.actions !== undefined) updateData.actions = rule.actions;
+      if (rule.is_active !== undefined) updateData.is_active = rule.is_active;
+      if (rule.priority !== undefined) updateData.priority = rule.priority;
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('make_automation_rules')
         .update(updateData)
         .eq('id', rule.id)
@@ -132,11 +134,7 @@ export function useMakeAutomations() {
       if (error) throw error;
       
       // Convert back to MakeAutomationRule
-      return {
-        ...data,
-        conditions: Array.isArray(data.conditions) ? data.conditions : [],
-        actions: Array.isArray(data.actions) ? data.actions : []
-      };
+      return transformAutomationRules([data])[0];
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['make-automation-rules'] });
@@ -148,7 +146,7 @@ export function useMakeAutomations() {
     onError: (error) => {
       toast({
         title: 'Error',
-        description: `Failed to update automation rule: ${error.message}`,
+        description: `Failed to update automation rule: ${error instanceof Error ? error.message : String(error)}`,
         variant: 'destructive',
       });
     },
@@ -157,7 +155,7 @@ export function useMakeAutomations() {
   // Toggle an automation rule's active state
   const toggleAutomationRule = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('make_automation_rules')
         .update({ is_active: isActive })
         .eq('id', id)
@@ -167,11 +165,7 @@ export function useMakeAutomations() {
       if (error) throw error;
       
       // Convert back to MakeAutomationRule
-      return {
-        ...data,
-        conditions: Array.isArray(data.conditions) ? data.conditions : [],
-        actions: Array.isArray(data.actions) ? data.actions : []
-      };
+      return transformAutomationRules([data])[0];
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['make-automation-rules'] });
@@ -183,7 +177,7 @@ export function useMakeAutomations() {
     onError: (error) => {
       toast({
         title: 'Error',
-        description: `Failed to toggle automation rule: ${error.message}`,
+        description: `Failed to toggle automation rule: ${error instanceof Error ? error.message : String(error)}`,
         variant: 'destructive',
       });
     },
@@ -192,7 +186,7 @@ export function useMakeAutomations() {
   // Delete an automation rule
   const deleteAutomationRule = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('make_automation_rules')
         .delete()
         .eq('id', id);
@@ -210,7 +204,7 @@ export function useMakeAutomations() {
     onError: (error) => {
       toast({
         title: 'Error',
-        description: `Failed to delete automation rule: ${error.message}`,
+        description: `Failed to delete automation rule: ${error instanceof Error ? error.message : String(error)}`,
         variant: 'destructive',
       });
     },
@@ -220,7 +214,7 @@ export function useMakeAutomations() {
   const reorderAutomationRules = useMutation({
     mutationFn: async (ruleIds: string[]) => {
       // Implement reordering logic via RPC
-      const { error } = await supabase.rpc('reorder_make_automation_rules', {
+      const { error } = await (supabase as any).rpc('reorder_make_automation_rules', {
         rule_ids: ruleIds,
       });
       
@@ -237,7 +231,7 @@ export function useMakeAutomations() {
     onError: (error) => {
       toast({
         title: 'Error',
-        description: `Failed to reorder automation rules: ${error.message}`,
+        description: `Failed to reorder automation rules: ${error instanceof Error ? error.message : String(error)}`,
         variant: 'destructive',
       });
     },
@@ -247,7 +241,7 @@ export function useMakeAutomations() {
   const testAutomationRule = useMutation({
     mutationFn: async ({ ruleId, testData }: { ruleId: string; testData: any }) => {
       // Get the rule by ID first to obtain its conditions and actions
-      const { data: rule, error: ruleError } = await supabase
+      const { data: rule, error: ruleError } = await (supabase as any)
         .from('make_automation_rules')
         .select('*')
         .eq('id', ruleId)
@@ -293,7 +287,7 @@ export function useMakeAutomations() {
     onError: (error) => {
       toast({
         title: 'Error',
-        description: `Failed to test rule: ${error.message}`,
+        description: `Failed to test rule: ${error instanceof Error ? error.message : String(error)}`,
         variant: 'destructive',
       });
     },

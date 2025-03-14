@@ -1644,11 +1644,14 @@ export type Database = {
           error_message: string | null
           event_type: string
           id: string
+          message_id: string | null
+          next_retry_at: string | null
           payload: Json | null
           request_headers: Json | null
           response_body: string | null
           response_code: number | null
           response_headers: Json | null
+          retry_count: number | null
           severity: string | null
           status: Database["public"]["Enums"]["make_log_status"]
           tags: string[] | null
@@ -1662,11 +1665,14 @@ export type Database = {
           error_message?: string | null
           event_type: string
           id?: string
+          message_id?: string | null
+          next_retry_at?: string | null
           payload?: Json | null
           request_headers?: Json | null
           response_body?: string | null
           response_code?: number | null
           response_headers?: Json | null
+          retry_count?: number | null
           severity?: string | null
           status?: Database["public"]["Enums"]["make_log_status"]
           tags?: string[] | null
@@ -1680,11 +1686,14 @@ export type Database = {
           error_message?: string | null
           event_type?: string
           id?: string
+          message_id?: string | null
+          next_retry_at?: string | null
           payload?: Json | null
           request_headers?: Json | null
           response_body?: string | null
           response_code?: number | null
           response_headers?: Json | null
+          retry_count?: number | null
           severity?: string | null
           status?: Database["public"]["Enums"]["make_log_status"]
           tags?: string[] | null
@@ -1699,6 +1708,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      make_telegram_events: {
+        Row: {
+          context: Json | null
+          created_at: string | null
+          event_type: string
+          id: string
+          message_id: string
+          payload: Json
+          webhook_results: Json | null
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string | null
+          event_type: string
+          id?: string
+          message_id: string
+          payload: Json
+          webhook_results?: Json | null
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string | null
+          event_type?: string
+          id?: string
+          message_id?: string
+          payload?: Json
+          webhook_results?: Json | null
+        }
+        Relationships: []
       }
       make_test_payloads: {
         Row: {
@@ -1739,10 +1778,12 @@ export type Database = {
           description: string | null
           event_types: string[]
           field_selection: Json | null
+          headers: Json | null
           id: string
           is_active: boolean | null
           name: string
           payload_template: Json | null
+          retry_config: Json | null
           transformation_code: string | null
           updated_at: string | null
           url: string
@@ -1752,10 +1793,12 @@ export type Database = {
           description?: string | null
           event_types: string[]
           field_selection?: Json | null
+          headers?: Json | null
           id?: string
           is_active?: boolean | null
           name: string
           payload_template?: Json | null
+          retry_config?: Json | null
           transformation_code?: string | null
           updated_at?: string | null
           url: string
@@ -1765,10 +1808,12 @@ export type Database = {
           description?: string | null
           event_types?: string[]
           field_selection?: Json | null
+          headers?: Json | null
           id?: string
           is_active?: boolean | null
           name?: string
           payload_template?: Json | null
+          retry_config?: Json | null
           transformation_code?: string | null
           updated_at?: string | null
           url?: string
@@ -3182,6 +3227,22 @@ export type Database = {
         }
         Returns: string
       }
+      make_process_telegram_message_event: {
+        Args: {
+          message_id: string
+          event_type: string
+          context?: Json
+        }
+        Returns: Json
+      }
+      make_test_webhook_field_mapping: {
+        Args: {
+          webhook_id: string
+          message_id: string
+          event_type: string
+        }
+        Returns: Json
+      }
       manually_create_invoice_from_estimate: {
         Args: {
           p_estimate_id: string
@@ -3795,6 +3856,12 @@ export type Database = {
         | "user_left"
         | "media_received"
         | "command_received"
+        | "message_edited"
+        | "message_deleted"
+        | "media_group_received"
+        | "message_forwarded"
+        | "caption_updated"
+        | "processing_completed"
       make_log_status: "pending" | "success" | "failed"
       message_operation_type:
         | "message_create"

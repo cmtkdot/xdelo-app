@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useMakeEventLogs, MakeEventLog } from '@/hooks/useMakeEventLogs';
 import { MakeEventType } from '@/types/make';
@@ -139,7 +140,7 @@ const EventMonitor: React.FC = () => {
       onError: (error) => {
         toast({
           title: 'Error',
-          description: `Failed to retry event: ${error.message}`,
+          description: `Failed to retry event: ${error instanceof Error ? error.message : String(error)}`,
           variant: 'destructive',
         });
         setIsLoading(false);
@@ -660,4 +661,4 @@ const EventMonitor: React.FC = () => {
   );
 };
 
-export default EventMonitor; 
+export default EventMonitor;

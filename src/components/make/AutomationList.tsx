@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useMakeAutomations } from '@/hooks/useMakeAutomations';
 import { MakeAutomationRule } from '@/types/make';
@@ -65,7 +66,9 @@ const AutomationList = ({ onEditRule }: AutomationListProps) => {
     }
     
     setRules(newRules);
-    reorderAutomationRules.mutate(newRules.map(rule => rule.id));
+    // Extract just the IDs for the reorder mutation
+    const ruleIds = newRules.map(rule => rule.id);
+    reorderAutomationRules.mutate(ruleIds);
   };
   
   const handleDragEnd = (result: any) => {
@@ -76,7 +79,9 @@ const AutomationList = ({ onEditRule }: AutomationListProps) => {
     items.splice(result.destination.index, 0, reorderedItem);
     
     setRules(items);
-    reorderAutomationRules.mutate(items.map(rule => rule.id));
+    // Extract just the IDs for the reorder mutation
+    const ruleIds = items.map(rule => rule.id);
+    reorderAutomationRules.mutate(ruleIds);
   };
 
   if (isLoading) {

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { 
   DropdownMenu,
@@ -102,4 +103,4 @@ const EventDetailMenu: React.FC<EventDetailMenuProps> = ({
   );
 };
 
-export default EventDetailMenu; 
+export default EventDetailMenu;
