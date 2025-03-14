@@ -1,3 +1,4 @@
+
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types';
@@ -21,11 +22,17 @@ export function useMediaGroups() {
 
         console.log('Received data:', data?.length || 0, 'messages');
 
+        // Early return if data is null or empty
+        if (!data || data.length === 0) {
+          console.log('No messages found, returning empty array');
+          return [] as Message[][];
+        }
+
         // Transform data into media groups with defensive programming
         const mediaGroups: Record<string, Message[]> = {};
 
         // Process each message with null checks
-        (data || []).forEach((message: any) => {
+        data.forEach((message: any) => {
           if (!message) return; // Skip null/undefined messages
           
           const groupId = message.media_group_id || `single-${message.id}`;
@@ -41,6 +48,8 @@ export function useMediaGroups() {
 
         // Sort media groups - keep most recent first
         Object.values(mediaGroups).forEach(group => {
+          if (!group || !Array.isArray(group)) return;
+          
           group.sort((a, b) => {
             // If we have telegram_message_id, sort by that
             if (a.telegram_message_id && b.telegram_message_id) {
@@ -56,6 +65,9 @@ export function useMediaGroups() {
 
         // Convert the record to an array of arrays for MessageGridView
         const messageGroups: Message[][] = Object.values(mediaGroups);
+        
+        console.log('Final message groups structure:', 
+          messageGroups.length, 'groups with proper typing');
         
         // Return the array of message groups (Message[][]) 
         return messageGroups;

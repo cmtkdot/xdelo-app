@@ -31,15 +31,27 @@ export const MessageListView: React.FC<MessageListViewProps> = ({
   onView,
   selectedId
 }) => {
+  // Add defensive check to ensure messages is an array
+  if (!messages || !Array.isArray(messages)) {
+    console.error('MessageListView: messages is not an array', messages);
+    return <div>No messages to display</div>;
+  }
+
   return (
     <div className="space-y-3">
-      {messages.map((group) => {
+      {messages.map((group, groupIndex) => {
         // Skip empty groups
-        if (!group || group.length === 0) return null;
+        if (!group || !Array.isArray(group) || group.length === 0) {
+          console.warn(`Skipping empty or invalid group at index ${groupIndex}`, group);
+          return null;
+        }
         
         // Get main message for display
         const mainMessage = group[0];
-        if (!mainMessage) return null;
+        if (!mainMessage) {
+          console.warn(`No main message found in group at index ${groupIndex}`, group);
+          return null;
+        }
         
         // Determine message type icon
         let TypeIcon = FileText;

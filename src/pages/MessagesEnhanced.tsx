@@ -66,83 +66,115 @@ const MessagesEnhanced = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  const { data: mediaGroups = [], isLoading, error, refetch } = useMediaGroups();
+  // Use mediaGroupsData as the raw data and enforce proper typing
+  const { data: mediaGroupsRaw = [], isLoading, error, refetch } = useMediaGroups();
+  
+  // Ensure mediaGroups is properly typed and defensively handled
+  const mediaGroups = useMemo(() => {
+    // Ensure we have an array
+    if (!Array.isArray(mediaGroupsRaw)) {
+      console.warn('mediaGroupsRaw is not an array:', mediaGroupsRaw);
+      return [] as Message[][];
+    }
+    return mediaGroupsRaw;
+  }, [mediaGroupsRaw]);
+  
   const { messages: realtimeMessages, handleRefresh } = useRealTimeMessages({
     limit: 100,
     processingState: filters.processingStates,
     sortBy: filters.sortField,
     sortOrder: filters.sortOrder
   });
+  
   const { data: analyticsData, isLoading: analyticsLoading } = useMessageAnalytics();
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const filteredMessages = useMemo(() => {
-    if (!mediaGroups || !Array.isArray(mediaGroups)) {
-      console.warn('mediaGroups is not an array or is empty', mediaGroups);
-      return [];
+    // Defensive check
+    if (!Array.isArray(mediaGroups)) {
+      console.warn('mediaGroups is not an array in filteredMessages', mediaGroups);
+      return [] as Message[][];
     }
     
-    return mediaGroups.filter(group => {
-      if (!group || !Array.isArray(group) || group.length === 0) {
-        return false;
-      }
-      
-      const mainMessage = group[0];
-      if (!mainMessage) return false;
-
-      if (filters.search && mainMessage.caption) {
-        const searchLower = filters.search.toLowerCase();
-        const captionMatch = mainMessage.caption.toLowerCase().includes(searchLower);
-        const productMatch = mainMessage.analyzed_content?.product_name?.toLowerCase().includes(searchLower);
-        const vendorMatch = mainMessage.analyzed_content?.vendor_uid?.toLowerCase().includes(searchLower);
+    // Additional logging for debugging
+    console.log('Filtering mediaGroups:', 
+      mediaGroups.length, 
+      'groups. Is array:', Array.isArray(mediaGroups)
+    );
+    
+    try {
+      return mediaGroups.filter(group => {
+        // Skip invalid groups
+        if (!group || !Array.isArray(group) || group.length === 0) {
+          return false;
+        }
         
-        if (!captionMatch && !productMatch && !vendorMatch) return false;
-      }
-      
-      if (filters.processingStates.length > 0) {
-        if (!mainMessage.processing_state || 
-           !filters.processingStates.includes(mainMessage.processing_state as ProcessingState)) {
-          return false;
+        const mainMessage = group[0];
+        if (!mainMessage) return false;
+
+        if (filters.search && mainMessage.caption) {
+          const searchLower = filters.search.toLowerCase();
+          const captionMatch = mainMessage.caption.toLowerCase().includes(searchLower);
+          const productMatch = mainMessage.analyzed_content?.product_name?.toLowerCase().includes(searchLower);
+          const vendorMatch = mainMessage.analyzed_content?.vendor_uid?.toLowerCase().includes(searchLower);
+          
+          if (!captionMatch && !productMatch && !vendorMatch) return false;
         }
-      }
-      
-      if (filters.dateRange) {
-        const messageDate = new Date(mainMessage.created_at || '');
-        if (messageDate < filters.dateRange.from || messageDate > filters.dateRange.to) {
-          return false;
+        
+        if (filters.processingStates.length > 0) {
+          if (!mainMessage.processing_state || 
+             !filters.processingStates.includes(mainMessage.processing_state as ProcessingState)) {
+            return false;
+          }
         }
-      }
-      
-      if (filters.mediaTypes.length > 0) {
-        const mediaType = mainMessage.mime_type?.split('/')[0] || 'unknown';
-        if (!filters.mediaTypes.includes(mediaType)) {
-          return false;
+        
+        if (filters.dateRange) {
+          const messageDate = new Date(mainMessage.created_at || '');
+          if (messageDate < filters.dateRange.from || messageDate > filters.dateRange.to) {
+            return false;
+          }
         }
-      }
-      
-      if (filters.vendors.length > 0) {
-        const vendor = mainMessage.analyzed_content?.vendor_uid;
-        if (!vendor || !filters.vendors.includes(vendor)) {
-          return false;
+        
+        if (filters.mediaTypes.length > 0) {
+          const mediaType = mainMessage.mime_type?.split('/')[0] || 'unknown';
+          if (!filters.mediaTypes.includes(mediaType)) {
+            return false;
+          }
         }
-      }
-      
-      if (filters.chatSources.length > 0) {
-        const chatSource = `${mainMessage.chat_id}-${mainMessage.chat_type}`;
-        if (!filters.chatSources.includes(chatSource)) {
-          return false;
+        
+        if (filters.vendors.length > 0) {
+          const vendor = mainMessage.analyzed_content?.vendor_uid;
+          if (!vendor || !filters.vendors.includes(vendor)) {
+            return false;
+          }
         }
-      }
-      
-      return true;
-    });
+        
+        if (filters.chatSources.length > 0) {
+          const chatSource = `${mainMessage.chat_id}-${mainMessage.chat_type}`;
+          if (!filters.chatSources.includes(chatSource)) {
+            return false;
+          }
+        }
+        
+        return true;
+      });
+    } catch (err) {
+      console.error('Error in filtering messages:', err);
+      return [] as Message[][];
+    }
   }, [mediaGroups, filters]);
 
   const paginatedMessages = useMemo(() => {
-    if (!filteredMessages || !Array.isArray(filteredMessages) || filteredMessages.length === 0) {
-      return [];
+    // Defensive programming - ensure filteredMessages is valid
+    if (!filteredMessages || !Array.isArray(filteredMessages)) {
+      console.warn('filteredMessages is not an array in pagination', filteredMessages);
+      return [] as Message[][];
+    }
+    
+    if (filteredMessages.length === 0) {
+      return [] as Message[][];
     }
     
     const startIndex = (filters.page - 1) * filters.itemsPerPage;
@@ -168,14 +200,18 @@ const MessagesEnhanced = () => {
   };
 
   const handleMessageView = (messageGroup: Message[]) => {
-    if (!messageGroup || messageGroup.length === 0) return;
+    if (!messageGroup || !Array.isArray(messageGroup) || messageGroup.length === 0) {
+      console.warn('Invalid message group provided to handleMessageView');
+      return;
+    }
     
     setCurrentGroup(messageGroup);
     setViewerOpen(true);
     
     if (filteredMessages) {
       const index = filteredMessages.findIndex(group => 
-        group && group[0] && messageGroup[0] && group[0].id === messageGroup[0].id
+        group && Array.isArray(group) && group.length > 0 && 
+        messageGroup[0] && group[0].id === messageGroup[0].id
       );
       
       if (index !== -1) {
@@ -200,8 +236,9 @@ const MessagesEnhanced = () => {
     if (filteredMessages && Array.isArray(filteredMessages) && groupIndex > 0) {
       const prevIndex = groupIndex - 1;
       const prevGroup = filteredMessages[prevIndex];
-      if (prevGroup) {
-        setCurrentGroup(prevGroup);
+      
+      if (prevGroup && Array.isArray(prevGroup) && prevGroup.length > 0) {
+        setCurrentGroup([...prevGroup]);
         setGroupIndex(prevIndex);
       }
     }
@@ -211,8 +248,9 @@ const MessagesEnhanced = () => {
     if (filteredMessages && Array.isArray(filteredMessages) && groupIndex < filteredMessages.length - 1) {
       const nextIndex = groupIndex + 1;
       const nextGroup = filteredMessages[nextIndex];
-      if (nextGroup) {
-        setCurrentGroup(nextGroup);
+      
+      if (nextGroup && Array.isArray(nextGroup) && nextGroup.length > 0) {
+        setCurrentGroup([...nextGroup]);
         setGroupIndex(nextIndex);
       }
     }
@@ -297,15 +335,15 @@ const MessagesEnhanced = () => {
   useEffect(() => {
     console.log('mediaGroups type:', Array.isArray(mediaGroups) ? 'array' : typeof mediaGroups);
     console.log('mediaGroups length:', Array.isArray(mediaGroups) ? mediaGroups.length : 'N/A');
-    console.log('filteredMessages length:', filteredMessages?.length || 0);
-    console.log('paginatedMessages length:', paginatedMessages?.length || 0);
+    console.log('filteredMessages length:', filteredMessages && Array.isArray(filteredMessages) ? filteredMessages.length : 'N/A');
+    console.log('paginatedMessages length:', paginatedMessages && Array.isArray(paginatedMessages) ? paginatedMessages.length : 'N/A');
   }, [mediaGroups, filteredMessages, paginatedMessages]);
 
   return (
     <div className="container mx-auto py-6 space-y-6">
       <EnhancedMessagesHeader 
         title="Enhanced Messages"
-        totalMessages={filteredMessages?.length || 0}
+        totalMessages={filteredMessages && Array.isArray(filteredMessages) ? filteredMessages.length : 0}
         onRefresh={handleDataRefresh}
         isLoading={isLoading}
       />
@@ -427,20 +465,32 @@ const MessagesEnhanced = () => {
           ) : (
             <Tabs value={filters.view} className="w-full">
               <TabsContent value="grid" className="mt-0">
-                <MessageGridView 
-                  messages={paginatedMessages} 
-                  onSelect={handleMessageSelect}
-                  onView={handleMessageView}
-                  selectedId={selectedMessage?.id}
-                />
+                {paginatedMessages && Array.isArray(paginatedMessages) ? (
+                  <MessageGridView 
+                    messages={paginatedMessages} 
+                    onSelect={handleMessageSelect}
+                    onView={handleMessageView}
+                    selectedId={selectedMessage?.id}
+                  />
+                ) : (
+                  <div className="text-center py-8">
+                    <p>No messages to display</p>
+                  </div>
+                )}
               </TabsContent>
               <TabsContent value="list" className="mt-0">
-                <MessageListView 
-                  messages={paginatedMessages}
-                  onSelect={handleMessageSelect}
-                  onView={handleMessageView}
-                  selectedId={selectedMessage?.id}
-                />
+                {paginatedMessages && Array.isArray(paginatedMessages) ? (
+                  <MessageListView 
+                    messages={paginatedMessages}
+                    onSelect={handleMessageSelect}
+                    onView={handleMessageView}
+                    selectedId={selectedMessage?.id}
+                  />
+                ) : (
+                  <div className="text-center py-8">
+                    <p>No messages to display</p>
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           )}
@@ -469,7 +519,7 @@ const MessagesEnhanced = () => {
         )}
       </div>
       
-      {viewerOpen && currentGroup.length > 0 && (
+      {viewerOpen && currentGroup && Array.isArray(currentGroup) && currentGroup.length > 0 && (
         <MediaViewer
           isOpen={viewerOpen}
           onClose={() => setViewerOpen(false)}

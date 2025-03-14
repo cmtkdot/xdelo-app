@@ -164,16 +164,22 @@ export type Database = {
       }
       function_backup: {
         Row: {
+          created_at: string | null
           function_definition: string | null
           function_name: string | null
+          id: string
         }
         Insert: {
+          created_at?: string | null
           function_definition?: string | null
           function_name?: string | null
+          id?: string
         }
         Update: {
+          created_at?: string | null
           function_definition?: string | null
           function_name?: string | null
+          id?: string
         }
         Relationships: []
       }
@@ -1830,7 +1836,6 @@ export type Database = {
           correlation_id: string | null
           created_at: string
           deleted_from_telegram: boolean | null
-          duration: number | null
           edit_count: number | null
           edit_date: string | null
           edit_history: Json | null
@@ -1852,7 +1857,6 @@ export type Database = {
           group_first_message_time: string | null
           group_last_message_time: string | null
           group_message_count: string | null
-          height: number | null
           id: string
           is_channel_post: string | null
           is_duplicate: boolean | null
@@ -1868,7 +1872,6 @@ export type Database = {
           last_processing_attempt: string | null
           media_group_id: string | null
           media_group_sync: string | null
-          media_type: string | null
           message_caption_id: string | null
           message_url: string | null
           mime_type: string | null
@@ -1878,24 +1881,17 @@ export type Database = {
           old_analyzed_content: Json[] | null
           original_file_id: string | null
           original_message_id: string | null
-          parsed_caption: string | null
-          parsed_notes: string | null
-          parsed_product_code: string | null
-          parsed_purchase_date: string | null
-          parsed_quantity: number | null
-          parsed_unit_price: number | null
-          parsed_vendor_uid: string | null
           processing_attempts: number | null
           processing_completed_at: string | null
-          processing_correlation_id: string | null
           processing_started_at: string | null
           processing_state: Database["public"]["Enums"]["processing_state_type"]
           product_code: string | null
           product_name: string | null
           product_quantity: number | null
+          product_sku: string | null
           public_url: string | null
           purchase_date: string | null
-          purchase_order: string | null
+          purchase_order_uid: string | null
           redownload_attempts: number | null
           redownload_completed_at: string | null
           redownload_flagged_at: string | null
@@ -1910,9 +1906,7 @@ export type Database = {
           telegram_message_id: number | null
           update_id: string | null
           updated_at: string
-          user_id: string | null
           vendor_uid: string | null
-          width: number | null
         }
         Insert: {
           analyzed_content?: Json | null
@@ -1923,7 +1917,6 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           deleted_from_telegram?: boolean | null
-          duration?: number | null
           edit_count?: number | null
           edit_date?: string | null
           edit_history?: Json | null
@@ -1945,7 +1938,6 @@ export type Database = {
           group_first_message_time?: string | null
           group_last_message_time?: string | null
           group_message_count?: string | null
-          height?: number | null
           id?: string
           is_channel_post?: string | null
           is_duplicate?: boolean | null
@@ -1961,7 +1953,6 @@ export type Database = {
           last_processing_attempt?: string | null
           media_group_id?: string | null
           media_group_sync?: string | null
-          media_type?: string | null
           message_caption_id?: string | null
           message_url?: string | null
           mime_type?: string | null
@@ -1971,24 +1962,17 @@ export type Database = {
           old_analyzed_content?: Json[] | null
           original_file_id?: string | null
           original_message_id?: string | null
-          parsed_caption?: string | null
-          parsed_notes?: string | null
-          parsed_product_code?: string | null
-          parsed_purchase_date?: string | null
-          parsed_quantity?: number | null
-          parsed_unit_price?: number | null
-          parsed_vendor_uid?: string | null
           processing_attempts?: number | null
           processing_completed_at?: string | null
-          processing_correlation_id?: string | null
           processing_started_at?: string | null
           processing_state?: Database["public"]["Enums"]["processing_state_type"]
           product_code?: string | null
           product_name?: string | null
           product_quantity?: number | null
+          product_sku?: string | null
           public_url?: string | null
           purchase_date?: string | null
-          purchase_order?: string | null
+          purchase_order_uid?: string | null
           redownload_attempts?: number | null
           redownload_completed_at?: string | null
           redownload_flagged_at?: string | null
@@ -2003,9 +1987,7 @@ export type Database = {
           telegram_message_id?: number | null
           update_id?: string | null
           updated_at?: string
-          user_id?: string | null
           vendor_uid?: string | null
-          width?: number | null
         }
         Update: {
           analyzed_content?: Json | null
@@ -2016,7 +1998,6 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           deleted_from_telegram?: boolean | null
-          duration?: number | null
           edit_count?: number | null
           edit_date?: string | null
           edit_history?: Json | null
@@ -2038,7 +2019,6 @@ export type Database = {
           group_first_message_time?: string | null
           group_last_message_time?: string | null
           group_message_count?: string | null
-          height?: number | null
           id?: string
           is_channel_post?: string | null
           is_duplicate?: boolean | null
@@ -2054,7 +2034,6 @@ export type Database = {
           last_processing_attempt?: string | null
           media_group_id?: string | null
           media_group_sync?: string | null
-          media_type?: string | null
           message_caption_id?: string | null
           message_url?: string | null
           mime_type?: string | null
@@ -2064,24 +2043,17 @@ export type Database = {
           old_analyzed_content?: Json[] | null
           original_file_id?: string | null
           original_message_id?: string | null
-          parsed_caption?: string | null
-          parsed_notes?: string | null
-          parsed_product_code?: string | null
-          parsed_purchase_date?: string | null
-          parsed_quantity?: number | null
-          parsed_unit_price?: number | null
-          parsed_vendor_uid?: string | null
           processing_attempts?: number | null
           processing_completed_at?: string | null
-          processing_correlation_id?: string | null
           processing_started_at?: string | null
           processing_state?: Database["public"]["Enums"]["processing_state_type"]
           product_code?: string | null
           product_name?: string | null
           product_quantity?: number | null
+          product_sku?: string | null
           public_url?: string | null
           purchase_date?: string | null
-          purchase_order?: string | null
+          purchase_order_uid?: string | null
           redownload_attempts?: number | null
           redownload_completed_at?: string | null
           redownload_flagged_at?: string | null
@@ -2096,9 +2068,7 @@ export type Database = {
           telegram_message_id?: number | null
           update_id?: string | null
           updated_at?: string
-          user_id?: string | null
           vendor_uid?: string | null
-          width?: number | null
         }
         Relationships: [
           {
@@ -2106,6 +2076,13 @@ export type Database = {
             columns: ["message_caption_id"]
             isOneToOne: false
             referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_message_caption"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages_view"
             referencedColumns: ["id"]
           },
           {
@@ -2127,6 +2104,13 @@ export type Database = {
             columns: ["message_caption_id"]
             isOneToOne: false
             referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages_view"
             referencedColumns: ["id"]
           },
           {
@@ -2548,6 +2532,13 @@ export type Database = {
             foreignKeyName: "fk_unified_audit_logs_messages"
             columns: ["entity_id"]
             isOneToOne: false
+            referencedRelation: "messages_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["entity_id"]
+            isOneToOne: false
             referencedRelation: "v_message_forwards"
             referencedColumns: ["id"]
           },
@@ -2669,13 +2660,13 @@ export type Database = {
           forward_info: Json | null
           glide_row_id: string | null
           group_caption_synced: boolean | null
+          id: string | null
           is_channel_post: string | null
           is_edited: boolean | null
           is_edited_channel_post: boolean | null
           is_forwarded: string | null
           is_original_caption: boolean | null
           media_group_id: string | null
-          media_type: string | null
           message_caption_id: string | null
           message_url: string | null
           mime_type: string | null
@@ -2687,9 +2678,10 @@ export type Database = {
           product_code: string | null
           product_name: string | null
           product_quantity: number | null
+          product_sku: string | null
           public_url: string | null
           purchase_date: string | null
-          purchase_order: string | null
+          purchase_order_uid: string | null
           storage_path: string | null
           telegram_data: Json | null
           vendor_uid: string | null
@@ -2707,13 +2699,13 @@ export type Database = {
           forward_info?: Json | null
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
+          id?: string | null
           is_channel_post?: string | null
           is_edited?: boolean | null
           is_edited_channel_post?: boolean | null
           is_forwarded?: string | null
           is_original_caption?: boolean | null
           media_group_id?: string | null
-          media_type?: string | null
           message_caption_id?: string | null
           message_url?: string | null
           mime_type?: string | null
@@ -2725,9 +2717,10 @@ export type Database = {
           product_code?: string | null
           product_name?: string | null
           product_quantity?: number | null
+          product_sku?: string | null
           public_url?: string | null
           purchase_date?: string | null
-          purchase_order?: string | null
+          purchase_order_uid?: string | null
           storage_path?: string | null
           telegram_data?: Json | null
           vendor_uid?: string | null
@@ -2745,13 +2738,13 @@ export type Database = {
           forward_info?: Json | null
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
+          id?: string | null
           is_channel_post?: string | null
           is_edited?: boolean | null
           is_edited_channel_post?: boolean | null
           is_forwarded?: string | null
           is_original_caption?: boolean | null
           media_group_id?: string | null
-          media_type?: string | null
           message_caption_id?: string | null
           message_url?: string | null
           mime_type?: string | null
@@ -2763,9 +2756,10 @@ export type Database = {
           product_code?: string | null
           product_name?: string | null
           product_quantity?: number | null
+          product_sku?: string | null
           public_url?: string | null
           purchase_date?: string | null
-          purchase_order?: string | null
+          purchase_order_uid?: string | null
           storage_path?: string | null
           telegram_data?: Json | null
           vendor_uid?: string | null
@@ -2776,6 +2770,13 @@ export type Database = {
             columns: ["message_caption_id"]
             isOneToOne: false
             referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_message_caption"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages_view"
             referencedColumns: ["id"]
           },
           {
@@ -2797,6 +2798,13 @@ export type Database = {
             columns: ["message_caption_id"]
             isOneToOne: false
             referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages_view"
             referencedColumns: ["id"]
           },
           {
@@ -2845,20 +2853,16 @@ export type Database = {
           chat_type: Database["public"]["Enums"]["telegram_chat_type"] | null
           correlation_id: string | null
           created_at: string | null
-          duration: number | null
           edit_date: string | null
           edit_history: Json | null
-          error: string | null
           error_message: string | null
           file_id: string | null
-          file_size: number | null
           file_unique_id: string | null
           glide_row_id: string | null
           group_caption_synced: boolean | null
           group_first_message_time: string | null
           group_last_message_time: string | null
           group_message_count: number | null
-          height: number | null
           id: string | null
           is_edited: boolean | null
           is_miscellaneous_item: boolean | null
@@ -2868,27 +2872,24 @@ export type Database = {
           message_url: string | null
           mime_type: string | null
           processing_completed_at: string | null
-          processing_correlation_id: string | null
           processing_started_at: string | null
           processing_state:
             | Database["public"]["Enums"]["processing_state_type"]
             | null
+          product_code: string | null
           product_name: string | null
           product_quantity: number | null
-          product_sku: string | null
           product_unit: string | null
           public_url: string | null
           purchase_date: string | null
-          purchase_order: string | null
+          purchase_order_uid: string | null
           retry_count: number | null
           storage_path: string | null
           sync_attempt: number | null
           telegram_data: Json | null
           telegram_message_id: number | null
           updated_at: string | null
-          user_id: string | null
-          vendor_name: string | null
-          width: number | null
+          vendor_uid: string | null
         }
         Insert: {
           analyzed_content?: Json | null
@@ -2898,20 +2899,16 @@ export type Database = {
           chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
           correlation_id?: string | null
           created_at?: string | null
-          duration?: number | null
           edit_date?: string | null
           edit_history?: Json | null
-          error?: string | null
           error_message?: string | null
           file_id?: string | null
-          file_size?: number | null
           file_unique_id?: string | null
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
           group_message_count?: never
-          height?: number | null
           id?: string | null
           is_edited?: boolean | null
           is_miscellaneous_item?: boolean | null
@@ -2921,27 +2918,24 @@ export type Database = {
           message_url?: string | null
           mime_type?: string | null
           processing_completed_at?: string | null
-          processing_correlation_id?: string | null
           processing_started_at?: string | null
           processing_state?:
             | Database["public"]["Enums"]["processing_state_type"]
             | null
+          product_code?: string | null
           product_name?: string | null
           product_quantity?: number | null
-          product_sku?: string | null
           product_unit?: never
           public_url?: string | null
           purchase_date?: string | null
-          purchase_order?: string | null
+          purchase_order_uid?: string | null
           retry_count?: number | null
           storage_path?: string | null
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
-          user_id?: string | null
-          vendor_name?: string | null
-          width?: number | null
+          vendor_uid?: string | null
         }
         Update: {
           analyzed_content?: Json | null
@@ -2951,20 +2945,16 @@ export type Database = {
           chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
           correlation_id?: string | null
           created_at?: string | null
-          duration?: number | null
           edit_date?: string | null
           edit_history?: Json | null
-          error?: string | null
           error_message?: string | null
           file_id?: string | null
-          file_size?: number | null
           file_unique_id?: string | null
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
           group_last_message_time?: string | null
           group_message_count?: never
-          height?: number | null
           id?: string | null
           is_edited?: boolean | null
           is_miscellaneous_item?: boolean | null
@@ -2974,27 +2964,24 @@ export type Database = {
           message_url?: string | null
           mime_type?: string | null
           processing_completed_at?: string | null
-          processing_correlation_id?: string | null
           processing_started_at?: string | null
           processing_state?:
             | Database["public"]["Enums"]["processing_state_type"]
             | null
+          product_code?: string | null
           product_name?: string | null
           product_quantity?: number | null
-          product_sku?: string | null
           product_unit?: never
           public_url?: string | null
           purchase_date?: string | null
-          purchase_order?: string | null
+          purchase_order_uid?: string | null
           retry_count?: number | null
           storage_path?: string | null
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           updated_at?: string | null
-          user_id?: string | null
-          vendor_name?: string | null
-          width?: number | null
+          vendor_uid?: string | null
         }
         Relationships: []
       }
@@ -3487,7 +3474,7 @@ export type Database = {
         Args: {
           chat_type: Database["public"]["Enums"]["telegram_chat_type"]
           chat_id: number
-          message_id: number
+          message_id: string
         }
         Returns: string
       }
