@@ -23,18 +23,11 @@ export function useMessageViewHandlers() {
   const { filteredMessages } = useFilteredMessages();
 
   // Viewer state
-  const [viewerState, setViewerState] = useState<ViewerState>({
-    isOpen: false,
-    currentGroup: [],
-    groupIndex: 0,
-    Viewer: null
-  });
+  const [viewerState, setViewerState] = useState<ViewerState | null>(null);
   
   // Message selection
   const handleMessageSelect = (message: Message) => {
     setSelectedMessage(message);
-    
-    if (!setDetailsOpen) return;
     setDetailsOpen(true);
     
     logEvent(
@@ -56,7 +49,7 @@ export function useMessageViewHandlers() {
     
     let currentIndex = 0;
     
-    if (filteredMessages) {
+    if (filteredMessages && Array.isArray(filteredMessages)) {
       const index = filteredMessages.findIndex(group => 
         group && Array.isArray(group) && group.length > 0 && 
         messageGroup[0] && group[0].id === messageGroup[0].id
@@ -74,7 +67,7 @@ export function useMessageViewHandlers() {
       Viewer: (
         <MediaViewer
           isOpen={true}
-          onClose={() => setViewerState(prev => ({ ...prev, isOpen: false }))}
+          onClose={() => setViewerState(prev => prev ? { ...prev, isOpen: false } : null)}
           currentGroup={messageGroup}
           onNext={handleNextGroup}
           onPrevious={handlePreviousGroup}
@@ -99,19 +92,21 @@ export function useMessageViewHandlers() {
 
   // Navigation within viewer
   const handlePreviousGroup = () => {
+    if (!viewerState) return;
+    
     if (filteredMessages && Array.isArray(filteredMessages) && viewerState.groupIndex > 0) {
       const prevIndex = viewerState.groupIndex - 1;
       const prevGroup = filteredMessages[prevIndex];
       
       if (prevGroup && Array.isArray(prevGroup) && prevGroup.length > 0) {
-        setViewerState(prev => ({
-          ...prev,
+        setViewerState({
+          ...viewerState,
           currentGroup: [...prevGroup],
           groupIndex: prevIndex,
           Viewer: (
             <MediaViewer
               isOpen={true}
-              onClose={() => setViewerState(prev => ({ ...prev, isOpen: false }))}
+              onClose={() => setViewerState(prev => prev ? { ...prev, isOpen: false } : null)}
               currentGroup={[...prevGroup]}
               onNext={handleNextGroup}
               onPrevious={handlePreviousGroup}
@@ -119,25 +114,27 @@ export function useMessageViewHandlers() {
               hasPrevious={prevIndex > 0}
             />
           )
-        }));
+        });
       }
     }
   };
 
   const handleNextGroup = () => {
+    if (!viewerState) return;
+    
     if (filteredMessages && Array.isArray(filteredMessages) && viewerState.groupIndex < filteredMessages.length - 1) {
       const nextIndex = viewerState.groupIndex + 1;
       const nextGroup = filteredMessages[nextIndex];
       
       if (nextGroup && Array.isArray(nextGroup) && nextGroup.length > 0) {
-        setViewerState(prev => ({
-          ...prev,
+        setViewerState({
+          ...viewerState,
           currentGroup: [...nextGroup],
           groupIndex: nextIndex,
           Viewer: (
             <MediaViewer
               isOpen={true}
-              onClose={() => setViewerState(prev => ({ ...prev, isOpen: false }))}
+              onClose={() => setViewerState(prev => prev ? { ...prev, isOpen: false } : null)}
               currentGroup={[...nextGroup]}
               onNext={handleNextGroup}
               onPrevious={handlePreviousGroup}
@@ -145,7 +142,7 @@ export function useMessageViewHandlers() {
               hasPrevious={nextIndex > 0}
             />
           )
-        }));
+        });
       }
     }
   };

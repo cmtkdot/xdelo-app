@@ -43,7 +43,6 @@ const MessagesEnhanced = () => {
   useRealtimeUpdates({
     tables: ['messages', 'unified_audit_logs'],
     onUpdate: () => {
-      console.log('Real-time update received');
       queryClient.invalidateQueries({ queryKey: ['enhanced-messages'] });
       queryClient.invalidateQueries({ queryKey: ['message-analytics'] });
     }

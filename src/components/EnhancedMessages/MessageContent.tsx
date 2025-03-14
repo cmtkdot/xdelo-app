@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, FileX } from 'lucide-react';
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Message } from '@/types';
 import { MessageGridView } from './MessageGridView';
@@ -32,7 +32,7 @@ export function MessageContent({
   } = useFilteredMessages();
 
   const handleDataRefresh = () => {
-    refetch();
+    if (refetch) refetch();
   };
 
   if (isLoading) {
@@ -58,32 +58,18 @@ export function MessageContent({
     );
   }
 
-  // Safely flatten the messages array with proper type assertions
-  const messages = React.useMemo(() => {
-    if (!paginatedMessages || !Array.isArray(paginatedMessages)) {
-      return [] as Message[];
+  // Extract messages from pagination groups
+  const extractMessages = (messageGroups: Message[][]) => {
+    if (!messageGroups || !Array.isArray(messageGroups) || messageGroups.length === 0) {
+      return [];
     }
     
-    if (paginatedMessages.length === 0) {
-      return [] as Message[];
-    }
-    
-    // Check if it's a nested array (Message[][])
-    if (paginatedMessages.length > 0 && Array.isArray(paginatedMessages[0])) {
-      // First cast to unknown then to the correct type for safe conversion
-      const flattenedMessages = (paginatedMessages as unknown as Message[][]).flatMap(group => {
-        // Ensure each group is an array and not empty
-        if (Array.isArray(group) && group.length > 0) {
-          return group;
-        }
-        return [];
-      });
-      return flattenedMessages;
-    }
-    
-    // It's already a flat array
-    return paginatedMessages as unknown as Message[];
-  }, [paginatedMessages]);
+    return messageGroups.flatMap(group => 
+      Array.isArray(group) ? group : []
+    );
+  };
+
+  const messages = extractMessages(paginatedMessages);
 
   if (!messages.length) {
     return (
