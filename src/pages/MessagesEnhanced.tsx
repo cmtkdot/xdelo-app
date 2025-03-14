@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/integrations/supabase/client";
 import { Message, ProcessingState, LogEventType } from '@/types';
 import { useToast } from '@/hooks/useToast';
-import { useMediaGroups } from '@/hooks/useMediaGroups';
+import { useEnhancedMessages } from '@/hooks/useEnhancedMessages';
 import { useRealTimeMessages } from '@/hooks/useRealTimeMessages';
 import { logEvent } from '@/lib/logUtils';
 import { MediaViewer } from '@/components/MediaViewer/MediaViewer';
@@ -66,18 +66,21 @@ const MessagesEnhanced = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  // Use mediaGroupsData as the raw data and enforce proper typing
-  const { data: mediaGroupsRaw = [], isLoading, error, refetch } = useMediaGroups();
-  
-  // Ensure mediaGroups is properly typed and defensively handled
-  const mediaGroups = useMemo(() => {
-    // Ensure we have an array
-    if (!Array.isArray(mediaGroupsRaw)) {
-      console.warn('mediaGroupsRaw is not an array:', mediaGroupsRaw);
-      return [] as Message[][];
-    }
-    return mediaGroupsRaw;
-  }, [mediaGroupsRaw]);
+  // Use useEnhancedMessages hook instead of mediaGroupsData
+  const { 
+    groupedMessages: mediaGroups, 
+    isLoading, 
+    error, 
+    refetch,
+    isRefetching
+  } = useEnhancedMessages({
+    grouped: true,
+    limit: 500,
+    processingStates: filters.processingStates,
+    searchTerm: filters.search,
+    sortBy: filters.sortField,
+    sortOrder: filters.sortOrder
+  });
   
   const { messages: realtimeMessages, handleRefresh } = useRealTimeMessages({
     limit: 100,

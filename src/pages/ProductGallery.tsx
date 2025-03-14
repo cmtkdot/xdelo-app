@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/useToast";
 import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
 import { ProductPagination } from "@/components/ProductGallery/ProductPagination";
 import ProductFilters from "@/components/ProductGallery/ProductFilters";
-import { useMediaGroups } from "@/hooks/useMediaGroups";
+import { useEnhancedMessages } from "@/hooks/useEnhancedMessages";
 import { useVendors } from "@/hooks/useVendors";
 import { logEvent, LogEventType } from "@/lib/logUtils";
 import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
@@ -46,7 +46,19 @@ const ProductGallery = () => {
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: mediaGroupsData = [], isLoading } = useMediaGroups();
+  
+  // Replace useMediaGroups with useEnhancedMessages
+  const { 
+    groupedMessages: mediaGroupsData = [], 
+    isLoading 
+  } = useEnhancedMessages({
+    grouped: true,
+    limit: 500,
+    sortBy: filters.sortField as any,
+    sortOrder: filters.sortOrder as any,
+    searchTerm: filters.search
+  });
+  
   const { data: vendors = [] } = useVendors();
   const { handleDelete, isProcessing } = useTelegramOperations();
 
