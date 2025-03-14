@@ -2,27 +2,29 @@
 import React from 'react';
 import { MessageList } from './MessageList';
 import { MessageControlPanel } from './MessageControlPanel';
-import { useMediaGroups } from '@/hooks/useMediaGroups';
 import { Spinner } from '../ui/spinner';
 import { useCaptionSync } from '@/hooks/useCaptionSync';
 import { useToast } from '@/hooks/useToast';
+import { useEnhancedMessages } from '@/hooks/useEnhancedMessages';
 
 export function MessageListContainer() {
   const {
-    data: mediaGroups,
+    messages,
     isLoading,
     error,
     refetch,
     isRefetching
-  } = useMediaGroups();
+  } = useEnhancedMessages({
+    grouped: true, // Keep grouped for backward compatibility
+    limit: 500
+  });
 
   const { forceSyncMessageGroup } = useCaptionSync();
   const { toast } = useToast();
 
-  // Convert the grouped messages object to an array for rendering
-  // Ensure we handle invalid data safely
-  const messages = Array.isArray(mediaGroups) 
-    ? mediaGroups.flatMap(group => Array.isArray(group) ? group : [])
+  // Simply flatten the grouped messages
+  const flatMessages = Array.isArray(messages) 
+    ? messages.flatMap(group => Array.isArray(group) ? group : [])
     : [];
 
   const onRetryProcessing = async (messageId: string): Promise<void> => {
@@ -54,7 +56,7 @@ export function MessageListContainer() {
       <MessageControlPanel
         onRefresh={() => { void refetch(); }}
         isRefreshing={isRefetching}
-        messageCount={messages.length}
+        messageCount={flatMessages.length}
       />
 
       {isLoading ? (
@@ -67,7 +69,7 @@ export function MessageListContainer() {
         </div>
       ) : (
         <MessageList 
-          messages={messages}
+          messages={flatMessages}
           onRefresh={() => { void refetch(); }}
           onRetryProcessing={onRetryProcessing}
           processAllLoading={isRefetching}
