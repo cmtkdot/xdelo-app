@@ -1,51 +1,21 @@
 
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Calendar } from '@/components/ui/calendar';
-import { 
-  Popover, 
-  PopoverContent, 
-  PopoverTrigger 
-} from '@/components/ui/popover';
-import { 
-  Select, 
-  SelectContent, 
-  SelectGroup, 
-  SelectItem, 
-  SelectLabel, 
-  SelectTrigger, 
-  SelectValue 
-} from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
-import { 
-  Check, 
-  ChevronsUpDown, 
-  CalendarIcon, 
-  X, 
-  Plus,
-  Filter, 
-  Save,
-  FileDown,
-  FileUp
-} from 'lucide-react';
+import { Filter, X } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
 import { ProcessingState } from '@/types';
-import { Badge } from '@/components/ui/badge';
 import { useVendors } from '@/hooks/useVendors';
 import { useMessagesStore } from '@/hooks/useMessagesStore';
+
+// Import filter components
+import { SearchFilter } from './Filters/SearchFilter';
+import { ProcessingStateFilter } from './Filters/ProcessingStateFilter';
+import { MediaTypeFilter } from './Filters/MediaTypeFilter';
+import { VendorFilter } from './Filters/VendorFilter';
+import { DateRangeFilter } from './Filters/DateRangeFilter';
+import { ShowGroupsFilter } from './Filters/ShowGroupsFilter';
+import { FilterPresets } from './Filters/FilterPresets';
 
 export const EnhancedFiltersPanel: React.FC = () => {
   const { data: vendors = [] } = useVendors();
@@ -62,20 +32,7 @@ export const EnhancedFiltersPanel: React.FC = () => {
       ? { from: filters.dateRange.from, to: filters.dateRange.to } 
       : undefined
   );
-  const [vendorPopoverOpen, setVendorPopoverOpen] = useState(false);
   const [presetName, setPresetName] = useState('');
-  
-  // Selection options
-  const processingStateOptions: ProcessingState[] = [
-    'completed', 'processing', 'error', 'pending', 'initialized'
-  ];
-  
-  const mediaTypeOptions = [
-    { value: 'image', label: 'Images' },
-    { value: 'video', label: 'Videos' },
-    { value: 'application', label: 'Documents' },
-    { value: 'audio', label: 'Audio' }
-  ];
   
   // Apply filters to the store
   const applyFilters = () => {
@@ -153,6 +110,50 @@ export const EnhancedFiltersPanel: React.FC = () => {
     setPage(1);
   };
 
+  // Export filters
+  const exportFilters = () => {
+    const filtersData = JSON.stringify(filters, null, 2);
+    const blob = new Blob([filtersData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'message-filters.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Import filters
+  const importFilters = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const importedFilters = JSON.parse(event.target?.result as string);
+          setFilters(importedFilters);
+          setSearchTerm(importedFilters.search || '');
+          setProcessingStates(importedFilters.processingStates || []);
+          setSelectedVendors(importedFilters.vendors || []);
+          setMediaTypes(importedFilters.mediaTypes || []);
+          setShowGroups(importedFilters.showGroups ?? true);
+          setDate(importedFilters.dateRange);
+          setPage(1);
+        } catch (error) {
+          console.error('Failed to parse imported filters:', error);
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
   // Update local state when filters change
   useEffect(() => {
     setSearchTerm(filters.search);
@@ -190,340 +191,58 @@ export const EnhancedFiltersPanel: React.FC = () => {
       </div>
 
       <div className="space-y-4 flex-1 overflow-y-auto pr-1">
-        {/* Search */}
-        <div className="space-y-2">
-          <Label htmlFor="search">Search</Label>
-          <div className="flex gap-2">
-            <Input
-              id="search"
-              placeholder="Search messages..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1"
-            />
-            <Button 
-              variant="outline" 
-              onClick={applyFilters}
-              className="shrink-0"
-            >
-              Search
-            </Button>
-          </div>
-        </div>
+        {/* Search Filter */}
+        <SearchFilter 
+          searchTerm={searchTerm} 
+          setSearchTerm={setSearchTerm} 
+          applyFilters={applyFilters} 
+        />
 
-        {/* Processing State */}
-        <div className="space-y-2">
-          <Label>Processing State</Label>
-          <div className="flex flex-wrap gap-2">
-            {processingStateOptions.map((state) => (
-              <Badge
-                key={state}
-                variant={processingStates.includes(state) ? "default" : "outline"}
-                className="cursor-pointer"
-                onClick={() => {
-                  setProcessingStates(
-                    processingStates.includes(state)
-                      ? processingStates.filter((s) => s !== state)
-                      : [...processingStates, state]
-                  );
-                }}
-              >
-                {state}
-                {processingStates.includes(state) && (
-                  <X className="ml-1 h-3 w-3" />
-                )}
-              </Badge>
-            ))}
-          </div>
-        </div>
+        {/* Processing State Filter */}
+        <ProcessingStateFilter 
+          processingStates={processingStates}
+          setProcessingStates={setProcessingStates}
+        />
 
-        {/* Media Type */}
-        <div className="space-y-2">
-          <Label>Media Type</Label>
-          <div className="flex flex-wrap gap-2">
-            {mediaTypeOptions.map((type) => (
-              <Badge
-                key={type.value}
-                variant={mediaTypes.includes(type.value) ? "default" : "outline"}
-                className="cursor-pointer"
-                onClick={() => {
-                  setMediaTypes(
-                    mediaTypes.includes(type.value)
-                      ? mediaTypes.filter((t) => t !== type.value)
-                      : [...mediaTypes, type.value]
-                  );
-                }}
-              >
-                {type.label}
-                {mediaTypes.includes(type.value) && (
-                  <X className="ml-1 h-3 w-3" />
-                )}
-              </Badge>
-            ))}
-          </div>
-        </div>
+        {/* Media Type Filter */}
+        <MediaTypeFilter 
+          mediaTypes={mediaTypes}
+          setMediaTypes={setMediaTypes}
+        />
 
-        {/* Vendors */}
-        <div className="space-y-2">
-          <Label>Vendors</Label>
-          <Popover open={vendorPopoverOpen} onOpenChange={setVendorPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={vendorPopoverOpen}
-                className="w-full justify-between"
-              >
-                {selectedVendors.length === 0
-                  ? "Select vendors..."
-                  : `${selectedVendors.length} vendor${selectedVendors.length !== 1 ? 's' : ''} selected`}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[300px] p-0">
-              <Command>
-                <CommandInput placeholder="Search vendors..." />
-                <CommandList>
-                  <CommandEmpty>No vendors found.</CommandEmpty>
-                  <CommandGroup>
-                    {vendors.map((vendor) => (
-                      <CommandItem
-                        key={vendor}
-                        value={vendor}
-                        onSelect={() => {
-                          setSelectedVendors(
-                            selectedVendors.includes(vendor)
-                              ? selectedVendors.filter((v) => v !== vendor)
-                              : [...selectedVendors, vendor]
-                          );
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            selectedVendors.includes(vendor)
-                              ? "opacity-100"
-                              : "opacity-0"
-                          )}
-                        />
-                        {vendor}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-                <div className="border-t p-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="w-full" 
-                    onClick={() => {
-                      applyFilters();
-                      setVendorPopoverOpen(false);
-                    }}
-                  >
-                    Apply
-                  </Button>
-                </div>
-              </Command>
-            </PopoverContent>
-          </Popover>
-          
-          {selectedVendors.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
-              {selectedVendors.map((vendor) => (
-                <Badge key={vendor} variant="secondary" className="gap-1">
-                  {vendor}
-                  <X
-                    className="h-3 w-3 cursor-pointer"
-                    onClick={() => {
-                      setSelectedVendors(selectedVendors.filter((v) => v !== vendor));
-                    }}
-                  />
-                </Badge>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Vendors Filter */}
+        <VendorFilter 
+          vendors={vendors}
+          selectedVendors={selectedVendors}
+          setSelectedVendors={setSelectedVendors}
+          applyFilters={applyFilters}
+        />
 
-        {/* Date Range */}
-        <div className="space-y-2">
-          <Label>Date Range</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !date && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {date?.from ? (
-                  date.to ? (
-                    <>
-                      {format(date.from, "LLL dd, y")} -{" "}
-                      {format(date.to, "LLL dd, y")}
-                    </>
-                  ) : (
-                    format(date.from, "LLL dd, y")
-                  )
-                ) : (
-                  <span>Pick a date range</span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="range"
-                selected={date || undefined}
-                onSelect={setDate}
-                initialFocus
-              />
-              <div className="p-2 border-t border-border">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full" 
-                  onClick={applyFilters}
-                >
-                  Apply Date Range
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-          
-          {date && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="mt-1 h-7 px-2 text-xs" 
-              onClick={() => {
-                setDate(null);
-                applyFilters();
-              }}
-            >
-              <X className="mr-1 h-3 w-3" />
-              Clear dates
-            </Button>
-          )}
-        </div>
+        {/* Date Range Filter */}
+        <DateRangeFilter 
+          date={date}
+          setDate={setDate}
+          applyFilters={applyFilters}
+        />
 
         {/* Show Groups Toggle */}
-        <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="show-groups" 
-            checked={showGroups} 
-            onCheckedChange={(checked) => setShowGroups(Boolean(checked))} 
-          />
-          <Label htmlFor="show-groups">Show Media Groups</Label>
-        </div>
+        <ShowGroupsFilter 
+          showGroups={showGroups}
+          setShowGroups={setShowGroups}
+        />
 
         <Separator className="my-4" />
 
         {/* Presets */}
-        <div className="space-y-3">
-          <h4 className="text-sm font-medium">Filter Presets</h4>
-          
-          <div className="flex gap-2">
-            <Input
-              placeholder="Preset name"
-              value={presetName}
-              onChange={(e) => setPresetName(e.target.value)}
-              className="flex-1"
-            />
-            <Button 
-              variant="outline" 
-              onClick={handleSavePreset} 
-              disabled={!presetName.trim()}
-              size="icon"
-            >
-              <Save className="h-4 w-4" />
-            </Button>
-          </div>
-          
-          {Object.keys(presetFilters).length > 0 && (
-            <div className="space-y-2">
-              <Label>Saved Presets</Label>
-              <Select onValueChange={handleLoadPreset}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a preset" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel>Presets</SelectLabel>
-                    {Object.keys(presetFilters).map((name) => (
-                      <SelectItem key={name} value={name}>
-                        {name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="flex-1 gap-1"
-              onClick={() => {
-                // This would trigger a file download with the current filters
-                const filtersData = JSON.stringify(filters, null, 2);
-                const blob = new Blob([filtersData], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'message-filters.json';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-              }}
-            >
-              <FileDown className="h-4 w-4" />
-              Export
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="flex-1 gap-1"
-              onClick={() => {
-                // This would trigger a file upload for importing filters
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'application/json';
-                input.onchange = (e) => {
-                  const file = (e.target as HTMLInputElement).files?.[0];
-                  if (!file) return;
-                  
-                  const reader = new FileReader();
-                  reader.onload = (event) => {
-                    try {
-                      const importedFilters = JSON.parse(event.target?.result as string);
-                      setFilters(importedFilters);
-                      setSearchTerm(importedFilters.search || '');
-                      setProcessingStates(importedFilters.processingStates || []);
-                      setSelectedVendors(importedFilters.vendors || []);
-                      setMediaTypes(importedFilters.mediaTypes || []);
-                      setShowGroups(importedFilters.showGroups ?? true);
-                      setDate(importedFilters.dateRange);
-                      setPage(1);
-                    } catch (error) {
-                      console.error('Failed to parse imported filters:', error);
-                    }
-                  };
-                  reader.readAsText(file);
-                };
-                input.click();
-              }}
-            >
-              <FileUp className="h-4 w-4" />
-              Import
-            </Button>
-          </div>
-        </div>
+        <FilterPresets 
+          presetName={presetName}
+          setPresetName={setPresetName}
+          presetFilters={presetFilters}
+          handleSavePreset={handleSavePreset}
+          handleLoadPreset={handleLoadPreset}
+          exportFilters={exportFilters}
+          importFilters={importFilters}
+        />
       </div>
       
       <div className="pt-4 border-t mt-4">

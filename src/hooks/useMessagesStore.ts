@@ -1,10 +1,9 @@
-
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ProcessingState } from '@/types';
 import { format } from 'date-fns';
 
-interface FilterState {
+export interface FilterState {
   search: string;
   processingStates: ProcessingState[];
   mediaTypes: string[];
