@@ -2024,6 +2024,11 @@ export type Database = {
           needs_redownload: boolean | null
           notes: string | null
           old_analyzed_content: Json[] | null
+          old_product_code: string | null
+          old_product_name: string | null
+          old_product_quantity: number | null
+          old_purchase_date: string | null
+          old_vendor_uid: string | null
           original_file_id: string | null
           original_message_id: string | null
           processing_attempts: number | null
@@ -2108,6 +2113,11 @@ export type Database = {
           needs_redownload?: boolean | null
           notes?: string | null
           old_analyzed_content?: Json[] | null
+          old_product_code?: string | null
+          old_product_name?: string | null
+          old_product_quantity?: number | null
+          old_purchase_date?: string | null
+          old_vendor_uid?: string | null
           original_file_id?: string | null
           original_message_id?: string | null
           processing_attempts?: number | null
@@ -2192,6 +2202,11 @@ export type Database = {
           needs_redownload?: boolean | null
           notes?: string | null
           old_analyzed_content?: Json[] | null
+          old_product_code?: string | null
+          old_product_name?: string | null
+          old_product_quantity?: number | null
+          old_purchase_date?: string | null
+          old_vendor_uid?: string | null
           original_file_id?: string | null
           original_message_id?: string | null
           processing_attempts?: number | null

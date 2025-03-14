@@ -9,6 +9,8 @@ import { MessageFiltersHeader } from '@/components/EnhancedMessages/MessageFilte
 import { MessageContent } from '@/components/EnhancedMessages/MessageContent';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useFilteredMessages } from '@/hooks/useFilteredMessages';
+import { ResponsiveContainer } from '@/components/ui/responsive-container';
+import { useIsMobile } from '@/hooks/useMobile';
 
 const MessagesEnhanced = () => {
   const { 
@@ -19,6 +21,7 @@ const MessagesEnhanced = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { refetch } = useFilteredMessages() || {};
+  const isMobile = useIsMobile();
   
   // Setup handlers for message interactions
   const {
@@ -63,7 +66,11 @@ const MessagesEnhanced = () => {
   };
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <ResponsiveContainer 
+      mobilePadding={isMobile ? "sm" : "md"}
+      className="py-4 space-y-4"
+      maxWidth="full"
+    >
       {/* Header with refresh button */}
       <MessageFiltersHeader onRefresh={handleDataRefresh} />
       
@@ -82,7 +89,7 @@ const MessagesEnhanced = () => {
       
       {/* Media viewer modal */}
       {viewerState?.isOpen && viewerState.Viewer}
-    </div>
+    </ResponsiveContainer>
   );
 };
 

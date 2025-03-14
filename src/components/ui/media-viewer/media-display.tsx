@@ -9,6 +9,11 @@ import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/useMobile';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
+import { 
+  Sheet, 
+  SheetContent, 
+  SheetClose 
+} from '@/components/ui/sheet';
 
 interface MediaDisplayProps {
   message: Message;
@@ -19,6 +24,7 @@ export function MediaDisplay({ message, className }: MediaDisplayProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isZoomed, setIsZoomed] = useState(false);
+  const [fullscreenSheetOpen, setFullscreenSheetOpen] = useState(false);
   const isMobile = useIsMobile();
 
   // Safety check for valid message
@@ -49,8 +55,63 @@ export function MediaDisplay({ message, className }: MediaDisplayProps) {
   };
 
   const toggleZoom = () => {
-    setIsZoomed(!isZoomed);
+    if (isMobile) {
+      setFullscreenSheetOpen(!fullscreenSheetOpen);
+    } else {
+      setIsZoomed(!isZoomed);
+    }
   };
+
+  const VideoPlayer = () => (
+    <AspectRatio ratio={16/9} className="w-full max-w-full h-auto">
+      <video
+        src={message.public_url}
+        className="w-full h-full object-contain rounded-md"
+        controls
+        playsInline
+        onLoadedData={handleLoadSuccess}
+        onError={() => handleLoadError('video')}
+        controlsList="nodownload"
+      />
+    </AspectRatio>
+  );
+  
+  const ImageDisplay = ({ fullscreen = false }) => (
+    <img 
+      src={message.public_url} 
+      alt={message.caption || "Media"}
+      className={cn(
+        "transition-all duration-300 ease-in-out rounded-md",
+        fullscreen || isZoomed
+          ? "max-w-none max-h-none object-contain w-full h-full" 
+          : "max-w-[85%] max-h-[85%] object-contain mx-auto"
+      )}
+      onLoad={handleLoadSuccess}
+      onError={() => handleLoadError('image')}
+    />
+  );
+
+  const MobileFullscreenSheet = () => (
+    <Sheet open={fullscreenSheetOpen} onOpenChange={setFullscreenSheetOpen}>
+      <SheetContent 
+        side="bottom" 
+        className="h-[90vh] p-0 flex flex-col justify-center rounded-t-lg border-t"
+      >
+        <SheetClose className="absolute right-4 top-4 z-50">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8 rounded-full bg-background/40 hover:bg-background/60"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </SheetClose>
+        <div className="flex items-center justify-center w-full h-full">
+          <ImageDisplay fullscreen={true} />
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
 
   return (
     <div className={cn(
@@ -104,7 +165,7 @@ export function MediaDisplay({ message, className }: MediaDisplayProps) {
       )}
       
       {/* Exit zoom button when zoomed */}
-      {isZoomed && !isVideo && (
+      {isZoomed && !isVideo && !isMobile && (
         <Button 
           variant="ghost" 
           size="icon" 
@@ -118,41 +179,25 @@ export function MediaDisplay({ message, className }: MediaDisplayProps) {
       {/* Media content */}
       {isVideo ? (
         <div className="w-full max-h-full flex items-center justify-center">
-          <AspectRatio ratio={16/9} className="w-full max-w-[95%] h-auto">
-            <video
-              src={message.public_url}
-              className="w-full h-full object-contain rounded-md"
-              controls
-              playsInline
-              onLoadedData={handleLoadSuccess}
-              onError={() => handleLoadError('video')}
-              controlsList="nodownload"
-            />
-          </AspectRatio>
+          <VideoPlayer />
         </div>
       ) : (
-        <div 
-          className={cn(
-            "transition-all duration-300 ease-in-out w-full h-full flex items-center justify-center",
-            {
-              "fixed inset-0 bg-background/90 z-50 p-4": isZoomed && isMobile,
-            }
-          )}
-          onClick={isMobile && !isZoomed ? toggleZoom : undefined}
-        >
-          <img 
-            src={message.public_url} 
-            alt={message.caption || "Media"}
+        <>
+          <div 
             className={cn(
-              "transition-all duration-300 ease-in-out rounded-md",
-              isZoomed 
-                ? "max-w-none max-h-none object-contain w-full h-full" 
-                : "max-w-[85%] max-h-[85%] object-contain mx-auto"
+              "transition-all duration-300 ease-in-out w-full h-full flex items-center justify-center",
+              {
+                "fixed inset-0 bg-background/90 z-50 p-4": isZoomed && !isMobile,
+              }
             )}
-            onLoad={handleLoadSuccess}
-            onError={() => handleLoadError('image')}
-          />
-        </div>
+            onClick={isMobile ? toggleZoom : undefined}
+          >
+            <ImageDisplay />
+          </div>
+          
+          {/* Mobile fullscreen sheet */}
+          {isMobile && <MobileFullscreenSheet />}
+        </>
       )}
     </div>
   );
