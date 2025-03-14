@@ -1,8 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MediaItem } from '@/types';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
-import { cn } from "@/lib/generalUtils";
+import { cn } from "@/lib/utils";
+import { useCarousel } from "@/components/ui/carousel";
+import { type CarouselApi } from '@/components/ui/carousel';
 
 interface MediaDisplayProps {
   mediaItems: MediaItem[];
@@ -18,12 +20,32 @@ export function MediaDisplay({
   className
 }: MediaDisplayProps) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const [api, setApi] = useState<CarouselApi | null>(null);
   
-  // Safely handle index change
-  const handleIndexChange = (index: number) => {
-    setActiveIndex(index);
-    onMediaChange(index);
-  };
+  // Set up the carousel API and handle index changes
+  useEffect(() => {
+    if (!api) return;
+    
+    // Handle when the carousel changes slides
+    const onSelect = () => {
+      const currentIndex = api.selectedScrollSnap();
+      setActiveIndex(currentIndex);
+      onMediaChange(currentIndex);
+    };
+    
+    // Subscribe to the select event
+    api.on("select", onSelect);
+    
+    // Set initial position
+    if (initialIndex !== undefined && initialIndex >= 0 && initialIndex < mediaItems.length) {
+      api.scrollTo(initialIndex);
+    }
+    
+    // Cleanup
+    return () => {
+      api.off("select", onSelect);
+    };
+  }, [api, initialIndex, mediaItems.length, onMediaChange]);
 
   // If there are no media items, show empty state
   if (!mediaItems || mediaItems.length === 0) {
@@ -39,18 +61,11 @@ export function MediaDisplay({
       {mediaItems.length > 1 ? (
         <Carousel 
           className="w-full h-full"
-          // Fix: Use proper event handler that extracts the index
-          onSelect={(event) => {
-            const api = event.target;
-            // Get the current index from the carousel API
-            if (api && typeof api.selectedScrollSnap === 'function') {
-              const index = api.selectedScrollSnap();
-              if (typeof index === 'number') {
-                handleIndexChange(index);
-              }
-            }
+          setApi={setApi}
+          opts={{
+            startIndex: initialIndex,
+            align: "center"
           }}
-          defaultIndex={initialIndex}
         >
           <CarouselContent className="h-full">
             {mediaItems.map((item, index) => (
