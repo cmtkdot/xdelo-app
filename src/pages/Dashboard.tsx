@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -93,6 +94,7 @@ const Dashboard = () => {
           file_unique_id,
           public_url,
           mime_type,
+          file_size,
           width,
           height,
           duration,
