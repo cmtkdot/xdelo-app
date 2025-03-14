@@ -58,11 +58,12 @@ export function MessageContent({
     );
   }
 
-  // Check if paginatedMessages exists and flatten if it's a 2D array
-  const messages = paginatedMessages && Array.isArray(paginatedMessages) 
+  // Ensure we have a flat array of messages to pass to our components
+  // Use type assertion to tell TypeScript that we're handling the conversion correctly
+  const messages: Message[] = paginatedMessages && Array.isArray(paginatedMessages) 
     ? Array.isArray(paginatedMessages[0]) 
-      ? paginatedMessages.flat() 
-      : paginatedMessages
+      ? (paginatedMessages as Message[][]).flat() 
+      : (paginatedMessages as Message[])
     : [];
 
   if (!messages.length) {
