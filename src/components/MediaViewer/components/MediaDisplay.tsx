@@ -1,10 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { MediaItem } from '@/types';
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious, type CarouselApi } from "@/components/ui/carousel";
 import { cn } from "@/lib/utils";
-import { useCarousel } from "@/components/ui/carousel";
-import { type CarouselApi } from '@/components/ui/carousel';
 
 interface MediaDisplayProps {
   mediaItems: MediaItem[];
