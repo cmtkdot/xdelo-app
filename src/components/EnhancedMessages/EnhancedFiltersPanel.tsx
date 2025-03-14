@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Filter, X } from 'lucide-react';
+import { Filter } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import { ProcessingState } from '@/types';
 import { useVendors } from '@/hooks/useVendors';
@@ -16,6 +15,8 @@ import { VendorFilter } from './Filters/VendorFilter';
 import { DateRangeFilter } from './Filters/DateRangeFilter';
 import { ShowGroupsFilter } from './Filters/ShowGroupsFilter';
 import { FilterPresets } from './Filters/FilterPresets';
+import { FilterActions } from './Filters/FilterActions';
+import { FilterImportExport } from './Filters/FilterImportExport';
 
 export const EnhancedFiltersPanel: React.FC = () => {
   const { data: vendors = [] } = useVendors();
@@ -179,15 +180,10 @@ export const EnhancedFiltersPanel: React.FC = () => {
           Filters
         </h3>
         
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={clearFilters}
-          className="h-8 px-2 text-xs gap-1"
-        >
-          <X className="h-3.5 w-3.5" />
-          Clear
-        </Button>
+        <FilterActions 
+          clearFilters={clearFilters}
+          applyFilters={applyFilters}
+        />
       </div>
 
       <div className="space-y-4 flex-1 overflow-y-auto pr-1">
@@ -243,12 +239,12 @@ export const EnhancedFiltersPanel: React.FC = () => {
           exportFilters={exportFilters}
           importFilters={importFilters}
         />
-      </div>
-      
-      <div className="pt-4 border-t mt-4">
-        <Button className="w-full" onClick={applyFilters}>
-          Apply Filters
-        </Button>
+        
+        {/* Import/Export */}
+        <FilterImportExport 
+          exportFilters={exportFilters}
+          importFilters={importFilters}
+        />
       </div>
     </div>
   );

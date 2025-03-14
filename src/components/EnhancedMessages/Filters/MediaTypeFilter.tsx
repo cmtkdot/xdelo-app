@@ -35,7 +35,7 @@ export function MediaTypeFilter({ mediaTypes, setMediaTypes }: MediaTypeFilterPr
             key={type.value}
             value={type.value}
             className="gap-1.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
-            pressed={mediaTypes.includes(type.value)}
+            aria-pressed={mediaTypes.includes(type.value)}
             onClick={() => handleToggleChange(type.value)}
           >
             {type.icon}
