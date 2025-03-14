@@ -1,13 +1,15 @@
+
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { AnalyzedContent, Message } from "@/types";
+import { AnalyzedContent } from "@/types";
 import { PageContainer } from "@/components/Layout/PageContainer";
 import { MessagesTable } from "@/components/MessagesTable/MessagesTable";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
+import { useEnhancedMessages } from "@/hooks/useEnhancedMessages";
 
 const Dashboard = () => {
   const queryClient = useQueryClient();
@@ -30,7 +32,7 @@ const Dashboard = () => {
         },
         () => {
           // Invalidate and refetch messages
-          queryClient.invalidateQueries({ queryKey: ['messages'] });
+          queryClient.invalidateQueries({ queryKey: ['enhanced-messages'] });
         }
       )
       .subscribe();
@@ -76,57 +78,24 @@ const Dashboard = () => {
     fetchStats();
   }, []);
 
-  const { data: messages, isLoading, refetch } = useQuery({
-    queryKey: ['messages'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('v_messages_compatibility')
-        .select(`
-          id,
-          telegram_message_id,
-          chat_id,
-          chat_type,
-          chat_title,
-          media_group_id,
-          caption,
-          file_id,
-          file_unique_id,
-          public_url,
-          mime_type,
-          width,
-          height,
-          duration,
-          is_edited,
-          edit_date,
-          processing_state,
-          processing_started_at,
-          processing_completed_at,
-          analyzed_content,
-          error_message,
-          created_at,
-          updated_at,
-          message_url,
-          group_caption_synced,
-          retry_count,
-          last_error_at
-        `)
-        .not('analyzed_content', 'is', null)
-        .gt('caption', '')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      
-      // Transform data to ensure required fields have values
-      const safeMessages = (data || []).map(msg => ({
-        id: msg.id,
-        file_unique_id: msg.file_unique_id || `unknown-${msg.id}`,
-        public_url: msg.public_url || '/placeholder.svg',
-        ...msg
-      }));
-      
-      return safeMessages as Message[];
-    }
+  // Use the new hook with filter for messages with analyzed_content and caption
+  const { 
+    messages, 
+    isLoading, 
+    refetch,
+    isRefetching
+  } = useEnhancedMessages({
+    limit: 100,
+    enableRealtime: true,
+    grouped: false
   });
+
+  // Filter for messages with analyzed content and non-empty caption
+  const filteredMessages = messages.filter(msg => 
+    msg.analyzed_content && 
+    msg.caption && 
+    msg.caption.trim() !== ''
+  );
 
   if (isLoading) {
     return (
@@ -150,8 +119,9 @@ const Dashboard = () => {
             onClick={() => refetch()}
             variant="outline"
             size="sm"
+            disabled={isRefetching}
           >
-            Refresh
+            {isRefetching ? 'Refreshing...' : 'Refresh'}
           </Button>
         </div>
 
@@ -178,7 +148,7 @@ const Dashboard = () => {
           <TabsContent value="table">
             <Card className="p-4">
               <h2 className="text-lg font-semibold mb-4">Message Data</h2>
-              <MessagesTable messages={messages || []} />
+              <MessagesTable messages={filteredMessages} />
             </Card>
           </TabsContent>
           <TabsContent value="stats">

@@ -1,10 +1,10 @@
 
 import { useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MessagesTable } from "@/components/MessagesTable/MessagesTable";
 import { Card } from "@/components/ui/card";
-import { Message } from "@/types";
+import { useEnhancedMessages } from "@/hooks/useEnhancedMessages";
 
 const MediaTable = () => {
   const queryClient = useQueryClient();
@@ -22,7 +22,7 @@ const MediaTable = () => {
         },
         () => {
           // Invalidate and refetch messages
-          queryClient.invalidateQueries({ queryKey: ['messages'] });
+          queryClient.invalidateQueries({ queryKey: ['enhanced-messages'] });
         }
       )
       .subscribe();
@@ -32,57 +32,19 @@ const MediaTable = () => {
     };
   }, [queryClient]);
 
-  const { data: messages, isLoading } = useQuery({
-    queryKey: ['messages'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('v_messages_compatibility')
-        .select(`
-          id,
-          telegram_message_id,
-          chat_id,
-          chat_type,
-          chat_title,
-          media_group_id,
-          caption,
-          file_id,
-          file_unique_id,
-          public_url,
-          mime_type,
-          width,
-          height,
-          duration,
-          is_edited,
-          edit_date,
-          processing_state,
-          processing_started_at,
-          processing_completed_at,
-          analyzed_content,
-          error_message,
-          created_at,
-          updated_at,
-          message_url,
-          group_caption_synced,
-          retry_count,
-          last_error_at
-        `)
-        .not('analyzed_content', 'is', null)
-        .gt('caption', '')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      
-      // Ensure messages have the required fields
-      const safeMessages = (data || []).map(msg => ({
-        id: msg.id,
-        file_unique_id: msg.file_unique_id || `unknown-${msg.id}`,
-        public_url: msg.public_url || '/placeholder.svg',
-        ...msg
-      }));
-      
-      return safeMessages as Message[];
-    }
+  // Use the new hook with filter for messages with analyzed_content and caption
+  const { messages, isLoading } = useEnhancedMessages({
+    limit: 100,
+    enableRealtime: true,
+    grouped: false // We want a flat list for the table
   });
+
+  // Filter for messages with analyzed content and non-empty caption
+  const filteredMessages = messages.filter(msg => 
+    msg.analyzed_content && 
+    msg.caption && 
+    msg.caption.trim() !== ''
+  );
 
   if (isLoading) {
     return (
@@ -97,7 +59,7 @@ const MediaTable = () => {
   return (
     <div className="container mx-auto py-6 space-y-6">
       <h1 className="text-2xl font-bold">Media Table</h1>
-      <MessagesTable messages={messages || []} />
+      <MessagesTable messages={filteredMessages} />
     </div>
   );
 };
