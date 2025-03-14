@@ -11,11 +11,12 @@ import { MessageContent } from '@/components/EnhancedMessages/MessageContent';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 
 const MessagesEnhanced = () => {
+  const messagesStore = useMessagesStore();
   const { 
     detailsOpen = false, 
     analyticsOpen = false,
     refreshData 
-  } = useMessagesStore() || {};
+  } = messagesStore || {};
   
   const { toast } = useToast();
   const queryClient = useQueryClient();

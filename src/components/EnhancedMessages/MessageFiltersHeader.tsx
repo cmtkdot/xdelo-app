@@ -24,13 +24,13 @@ interface MessageFiltersHeaderProps {
 
 export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
   const { 
-    filters, 
+    filters = {}, 
     setFilters,
     detailsOpen, 
     setDetailsOpen,
     analyticsOpen, 
     setAnalyticsOpen 
-  } = useMessagesStore();
+  } = useMessagesStore() || {};
   
   const { total = 0, isLoading = false } = useFilteredMessages() || {};
   const [filtersVisible, setFiltersVisible] = React.useState(false);
@@ -55,6 +55,13 @@ export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
     mediaTypesLength + 
     (filters?.dateRange ? 1 : 0)
   );
+
+  // Define safe handler for setting filters
+  const handleSetFilters = (newFilters: any) => {
+    if (setFilters) {
+      setFilters({...(filters || {}), ...newFilters});
+    }
+  };
 
   return (
     <>
@@ -88,7 +95,7 @@ export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
             variant="outline" 
             size="sm" 
             className={cn("gap-2", analyticsOpen ? "bg-secondary" : "")}
-            onClick={() => setAnalyticsOpen(!analyticsOpen)}
+            onClick={() => setAnalyticsOpen && setAnalyticsOpen(!analyticsOpen)}
           >
             <BarChart3 className="h-4 w-4" />
             Analytics
@@ -97,7 +104,7 @@ export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
           <Tabs 
             defaultValue={filters?.view || 'grid'} 
             className="w-auto" 
-            onValueChange={(value) => setFilters({ ...filters, view: value as 'grid' | 'list' })}
+            onValueChange={(value) => handleSetFilters({ view: value as 'grid' | 'list' })}
           >
             <TabsList className="h-9">
               <TabsTrigger value="grid" className="px-3">
@@ -128,7 +135,7 @@ export function MessageFiltersHeader({ onRefresh }: MessageFiltersHeaderProps) {
             variant="outline" 
             size="sm" 
             className={cn("gap-2", detailsOpen ? "bg-secondary" : "")}
-            onClick={() => setDetailsOpen(!detailsOpen)}
+            onClick={() => setDetailsOpen && setDetailsOpen(!detailsOpen)}
           >
             <PanelRight className="h-4 w-4" />
             Details
