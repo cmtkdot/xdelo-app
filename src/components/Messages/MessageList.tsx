@@ -9,7 +9,6 @@ interface MessageListProps {
   isLoading?: boolean;
   onRetryProcessing?: (messageId: string) => Promise<void>;
   onRefresh?: () => void;
-  processAllLoading?: boolean;
 }
 
 export const MessageList: React.FC<MessageListProps> = ({
@@ -17,7 +16,6 @@ export const MessageList: React.FC<MessageListProps> = ({
   isLoading,
   onRetryProcessing = async () => {},
   onRefresh,
-  processAllLoading = false
 }) => {
   if (isLoading) {
     return (
@@ -44,7 +42,6 @@ export const MessageList: React.FC<MessageListProps> = ({
             key={message.id} 
             message={message} 
             onRetryProcessing={onRetryProcessing} 
-            processAllLoading={processAllLoading}
           />
         ))}
       </div>

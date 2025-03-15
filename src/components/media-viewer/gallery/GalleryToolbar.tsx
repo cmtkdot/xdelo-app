@@ -107,84 +107,51 @@ export function GalleryToolbar({
         </div>
       </div>
       
-      {/* Media Tools Section */}
+      {/* Media Tools Section - Only shown when tools are toggled on */}
       {showTools && (
-        <div className="pt-2 border-t mt-2">
-          <div className="flex flex-wrap gap-2">
-            {/* Fix Content Disposition */}
-            <Button
-              variant="outline"
+        <div className="mt-2 pt-2 border-t">
+          <div className="grid grid-cols-2 gap-2">
+            <Button 
+              variant="outline" 
               size="sm"
-              className="flex items-center gap-1"
               disabled={isProcessingAny}
-              onClick={() => handleRepairAction(fixContentDispositionForMessage, currentMedia.id)}
+              onClick={() => currentMedia && handleRepairAction(fixContentDispositionForMessage, currentMedia.id)}
+              className="flex items-center gap-1"
             >
               <FileSearch className="h-4 w-4" />
-              <span>Fix Metadata</span>
-              {processingMessageIds[currentMedia.id] && (
-                <RefreshCw className="h-3 w-3 ml-1 animate-spin" />
-              )}
+              <span>Fix Disposition</span>
             </Button>
             
-            {/* Reupload from Telegram */}
-            <Button
-              variant="outline"
+            <Button 
+              variant="outline" 
               size="sm"
-              className="flex items-center gap-1"
               disabled={isProcessingAny}
-              onClick={() => handleRepairAction(reuploadMediaFromTelegram, currentMedia.id)}
+              onClick={() => currentMedia && handleRepairAction(reuploadMediaFromTelegram, currentMedia.id)}
+              className="flex items-center gap-1"
             >
               <RefreshCcw className="h-4 w-4" />
               <span>Reupload</span>
-              {processingMessageIds[currentMedia.id] && (
-                <RefreshCw className="h-3 w-3 ml-1 animate-spin" />
-              )}
             </Button>
             
-            {/* Group Repair - only show when multiple messages */}
-            {messageIds.length > 1 && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button 
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center gap-1"
-                    disabled={isProcessingAny}
-                  >
-                    <Wrench className="h-4 w-4" />
-                    <span>Group Repair</span>
-                    <ChevronDown className="h-3 w-3 ml-1" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-56 p-2">
-                  <div className="space-y-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start"
-                      disabled={isProcessingAny}
-                      onClick={() => repairMediaBatch(messageIds)}
-                    >
-                      <Wrench className="h-4 w-4 mr-2" />
-                      <span>Repair All Files</span>
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            )}
-            
-            {/* Direct Download Link */}
-            {currentMedia?.public_url && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-1"
-                onClick={() => window.open(currentMedia.public_url, '_blank')}
-              >
-                <Download className="h-4 w-4" />
-                <span>Download</span>
-              </Button>
-            )}
+            <Button 
+              variant="outline" 
+              size="sm"
+              disabled={isProcessingAny || messageIds.length === 0}
+              onClick={() => repairMediaBatch(messageIds)}
+              className="flex items-center gap-1 col-span-2"
+            >
+              <Wrench className="h-4 w-4" />
+              <span>
+                {isProcessingAny ? (
+                  <>
+                    <RefreshCw className="h-3 w-3 inline animate-spin mr-1" />
+                    Repairing...
+                  </>
+                ) : (
+                  `Repair All (${messageIds.length})`
+                )}
+              </span>
+            </Button>
           </div>
         </div>
       )}

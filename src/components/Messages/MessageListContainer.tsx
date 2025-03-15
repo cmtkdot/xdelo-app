@@ -3,7 +3,6 @@ import React from 'react';
 import { MessageList } from './MessageList';
 import { MessageControlPanel } from './MessageControlPanel';
 import { Spinner } from '../ui/spinner';
-import { useCaptionSync } from '@/hooks/useCaptionSync';
 import { useToast } from '@/hooks/useToast';
 import { useEnhancedMessages } from '@/hooks/useEnhancedMessages';
 import { useMediaUtils } from '@/hooks/useMediaUtils';
@@ -20,7 +19,6 @@ export function MessageListContainer() {
     limit: 500
   });
 
-  const { syncMessageCaption } = useCaptionSync();
   const { processMessage } = useMediaUtils();
   const { toast } = useToast();
 
@@ -33,13 +31,12 @@ export function MessageListContainer() {
     try {
       toast({
         title: "Processing Message",
-        description: "Analyzing caption and syncing with media group..."
+        description: "Analyzing message content..."
       });
       
       const result = await processMessage(messageId);
       
       if (result.success) {
-        await syncMessageCaption({ messageId });
         void refetch();
         
         toast({
@@ -80,7 +77,6 @@ export function MessageListContainer() {
           messages={flatMessages}
           onRefresh={() => { void refetch(); }}
           onRetryProcessing={onRetryProcessing}
-          processAllLoading={isRefetching}
         />
       )}
     </div>

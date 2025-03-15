@@ -3,6 +3,7 @@ import { useState, useCallback } from 'react';
 import { Message } from '@/types/entities/Message';
 import { useToast } from '@/hooks/useToast';
 import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   fixContentDisposition,
   reuploadMediaFromTelegram,
@@ -13,6 +14,7 @@ import {
   reanalyzeMessageCaption,
   RepairResult
 } from '@/lib/mediaOperations';
+import { logEvent, LogEventType } from '@/lib/logUtils';
 
 /**
  * Unified hook for all media operations with improved error handling
@@ -21,6 +23,7 @@ export function useMediaUtils() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessageIds, setProcessingMessageIds] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Helper functions for tracking processing state
   const addProcessingMessageId = useCallback((id: string) => {
@@ -271,6 +274,183 @@ export function useMediaUtils() {
     }
   }, [addProcessingMessageId, removeProcessingMessageId, toast]);
 
+  // Sync caption to all messages in the same media group
+  const syncMessageCaption = useCallback(async ({ messageId }: { messageId: string }): Promise<RepairResult> => {
+    try {
+      addProcessingMessageId(messageId);
+      
+      // Get the message first
+      const { data: message, error: messageError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', messageId)
+        .single();
+      
+      if (messageError || !message) {
+        throw new Error(`Could not find message: ${messageError?.message || 'Not found'}`);
+      }
+      
+      const mediaGroupId = message.media_group_id;
+      
+      if (!mediaGroupId) {
+        return {
+          success: false,
+          message: "Message is not part of a media group"
+        };
+      }
+      
+      // Call the edge function to sync the media group
+      const { data, error } = await supabase.functions.invoke('xdelo_sync_media_group', {
+        body: { 
+          message_id: messageId,
+          media_group_id: mediaGroupId,
+          force: true
+        }
+      });
+      
+      if (error) {
+        throw new Error(`Failed to sync media group: ${error.message}`);
+      }
+      
+      // Log the operation and refresh data
+      await logEvent(
+        LogEventType.SYNC_COMPLETED,
+        messageId,
+        {
+          operation: 'caption_sync',
+          media_group_id: mediaGroupId,
+          result: data
+        }
+      );
+      
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+      queryClient.invalidateQueries({ queryKey: ['media-groups'] });
+      
+      toast({
+        title: "Caption Synced",
+        description: "Caption has been synced to all messages in the media group"
+      });
+      
+      return {
+        success: true,
+        message: "Caption synced successfully",
+        data
+      };
+      
+    } catch (error) {
+      console.error("Error syncing caption:", error);
+      
+      toast({
+        title: "Sync Failed",
+        description: error.message || "Failed to sync caption to media group",
+        variant: "destructive"
+      });
+      
+      return {
+        success: false,
+        message: error.message || "Unknown error during caption sync"
+      };
+    } finally {
+      removeProcessingMessageId(messageId);
+    }
+  }, [addProcessingMessageId, removeProcessingMessageId, queryClient, toast]);
+
+  // Process all pending messages
+  const processAllPendingMessages = useCallback(async (): Promise<RepairResult> => {
+    try {
+      setIsProcessing(true);
+      
+      // Fetch all pending messages
+      const { data: pendingMessages, error: pendingMessagesError } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('processing_state', 'pending')
+        .limit(100);
+      
+      if (pendingMessagesError) {
+        throw new Error(`Failed to fetch pending messages: ${pendingMessagesError.message}`);
+      }
+      
+      const messageIds = pendingMessages?.map(m => m.id) || [];
+      
+      if (messageIds.length === 0) {
+        toast({
+          title: "No Pending Messages",
+          description: "There are no pending messages to process."
+        });
+        
+        return {
+          success: true,
+          message: "No pending messages found"
+        };
+      }
+      
+      // Mark all messages as processing
+      messageIds.forEach(id => addProcessingMessageId(id));
+      
+      // Process each message in sequence
+      let successful = 0;
+      let failed = 0;
+      
+      for (const id of messageIds) {
+        try {
+          const result = await processMessage(id);
+          if (result.success) {
+            successful++;
+          } else {
+            failed++;
+          }
+        } catch (err) {
+          console.error(`Error processing message ${id}:`, err);
+          failed++;
+        }
+      }
+      
+      // Log the batch processing operation
+      await logEvent(
+        LogEventType.BATCH_OPERATION,
+        'batch_process',
+        {
+          operation: 'process_pending',
+          total: messageIds.length,
+          successful,
+          failed
+        }
+      );
+      
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+      
+      toast({
+        title: "Processing Complete",
+        description: `Processed ${successful} of ${messageIds.length} messages successfully. ${failed} failed.`
+      });
+      
+      return {
+        success: true,
+        message: `Processed ${successful} of ${messageIds.length} messages`,
+        successful,
+        failed
+      };
+      
+    } catch (error) {
+      console.error("Error processing pending messages:", error);
+      
+      toast({
+        title: "Processing Failed",
+        description: error.message || "Failed to process pending messages",
+        variant: "destructive"
+      });
+      
+      return {
+        success: false,
+        message: error.message || "Unknown error during batch processing"
+      };
+    } finally {
+      setIsProcessing(false);
+      setProcessingMessageIds({});
+    }
+  }, [setIsProcessing, addProcessingMessageId, queryClient, toast]);
+
   return {
     // State
     isProcessing,
@@ -281,10 +461,12 @@ export function useMediaUtils() {
     reuploadMediaFromTelegram: reuploadMedia,
     processMessage: processMessageWithFeedback,
     reanalyzeMessageCaption: reanalyzeCaption,
+    syncMessageCaption,
     
     // Batch operations
     standardizeStoragePaths: standardizePaths,
     fixMediaUrls: fixUrls,
     repairMediaBatch: repairMessages,
+    processAllPendingMessages,
   };
 }

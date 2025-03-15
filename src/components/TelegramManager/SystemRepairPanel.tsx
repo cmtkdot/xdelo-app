@@ -18,7 +18,8 @@ export function SystemRepairPanel() {
   };
 
   const handleRepairFiles = async () => {
-    await repairMediaBatch([]);
+    const results = await repairMediaBatch([]);
+    setRepairResults(results);
   };
 
   return (

@@ -8,22 +8,19 @@ import { Spinner } from '@/components/ui/spinner';
 import type { Message } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { useMediaUtils } from '@/hooks/useMediaUtils';
-import { logEvent, LogEventType } from '@/lib/logUtils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface MessageCardProps {
   message: Message;
   onRetryProcessing: (messageId: string) => Promise<void>;
-  processAllLoading?: boolean;
 }
 
 export const MessageCard: React.FC<MessageCardProps> = ({ 
   message, 
   onRetryProcessing,
-  processAllLoading = false
 }) => {
   const { 
-    isProcessing,
+    processingMessageIds, 
     repairMediaBatch 
   } = useMediaUtils();
   
@@ -37,35 +34,13 @@ export const MessageCard: React.FC<MessageCardProps> = ({
   } = message;
 
   const handleRetry = async () => {
-    if (isProcessing) return;
+    if (processingMessageIds[id]) return;
     
     try {
-      // Log the retry attempt
-      await logEvent(
-        LogEventType.USER_ACTION,
-        id,
-        {
-          action: 'retry_processing',
-          previous_state: processing_state,
-          error_message
-        }
-      );
-      
       // Try the provided retry function first
       await onRetryProcessing(id);
     } catch (error) {
       console.error('Error in primary retry, attempting repair:', error);
-      
-      // Log the fallback to repair
-      await logEvent(
-        LogEventType.USER_ACTION,
-        id,
-        {
-          action: 'fallback_to_repair',
-          error: error instanceof Error ? error.message : String(error)
-        }
-      );
-      
       // Fall back to repair if the retry function fails
       await repairMediaBatch([id]);
     }
@@ -73,7 +48,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
 
   const isError = message.processing_state === 'error';
   const productDetails = analyzed_content ? (analyzed_content as any)?.product_name : null;
-  const isLoading = processAllLoading || isProcessing;
+  const isProcessing = processingMessageIds[id];
   
   // Format error message to be more user-friendly
   const formattedError = error_message ? 
@@ -116,12 +91,12 @@ export const MessageCard: React.FC<MessageCardProps> = ({
             {isError && (
               <Button 
                 onClick={handleRetry}
-                disabled={isLoading}
+                disabled={isProcessing}
                 variant="outline"
                 size="sm"
                 className="h-8 px-2"
               >
-                {isLoading ? (
+                {isProcessing ? (
                   <Spinner size="sm" className="mr-1" />
                 ) : (
                   <RefreshCw className="w-4 h-4 mr-1" />
