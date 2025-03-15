@@ -12,7 +12,7 @@ interface MessageViewContainerProps {
   isLoading: boolean;
   hasMoreItems: boolean;
   handleLoadMore: () => void;
-  handleViewMessage: (message: Message[]) => void;
+  handleViewMessage: (messages: Message[]) => void;
   handleEditMessage: (message: Message) => void;
   handleDeleteMessage: (id: string) => void;
   handleToggleSelect: (message: Message, selected: boolean) => void;
