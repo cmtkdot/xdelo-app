@@ -1,34 +1,27 @@
 
-import { xdelo_isViewableMimeType } from './mimeTypes';
-import { corsHeaders } from './corsUtils';
+import { corsHeaders } from './corsUtils.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
-// Get upload options with proper content disposition
-export function xdelo_getUploadOptions(mimeType: string): Record<string, any> {
-  const isViewable = xdelo_isViewableMimeType(mimeType);
-  
-  return {
-    contentType: mimeType || 'application/octet-stream',
-    upsert: true,
-    cacheControl: '3600',
-    contentDisposition: isViewable ? 'inline' : 'attachment'
-  };
-}
-
-// Upload file to storage with improved error handling
+/**
+ * Upload media to Supabase Storage with proper content type
+ */
 export async function xdelo_uploadMediaToStorage(
   storagePath: string,
-  fileData: Blob,
+  blob: Blob,
   mimeType: string,
-  messageId?: string,
-  bucket: string = 'telegram-media'
-): Promise<{ success: boolean; error?: string; publicUrl?: string }> {
+  messageId?: string
+): Promise<{
+  success: boolean;
+  publicUrl?: string;
+  error?: string;
+}> {
   try {
-    console.log(`Uploading file to storage: ${storagePath} with MIME type: ${mimeType}`);
+    if (!storagePath) {
+      throw new Error('Storage path is required');
+    }
     
-    // Get correct upload options based on mime type
-    const uploadOptions = xdelo_getUploadOptions(mimeType);
+    console.log(`Uploading to storage: ${storagePath} with MIME type: ${mimeType}`);
     
-    // Get Supabase client instance
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
@@ -36,90 +29,74 @@ export async function xdelo_uploadMediaToStorage(
       throw new Error('Missing Supabase credentials');
     }
     
-    // Import dynamically to avoid issues in edge function context
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.38.4');
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Upload the file with retry for network stability
-    let uploadError = null;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        const { error } = await supabase.storage
-          .from(bucket)
-          .upload(storagePath, fileData, uploadOptions);
-          
-        if (!error) {
-          uploadError = null;
-          break;
+    // Determine content disposition based on MIME type
+    const isViewableInBrowser = mimeType.startsWith('image/') || 
+      mimeType.startsWith('video/') || 
+      mimeType === 'application/pdf';
+    
+    const contentDisposition = isViewableInBrowser ? 'inline' : 'attachment';
+    
+    console.log(`Using content disposition: ${contentDisposition} for ${mimeType}`);
+    
+    // Upload file to storage
+    const { error: uploadError } = await supabase
+      .storage
+      .from('telegram-media')
+      .upload(storagePath, blob, {
+        contentType: mimeType,
+        cacheControl: '3600',
+        upsert: true,
+        duplex: 'half',
+        headers: {
+          ...corsHeaders,
+          'Content-Disposition': contentDisposition
         }
-        
-        uploadError = error;
-        console.warn(`Upload attempt ${attempt}/3 failed for ${storagePath}: ${error.message}`);
-        
-        // Wait with exponential backoff before retrying
-        if (attempt < 3) {
-          await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt - 1)));
-        }
-      } catch (err) {
-        uploadError = err;
-        console.warn(`Upload attempt ${attempt}/3 failed for ${storagePath}: ${err.message}`);
-        
-        // Wait with exponential backoff before retrying
-        if (attempt < 3) {
-          await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt - 1)));
-        }
-      }
-    }
+      });
     
     if (uploadError) {
-      throw new Error(`Storage upload failed after 3 attempts: ${uploadError.message}`);
+      throw uploadError;
     }
-
-    // Construct public URL
-    const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}`;
-    console.log(`File uploaded successfully, public URL: ${publicUrl}`);
     
-    // If messageId provided, update the message with the public URL
+    // Get public URL for the file
+    const { data: { publicUrl } } = supabase
+      .storage
+      .from('telegram-media')
+      .getPublicUrl(storagePath);
+    
+    console.log(`Successfully uploaded ${storagePath}, public URL: ${publicUrl}`);
+    
+    // If a message ID was provided, update the message with storage metadata
     if (messageId) {
       await supabase
         .from('messages')
         .update({
           storage_path: storagePath,
           public_url: publicUrl,
+          mime_type: mimeType,
+          content_disposition: contentDisposition,
           storage_exists: true,
           storage_path_standardized: true,
+          storage_metadata: {
+            content_type: mimeType,
+            content_disposition: contentDisposition,
+            uploaded_at: new Date().toISOString()
+          },
           updated_at: new Date().toISOString()
         })
         .eq('id', messageId);
     }
     
-    return { 
-      success: true, 
+    return {
+      success: true,
       publicUrl
     };
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('Error uploading media to storage:', error);
     return {
       success: false,
-      error: error.message
+      error: `Upload failed: ${error.message}`
     };
-  }
-}
-
-// Check if file exists in storage
-export async function xdelo_verifyFileExists(
-  supabase: any,
-  storagePath: string,
-  bucket: string = 'telegram-media'
-): Promise<boolean> {
-  try {
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .createSignedUrl(storagePath, 60);
-    
-    return !error && !!data;
-  } catch (error) {
-    console.error('Error verifying file existence:', error);
-    return false;
   }
 }

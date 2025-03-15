@@ -4,4 +4,3 @@ name = "telegram-webhook"
 version = 1
 path = "telegram-webhook"
 verify_jwt = false
-
