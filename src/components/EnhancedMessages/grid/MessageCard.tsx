@@ -8,7 +8,11 @@ import { cn } from '@/lib/utils';
 import { CardActions } from './CardActions';
 import { VideoThumbnail } from './VideoThumbnail';
 import { ImageThumbnail } from './ImageThumbnail';
-import { isVideoMessage, getProcessingStateColor, getVideoMetadata } from '../utils/mediaUtils';
+import { 
+  isVideoMessage, 
+  getProcessingStateColor, 
+  getVideoMetadata 
+} from '@/utils/mediaUtils';
 
 interface MessageCardProps {
   message: Message;
@@ -57,7 +61,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
     const videoMetadata = getVideoMetadata(message);
     // Try to seek to the middle or start of the video
     const seekTo = videoMetadata?.duration ? videoMetadata.duration / 2 : 
-                 message.duration ? message.duration / 2 : 1;
+               message.duration ? message.duration / 2 : 1;
     
     video.addEventListener('loadedmetadata', () => {
       video.currentTime = seekTo;

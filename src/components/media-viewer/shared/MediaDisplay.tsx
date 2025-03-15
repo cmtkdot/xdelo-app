@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { VideoPlayer } from './VideoPlayer';
 import { ImageViewer } from './ImageViewer';
 import { MediaDisplayProps } from '../types';
-import { isVideoMessage } from '@/components/EnhancedMessages/utils/mediaUtils';
+import { isVideoMessage } from '@/utils/mediaUtils';
 
 export function MediaDisplay({ message, className }: MediaDisplayProps) {
   if (!message || !message.public_url) {

@@ -1,5 +1,5 @@
 
-import { GalleryMediaViewer } from '@/components/media-viewer/gallery/GalleryMediaViewer';
+import { MediaViewer as BaseMediaViewer } from '@/components/media-viewer/MediaViewer';
 import type { Message } from '@/types';
 
 export interface MediaViewerProps {
@@ -14,9 +14,9 @@ export interface MediaViewerProps {
 }
 
 /**
- * MediaViewer component that delegates to the GalleryMediaViewer
+ * MediaViewer component that delegates to the MediaViewer implementation
  * This provides a compatibility layer for existing code
  */
 export function MediaViewer(props: MediaViewerProps) {
-  return <GalleryMediaViewer {...props} />;
+  return <BaseMediaViewer {...props} />;
 }

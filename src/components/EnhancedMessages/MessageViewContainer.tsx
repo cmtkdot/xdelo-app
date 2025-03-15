@@ -64,7 +64,7 @@ export function MessageViewContainer({
       <MessageListView
         messages={flatItems}
         onSelect={handleToggleSelect}
-        onView={handleViewMessage} // Now this is correct since handleViewMessage expects Message[]
+        onView={handleViewMessage}
         onEdit={handleEditMessage}
         onDelete={(message) => handleDeleteMessage(message.id)}
         selectedId={Object.keys(selectedMessages)[0]}
