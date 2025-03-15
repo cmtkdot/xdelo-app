@@ -15,7 +15,7 @@ export function MessageListContainer() {
     refetch,
     isRefetching
   } = useEnhancedMessages({
-    grouped: true, // Keep grouped for backward compatibility
+    grouped: true,
     limit: 500
   });
 

@@ -280,11 +280,11 @@ export function useMediaUtils() {
     fixContentDispositionForMessage,
     reuploadMediaFromTelegram: reuploadMedia,
     processMessage: processMessageWithFeedback,
-    reanalyzeMessageCaption,
+    reanalyzeMessageCaption: reanalyzeCaption,
     
     // Batch operations
-    standardizeStoragePaths,
-    fixMediaUrls,
-    repairMediaBatch,
+    standardizeStoragePaths: standardizePaths,
+    fixMediaUrls: fixUrls,
+    repairMediaBatch: repairMessages,
   };
 }

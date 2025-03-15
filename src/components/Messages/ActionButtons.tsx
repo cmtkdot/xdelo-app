@@ -5,18 +5,14 @@ import { Loader2, RefreshCw } from 'lucide-react';
 
 interface ActionButtonsProps {
   onRefresh: () => void;
-  onQueueUnprocessed: () => Promise<void>;
-  onProcessQueue: () => Promise<void>;
-  isProcessingAny: boolean;
   isRefreshing: boolean;
+  isProcessing?: boolean;
 }
 
 export const ActionButtons: React.FC<ActionButtonsProps> = ({
   onRefresh,
-  onQueueUnprocessed,
-  onProcessQueue,
-  isProcessingAny,
-  isRefreshing
+  isRefreshing,
+  isProcessing = false
 }) => {
   return (
     <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
@@ -24,28 +20,10 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
         variant="outline" 
         size="sm"
         onClick={onRefresh}
-        disabled={isProcessingAny}
+        disabled={isProcessing || isRefreshing}
       >
         <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
         Refresh
-      </Button>
-      <Button 
-        variant="secondary" 
-        size="sm"
-        onClick={onQueueUnprocessed}
-        disabled={isProcessingAny}
-      >
-        {isProcessingAny && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Find Unprocessed
-      </Button>
-      <Button 
-        variant="default" 
-        size="sm"
-        onClick={onProcessQueue}
-        disabled={isProcessingAny}
-      >
-        {isProcessingAny && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Process Queue
       </Button>
     </div>
   );
