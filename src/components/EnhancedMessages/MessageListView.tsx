@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Message } from '@/types';
 import { useIsMobile } from '@/hooks/useMobile';
 import { cn } from '@/lib/utils';
@@ -27,10 +27,17 @@ export function MessageListView({
   const [mediaErrors, setMediaErrors] = useState<Record<string, boolean>>({});
   
   // Handle media load error
-  const handleMediaError = (messageId: string) => {
+  const handleMediaError = useCallback((messageId: string) => {
     console.log(`Media load error for message: ${messageId}`);
     setMediaErrors(prev => ({ ...prev, [messageId]: true }));
-  };
+  }, []);
+
+  // Reset errors when messages change
+  useEffect(() => {
+    if (messages && messages.length > 0) {
+      setMediaErrors({});
+    }
+  }, [messages]);
 
   if (!messages || messages.length === 0) {
     return <EmptyList />;
