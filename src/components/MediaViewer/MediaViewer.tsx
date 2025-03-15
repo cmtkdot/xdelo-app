@@ -1,9 +1,8 @@
 
 import React from 'react';
-import { MediaViewer as EnhancedMediaViewer } from '@/components/ui/media-viewer';
+import { GalleryMediaViewer } from '@/components/media-viewer/gallery/GalleryMediaViewer';
 import { Message } from '@/types/entities/Message';
 
-// Use the standardized type definition
 export interface MediaViewerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -16,9 +15,9 @@ export interface MediaViewerProps {
 }
 
 /**
- * MediaViewer component that delegates to the enhanced implementation
+ * MediaViewer component that delegates to the gallery implementation
  * This provides a compatibility layer for older code using this component
  */
 export function MediaViewer(props: MediaViewerProps) {
-  return <EnhancedMediaViewer {...props} />;
+  return <GalleryMediaViewer {...props} />;
 }

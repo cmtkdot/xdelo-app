@@ -1,12 +1,11 @@
 
-import { useState } from 'react';
-import { Message, LogEventType } from '@/types';
-import { logEvent } from '@/lib/logUtils';
-import { useMessagesStore } from './useMessagesStore';
-import { MediaViewer } from '@/components/ui/media-viewer';
-import { useFilteredMessages } from './useFilteredMessages';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Message } from '@/types/entities/Message';
+import { GalleryMediaViewer } from '@/components/media-viewer/gallery/GalleryMediaViewer';
+import { useMediaOperations } from './useMediaOperations';
+import { useToast } from './useToast';
 
-export interface ViewerState {
+interface ViewerState {
   isOpen: boolean;
   currentGroup: Message[];
   groupIndex: number;
@@ -14,152 +13,77 @@ export interface ViewerState {
 }
 
 export function useMessageViewHandlers() {
-  const { 
-    selectedMessage, 
-    setSelectedMessage,
-    setDetailsOpen
-  } = useMessagesStore();
-  
-  const { filteredMessages } = useFilteredMessages();
-
-  // Viewer state
   const [viewerState, setViewerState] = useState<ViewerState | null>(null);
-  
-  // Message selection
-  const handleMessageSelect = (message: Message) => {
-    setSelectedMessage(message);
-    setDetailsOpen(true);
-    
-    logEvent(
-      LogEventType.USER_ACTION,
-      message.id,
-      {
-        action: 'select_message',
-        message_id: message.id
-      }
-    );
-  };
+  const [selectedItems, setSelectedItems] = useState<Message[]>([]);
+  const { deleteMessage } = useMediaOperations();
+  const { toast } = useToast();
 
-  // Message viewing in modal
-  const handleMessageView = (messageGroup: Message[]) => {
-    if (!messageGroup || !Array.isArray(messageGroup) || messageGroup.length === 0) {
-      console.warn('Invalid message group provided to handleMessageView');
-      return;
-    }
-    
-    let currentIndex = 0;
-    
-    if (filteredMessages && Array.isArray(filteredMessages)) {
-      const index = filteredMessages.findIndex(group => 
-        group && Array.isArray(group) && group.length > 0 && 
-        messageGroup[0] && group[0].id === messageGroup[0].id
-      );
-      
-      if (index !== -1) {
-        currentIndex = index;
+  // Handle selecting messages (e.g., for bulk operations)
+  const handleMessageSelect = useCallback((message: Message, selected: boolean) => {
+    setSelectedItems(prev => {
+      if (selected) {
+        return [...prev, message];
+      } else {
+        return prev.filter(m => m.id !== message.id);
       }
-    }
-    
+    });
+  }, []);
+
+  // Handle viewing a message in the media viewer
+  const handleMessageView = useCallback((group: Message[], index: number = 0) => {
     setViewerState({
       isOpen: true,
-      currentGroup: messageGroup,
-      groupIndex: currentIndex,
+      currentGroup: group,
+      groupIndex: index,
       Viewer: (
-        <MediaViewer
+        <GalleryMediaViewer
           isOpen={true}
-          onClose={() => setViewerState(prev => prev ? { ...prev, isOpen: false } : null)}
-          currentGroup={messageGroup}
-          onNext={handleNextGroup}
-          onPrevious={handlePreviousGroup}
-          hasNext={filteredMessages && Array.isArray(filteredMessages) && currentIndex < filteredMessages.length - 1}
-          hasPrevious={currentIndex > 0}
+          onClose={() => setViewerState(null)}
+          currentGroup={group}
+          className="z-50"
         />
       )
     });
-    
-    if (messageGroup[0]) {
-      logEvent(
-        LogEventType.USER_ACTION,
-        messageGroup[0].id,
-        {
-          action: 'view_message_group',
-          group_size: messageGroup.length,
-          media_group_id: messageGroup[0].media_group_id
-        }
-      );
+  }, []);
+
+  // Handle navigation to previous message group
+  const handlePreviousGroup = useCallback(() => {
+    // This would typically come from a parent component's state
+    console.log('Previous group navigation');
+  }, []);
+
+  // Handle navigation to next message group
+  const handleNextGroup = useCallback(() => {
+    // This would typically come from a parent component's state
+    console.log('Next group navigation');
+  }, []);
+
+  // Handle editing a message
+  const handleEditMessage = useCallback((message: Message) => {
+    console.log('Edit message:', message);
+  }, []);
+
+  // Handle deleting a message
+  const handleDeleteMessage = useCallback(async (message: Message) => {
+    try {
+      await deleteMessage(message.id);
+      toast({
+        title: "Message deleted",
+        description: "The message has been successfully deleted"
+      });
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      toast({
+        title: "Delete failed",
+        description: "There was an error deleting the message",
+        variant: "destructive"
+      });
     }
-  };
-
-  // Navigation within viewer
-  const handlePreviousGroup = () => {
-    if (!viewerState) return;
-    
-    if (filteredMessages && Array.isArray(filteredMessages) && viewerState.groupIndex > 0) {
-      const prevIndex = viewerState.groupIndex - 1;
-      const prevGroup = filteredMessages[prevIndex];
-      
-      if (prevGroup && Array.isArray(prevGroup) && prevGroup.length > 0) {
-        setViewerState({
-          ...viewerState,
-          currentGroup: [...prevGroup],
-          groupIndex: prevIndex,
-          Viewer: (
-            <MediaViewer
-              isOpen={true}
-              onClose={() => setViewerState(prev => prev ? { ...prev, isOpen: false } : null)}
-              currentGroup={[...prevGroup]}
-              onNext={handleNextGroup}
-              onPrevious={handlePreviousGroup}
-              hasNext={filteredMessages.length > prevIndex + 1}
-              hasPrevious={prevIndex > 0}
-            />
-          )
-        });
-      }
-    }
-  };
-
-  const handleNextGroup = () => {
-    if (!viewerState) return;
-    
-    if (filteredMessages && Array.isArray(filteredMessages) && viewerState.groupIndex < filteredMessages.length - 1) {
-      const nextIndex = viewerState.groupIndex + 1;
-      const nextGroup = filteredMessages[nextIndex];
-      
-      if (nextGroup && Array.isArray(nextGroup) && nextGroup.length > 0) {
-        setViewerState({
-          ...viewerState,
-          currentGroup: [...nextGroup],
-          groupIndex: nextIndex,
-          Viewer: (
-            <MediaViewer
-              isOpen={true}
-              onClose={() => setViewerState(prev => prev ? { ...prev, isOpen: false } : null)}
-              currentGroup={[...nextGroup]}
-              onNext={handleNextGroup}
-              onPrevious={handlePreviousGroup}
-              hasNext={filteredMessages.length > nextIndex + 1}
-              hasPrevious={nextIndex > 0}
-            />
-          )
-        });
-      }
-    }
-  };
-
-  // Message editing and deletion
-  const handleEditMessage = (message: Message) => {
-    setSelectedMessage(message);
-    // The actual edit dialog would be handled elsewhere
-  };
-
-  const handleDeleteMessage = (message: Message) => {
-    setSelectedMessage(message);
-    // The actual delete confirmation would be handled elsewhere
-  };
+  }, [deleteMessage, toast]);
 
   return {
     viewerState,
+    selectedItems,
     handleMessageSelect,
     handleMessageView,
     handlePreviousGroup,
