@@ -1,9 +1,6 @@
 
 import React from 'react';
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { RefreshCw, Wrench } from "lucide-react";
-import { useFileRepair } from '@/hooks/useFileRepair';
+import { ActionButtons } from './ActionButtons';
 
 interface MessageControlPanelProps {
   onRefresh: () => void;
@@ -11,42 +8,24 @@ interface MessageControlPanelProps {
   messageCount: number;
 }
 
-export function MessageControlPanel({ 
-  onRefresh, 
-  isRefreshing, 
+export const MessageControlPanel: React.FC<MessageControlPanelProps> = ({
+  onRefresh,
+  isRefreshing,
   messageCount
-}: MessageControlPanelProps) {
-  const { repairFiles, isRepairing } = useFileRepair();
-
+}) => {
   return (
-    <Card className="p-4">
-      <div className="flex flex-wrap gap-2 justify-between items-center">
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={onRefresh}
-            disabled={isRefreshing}
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => repairFiles({})}
-            disabled={isRepairing}
-          >
-            <Wrench className="mr-2 h-4 w-4" />
-            Repair Files
-          </Button>
-        </div>
-
-        <div className="text-sm text-muted-foreground">
-          Showing {messageCount} message{messageCount !== 1 ? 's' : ''}
-        </div>
+    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-background p-4 rounded-lg border">
+      <div>
+        <h2 className="text-xl font-semibold">Message Processing</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {messageCount} messages in queue
+        </p>
       </div>
-    </Card>
+      
+      <ActionButtons 
+        onRefresh={onRefresh}
+        isRefreshing={isRefreshing}
+      />
+    </div>
   );
-}
+};

@@ -7,18 +7,9 @@ import { Message } from '@/types';
 interface MessageControlsProps {
   message: Message;
   onRefresh: () => void;
-  queue: {
-    messages: Message[];
-    isLoading: boolean;
-    error: Error;
-    refetch: () => Promise<void>;
-    isRefetching: boolean;
-    stats: any;
-    handleRefresh: () => Promise<void>;
-  };
 }
 
-export function MessageControls({ message, onRefresh, queue }: MessageControlsProps) {
+export function MessageControls({ message, onRefresh }: MessageControlsProps) {
   return (
     <div className="flex gap-2 mt-2">
       <Button 
