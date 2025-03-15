@@ -1,20 +1,24 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Film, AlertCircle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Spinner } from '@/components/ui/spinner';
 import { Message } from '@/types/entities/Message';
+import { Button } from '@/components/ui/button';
 
 interface VideoPlayerProps {
   src: string;
   message: Message;
   className?: string;
+  autoPlay?: boolean;
 }
 
-export function VideoPlayer({ src, message, className }: VideoPlayerProps) {
+export function VideoPlayer({ src, message, className, autoPlay = false }: VideoPlayerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showControls, setShowControls] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const handleLoadSuccess = () => {
     setIsLoading(false);
@@ -27,13 +31,57 @@ export function VideoPlayer({ src, message, className }: VideoPlayerProps) {
     console.error('Video load error:', message.id, src);
   };
 
+  const handleMouseEnter = () => {
+    setShowControls(true);
+    if (videoRef.current && !isLoading && !error && autoPlay) {
+      videoRef.current.play().catch(err => {
+        console.warn('Auto-play prevented by browser:', err);
+      });
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setShowControls(false);
+    if (videoRef.current && autoPlay) {
+      videoRef.current.pause();
+    }
+  };
+
   const handleRetry = () => {
     setIsLoading(true);
     setError(null);
+    
+    // Force reload the video by updating the src with a cache-busting parameter
+    if (videoRef.current) {
+      const newSrc = src.includes('?') ? 
+        `${src}&cache=${Date.now()}` : 
+        `${src}?cache=${Date.now()}`;
+      
+      videoRef.current.src = newSrc;
+      videoRef.current.load();
+    }
+  };
+
+  // Try to fix MIME type issues by using appropriate content-type
+  const getVideoType = () => {
+    if (message.mime_type && message.mime_type.startsWith('video/')) {
+      return message.mime_type;
+    }
+    
+    if (src.endsWith('.mp4')) return 'video/mp4';
+    if (src.endsWith('.webm')) return 'video/webm';
+    if (src.endsWith('.mov')) return 'video/quicktime';
+    if (src.endsWith('.avi')) return 'video/x-msvideo';
+    
+    return 'video/mp4'; // Default to MP4
   };
 
   return (
-    <div className={cn("relative w-full", className)}>
+    <div 
+      className={cn("relative w-full", className)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       {/* Loading state */}
       {isLoading && !error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/50 backdrop-blur-sm z-10">
@@ -51,13 +99,14 @@ export function VideoPlayer({ src, message, className }: VideoPlayerProps) {
             <p className="text-xs text-center mb-3 text-muted-foreground">
               The video format may not be supported by your browser or the file may be corrupted.
             </p>
-            <button 
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+            <Button 
+              variant="default" 
               onClick={handleRetry}
+              className="flex items-center gap-2"
             >
-              <RefreshCw className="h-4 w-4 mr-2 inline" />
+              <RefreshCw className="h-4 w-4" />
               Retry
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -65,14 +114,17 @@ export function VideoPlayer({ src, message, className }: VideoPlayerProps) {
       {/* Video player */}
       <AspectRatio ratio={16/9} className="w-full h-auto overflow-hidden rounded-md">
         <video
+          ref={videoRef}
           src={src}
           className="w-full h-full object-contain rounded-md"
-          controls
+          controls={showControls || !autoPlay}
           playsInline
           onLoadedData={handleLoadSuccess}
           onError={handleLoadError}
           controlsList="nodownload"
           poster="/placeholder.svg"
+          type={getVideoType()}
+          preload="metadata"
         />
       </AspectRatio>
     </div>

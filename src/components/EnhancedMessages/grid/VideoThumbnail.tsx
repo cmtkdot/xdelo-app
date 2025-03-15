@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Badge } from "@/components/ui/badge";
-import { Play, FileX } from 'lucide-react';
+import { Play, FileX, RefreshCw } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Message } from '@/types';
 
@@ -68,6 +68,16 @@ export const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
       <span className="text-muted-foreground text-xs text-center px-2">
         Video preview failed
       </span>
+      <button 
+        className="mt-2 text-xs bg-muted/50 hover:bg-muted px-2 py-1 rounded-md flex items-center"
+        onClick={(e) => {
+          e.stopPropagation();
+          onGenerate();
+        }}
+      >
+        <RefreshCw className="h-3 w-3 mr-1" />
+        Retry
+      </button>
       <Badge className="mt-2">Video</Badge>
     </div>
   );

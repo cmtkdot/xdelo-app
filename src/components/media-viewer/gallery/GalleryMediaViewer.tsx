@@ -1,155 +1,227 @@
 
-import React, { useState } from 'react';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogClose
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
-import { X, Info, ChevronUp } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { MediaDisplay } from '../shared/MediaDisplay';
+import { Message } from '@/types/entities/Message';
+import { ChevronLeft, ChevronRight, X, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useIsMobile } from '@/hooks/useMobile';
-import { GalleryToolbar } from './GalleryToolbar';
-import { GalleryMediaCarousel } from './GalleryMediaCarousel';
-import { getMainMediaFromGroup } from '../utils';
-import { ProductDetails } from '../shared/ProductDetails';
-import { BaseMediaViewerProps } from '../types';
+import { Button } from '@/components/ui/button';
+import { MediaViewerProps } from '@/components/ui/media-viewer';
+import { sortMediaGroupItems } from '@/components/EnhancedMessages/utils/mediaUtils';
+import { getTelegramMessageUrl } from '../utils';
 
 export function GalleryMediaViewer({
   isOpen,
   onClose,
-  currentGroup = [],
+  currentGroup,
   onPrevious,
   onNext,
-  hasPrevious = false,
-  hasNext = false,
-  className
-}: BaseMediaViewerProps) {
-  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
-  const [showTools, setShowTools] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
-  const isMobile = useIsMobile();
+  hasPrevious,
+  hasNext,
+  className,
+}: MediaViewerProps) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [sortedGroup, setSortedGroup] = useState<Message[]>([]);
   
-  // Ensure we have valid data
-  if (!currentGroup || !Array.isArray(currentGroup) || currentGroup.length === 0) {
-    return null;
-  }
+  // Sort media group with images first, then videos
+  useEffect(() => {
+    if (currentGroup?.length) {
+      setSortedGroup(sortMediaGroupItems([...currentGroup]));
+    } else {
+      setSortedGroup([]);
+    }
+  }, [currentGroup]);
 
-  // Get the main media item (either the one with caption or the first one)
-  const mainMedia = getMainMediaFromGroup(currentGroup);
-  
-  // Get the currently active media item
-  const currentMedia = currentGroup[activeMediaIndex] || mainMedia;
-  
-  // Find all message IDs for repair tools
-  const messageIds = currentGroup.map(message => message?.id).filter(Boolean);
-  
-  const handleMediaChange = (index: number) => {
-    setActiveMediaIndex(index);
+  useEffect(() => {
+    // Reset index when group changes
+    setCurrentIndex(0);
+  }, [sortedGroup]);
+
+  const handlePrevItem = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+    }
   };
 
-  const handleToggleTools = () => {
-    setShowTools(!showTools);
+  const handleNextItem = () => {
+    if (currentIndex < sortedGroup.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+    }
   };
 
-  // Mobile detail drawer component
-  const MobileDetailsSheet = () => (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          className="flex items-center gap-1 bg-background/40 hover:bg-background/60 rounded-full px-3 py-1"
-        >
-          <Info className="h-4 w-4" />
-          <span>Details</span>
-          <ChevronUp className="h-4 w-4" />
-        </Button>
-      </SheetTrigger>
-      <SheetContent side="bottom" className="h-[80vh] pt-8 rounded-t-xl">
-        <SheetClose className="absolute right-4 top-4 z-50">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-8 w-8 rounded-full"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </SheetClose>
-        <ScrollArea className="h-full py-1">
-          <div className="p-4">
-            <ProductDetails mainMedia={mainMedia} />
-          </div>
-        </ScrollArea>
-      </SheetContent>
-    </Sheet>
-  );
+  const currentItem = sortedGroup[currentIndex];
+  const telegramUrl = currentItem ? getTelegramMessageUrl(currentItem) : null;
+
+  // Handle keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isOpen) return;
+      
+      if (e.key === 'ArrowLeft') {
+        if (currentIndex > 0) {
+          handlePrevItem();
+        } else if (hasPrevious && onPrevious) {
+          onPrevious();
+        }
+      } else if (e.key === 'ArrowRight') {
+        if (currentIndex < sortedGroup.length - 1) {
+          handleNextItem();
+        } else if (hasNext && onNext) {
+          onNext();
+        }
+      } else if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, currentIndex, sortedGroup.length, hasPrevious, hasNext]);
+
+  // Handle swipe navigation
+  const [touchStart, setTouchStart] = useState(0);
+  const [touchEnd, setTouchEnd] = useState(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+    
+    if (isLeftSwipe) {
+      if (currentIndex < sortedGroup.length - 1) {
+        handleNextItem();
+      } else if (hasNext && onNext) {
+        onNext();
+      }
+    } else if (isRightSwipe) {
+      if (currentIndex > 0) {
+        handlePrevItem();
+      } else if (hasPrevious && onPrevious) {
+        onPrevious();
+      }
+    }
+    
+    setTouchStart(0);
+    setTouchEnd(0);
+  };
+
+  if (!isOpen || !sortedGroup.length) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent 
-        className={cn(
-          "p-0 max-w-6xl w-[95vw] h-[90vh] max-h-[90vh] overflow-hidden flex flex-col md:flex-row gap-0 bg-background/95 backdrop-blur-md", 
-          className
-        )}
+        className={cn("sm:max-w-5xl p-0 gap-0 bg-background/80 backdrop-blur-lg", className)}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
-        {/* Close button positioned absolutely in top-right */}
-        <DialogClose className="absolute right-4 top-4 z-50">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-8 w-8 rounded-full bg-background/40 hover:bg-background/60"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </DialogClose>
+        <div className="relative h-[80vh] flex flex-col">
+          {/* Controls */}
+          <div className="absolute top-2 right-2 z-20 flex gap-2">
+            {telegramUrl && (
+              <a 
+                href={telegramUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="p-2 bg-background/80 rounded-full hover:bg-background"
+              >
+                <ExternalLink className="h-5 w-5" />
+              </a>
+            )}
+            <button 
+              onClick={onClose}
+              className="p-2 bg-background/80 rounded-full hover:bg-background"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
 
-        {/* Left column: Media display */}
-        <div className={cn(
-          "w-full flex flex-col h-full",
-          !isMobile && "md:w-3/5"
-        )}>
-          {/* Media display area */}
-          <div className="flex-grow overflow-hidden relative">
-            <GalleryMediaCarousel 
-              mediaItems={currentGroup}
-              activeIndex={activeMediaIndex}
-              onIndexChange={handleMediaChange}
-              hasPrevious={hasPrevious}
-              hasNext={hasNext}
-              onPrevious={onPrevious}
-              onNext={onNext}
-            />
-            
-            {/* Mobile-only detail sheet trigger at bottom of screen */}
-            {isMobile && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
-                <MobileDetailsSheet />
-              </div>
+          {/* Previous/Next Group Controls */}
+          {hasPrevious && onPrevious && (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="absolute left-2 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
+              onClick={onPrevious}
+            >
+              <ChevronLeft className="h-8 w-8" />
+            </Button>
+          )}
+          
+          {hasNext && onNext && (
+            <Button 
+              variant="ghost" 
+              size="icon"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
+              onClick={onNext}
+            >
+              <ChevronRight className="h-8 w-8" />
+            </Button>
+          )}
+
+          {/* Previous/Next Item Controls */}
+          {currentIndex > 0 && (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="absolute left-16 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
+              onClick={handlePrevItem}
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </Button>
+          )}
+          
+          {currentIndex < sortedGroup.length - 1 && (
+            <Button 
+              variant="ghost" 
+              size="icon"
+              className="absolute right-16 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
+              onClick={handleNextItem}
+            >
+              <ChevronRight className="h-6 w-6" />
+            </Button>
+          )}
+
+          {/* Media Display */}
+          <div className="flex-1 flex items-center justify-center p-4">
+            {currentItem && (
+              <MediaDisplay message={currentItem} />
             )}
           </div>
-          
-          {/* Toolbar with actions */}
-          <GalleryToolbar 
-            currentMedia={currentMedia}
-            showTools={showTools}
-            onToggleTools={handleToggleTools} 
-            messageIds={messageIds}
-          />
+
+          {/* Thumbnails/Pagination */}
+          {sortedGroup.length > 1 && (
+            <div className="p-2 flex justify-center gap-2 bg-background/20">
+              {sortedGroup.map((item, idx) => (
+                <button
+                  key={item.id}
+                  className={cn(
+                    "w-2 h-2 rounded-full transition-all",
+                    idx === currentIndex ? "bg-primary w-4" : "bg-muted-foreground/50"
+                  )}
+                  onClick={() => setCurrentIndex(idx)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Caption */}
+          {currentItem?.caption && (
+            <div className="p-4 bg-background/10 max-h-32 overflow-y-auto">
+              <p className="text-sm">{currentItem.caption}</p>
+            </div>
+          )}
         </div>
-        
-        {/* Right column: Product information (desktop only) */}
-        {!isMobile && (
-          <div className="border-t md:border-t-0 md:border-l bg-background/95 w-full md:w-2/5 h-full">
-            <ScrollArea className="h-full">
-              <div className="p-4">
-                <ProductDetails mainMedia={mainMedia} />
-              </div>
-            </ScrollArea>
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );

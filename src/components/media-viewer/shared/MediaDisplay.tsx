@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { VideoPlayer } from './VideoPlayer';
 import { ImageViewer } from './ImageViewer';
 import { MediaDisplayProps } from '../types';
+import { isVideoMessage } from '@/components/EnhancedMessages/utils/mediaUtils';
 
 export function MediaDisplay({ message, className }: MediaDisplayProps) {
   if (!message || !message.public_url) {
@@ -14,9 +15,8 @@ export function MediaDisplay({ message, className }: MediaDisplayProps) {
     );
   }
 
-  // Determine if this is a video based on mime type or URL
-  const isVideo = message.mime_type?.startsWith('video/') || 
-                 (message.public_url && /\.(mp4|mov|webm|avi)$/i.test(message.public_url));
+  // Use our enhanced isVideoMessage function to better detect videos
+  const isVideo = isVideoMessage(message);
 
   return (
     <div className={cn(

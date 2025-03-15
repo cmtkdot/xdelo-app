@@ -31,6 +31,9 @@ export const MessageCard: React.FC<MessageCardProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [videoThumbnail, setVideoThumbnail] = useState<string | null>(null);
   
+  // Determine if the message is a video based on enhanced logic
+  const isVideo = isVideoMessage(message);
+  
   // Handle media load error
   const handleMediaError = () => {
     console.log(`Media load error for message: ${message.id}`);
@@ -93,10 +96,10 @@ export const MessageCard: React.FC<MessageCardProps> = ({
 
   // Generate thumbnails for visible videos
   useEffect(() => {
-    if (isVideoMessage(message) && !videoThumbnail && !hasMediaError) {
+    if (isVideo && !videoThumbnail && !hasMediaError) {
       generateVideoThumbnail();
     }
-  }, [message, videoThumbnail, hasMediaError]);
+  }, [message, videoThumbnail, hasMediaError, isVideo]);
 
   return (
     <Card 
@@ -114,7 +117,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
           </div>
         )}
         
-        {isVideoMessage(message) ? (
+        {isVideo ? (
           <VideoThumbnail 
             message={message}
             thumbnailUrl={videoThumbnail || undefined}
@@ -170,4 +173,4 @@ export const MessageCard: React.FC<MessageCardProps> = ({
       </CardContent>
     </Card>
   );
-};
+}

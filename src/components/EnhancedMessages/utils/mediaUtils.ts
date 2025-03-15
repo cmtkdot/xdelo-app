@@ -5,8 +5,34 @@ import { Message } from '@/types';
  * Determine if a message contains a video based on mime type or URL pattern
  */
 export const isVideoMessage = (message: Message): boolean => {
-  return message.mime_type?.startsWith('video/') || 
-         (message.public_url && /\.(mp4|mov|webm|avi)$/i.test(message.public_url));
+  // Check mime type first
+  if (message.mime_type?.startsWith('video/')) {
+    return true;
+  }
+  
+  // Check URL file extension if mime type doesn't indicate video
+  if (message.public_url) {
+    const videoExtensions = /\.(mp4|mov|webm|avi|mkv|mpg|mpeg|m4v|3gp)$/i;
+    if (videoExtensions.test(message.public_url)) {
+      return true;
+    }
+  }
+  
+  // Check if it's marked as video in telegram_data (for application/octet-stream)
+  if (message.telegram_data?.video || 
+      (message.telegram_data?.document?.mime_type && 
+       message.telegram_data?.document?.mime_type.startsWith('video/'))) {
+    return true;
+  }
+
+  // Handle specific octet-stream cases that we know are videos
+  if (message.mime_type === 'application/octet-stream' && 
+      (message.duration || 
+       (message.telegram_data?.document?.mime_type?.startsWith('video/')))) {
+    return true;
+  }
+  
+  return false;
 };
 
 /**
@@ -20,4 +46,42 @@ export const getProcessingStateColor = (state: string): string => {
     case 'error': return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300';
     default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800/40 dark:text-gray-300';
   }
+};
+
+/**
+ * Get the appropriate icon name based on media type
+ */
+export const getMediaIcon = (message: Message): string => {
+  if (isVideoMessage(message)) {
+    return 'video';
+  }
+  
+  if (message.mime_type?.startsWith('image/')) {
+    return 'image';
+  }
+  
+  if (message.mime_type?.startsWith('audio/')) {
+    return 'audio';
+  }
+  
+  return 'file';
+};
+
+/**
+ * Sort messages within a media group with images first, then videos
+ */
+export const sortMediaGroupItems = (messages: Message[]): Message[] => {
+  if (!messages || messages.length <= 1) return messages;
+  
+  return [...messages].sort((a, b) => {
+    // Put images first
+    const aIsImage = a.mime_type?.startsWith('image/') || false;
+    const bIsImage = b.mime_type?.startsWith('image/') || false;
+    
+    if (aIsImage && !bIsImage) return -1;
+    if (!aIsImage && bIsImage) return 1;
+    
+    // Then sort by created_at
+    return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+  });
 };
