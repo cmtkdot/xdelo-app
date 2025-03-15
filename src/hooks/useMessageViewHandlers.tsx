@@ -5,7 +5,8 @@ import { useTelegramOperations } from './useTelegramOperations';
 import { useMediaOperations } from './useMediaOperations';
 
 export function useMessageViewHandlers() {
-  const [selectedMessages, setSelectedMessages] = useState<Record<string, boolean>>({});
+  // Change from Record<string, boolean> to Record<string, Message>
+  const [selectedMessages, setSelectedMessages] = useState<Record<string, Message>>({});
   const { handleDelete, isProcessing } = useTelegramOperations();
   const { 
     fixContentDispositionForMessage,
@@ -13,12 +14,21 @@ export function useMessageViewHandlers() {
     processingMessageIds
   } = useMediaOperations();
 
-  // Handle selecting/deselecting messages
-  const handleToggleSelect = useCallback((message: Message, selected: boolean) => {
-    setSelectedMessages(prev => ({
-      ...prev,
-      [message.id]: selected
-    }));
+  // Update to only use the Message parameter
+  const handleToggleSelect = useCallback((message: Message) => {
+    setSelectedMessages(prev => {
+      // If already selected, remove it; otherwise add it
+      if (prev[message.id]) {
+        const newSelected = {...prev};
+        delete newSelected[message.id];
+        return newSelected;
+      } else {
+        return {
+          ...prev,
+          [message.id]: message
+        };
+      }
+    });
   }, []);
 
   // Clear all selections
@@ -28,9 +38,7 @@ export function useMessageViewHandlers() {
 
   // Get all selected message IDs
   const getSelectedMessageIds = useCallback(() => {
-    return Object.entries(selectedMessages)
-      .filter(([_, selected]) => selected)
-      .map(([id]) => id);
+    return Object.keys(selectedMessages);
   }, [selectedMessages]);
 
   return {

@@ -30,10 +30,10 @@ export default function MessagesEnhanced() {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   
-  // Update selected messages state to use Message objects instead of booleans
+  // Now using the updated hook with correct types
   const { 
-    selectedMessages, // This is now a Record<string, Message>
-    handleToggleSelect, // This now accepts a Message and updates the record
+    selectedMessages, 
+    handleToggleSelect, 
     clearSelection,
     getSelectedMessageIds,
     deleteMessage,
