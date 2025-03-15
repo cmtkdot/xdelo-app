@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,6 +7,7 @@ import { Message } from "@/types";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { useTelegramOperations } from '@/hooks/useTelegramOperations';
 import { getMainMediaFromGroup } from '@/components/media-viewer/utils';
+import { isVideoMessage } from '@/components/EnhancedMessages/utils/mediaUtils';
 
 interface ProductGroupProps {
   group: Message[];
@@ -27,8 +29,8 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
 
   if (!mainMedia) return null;
 
-  const isVideo = mainMedia.mime_type?.startsWith('video/') || 
-                 (mainMedia.public_url && /\.(mp4|mov|webm|avi)$/i.test(mainMedia.public_url));
+  // Use the enhanced isVideoMessage function instead of direct MIME type checks
+  const isVideo = isVideoMessage(mainMedia);
 
   const productName = mainMedia.analyzed_content?.product_name || 'No product name';
 

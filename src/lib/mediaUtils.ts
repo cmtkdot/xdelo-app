@@ -1,6 +1,7 @@
 
 import { Message } from "@/types/entities/Message";
 import { MediaItem, getMediaType } from "@/types/ui/MediaItem";
+import { isVideoMessage } from "@/components/EnhancedMessages/utils/mediaUtils";
 
 /**
  * Converts a Message to a MediaItem for use in components

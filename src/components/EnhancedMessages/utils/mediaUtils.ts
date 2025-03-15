@@ -1,4 +1,3 @@
-
 import { Message } from '@/types';
 
 /**
@@ -158,17 +157,23 @@ export const getVideoDuration = (message: Message): number | null => {
 
 /**
  * Sort messages within a media group with images first, then videos
+ * Uses the more reliable isVideoMessage function instead of direct mime_type checks
  */
 export const sortMediaGroupItems = (messages: Message[]): Message[] => {
   if (!messages || messages.length <= 1) return messages;
   
   return [...messages].sort((a, b) => {
-    // Put images first
+    // Use isVideoMessage to reliably identify videos
+    const aIsVideo = isVideoMessage(a);
+    const bIsVideo = isVideoMessage(b);
     const aIsImage = a.mime_type?.startsWith('image/') || false;
     const bIsImage = b.mime_type?.startsWith('image/') || false;
     
+    // Put images first, then videos
     if (aIsImage && !bIsImage) return -1;
     if (!aIsImage && bIsImage) return 1;
+    if (!aIsVideo && bIsVideo) return -1;
+    if (aIsVideo && !bIsVideo) return 1;
     
     // Then sort by created_at
     return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
