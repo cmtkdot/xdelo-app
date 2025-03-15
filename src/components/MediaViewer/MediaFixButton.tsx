@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Wrench } from "lucide-react";
 import { MediaRepairDialog } from "./MediaRepairDialog";
 import { Message } from "@/types/MessagesTypes";
+import { useMediaUtils } from "@/hooks/useMediaUtils";
 
 interface MediaFixButtonProps {
   messages?: Message[];
@@ -23,6 +24,7 @@ export function MediaFixButton({
   size = "sm"
 }: MediaFixButtonProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { repairMediaBatch } = useMediaUtils();
 
   const handleOpenDialog = () => {
     setDialogOpen(true);

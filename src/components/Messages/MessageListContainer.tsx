@@ -6,6 +6,7 @@ import { Spinner } from '../ui/spinner';
 import { useCaptionSync } from '@/hooks/useCaptionSync';
 import { useToast } from '@/hooks/useToast';
 import { useEnhancedMessages } from '@/hooks/useEnhancedMessages';
+import { useMediaUtils } from '@/hooks/useMediaUtils';
 
 export function MessageListContainer() {
   const {
@@ -19,7 +20,8 @@ export function MessageListContainer() {
     limit: 500
   });
 
-  const { forceSyncMessageGroup } = useCaptionSync();
+  const { syncMessageCaption } = useCaptionSync();
+  const { processMessage } = useMediaUtils();
   const { toast } = useToast();
 
   // Simply flatten the grouped messages
@@ -34,13 +36,19 @@ export function MessageListContainer() {
         description: "Analyzing caption and syncing with media group..."
       });
       
-      await forceSyncMessageGroup({ messageId });
-      void refetch();
+      const result = await processMessage(messageId);
       
-      toast({
-        title: "Processing Complete",
-        description: "Message has been processed and synchronized."
-      });
+      if (result.success) {
+        await syncMessageCaption({ messageId });
+        void refetch();
+        
+        toast({
+          title: "Processing Complete",
+          description: "Message has been processed and synchronized."
+        });
+      } else {
+        throw new Error(result.message || "Processing failed");
+      }
     } catch (error: any) {
       console.error("Error retrying processing:", error);
       toast({
