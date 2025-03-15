@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
-import { useMediaOperations } from '@/hooks/useMediaOperations';
+import { useMediaUtils } from '@/hooks/useMediaUtils';
 import { Message } from '@/types/MessagesTypes';
 
 interface ContentDispositionFixButtonProps {
@@ -11,7 +11,7 @@ interface ContentDispositionFixButtonProps {
 }
 
 export function ContentDispositionFixButton({ message, className }: ContentDispositionFixButtonProps) {
-  const { fixContentDispositionForMessage, processingMessageIds } = useMediaOperations();
+  const { fixContentDispositionForMessage, processingMessageIds } = useMediaUtils();
   const isLoading = processingMessageIds[message.id];
 
   const handleFix = async () => {

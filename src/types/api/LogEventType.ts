@@ -41,5 +41,8 @@ export enum LogEventType {
   SYNC_STARTED = 'sync:started',
   SYNC_COMPLETED = 'sync:completed',
   SYNC_FAILED = 'sync:failed',
-  SYNC_PRODUCTS = 'sync:products'
+  SYNC_PRODUCTS = 'sync:products',
+  
+  // Batch operations
+  BATCH_OPERATION = 'batch:operation'
 }

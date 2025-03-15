@@ -35,7 +35,7 @@ export function MediaRepairDialog({
     successful: number;
     failed: number;
     total: number;
-    errors?: string[];
+    errorMessages?: string[];
   } | null>(null);
 
   const { 
@@ -77,7 +77,7 @@ export function MediaRepairDialog({
         successful: repairResult.successful || 0,
         failed: repairResult.failed || 0,
         total: messagesToRepair.length,
-        errors: repairResult.errors
+        errorMessages: repairResult.error ? [repairResult.error] : undefined
       });
       
       if (onComplete) {
@@ -89,7 +89,7 @@ export function MediaRepairDialog({
         successful: 0,
         failed: combinedMessageIds.length,
         total: combinedMessageIds.length,
-        errors: [error.message || 'Unknown error occurred']
+        errorMessages: [error.message || 'Unknown error occurred']
       });
     } finally {
       setRepairing(false);
@@ -199,14 +199,14 @@ export function MediaRepairDialog({
                   {result.failed > 0 && ` ${result.failed} files could not be repaired.`}
                 </p>
                 
-                {result.errors && result.errors.length > 0 && (
+                {result.errorMessages && result.errorMessages.length > 0 && (
                   <div className="mt-2 text-sm text-red-600 dark:text-red-400">
                     <p className="font-medium">Errors:</p>
                     <ul className="list-disc pl-5 mt-1">
-                      {result.errors.slice(0, 3).map((error, index) => (
+                      {result.errorMessages.slice(0, 3).map((error, index) => (
                         <li key={index}>{error}</li>
                       ))}
-                      {result.errors.length > 3 && <li>...and {result.errors.length - 3} more errors</li>}
+                      {result.errorMessages.length > 3 && <li>...and {result.errorMessages.length - 3} more errors</li>}
                     </ul>
                   </div>
                 )}
