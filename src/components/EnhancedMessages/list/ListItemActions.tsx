@@ -1,20 +1,14 @@
 
 import React from 'react';
-import { Button } from "@/components/ui/button";
-import { Eye, Edit, Trash2, MoreHorizontal } from 'lucide-react';
+import { Eye, Pencil, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Message } from '@/types';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 interface ListItemActionsProps {
   message: Message;
   onView: () => void;
-  onEdit?: (message: Message) => void;
-  onDelete?: (message: Message) => void;
+  onEdit?: ((message: Message) => void) | undefined;
+  onDelete?: ((message: Message) => void) | undefined;
   isMobile: boolean;
 }
 
@@ -25,76 +19,46 @@ export const ListItemActions: React.FC<ListItemActionsProps> = ({
   onDelete,
   isMobile
 }) => {
-  if (isMobile) {
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={onView}>
-            <Eye className="h-4 w-4 mr-2" />
-            View
-          </DropdownMenuItem>
-          {onEdit && (
-            <DropdownMenuItem onClick={() => onEdit(message)}>
-              <Edit className="h-4 w-4 mr-2" />
-              Edit
-            </DropdownMenuItem>
-          )}
-          {onDelete && (
-            <DropdownMenuItem 
-              onClick={() => onDelete(message)}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    );
-  }
-  
   return (
-    <div className="flex items-center gap-1 flex-shrink-0">
-      <Button 
-        variant="ghost" 
-        size="icon" 
+    <div className="flex items-center gap-1 ml-auto">
+      <Button
+        variant="ghost"
+        size="icon"
         className="h-8 w-8"
         onClick={(e) => {
           e.stopPropagation();
           onView();
         }}
+        title="View"
       >
         <Eye className="h-4 w-4" />
       </Button>
       
       {onEdit && (
-        <Button 
-          variant="ghost" 
-          size="icon" 
+        <Button
+          variant="ghost"
+          size="icon"
           className="h-8 w-8"
           onClick={(e) => {
             e.stopPropagation();
             onEdit(message);
           }}
+          title="Edit"
         >
-          <Edit className="h-4 w-4" />
+          <Pencil className="h-4 w-4" />
         </Button>
       )}
       
       {onDelete && (
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="h-8 w-8 hover:bg-red-100 hover:text-red-700 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
           onClick={(e) => {
             e.stopPropagation();
             onDelete(message);
           }}
+          title="Delete"
         >
           <Trash2 className="h-4 w-4" />
         </Button>

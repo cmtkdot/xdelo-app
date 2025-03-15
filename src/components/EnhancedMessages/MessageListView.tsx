@@ -50,7 +50,7 @@ export function MessageListView({
           key={message.id}
           message={message}
           onSelect={onSelect}
-          onView={onView}
+          onView={() => onView([message])} // Pass the message as an array to match expected type
           onEdit={onEdit}
           onDelete={onDelete}
           isSelected={selectedId === message.id}

@@ -7,46 +7,67 @@ import { MessageCard } from './grid/MessageCard';
 import { EmptyState } from './grid/EmptyState';
 
 interface MessageGridViewProps {
-  messages: Message[];
+  messageGroups: Message[][];
   onSelect: (message: Message) => void;
   onView: (messageGroup: Message[]) => void;
   onEdit?: (message: Message) => void;
   onDelete?: (message: Message) => void;
-  selectedId?: string;
+  selectedMessages: Record<string, Message>;
+  hasMoreItems: boolean;
+  onLoadMore: () => void;
 }
 
 export function MessageGridView({ 
-  messages, 
+  messageGroups, 
   onSelect, 
   onView,
   onEdit,
   onDelete,
-  selectedId
+  selectedMessages,
+  hasMoreItems,
+  onLoadMore
 }: MessageGridViewProps) {
   const isMobile = useIsMobile();
 
-  if (!messages || messages.length === 0) {
+  if (!messageGroups || messageGroups.length === 0) {
     return <EmptyState />;
   }
 
   return (
-    <div className={cn(
-      "grid gap-3",
-      isMobile
-        ? "grid-cols-2"
-        : "grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
-    )}>
-      {messages.map((message) => (
-        <MessageCard
-          key={message.id}
-          message={message}
-          onSelect={onSelect}
-          onView={onView}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          isSelected={selectedId === message.id}
-        />
-      ))}
+    <div className="space-y-6">
+      <div className={cn(
+        "grid gap-3",
+        isMobile
+          ? "grid-cols-2"
+          : "grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+      )}>
+        {messageGroups.map((group) => {
+          // Use the first message of each group for the card
+          const message = group[0];
+          return (
+            <MessageCard
+              key={message.id}
+              message={message}
+              onSelect={onSelect}
+              onView={() => onView(group)}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              isSelected={!!selectedMessages[message.id]}
+            />
+          );
+        })}
+      </div>
+
+      {hasMoreItems && (
+        <div className="flex justify-center mt-4">
+          <button 
+            onClick={onLoadMore}
+            className="px-4 py-2 bg-primary/10 hover:bg-primary/20 rounded-md text-sm font-medium"
+          >
+            Load More
+          </button>
+        </div>
+      )}
     </div>
   );
 }

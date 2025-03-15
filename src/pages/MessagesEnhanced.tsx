@@ -30,9 +30,10 @@ export default function MessagesEnhanced() {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   
+  // Update selected messages state to use Message objects instead of booleans
   const { 
-    selectedMessages,
-    handleToggleSelect,
+    selectedMessages, // This is now a Record<string, Message>
+    handleToggleSelect, // This now accepts a Message and updates the record
     clearSelection,
     getSelectedMessageIds,
     deleteMessage,
@@ -50,7 +51,6 @@ export default function MessagesEnhanced() {
   } = useEnhancedMessages({
     limit: ITEMS_PER_PAGE,
     searchTerm: debouncedSearch,
-    // Remove the dateRange property as it's not part of the interface
   });
   
   const [viewItem, setViewItem] = useState<Message[] | null>(null);
@@ -65,8 +65,9 @@ export default function MessagesEnhanced() {
     return showMode === 'grid' ? groupedMessages : items;
   }, [items, groupedMessages, showMode]);
   
-  const handleViewMessage = (message: Message[]) => {
-    setViewItem(message);
+  // Update to accept Message[] as parameter
+  const handleViewMessage = (messages: Message[]) => {
+    setViewItem(messages);
     setViewerOpen(true);
   };
   
@@ -91,7 +92,7 @@ export default function MessagesEnhanced() {
     }
   };
 
-  // Function to handle loading more items - this is a stub since we don't have infinite loading in useEnhancedMessages
+  // Function to handle loading more items
   const handleLoadMore = async () => {
     // We'll just refresh the data for now
     await refetch();
