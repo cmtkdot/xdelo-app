@@ -19,16 +19,24 @@ export const isVideoMessage = (message: Message): boolean => {
   }
   
   // Check if it's marked as video in telegram_data (for application/octet-stream)
-  if (message.telegram_data?.video || 
-      (message.telegram_data?.document?.mime_type && 
-       message.telegram_data?.document?.mime_type.startsWith('video/'))) {
-    return true;
+  if (message.telegram_data && typeof message.telegram_data === 'object') {
+    // Type guard to check if telegram_data is an object before accessing properties
+    const telegramData = message.telegram_data as Record<string, any>;
+    
+    if (telegramData.video || 
+       (telegramData.document?.mime_type && 
+        typeof telegramData.document.mime_type === 'string' &&
+        telegramData.document.mime_type.startsWith('video/'))) {
+      return true;
+    }
   }
 
   // Handle specific octet-stream cases that we know are videos
   if (message.mime_type === 'application/octet-stream' && 
       (message.duration || 
-       (message.telegram_data?.document?.mime_type?.startsWith('video/')))) {
+      (message.telegram_data && 
+       typeof message.telegram_data === 'object' && 
+       (message.telegram_data as any).document?.mime_type?.startsWith('video/')))) {
     return true;
   }
   

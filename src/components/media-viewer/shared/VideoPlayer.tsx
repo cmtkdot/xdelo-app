@@ -123,9 +123,12 @@ export function VideoPlayer({ src, message, className, autoPlay = false }: Video
           onError={handleLoadError}
           controlsList="nodownload"
           poster="/placeholder.svg"
-          type={getVideoType()}
           preload="metadata"
-        />
+        >
+          {/* Use source element with type attribute instead of type on video element */}
+          <source src={src} type={getVideoType()} />
+          Your browser does not support the video tag.
+        </video>
       </AspectRatio>
     </div>
   );
