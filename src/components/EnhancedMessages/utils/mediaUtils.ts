@@ -62,22 +62,17 @@ export const isVideoMessage = (message: Message): boolean => {
     return true;
   }
   
-  // Fallback to mime type check
+  // Fallback to mime type check (less reliable)
   if (message.mime_type?.startsWith('video/')) {
     return true;
   }
   
-  // Fallback to URL file extension check
+  // Fallback to URL file extension check (least reliable)
   if (message.public_url) {
     const videoExtensions = /\.(mp4|mov|webm|avi|mkv|mpg|mpeg|m4v|3gp)$/i;
     if (videoExtensions.test(message.public_url)) {
       return true;
     }
-  }
-  
-  // Last fallback: Look for duration property which often indicates video
-  if (message.duration) {
-    return true;
   }
   
   return false;
