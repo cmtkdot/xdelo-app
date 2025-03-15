@@ -14,7 +14,7 @@ import { useIsMobile } from '@/hooks/useMobile';
 import { GalleryToolbar } from './GalleryToolbar';
 import { GalleryMediaCarousel } from './GalleryMediaCarousel';
 import { getMainMediaFromGroup } from '../utils';
-import { ProductDetails } from '@/components/ui/media-viewer/product-details';
+import { ProductDetails } from '../shared/ProductDetails';
 import { BaseMediaViewerProps } from '../types';
 
 export function GalleryMediaViewer({

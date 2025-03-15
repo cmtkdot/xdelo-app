@@ -1,8 +1,6 @@
 
-'use client'
-
 import React from 'react';
-import { Message } from '@/types/MessagesTypes';
+import { Message } from '@/types/entities/Message';
 import { 
   Accordion, 
   AccordionContent, 

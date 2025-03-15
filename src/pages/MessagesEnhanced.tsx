@@ -1,120 +1,230 @@
+'use client'
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Message } from '@/types/entities/Message';
+import { MessageList } from '@/components/MessageList';
+import { MessageGrid as MessageGridView } from '@/components/MessageGrid';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { 
+  Slider,
+} from "@/components/ui/slider"
+import { 
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { 
+  ArrowDown, 
+  ArrowUp, 
+  Copy, 
+  Download, 
+  ExternalLink, 
+  Filter, 
+  Grip, 
+  GripVertical, 
+  Loader2, 
+  MoreHorizontal, 
+  Plus, 
+  Search, 
+  Share2, 
+  Trash2 
+} from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/useToast';
-import { useMessagesStore } from '@/hooks/useMessagesStore';
-import { useMessageViewHandlers } from '@/hooks/useMessageViewHandlers';
-import { MessagesLayout } from '@/components/EnhancedMessages/MessagesLayout';
-import { MessageFiltersHeader } from '@/components/EnhancedMessages/MessageFiltersHeader';
-import { MessageContent } from '@/components/EnhancedMessages/MessageContent';
-import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
-import { useFilteredMessages } from '@/hooks/useFilteredMessages';
-import { ResponsiveContainer } from '@/components/ui/responsive-container';
+import { useDebounce } from '@/hooks/useDebounce';
 import { useIsMobile } from '@/hooks/useMobile';
-import { EnhancedMessagesHeader } from '@/components/EnhancedMessages/EnhancedMessagesHeader';
+import { useMessageViewHandlers } from '@/hooks/useMessageViewHandlers';
+import { useEnhancedMessages } from '@/hooks/useEnhancedMessages';
+import { MediaViewer } from '@/components/media-viewer/gallery/GalleryMediaViewer';
 
-const MessagesEnhanced = () => {
-  const { 
-    detailsOpen,
-    analyticsOpen,
-    toggleView,
-    currentView,
-    filtersCount
-  } = useMessagesStore();
+const ITEMS_PER_PAGE = 50;
+
+export default function MessagesEnhanced() {
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch] = useDebounce(search, 300);
+  const [showMode, setShowMode] = useState<'list' | 'grid'>('grid');
+  const [selectedChatIds, setSelectedChatIds] = useState<string[]>([]);
+  const [selectedDateRange, setSelectedDateRange] = useState<Date[] | undefined>(undefined);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [sliderValue, setSliderValue] = useState<number[]>([100])
   
-  const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { filteredMessages, refetch, isLoading, total } = useFilteredMessages();
+  const { toast } = useToast();
   const isMobile = useIsMobile();
-  const [filtersPanelOpen, setFiltersPanelOpen] = useState(false);
   
-  // Setup handlers for message interactions
-  const {
-    viewerState,
-    handleMessageSelect,
-    handleMessageView,
-    handlePreviousGroup,
-    handleNextGroup,
-    handleEditMessage,
-    handleDeleteMessage
+  const { 
+    selectedMessages,
+    handleToggleSelect,
+    clearSelection,
+    getSelectedMessageIds,
+    deleteMessage,
+    fixContentDispositionForMessage,
+    reuploadMediaFromTelegram,
+    isProcessing,
+    processingMessageIds
   } = useMessageViewHandlers();
   
-  // Setup realtime updates
-  useRealtimeUpdates({
-    tables: ['messages', 'unified_audit_logs'],
-    onUpdate: () => {
-      queryClient.invalidateQueries({ queryKey: ['enhanced-messages'] });
-      queryClient.invalidateQueries({ queryKey: ['message-analytics'] });
-    }
+  const { 
+    messages: items, 
+    isLoading, 
+    hasNextPage, 
+    fetchNextPage 
+  } = useEnhancedMessages({
+    limit: ITEMS_PER_PAGE,
+    searchTerm: debouncedSearch,
+    chatIds: selectedChatIds,
+    dateRange: selectedDateRange
   });
-
-  // Handle data refresh
-  const handleDataRefresh = async () => {
+  
+  const [viewItem, setViewItem] = useState<Message[] | null>(null);
+  const [editItem, setEditItem] = useState<Message | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  
+  const totalItems = items?.length || 0;
+  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+  
+  const paginatedItems = useMemo(() => {
+    if (!items) return [];
+    return items;
+  }, [items]);
+  
+  const handleViewMessage = (message: Message[]) => {
+    setViewItem(message);
+    setViewerOpen(true);
+  };
+  
+  const handleEditMessage = (message: Message) => {
+    setEditItem(message);
+  };
+  
+  const handleDeleteMessage = async (id: string) => {
     try {
-      if (refetch) {
-        await refetch();
-        
-        toast({
-          title: "Data refreshed",
-          description: "Messages have been refreshed"
-        });
-      }
-    } catch (error) {
-      console.error("Error refreshing data:", error);
+      await deleteMessage(id);
       toast({
-        title: "Refresh failed",
-        description: "Could not refresh message data",
-        variant: "destructive"
+        title: 'Message deleted',
+        description: 'The message has been successfully deleted.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error deleting message',
+        description: 'There was an error deleting the message. Please try again.',
       });
     }
   };
 
-  const toggleFiltersPanel = () => {
-    setFiltersPanelOpen(prev => !prev);
-  };
-
-  return (
-    <ResponsiveContainer 
-      mobilePadding={isMobile ? "sm" : "md"}
-      className="py-4 space-y-4 bg-background"
-      maxWidth="full"
-    >
-      {/* Header with refresh button */}
-      <EnhancedMessagesHeader
-        title="Enhanced Messages"
-        totalMessages={total || 0}
-        onRefresh={handleDataRefresh}
-        isLoading={isLoading}
-        onToggleFilters={toggleFiltersPanel}
-        onToggleView={toggleView}
-        currentView={currentView}
-        filtersCount={filtersCount}
-      />
-      
-      {/* Filter header with basic controls */}
-      <MessageFiltersHeader 
-        onRefresh={handleDataRefresh} 
-        isFiltersPanelOpen={filtersPanelOpen}
-        onToggleFiltersPanel={toggleFiltersPanel}
-      />
-      
-      {/* Main content area with filters, message grid/list, and panels */}
-      <MessagesLayout 
-        detailsOpen={detailsOpen}
-        analyticsOpen={analyticsOpen}
-      >
-        <MessageContent 
-          onSelect={handleMessageSelect}
-          onView={handleMessageView}
-          onEdit={handleEditMessage}
+  const renderMessages = () => {
+    if (showMode === 'grid') {
+      return (
+        <MessageGridView 
+          mediaGroups={paginatedItems} 
+          isLoading={isLoading} 
+          onView={handleViewMessage}
           onDelete={handleDeleteMessage}
+          onEdit={handleEditMessage}
+          onToggleSelect={(message, selected) => handleToggleSelect(message, selected)}
+          selectedMessages={selectedMessages}
         />
-      </MessagesLayout>
+      );
+    }
+    
+    return (
+      <MessageList 
+        messages={paginatedItems}
+        isLoading={isLoading}
+        onView={handleViewMessage}
+        onDelete={handleDeleteMessage}
+        onEdit={handleEditMessage}
+        onToggleSelect={(message, selected) => handleToggleSelect(message, selected)}
+        selectedMessages={selectedMessages}
+      />
+    );
+  };
+  
+  return (
+    <div className="container mx-auto py-10">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center space-x-2">
+          <Input
+            type="text"
+            placeholder="Search messages..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <Button variant="outline" size="icon" onClick={() => setIsFilterOpen(!isFilterOpen)}>
+            <Filter className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button variant="outline" size="sm" onClick={() => setShowMode(showMode === 'grid' ? 'list' : 'grid')}>
+            Show {showMode === 'grid' ? 'List' : 'Grid'}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                Actions <MoreHorizontal className="ml-2 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => clearSelection()}>
+                Clear Selection <Copy className="ml-auto h-4 w-4" />
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={getSelectedMessageIds().length === 0}>
+                Delete Selected <Trash2 className="ml-auto h-4 w-4" />
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
       
-      {/* Media viewer modal */}
-      {viewerState?.isOpen && viewerState.Viewer}
-    </ResponsiveContainer>
+      {isFilterOpen && (
+        <div className="mb-4 p-4 border rounded-md">
+          <h3 className="text-lg font-semibold mb-2">Filters</h3>
+          {/* Add filter components here */}
+          <p>Filter options will be added here.</p>
+        </div>
+      )}
+      
+      {renderMessages()}
+      
+      {hasNextPage && (
+        <Button variant="outline" className="w-full" onClick={() => fetchNextPage()}>
+          {isLoading ? (
+            <>
+              Loading more...
+              <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+            </>
+          ) : (
+            'Load More'
+          )}
+        </Button>
+      )}
+      
+      {viewItem && (
+        <MediaViewer
+          isOpen={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+          currentGroup={viewItem}
+        />
+      )}
+    </div>
   );
-};
-
-export default MessagesEnhanced;
+}
