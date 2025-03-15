@@ -9,7 +9,7 @@ import {
   xdelo_downloadMediaFromTelegram,
   xdelo_uploadMediaToStorage,
   xdelo_processMessageMedia
-} from '../../_shared/mediaUtils.ts';
+} from '../../_shared/mediaUtils/index.ts';
 
 // Declare Deno type for Edge Functions
 declare const Deno: {
@@ -143,7 +143,7 @@ export const redownloadMissingFile = async (message: MessageRecord): Promise<{su
   }
 };
 
-// Export all functions from the shared mediaUtils.ts for backward compatibility
+// Export all functions from the shared mediaUtils for backward compatibility
 export { 
   xdelo_isViewableMimeType, 
   xdelo_getUploadOptions,
