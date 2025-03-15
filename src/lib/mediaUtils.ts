@@ -1,6 +1,6 @@
 
 import { Message } from "@/types/entities/Message";
-import { MediaItem, getMediaType } from "@/types/ui/MediaViewer";
+import { MediaItem, getMediaType } from "@/types/ui/MediaItem";
 
 /**
  * Converts a Message to a MediaItem for use in components
@@ -61,3 +61,6 @@ export function getTelegramMessageUrl(message: Message): string | null {
   
   return `https://t.me/c/${message.chat_id.toString().replace("-100", "")}/${message.telegram_message_id}`;
 }
+
+// Re-export getMediaType for convenience
+export { getMediaType };

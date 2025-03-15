@@ -1,10 +1,11 @@
 
+// This file is now deprecated - import from '@/types/ui/MediaItem' instead
 import { Message } from '@/types';
-import { MediaItem, getMediaType } from '@/types/ui/MediaViewer';
 import { 
   messageToMediaItem, 
   getMainMediaFromGroup, 
-  getTelegramMessageUrl 
+  getTelegramMessageUrl,
+  getMediaType 
 } from '@/lib/mediaUtils';
 
 // Re-export the utility functions from our consolidated location
