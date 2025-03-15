@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Play, FileX, RefreshCw } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Message } from '@/types';
+import { getVideoDuration } from '../utils/mediaUtils';
 
 interface VideoThumbnailProps {
   message: Message;
@@ -22,6 +23,9 @@ export const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   onError,
   hasError
 }) => {
+  // Get duration from telegram_data or message property
+  const duration = getVideoDuration(message);
+  
   if (thumbnailUrl && !hasError) {
     return (
       <>
@@ -37,7 +41,7 @@ export const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
           </div>
         </div>
         <Badge className="absolute top-2 right-2 bg-black/70 text-white">
-          {message.duration ? `${Math.floor(message.duration)}s` : 'Video'}
+          {duration ? `${Math.floor(duration)}s` : 'Video'}
         </Badge>
       </>
     );

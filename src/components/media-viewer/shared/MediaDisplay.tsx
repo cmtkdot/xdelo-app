@@ -15,7 +15,7 @@ export function MediaDisplay({ message, className }: MediaDisplayProps) {
     );
   }
 
-  // Use our enhanced isVideoMessage function to better detect videos
+  // Use our enhanced telegram_data-aware isVideoMessage function
   const isVideo = isVideoMessage(message);
 
   return (

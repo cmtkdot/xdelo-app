@@ -2,15 +2,72 @@
 import { Message } from '@/types';
 
 /**
- * Determine if a message contains a video based on mime type or URL pattern
+ * Unified interface for Telegram video metadata
+ */
+interface TelegramVideo {
+  duration?: number;
+  width?: number;
+  height?: number;
+  file_name?: string;
+  mime_type?: string;
+  thumb?: {
+    file_id?: string;
+    width?: number;
+    height?: number;
+  };
+}
+
+/**
+ * Type-safe access to telegram_data properties
+ */
+export const getTelegramData = (message: Message): Record<string, any> | null => {
+  if (!message.telegram_data || typeof message.telegram_data !== 'object') {
+    return null;
+  }
+  return message.telegram_data as Record<string, any>;
+};
+
+/**
+ * Get video metadata from telegram_data
+ */
+export const getVideoMetadata = (message: Message): TelegramVideo | null => {
+  const telegramData = getTelegramData(message);
+  if (!telegramData) return null;
+  
+  // Direct video object in telegram_data
+  if (telegramData.video && typeof telegramData.video === 'object') {
+    return telegramData.video as TelegramVideo;
+  }
+  
+  // Video in document
+  if (telegramData.document && 
+      typeof telegramData.document === 'object' && 
+      telegramData.document.mime_type && 
+      typeof telegramData.document.mime_type === 'string' && 
+      telegramData.document.mime_type.startsWith('video/')) {
+    return telegramData.document as TelegramVideo;
+  }
+  
+  return null;
+};
+
+/**
+ * Determine if a message contains a video based on telegram_data
+ * This is the primary and most reliable method for video detection
  */
 export const isVideoMessage = (message: Message): boolean => {
-  // Check mime type first
+  // Check telegram_data first (most reliable)
+  const videoMetadata = getVideoMetadata(message);
+  if (videoMetadata) {
+    return true;
+  }
+  
+  // Fallback to mime type check
   if (message.mime_type?.startsWith('video/')) {
     return true;
   }
   
-  // Check URL file extension if mime type doesn't indicate video
+  // Fallback to URL file extension check
   if (message.public_url) {
     const videoExtensions = /\.(mp4|mov|webm|avi|mkv|mpg|mpeg|m4v|3gp)$/i;
     if (videoExtensions.test(message.public_url)) {
@@ -18,25 +75,8 @@ export const isVideoMessage = (message: Message): boolean => {
     }
   }
   
-  // Check if it's marked as video in telegram_data (for application/octet-stream)
-  if (message.telegram_data && typeof message.telegram_data === 'object') {
-    // Type guard to check if telegram_data is an object before accessing properties
-    const telegramData = message.telegram_data as Record<string, any>;
-    
-    if (telegramData.video || 
-       (telegramData.document?.mime_type && 
-        typeof telegramData.document.mime_type === 'string' &&
-        telegramData.document.mime_type.startsWith('video/'))) {
-      return true;
-    }
-  }
-
-  // Handle specific octet-stream cases that we know are videos
-  if (message.mime_type === 'application/octet-stream' && 
-      (message.duration || 
-      (message.telegram_data && 
-       typeof message.telegram_data === 'object' && 
-       (message.telegram_data as any).document?.mime_type?.startsWith('video/')))) {
+  // Last fallback: Look for duration property which often indicates video
+  if (message.duration) {
     return true;
   }
   
@@ -73,6 +113,52 @@ export const getMediaIcon = (message: Message): string => {
   }
   
   return 'file';
+};
+
+/**
+ * Get video dimensions for proper aspect ratio display
+ */
+export const getVideoDimensions = (message: Message): { width: number; height: number } => {
+  // First try to get dimensions from telegram_data
+  const videoMetadata = getVideoMetadata(message);
+  if (videoMetadata && videoMetadata.width && videoMetadata.height) {
+    return {
+      width: videoMetadata.width,
+      height: videoMetadata.height
+    };
+  }
+  
+  // Fallback to message properties
+  if (message.width && message.height) {
+    return {
+      width: message.width,
+      height: message.height
+    };
+  }
+  
+  // Default 16:9 ratio if no dimensions available
+  return {
+    width: 16,
+    height: 9
+  };
+};
+
+/**
+ * Get video duration in seconds
+ */
+export const getVideoDuration = (message: Message): number | null => {
+  // First try to get duration from telegram_data
+  const videoMetadata = getVideoMetadata(message);
+  if (videoMetadata && videoMetadata.duration) {
+    return videoMetadata.duration;
+  }
+  
+  // Fallback to message property
+  if (message.duration) {
+    return message.duration;
+  }
+  
+  return null;
 };
 
 /**
