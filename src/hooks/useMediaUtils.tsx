@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { Message } from '@/types/entities/Message';
 import { useToast } from '@/hooks/useToast';
@@ -14,19 +13,18 @@ import {
 } from '@/lib/mediaOperations';
 
 /**
- * Unified hook for all media operations
+ * Unified hook for all media operations with improved error handling
  */
 export function useMediaUtils() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessageIds, setProcessingMessageIds] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
-  // Add a message ID to the processing state
+  // Helper functions for tracking processing state
   const addProcessingMessageId = useCallback((id: string) => {
     setProcessingMessageIds(prev => ({ ...prev, [id]: true }));
   }, []);
 
-  // Remove a message ID from the processing state
   const removeProcessingMessageId = useCallback((id: string) => {
     setProcessingMessageIds(prev => {
       const updated = { ...prev };
@@ -34,6 +32,107 @@ export function useMediaUtils() {
       return updated;
     });
   }, []);
+
+  // Process a message with improved error handling and retry logic
+  const processMessageWithFeedback = useCallback(async (messageId: string): Promise<RepairResult> => {
+    try {
+      addProcessingMessageId(messageId);
+      
+      const result = await processMessage(messageId);
+      
+      if (result.success) {
+        toast({
+          title: "Message Processed",
+          description: result.message || "Message has been processed successfully."
+        });
+      } else {
+        const retryInfo = result.retryCount ? ` after ${result.retryCount} attempts` : '';
+        
+        toast({
+          title: "Processing Failed",
+          description: `${result.message || "Failed to process message"}${retryInfo}`,
+          variant: "destructive"
+        });
+      }
+      
+      return result;
+    } finally {
+      removeProcessingMessageId(messageId);
+    }
+  }, [addProcessingMessageId, removeProcessingMessageId, toast]);
+
+  // Reupload media from Telegram with improved error handling
+  const reuploadMedia = useCallback(async (messageId: string): Promise<RepairResult> => {
+    try {
+      addProcessingMessageId(messageId);
+      
+      // First check if the message exists
+      const { data: messageData, error: messageError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', messageId)
+        .single();
+      
+      if (messageError || !messageData) {
+        throw new Error(`Could not find message: ${messageError?.message || 'Not found'}`);
+      }
+      
+      // Update message state to show processing
+      await supabase
+        .from('messages')
+        .update({
+          processing_state: 'processing',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', messageId);
+      
+      const result = await reuploadMediaFromTelegram(messageId);
+      
+      if (result.success) {
+        toast({
+          title: 'Media Reuploaded',
+          description: 'File has been successfully reuploaded from Telegram.',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: result.message || 'Failed to reupload media. Please try again.',
+          variant: 'destructive',
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error reuploading media:', error);
+      
+      // Update message state to show error
+      try {
+        await supabase
+          .from('messages')
+          .update({
+            processing_state: 'error',
+            error_message: error.message || 'Reupload failed',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', messageId);
+      } catch (updateError) {
+        console.error('Failed to update message error state:', updateError);
+      }
+      
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to reupload media. Please try again.',
+        variant: 'destructive',
+      });
+      
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    } finally {
+      removeProcessingMessageId(messageId);
+    }
+  }, [addProcessingMessageId, removeProcessingMessageId, toast]);
 
   // Fix content disposition for a single message with UI feedback
   const fixContentDispositionForMessage = useCallback(async (messageId: string): Promise<RepairResult> => {
@@ -51,32 +150,6 @@ export function useMediaUtils() {
         toast({
           title: 'Error',
           description: result.message || 'Failed to fix content disposition. Please try again.',
-          variant: 'destructive',
-        });
-      }
-      
-      return result;
-    } finally {
-      removeProcessingMessageId(messageId);
-    }
-  }, [addProcessingMessageId, removeProcessingMessageId, toast]);
-
-  // Reupload media from Telegram with UI feedback
-  const reuploadMedia = useCallback(async (messageId: string): Promise<RepairResult> => {
-    try {
-      addProcessingMessageId(messageId);
-      
-      const result = await reuploadMediaFromTelegram(messageId);
-      
-      if (result.success) {
-        toast({
-          title: 'Media Reuploaded',
-          description: 'File has been successfully reuploaded from Telegram.',
-        });
-      } else {
-        toast({
-          title: 'Error',
-          description: result.message || 'Failed to reupload media. Please try again.',
           variant: 'destructive',
         });
       }
@@ -170,32 +243,6 @@ export function useMediaUtils() {
     }
   }, [addProcessingMessageId, removeProcessingMessageId, toast]);
 
-  // Process a message with UI feedback
-  const processMessageWithFeedback = useCallback(async (messageId: string): Promise<RepairResult> => {
-    try {
-      addProcessingMessageId(messageId);
-      
-      const result = await processMessage(messageId);
-      
-      if (result.success) {
-        toast({
-          title: "Message Processed",
-          description: result.message || "Message has been processed successfully."
-        });
-      } else {
-        toast({
-          title: "Processing Failed",
-          description: result.message || "Failed to process message",
-          variant: "destructive"
-        });
-      }
-      
-      return result;
-    } finally {
-      removeProcessingMessageId(messageId);
-    }
-  }, [addProcessingMessageId, removeProcessingMessageId, toast]);
-
   // Reanalyze message caption with UI feedback
   const reanalyzeCaption = useCallback(async (message: Message): Promise<RepairResult> => {
     try {
@@ -223,7 +270,7 @@ export function useMediaUtils() {
   }, [addProcessingMessageId, removeProcessingMessageId, toast]);
 
   return {
-    // Processing state
+    // State
     isProcessing,
     processingMessageIds,
     
@@ -231,11 +278,11 @@ export function useMediaUtils() {
     fixContentDispositionForMessage,
     reuploadMediaFromTelegram: reuploadMedia,
     processMessage: processMessageWithFeedback,
-    reanalyzeMessageCaption: reanalyzeCaption,
+    reanalyzeMessageCaption,
     
     // Batch operations
-    standardizeStoragePaths: standardizePaths,
-    fixMediaUrls: fixUrls,
-    repairMediaBatch: repairMessages,
+    standardizeStoragePaths,
+    fixMediaUrls,
+    repairMediaBatch,
   };
 }

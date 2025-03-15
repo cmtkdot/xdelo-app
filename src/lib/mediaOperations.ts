@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types/entities/Message';
 import { useToast } from '@/hooks/useToast';
@@ -11,6 +10,7 @@ export interface RepairResult {
   failed?: number;
   errors?: string[];
   message?: string;
+  retryCount?: number;
 }
 
 /**
@@ -174,45 +174,84 @@ export async function repairMediaBatch(messageIds: string[]): Promise<RepairResu
 }
 
 /**
- * Process a message to repair content
+ * Process a message to repair content with improved error handling
  */
 export async function processMessage(messageId: string): Promise<RepairResult> {
-  try {
-    // First, set the message to pending state
-    const { error: updateError } = await supabase.from('messages')
-      .update({ 
-        processing_state: 'pending',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', messageId);
-    
-    if (updateError) throw updateError;
-    
-    // Call the edge function to process this specific message
-    const { data, error } = await supabase.functions.invoke(
-      'direct-caption-processor',
-      {
-        body: { 
-          messageId,
-          trigger_source: 'manual'
+  let retryCount = 0;
+  const maxRetries = 2;
+  
+  while (retryCount <= maxRetries) {
+    try {
+      // First, set the message to pending state
+      const { error: updateError } = await supabase.from('messages')
+        .update({ 
+          processing_state: 'pending',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', messageId);
+      
+      if (updateError) throw updateError;
+      
+      // Call the edge function to process this specific message
+      const { data, error } = await supabase.functions.invoke(
+        'direct-caption-processor',
+        {
+          body: { 
+            messageId,
+            trigger_source: 'manual',
+            retryCount
+          }
         }
+      );
+      
+      if (error) throw error;
+      
+      return {
+        success: true,
+        message: `Successfully processed message ${messageId.substring(0, 8)}.`,
+        retryCount
+      };
+    } catch (error) {
+      console.error(`Processing attempt ${retryCount + 1}/${maxRetries + 1} failed:`, error);
+      
+      // If we've reached max retries, give up
+      if (retryCount >= maxRetries) {
+        console.error('Max retries reached for processing:', error);
+        
+        // Update message state to error
+        try {
+          await supabase.from('messages')
+            .update({ 
+              processing_state: 'error',
+              error_message: error.message || 'Processing failed after multiple attempts',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', messageId);
+        } catch (updateError) {
+          console.error('Failed to update message error state:', updateError);
+        }
+        
+        return {
+          success: false,
+          message: `Failed to process message after ${maxRetries + 1} attempts`,
+          retryCount: retryCount + 1
+        };
       }
-    );
-    
-    if (error) throw error;
-    
-    return {
-      success: true,
-      message: `Successfully processed message ${messageId.substring(0, 8)}.`
-    };
-  } catch (error) {
-    console.error('Error processing message:', error);
-    
-    return {
-      success: false,
-      message: error.message || "Failed to process message"
-    };
+      
+      // Wait before retrying (exponential backoff)
+      const delay = Math.pow(2, retryCount) * 1000;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      retryCount++;
+    }
   }
+  
+  // This should never be reached due to the return in the catch block
+  return {
+    success: false,
+    message: "Unexpected error in process flow",
+    retryCount
+  };
 }
 
 /**
