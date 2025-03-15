@@ -89,8 +89,7 @@ export default function MessagesEnhanced() {
   } = useEnhancedMessages({
     limit: ITEMS_PER_PAGE,
     searchTerm: debouncedSearch,
-    // Note: chatIds is not in the interface, so we'll remove it
-    dateRange: selectedDateRange
+    // Remove the dateRange property as it's not part of the interface
   });
   
   const [viewItem, setViewItem] = useState<Message[] | null>(null);
