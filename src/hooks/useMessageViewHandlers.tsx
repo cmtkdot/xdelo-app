@@ -2,7 +2,7 @@
 import { useState, useCallback } from 'react';
 import { Message } from '@/types/entities/Message';
 import { useTelegramOperations } from './useTelegramOperations';
-import { useMediaOperations } from './useMediaOperations';
+import { useMediaUtils } from './useMediaUtils';
 
 export function useMessageViewHandlers() {
   // Change from Record<string, boolean> to Record<string, Message>
@@ -12,7 +12,7 @@ export function useMessageViewHandlers() {
     fixContentDispositionForMessage,
     reuploadMediaFromTelegram,
     processingMessageIds
-  } = useMediaOperations();
+  } = useMediaUtils();
 
   // Update to only use the Message parameter
   const handleToggleSelect = useCallback((message: Message) => {

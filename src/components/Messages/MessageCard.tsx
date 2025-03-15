@@ -7,7 +7,7 @@ import { RefreshCw } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
 import type { Message } from '@/types';
 import { formatDate } from '@/lib/utils';
-import { useMediaOperations } from '@/hooks/useMediaOperations';
+import { useMediaUtils } from '@/hooks/useMediaUtils';
 import { logEvent, LogEventType } from '@/lib/logUtils';
 
 interface MessageCardProps {
@@ -24,7 +24,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
   const { 
     isProcessing,
     repairMediaBatch 
-  } = useMediaOperations();
+  } = useMediaUtils();
   
   const { 
     id,
