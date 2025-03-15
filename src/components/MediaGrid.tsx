@@ -1,7 +1,7 @@
 
 import { Message } from "@/types";
 import { ProductGroup } from "@/components/ProductGroup";
-import { getMainMediaFromGroup } from "@/components/MediaViewer/types";
+import { getMainMediaFromGroup } from "@/lib/mediaUtils";
 
 interface MediaGridProps {
   mediaGroups: { [key: string]: Message[] };

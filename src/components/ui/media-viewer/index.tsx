@@ -12,7 +12,7 @@ import { MediaCarousel } from './media-carousel';
 import { MediaToolbar } from './media-toolbar';
 import { ProductDetails } from './product-details';
 import { cn } from '@/lib/utils';
-import { getMainMediaFromGroup } from '@/components/MediaViewer/utils/mediaHelpers';
+import { getMainMediaFromGroup } from '@/lib/mediaUtils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';

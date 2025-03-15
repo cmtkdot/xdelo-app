@@ -8,7 +8,7 @@ import { ExternalLink, FileDown, Info, Settings, Share2 } from "lucide-react";
 import { Message } from '@/types/MessagesTypes';
 import { MediaFixButton } from '@/components/MediaViewer/MediaFixButton';
 import { cn } from '@/lib/utils';
-import { getTelegramMessageUrl } from '@/components/MediaViewer/utils/mediaHelpers';
+import { getTelegramMessageUrl } from '@/lib/mediaUtils';
 import { 
   Tooltip,
   TooltipContent,

@@ -3,8 +3,8 @@ import React from 'react';
 import { MediaViewer as EnhancedMediaViewer } from '@/components/ui/media-viewer';
 import { Message } from '@/types/entities/Message';
 
-// Define component props with proper typing
-interface MediaViewerProps {
+// Use the standardized type definition
+export interface MediaViewerProps {
   isOpen: boolean;
   onClose: () => void;
   currentGroup: Message[];
