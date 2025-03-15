@@ -1,50 +1,8 @@
 
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Message } from '@/types/entities/Message';
-import { MessageList } from '@/components/MessageList';
-import { MessageGrid } from '@/components/MessageGrid';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { 
-  Slider,
-} from "@/components/ui/slider"
-import { 
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { 
-  ArrowDown, 
-  ArrowUp, 
-  Copy, 
-  Download, 
-  ExternalLink, 
-  Filter, 
-  Grip, 
-  GripVertical, 
-  Loader2, 
-  MoreHorizontal, 
-  Plus, 
-  Search, 
-  Share2, 
-  Trash2 
-} from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/useToast';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -52,6 +10,9 @@ import { useIsMobile } from '@/hooks/useMobile';
 import { useMessageViewHandlers } from '@/hooks/useMessageViewHandlers';
 import { useEnhancedMessages } from '@/hooks/useEnhancedMessages';
 import { MediaViewer } from '@/components/ui/media-viewer';
+import { MessageFilterBar } from '@/components/EnhancedMessages/MessageFilterBar';
+import { MessageFilterPanel } from '@/components/EnhancedMessages/MessageFilterPanel';
+import { MessageViewContainer } from '@/components/EnhancedMessages/MessageViewContainer';
 
 const ITEMS_PER_PAGE = 50;
 
@@ -141,93 +102,36 @@ export default function MessagesEnhanced() {
     return totalItems > paginatedItems.length;
   }, [totalItems, paginatedItems]);
 
-  const renderMessages = () => {
-    if (showMode === 'grid') {
-      return (
-        <MessageGrid 
-          mediaGroups={paginatedItems as Message[][]} 
-          isLoading={isLoading} 
-          onView={handleViewMessage}
-          onDelete={handleDeleteMessage}
-          onEdit={handleEditMessage}
-          onToggleSelect={(message, selected) => handleToggleSelect(message, selected)}
-          selectedMessages={selectedMessages}
-        />
-      );
-    }
-    
-    return (
-      <MessageList 
-        messages={paginatedItems as Message[]}
-        isLoading={isLoading}
-        onView={handleViewMessage}
-        onDelete={handleDeleteMessage}
-        onEdit={handleEditMessage}
-        onToggleSelect={(message, selected) => handleToggleSelect(message, selected)}
-        selectedMessages={selectedMessages}
-      />
-    );
-  };
+  const toggleFilterPanel = () => setIsFilterOpen(!isFilterOpen);
+  const toggleShowMode = () => setShowMode(showMode === 'grid' ? 'list' : 'grid');
   
   return (
     <div className="container mx-auto py-10">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <Input
-            type="text"
-            placeholder="Search messages..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <Button variant="outline" size="icon" onClick={() => setIsFilterOpen(!isFilterOpen)}>
-            <Filter className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm" onClick={() => setShowMode(showMode === 'grid' ? 'list' : 'grid')}>
-            Show {showMode === 'grid' ? 'List' : 'Grid'}
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                Actions <MoreHorizontal className="ml-2 h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => clearSelection()}>
-                Clear Selection <Copy className="ml-auto h-4 w-4" />
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={getSelectedMessageIds().length === 0}>
-                Delete Selected <Trash2 className="ml-auto h-4 w-4" />
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      <MessageFilterBar 
+        search={search}
+        onSearchChange={setSearch}
+        isFilterOpen={isFilterOpen}
+        toggleFilter={toggleFilterPanel}
+        showMode={showMode}
+        onToggleShowMode={toggleShowMode}
+        clearSelection={clearSelection}
+        getSelectedMessageIds={getSelectedMessageIds}
+      />
       
-      {isFilterOpen && (
-        <div className="mb-4 p-4 border rounded-md">
-          <h3 className="text-lg font-semibold mb-2">Filters</h3>
-          {/* Add filter components here */}
-          <p>Filter options will be added here.</p>
-        </div>
-      )}
+      <MessageFilterPanel isVisible={isFilterOpen} />
       
-      {renderMessages()}
-      
-      {hasMoreItems && (
-        <Button variant="outline" className="w-full mt-4" onClick={handleLoadMore}>
-          {isLoading ? (
-            <>
-              Loading more...
-              <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-            </>
-          ) : (
-            'Load More'
-          )}
-        </Button>
-      )}
+      <MessageViewContainer 
+        showMode={showMode}
+        paginatedItems={paginatedItems}
+        isLoading={isLoading}
+        hasMoreItems={hasMoreItems}
+        handleLoadMore={handleLoadMore}
+        handleViewMessage={handleViewMessage}
+        handleEditMessage={handleEditMessage}
+        handleDeleteMessage={handleDeleteMessage}
+        handleToggleSelect={handleToggleSelect}
+        selectedMessages={selectedMessages}
+      />
       
       {viewItem && (
         <MediaViewer
