@@ -21,3 +21,17 @@ export interface MediaItem {
   processing_state?: string;
   type?: 'image' | 'video' | 'document' | 'audio' | 'unknown';
 }
+
+/**
+ * Utility function to determine media type from MIME type
+ */
+export function getMediaType(mimeType?: string): 'image' | 'video' | 'document' | 'audio' | 'unknown' {
+  if (!mimeType) return 'unknown';
+  
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  if (mimeType.startsWith('application/')) return 'document';
+  
+  return 'unknown';
+}

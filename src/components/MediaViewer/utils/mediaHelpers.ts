@@ -1,15 +1,12 @@
 
 import { Message } from '@/types/entities/Message';
-import { MediaItem } from '@/types/ui/MediaViewer';
-import { getMediaType, getMainMediaFromGroup, getTelegramMessageUrl } from '../types';
+import { MediaItem, getMediaType } from '@/types/ui/MediaViewer';
 
 /**
  * Converts a Message to a MediaItem for the viewer
  */
 export function messageToMediaItem(message: Message): MediaItem {
   if (!message) return null;
-  
-  const type = getMediaType(message.mime_type);
   
   return {
     id: message.id,
@@ -26,13 +23,36 @@ export function messageToMediaItem(message: Message): MediaItem {
     content_disposition: message.content_disposition,
     storage_path: message.storage_path,
     processing_state: message.processing_state,
-    type
+    type: getMediaType(message.mime_type)
   };
 }
 
-// Re-export utility functions for backward compatibility
-export { 
-  getMainMediaFromGroup, 
-  getTelegramMessageUrl,
-  getMediaType
-};
+/**
+ * Finds the main media in a group (with caption or first item)
+ */
+export function getMainMediaFromGroup(messages: Message[]): Message | null {
+  if (!messages || messages.length === 0) return null;
+  
+  // First, try to find message with original caption
+  const originalCaption = messages.find(m => m.is_original_caption === true);
+  if (originalCaption) return originalCaption;
+  
+  // Then, try to find any message with caption
+  const withCaption = messages.find(m => !!m.caption);
+  if (withCaption) return withCaption;
+  
+  // Finally, just return the first message as fallback
+  return messages[0];
+}
+
+/**
+ * Gets Telegram message URL
+ */
+export function getTelegramMessageUrl(message: Message): string | null {
+  if (!message || !message.chat_id || !message.telegram_message_id) return null;
+  
+  return `https://t.me/c/${message.chat_id.toString().replace("-100", "")}/${message.telegram_message_id}`;
+}
+
+// Export the getMediaType utility directly for use in components
+export { getMediaType };

@@ -1,6 +1,6 @@
 
 import { Message } from "@/types/entities/Message";
-import { MediaItem } from "@/types/ui/MediaViewer";
+import { MediaItem, getMediaType } from "@/types/ui/MediaViewer";
 
 /**
  * Converts a Message to a MediaItem for use in components
@@ -22,7 +22,8 @@ export function messageToMediaItem(message: Message): MediaItem {
     duration: message.duration,
     content_disposition: message.content_disposition,
     storage_path: message.storage_path,
-    processing_state: message.processing_state
+    processing_state: message.processing_state,
+    type: getMediaType(message.mime_type)
   };
 }
 

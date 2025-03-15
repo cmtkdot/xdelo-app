@@ -1,21 +1,7 @@
 
-import { AnalyzedContent } from './index';
+// Legacy type file - redirecting to the new location
+// Import from '@/types/ui/MediaViewer' instead
 
-// This is a legacy type for compatibility, 
-// the main definition is now in src/types/ui/MediaViewer.ts
-export interface MediaItem {
-  id: string;
-  public_url: string;
-  mime_type?: string;
-  file_unique_id: string;
-  analyzed_content?: AnalyzedContent;
-  created_at: string;
-  caption?: string;
-  width?: number;
-  height?: number;
-  file_size?: number;
-  duration?: number;
-  content_disposition?: 'inline' | 'attachment';
-  storage_path?: string;
-  processing_state?: string;
-}
+import { MediaItem as NewMediaItem } from './ui/MediaViewer';
+
+export type MediaItem = NewMediaItem;
