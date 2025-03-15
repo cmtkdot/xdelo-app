@@ -1,6 +1,6 @@
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { ProcessingState, Message, AnalyzedContent } from "../_shared/types";
+import { ProcessingState, Message, AnalyzedContent } from "../_shared/types.ts";
 import { MessageInput, ForwardInfo } from "./types";
 
 interface BaseMessageRecord {
