@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +5,7 @@ import { FileEdit, Eye, Trash2 } from "lucide-react";
 import { Message } from "@/types";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { useTelegramOperations } from '@/hooks/useTelegramOperations';
-import { getMainMediaFromGroup } from '@/components/MediaViewer/types';
+import { getMainMediaFromGroup } from '@/components/media-viewer/utils';
 
 interface ProductGroupProps {
   group: Message[];
@@ -28,11 +27,9 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
 
   if (!mainMedia) return null;
 
-  // Determine if this is a video based on mime type or filename
   const isVideo = mainMedia.mime_type?.startsWith('video/') || 
                  (mainMedia.public_url && /\.(mp4|mov|webm|avi)$/i.test(mainMedia.public_url));
 
-  // Get the product name from analyzed content if available
   const productName = mainMedia.analyzed_content?.product_name || 'No product name';
 
   const handleDelete = async (deleteTelegram: boolean) => {
@@ -51,7 +48,6 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
               preload="metadata"
               onError={(e) => {
                 const target = e.target as HTMLVideoElement;
-                // Set a fallback or placeholder for failed videos
                 console.error("Video failed to load:", mainMedia.public_url);
               }}
             />

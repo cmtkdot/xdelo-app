@@ -6,10 +6,11 @@ import { useMediaOperations } from './useMediaOperations';
 
 export function useMessageViewHandlers() {
   const [selectedMessages, setSelectedMessages] = useState<Record<string, boolean>>({});
-  const { deleteMessage, isProcessing, processingMessageIds } = useTelegramOperations();
+  const { handleDelete, isProcessing } = useTelegramOperations();
   const { 
     fixContentDispositionForMessage,
-    reuploadMediaFromTelegram
+    reuploadMediaFromTelegram,
+    processingMessageIds
   } = useMediaOperations();
 
   // Handle selecting/deselecting messages
@@ -37,7 +38,7 @@ export function useMessageViewHandlers() {
     handleToggleSelect,
     clearSelection,
     getSelectedMessageIds,
-    deleteMessage,
+    deleteMessage: handleDelete, // Map to the correct property
     fixContentDispositionForMessage,
     reuploadMediaFromTelegram,
     isProcessing,
