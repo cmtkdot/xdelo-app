@@ -9,7 +9,7 @@ import type { Message } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { useMediaUtils } from '@/hooks/useMediaUtils';
 import { logEvent, LogEventType } from '@/lib/logUtils';
-import { Tooltip } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface MessageCardProps {
   message: Message;
@@ -97,12 +97,19 @@ export const MessageCard: React.FC<MessageCardProps> = ({
               Created: {formatDate(new Date(created_at || ''))}
             </div>
             {error_message && (
-              <Tooltip content={error_message}>
-                <div className="text-xs text-red-500 dark:text-red-400 flex items-center space-x-1">
-                  <AlertCircle className="h-3 w-3" />
-                  <span>{formattedError.substring(0, 50)}{formattedError.length > 50 ? '...' : ''}</span>
-                </div>
-              </Tooltip>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <div className="text-xs text-red-500 dark:text-red-400 flex items-center space-x-1">
+                      <AlertCircle className="h-3 w-3" />
+                      <span>{formattedError.substring(0, 50)}{formattedError.length > 50 ? '...' : ''}</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {error_message}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
           <div className="flex items-center space-x-2">

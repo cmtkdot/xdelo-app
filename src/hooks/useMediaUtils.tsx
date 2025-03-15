@@ -1,6 +1,8 @@
+
 import { useState, useCallback } from 'react';
 import { Message } from '@/types/entities/Message';
 import { useToast } from '@/hooks/useToast';
+import { supabase } from '@/integrations/supabase/client';
 import {
   fixContentDisposition,
   reuploadMediaFromTelegram,
