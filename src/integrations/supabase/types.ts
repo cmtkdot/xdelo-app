@@ -444,39 +444,6 @@ export type Database = {
         }
         Relationships: []
       }
-      gl_data_validation_errors: {
-        Row: {
-          created_at: string
-          error_message: string
-          id: string
-          is_resolved: boolean | null
-          record_id: string
-          resolved_at: string | null
-          table_name: string
-          validation_type: string
-        }
-        Insert: {
-          created_at?: string
-          error_message: string
-          id?: string
-          is_resolved?: boolean | null
-          record_id: string
-          resolved_at?: string | null
-          table_name: string
-          validation_type: string
-        }
-        Update: {
-          created_at?: string
-          error_message?: string
-          id?: string
-          is_resolved?: boolean | null
-          record_id?: string
-          resolved_at?: string | null
-          table_name?: string
-          validation_type?: string
-        }
-        Relationships: []
-      }
       gl_estimate_lines: {
         Row: {
           created_at: string | null
@@ -782,13 +749,10 @@ export type Database = {
           pdf_generated_at: string | null
           pdf_url: string | null
           rowids_accountsid: string | null
-          rowids_accountsid_new: string | null
           sb_accounts_id: string | null
           sb_estimates_id: string | null
           sb_pdf_generated_at: string | null
           sb_pdf_storage_path: string | null
-          sb_pdf_updated_at: string | null
-          sb_pdf_url: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
           updated_at: string | null
         }
@@ -811,13 +775,10 @@ export type Database = {
           pdf_generated_at?: string | null
           pdf_url?: string | null
           rowids_accountsid?: string | null
-          rowids_accountsid_new?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
           sb_pdf_generated_at?: string | null
           sb_pdf_storage_path?: string | null
-          sb_pdf_updated_at?: string | null
-          sb_pdf_url?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
@@ -840,54 +801,12 @@ export type Database = {
           pdf_generated_at?: string | null
           pdf_url?: string | null
           rowids_accountsid?: string | null
-          rowids_accountsid_new?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
           sb_pdf_generated_at?: string | null
           sb_pdf_storage_path?: string | null
-          sb_pdf_updated_at?: string | null
-          sb_pdf_url?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
-        }
-        Relationships: []
-      }
-      gl_pdf_generation_queue: {
-        Row: {
-          completed_at: string | null
-          created_at: string | null
-          error_message: string | null
-          id: string
-          priority: number | null
-          processing_started_at: string | null
-          record_id: string
-          retry_count: number | null
-          status: string | null
-          table_name: string
-        }
-        Insert: {
-          completed_at?: string | null
-          created_at?: string | null
-          error_message?: string | null
-          id?: string
-          priority?: number | null
-          processing_started_at?: string | null
-          record_id: string
-          retry_count?: number | null
-          status?: string | null
-          table_name: string
-        }
-        Update: {
-          completed_at?: string | null
-          created_at?: string | null
-          error_message?: string | null
-          id?: string
-          priority?: number | null
-          processing_started_at?: string | null
-          record_id?: string
-          retry_count?: number | null
-          status?: string | null
-          table_name?: string
         }
         Relationships: []
       }
@@ -3856,64 +3775,29 @@ export type Database = {
           latest_error_time: string
         }[]
       }
-      xan_get_recent_validation_errors:
-        | {
-            Args: {
-              p_limit?: number
-            }
-            Returns: {
-              table_name: string
-              record_id: string
-              validation_type: string
-              error_message: string
-              created_at: string
-            }[]
-          }
-        | {
-            Args: {
-              p_limit?: number
-              p_include_record_details?: boolean
-            }
-            Returns: {
-              id: string
-              table_name: string
-              record_id: string
-              validation_type: string
-              error_message: string
-              created_at: string
-              resolved_at: string
-              is_resolved: boolean
-              record_details: Json
-            }[]
-          }
-      xan_get_record_validation_errors:
-        | {
-            Args: {
-              p_table_name: string
-              p_record_id: string
-            }
-            Returns: {
-              created_at: string
-              error_message: string
-              id: string
-              is_resolved: boolean | null
-              record_id: string
-              resolved_at: string | null
-              table_name: string
-              validation_type: string
-            }[]
-          }
-        | {
-            Args: {
-              p_table_name: string
-              p_record_id: string
-            }
-            Returns: {
-              validation_type: string
-              error_message: string
-              created_at: string
-            }[]
-          }
+      xan_get_recent_validation_errors: {
+        Args: {
+          p_limit?: number
+        }
+        Returns: {
+          table_name: string
+          record_id: string
+          validation_type: string
+          error_message: string
+          created_at: string
+        }[]
+      }
+      xan_get_record_validation_errors: {
+        Args: {
+          p_table_name: string
+          p_record_id: string
+        }
+        Returns: {
+          validation_type: string
+          error_message: string
+          created_at: string
+        }[]
+      }
       xan_get_validation_summary: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3929,15 +3813,6 @@ export type Database = {
           relationship_type: string
           records_updated: number
         }[]
-      }
-      xan_log_validation_error: {
-        Args: {
-          p_table_name: string
-          p_record_id: string
-          p_validation_type: string
-          p_error_message: string
-        }
-        Returns: string
       }
       xan_perform_maintenance: {
         Args: Record<PropertyKey, never>
@@ -3975,20 +3850,6 @@ export type Database = {
           records_updated: number
         }[]
       }
-      xan_resolve_validation_error: {
-        Args: {
-          p_error_id: string
-        }
-        Returns: boolean
-      }
-      xan_run_data_repair: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      xan_run_pdf_generation: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
       xan_store_relationship_validation_history: {
         Args: Record<PropertyKey, never>
         Returns: number
@@ -4004,13 +3865,6 @@ export type Database = {
           po_id: string
         }
         Returns: undefined
-      }
-      xan_validate_all_invoices: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          validated_count: number
-          error_count: number
-        }[]
       }
       xan_validate_entity_references: {
         Args: Record<PropertyKey, never>
