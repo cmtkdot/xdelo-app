@@ -3,10 +3,9 @@ import { Message } from "@/types/MessagesTypes";
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { MediaViewer } from '@/components/MediaViewer/MediaViewer';
-import { MediaFixButton } from '@/components/ProductGallery/MediaFixButton';
 import { Button } from '@/components/ui/button';
 import { toast } from "sonner";
-import { Image, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 const PublicGallery = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -14,7 +13,6 @@ const PublicGallery = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Message[]>([]);
-  const [isFixingImages, setIsFixingImages] = useState(false);
   const [filter, setFilter] = useState<string>("all"); // all, images, videos
 
   useEffect(() => {
@@ -65,43 +63,6 @@ const PublicGallery = () => {
       setSelectedMedia([message]);
     }
     setIsViewerOpen(true);
-  };
-
-  const handleQuickFixImages = async () => {
-    setIsFixingImages(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('xdelo_fix_media_urls', {
-        body: { 
-          limit: 100, 
-          dryRun: false,
-          onlyImages: true
-        }
-      });
-      
-      if (error) {
-        throw error;
-      }
-      
-      toast.success(`Successfully fixed ${data.results.fixed} image URLs`);
-      
-      // Refresh the gallery
-      const { data: refreshedData } = await supabase
-        .from('messages')
-        .select('*')
-        .is('deleted_from_telegram', false)
-        .order('created_at', { ascending: false })
-        .limit(50);
-        
-      if (refreshedData) {
-        setMessages(refreshedData as unknown as Message[]);
-      }
-      
-    } catch (error) {
-      console.error('Error fixing images:', error);
-      toast.error('Failed to fix images: ' + (error?.message || 'Unknown error'));
-    } finally {
-      setIsFixingImages(false);
-    }
   };
 
   const renderMedia = (message: Message) => {
@@ -175,20 +136,6 @@ const PublicGallery = () => {
           onClick={() => setFilter("videos")}
         >
           Videos
-        </Button>
-        
-        <Button 
-          variant="outline" 
-          className="ml-auto flex items-center gap-2"
-          onClick={handleQuickFixImages}
-          disabled={isFixingImages}
-        >
-          {isFixingImages ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Image className="h-4 w-4" />
-          )}
-          Fix Images
         </Button>
       </div>
       
