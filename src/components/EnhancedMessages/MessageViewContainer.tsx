@@ -40,43 +40,39 @@ export function MessageViewContainer({
     );
   }
 
-  // Check if paginatedItems is an array of arrays (grouped messages)
-  const isGroupedData = Array.isArray(paginatedItems[0]) && Array.isArray(paginatedItems);
+  // No items to display
+  if (!paginatedItems || paginatedItems.length === 0) {
+    return (
+      <div className="mt-6 p-8 text-center border rounded-md bg-muted/20">
+        <h3 className="text-xl font-semibold mb-2">No messages found</h3>
+        <p className="text-muted-foreground">Try adjusting your filters or refreshing the data.</p>
+      </div>
+    );
+  }
+
+  // Determine if we're dealing with grouped data
+  const isGroupedData = Array.isArray(paginatedItems[0]);
 
   if (showMode === 'grid') {
-    // If the data isn't already in grouped format, we need to convert it
-    if (!isGroupedData) {
-      // Convert flat messages array to array of single-message groups
-      const messageGroups = (paginatedItems as Message[]).map(message => [message]);
-      return (
-        <MessageGridView
-          messageGroups={messageGroups}
-          onSelect={handleToggleSelect}
-          onView={handleViewMessage}
-          onEdit={handleEditMessage}
-          onDelete={(message) => handleDeleteMessage(message.id)}
-          selectedMessages={selectedMessages}
-          hasMoreItems={hasMoreItems}
-          onLoadMore={handleLoadMore}
-        />
-      );
-    } else {
-      // Data is already in the correct format for grid view
-      return (
-        <MessageGridView
-          messageGroups={paginatedItems as Message[][]}
-          onSelect={handleToggleSelect}
-          onView={handleViewMessage}
-          onEdit={handleEditMessage}
-          onDelete={(message) => handleDeleteMessage(message.id)}
-          selectedMessages={selectedMessages}
-          hasMoreItems={hasMoreItems}
-          onLoadMore={handleLoadMore}
-        />
-      );
-    }
+    // Ensure data is in grouped format for grid view
+    const messageGroups = isGroupedData
+      ? (paginatedItems as Message[][])
+      : (paginatedItems as Message[]).map(message => [message]);
+    
+    return (
+      <MessageGridView
+        messageGroups={messageGroups}
+        onSelect={handleToggleSelect}
+        onView={handleViewMessage}
+        onEdit={handleEditMessage}
+        onDelete={(message) => handleDeleteMessage(message.id)}
+        selectedMessages={selectedMessages}
+        hasMoreItems={hasMoreItems}
+        onLoadMore={handleLoadMore}
+      />
+    );
   } else {
-    // List view - flatten groups if needed
+    // For list view, flatten groups if needed
     const flatItems = isGroupedData 
       ? (paginatedItems as Message[][]).flat() 
       : (paginatedItems as Message[]);
@@ -85,7 +81,7 @@ export function MessageViewContainer({
       <MessageListView
         messages={flatItems}
         onSelect={handleToggleSelect}
-        onView={handleViewMessage}
+        onView={(message) => handleViewMessage([message])}
         onEdit={handleEditMessage}
         onDelete={(message) => handleDeleteMessage(message.id)}
         selectedId={Object.keys(selectedMessages)[0]}

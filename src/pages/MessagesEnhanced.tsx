@@ -24,13 +24,12 @@ export default function MessagesEnhanced() {
   const [selectedChatIds, setSelectedChatIds] = useState<string[]>([]);
   const [selectedDateRange, setSelectedDateRange] = useState<Date[] | undefined>(undefined);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [sliderValue, setSliderValue] = useState<number[]>([100])
+  const [sliderValue, setSliderValue] = useState<number[]>([100]);
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const isMobile = useIsMobile();
   
-  // Now using the updated hook with correct types
   const { 
     selectedMessages, 
     handleToggleSelect, 
@@ -51,6 +50,7 @@ export default function MessagesEnhanced() {
   } = useEnhancedMessages({
     limit: ITEMS_PER_PAGE,
     searchTerm: debouncedSearch,
+    grouped: showMode === 'grid', // Request grouped data for grid view
   });
   
   const [viewItem, setViewItem] = useState<Message[] | null>(null);
@@ -62,11 +62,13 @@ export default function MessagesEnhanced() {
   
   const paginatedItems = useMemo(() => {
     if (!items) return [];
+    // Use the appropriate data structure for each view mode
     return showMode === 'grid' ? groupedMessages : items;
   }, [items, groupedMessages, showMode]);
   
-  // Update to accept Message[] as parameter
+  // View handler consistently accepts array of messages
   const handleViewMessage = (messages: Message[]) => {
+    if (!messages || messages.length === 0) return;
     setViewItem(messages);
     setViewerOpen(true);
   };
@@ -94,7 +96,6 @@ export default function MessagesEnhanced() {
 
   // Function to handle loading more items
   const handleLoadMore = async () => {
-    // We'll just refresh the data for now
     await refetch();
   };
 

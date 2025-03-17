@@ -2,14 +2,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Message } from '@/types';
 import { useIsMobile } from '@/hooks/useMobile';
-import { cn } from '@/lib/utils';
-import { MessageListItem } from './list/MessageListItem';
 import { EmptyList } from './list/EmptyList';
+import { MessageListItem } from './list/MessageListItem';
 
 interface MessageListViewProps {
   messages: Message[];
   onSelect: (message: Message) => void;
-  onView: (messageGroup: Message[]) => void;
+  onView: (message: Message) => void;  // Changed to accept single message
   onEdit?: (message: Message) => void;
   onDelete?: (message: Message) => void;
   selectedId?: string;
@@ -50,7 +49,7 @@ export function MessageListView({
           key={message.id}
           message={message}
           onSelect={onSelect}
-          onView={() => onView([message])} // Pass the message as an array to match expected type
+          onView={() => onView(message)}
           onEdit={onEdit}
           onDelete={onDelete}
           isSelected={selectedId === message.id}

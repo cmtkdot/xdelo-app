@@ -3807,15 +3807,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
-      xan_count_by_status_and_table: {
-        Args: {
-          p_table_name: string
-        }
-        Returns: {
-          status: string
-          count: number
-        }[]
-      }
       xan_fetch_glide_products: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -3863,64 +3854,34 @@ export type Database = {
           payments_count: number
         }[]
       }
-      xan_get_recent_validation_errors:
-        | {
-            Args: {
-              p_limit?: number
-            }
-            Returns: {
-              table_name: string
-              record_id: string
-              validation_type: string
-              error_message: string
-              created_at: string
-            }[]
-          }
-        | {
-            Args: {
-              p_limit?: number
-              p_include_record_details?: boolean
-            }
-            Returns: {
-              id: string
-              table_name: string
-              record_id: string
-              validation_type: string
-              error_message: string
-              created_at: string
-              resolved_at: string
-              is_resolved: boolean
-              record_details: Json
-            }[]
-          }
-      xan_get_record_validation_errors:
-        | {
-            Args: {
-              p_table_name: string
-              p_record_id: string
-            }
-            Returns: {
-              created_at: string
-              error_message: string
-              id: string
-              is_resolved: boolean | null
-              record_id: string
-              resolved_at: string | null
-              table_name: string
-              validation_type: string
-            }[]
-          }
-        | {
-            Args: {
-              p_table_name: string
-              p_record_id: string
-            }
-            Returns: {
-              validation_type: string
-              error_message: string
-              created_at: string
-            }[]
-          }
+      xan_get_recent_validation_errors: {
+        Args: {
+          p_limit?: number
+        }
+        Returns: {
+          table_name: string
+          record_id: string
+          validation_type: string
+          error_message: string
+          created_at: string
+        }[]
+      }
+      xan_get_record_validation_errors: {
+        Args: {
+          p_table_name: string
+          p_record_id: string
+        }
+        Returns: {
+          created_at: string
+          error_message: string
+          id: string
+          is_resolved: boolean | null
+          record_id: string
+          resolved_at: string | null
+          table_name: string
+          validation_type: string
+        }[]
+      }
       xan_get_relationship_health: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3932,15 +3893,6 @@ export type Database = {
           valid_mappings: number
           last_sync_time: string
           is_active: boolean
-        }[]
-      }
-      xan_get_validation_summary: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          table_name: string
-          error_count: number
-          distinct_records: number
-          latest_error: string
         }[]
       }
       xan_log_validation_error: {
@@ -3975,12 +3927,6 @@ export type Database = {
           fixed_count: number
         }[]
       }
-      xan_resolve_validation_error: {
-        Args: {
-          p_error_id: string
-        }
-        Returns: boolean
-      }
       xan_run_data_repair: {
         Args: Record<PropertyKey, never>
         Returns: Json
@@ -4010,16 +3956,6 @@ export type Database = {
         Returns: {
           validated_count: number
           error_count: number
-        }[]
-      }
-      xan_validate_relationships: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          table_name: string
-          glide_column: string
-          supabase_column: string
-          missing_count: number
-          last_checked: string
         }[]
       }
       xdelo_check_media_group_content: {
