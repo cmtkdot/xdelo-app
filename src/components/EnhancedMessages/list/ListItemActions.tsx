@@ -6,7 +6,7 @@ import { Message } from '@/types';
 
 interface ListItemActionsProps {
   message: Message;
-  onView: () => void;
+  onView: () => void;  // Simplified to just a callback
   onEdit?: ((message: Message) => void) | undefined;
   onDelete?: ((message: Message) => void) | undefined;
   isMobile: boolean;

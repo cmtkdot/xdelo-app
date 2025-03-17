@@ -12,7 +12,7 @@ import { useFilteredMessages } from '@/hooks/useFilteredMessages';
 
 interface MessageContentProps {
   onSelect: (message: Message) => void;
-  onView: (messageGroup: Message[]) => void;
+  onView: (messages: Message[]) => void;  // Standardized to use array
   onEdit: (message: Message) => void;
   onDelete: (message: Message) => void;
 }
@@ -87,7 +87,7 @@ export function MessageContent({
         <MessageGridView 
           messageGroups={messages.map(msg => [msg])} // Convert each message to a group array
           onSelect={onSelect}
-          onView={onView}
+          onView={onView}  // Already accepts Message[]
           onEdit={onEdit}
           onDelete={onDelete}
           selectedMessages={{[selectedMessage?.id || '']: selectedMessage as Message}}
@@ -99,7 +99,7 @@ export function MessageContent({
         <MessageListView 
           messages={messages}
           onSelect={onSelect}
-          onView={onView}
+          onView={onView}  // Now consistently accepts Message[]
           onEdit={onEdit}
           onDelete={onDelete}
           selectedId={selectedMessage?.id}

@@ -11,7 +11,7 @@ interface MessageViewContainerProps {
   isLoading: boolean;
   hasMoreItems: boolean;
   handleLoadMore: () => void;
-  handleViewMessage: (messages: Message[]) => void;
+  handleViewMessage: (messages: Message[]) => void;  // Consistently accept array
   handleEditMessage: (message: Message) => void;
   handleDeleteMessage: (messageId: string) => void;
   handleToggleSelect: (message: Message) => void;
@@ -81,7 +81,7 @@ export function MessageViewContainer({
       <MessageListView
         messages={flatItems}
         onSelect={handleToggleSelect}
-        onView={(message) => handleViewMessage([message])}
+        onView={handleViewMessage}  // Now consistently passing arrays
         onEdit={handleEditMessage}
         onDelete={(message) => handleDeleteMessage(message.id)}
         selectedId={Object.keys(selectedMessages)[0]}

@@ -8,7 +8,7 @@ import { MessageListItem } from './list/MessageListItem';
 interface MessageListViewProps {
   messages: Message[];
   onSelect: (message: Message) => void;
-  onView: (message: Message) => void;  // Changed to accept single message
+  onView: (messages: Message[]) => void;  // Updated to accept array of messages
   onEdit?: (message: Message) => void;
   onDelete?: (message: Message) => void;
   selectedId?: string;
@@ -49,7 +49,7 @@ export function MessageListView({
           key={message.id}
           message={message}
           onSelect={onSelect}
-          onView={() => onView(message)}
+          onView={() => onView([message])}  // Wrap single message in array
           onEdit={onEdit}
           onDelete={onDelete}
           isSelected={selectedId === message.id}
