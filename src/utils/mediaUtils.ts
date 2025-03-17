@@ -5,7 +5,7 @@ import { AnalyzedContent } from "@/types/utils/AnalyzedContent";
 /**
  * Unified interface for Telegram video metadata
  */
-interface TelegramVideo {
+export interface TelegramVideo {
   duration?: number;
   width?: number;
   height?: number;
@@ -16,13 +16,16 @@ interface TelegramVideo {
     width?: number;
     height?: number;
   };
+  file_size?: number;
+  file_id?: string;
+  file_unique_id?: string;
 }
 
 /**
  * Type-safe access to telegram_data properties
  */
 export const getTelegramData = (message: Message): Record<string, any> | null => {
-  if (!message.telegram_data || typeof message.telegram_data !== 'object') {
+  if (!message?.telegram_data || typeof message.telegram_data !== 'object') {
     return null;
   }
   return message.telegram_data as Record<string, any>;
@@ -57,6 +60,8 @@ export const getVideoMetadata = (message: Message): TelegramVideo | null => {
  * This is the primary and most reliable method for video detection
  */
 export const isVideoMessage = (message: Message): boolean => {
+  if (!message) return false;
+  
   // Check telegram_data first (most reliable)
   const videoMetadata = getVideoMetadata(message);
   if (videoMetadata) {
@@ -115,9 +120,13 @@ export const getMediaIcon = (message: Message): string => {
  * Get video dimensions for proper aspect ratio display
  */
 export const getVideoDimensions = (message: Message): { width: number; height: number } => {
+  if (!message) {
+    return { width: 16, height: 9 }; // Default 16:9 ratio if no message
+  }
+  
   // First try to get dimensions from telegram_data
   const videoMetadata = getVideoMetadata(message);
-  if (videoMetadata && videoMetadata.width && videoMetadata.height) {
+  if (videoMetadata?.width && videoMetadata?.height) {
     return {
       width: videoMetadata.width,
       height: videoMetadata.height
@@ -143,9 +152,11 @@ export const getVideoDimensions = (message: Message): { width: number; height: n
  * Get video duration in seconds
  */
 export const getVideoDuration = (message: Message): number | null => {
+  if (!message) return null;
+  
   // First try to get duration from telegram_data
   const videoMetadata = getVideoMetadata(message);
-  if (videoMetadata && videoMetadata.duration) {
+  if (videoMetadata?.duration) {
     return videoMetadata.duration;
   }
   

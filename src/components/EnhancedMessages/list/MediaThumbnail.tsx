@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { FileX, Film } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { Message } from '@/types';
-import { isVideoMessage } from '../utils/mediaUtils';
+import { isVideoMessage } from '@/utils/mediaUtils';
 
 interface MediaThumbnailProps {
   message: Message;

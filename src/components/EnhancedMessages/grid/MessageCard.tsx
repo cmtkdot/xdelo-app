@@ -8,11 +8,7 @@ import { cn } from '@/lib/utils';
 import { CardActions } from './CardActions';
 import { VideoThumbnail } from './VideoThumbnail';
 import { ImageThumbnail } from './ImageThumbnail';
-import { 
-  isVideoMessage, 
-  getProcessingStateColor, 
-  getVideoMetadata 
-} from '@/utils/mediaUtils';
+import { isVideoMessage, getProcessingStateColor, getVideoMetadata } from '@/utils/mediaUtils';
 
 interface MessageCardProps {
   message: Message;

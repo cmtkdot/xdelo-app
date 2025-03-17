@@ -13,9 +13,18 @@ interface VideoPlayerProps {
   message: Message;
   className?: string;
   autoPlay?: boolean;
+  onError?: () => void;
+  onLoad?: () => void;
 }
 
-export function VideoPlayer({ src, message, className, autoPlay = false }: VideoPlayerProps) {
+export function VideoPlayer({ 
+  src, 
+  message, 
+  className, 
+  autoPlay = false, 
+  onError,
+  onLoad
+}: VideoPlayerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showControls, setShowControls] = useState(false);
@@ -28,12 +37,14 @@ export function VideoPlayer({ src, message, className, autoPlay = false }: Video
   const handleLoadSuccess = () => {
     setIsLoading(false);
     setError(null);
+    onLoad?.();
   };
 
   const handleLoadError = () => {
     setIsLoading(false);
     setError('Failed to load video');
     console.error('Video load error:', message.id, src);
+    onError?.();
   };
 
   const handleMouseEnter = () => {
