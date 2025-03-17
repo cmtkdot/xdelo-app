@@ -3,7 +3,7 @@ import React from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Message } from '@/types';
 import { cn } from '@/lib/utils';
-import { getProcessingStateColor } from '../utils/mediaUtils';
+import { getProcessingStateColor } from '@/utils/mediaUtils';
 
 interface MessageContentProps {
   message: Message;

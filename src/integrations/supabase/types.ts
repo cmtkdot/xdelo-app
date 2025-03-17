@@ -1958,6 +1958,7 @@ export type Database = {
           correlation_id: string | null
           created_at: string
           deleted_from_telegram: boolean | null
+          duplicate_reference_id: string | null
           duration: number | null
           edit_count: number | null
           edit_date: string | null
@@ -2048,6 +2049,7 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           deleted_from_telegram?: boolean | null
+          duplicate_reference_id?: string | null
           duration?: number | null
           edit_count?: number | null
           edit_date?: string | null
@@ -2138,6 +2140,7 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           deleted_from_telegram?: boolean | null
+          duplicate_reference_id?: string | null
           duration?: number | null
           edit_count?: number | null
           edit_date?: string | null

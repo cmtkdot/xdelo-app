@@ -7,8 +7,7 @@ import { ChevronLeft, ChevronRight, X, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { MediaViewerProps } from '@/components/ui/media-viewer';
-import { sortMediaGroupItems } from '@/components/EnhancedMessages/utils/mediaUtils';
-import { getTelegramMessageUrl } from '../utils';
+import { sortMediaGroupItems, getTelegramMessageUrl } from '@/utils/mediaUtils';
 
 export function GalleryMediaViewer({
   isOpen,

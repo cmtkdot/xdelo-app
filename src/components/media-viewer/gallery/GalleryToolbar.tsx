@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Message } from '@/types/entities/Message';
 import { useMediaUtils } from '@/hooks/useMediaUtils';
-import { getTelegramMessageUrl } from '@/lib/mediaUtils';
+import { getTelegramMessageUrl } from '@/utils/mediaUtils';
 
 interface GalleryToolbarProps {
   currentMedia: Message;

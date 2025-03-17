@@ -6,8 +6,7 @@ import { FileEdit, Eye, Trash2 } from "lucide-react";
 import { Message } from "@/types";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { useTelegramOperations } from '@/hooks/useTelegramOperations';
-import { getMainMediaFromGroup } from '@/components/media-viewer/utils';
-import { isVideoMessage } from '@/components/EnhancedMessages/utils/mediaUtils';
+import { getMainMediaFromGroup, isVideoMessage } from '@/utils/mediaUtils';
 
 interface ProductGroupProps {
   group: Message[];
