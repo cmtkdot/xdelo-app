@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Play, FileX, RefreshCw } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Message } from '@/types';
-import { getVideoDuration } from '../utils/mediaUtils';
+import { getVideoDuration } from '@/utils/mediaUtils';
 
 interface VideoThumbnailProps {
   message: Message;

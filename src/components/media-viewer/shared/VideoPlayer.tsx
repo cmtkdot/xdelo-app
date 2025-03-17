@@ -6,7 +6,7 @@ import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Spinner } from '@/components/ui/spinner';
 import { Message } from '@/types/entities/Message';
 import { Button } from '@/components/ui/button';
-import { getVideoMetadata, getVideoDimensions } from '@/components/EnhancedMessages/utils/mediaUtils';
+import { getVideoMetadata, getVideoDimensions } from '@/utils/mediaUtils';
 
 interface VideoPlayerProps {
   src: string;
