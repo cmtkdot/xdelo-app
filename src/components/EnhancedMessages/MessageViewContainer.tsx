@@ -11,7 +11,7 @@ interface MessageViewContainerProps {
   isLoading: boolean;
   hasMoreItems: boolean;
   handleLoadMore: () => void;
-  handleViewMessage: (messages: Message[]) => void;
+  handleViewMessage: (messages: Message[]) => void;  // Consistently accept array
   handleEditMessage: (message: Message) => void;
   handleDeleteMessage: (messageId: string) => void;
   handleToggleSelect: (message: Message) => void;
@@ -40,11 +40,28 @@ export function MessageViewContainer({
     );
   }
 
-  if (showMode === 'grid' && Array.isArray(paginatedItems[0])) {
-    // Grid view with grouped messages
+  // No items to display
+  if (!paginatedItems || paginatedItems.length === 0) {
+    return (
+      <div className="mt-6 p-8 text-center border rounded-md bg-muted/20">
+        <h3 className="text-xl font-semibold mb-2">No messages found</h3>
+        <p className="text-muted-foreground">Try adjusting your filters or refreshing the data.</p>
+      </div>
+    );
+  }
+
+  // Determine if we're dealing with grouped data
+  const isGroupedData = Array.isArray(paginatedItems[0]);
+
+  if (showMode === 'grid') {
+    // Ensure data is in grouped format for grid view
+    const messageGroups = isGroupedData
+      ? (paginatedItems as Message[][])
+      : (paginatedItems as Message[]).map(message => [message]);
+    
     return (
       <MessageGridView
-        messageGroups={paginatedItems as Message[][]}
+        messageGroups={messageGroups}
         onSelect={handleToggleSelect}
         onView={handleViewMessage}
         onEdit={handleEditMessage}
@@ -55,8 +72,8 @@ export function MessageViewContainer({
       />
     );
   } else {
-    // List view with flat messages or fallback for grid if groups aren't available
-    const flatItems = Array.isArray(paginatedItems[0]) 
+    // For list view, flatten groups if needed
+    const flatItems = isGroupedData 
       ? (paginatedItems as Message[][]).flat() 
       : (paginatedItems as Message[]);
     
@@ -64,7 +81,7 @@ export function MessageViewContainer({
       <MessageListView
         messages={flatItems}
         onSelect={handleToggleSelect}
-        onView={handleViewMessage}
+        onView={handleViewMessage}  // Now consistently passing arrays
         onEdit={handleEditMessage}
         onDelete={(message) => handleDeleteMessage(message.id)}
         selectedId={Object.keys(selectedMessages)[0]}

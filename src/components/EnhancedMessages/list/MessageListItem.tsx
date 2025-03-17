@@ -9,7 +9,7 @@ import { ListItemActions } from './ListItemActions';
 interface MessageListItemProps {
   message: Message;
   onSelect: (message: Message) => void;
-  onView: (messageGroup: Message[]) => void;
+  onView: () => void;  // This is now just a callback with no params
   onEdit?: (message: Message) => void;
   onDelete?: (message: Message) => void;
   isSelected?: boolean;
@@ -38,14 +38,14 @@ export const MessageListItem: React.FC<MessageListItemProps> = ({
       <MediaThumbnail 
         message={message}
         hasError={hasError}
-        onView={() => onView([message])}
+        onView={onView}  // Pass the callback directly
       />
       
       <MessageContent message={message} />
       
       <ListItemActions 
         message={message}
-        onView={() => onView([message])}
+        onView={onView}  // Pass the callback directly
         onEdit={onEdit}
         onDelete={onDelete}
         isMobile={isMobile}

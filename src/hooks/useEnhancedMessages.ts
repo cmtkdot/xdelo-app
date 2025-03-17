@@ -1,4 +1,3 @@
-
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,7 +19,7 @@ export function useEnhancedMessages({
   searchTerm = '',
   sortBy = 'created_at',
   sortOrder = 'desc',
-  grouped = false,
+  grouped = true, // Default to grouped for better compatibility
   enableRealtime = true
 }: UseEnhancedMessagesOptions = {}) {
   const queryClient = useQueryClient();
@@ -58,11 +57,11 @@ export function useEnhancedMessages({
     error,
     refetch
   } = useQuery({
-    queryKey: ['enhanced-messages', limit, processingStates, sortBy, sortOrder, searchTerm],
+    queryKey: ['enhanced-messages', limit, processingStates, sortBy, sortOrder, searchTerm, grouped],
     queryFn: async () => {
       try {
         console.log('Fetching enhanced messages with options:', {
-          limit, processingStates, sortBy, sortOrder, searchTerm
+          limit, processingStates, sortBy, sortOrder, searchTerm, grouped
         });
         
         // Build the query
@@ -109,50 +108,51 @@ export function useEnhancedMessages({
           ...rawMessage
         }));
         
-        // Return flat array if grouping is not requested
-        if (!grouped) {
+        // Process grouped messages if requested
+        if (grouped) {
+          const mediaGroups: Record<string, Message[]> = {};
+          
+          validMessages.forEach((message) => {
+            // Use media_group_id if available, otherwise create a single-message group
+            const groupId = message.media_group_id || `single-${message.id}`;
+            
+            if (!mediaGroups[groupId]) {
+              mediaGroups[groupId] = [];
+            }
+            
+            mediaGroups[groupId].push(message);
+          });
+          
+          console.log(`Created ${Object.keys(mediaGroups).length} media groups`);
+          
+          // Sort messages within each group
+          Object.values(mediaGroups).forEach(group => {
+            group.sort((a, b) => {
+              // If we have telegram_message_id, sort by that
+              if (a.telegram_message_id && b.telegram_message_id) {
+                return a.telegram_message_id - b.telegram_message_id;
+              }
+              
+              // Otherwise sort by created_at
+              const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+              const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+              return dateA - dateB;
+            });
+          });
+          
+          // Convert to array of arrays for component consumption
+          const groupedMessagesArray = Object.values(mediaGroups);
+          
           return {
             flatMessages: validMessages,
-            groupedMessages: []
+            groupedMessages: groupedMessagesArray
           };
         }
         
-        // Otherwise, perform the grouping operation
-        const mediaGroups: Record<string, Message[]> = {};
-        
-        validMessages.forEach((message) => {
-          const groupId = message.media_group_id || `single-${message.id}`;
-          
-          if (!mediaGroups[groupId]) {
-            mediaGroups[groupId] = [];
-          }
-          
-          mediaGroups[groupId].push(message);
-        });
-        
-        console.log(`Created ${Object.keys(mediaGroups).length} media groups`);
-        
-        // Sort messages within each group
-        Object.values(mediaGroups).forEach(group => {
-          group.sort((a, b) => {
-            // If we have telegram_message_id, sort by that
-            if (a.telegram_message_id && b.telegram_message_id) {
-              return a.telegram_message_id - b.telegram_message_id;
-            }
-            
-            // Otherwise sort by created_at
-            const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-            const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-            return dateA - dateB;
-          });
-        });
-        
-        // Convert to array of arrays for component consumption
-        const groupedMessagesArray = Object.values(mediaGroups);
-        
+        // Return ungrouped data
         return {
           flatMessages: validMessages,
-          groupedMessages: groupedMessagesArray
+          groupedMessages: validMessages.map(msg => [msg]) // Create single-item groups for compatibility
         };
         
       } catch (err) {
