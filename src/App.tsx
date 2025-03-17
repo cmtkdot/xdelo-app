@@ -119,6 +119,11 @@ function App() {
               <Router>
                 <Routes>
                   <Route path="/auth" element={<Auth />} />
+                  <Route path="/p/public" element={
+                    <Suspense fallback={<PageLoader />}>
+                      <PublicGallery />
+                    </Suspense>
+                  } />
                   <Route path="/p/:id" element={
                     <Suspense fallback={<PageLoader />}>
                       <PublicGallery />

@@ -1,3 +1,4 @@
+
 import React from "react";
 import { 
   Home, 
@@ -9,6 +10,7 @@ import {
   Database, 
   Zap, 
   Music,
+  GalleryHorizontal,
   LucideIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,6 +35,7 @@ export const navItems: NavItem[] = [
   { name: "Dashboard", Icon: Home, path: "/", group: "main" },
   { name: "Messages", Icon: PanelTopOpen, path: "/messages-enhanced", group: "main" },
   { name: "Gallery", Icon: ImageIcon, path: "/gallery", group: "main" },
+  { name: "Public Gallery", Icon: GalleryHorizontal, path: "/p/public", group: "main" },
   
   { name: "Media Table", Icon: PanelLeft, path: "/media-table", group: "data", divider: true },
   { name: "SQL Console", Icon: Database, path: "/sql-console", group: "data" },
