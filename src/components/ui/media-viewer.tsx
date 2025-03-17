@@ -1,17 +1,8 @@
 
-import { MediaViewer as BaseMediaViewer } from '@/components/media-viewer/MediaViewer';
-import type { Message } from '@/types';
+import { MediaViewer as BaseMediaViewer } from '@/components/MediaViewer';
+import type { MediaViewerProps } from '@/components/MediaViewer';
 
-export interface MediaViewerProps {
-  isOpen: boolean;
-  onClose: () => void;
-  currentGroup: Message[];
-  onPrevious?: () => void;
-  onNext?: () => void;
-  hasPrevious?: boolean;
-  hasNext?: boolean;
-  className?: string;
-}
+export type { MediaViewerProps };
 
 /**
  * MediaViewer component that delegates to the MediaViewer implementation
