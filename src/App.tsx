@@ -14,7 +14,6 @@ import { useIsMobile } from "./hooks/useMobile";
 
 // Lazy load page components for better performance
 const Dashboard = lazy(() => import("./pages/Dashboard"));
-const MessagesPage = lazy(() => import("./pages/Messages"));
 const MessagesEnhanced = lazy(() => import("./pages/MessagesEnhanced"));
 const ProductGallery = lazy(() => import("./pages/ProductGallery"));
 const MediaTable = lazy(() => import("./pages/MediaTable"));
@@ -26,7 +25,7 @@ const PublicGallery = lazy(() => import("./pages/PublicGallery"));
 const SqlConsole = lazy(() => import('./pages/SqlConsole'));
 const MakeAutomations = lazy(() => import('./pages/MakeAutomations'));
 
-import { AppSidebar } from "./components/Layout/AppSidebar";
+import { AppSidebar } from "@/components/Layout/Sidebar";
 
 interface ApiError extends Error {
   status?: number;
@@ -52,7 +51,6 @@ const queryClient = new QueryClient({
   }
 });
 
-// Loading component for Suspense fallback
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen">
     <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -121,6 +119,11 @@ function App() {
               <Router>
                 <Routes>
                   <Route path="/auth" element={<Auth />} />
+                  <Route path="/p/public" element={
+                    <Suspense fallback={<PageLoader />}>
+                      <PublicGallery />
+                    </Suspense>
+                  } />
                   <Route path="/p/:id" element={
                     <Suspense fallback={<PageLoader />}>
                       <PublicGallery />
@@ -144,7 +147,7 @@ function App() {
                     </ProtectedRoute>
                   }>
                     <Route path="/" element={<Dashboard />} />
-                    <Route path="/messages" element={<MessagesPage />} />
+                    <Route path="/messages" element={<Navigate to="/messages-enhanced" replace />} />
                     <Route path="/messages-enhanced" element={<MessagesEnhanced />} />
                     <Route path="/gallery" element={<ProductGallery />} />
                     <Route path="/media-table" element={<MediaTable />} />

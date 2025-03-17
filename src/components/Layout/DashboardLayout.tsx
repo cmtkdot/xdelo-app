@@ -1,7 +1,7 @@
 
 import React, { useEffect } from "react";
 import { Header } from "./Header";
-import { AppSidebar } from "./AppSidebar";
+import { AppSidebar } from "./Sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
 import { MobileDrawer } from "./MobileDrawer";
 import { useNavigation } from "@/components/Layout/NavigationProvider";
