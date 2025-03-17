@@ -26,7 +26,7 @@ const PublicGallery = lazy(() => import("./pages/PublicGallery"));
 const SqlConsole = lazy(() => import('./pages/SqlConsole'));
 const MakeAutomations = lazy(() => import('./pages/MakeAutomations'));
 
-import { AppSidebar } from "./components/Layout/AppSidebar";
+import { AppSidebar } from "./components/Layout/Sidebar";
 
 interface ApiError extends Error {
   status?: number;
@@ -52,7 +52,6 @@ const queryClient = new QueryClient({
   }
 });
 
-// Loading component for Suspense fallback
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen">
     <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
