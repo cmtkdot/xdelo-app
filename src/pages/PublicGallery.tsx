@@ -5,7 +5,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { MediaViewer } from '@/components/MediaViewer/MediaViewer';
 import { Button } from '@/components/ui/button';
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, CalendarIcon, Package, Tag, FileText } from "lucide-react";
+import { format } from "date-fns";
+import { Badge } from "@/components/ui/badge";
 
 const PublicGallery = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -114,6 +116,16 @@ const PublicGallery = () => {
     );
   };
 
+  // Helper function to format date
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return null;
+    try {
+      return format(new Date(dateString), 'MMM d, yyyy');
+    } catch (e) {
+      return dateString;
+    }
+  };
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Public Gallery</h1>
@@ -145,12 +157,61 @@ const PublicGallery = () => {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {filteredMessages.map(message => (
-              <div key={message.id} className="border rounded-md p-2">
-                {renderMedia(message)}
-                <p className="text-sm mt-2 truncate">{message.caption || 'No caption'}</p>
-                <p className="text-xs text-gray-500 truncate">{message.mime_type || 'Unknown type'}</p>
+              <div key={message.id} className="border rounded-md p-4 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex justify-center mb-3">
+                  {renderMedia(message)}
+                </div>
+                
+                {/* Product Information */}
+                <div className="space-y-2">
+                  <h3 className="font-medium text-md truncate">
+                    {message.analyzed_content?.product_name || message.caption || 'No title'}
+                  </h3>
+                  
+                  {message.analyzed_content?.vendor_uid && (
+                    <div className="flex items-center gap-1">
+                      <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">
+                        {message.analyzed_content.vendor_uid}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {message.analyzed_content?.product_code && (
+                    <div className="flex items-center gap-1">
+                      <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">
+                        {message.analyzed_content.product_code}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {message.analyzed_content?.purchase_date && (
+                    <div className="flex items-center gap-1">
+                      <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">
+                        {formatDate(message.analyzed_content.purchase_date)}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {message.analyzed_content?.notes && (
+                    <div className="flex items-start gap-1">
+                      <FileText className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
+                      <span className="text-sm text-muted-foreground line-clamp-2">
+                        {message.analyzed_content.notes}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {message.analyzed_content?.quantity && (
+                    <Badge variant="outline" className="mt-1">
+                      Qty: {message.analyzed_content.quantity}
+                    </Badge>
+                  )}
+                </div>
               </div>
             ))}
           </div>
