@@ -1,18 +1,18 @@
 
-import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Message } from '@/types';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import { MediaDisplay } from './MediaDisplay';
 import { MediaToolbar } from './MediaToolbar';
-import { sortMediaGroupItems, getMainMediaFromGroup } from '@/utils/mediaUtils';
+import { cn } from '@/lib/utils';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export interface MediaViewerProps {
   isOpen: boolean;
   onClose: () => void;
   currentGroup: Message[];
+  initialIndex?: number;
   onPrevious?: () => void;
   onNext?: () => void;
   hasPrevious?: boolean;
@@ -24,83 +24,80 @@ export function MediaViewer({
   isOpen,
   onClose,
   currentGroup,
+  initialIndex = 0,
   onPrevious,
   onNext,
-  hasPrevious,
-  hasNext,
-  className,
+  hasPrevious = false,
+  hasNext = false,
+  className
 }: MediaViewerProps) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [sortedGroup, setSortedGroup] = useState<Message[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [showTools, setShowTools] = useState(false);
   
-  // Sort media group with images first, then videos
+  const currentMedia = currentGroup[currentIndex];
+  const messageIds = currentGroup.map(message => message.id);
+  
+  // Reset current index when group changes
   useEffect(() => {
-    if (currentGroup?.length) {
-      setSortedGroup(sortMediaGroupItems([...currentGroup]));
-    } else {
-      setSortedGroup([]);
-    }
-  }, [currentGroup]);
-
-  useEffect(() => {
-    // Reset index when group changes
-    setCurrentIndex(0);
-  }, [sortedGroup]);
-
-  const handlePrevItem = () => {
+    setCurrentIndex(initialIndex);
+  }, [currentGroup, initialIndex]);
+  
+  const handlePrevious = useCallback(() => {
     if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
+      setCurrentIndex(prev => prev - 1);
+    } else if (onPrevious) {
+      onPrevious();
     }
-  };
-
-  const handleNextItem = () => {
-    if (currentIndex < sortedGroup.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+  }, [currentIndex, onPrevious]);
+  
+  const handleNext = useCallback(() => {
+    if (currentIndex < currentGroup.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    } else if (onNext) {
+      onNext();
     }
-  };
-
-  const currentItem = sortedGroup[currentIndex];
-  const messageIds = sortedGroup.map(message => message.id);
-
+  }, [currentIndex, currentGroup.length, onNext]);
+  
   // Handle keyboard navigation
   useEffect(() => {
+    if (!isOpen) return;
+    
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isOpen) return;
-      
-      if (e.key === 'ArrowLeft') {
-        if (currentIndex > 0) {
-          handlePrevItem();
-        } else if (hasPrevious && onPrevious) {
-          onPrevious();
-        }
-      } else if (e.key === 'ArrowRight') {
-        if (currentIndex < sortedGroup.length - 1) {
-          handleNextItem();
-        } else if (hasNext && onNext) {
-          onNext();
-        }
-      } else if (e.key === 'Escape') {
-        onClose();
+      switch (e.key) {
+        case 'ArrowLeft':
+          handlePrevious();
+          break;
+        case 'ArrowRight':
+          handleNext();
+          break;
+        case 'Escape':
+          onClose();
+          break;
+        case 't':
+          setShowTools(prev => !prev);
+          break;
+        default:
+          break;
       }
     };
-
+    
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, currentIndex, sortedGroup.length, hasPrevious, hasNext, onPrevious, onNext, onClose]);
-
-  // Handle swipe navigation
-  const [touchStart, setTouchStart] = useState(0);
-  const [touchEnd, setTouchEnd] = useState(0);
-
+  }, [isOpen, handleNext, handlePrevious, onClose]);
+  
+  // Handle touch gestures for navigation
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  
   const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
   };
-
+  
   const handleTouchMove = (e: React.TouchEvent) => {
     setTouchEnd(e.targetTouches[0].clientX);
   };
-
+  
   const handleTouchEnd = () => {
     if (!touchStart || !touchEnd) return;
     
@@ -109,128 +106,76 @@ export function MediaViewer({
     const isRightSwipe = distance < -50;
     
     if (isLeftSwipe) {
-      if (currentIndex < sortedGroup.length - 1) {
-        handleNextItem();
-      } else if (hasNext && onNext) {
-        onNext();
-      }
+      handleNext();
     } else if (isRightSwipe) {
-      if (currentIndex > 0) {
-        handlePrevItem();
-      } else if (hasPrevious && onPrevious) {
-        onPrevious();
-      }
+      handlePrevious();
     }
-    
-    setTouchStart(0);
-    setTouchEnd(0);
   };
-
-  if (!isOpen || !sortedGroup.length) return null;
-
+  
+  const canNavigatePrevious = currentIndex > 0 || !!onPrevious && hasPrevious;
+  const canNavigateNext = currentIndex < currentGroup.length - 1 || !!onNext && hasNext;
+  
+  if (!currentMedia) return null;
+  
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent 
-        className={cn("sm:max-w-5xl p-0 gap-0 bg-background/80 backdrop-blur-lg", className)}
+      <DialogContent
+        className={cn("max-w-7xl w-full h-[90vh] p-0 overflow-hidden flex flex-col", className)}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="relative h-[80vh] flex flex-col">
-          {/* Close button */}
-          <div className="absolute top-2 right-2 z-20">
-            <button 
-              onClick={onClose}
-              className="p-2 bg-background/80 rounded-full hover:bg-background"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          {/* Previous/Next Group Controls */}
-          {hasPrevious && onPrevious && (
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="absolute left-2 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
-              onClick={onPrevious}
-            >
-              <ChevronLeft className="h-8 w-8" />
-            </Button>
-          )}
-          
-          {hasNext && onNext && (
-            <Button 
-              variant="ghost" 
-              size="icon"
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
-              onClick={onNext}
-            >
-              <ChevronRight className="h-8 w-8" />
-            </Button>
-          )}
-
-          {/* Previous/Next Item Controls */}
-          {currentIndex > 0 && (
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="absolute left-16 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
-              onClick={handlePrevItem}
-            >
-              <ChevronLeft className="h-6 w-6" />
-            </Button>
-          )}
-          
-          {currentIndex < sortedGroup.length - 1 && (
-            <Button 
-              variant="ghost" 
-              size="icon"
-              className="absolute right-16 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
-              onClick={handleNextItem}
-            >
-              <ChevronRight className="h-6 w-6" />
-            </Button>
-          )}
-
-          {/* Media Display */}
-          <div className="flex-1 flex items-center justify-center p-4">
-            {currentItem && (
-              <MediaDisplay message={currentItem} />
-            )}
-          </div>
-
-          {/* Thumbnails/Pagination */}
-          {sortedGroup.length > 1 && (
-            <div className="p-2 flex justify-center gap-2 bg-background/20">
-              {sortedGroup.map((item, idx) => (
-                <button
-                  key={item.id}
-                  className={cn(
-                    "w-2 h-2 rounded-full transition-all",
-                    idx === currentIndex ? "bg-primary w-4" : "bg-muted-foreground/50"
-                  )}
-                  onClick={() => setCurrentIndex(idx)}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Caption */}
-          {currentItem?.caption && (
-            <div className="p-4 bg-background/10 max-h-32 overflow-y-auto">
-              <p className="text-sm">{currentItem.caption}</p>
-            </div>
-          )}
-
-          {/* Media Toolbar */}
-          <MediaToolbar 
-            currentMedia={currentItem}
-            showTools={showTools}
-            onToggleTools={() => setShowTools(!showTools)}
-            messageIds={messageIds}
-          />
+        {/* Close button */}
+        <div className="absolute top-2 right-2 z-50">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="rounded-full text-white/70 hover:text-white hover:bg-white/10"
+            onClick={onClose}
+          >
+            <X className="h-5 w-5" />
+          </Button>
         </div>
+        
+        {/* Navigation overlays */}
+        {canNavigatePrevious && (
+          <div 
+            className="absolute left-0 top-0 bottom-0 w-24 flex items-center justify-start p-2 z-10 cursor-pointer"
+            onClick={handlePrevious}
+          >
+            <div className="bg-black/30 rounded-full p-2 hover:bg-black/50 transition-colors">
+              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </div>
+          </div>
+        )}
+        
+        {canNavigateNext && (
+          <div 
+            className="absolute right-0 top-0 bottom-0 w-24 flex items-center justify-end p-2 z-10 cursor-pointer"
+            onClick={handleNext}
+          >
+            <div className="bg-black/30 rounded-full p-2 hover:bg-black/50 transition-colors">
+              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </div>
+        )}
+        
+        {/* Media display */}
+        <div className="flex-1 overflow-hidden relative">
+          <MediaDisplay message={currentMedia} />
+        </div>
+        
+        {/* Toolbar */}
+        <MediaToolbar 
+          currentMedia={currentMedia}
+          showTools={showTools}
+          onToggleTools={() => setShowTools(prev => !prev)}
+          messageIds={messageIds}
+        />
       </DialogContent>
     </Dialog>
   );
