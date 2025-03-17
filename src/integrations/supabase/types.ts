@@ -99,27 +99,6 @@ export type Database = {
         }
         Relationships: []
       }
-      documents: {
-        Row: {
-          content: string | null
-          embedding: string | null
-          id: number
-          metadata: Json | null
-        }
-        Insert: {
-          content?: string | null
-          embedding?: string | null
-          id?: number
-          metadata?: Json | null
-        }
-        Update: {
-          content?: string | null
-          embedding?: string | null
-          id?: number
-          metadata?: Json | null
-        }
-        Relationships: []
-      }
       execution_entity: {
         Row: {
           data: string
@@ -1522,6 +1501,36 @@ export type Database = {
         }
         Relationships: []
       }
+      gl_validation_log: {
+        Row: {
+          created_at: string
+          error_data: Json | null
+          error_message: string
+          id: string
+          record_id: string
+          table_name: string
+          validation_type: string
+        }
+        Insert: {
+          created_at?: string
+          error_data?: Json | null
+          error_message: string
+          id?: string
+          record_id: string
+          table_name: string
+          validation_type: string
+        }
+        Update: {
+          created_at?: string
+          error_data?: Json | null
+          error_message?: string
+          id?: string
+          record_id?: string
+          table_name?: string
+          validation_type?: string
+        }
+        Relationships: []
+      }
       gl_vendor_payments: {
         Row: {
           created_at: string | null
@@ -1979,6 +1988,7 @@ export type Database = {
           correlation_id: string | null
           created_at: string
           deleted_from_telegram: boolean | null
+          duplicate_reference_id: string | null
           duration: number | null
           edit_count: number | null
           edit_date: string | null
@@ -2069,6 +2079,7 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           deleted_from_telegram?: boolean | null
+          duplicate_reference_id?: string | null
           duration?: number | null
           edit_count?: number | null
           edit_date?: string | null
@@ -2159,6 +2170,7 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           deleted_from_telegram?: boolean | null
+          duplicate_reference_id?: string | null
           duration?: number | null
           edit_count?: number | null
           edit_date?: string | null
@@ -2720,6 +2732,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      vector_documents: {
+        Row: {
+          content: string | null
+          embedding: string | null
+          id: number
+          metadata: Json | null
+        }
+        Insert: {
+          content?: string | null
+          embedding?: string | null
+          id?: number
+          metadata?: Json | null
+        }
+        Update: {
+          content?: string | null
+          embedding?: string | null
+          id?: number
+          metadata?: Json | null
+        }
+        Relationships: []
       }
       webhook_entity: {
         Row: {
@@ -3740,6 +3773,38 @@ export type Database = {
           count: number
           latest_error_message: string
           latest_error_time: string
+        }[]
+      }
+      xan_get_recent_validation_errors: {
+        Args: {
+          p_limit?: number
+        }
+        Returns: {
+          table_name: string
+          record_id: string
+          validation_type: string
+          error_message: string
+          created_at: string
+        }[]
+      }
+      xan_get_record_validation_errors: {
+        Args: {
+          p_table_name: string
+          p_record_id: string
+        }
+        Returns: {
+          validation_type: string
+          error_message: string
+          created_at: string
+        }[]
+      }
+      xan_get_validation_summary: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          table_name: string
+          error_count: number
+          distinct_records: number
+          latest_error: string
         }[]
       }
       xan_handle_circular_references: {

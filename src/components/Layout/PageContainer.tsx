@@ -2,7 +2,7 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from '@/hooks/useMobile';
-import { useNavigation } from '@/hooks/useNavigation';
+import { useNavigation } from '@/components/Layout/NavigationProvider';
 import { useEffect } from 'react';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { ChevronLeft } from "lucide-react";

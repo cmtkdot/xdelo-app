@@ -3,7 +3,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useNavigation } from "@/hooks/useNavigation";
+import { useNavigation } from "@/components/Layout/NavigationProvider";
 import { useIsMobile } from "@/hooks/useMobile";
 
 interface MobileBreadcrumbsProps {

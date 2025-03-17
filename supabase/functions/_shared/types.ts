@@ -191,7 +191,7 @@ export async function getMediaGroupInfo(
   };
 }
 
-export async function syncMediaGroupContent(
+export async function xdelo_syncMediaGroupContent(
   supabase: SupabaseClient,
   sourceMessageId: string,
   mediaGroupId: string,

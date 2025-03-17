@@ -5,11 +5,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Separator } from "@/components/ui/separator";
 import { RotateCw, Database, AlertTriangle, Wrench } from 'lucide-react';
 import { useSystemRepair } from '@/hooks/useSystemRepair';
-import { useFileRepair } from '@/hooks/useFileRepair';
+import { useMediaUtils } from '@/hooks/useMediaUtils';
 
 export function SystemRepairPanel() {
   const { repairSystem, isRepairing: isSystemRepairing } = useSystemRepair();
-  const { repairFiles, isRepairing: isFilesRepairing } = useFileRepair();
+  const { repairMediaBatch, isProcessing: isMediaRepairing } = useMediaUtils();
   const [repairResults, setRepairResults] = useState<any>(null);
 
   const handleRepairSystem = async () => {
@@ -18,7 +18,8 @@ export function SystemRepairPanel() {
   };
 
   const handleRepairFiles = async () => {
-    await repairFiles({});
+    const results = await repairMediaBatch([]);
+    setRepairResults(results);
   };
 
   return (
@@ -48,7 +49,7 @@ export function SystemRepairPanel() {
             <Button 
               variant="outline" 
               size="sm"
-              disabled={isFilesRepairing}
+              disabled={isMediaRepairing}
               onClick={handleRepairFiles}
             >
               <RotateCw className="mr-2 h-4 w-4" />

@@ -3,9 +3,9 @@ import React from 'react';
 import { MessageList } from './MessageList';
 import { MessageControlPanel } from './MessageControlPanel';
 import { Spinner } from '../ui/spinner';
-import { useCaptionSync } from '@/hooks/useCaptionSync';
 import { useToast } from '@/hooks/useToast';
 import { useEnhancedMessages } from '@/hooks/useEnhancedMessages';
+import { useMediaUtils } from '@/hooks/useMediaUtils';
 
 export function MessageListContainer() {
   const {
@@ -15,11 +15,11 @@ export function MessageListContainer() {
     refetch,
     isRefetching
   } = useEnhancedMessages({
-    grouped: true, // Keep grouped for backward compatibility
+    grouped: true,
     limit: 500
   });
 
-  const { forceSyncMessageGroup } = useCaptionSync();
+  const { processMessage } = useMediaUtils();
   const { toast } = useToast();
 
   // Simply flatten the grouped messages
@@ -31,16 +31,21 @@ export function MessageListContainer() {
     try {
       toast({
         title: "Processing Message",
-        description: "Analyzing caption and syncing with media group..."
+        description: "Analyzing message content..."
       });
       
-      await forceSyncMessageGroup({ messageId });
-      void refetch();
+      const result = await processMessage(messageId);
       
-      toast({
-        title: "Processing Complete",
-        description: "Message has been processed and synchronized."
-      });
+      if (result.success) {
+        void refetch();
+        
+        toast({
+          title: "Processing Complete",
+          description: "Message has been processed and synchronized."
+        });
+      } else {
+        throw new Error(result.message || "Processing failed");
+      }
     } catch (error: any) {
       console.error("Error retrying processing:", error);
       toast({
@@ -72,7 +77,6 @@ export function MessageListContainer() {
           messages={flatMessages}
           onRefresh={() => { void refetch(); }}
           onRetryProcessing={onRetryProcessing}
-          processAllLoading={isRefetching}
         />
       )}
     </div>

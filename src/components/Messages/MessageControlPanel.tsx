@@ -1,52 +1,55 @@
 
 import React from 'react';
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { RefreshCw, Wrench } from "lucide-react";
-import { useFileRepair } from '@/hooks/useFileRepair';
+import { Button } from '@/components/ui/button';
+import { ActionButtons } from './ActionButtons';
+import { MediaFixButton } from '@/components/MediaViewer/MediaFixButton';
+import { useMediaUtils } from '@/hooks/useMediaUtils';
 
 interface MessageControlPanelProps {
   onRefresh: () => void;
   isRefreshing: boolean;
-  messageCount: number;
+  messageCount?: number;
 }
 
-export function MessageControlPanel({ 
-  onRefresh, 
-  isRefreshing, 
-  messageCount
-}: MessageControlPanelProps) {
-  const { repairFiles, isRepairing } = useFileRepair();
-
+export const MessageControlPanel: React.FC<MessageControlPanelProps> = ({
+  onRefresh,
+  isRefreshing,
+  messageCount = 0
+}) => {
+  const { isProcessing, processAllPendingMessages } = useMediaUtils();
+  
   return (
-    <Card className="p-4">
-      <div className="flex flex-wrap gap-2 justify-between items-center">
-        <div className="flex items-center gap-2">
-          <Button 
+    <div className="bg-muted/30 p-4 rounded-lg border">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
+        <div className="flex flex-col w-full sm:w-auto">
+          <h2 className="font-semibold">Message Queue</h2>
+          <p className="text-sm text-muted-foreground">
+            {messageCount} {messageCount === 1 ? 'message' : 'messages'} in the queue
+          </p>
+        </div>
+        
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
+          <MediaFixButton 
             variant="outline" 
             size="sm" 
-            onClick={onRefresh}
-            disabled={isRefreshing}
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-
-          <Button 
-            variant="outline" 
+          />
+          
+          <Button
+            variant="outline"
             size="sm"
-            onClick={() => repairFiles({})}
-            disabled={isRepairing}
+            onClick={() => processAllPendingMessages()}
+            disabled={isRefreshing || isProcessing}
           >
-            <Wrench className="mr-2 h-4 w-4" />
-            Repair Files
+            Process All Pending
           </Button>
-        </div>
-
-        <div className="text-sm text-muted-foreground">
-          Showing {messageCount} message{messageCount !== 1 ? 's' : ''}
+          
+          <ActionButtons 
+            onRefresh={onRefresh}
+            isRefreshing={isRefreshing}
+            isProcessing={isProcessing}
+          />
         </div>
       </div>
-    </Card>
+    </div>
   );
-}
+};

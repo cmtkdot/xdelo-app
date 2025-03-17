@@ -1,56 +1,57 @@
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Wrench } from "lucide-react";
-import { MediaRepairDialog } from "@/components/MediaViewer/MediaRepairDialog";
-import { Message } from "@/types/MessagesTypes";
+import React from 'react';
+import { Button } from '@/components/ui/button';
+import { Wrench, RefreshCw } from 'lucide-react';
+import { useMediaUtils } from '@/hooks/useMediaUtils';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
-interface MediaFixButtonProps {
-  messageIds?: string[];
-  messages?: Message[];
-  onComplete?: () => void;
-  variant?: "default" | "outline" | "secondary";
-  size?: "default" | "sm" | "lg";
-}
-
-export function MediaFixButton({ 
-  messageIds, 
-  messages, 
-  onComplete,
-  variant = "outline",
-  size = "sm"
-}: MediaFixButtonProps) {
-  const [dialogOpen, setDialogOpen] = useState(false);
-
-  // We can't show if there are no messages or messageIds
-  if ((!messages || messages.length === 0) && (!messageIds || messageIds.length === 0)) {
-    return null;
-  }
+export function MediaFixButton() {
+  const { 
+    isProcessing, 
+    standardizeStoragePaths, 
+    fixMediaUrls 
+  } = useMediaUtils();
 
   return (
-    <>
-      <Button 
-        variant={variant} 
-        size={size}
-        onClick={() => setDialogOpen(true)}
-        title="Open media repair tool to fix issues with media files"
-      >
-        <Wrench className="w-4 h-4 mr-2" />
-        Repair Media
-      </Button>
-
-      <MediaRepairDialog
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          setDialogOpen(open);
-          if (!open && onComplete) {
-            onComplete();
-          }
-        }}
-        messageIds={messageIds}
-        messages={messages}
-        onComplete={onComplete}
-      />
-    </>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="flex items-center gap-2"
+          disabled={isProcessing}
+        >
+          <Wrench className="h-4 w-4" />
+          Media Utilities
+          {isProcessing && <RefreshCw className="h-3 w-3 animate-spin" />}
+        </Button>
+      </PopoverTrigger>
+      
+      <PopoverContent className="w-56 p-2">
+        <div className="space-y-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start"
+            disabled={isProcessing}
+            onClick={() => standardizeStoragePaths(100)}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            <span>Standardize Storage Paths</span>
+          </Button>
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start"
+            disabled={isProcessing}
+            onClick={() => fixMediaUrls(100)}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            <span>Fix Public URLs</span>
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

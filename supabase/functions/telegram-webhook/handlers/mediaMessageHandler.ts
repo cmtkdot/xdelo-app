@@ -1,7 +1,6 @@
 
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
-import { xdelo_analyzeMessageCaption } from '../../_shared/databaseOperations.ts';
 import { 
   xdelo_downloadMediaFromTelegram,
   xdelo_uploadMediaToStorage,
@@ -515,7 +514,7 @@ async function xdelo_processCaptionChanges(
   console.log(`[${correlationId}] Processing caption for message ${messageId}`);
   
   try {
-    // First try direct caption processor with manual-caption-parser
+    // Use direct caption processor with manual-caption-parser
     const captionProcessorUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/manual-caption-parser`;
     const processorResponse = await fetch(captionProcessorUrl, {
       method: 'POST',
@@ -543,23 +542,37 @@ async function xdelo_processCaptionChanges(
     const processorResult = await processorResponse.json();
     console.log(`[${correlationId}] Manual caption processing successful:`, processorResult);
   } catch (directError) {
-    console.error(`[${correlationId}] Manual caption processor failed, falling back to database function:`, directError);
+    console.error(`[${correlationId}] Manual caption processor failed:`, directError);
     
-    // Fallback: Call the database function
+    // Log the failure
     try {
-      const captionResult = await xdelo_analyzeMessageCaption(
-        messageId,
-        correlationId,
-        caption,
-        mediaGroupId,
-        isEdit // Force reprocess for edits
-      );
+      await supabaseClient.from('unified_audit_logs').insert({
+        event_type: 'caption_processing_failed',
+        entity_id: messageId,
+        error_message: directError.message,
+        metadata: {
+          correlationId,
+          caption_length: caption.length,
+          media_group_id: mediaGroupId,
+          is_edit: isEdit,
+          timestamp: new Date().toISOString()
+        },
+        correlation_id: correlationId
+      });
       
-      if (!captionResult.success) {
-        console.error(`[${correlationId}] Database caption processing failed:`, captionResult.error);
-      }
-    } catch (dbError) {
-      console.error(`[${correlationId}] All caption processing attempts failed:`, dbError);
+      // Update message to error state
+      await supabaseClient
+        .from('messages')
+        .update({
+          processing_state: 'error',
+          error_message: `Caption processing failed: ${directError.message}`,
+          error_code: 'CAPTION_PROCESSING_ERROR',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', messageId);
+        
+    } catch (logError) {
+      console.error(`[${correlationId}] Failed to log caption processing error:`, logError);
     }
   }
 }

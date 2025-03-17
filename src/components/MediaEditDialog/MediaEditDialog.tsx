@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/useToast"
-import { useCaptionSync } from '@/hooks/useCaptionSync';
+import { useMediaUtils } from '@/hooks/useMediaUtils';
 
 interface MediaEditDialogProps {
   media: { id: string; caption?: string; media_group_id?: string };
@@ -38,7 +38,7 @@ export function MediaEditDialog({
   const [error, setError] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const { toast } = useToast();
-  const { processCaptionUpdate } = useCaptionSync();
+  const { syncMessageCaption } = useMediaUtils();
 
   const handleOpenChange = (isOpen: boolean) => {
     onOpenChange(isOpen);
@@ -64,10 +64,10 @@ export function MediaEditDialog({
       setSyncStatus('Updating and analyzing caption...');
       
       // Use the updated caption sync hook to handle the update and sync
-      const result = await processCaptionUpdate(media, newCaption);
+      const result = await syncMessageCaption({ messageId: media.id });
       
       if (!result?.success) {
-        throw new Error(result?.error || 'Failed to process caption update');
+        throw new Error(result?.message || 'Failed to process caption update');
       }
       
       setSyncStatus('Caption updated and synced');

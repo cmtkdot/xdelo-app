@@ -4,7 +4,7 @@ import { Header } from "./Header";
 import { AppSidebar } from "./AppSidebar";
 import { useIsMobile } from "@/hooks/useMobile";
 import { MobileDrawer } from "./MobileDrawer";
-import { useNavigation } from "@/hooks/useNavigation";
+import { useNavigation } from "@/components/Layout/NavigationProvider";
 import { useTouchInteraction } from "@/hooks/useTouchInteraction";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { cn } from "@/lib/utils";

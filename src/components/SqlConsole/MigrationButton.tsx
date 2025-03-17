@@ -3,10 +3,10 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Database } from "lucide-react";
-import { useMediaOperations } from '@/hooks/useMediaOperations';
+import { useMediaUtils } from '@/hooks/useMediaUtils';
 
 export function MigrationButton() {
-  const { standardizeStoragePaths, isProcessing } = useMediaOperations();
+  const { standardizeStoragePaths, isProcessing } = useMediaUtils();
   const [results, setResults] = React.useState<{
     success: boolean;
     updatedCount?: number;

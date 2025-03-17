@@ -85,12 +85,14 @@ export function MessageContent({
     <Tabs value={filters.view} className="w-full">
       <TabsContent value="grid" className="mt-0">
         <MessageGridView 
-          messages={messages} 
+          messageGroups={messages.map(msg => [msg])} // Convert each message to a group array
           onSelect={onSelect}
           onView={onView}
           onEdit={onEdit}
           onDelete={onDelete}
-          selectedId={selectedMessage?.id}
+          selectedMessages={{[selectedMessage?.id || '']: selectedMessage as Message}}
+          hasMoreItems={false}
+          onLoadMore={() => {}}
         />
       </TabsContent>
       <TabsContent value="list" className="mt-0">

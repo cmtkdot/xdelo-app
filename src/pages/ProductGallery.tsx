@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,7 +20,6 @@ import { AnalyzedContent } from "@/types";
 
 const ITEMS_PER_PAGE = 12;
 
-// Type guard to check if analyzed_content has a property
 function hasProperty<T extends object, K extends string>(
   obj: T | null | undefined, 
   prop: K
@@ -47,7 +45,6 @@ const ProductGallery = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   
-  // Replace useMediaGroups with useEnhancedMessages
   const { 
     groupedMessages: mediaGroupsData = [], 
     isLoading 
@@ -62,7 +59,6 @@ const ProductGallery = () => {
   const { data: vendors = [] } = useVendors();
   const { handleDelete, isProcessing } = useTelegramOperations();
 
-  // Ensure mediaGroups is properly typed as Message[][]
   const mediaGroups = useMemo(() => {
     return Array.isArray(mediaGroupsData) ? mediaGroupsData : [] as Message[][];
   }, [mediaGroupsData]);
@@ -126,7 +122,6 @@ const ProductGallery = () => {
   const handleView = (group: Message[]) => {
     if (!group || group.length === 0) return;
     
-    // Make a shallow copy to avoid type conflicts
     setCurrentViewGroup([...group]);
     setViewerOpen(true);
     
@@ -144,7 +139,6 @@ const ProductGallery = () => {
     if (currentGroupIndex > 0) {
       const prevIndex = currentGroupIndex - 1;
       setCurrentGroupIndex(prevIndex);
-      // Make a shallow copy to avoid type conflicts
       const group = paginatedProducts[prevIndex];
       if (group && Array.isArray(group)) {
         setCurrentViewGroup([...group]);
@@ -156,7 +150,6 @@ const ProductGallery = () => {
     if (currentGroupIndex < paginatedProducts.length - 1) {
       const nextIndex = currentGroupIndex + 1;
       setCurrentGroupIndex(nextIndex);
-      // Make a shallow copy to avoid type conflicts
       const group = paginatedProducts[nextIndex];
       if (group && Array.isArray(group)) {
         setCurrentViewGroup([...group]);

@@ -166,7 +166,7 @@ export function xdelo_getUploadOptions(mimeType: string): Record<string, any> {
 }
 
 /**
- * Enhanced fetch function with exponential backoff retry logic
+ * Enhanced fetch function with exponential backoff retry logic and improved error handling
  * @param url The URL to fetch
  * @param options Fetch options
  * @param maxRetries Maximum number of retry attempts
@@ -176,7 +176,7 @@ export function xdelo_getUploadOptions(mimeType: string): Record<string, any> {
 async function xdelo_fetchWithRetry(
   url: string,
   options: RequestInit = {},
-  maxRetries: number = 3,
+  maxRetries: number = 5,
   initialRetryDelay: number = 500
 ): Promise<Response> {
   let retryCount = 0;
@@ -187,32 +187,52 @@ async function xdelo_fetchWithRetry(
     try {
       // Add timeout to avoid hanging requests using AbortController
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       
       const enhancedOptions = {
         ...options,
         signal: controller.signal
       };
       
+      // Add detailed logging for debugging
+      console.log(`Attempt ${retryCount + 1}/${maxRetries} to fetch ${url.substring(0, 100)}...`);
+      
       const response = await fetch(url, enhancedOptions);
       clearTimeout(timeoutId);
       
       // Check if response is OK (status 200-299)
       if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status} - ${response.statusText}`);
+        const responseText = await response.text().catch(() => 'Unable to get response text');
+        throw new Error(`HTTP error! Status: ${response.status} - ${response.statusText}. Response: ${responseText.substring(0, 200)}`);
       }
       
+      console.log(`Successfully fetched ${url.substring(0, 100)} on attempt ${retryCount + 1}`);
       return response;
     } catch (error) {
       lastError = error;
       retryCount++;
       
-      // Log the retry attempt
-      console.warn(`Fetch attempt ${retryCount}/${maxRetries} failed for ${url}: ${error.message}`);
+      // Classify errors for better handling
+      const isNetworkError = error.message.includes('NetworkError') || 
+                            error.message.includes('network') ||
+                            error.message.includes('Failed to fetch');
+                            
+      const isTimeoutError = error.name === 'AbortError' || 
+                            error.message.includes('timeout') ||
+                            error.message.includes('aborted');
+                            
+      const isServerError = error.message.includes('5') && 
+                           error.message.includes('HTTP error');
+      
+      // Enhanced logging with error classification
+      console.warn(`Fetch attempt ${retryCount}/${maxRetries} failed for ${url.substring(0, 100)}: 
+        Error: ${error.message}
+        Type: ${isNetworkError ? 'Network Error' : isTimeoutError ? 'Timeout' : isServerError ? 'Server Error' : 'Other'}
+        Will ${retryCount < maxRetries ? `retry in ${retryDelay}ms` : 'not retry'}`);
       
       // If we've reached max retries, throw the last error
       if (retryCount >= maxRetries) {
-        console.error(`All ${maxRetries} retry attempts failed for ${url}`);
+        console.error(`All ${maxRetries} retry attempts failed for ${url.substring(0, 100)}`);
         throw new Error(`Failed after ${maxRetries} attempts: ${error.message}`);
       }
       
@@ -220,7 +240,12 @@ async function xdelo_fetchWithRetry(
       await new Promise(resolve => setTimeout(resolve, retryDelay));
       
       // Exponential backoff with jitter to avoid thundering herd
-      retryDelay = retryDelay * 2 * (0.9 + Math.random() * 0.2);
+      // More aggressive backoff for network errors, more patient for server errors
+      const backoffFactor = isNetworkError ? 1.5 : isServerError ? 2.5 : 2;
+      retryDelay = Math.min(
+        retryDelay * backoffFactor * (0.8 + Math.random() * 0.4),
+        60000
+      );
     }
   }
   
@@ -295,7 +320,7 @@ export async function xdelo_uploadMediaToStorage(
   storagePath: string,
   fileData: Blob,
   mimeType: string,
-  messageId?: string, // Optional: directly update a message's public_url
+  messageId?: string,
   bucket: string = 'telegram-media'
 ): Promise<{ success: boolean; error?: string; publicUrl?: string }> {
   try {
@@ -393,16 +418,19 @@ export async function xdelo_downloadMediaFromTelegram(
   blob?: Blob; 
   storagePath?: string; 
   mimeType?: string;
-  error?: string 
+  error?: string;
+  attempts?: number;
 }> {
   try {
     if (!telegramBotToken) {
       throw new Error('Telegram bot token is required');
     }
     
-    console.log(`Fetching file info for ${fileId}\n`);
+    console.log(`Starting download process for file ${fileId} (${fileUniqueId})`);
     
-    // Get file info from Telegram with retry logic
+    // Get file info from Telegram with improved retry logic
+    console.log(`Fetching file info for ${fileId}`);
+    
     const fileInfoResponse = await xdelo_fetchWithRetry(
       `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${fileId}`,
       { 
@@ -411,7 +439,9 @@ export async function xdelo_downloadMediaFromTelegram(
           ...corsHeaders,
           'Content-Type': 'application/json'
         }
-      }
+      },
+      5,
+      800
     );
     
     const fileInfo = await fileInfoResponse.json();
@@ -424,15 +454,19 @@ export async function xdelo_downloadMediaFromTelegram(
       throw new Error(`Invalid file info response from Telegram: ${JSON.stringify(fileInfo)}`);
     }
     
+    console.log(`Successfully retrieved file path: ${fileInfo.result.file_path}`);
+    
+    // Download file from Telegram with enhanced retry logic
     console.log(`Downloading file from path ${fileInfo.result.file_path}`);
     
-    // Download file from Telegram with retry logic
     const fileDataResponse = await xdelo_fetchWithRetry(
       `https://api.telegram.org/file/bot${telegramBotToken}/${fileInfo.result.file_path}`,
       { 
         method: 'GET',
         headers: corsHeaders
-      }
+      },
+      5,
+      1000
     );
     
     const fileData = await fileDataResponse.blob();
@@ -441,6 +475,8 @@ export async function xdelo_downloadMediaFromTelegram(
     if (!fileData || fileData.size === 0) {
       throw new Error('Downloaded empty file from Telegram');
     }
+    
+    console.log(`Successfully downloaded file: ${fileData.size} bytes`);
     
     // Try to detect MIME type from file extension if not provided
     let detectedMimeType = mimeType;
@@ -479,13 +515,27 @@ export async function xdelo_downloadMediaFromTelegram(
       success: true,
       blob: fileData,
       storagePath,
-      mimeType: detectedMimeType
+      mimeType: detectedMimeType,
+      attempts: 1
     };
   } catch (error) {
     console.error('Error downloading media from Telegram:', error);
+    
+    // Add more detailed error information for debugging
+    const errorDetails = {
+      message: error.message,
+      code: error.code || 'UNKNOWN',
+      stack: error.stack,
+      file_id: fileId,
+      file_unique_id: fileUniqueId
+    };
+    
+    console.error('Download error details:', JSON.stringify(errorDetails, null, 2));
+    
     return {
       success: false,
-      error: error.message
+      error: `Download failed: ${error.message}`,
+      attempts: 5
     };
   }
 }
@@ -582,7 +632,7 @@ export async function xdelo_processMessageMedia(
       downloadResult.storagePath,
       downloadResult.blob,
       downloadResult.mimeType || mimeType,
-      messageId // Pass messageId for direct update
+      messageId
     );
     
     if (!uploadResult.success) {

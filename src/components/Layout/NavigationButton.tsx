@@ -3,7 +3,7 @@ import React from "react";
 import { Menu, X, ArrowLeft, ChevronRight, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useNavigation } from "@/hooks/useNavigation";
+import { useNavigation } from "@/components/Layout/NavigationProvider";
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/useMobile";
 
