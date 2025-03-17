@@ -1,7 +1,7 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
-import { useNavigation } from "@/hooks/useNavigation";
+import { useNavigation } from "@/components/Layout/NavigationProvider";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 

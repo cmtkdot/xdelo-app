@@ -1501,6 +1501,36 @@ export type Database = {
         }
         Relationships: []
       }
+      gl_validation_log: {
+        Row: {
+          created_at: string
+          error_data: Json | null
+          error_message: string
+          id: string
+          record_id: string
+          table_name: string
+          validation_type: string
+        }
+        Insert: {
+          created_at?: string
+          error_data?: Json | null
+          error_message: string
+          id?: string
+          record_id: string
+          table_name: string
+          validation_type: string
+        }
+        Update: {
+          created_at?: string
+          error_data?: Json | null
+          error_message?: string
+          id?: string
+          record_id?: string
+          table_name?: string
+          validation_type?: string
+        }
+        Relationships: []
+      }
       gl_vendor_payments: {
         Row: {
           created_at: string | null
@@ -3743,6 +3773,38 @@ export type Database = {
           count: number
           latest_error_message: string
           latest_error_time: string
+        }[]
+      }
+      xan_get_recent_validation_errors: {
+        Args: {
+          p_limit?: number
+        }
+        Returns: {
+          table_name: string
+          record_id: string
+          validation_type: string
+          error_message: string
+          created_at: string
+        }[]
+      }
+      xan_get_record_validation_errors: {
+        Args: {
+          p_table_name: string
+          p_record_id: string
+        }
+        Returns: {
+          validation_type: string
+          error_message: string
+          created_at: string
+        }[]
+      }
+      xan_get_validation_summary: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          table_name: string
+          error_count: number
+          distinct_records: number
+          latest_error: string
         }[]
       }
       xan_handle_circular_references: {

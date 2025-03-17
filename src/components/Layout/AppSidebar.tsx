@@ -77,7 +77,6 @@ export const AppSidebar = () => {
     }
   };
 
-  // Mobile Header with Toggle Button
   const MobileHeader = () => {
     return (
       <div className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 z-50">
@@ -96,13 +95,11 @@ export const AppSidebar = () => {
     );
   };
 
-  // Mobile Sidebar Drawer
   const MobileSidebar = () => {
     return (
       <AnimatePresence>
         {isOpen && (
           <>
-            {/* Backdrop */}
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.5 }}
@@ -111,7 +108,6 @@ export const AppSidebar = () => {
               onClick={closeNavigation}
             />
             
-            {/* Sidebar */}
             <motion.div
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
@@ -159,7 +155,7 @@ export const AppSidebar = () => {
                     className="flex items-center w-full justify-start px-4 py-2.5 text-sm font-medium mobile-touch-target h-auto min-h-[44px] mb-12"
                     onClick={handleLogout}
                   >
-                    <LogOut className="flex-shrink-0 w-5 h-5 mr-3 text-muted-foreground" />
+                    <LogOut className="flex-shrink-0 w-5 h-5 text-muted-foreground" />
                     <span>Logout</span>
                   </Button>
                 </div>
@@ -171,9 +167,7 @@ export const AppSidebar = () => {
     );
   };
 
-  // Desktop Sidebar
   const DesktopSidebar = () => {
-    // State for expanded/collapsed sidebar on hover
     const [expanded, setExpanded] = React.useState(false);
 
     return (

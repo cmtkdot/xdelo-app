@@ -6,7 +6,7 @@ import { useIsMobile } from "@/hooks/useMobile";
 import { cn } from "@/lib/utils";
 import { NavigationButton } from "./NavigationButton";
 import { MobileBreadcrumbs } from "./MobileBreadcrumbs";
-import { useNavigation } from "@/hooks/useNavigation";
+import { useNavigation } from "@/components/Layout/NavigationProvider";
 
 export const Header = () => {
   const { theme } = useTheme();
