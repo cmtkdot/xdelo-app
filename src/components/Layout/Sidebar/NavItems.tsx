@@ -1,13 +1,11 @@
-
 import React from "react";
 import { 
   Home, 
-  MessageSquare, 
+  PanelTopOpen, 
   Image as ImageIcon, 
   PanelLeft, 
   FileText, 
   Settings, 
-  PanelTopOpen, 
   Database, 
   Zap, 
   Music,
@@ -33,8 +31,7 @@ interface NavItemsProps {
 
 export const navItems: NavItem[] = [
   { name: "Dashboard", Icon: Home, path: "/", group: "main" },
-  { name: "Messages", Icon: MessageSquare, path: "/messages", group: "main" },
-  { name: "Enhanced Messages", Icon: PanelTopOpen, path: "/messages-enhanced", group: "main" },
+  { name: "Messages", Icon: PanelTopOpen, path: "/messages-enhanced", group: "main" },
   { name: "Gallery", Icon: ImageIcon, path: "/gallery", group: "main" },
   
   { name: "Media Table", Icon: PanelLeft, path: "/media-table", group: "data", divider: true },
