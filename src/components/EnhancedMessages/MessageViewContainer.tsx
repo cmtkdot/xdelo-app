@@ -40,23 +40,44 @@ export function MessageViewContainer({
     );
   }
 
-  if (showMode === 'grid' && Array.isArray(paginatedItems[0])) {
-    // Grid view with grouped messages
-    return (
-      <MessageGridView
-        messageGroups={paginatedItems as Message[][]}
-        onSelect={handleToggleSelect}
-        onView={handleViewMessage}
-        onEdit={handleEditMessage}
-        onDelete={(message) => handleDeleteMessage(message.id)}
-        selectedMessages={selectedMessages}
-        hasMoreItems={hasMoreItems}
-        onLoadMore={handleLoadMore}
-      />
-    );
+  // Check if paginatedItems is an array of arrays (grouped messages)
+  const isGroupedData = Array.isArray(paginatedItems[0]) && Array.isArray(paginatedItems);
+
+  if (showMode === 'grid') {
+    // If the data isn't already in grouped format, we need to convert it
+    if (!isGroupedData) {
+      // Convert flat messages array to array of single-message groups
+      const messageGroups = (paginatedItems as Message[]).map(message => [message]);
+      return (
+        <MessageGridView
+          messageGroups={messageGroups}
+          onSelect={handleToggleSelect}
+          onView={handleViewMessage}
+          onEdit={handleEditMessage}
+          onDelete={(message) => handleDeleteMessage(message.id)}
+          selectedMessages={selectedMessages}
+          hasMoreItems={hasMoreItems}
+          onLoadMore={handleLoadMore}
+        />
+      );
+    } else {
+      // Data is already in the correct format for grid view
+      return (
+        <MessageGridView
+          messageGroups={paginatedItems as Message[][]}
+          onSelect={handleToggleSelect}
+          onView={handleViewMessage}
+          onEdit={handleEditMessage}
+          onDelete={(message) => handleDeleteMessage(message.id)}
+          selectedMessages={selectedMessages}
+          hasMoreItems={hasMoreItems}
+          onLoadMore={handleLoadMore}
+        />
+      );
+    }
   } else {
-    // List view with flat messages or fallback for grid if groups aren't available
-    const flatItems = Array.isArray(paginatedItems[0]) 
+    // List view - flatten groups if needed
+    const flatItems = isGroupedData 
       ? (paginatedItems as Message[][]).flat() 
       : (paginatedItems as Message[]);
     

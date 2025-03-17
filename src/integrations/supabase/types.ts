@@ -790,6 +790,7 @@ export type Database = {
           sb_pdf_updated_at: string | null
           sb_pdf_url: string | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
+          temp_account_glide_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -819,6 +820,7 @@ export type Database = {
           sb_pdf_updated_at?: string | null
           sb_pdf_url?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          temp_account_glide_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -848,6 +850,7 @@ export type Database = {
           sb_pdf_updated_at?: string | null
           sb_pdf_url?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          temp_account_glide_id?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -3655,10 +3658,6 @@ export type Database = {
         }
         Returns: string
       }
-      map_circular_references: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
       match_documents: {
         Args: {
           query_embedding: string
@@ -3700,13 +3699,6 @@ export type Database = {
           rule_ids: string[]
         }
         Returns: undefined
-      }
-      repair_data_issues: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          fixed_issue: string
-          record_count: number
-        }[]
       }
       schedule_relationship_maintenance: {
         Args: Record<PropertyKey, never>
@@ -3805,10 +3797,6 @@ export type Database = {
         }
         Returns: number
       }
-      xan_build_relationship_health_view: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
       xan_categorize_sync_error: {
         Args: {
           error_message: string
@@ -3836,10 +3824,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      xan_fix_relationship_definitions: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
       xan_generate_share_id: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -3854,6 +3838,29 @@ export type Database = {
           count: number
           latest_error_message: string
           latest_error_time: string
+        }[]
+      }
+      xan_get_purchase_orders_with_accounts: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          id: string
+          glide_id: string
+          main_po_date: string
+          rowid_accntrowid: string
+          main_purchase_order_uid: string
+          doc_document: string
+          main_po_total: number
+          main_balance_due: number
+          sb_accounts_id: string
+          gl_accounts: Json
+          has_issues: boolean
+          created_at: string
+          updated_at: string
+          products_count: number
+          payments_count: number
         }[]
       }
       xan_get_recent_validation_errors:
@@ -3914,6 +3921,19 @@ export type Database = {
               created_at: string
             }[]
           }
+      xan_get_relationship_health: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          source_table: string
+          glide_column: string
+          supabase_column: string
+          reference_table: string
+          missing_count: number
+          valid_mappings: number
+          last_sync_time: string
+          is_active: boolean
+        }[]
+      }
       xan_get_validation_summary: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3921,13 +3941,6 @@ export type Database = {
           error_count: number
           distinct_records: number
           latest_error: string
-        }[]
-      }
-      xan_handle_circular_references: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          relationship_type: string
-          records_updated: number
         }[]
       }
       xan_log_validation_error: {
@@ -3950,29 +3963,16 @@ export type Database = {
           records_updated: number
         }[]
       }
-      xan_repair_data_relationships: {
+      xan_recalculate_purchase_order_totals: {
         Args: Record<PropertyKey, never>
-        Returns: {
-          type: string
-          entity: string
-          count: number
-        }[]
+        Returns: Json
       }
-      xan_repair_data_relationships_from_defs: {
-        Args: Record<PropertyKey, never>
+      xan_repair_table_relationships: {
+        Args: {
+          p_table_name: string
+        }
         Returns: {
-          source_table: string
-          glide_column: string
-          supabase_column: string
-          reference_table: string
           fixed_count: number
-        }[]
-      }
-      xan_repair_entity_relationships: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          table_name: string
-          records_updated: number
         }[]
       }
       xan_resolve_validation_error: {
@@ -4010,13 +4010,6 @@ export type Database = {
         Returns: {
           validated_count: number
           error_count: number
-        }[]
-      }
-      xan_validate_entity_references: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          entity_type: string
-          invalid_references: number
         }[]
       }
       xan_validate_relationships: {
