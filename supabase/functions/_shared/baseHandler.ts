@@ -1,157 +1,50 @@
 
-import { corsHeaders, handleOptionsRequest, createCorsResponse, isPreflightRequest } from './cors.ts';
+import { corsHeaders, handleOptionsRequest } from './cors.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// Security level enum for edge functions
+/**
+ * Security level for edge functions
+ */
 export enum SecurityLevel {
   PUBLIC = 'public',
   AUTHENTICATED = 'authenticated',
-  SERVICE_ROLE = 'service_role',
+  SERVICE_ROLE = 'service_role'
 }
 
-type EdgeFunctionHandler = (req: Request, correlationId: string) => Promise<Response>;
-
-interface HandlerOptions {
-  enableCors?: boolean;
-  enableMetrics?: boolean;
-  enableLogging?: boolean;
-  securityLevel?: SecurityLevel;
-  fallbackToPublic?: boolean;
+/**
+ * Options for the edge function handler
+ */
+export interface HandlerOptions {
+  enableCors: boolean;
+  enableLogging: boolean;
+  securityLevel: SecurityLevel;
 }
 
+/**
+ * Default handler options
+ */
 const defaultOptions: HandlerOptions = {
   enableCors: true,
-  enableMetrics: true,
   enableLogging: true,
-  securityLevel: SecurityLevel.PUBLIC,
-  fallbackToPublic: true,
+  securityLevel: SecurityLevel.PUBLIC
 };
 
 /**
- * Creates a standardized handler function for edge functions
+ * Create a Supabase client
  */
-export function createHandler(
-  handlerFn: EdgeFunctionHandler,
-  options: Partial<HandlerOptions> = {}
-): (req: Request) => Promise<Response> {
-  // Merge options with defaults
-  const config = { ...defaultOptions, ...options };
+export function createSupabaseClient() {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   
-  return async (req: Request) => {
-    // Handle CORS preflight requests
-    if (config.enableCors && isPreflightRequest(req)) {
-      return handleOptionsRequest();
-    }
-
-    try {
-      // Generate a correlation ID for request tracking
-      const correlationId = req.headers.get('x-correlation-id') || crypto.randomUUID();
-      const startTime = Date.now();
-      
-      // Add correlation ID to headers for logging
-      const headers = new Headers(req.headers);
-      headers.set('X-Correlation-ID', correlationId);
-      
-      // Create a new request with the correlation ID
-      const enhancedRequest = new Request(req.url, {
-        method: req.method,
-        headers,
-        body: req.body,
-        redirect: req.redirect
-      });
-      
-      // Log the request if enabled
-      if (config.enableLogging) {
-        console.log(JSON.stringify({
-          level: 'info',
-          correlation_id: correlationId,
-          message: `Request received: ${req.method} ${new URL(req.url).pathname}`,
-          timestamp: new Date().toISOString(),
-          headers: Object.fromEntries([...req.headers.entries()].filter(([key]) => 
-            !['authorization', 'cookie'].includes(key.toLowerCase())
-          ))
-        }));
-      }
-      
-      // Check authentication if required
-      if (config.securityLevel !== SecurityLevel.PUBLIC) {
-        const token = req.headers.get('Authorization')?.replace('Bearer ', '');
-        if (!token) {
-          return createCorsResponse({ 
-            error: 'Missing authorization token',
-            success: false 
-          }, { status: 401 });
-        }
-        
-        // For actual JWT validation, we would use Deno's JWT libraries
-        // This implementation assumes JWT verification is disabled for now
-      }
-      
-      // Call the handler function
-      const response = await handlerFn(enhancedRequest, correlationId);
-      
-      // Calculate duration
-      const duration = Date.now() - startTime;
-      
-      if (!config.enableCors) {
-        return response;
-      }
-      
-      // Add performance metrics headers if enabled
-      const enhancedHeaders: Record<string, string> = {};
-      
-      if (config.enableMetrics) {
-        enhancedHeaders['X-Correlation-ID'] = correlationId;
-        enhancedHeaders['X-Processing-Time'] = `${duration}ms`;
-        enhancedHeaders['X-Function-Version'] = '1.0';
-      }
-      
-      // Clone the response with CORS headers
-      const enhancedResponse = new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: {
-          ...Object.fromEntries(response.headers.entries()),
-          ...corsHeaders,
-          ...enhancedHeaders
-        }
-      });
-      
-      // Log the response if enabled
-      if (config.enableLogging) {
-        console.log(JSON.stringify({
-          level: 'info',
-          correlation_id: correlationId,
-          message: `Response sent: ${response.status}`,
-          timestamp: new Date().toISOString(),
-          duration_ms: duration,
-          status: response.status
-        }));
-      }
-      
-      return enhancedResponse;
-      
-    } catch (error) {
-      console.error(JSON.stringify({
-        level: 'error',
-        message: 'Error in edge function',
-        error: error.message,
-        stack: error.stack,
-        timestamp: new Date().toISOString()
-      }));
-      
-      // Return standardized error response
-      return createCorsResponse({
-        success: false,
-        error: error.message || 'Unknown error',
-        errorType: error.name || 'UnknownError',
-        timestamp: new Date().toISOString()
-      }, { status: 500 });
-    }
-  };
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing Supabase credentials');
+  }
+  
+  return createClient(supabaseUrl, supabaseKey);
 }
 
 /**
- * Helper function for simplifying fetch operations with better error handling and retry logic
+ * Helper function for retrying API requests
  */
 export async function xdelo_fetchWithRetry(
   url: string,
@@ -159,145 +52,169 @@ export async function xdelo_fetchWithRetry(
   maxRetries = 3,
   baseDelay = 500
 ): Promise<Response> {
-  let attempt = 1;
-  let lastError;
-
-  // Generate a unique ID for this fetch operation for logging
-  const fetchId = crypto.randomUUID().substring(0, 8);
+  let retries = 0;
   
-  console.log(JSON.stringify({
-    level: 'info',
-    message: `Starting fetch to ${url.split('?')[0]}`,
-    fetch_id: fetchId,
-    max_retries: maxRetries,
-    timestamp: new Date().toISOString()
-  }));
-
-  while (attempt <= maxRetries) {
+  while (true) {
     try {
-      // Apply basic rate limiting
-      const now = Date.now();
-      const timeSinceLastCall = now - (globalThis as any).lastFetchTime || 0;
-      const minInterval = 50; // ms between API calls
-      
-      if (timeSinceLastCall < minInterval) {
-        const waitTime = minInterval - timeSinceLastCall;
-        console.log(JSON.stringify({
-          level: 'debug',
-          message: `Rate limiting, waiting ${waitTime}ms before request`,
-          fetch_id: fetchId,
-          attempt,
-          wait_time: waitTime,
-          timestamp: new Date().toISOString()
-        }));
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-      }
-      
-      (globalThis as any).lastFetchTime = Date.now();
-      
-      // Log request details
-      console.log(JSON.stringify({
-        level: 'debug',
-        message: `Attempt ${attempt}/${maxRetries}: Fetching ${url.split('?')[0]}`,
-        fetch_id: fetchId,
-        attempt,
-        method: options.method || 'GET',
-        timestamp: new Date().toISOString()
-      }));
-      
-      // Make the actual request
-      const startTime = Date.now();
       const response = await fetch(url, options);
-      const duration = Date.now() - startTime;
       
-      // Log response details
-      console.log(JSON.stringify({
-        level: 'debug',
-        message: `Response received in ${duration}ms with status ${response.status}`,
-        fetch_id: fetchId,
-        attempt,
-        status: response.status,
-        status_text: response.statusText,
-        duration_ms: duration,
-        timestamp: new Date().toISOString()
-      }));
-      
-      // Check if the response is OK (status in 200-299 range)
-      if (!response.ok) {
-        // Try to get response text for better error logging
-        let responseText = '';
-        try {
-          // Clone the response to not consume the original
-          const clonedResponse = response.clone();
-          responseText = await clonedResponse.text();
-        } catch (textError) {
-          responseText = 'Could not extract response text';
-        }
-        
-        console.error(JSON.stringify({
-          level: 'error',
-          message: `HTTP error ${response.status}: ${response.statusText}`,
-          fetch_id: fetchId,
-          attempt,
-          status: response.status,
-          status_text: response.statusText,
-          response_text: responseText,
-          timestamp: new Date().toISOString()
-        }));
-        throw new Error(`HTTP error! Status: ${response.status} - ${response.statusText}`);
+      if (response.ok || retries >= maxRetries) {
+        return response;
       }
       
-      console.log(JSON.stringify({
-        level: 'info',
-        message: `Fetch successful on attempt ${attempt}`,
-        fetch_id: fetchId,
-        attempt,
-        duration_ms: duration,
-        timestamp: new Date().toISOString()
-      }));
-      return response;
-    } catch (error) {
-      lastError = error;
+      // If we get rate limited, wait longer
+      const delay = response.status === 429
+        ? baseDelay * Math.pow(2, retries) + Math.random() * 1000
+        : baseDelay * Math.pow(2, retries);
       
-      // Categorize the error type for better debugging
-      let errorType = 'Unknown';
-      if (error.name === 'TypeError' && (error.message.includes('fetch') || error.message.includes('network'))) {
-        errorType = 'Network';
-      } else if (error.message.includes('timeout')) {
-        errorType = 'Timeout';
-      } else if (error.message.includes('HTTP error')) {
-        errorType = 'HTTP';
-      } else {
-        errorType = 'Other';
-      }
+      console.log(`Request failed with status ${response.status}, retrying in ${delay}ms...`);
       
-      console.error(JSON.stringify({
-        level: 'error',
-        message: `Attempt ${attempt}/${maxRetries} failed`,
-        fetch_id: fetchId,
-        attempt,
-        url: url.split('?')[0],
-        error_message: error.message,
-        error_type: errorType,
-        retry_delay: baseDelay * Math.pow(2, attempt - 1),
-        timestamp: new Date().toISOString()
-      }));
-      
-      // Calculate exponential backoff delay with jitter
-      const delay = baseDelay * Math.pow(2, attempt - 1) * (1 + Math.random() * 0.1);
       await new Promise(resolve => setTimeout(resolve, delay));
+      retries++;
+    } catch (error) {
+      if (retries >= maxRetries) {
+        throw error;
+      }
       
-      attempt++;
+      const delay = baseDelay * Math.pow(2, retries);
+      console.log(`Request failed with error: ${error.message}, retrying in ${delay}ms...`);
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
+      retries++;
     }
   }
+}
+
+/**
+ * Create a standardized handler for edge functions
+ */
+export function createHandler(
+  handlerFn: (req: Request, correlationId?: string) => Promise<Response>,
+  options: Partial<HandlerOptions> = {}
+) {
+  // Merge the provided options with the defaults
+  const config = { ...defaultOptions, ...options };
   
-  console.error(JSON.stringify({
-    level: 'error',
-    message: `All ${maxRetries} retry attempts failed`,
-    fetch_id: fetchId,
-    url: url.split('?')[0],
-    error_message: lastError?.message,
-    timestamp: new Date().toISOString()
-  }));
-  throw new Error(`Failed after ${maxRetries} attempts: ${lastError?.message}`);
+  return async (req: Request): Promise<Response> => {
+    // Handle CORS preflight requests if CORS is enabled
+    if (config.enableCors && req.method === 'OPTIONS') {
+      return handleOptionsRequest();
+    }
+    
+    // Generate a correlation ID for request tracking
+    const correlationId = crypto.randomUUID();
+    const startTime = performance.now();
+    
+    // Log the request if logging is enabled
+    if (config.enableLogging) {
+      try {
+        console.log(JSON.stringify({
+          level: 'INFO',
+          message: 'Request received',
+          method: req.method,
+          url: req.url,
+          correlation_id: correlationId,
+          timestamp: new Date().toISOString()
+        }));
+      } catch (e) {
+        // Fallback simple logging if JSON.stringify fails
+        console.log(`[${correlationId}] Request received: ${req.method} ${req.url}`);
+      }
+    }
+    
+    try {
+      // Call the handler function with the request and correlation ID
+      const response = await handlerFn(req, correlationId);
+      
+      // Log the response if logging is enabled
+      if (config.enableLogging) {
+        const duration = performance.now() - startTime;
+        try {
+          console.log(JSON.stringify({
+            level: 'INFO',
+            message: 'Response sent',
+            status: response.status,
+            correlation_id: correlationId,
+            duration_ms: duration.toFixed(2),
+            timestamp: new Date().toISOString()
+          }));
+        } catch (e) {
+          // Fallback simple logging if JSON.stringify fails
+          console.log(`[${correlationId}] Response sent: ${response.status} (${duration.toFixed(2)}ms)`);
+        }
+      }
+      
+      // Add CORS headers to the response if CORS is enabled
+      if (config.enableCors) {
+        const responseHeaders = new Headers(response.headers);
+        
+        // Add CORS headers
+        Object.entries(corsHeaders).forEach(([key, value]) => {
+          responseHeaders.set(key, value);
+        });
+        
+        // Create a new response with the CORS headers
+        return new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: responseHeaders
+        });
+      }
+      
+      return response;
+    } catch (error) {
+      // Log the error if logging is enabled
+      if (config.enableLogging) {
+        const duration = performance.now() - startTime;
+        try {
+          console.error(JSON.stringify({
+            level: 'ERROR',
+            message: 'Error processing request',
+            error: error.message,
+            stack: error.stack,
+            correlation_id: correlationId,
+            duration_ms: duration.toFixed(2),
+            timestamp: new Date().toISOString()
+          }));
+        } catch (e) {
+          // Fallback simple logging if JSON.stringify fails
+          console.error(`[${correlationId}] Error processing request: ${error.message}`);
+          console.error(error.stack);
+        }
+      }
+      
+      // Create a standardized error response
+      const errorResponse = new Response(
+        JSON.stringify({
+          error: error.message || 'Internal server error',
+          success: false,
+          correlation_id: correlationId,
+          timestamp: new Date().toISOString()
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+      
+      // Add CORS headers to the error response if CORS is enabled
+      if (config.enableCors) {
+        const errorHeaders = new Headers(errorResponse.headers);
+        
+        // Add CORS headers
+        Object.entries(corsHeaders).forEach(([key, value]) => {
+          errorHeaders.set(key, value);
+        });
+        
+        // Create a new response with the CORS headers
+        return new Response(errorResponse.body, {
+          status: errorResponse.status,
+          statusText: errorResponse.statusText,
+          headers: errorHeaders
+        });
+      }
+      
+      return errorResponse;
+    }
+  };
 }
