@@ -28,7 +28,7 @@ export const useMediaUtils = () => {
     processMessage,
     reanalyzeMessageCaption,
     syncMessageCaption,
-    standardizeStoragePaths
+    standardizeStoragePaths: standardizeStoragePathSingle
   } = useSingleFileOperations(
     addProcessingMessageId,
     removeProcessingMessageId
@@ -39,7 +39,10 @@ export const useMediaUtils = () => {
     checkMissingFiles,
     fixAllContentDispositions,
     processAllPendingMessages,
-    reanalyzeAllCaptions
+    reanalyzeAllCaptions,
+    standardizeStoragePaths,
+    fixMediaUrls,
+    repairMediaBatch
   } = useBatchOperations(
     setIsProcessing,
     addProcessingMessageId,
@@ -57,12 +60,15 @@ export const useMediaUtils = () => {
     processMessage,
     reanalyzeMessageCaption,
     syncMessageCaption,
-    standardizeStoragePaths,
+    standardizeStoragePathSingle,
     
     // Batch operations
     checkMissingFiles,
     fixAllContentDispositions,
     processAllPendingMessages,
-    reanalyzeAllCaptions
+    reanalyzeAllCaptions,
+    standardizeStoragePaths,
+    fixMediaUrls,
+    repairMediaBatch
   };
 };

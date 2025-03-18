@@ -3946,6 +3946,12 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_construct_message_url_from_data: {
+        Args: {
+          telegram_data: Json
+        }
+        Returns: string
+      }
       xdelo_construct_telegram_message_url:
         | {
             Args: {

@@ -1,50 +1,38 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { RepairResult, SyncCaptionResult, StandardizeResult } from "./types";
-import { analyzeWithAI, parseCaption } from "@/lib/api";
 
-/**
- * Single file operations hook
- */
-export function useSingleFileOperations(
+export const useSingleFileOperations = (
   addProcessingMessageId: (id: string) => void,
   removeProcessingMessageId: (id: string) => void
-) {
+) => {
   /**
-   * Re-uploads media from Telegram using the file_id
+   * Reupload media from Telegram for a single message
    */
   const reuploadMediaFromTelegram = async (messageId: string): Promise<RepairResult> => {
     try {
       addProcessingMessageId(messageId);
       
-      // Log the start of the operation
-      console.log(`Re-uploading media from Telegram for message: ${messageId}`);
-      
-      // Call the redownload function
-      const { data, error } = await supabase.functions.invoke('redownload-media', {
-        body: { messageId },
+      const { data, error } = await supabase.functions.invoke('xdelo_reupload_media', {
+        body: { messageId }
       });
       
-      if (error) {
-        console.error('Error re-uploading media:', error);
-        return {
-          success: false,
-          error: error.message,
-          message: 'Failed to re-upload media'
-        };
-      }
+      if (error) throw error;
+      
+      toast.success('Media reuploaded successfully');
       
       return {
         success: true,
-        message: data?.message || 'Media re-uploaded successfully',
+        message: 'Media reuploaded successfully',
         data
       };
     } catch (error) {
-      console.error('Error in reuploadMediaFromTelegram:', error);
+      console.error('Error reuploading media:', error);
+      toast.error('Failed to reupload media');
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
-        message: 'An unexpected error occurred while re-uploading media'
+        error: error.message || 'Unknown error occurred'
       };
     } finally {
       removeProcessingMessageId(messageId);
@@ -52,40 +40,31 @@ export function useSingleFileOperations(
   };
 
   /**
-   * Fixes the content disposition of a media file
+   * Fix content disposition for a single message
    */
   const fixContentDispositionForMessage = async (messageId: string): Promise<RepairResult> => {
     try {
       addProcessingMessageId(messageId);
       
-      // Log the start of the operation
-      console.log(`Fixing content disposition for message: ${messageId}`);
-      
-      // Call the function to fix content disposition
-      const { data, error } = await supabase.functions.invoke('fix-content-disposition', {
-        body: { messageId },
+      const { data, error } = await supabase.functions.invoke('xdelo_fix_content_disposition', {
+        body: { messageId }
       });
       
-      if (error) {
-        console.error('Error fixing content disposition:', error);
-        return {
-          success: false,
-          error: error.message,
-          message: 'Failed to fix content disposition'
-        };
-      }
+      if (error) throw error;
+      
+      toast.success('Content disposition fixed successfully');
       
       return {
         success: true,
-        message: data?.message || 'Content disposition fixed successfully',
+        message: 'Content disposition fixed successfully',
         data
       };
     } catch (error) {
-      console.error('Error in fixContentDispositionForMessage:', error);
+      console.error('Error fixing content disposition:', error);
+      toast.error('Failed to fix content disposition');
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
-        message: 'An unexpected error occurred while fixing content disposition'
+        error: error.message || 'Unknown error occurred'
       };
     } finally {
       removeProcessingMessageId(messageId);
@@ -93,40 +72,31 @@ export function useSingleFileOperations(
   };
 
   /**
-   * Processes a single message
+   * Process a single message
    */
   const processMessage = async (messageId: string): Promise<RepairResult> => {
     try {
       addProcessingMessageId(messageId);
       
-      // Log the start of the operation
-      console.log(`Processing message: ${messageId}`);
-      
-      // Call the function to process the message
-      const { data, error } = await supabase.functions.invoke('process-single-message', {
-        body: { messageId },
+      const { data, error } = await supabase.functions.invoke('xdelo_process_message', {
+        body: { messageId }
       });
       
-      if (error) {
-        console.error('Error processing message:', error);
-        return {
-          success: false,
-          error: error.message,
-          message: 'Failed to process message'
-        };
-      }
+      if (error) throw error;
+      
+      toast.success('Message processed successfully');
       
       return {
         success: true,
-        message: data?.message || 'Message processed successfully',
+        message: 'Message processed successfully',
         data
       };
     } catch (error) {
-      console.error('Error in processMessage:', error);
+      console.error('Error processing message:', error);
+      toast.error('Failed to process message');
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
-        message: 'An unexpected error occurred while processing the message'
+        error: error.message || 'Unknown error occurred'
       };
     } finally {
       removeProcessingMessageId(messageId);
@@ -134,62 +104,31 @@ export function useSingleFileOperations(
   };
 
   /**
-   * Re-analyzes the caption of a message using AI
+   * Reanalyze message caption
    */
   const reanalyzeMessageCaption = async (messageId: string): Promise<RepairResult> => {
     try {
       addProcessingMessageId(messageId);
       
-      // Log the start of the operation
-      console.log(`Re-analyzing caption for message: ${messageId}`);
+      const { data, error } = await supabase.functions.invoke('xdelo_reanalyze_caption', {
+        body: { messageId, force: true }
+      });
       
-      // Fetch the message from Supabase
-      const { data: messageData, error: messageError } = await supabase
-        .from('messages')
-        .select('caption')
-        .eq('id', messageId)
-        .single();
+      if (error) throw error;
       
-      if (messageError) {
-        console.error('Error fetching message:', messageError);
-        return {
-          success: false,
-          error: messageError.message,
-          message: 'Failed to fetch message'
-        };
-      }
-      
-      if (!messageData?.caption) {
-        console.warn('Message has no caption to analyze.');
-        return {
-          success: false,
-          message: 'Message has no caption to analyze'
-        };
-      }
-      
-      // Call the analyzeWithAI function
-      const result = await analyzeWithAI(messageId, messageData.caption);
-      
-      if (!result.success) {
-        console.error('AI analysis failed:', result.error);
-        return {
-          success: false,
-          error: result.error,
-          message: 'AI analysis failed'
-        };
-      }
+      toast.success('Caption reanalyzed successfully');
       
       return {
         success: true,
-        message: 'Caption re-analyzed successfully',
-        data: result.data
+        message: 'Caption reanalyzed successfully',
+        data
       };
     } catch (error) {
-      console.error('Error in reanalyzeMessageCaption:', error);
+      console.error('Error reanalyzing caption:', error);
+      toast.error('Failed to reanalyze caption');
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
-        message: 'An unexpected error occurred while re-analyzing the caption'
+        error: error.message || 'Unknown error occurred'
       };
     } finally {
       removeProcessingMessageId(messageId);
@@ -197,68 +136,33 @@ export function useSingleFileOperations(
   };
 
   /**
-   * Syncs the caption of a message to all messages in its media group
+   * Sync message caption
    */
   const syncMessageCaption = async (messageId: string): Promise<SyncCaptionResult> => {
     try {
       addProcessingMessageId(messageId);
       
-      // Log the start of the operation
-      console.log(`Syncing caption for message: ${messageId}`);
+      const { data, error } = await supabase.functions.invoke('xdelo_sync_caption', {
+        body: { messageId }
+      });
       
-      // First, fetch media_group_id for the message
-      const { data: messageData, error: messageError } = await supabase
-        .from('messages')
-        .select('media_group_id')
-        .eq('id', messageId)
-        .single();
+      if (error) throw error;
       
-      if (messageError || !messageData?.media_group_id) {
-        console.error('Error fetching message or no media group found:', messageError);
-        return {
-          success: false,
-          error: messageError?.message || 'No media group found',
-          message: 'Failed to find media group for message'
-        };
-      }
+      toast.success(`Caption synced successfully for ${data.synced} messages`);
       
-      // Call the RPC function to sync the caption
-      const { data, error } = await supabase
-        .rpc('xdelo_sync_media_group_content', { 
-          p_source_message_id: messageId,
-          p_media_group_id: messageData.media_group_id
-        });
-      
-      if (error) {
-        console.error('Error syncing caption:', error);
-        return {
-          success: false,
-          error: error.message,
-          message: 'Failed to sync caption'
-        };
-      }
-      
-      // Check if data is available and has the expected structure
-      const syncResult: SyncCaptionResult = {
+      return {
         success: true,
-        message: 'Caption synchronized successfully'
+        message: `Caption synced successfully for ${data.synced} messages`,
+        synced: data.synced,
+        skipped: data.skipped
       };
-      
-      // Only try to access properties if data exists and is an object
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        syncResult.message = (data.message as string) || syncResult.message;
-        syncResult.synced = (data.updated_count as number) || 0;
-        syncResult.skipped = (data.skipped as number) || 0;
-        syncResult.data = data;
-      }
-      
-      return syncResult;
     } catch (error) {
-      console.error('Error in syncMessageCaption:', error);
+      console.error('Error syncing caption:', error);
+      toast.error('Failed to sync caption');
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
-        message: 'An unexpected error occurred while syncing the caption'
+        message: 'Failed to sync caption',
+        error: error.message || 'Unknown error occurred'
       };
     } finally {
       removeProcessingMessageId(messageId);
@@ -266,36 +170,33 @@ export function useSingleFileOperations(
   };
 
   /**
-   * Standardizes storage paths for media files
+   * Standardize storage paths
    */
-  const standardizeStoragePaths = async (limit: number = 100): Promise<StandardizeResult> => {
+  const standardizeStoragePaths = async (messageId: string): Promise<StandardizeResult> => {
     try {
-      console.log(`Standardizing storage paths for up to ${limit} messages`);
+      addProcessingMessageId(messageId);
       
-      const { data, error } = await supabase
-        .rpc('xdelo_fix_public_urls', { p_limit: limit });
+      const { data, error } = await supabase.functions.invoke('xdelo_standardize_storage_path', {
+        body: { messageId }
+      });
       
-      if (error) {
-        console.error('Error standardizing storage paths:', error);
-        return {
-          success: false,
-          error: error.message,
-          message: 'Failed to standardize storage paths'
-        };
-      }
+      if (error) throw error;
+      
+      toast.success('Storage path standardized successfully');
       
       return {
         success: true,
-        message: `Updated ${data?.length || 0} message URLs`,
-        successful: data?.length || 0
+        message: 'Storage path standardized successfully'
       };
     } catch (error) {
-      console.error('Error in standardizeStoragePaths:', error);
+      console.error('Error standardizing storage path:', error);
+      toast.error('Failed to standardize storage path');
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
-        message: 'An unexpected error occurred while standardizing storage paths'
+        error: error.message || 'Unknown error occurred'
       };
+    } finally {
+      removeProcessingMessageId(messageId);
     }
   };
 
@@ -307,4 +208,4 @@ export function useSingleFileOperations(
     syncMessageCaption,
     standardizeStoragePaths
   };
-}
+};
