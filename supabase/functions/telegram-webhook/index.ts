@@ -1,25 +1,16 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { xdelo_createStandardizedHandler } from "../_shared/standardizedHandler.ts";
 import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage } from './handlers/textMessageHandler.ts';
 import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
-import { corsHeaders } from '../_shared/cors.ts';
 import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
 import { Logger } from './utils/logger.ts';
 
-serve(async (req: Request) => {
-  // Generate a correlation ID for tracing
-  const correlationId = crypto.randomUUID();
-  
+// The main handler function that will be wrapped by standardizedHandler
+const telegramWebhookHandler = async (req: Request, correlationId: string) => {
   // Create a main logger for this request
   const logger = new Logger(correlationId, 'telegram-webhook');
   
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    logger.debug('Received OPTIONS request, returning CORS headers');
-    return new Response(null, { headers: corsHeaders });
-  }
-
   try {
     // Log webhook received event
     logger.info('Webhook received', {
@@ -53,7 +44,7 @@ serve(async (req: Request) => {
         error: 'Invalid JSON in request body',
         correlationId
       }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         status: 400
       });
     }
@@ -67,7 +58,7 @@ serve(async (req: Request) => {
         message: "No processable content",
         correlationId
       }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         status: 400
       });
     }
@@ -79,7 +70,8 @@ serve(async (req: Request) => {
       correlationId,
       isEdit: !!update.edited_message || !!update.edited_channel_post,
       previousMessage: update.edited_message || update.edited_channel_post,
-      logger // Add logger to context so handlers can use it
+      logger, // Add logger to context so handlers can use it
+      startTime: new Date().toISOString() // Add start time for performance tracking
     };
 
     // Log message details with sensitive data masked
@@ -155,7 +147,7 @@ serve(async (req: Request) => {
         error: handlerError.message,
         correlationId
       }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         status: 200 // Still return 200 to prevent Telegram from retrying
       });
     }
@@ -170,8 +162,20 @@ serve(async (req: Request) => {
       error: error.message || 'Unknown error',
       correlationId
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       status: 500
     });
   }
+};
+
+// Wrap with standardized handler and export
+export const handler = xdelo_createStandardizedHandler(telegramWebhookHandler, {
+  enableCors: true,
+  logRequests: true,
+  logResponses: true,
+  securityLevel: "PUBLIC"
 });
+
+// Use Deno's serve function with our handler
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+serve(handler);

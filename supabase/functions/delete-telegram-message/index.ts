@@ -1,7 +1,14 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { corsHeaders } from "../_shared/cors.ts";
+import { xdelo_createStandardizedHandler, xdelo_createSuccessResponse, xdelo_createErrorResponse } from "../_shared/standardizedHandler.ts";
+import { createSupabaseClient } from "../_shared/supabase.ts";
+import { Logger } from "../_shared/logger.ts";
+
+interface DeleteMessageRequest {
+  message_id: number;
+  chat_id: number;
+  media_group_id?: string;
+}
+
 /**
  * Log an event to the unified audit system
  */
@@ -43,30 +50,26 @@ async function logEvent(
   }
 }
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  // Generate a correlation ID for this deletion operation
-  const correlationId = `telegram_delete_${crypto.randomUUID()}`;
+const deleteTelegramMessageHandler = async (req: Request, correlationId: string) => {
+  // Create a logger instance
+  const logger = new Logger(correlationId, 'delete-telegram-message');
   
   try {
+    logger.info('Processing delete telegram message request');
+    
+    // Validate Telegram bot token
     const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
     if (!TELEGRAM_BOT_TOKEN) {
+      logger.error('TELEGRAM_BOT_TOKEN is not configured');
       throw new Error("TELEGRAM_BOT_TOKEN is not configured");
     }
 
-    const { message_id, chat_id, media_group_id } = await req.json();
-    console.log("Deleting message:", { message_id, chat_id, media_group_id, correlation_id: correlationId });
+    // Parse request body
+    const { message_id, chat_id, media_group_id }: DeleteMessageRequest = await req.json();
+    logger.info("Delete request parsed", { message_id, chat_id, media_group_id });
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Supabase credentials not configured");
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Initialize Supabase client
+    const supabase = createSupabaseClient();
     
     // Find the message in the database to get its ID
     const { data: messageData, error: messageError } = await supabase
@@ -117,7 +120,7 @@ serve(async (req) => {
     });
 
     const result = await response.json();
-    console.log("Telegram deletion result:", result);
+    logger.info("Telegram deletion result", result);
 
     if (!result.ok) {
       const errorMsg = `Failed to delete Telegram message: ${result.description}`;
@@ -243,7 +246,7 @@ serve(async (req) => {
             );
           }
         } catch (groupError) {
-          console.error(`Error deleting group message ${msg.telegram_message_id}:`, groupError);
+          logger.error(`Error deleting group message ${msg.telegram_message_id}:`, groupError);
           // Continue with other messages even if one fails
           groupResults.push({
             id: msg.id,
@@ -286,25 +289,23 @@ serve(async (req) => {
       );
     }
 
-    return new Response(
-      JSON.stringify({ 
-        success: true,
-        correlation_id: correlationId
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
+    return xdelo_createSuccessResponse({ 
+      message: "Message successfully deleted from Telegram"
+    }, correlationId);
   } catch (error) {
-    console.error("Error deleting Telegram message:", error);
-    return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        correlation_id: correlationId
-      }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
-      }
-    );
+    logger.error("Error deleting Telegram message:", error);
+    return xdelo_createErrorResponse(error, correlationId, 500);
   }
+};
+
+// Wrap with standardized handler
+const handler = xdelo_createStandardizedHandler(deleteTelegramMessageHandler, {
+  enableCors: true,
+  logRequests: true,
+  logResponses: true,
+  securityLevel: "PUBLIC"
 });
+
+// Start the server
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+serve(handler);

@@ -1,3 +1,6 @@
 
 project_id = "xjhhehxcxkiumnwbirel"
+name = "delete-telegram-message"
+version = 1
+path = "delete-telegram-message"
 verify_jwt = false
