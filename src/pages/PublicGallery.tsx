@@ -12,7 +12,6 @@ import { GalleryTableView } from "@/components/PublicGallery/GalleryTableView";
 
 const PublicGallery = () => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [filteredMessages, setFilteredMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
@@ -22,6 +21,15 @@ const PublicGallery = () => {
   const [hasMoreItems, setHasMoreItems] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const itemsPerPage = 16;
+  
+  // Use our custom hook to handle search
+  const { 
+    searchTerm, 
+    filteredMessages, 
+    isSearching, 
+    handleSearch, 
+    clearSearch 
+  } = usePublicGallerySearch({ messages });
 
   const fetchMessages = async (page = 1, append = false) => {
     if (page === 1) {
@@ -76,16 +84,20 @@ const PublicGallery = () => {
     fetchMessages();
   }, []);
 
-  // Apply filters whenever messages or filter change
-  useEffect(() => {
+  // Apply content-type filter to the already search-filtered messages
+  const applyMediaTypeFilter = (messages: Message[]) => {
     if (filter === "all") {
-      setFilteredMessages(messages);
+      return messages;
     } else if (filter === "images") {
-      setFilteredMessages(messages.filter(m => m.mime_type?.startsWith('image/')));
+      return messages.filter(m => m.mime_type?.startsWith('image/'));
     } else if (filter === "videos") {
-      setFilteredMessages(messages.filter(m => m.mime_type?.startsWith('video/')));
+      return messages.filter(m => m.mime_type?.startsWith('video/'));
     }
-  }, [messages, filter]);
+    return messages;
+  };
+
+  // Get the final filtered messages by applying both search and media type filters
+  const finalFilteredMessages = applyMediaTypeFilter(filteredMessages);
 
   const handleMediaClick = (message: Message) => {
     if (message.media_group_id) {

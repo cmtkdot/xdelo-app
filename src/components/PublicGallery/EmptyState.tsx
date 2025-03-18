@@ -1,12 +1,28 @@
 
-import { ImageIcon } from "lucide-react";
+import { SearchX, Image } from "lucide-react";
 
-export const EmptyState = () => {
+interface EmptyStateProps {
+  message?: string;
+}
+
+export const EmptyState = ({ message }: EmptyStateProps) => {
+  const isSearchEmpty = message && message.includes("search");
+  
   return (
-    <div className="text-center py-12 bg-muted/20 rounded-lg">
-      <ImageIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-      <p className="text-muted-foreground text-lg">No media found</p>
-      <p className="text-muted-foreground text-sm mt-1">Try a different filter or check back later</p>
+    <div className="flex flex-col items-center justify-center p-10 text-center">
+      {isSearchEmpty ? (
+        <SearchX className="w-16 h-16 text-muted-foreground mb-4" />
+      ) : (
+        <Image className="w-16 h-16 text-muted-foreground mb-4" />
+      )}
+      
+      <h3 className="text-xl font-semibold mb-2">
+        {isSearchEmpty ? "No results found" : "No items in gallery"}
+      </h3>
+      
+      <p className="text-muted-foreground max-w-md">
+        {message || "There are no media items to display in the gallery at this time."}
+      </p>
     </div>
   );
 };
