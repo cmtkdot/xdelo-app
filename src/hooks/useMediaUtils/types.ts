@@ -20,3 +20,11 @@ export interface MediaUtilsState {
   isProcessing: boolean;
   processingMessageIds: Record<string, boolean>;
 }
+
+/**
+ * Sync Caption Result
+ */
+export interface SyncCaptionResult extends RepairResult {
+  synced?: number;
+  skipped?: number;
+}

@@ -10,11 +10,13 @@ import {
   ChevronUp,
   FileSearch,
   RefreshCcw,
-  Link
+  Link,
+  Copy
 } from 'lucide-react';
 import { Message } from '@/types';
 import { useMediaUtils } from '@/hooks/useMediaUtils';
 import { getTelegramMessageUrl } from '@/utils/mediaUtils';
+import { useToast } from '@/hooks/useToast';
 
 interface MediaToolbarProps {
   currentMedia: Message;
@@ -33,11 +35,13 @@ export function MediaToolbar({
 }: MediaToolbarProps) {
   const [isUrlCopied, setIsUrlCopied] = useState(false);
   const telegramUrl = currentMedia ? getTelegramMessageUrl(currentMedia) : null;
+  const { toast } = useToast();
   
   const { 
     processingMessageIds,
     fixContentDispositionForMessage,
     reuploadMediaFromTelegram,
+    syncMessageCaption,
     repairMediaBatch
   } = useMediaUtils();
   
@@ -54,6 +58,33 @@ export function MediaToolbar({
       } catch (err) {
         console.error('Failed to copy URL:', err);
       }
+    }
+  };
+
+  // Handle syncing caption across the media group
+  const handleSyncCaption = async () => {
+    if (!currentMedia || !currentMedia.media_group_id) {
+      toast({
+        title: "Sync not possible",
+        description: "Current message is not part of a media group",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const result = await syncMessageCaption(currentMedia.id);
+    
+    if (result.success) {
+      toast({
+        title: "Caption synced",
+        description: `Successfully synced caption to ${result.synced} messages in the group`,
+      });
+    } else {
+      toast({
+        title: "Sync failed",
+        description: result.message || "Failed to sync caption",
+        variant: "destructive"
+      });
     }
   };
 
@@ -133,12 +164,25 @@ export function MediaToolbar({
               <span>Reupload</span>
             </Button>
             
+            {currentMedia && currentMedia.media_group_id && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                disabled={isProcessingAny}
+                onClick={() => currentMedia && handleRepairAction(syncMessageCaption, currentMedia.id)}
+                className="flex items-center gap-1"
+              >
+                <Copy className="h-4 w-4" />
+                <span>Sync Caption</span>
+              </Button>
+            )}
+            
             <Button 
               variant="outline" 
               size="sm"
               disabled={isProcessingAny || messageIds.length === 0}
               onClick={() => repairMediaBatch(messageIds)}
-              className="flex items-center gap-1 col-span-2"
+              className={`flex items-center gap-1 ${currentMedia && currentMedia.media_group_id ? 'col-span-1' : 'col-span-2'}`}
             >
               <Wrench className="h-4 w-4" />
               <span>

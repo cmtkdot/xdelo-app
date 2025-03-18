@@ -1,9 +1,10 @@
 
 import React from 'react';
 import { Button } from "@/components/ui/button";
-import { FileDown, RefreshCcw, FileEdit } from "lucide-react";
+import { FileDown, RefreshCcw, FileEdit, Copy } from "lucide-react";
 import { Message } from "@/types/MessagesTypes";
 import { useMediaUtils } from '@/hooks/useMediaUtils';
+import { useToast } from '@/hooks/useToast';
 
 interface MediaFixToolsProps {
   message: Message;
@@ -11,11 +12,38 @@ interface MediaFixToolsProps {
 }
 
 export function MediaFixTools({ message, onEdit }: MediaFixToolsProps) {
-  const { reuploadMediaFromTelegram, processingMessageIds } = useMediaUtils();
+  const { reuploadMediaFromTelegram, syncMessageCaption, processingMessageIds } = useMediaUtils();
+  const { toast } = useToast();
   const isLoading = processingMessageIds[message.id];
 
   const handleReupload = async () => {
     await reuploadMediaFromTelegram(message.id);
+  };
+
+  const handleSyncCaption = async () => {
+    if (!message.media_group_id) {
+      toast({
+        title: "Sync not possible",
+        description: "This message is not part of a media group",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const result = await syncMessageCaption(message.id);
+    
+    if (result.success) {
+      toast({
+        title: "Caption synced",
+        description: `Successfully synced caption to ${result.synced} messages in the group`,
+      });
+    } else {
+      toast({
+        title: "Sync failed",
+        description: result.message || "Failed to sync caption",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleDownload = () => {
@@ -46,6 +74,19 @@ export function MediaFixTools({ message, onEdit }: MediaFixToolsProps) {
         <RefreshCcw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
         Reupload
       </Button>
+      
+      {message.media_group_id && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleSyncCaption}
+          disabled={isLoading}
+          title="Sync caption to all images in group"
+        >
+          <Copy className="h-4 w-4 mr-2" />
+          Sync Caption
+        </Button>
+      )}
       
       {onEdit && (
         <Button

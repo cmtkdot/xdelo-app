@@ -3949,13 +3949,6 @@ export type Database = {
       xdelo_construct_telegram_message_url:
         | {
             Args: {
-              chat_id: number
-              message_id: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
               chat_type: Database["public"]["Enums"]["telegram_chat_type"]
               chat_id: number
               id: string
@@ -3964,9 +3957,10 @@ export type Database = {
           }
         | {
             Args: {
-              p_chat_type: string
-              p_chat_id: number
-              p_id: string
+              chat_type: Database["public"]["Enums"]["telegram_chat_type"]
+              chat_id: number
+              message_id: string
+              telegram_message_id?: number
             }
             Returns: string
           }
