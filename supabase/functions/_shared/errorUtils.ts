@@ -33,6 +33,10 @@ export function extractErrorDetails(logData: any) {
       ? logData.metadata[0] 
       : {};
     
+    // Check if this is a file_id error from Telegram
+    const isFileIdError = errorMessage.includes('wrong file_id') || 
+                          errorMessage.includes('file is temporarily unavailable');
+    
     return {
       error: errorMessage,
       function_id: metadata.function_id || null,
@@ -41,7 +45,9 @@ export function extractErrorDetails(logData: any) {
       path: errorPath,
       execution_id: metadata.execution_id || null,
       region: metadata.region || null,
-      level: metadata.level || 'error'
+      level: metadata.level || 'error',
+      is_file_id_error: isFileIdError,
+      file_id: isFileIdError ? extractFileIdFromError(errorMessage) : null
     };
   } catch (e) {
     console.error('Error extracting error details:', e);
@@ -53,5 +59,22 @@ export function extractErrorDetails(logData: any) {
       path: null,
       execution_id: null
     };
+  }
+}
+
+/**
+ * Try to extract the file_id from an error message
+ */
+function extractFileIdFromError(errorMessage: string): string | null {
+  try {
+    // Look for patterns like "file_id=AgACAgEAA" in the error message
+    const fileIdMatch = errorMessage.match(/file_id=([^&\s]+)/);
+    if (fileIdMatch && fileIdMatch.length > 1) {
+      return fileIdMatch[1];
+    }
+    return null;
+  } catch (error) {
+    console.error('Error extracting file_id from error message:', error);
+    return null;
   }
 }
