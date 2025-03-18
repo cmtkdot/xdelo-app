@@ -6,6 +6,17 @@ DECLARE
   v_missing_columns TEXT[] := '{}';
   v_result JSONB;
 BEGIN
+  -- Check if telegram_message_id column exists
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'other_messages' AND column_name = 'telegram_message_id'
+  ) THEN
+    v_missing_columns := array_append(v_missing_columns, 'telegram_message_id');
+    
+    -- Add telegram_message_id column
+    ALTER TABLE other_messages ADD COLUMN telegram_message_id BIGINT;
+  END IF;
+
   -- Check if forward_info column exists
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns 
