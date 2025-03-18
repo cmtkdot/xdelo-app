@@ -1,110 +1,104 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
-// Create Supabase client
-const supabaseClient = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    }
-  }
-);
+// Initialize Supabase client (lazily to avoid unnecessary instantiation)
+let _supabaseClient: any = null;
 
 /**
- * Log a processing event to the unified_audit_logs table
+ * Get a singleton Supabase client instance
+ */
+export function getSupabaseClient() {
+  if (!_supabaseClient) {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Missing Supabase credentials in environment variables');
+    }
+    
+    _supabaseClient = createClient(supabaseUrl, supabaseKey);
+  }
+  
+  return _supabaseClient;
+}
+
+/**
+ * Log a processing event to the unified audit logs
  */
 export async function xdelo_logProcessingEvent(
   eventType: string,
   entityId: string,
   correlationId: string,
-  metadata: Record<string, unknown>,
+  metadata: Record<string, any> = {},
   errorMessage?: string
-) {
+): Promise<void> {
   try {
-    // Ensure metadata has a timestamp
-    const enhancedMetadata = {
-      ...metadata,
-      timestamp: metadata.timestamp || new Date().toISOString(),
-      correlation_id: correlationId,
-      logged_from: 'edge_function'
-    };
+    const supabase = getSupabaseClient();
     
-    await supabaseClient.from('unified_audit_logs').insert({
+    await supabase
+      .from('unified_audit_logs')
+      .insert({
+        event_type: eventType,
+        entity_id: entityId,
+        correlation_id: correlationId,
+        metadata: {
+          ...metadata,
+          logged_at: new Date().toISOString()
+        },
+        error_message: errorMessage,
+        event_timestamp: new Date().toISOString()
+      });
+  } catch (error) {
+    // Don't throw errors from logging functions - just log to console
+    console.error(JSON.stringify({
+      level: 'ERROR',
+      message: 'Failed to log processing event',
       event_type: eventType,
       entity_id: entityId,
-      metadata: enhancedMetadata,
-      error_message: errorMessage,
       correlation_id: correlationId,
-      event_timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error(`Error logging event: ${eventType}`, error);
+      error: error.message,
+      timestamp: new Date().toISOString()
+    }));
   }
 }
 
 /**
- * Update message processing state
+ * Update the processing state of a message
  */
-export async function updateMessageState(
+export async function xdelo_updateMessageProcessingState(
   messageId: string,
-  state: 'pending' | 'processing' | 'completed' | 'error',
+  status: 'pending' | 'processing' | 'completed' | 'error',
   errorMessage?: string
-) {
+): Promise<void> {
   try {
-    const updates: Record<string, unknown> = {
-      processing_state: state,
+    const supabase = getSupabaseClient();
+    
+    const updates: Record<string, any> = {
+      processing_state: status,
       updated_at: new Date().toISOString()
     };
     
-    if (state === 'processing') {
+    if (status === 'processing') {
       updates.processing_started_at = new Date().toISOString();
-    } else if (state === 'completed') {
+    } else if (status === 'completed') {
       updates.processing_completed_at = new Date().toISOString();
-      updates.error_message = null;
-    } else if (state === 'error' && errorMessage) {
-      updates.error_message = errorMessage;
-      updates.last_error_at = new Date().toISOString();
+    } else if (status === 'error') {
+      updates.error_message = errorMessage || 'Unknown error';
     }
     
-    const { error } = await supabaseClient
+    await supabase
       .from('messages')
       .update(updates)
       .eq('id', messageId);
-      
-    if (error) {
-      console.error(`Error updating message state: ${error.message}`);
-      return false;
-    }
-    
-    return true;
   } catch (error) {
-    console.error(`Error updating message state: ${error.message}`);
-    return false;
-  }
-}
-
-/**
- * Get message by ID
- */
-export async function getMessageById(messageId: string) {
-  try {
-    const { data, error } = await supabaseClient
-      .from('messages')
-      .select('*')
-      .eq('id', messageId)
-      .single();
-      
-    if (error) {
-      console.error(`Error getting message: ${error.message}`);
-      return null;
-    }
-    
-    return data;
-  } catch (error) {
-    console.error(`Error getting message: ${error.message}`);
-    return null;
+    console.error(JSON.stringify({
+      level: 'ERROR',
+      message: 'Failed to update message processing state',
+      message_id: messageId,
+      status,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    }));
+    throw error;
   }
 }
