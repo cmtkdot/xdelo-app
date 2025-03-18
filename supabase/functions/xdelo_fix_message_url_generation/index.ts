@@ -1,6 +1,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
+import * as fs from "https://deno.land/std@0.181.0/fs/mod.ts";
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -16,7 +17,29 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Run the SQL function to update the trigger
+    // Read the SQL script
+    const sqlScript = await Deno.readTextFile(new URL("./upgrade_triggers.sql", import.meta.url));
+    
+    // Execute each SQL statement
+    const statements = sqlScript.split(';').filter(stmt => stmt.trim() !== '');
+    
+    const results = [];
+    for (const stmt of statements) {
+      try {
+        const { data, error } = await supabase.rpc('xdelo_run_sql', { sql: stmt + ';' });
+        if (error) {
+          console.error("Error executing SQL statement:", error);
+          results.push({ success: false, error: error.message, statement: stmt.substring(0, 100) + '...' });
+        } else {
+          results.push({ success: true, statement: stmt.substring(0, 100) + '...' });
+        }
+      } catch (e) {
+        console.error("Error executing SQL statement:", e);
+        results.push({ success: false, error: e.message, statement: stmt.substring(0, 100) + '...' });
+      }
+    }
+    
+    // Run the function to update the triggers
     const { data, error } = await supabase.rpc('xdelo_update_message_url_triggers');
     
     if (error) {
@@ -30,7 +53,8 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         message: "Successfully updated message URL triggers",
-        data
+        data,
+        sql_execution_results: results
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

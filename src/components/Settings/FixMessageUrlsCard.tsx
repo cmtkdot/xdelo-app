@@ -1,100 +1,97 @@
 
-import React from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
-import { AlertTriangle, CheckCircle } from "lucide-react";
-import { supabase } from '@/integrations/supabase/client';
+import React, { useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/useToast';
+import { supabase } from '@/lib/supabase';
+import { ArrowRight, Loader2 } from 'lucide-react';
 
 export function FixMessageUrlsCard() {
-  const [isProcessing, setIsProcessing] = React.useState(false);
-  const [result, setResult] = React.useState<{ success: boolean; message: string } | null>(null);
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
 
-  const runFixMessageUrlTriggers = async () => {
+  const handleFixMessageUrls = async () => {
+    setIsLoading(true);
+    setResult(null);
+
     try {
-      setIsProcessing(true);
-      setResult(null);
-      
       const { data, error } = await supabase.functions.invoke('xdelo_fix_message_url_generation');
-      
+
       if (error) {
-        throw new Error(error.message);
+        throw error;
       }
-      
-      setResult({
-        success: true,
-        message: "Message URL generation has been fixed successfully!"
-      });
+
+      setResult(data);
       
       toast({
-        title: "Success",
-        description: "Message URL generation has been fixed",
-        variant: "default"
+        title: 'Message URLs Fixed',
+        description: data.message || 'Message URL generation has been updated successfully',
+        variant: 'success',
       });
-    } catch (error) {
-      console.error("Error fixing message URL generation:", error);
-      
-      setResult({
-        success: false,
-        message: error instanceof Error ? error.message : "Unknown error occurred"
-      });
+    } catch (error: any) {
+      console.error('Error fixing message URLs:', error);
       
       toast({
-        title: "Error",
-        description: "Failed to fix message URL generation",
-        variant: "destructive"
+        title: 'Error Fixing Message URLs',
+        description: error.message || 'An unexpected error occurred',
+        variant: 'destructive',
       });
     } finally {
-      setIsProcessing(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <Card className="w-full">
+    <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Fix Message URL Generation</CardTitle>
+        <CardTitle>Fix Message URLs</CardTitle>
         <CardDescription>
-          Fix the message URL generation for non-media messages stored in the database
+          Enhance database triggers for generating Telegram message URLs, especially for non-media messages
         </CardDescription>
       </CardHeader>
-      
-      <CardContent>
-        <p className="text-sm text-muted-foreground mb-4">
-          This will update the database triggers to properly generate message URLs for non-media messages by extracting
-          data from the telegram_data JSON field.
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          This utility will update the database triggers that generate message URLs for non-media messages. 
+          It will also fix any missing columns in the database tables and update the processing state enum types.
         </p>
         
-        {result && (
-          <div className={`p-3 mb-4 rounded-md flex items-start gap-2 ${result.success ? 'bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-400' : 'bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-400'}`}>
-            {result.success ? (
-              <CheckCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">
+            {isLoading 
+              ? 'Updating triggers...' 
+              : result 
+                ? 'Triggers updated successfully' 
+                : 'Click to update message URL triggers'}
+          </span>
+          <Button 
+            variant="default" 
+            onClick={handleFixMessageUrls}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Updating...
+              </>
             ) : (
-              <AlertTriangle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+              <>
+                Fix Message URLs
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </>
             )}
-            <div>
-              <p className="font-medium">{result.success ? "Success" : "Error"}</p>
-              <p className="text-sm">{result.message}</p>
-            </div>
+          </Button>
+        </div>
+        
+        {result && (
+          <div className="mt-4 p-3 bg-muted rounded-md text-sm">
+            <p className="font-medium">Results:</p>
+            <pre className="text-xs mt-2 whitespace-pre-wrap">
+              {JSON.stringify(result, null, 2)}
+            </pre>
           </div>
         )}
       </CardContent>
-      
-      <CardFooter>
-        <Button 
-          onClick={runFixMessageUrlTriggers} 
-          disabled={isProcessing}
-          className="w-full"
-        >
-          {isProcessing ? (
-            <>
-              <Spinner className="mr-2 h-4 w-4" />
-              Updating triggers...
-            </>
-          ) : "Fix Message URL Generation"}
-        </Button>
-      </CardFooter>
     </Card>
   );
 }
