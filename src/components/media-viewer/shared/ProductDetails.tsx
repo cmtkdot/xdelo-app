@@ -113,7 +113,7 @@ export function ProductDetails({ mainMedia, className }: ProductDetailsProps) {
           )}
           
           {/* Only show price section if either unit_price or total_price exists */}
-          {(analyzedContent.unit_price || analyzedContent.total_price) && (
+          {(analyzedContent.unit_price !== undefined || analyzedContent.total_price !== undefined) && (
             <div className="flex flex-col sm:flex-row gap-2">
               {analyzedContent.unit_price !== undefined && (
                 <div className="flex items-center space-x-2 p-2 rounded-md bg-muted/10 flex-1">

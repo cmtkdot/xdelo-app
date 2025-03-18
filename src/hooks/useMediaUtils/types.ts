@@ -24,3 +24,9 @@ export interface StandardizeResult {
   successful?: number;
   failed?: number;
 }
+
+// Add the MediaUtilsState interface that was missing
+export interface MediaUtilsState {
+  isProcessing: boolean;
+  processingMessageIds: Record<string, boolean>;
+}

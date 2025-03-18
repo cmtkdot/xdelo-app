@@ -113,7 +113,7 @@ export function useMessageTableState(initialMessages: Message[]) {
             ...(currentContent.parsing_metadata || {}),
             method: 'manual' as const,
             timestamp: new Date().toISOString()
-            // No confidence field - we don't use it anymore
+            // Confidence is now optional, so we don't need to set it
           }
         };
         

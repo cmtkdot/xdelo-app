@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useMediaUtils } from '@/hooks/useMediaUtils';
 
 export function FixMediaUrlsCard() {
-  const { repairMediaUrls, isProcessing } = useMediaUtils();
+  const { standardizeStoragePaths, isProcessing } = useMediaUtils();
   const [results, setResults] = React.useState<{
     success: boolean;
     repaired?: number;
@@ -16,7 +16,7 @@ export function FixMediaUrlsCard() {
 
   const handleRunRepair = async () => {
     try {
-      const result = await repairMediaUrls();
+      const result = await standardizeStoragePaths();
       setResults({
         success: result.success,
         repaired: result.successful,
