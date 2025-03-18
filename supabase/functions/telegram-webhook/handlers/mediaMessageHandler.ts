@@ -1,4 +1,3 @@
-
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { 
@@ -37,6 +36,11 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     // Log the start of processing
     console.log(`[${correlationId}] Processing ${isEdit ? 'edited' : 'new'} media message ${message.message_id} in chat ${message.chat.id}`);
     
+    // Validate the message structure
+    if (!message || !message.chat) {
+      throw new Error(`Invalid message structure: ${JSON.stringify(message, null, 2)}`);
+    }
+    
     // Determine if this is an edited message or a new message
     if (isEdit && previousMessage) {
       return await xdelo_handleEditedMediaMessage(message, context, previousMessage);
@@ -45,29 +49,49 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     // Handle new message
     return await xdelo_handleNewMediaMessage(message, context);
   } catch (error) {
-    console.error(`[${context.correlationId}] Error handling media message:`, error);
+    // Improved error handling with better stringification
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : (typeof error === 'object' ? JSON.stringify(error) : String(error));
     
-    // Log error event
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    console.error(`[${context.correlationId}] Error handling media message:`, errorMessage);
+    if (errorStack) {
+      console.error(`[${context.correlationId}] Error stack:`, errorStack);
+    }
+    
+    // Log full error object structure for debugging
+    if (typeof error === 'object') {
+      console.error(`[${context.correlationId}] Error object keys:`, Object.keys(error));
+    }
+    
+    // Log error event with structured data
     try {
       await supabaseClient.from('unified_audit_logs').insert({
         event_type: 'message_processing_failed',
-        error_message: error.message || 'Unknown error in media message handler',
+        entity_id: crypto.randomUUID(), // Generate a fallback ID
+        error_message: errorMessage,
         metadata: {
-          message_id: message.message_id,
-          chat_id: message.chat?.id,
+          message_id: message?.message_id,
+          chat_id: message?.chat?.id,
           processing_stage: 'media_handling',
-          error_code: error.code,
-          handler_type: 'media_message'
+          error_code: error instanceof Error && 'code' in error ? (error as any).code : 'UNKNOWN_ERROR',
+          error_stack: errorStack,
+          error_object: typeof error === 'object' ? JSON.stringify(error) : undefined,
+          handler_type: 'media_message',
+          timestamp: new Date().toISOString()
         },
         correlation_id: context.correlationId
       });
     } catch (logError) {
-      console.error(`[${context.correlationId}] Failed to log error:`, logError);
+      console.error(`[${context.correlationId}] Failed to log error:`, 
+        logError instanceof Error ? logError.message : String(logError));
     }
     
     return new Response(
       JSON.stringify({ 
-        error: error.message,
+        error: errorMessage,
         correlationId: context.correlationId 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
@@ -270,78 +294,265 @@ async function xdelo_handleNewMediaMessage(
     throw new Error('Missing TELEGRAM_BOT_TOKEN, cannot process media');
   }
 
+  // Validate message has required fields
+  if (!message.chat?.id) {
+    throw new Error(`Missing chat ID in message: ${JSON.stringify(message)}`);
+  }
+
   // Extract the media from the message (photo, video, or document)
   const mediaContent = message.photo ? 
     message.photo[message.photo.length - 1] : 
     message.video || message.document;
     
   if (!mediaContent) {
-    throw new Error('No media content found in message');
+    throw new Error(`No media content found in message: ${JSON.stringify(message)}`);
   }
 
-  // Check for duplicate message by file_unique_id
-  const existingMedia = await checkDuplicateFile(supabaseClient, mediaContent.file_unique_id);
+  if (!mediaContent.file_unique_id) {
+    throw new Error(`Missing file_unique_id in mediaContent: ${JSON.stringify(mediaContent)}`);
+  }
 
-  // If file already exists, update instead of creating new record
-  if (existingMedia) {
-    console.log(`[${correlationId}] Duplicate message detected with file_unique_id ${mediaContent.file_unique_id}, updating existing record`);
-    
-    // Check if caption changed
-    const captionChanged = message.caption !== existingMedia.caption;
-    
-    // Update the existing message
-    const updateData: Record<string, any> = {
-      caption: message.caption,
-      chat_id: message.chat.id,
-      chat_title: message.chat.title,
-      chat_type: message.chat.type,
-      telegram_message_id: message.message_id,
-      telegram_data: message,
-      correlation_id: correlationId,
-      media_group_id: message.media_group_id,
-      // Preserve existing storage path
-      storage_path: existingMedia.storage_path,
-      // Use existing public_url - it's generated by Supabase
-      public_url: existingMedia.public_url,
-      // Reset processing if caption changed
-      processing_state: captionChanged ? 'pending' : existingMedia.processing_state,
-      analyzed_content: captionChanged ? null : existingMedia.analyzed_content,
-      updated_at: new Date().toISOString(),
-      is_duplicate: true,
-      duplicate_reference_id: existingMedia.id,
-      // Clear any error state on successful update
-      error_message: null,
-      error_code: null
-    };
+  try {
+    // Check for duplicate message by file_unique_id
+    const existingMedia = await checkDuplicateFile(supabaseClient, mediaContent.file_unique_id);
 
-    const { error: updateError } = await supabaseClient
-      .from('messages')
-      .update(updateData)
-      .eq('id', existingMedia.id);
+    // If file already exists, update instead of creating new record
+    if (existingMedia) {
+      console.log(`[${correlationId}] Duplicate message detected with file_unique_id ${mediaContent.file_unique_id}, updating existing record`);
+      
+      // Check if caption changed
+      const captionChanged = message.caption !== existingMedia.caption;
+      
+      // Update the existing message
+      const updateData: Record<string, any> = {
+        caption: message.caption,
+        chat_id: message.chat.id,
+        chat_title: message.chat.title,
+        chat_type: message.chat.type,
+        telegram_message_id: message.message_id,
+        telegram_data: message,
+        correlation_id: correlationId,
+        media_group_id: message.media_group_id,
+        // Preserve existing storage path
+        storage_path: existingMedia.storage_path,
+        // Use existing public_url - it's generated by Supabase
+        public_url: existingMedia.public_url,
+        // Reset processing if caption changed
+        processing_state: captionChanged ? 'pending' : existingMedia.processing_state,
+        analyzed_content: captionChanged ? null : existingMedia.analyzed_content,
+        updated_at: new Date().toISOString(),
+        is_duplicate: true,
+        duplicate_reference_id: existingMedia.id,
+        // Clear any error state on successful update
+        error_message: null,
+        error_code: null
+      };
 
-    if (updateError) {
-      console.error(`[${correlationId}] Error updating existing message:`, updateError);
-      throw updateError;
+      const { error: updateError } = await supabaseClient
+        .from('messages')
+        .update(updateData)
+        .eq('id', existingMedia.id);
+
+      if (updateError) {
+        console.error(`[${correlationId}] Error updating existing message:`, updateError);
+        throw updateError;
+      }
+
+      // Log the duplicate detection
+      await supabaseClient.from('unified_audit_logs').insert({
+        event_type: 'duplicate_file_detected',
+        entity_id: existingMedia.id,
+        metadata: {
+          telegram_message_id: message.message_id,
+          chat_id: message.chat.id,
+          file_unique_id: mediaContent.file_unique_id,
+          media_group_id: message.media_group_id,
+          update_type: 'duplicate_update'
+        },
+        correlation_id: correlationId
+      });
+
+      // Process caption if it changed
+      if (captionChanged && message.caption) {
+        await xdelo_processCaptionChanges(
+          existingMedia.id,
+          message.caption,
+          message.media_group_id,
+          correlationId,
+          false // Not an edit
+        );
+      } else if (message.media_group_id) {
+        // Check if we need to sync with media group
+        await xdelo_checkMediaGroupSync(
+          existingMedia.id,
+          message.media_group_id,
+          correlationId
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, duplicate: true, correlationId }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Log the duplicate detection
-    await supabaseClient.from('unified_audit_logs').insert({
-      event_type: 'duplicate_file_detected',
-      entity_id: existingMedia.id,
-      metadata: {
-        telegram_message_id: message.message_id,
-        chat_id: message.chat.id,
-        file_unique_id: mediaContent.file_unique_id,
-        media_group_id: message.media_group_id,
-        update_type: 'duplicate_update'
-      },
-      correlation_id: correlationId
-    });
+    // Process media for new message with improved approach
+    const telegramFile = message.photo ? 
+      message.photo[message.photo.length - 1] : 
+      message.video || message.document;
+    
+    if (!telegramFile) {
+      throw new Error(`Failed to extract telegram file from message: ${JSON.stringify(message)}`);
+    }
+    
+    if (!telegramFile.file_id) {
+      throw new Error(`Missing file_id in telegram file: ${JSON.stringify(telegramFile)}`);
+    }
+    
+    // Detect MIME type from the complete message
+    const detectedMimeType = xdelo_detectMimeType(message);
+    console.log(`[${correlationId}] Detected MIME type: ${detectedMimeType} for new message ${message.message_id}`);
+    
+    // Download the file with improved metadata handling
+    const downloadResult = await xdelo_downloadMediaFromTelegram(
+      telegramFile.file_id,
+      telegramFile.file_unique_id,
+      detectedMimeType,
+      TELEGRAM_BOT_TOKEN
+    );
+    
+    if (!downloadResult.success || !downloadResult.blob) {
+      throw new Error(`Failed to download file from Telegram: ${downloadResult.error || 'Unknown error'}`);
+    }
+    
+    // Upload to Supabase Storage with standardized path
+    const uploadResult = await xdelo_uploadMediaToStorage(
+      downloadResult.storagePath || `${telegramFile.file_unique_id}.bin`,
+      downloadResult.blob,
+      downloadResult.mimeType || detectedMimeType,
+      // No message ID yet since we haven't created it
+    );
+    
+    if (!uploadResult.success) {
+      throw new Error(`Failed to upload file to Supabase Storage: ${uploadResult.error || 'Unknown error'}`);
+    }
 
-    // Process caption if it changed
-    if (captionChanged && message.caption) {
+    // Prepare forward info if message is forwarded
+    const forwardInfo: ForwardInfo | undefined = message.forward_origin ? {
+      is_forwarded: true,
+      forward_origin_type: message.forward_origin.type,
+      forward_from_chat_id: message.forward_origin.chat?.id,
+      forward_from_chat_title: message.forward_origin.chat?.title,
+      forward_from_chat_type: message.forward_origin.chat?.type,
+      forward_from_message_id: message.forward_origin.message_id,
+      forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
+      original_chat_id: message.forward_origin.chat?.id,
+      original_chat_title: message.forward_origin.chat?.title,
+      original_message_id: message.forward_origin.message_id
+    } : undefined;
+
+    // Create message input using the downloaded media info
+    const messageInput: MessageInput = {
+      telegram_message_id: message.message_id,
+      chat_id: message.chat.id,
+      chat_type: message.chat.type,
+      chat_title: message.chat.title,
+      caption: message.caption,
+      media_group_id: message.media_group_id,
+      file_id: telegramFile.file_id,
+      file_unique_id: telegramFile.file_unique_id,
+      mime_type: downloadResult.mimeType || detectedMimeType,
+      mime_type_original: message.document?.mime_type || message.video?.mime_type,
+      storage_path: downloadResult.storagePath || `${telegramFile.file_unique_id}.bin`,
+      public_url: uploadResult.publicUrl,
+      width: telegramFile.width,
+      height: telegramFile.height,
+      duration: message.video?.duration,
+      file_size: telegramFile.file_size || downloadResult.blob.size,
+      correlation_id: context.correlationId,
+      processing_state: message.caption ? 'pending' : 'initialized',
+      is_edited_channel_post: context.isChannelPost,
+      forward_info: forwardInfo,
+      telegram_data: message,
+      edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : undefined,
+      is_forward: context.isForwarded,
+      edit_history: context.isEdit ? [{
+        timestamp: new Date().toISOString(),
+        is_initial_edit: true,
+        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+      }] : [],
+      storage_exists: true, // We just uploaded it
+      storage_path_standardized: true, // We're using our standardized paths
+      message_url: constructTelegramMessageUrl(message) // Add message URL using the utility function
+    };
+
+    // Create the message record
+    const logger = {
+      error: (msg: string, error: unknown) => {
+        const errorStr = error instanceof Error ? 
+          `${error.message} (${error.stack})` : 
+          (typeof error === 'object' ? JSON.stringify(error, null, 2) : String(error));
+        console.error(`[${correlationId}] ${msg}`, errorStr);
+      },
+      info: (msg: string, data?: unknown) => console.log(`[${correlationId}] ${msg}`, data)
+    };
+    
+    // Create the message with improved logging
+    console.log(`[${correlationId}] Creating message with input:`, JSON.stringify({
+      telegram_message_id: messageInput.telegram_message_id,
+      chat_id: messageInput.chat_id,
+      file_unique_id: messageInput.file_unique_id,
+      media_group_id: messageInput.media_group_id,
+      mime_type: messageInput.mime_type,
+      storage_path: messageInput.storage_path,
+      public_url: messageInput.public_url?.substring(0, 50) + '...' // Truncate for log readability
+    }));
+    
+    const result = await createMessage(supabaseClient, messageInput, logger);
+
+    if (!result.success) {
+      console.error(`[${correlationId}] Error creating message:`, result.error_message);
+      
+      // Additional diagnostic info about the failed message
+      console.error(`[${correlationId}] Message creation diagnostic details:`, {
+        telegram_message_id: messageInput.telegram_message_id,
+        chat_id: messageInput.chat_id,
+        file_unique_id: messageInput.file_unique_id,
+        storage_path: messageInput.storage_path,
+        public_url_exists: !!messageInput.public_url,
+        error_message: result.error_message,
+        error_code: result.error_code
+      });
+      
+      throw new Error(`Failed to create message: ${result.error_message || 'Unknown error'}`);
+    }
+
+    // Log the insert event
+    try {
+      await supabaseClient.from('unified_audit_logs').insert({
+        event_type: 'message_created',
+        entity_id: result.id,
+        metadata: {
+          telegram_message_id: message.message_id,
+          chat_id: message.chat.id,
+          file_unique_id: telegramFile.file_unique_id,
+          media_group_id: message.media_group_id,
+          is_forwarded: !!messageInput.forward_info,
+          storage_path: downloadResult.storagePath,
+          mime_type: downloadResult.mimeType || detectedMimeType,
+          document_mime_type: message.document?.mime_type,
+          video_mime_type: message.video?.mime_type
+        },
+        correlation_id: correlationId
+      });
+    } catch (logError) {
+      console.error(`[${correlationId}] Error logging message creation:`, logError);
+    }
+
+    // Process caption or check media group sync
+    if (message.caption) {
       await xdelo_processCaptionChanges(
-        existingMedia.id,
+        result.id,
         message.caption,
         message.media_group_id,
         correlationId,
@@ -350,157 +561,62 @@ async function xdelo_handleNewMediaMessage(
     } else if (message.media_group_id) {
       // Check if we need to sync with media group
       await xdelo_checkMediaGroupSync(
-        existingMedia.id,
+        result.id,
         message.media_group_id,
         correlationId
       );
     }
 
     return new Response(
-      JSON.stringify({ success: true, duplicate: true, correlationId }),
+      JSON.stringify({ success: true, id: result.id, correlationId }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-  }
-
-  // Process media for new message with improved approach
-  const telegramFile = message.photo ? 
-    message.photo[message.photo.length - 1] : 
-    message.video || message.document;
-  
-  // Detect MIME type from the complete message
-  const detectedMimeType = xdelo_detectMimeType(message);
-  console.log(`[${correlationId}] Detected MIME type: ${detectedMimeType} for new message ${message.message_id}`);
-  
-  // Download the file with improved metadata handling
-  const downloadResult = await xdelo_downloadMediaFromTelegram(
-    telegramFile.file_id,
-    telegramFile.file_unique_id,
-    detectedMimeType,
-    TELEGRAM_BOT_TOKEN
-  );
-  
-  if (!downloadResult.success || !downloadResult.blob) {
-    throw new Error(`Failed to download file from Telegram: ${downloadResult.error || 'Unknown error'}`);
-  }
-  
-  // Upload to Supabase Storage with standardized path
-  const uploadResult = await xdelo_uploadMediaToStorage(
-    downloadResult.storagePath || `${telegramFile.file_unique_id}.bin`,
-    downloadResult.blob,
-    downloadResult.mimeType || detectedMimeType,
-    // No message ID yet since we haven't created it
-  );
-  
-  if (!uploadResult.success) {
-    throw new Error(`Failed to upload file to Supabase Storage: ${uploadResult.error || 'Unknown error'}`);
-  }
-
-  // Prepare forward info if message is forwarded
-  const forwardInfo: ForwardInfo | undefined = message.forward_origin ? {
-    is_forwarded: true,
-    forward_origin_type: message.forward_origin.type,
-    forward_from_chat_id: message.forward_origin.chat?.id,
-    forward_from_chat_title: message.forward_origin.chat?.title,
-    forward_from_chat_type: message.forward_origin.chat?.type,
-    forward_from_message_id: message.forward_origin.message_id,
-    forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
-    original_chat_id: message.forward_origin.chat?.id,
-    original_chat_title: message.forward_origin.chat?.title,
-    original_message_id: message.forward_origin.message_id
-  } : undefined;
-
-  // Create message input using the downloaded media info
-  const messageInput: MessageInput = {
-    telegram_message_id: message.message_id,
-    chat_id: message.chat.id,
-    chat_type: message.chat.type,
-    chat_title: message.chat.title,
-    caption: message.caption,
-    media_group_id: message.media_group_id,
-    file_id: telegramFile.file_id,
-    file_unique_id: telegramFile.file_unique_id,
-    mime_type: downloadResult.mimeType || detectedMimeType,
-    mime_type_original: message.document?.mime_type || message.video?.mime_type,
-    storage_path: downloadResult.storagePath || `${telegramFile.file_unique_id}.bin`,
-    public_url: uploadResult.publicUrl,
-    width: telegramFile.width,
-    height: telegramFile.height,
-    duration: message.video?.duration,
-    file_size: telegramFile.file_size || downloadResult.blob.size,
-    correlation_id: context.correlationId,
-    processing_state: message.caption ? 'pending' : 'initialized',
-    is_edited_channel_post: context.isChannelPost,
-    forward_info: forwardInfo,
-    telegram_data: message,
-    edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : undefined,
-    is_forward: context.isForwarded,
-    edit_history: context.isEdit ? [{
-      timestamp: new Date().toISOString(),
-      is_initial_edit: true,
-      edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
-    }] : [],
-    storage_exists: true, // We just uploaded it
-    storage_path_standardized: true, // We're using our standardized paths
-    message_url: constructTelegramMessageUrl(message) // Add message URL using the utility function
-  };
-
-  // Create the message record
-  const logger = {
-    error: (msg: string, error: unknown) => console.error(`[${correlationId}] ${msg}`, error),
-    info: (msg: string, data?: unknown) => console.log(`[${correlationId}] ${msg}`, data)
-  };
-  
-  const result = await createMessage(supabaseClient, messageInput, logger);
-
-  if (!result.success) {
-    console.error(`[${correlationId}] Error creating message:`, result.error_message);
-    throw new Error(result.error_message || 'Failed to create message');
-  }
-
-  // Log the insert event
-  try {
-    await supabaseClient.from('unified_audit_logs').insert({
-      event_type: 'message_created',
-      entity_id: result.id,
-      metadata: {
-        telegram_message_id: message.message_id,
-        chat_id: message.chat.id,
-        file_unique_id: telegramFile.file_unique_id,
-        media_group_id: message.media_group_id,
-        is_forwarded: !!messageInput.forward_info,
-        storage_path: downloadResult.storagePath,
-        mime_type: downloadResult.mimeType || detectedMimeType,
-        document_mime_type: message.document?.mime_type,
-        video_mime_type: message.video?.mime_type
-      },
-      correlation_id: correlationId
+  } catch (createError) {
+    // Enhanced error handling
+    const errorMessage = createError instanceof Error 
+      ? createError.message 
+      : (typeof createError === 'object' ? JSON.stringify(createError) : String(createError));
+    
+    const errorStack = createError instanceof Error ? createError.stack : undefined;
+    
+    console.error(`[${correlationId}] Error in xdelo_handleNewMediaMessage:`, errorMessage);
+    if (errorStack) {
+      console.error(`[${correlationId}] Error stack:`, errorStack);
+    }
+    
+    // Full diagnostic information for debugging
+    console.error(`[${correlationId}] Error context:`, {
+      telegram_message_id: message.message_id,
+      chat_id: message.chat?.id,
+      file_unique_id: mediaContent.file_unique_id,
+      media_group_id: message.media_group_id,
+      error_type: typeof createError,
+      error_keys: typeof createError === 'object' ? Object.keys(createError) : 'N/A'
     });
-  } catch (logError) {
-    console.error(`[${correlationId}] Error logging message creation:`, logError);
+    
+    // Log detailed error to database
+    try {
+      await supabaseClient.from('unified_audit_logs').insert({
+        event_type: 'media_message_creation_failed',
+        entity_id: crypto.randomUUID(),
+        error_message: errorMessage,
+        metadata: {
+          telegram_message_id: message.message_id,
+          chat_id: message.chat?.id,
+          file_unique_id: mediaContent.file_unique_id,
+          media_group_id: message.media_group_id,
+          error_stack: errorStack,
+          correlation_id
+        },
+        correlation_id
+      });
+    } catch (logError) {
+      console.error(`[${correlationId}] Failed to log media creation error:`, logError);
+    }
+    
+    // Re-throw to be caught by the main handler
+    throw createError;
   }
-
-  // Process caption or check media group sync
-  if (message.caption) {
-    await xdelo_processCaptionChanges(
-      result.id,
-      message.caption,
-      message.media_group_id,
-      correlationId,
-      false // Not an edit
-    );
-  } else if (message.media_group_id) {
-    // Check if we need to sync with media group
-    await xdelo_checkMediaGroupSync(
-      result.id,
-      message.media_group_id,
-      correlationId
-    );
-  }
-
-  return new Response(
-    JSON.stringify({ success: true, id: result.id, correlationId }),
-    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
 }
 
 /**

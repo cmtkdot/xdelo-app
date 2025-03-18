@@ -3836,6 +3836,23 @@ export type Database = {
         }
         Returns: string
       }
+      xdelo_construct_telegram_message_url:
+        | {
+            Args: {
+              chat_type: Database["public"]["Enums"]["telegram_chat_type"]
+              chat_id: number
+              id: number
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              chat_type: Database["public"]["Enums"]["telegram_chat_type"]
+              chat_id: number
+              id: string
+            }
+            Returns: string
+          }
       xdelo_fail_message_processing: {
         Args: {
           p_message_id: string
