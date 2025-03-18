@@ -4,11 +4,11 @@ import { Message } from '@/types/entities/Message';
 import { useToast } from '@/hooks/useToast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
-import { RepairResult } from './types';
 import { logEvent, LogEventType } from '@/lib/logUtils';
+import { RepairResult } from './types';
 
 /**
- * Hook with single file media operations
+ * Hook for single file media operations
  */
 export function useSingleFileOperations(
   addProcessingMessageId: (id: string) => void,
@@ -25,7 +25,7 @@ export function useSingleFileOperations(
       addProcessingMessageId(messageId);
       
       // Call the edge function to process the message
-      const { data, error } = await supabase.functions.invoke('xdelo_process_message', {
+      const { data, error } = await supabase.functions.invoke('process-message', {
         body: { messageId }
       });
       
@@ -76,7 +76,7 @@ export function useSingleFileOperations(
       addProcessingMessageId(messageId);
       
       // Call the edge function to reupload media
-      const { data, error } = await supabase.functions.invoke('xdelo_reupload_media', {
+      const { data, error } = await supabase.functions.invoke('redownload-missing-files', {
         body: { messageId }
       });
       
@@ -122,8 +122,11 @@ export function useSingleFileOperations(
       addProcessingMessageId(messageId);
       
       // Call the edge function to fix content disposition
-      const { data, error } = await supabase.functions.invoke('xdelo_fix_content_disposition', {
-        body: { messageId }
+      const { data, error } = await supabase.functions.invoke('media-management', {
+        body: { 
+          action: 'fix_content_disposition', 
+          messageId
+        }
       });
       
       if (error) {
@@ -168,7 +171,7 @@ export function useSingleFileOperations(
       addProcessingMessageId(message.id);
       
       // Call the edge function to reanalyze caption
-      const { data, error } = await supabase.functions.invoke('xdelo_analyze_caption', {
+      const { data, error } = await supabase.functions.invoke('parse-caption-with-ai', {
         body: { 
           messageId: message.id,
           caption: message.caption
@@ -237,10 +240,11 @@ export function useSingleFileOperations(
       }
       
       // Call the edge function to sync the media group
-      const { data, error } = await supabase.functions.invoke('xdelo_sync_media_group', {
+      const { data, error } = await supabase.functions.invoke('media-management', {
         body: { 
-          message_id: messageId,
-          media_group_id: mediaGroupId,
+          action: 'sync_media_group',
+          sourceMessageId: messageId,
+          mediaGroupId,
           force: true
         }
       });
@@ -297,6 +301,6 @@ export function useSingleFileOperations(
     reuploadMediaFromTelegram,
     fixContentDispositionForMessage,
     reanalyzeMessageCaption,
-    syncMessageCaption
+    syncMessageCaption,
   };
 }

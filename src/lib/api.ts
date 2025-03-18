@@ -84,3 +84,46 @@ export async function logOperation(
     metadata
   });
 }
+
+/**
+ * Process a message caption with AI
+ */
+export async function analyzeWithAI(messageId: string, caption: string) {
+  return invokeFunctionWrapper('analyze-with-ai', {
+    messageId,
+    caption
+  });
+}
+
+/**
+ * Manually parse a caption
+ */
+export async function parseCaption(messageId: string, caption?: string, isEdit = false) {
+  return invokeFunctionWrapper('manual-caption-parser', {
+    messageId,
+    caption,
+    isEdit,
+    trigger_source: 'web_ui'
+  });
+}
+
+/**
+ * Delete a message and its associated media files
+ */
+export async function deleteMessage(messageId: string, cascade = true) {
+  return invokeFunctionWrapper('cleanup-storage-on-delete', {
+    message_id: messageId,
+    cascade
+  });
+}
+
+/**
+ * Validate storage files
+ */
+export async function validateStorageFiles(options: {
+  messageIds?: string[];
+  limit?: number;
+  fixMissingFiles?: boolean;
+}) {
+  return invokeFunctionWrapper('validate-storage-files', options);
+}
