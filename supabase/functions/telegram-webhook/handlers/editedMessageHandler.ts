@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
+import { constructTelegramMessageUrl, isMessageForwarded } from '../../_shared/messageUtils.ts';
 
 // Create Supabase client
 const supabaseClient = createClient(
@@ -33,6 +34,9 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       return await handleMediaMessage(message, context);
     }
     
+    // Generate message URL using our utility function
+    const message_url = constructTelegramMessageUrl(message);
+    
     // Look up the original message in other_messages
     const { data: existingMessage } = await supabaseClient
       .from('other_messages')
@@ -57,6 +61,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         .update({
           message_text: message.text || message.caption || '',
           telegram_data: message,
+          message_url: message_url, // Update the URL
           updated_at: new Date().toISOString(),
           edit_history: editHistory,
           edit_count: (existingMessage.edit_count || 0) + 1,
@@ -76,7 +81,8 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         {
           telegram_message_id: message.message_id,
           chat_id: message.chat.id,
-          edit_type: 'text_message'
+          edit_type: 'text_message',
+          message_url: message_url
         }
       );
       
@@ -87,7 +93,8 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
           success: true, 
           messageId: existingMessage.id, 
           correlationId,
-          action: 'updated'
+          action: 'updated',
+          message_url: message_url
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

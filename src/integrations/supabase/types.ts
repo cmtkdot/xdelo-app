@@ -9,36 +9,6 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      credentials_entity: {
-        Row: {
-          createdAt: string
-          data: string
-          id: number
-          name: string
-          nodesAccess: Json
-          type: string
-          updatedAt: string
-        }
-        Insert: {
-          createdAt?: string
-          data: string
-          id?: number
-          name: string
-          nodesAccess: Json
-          type: string
-          updatedAt?: string
-        }
-        Update: {
-          createdAt?: string
-          data?: string
-          id?: number
-          name?: string
-          nodesAccess?: Json
-          type?: string
-          updatedAt?: string
-        }
-        Relationships: []
-      }
       deleted_messages: {
         Row: {
           analyzed_content: Json | null
@@ -96,69 +66,6 @@ export type Database = {
           telegram_data?: Json | null
           telegram_message_id?: number | null
           user_id?: string | null
-        }
-        Relationships: []
-      }
-      execution_entity: {
-        Row: {
-          data: string
-          finished: boolean
-          id: number
-          mode: string
-          retryOf: string | null
-          retrySuccessId: string | null
-          startedAt: string
-          stoppedAt: string | null
-          waitTill: string | null
-          workflowData: Json
-          workflowId: string | null
-        }
-        Insert: {
-          data: string
-          finished: boolean
-          id?: number
-          mode: string
-          retryOf?: string | null
-          retrySuccessId?: string | null
-          startedAt: string
-          stoppedAt?: string | null
-          waitTill?: string | null
-          workflowData: Json
-          workflowId?: string | null
-        }
-        Update: {
-          data?: string
-          finished?: boolean
-          id?: number
-          mode?: string
-          retryOf?: string | null
-          retrySuccessId?: string | null
-          startedAt?: string
-          stoppedAt?: string | null
-          waitTill?: string | null
-          workflowData?: Json
-          workflowId?: string | null
-        }
-        Relationships: []
-      }
-      function_backup: {
-        Row: {
-          created_at: string | null
-          function_definition: string | null
-          function_name: string | null
-          id: string
-        }
-        Insert: {
-          created_at?: string | null
-          function_definition?: string | null
-          function_name?: string | null
-          id?: string
-        }
-        Update: {
-          created_at?: string | null
-          function_definition?: string | null
-          function_name?: string | null
-          id?: string
         }
         Relationships: []
       }
@@ -2458,9 +2365,11 @@ export type Database = {
           edit_date: string | null
           edit_history: Json | null
           error_message: string | null
+          forward_info: Json | null
           id: string
           is_edited: boolean
           is_forward: string | null
+          last_error_at: string | null
           message_text: string | null
           message_type: string
           message_url: string | null
@@ -2473,6 +2382,7 @@ export type Database = {
           product_name: string | null
           product_quantity: number | null
           purchase_date: string | null
+          retry_count: number | null
           telegram_data: Json | null
           telegram_message_id: number
           updated_at: string
@@ -2489,9 +2399,11 @@ export type Database = {
           edit_date?: string | null
           edit_history?: Json | null
           error_message?: string | null
+          forward_info?: Json | null
           id?: string
           is_edited?: boolean
           is_forward?: string | null
+          last_error_at?: string | null
           message_text?: string | null
           message_type: string
           message_url?: string | null
@@ -2504,6 +2416,7 @@ export type Database = {
           product_name?: string | null
           product_quantity?: number | null
           purchase_date?: string | null
+          retry_count?: number | null
           telegram_data?: Json | null
           telegram_message_id: number
           updated_at?: string
@@ -2520,9 +2433,11 @@ export type Database = {
           edit_date?: string | null
           edit_history?: Json | null
           error_message?: string | null
+          forward_info?: Json | null
           id?: string
           is_edited?: boolean
           is_forward?: string | null
+          last_error_at?: string | null
           message_text?: string | null
           message_type?: string
           message_url?: string | null
@@ -2535,6 +2450,7 @@ export type Database = {
           product_name?: string | null
           product_quantity?: number | null
           purchase_date?: string | null
+          retry_count?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number
           updated_at?: string
@@ -2654,27 +2570,6 @@ export type Database = {
           product_id?: string | null
           status?: string | null
           updated_at?: string | null
-        }
-        Relationships: []
-      }
-      tag_entity: {
-        Row: {
-          createdAt: string
-          id: number
-          name: string
-          updatedAt: string
-        }
-        Insert: {
-          createdAt?: string
-          id?: number
-          name: string
-          updatedAt?: string
-        }
-        Update: {
-          createdAt?: string
-          id?: number
-          name?: string
-          updatedAt?: string
         }
         Relationships: []
       }
@@ -2873,13 +2768,6 @@ export type Database = {
             columns: ["workflowId"]
             isOneToOne: false
             referencedRelation: "workflow_entity"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "FK_5e29bfe9e22c5d6567f509d4a46"
-            columns: ["tagId"]
-            isOneToOne: false
-            referencedRelation: "tag_entity"
             referencedColumns: ["id"]
           },
         ]
@@ -3921,6 +3809,10 @@ export type Database = {
           error_count: number
         }[]
       }
+      xdelo_add_missing_columns_to_other_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       xdelo_check_media_group_content: {
         Args: {
           p_media_group_id: string
@@ -3946,30 +3838,20 @@ export type Database = {
         }
         Returns: Json
       }
-      xdelo_construct_telegram_message_url:
-        | {
-            Args: {
-              chat_id: number
-              message_id: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              chat_type: Database["public"]["Enums"]["telegram_chat_type"]
-              chat_id: number
-              id: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_chat_type: string
-              p_chat_id: number
-              p_id: string
-            }
-            Returns: string
-          }
+      xdelo_construct_message_url_from_data: {
+        Args: {
+          telegram_data: Json
+        }
+        Returns: string
+      }
+      xdelo_construct_telegram_message_url: {
+        Args: {
+          chat_type: Database["public"]["Enums"]["telegram_chat_type"]
+          chat_id: number
+          id: string
+        }
+        Returns: string
+      }
       xdelo_fail_message_processing: {
         Args: {
           p_message_id: string
@@ -4373,7 +4255,12 @@ export type Database = {
         | "ignored"
         | "resolved"
       sync_status: "pending" | "synced" | "error" | "locked"
-      telegram_chat_type: "private" | "group" | "supergroup" | "channel"
+      telegram_chat_type:
+        | "private"
+        | "group"
+        | "supergroup"
+        | "channel"
+        | "unknown"
       telegram_other_message_type:
         | "text"
         | "callback_query"

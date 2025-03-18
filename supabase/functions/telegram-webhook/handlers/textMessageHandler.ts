@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
+import { constructTelegramMessageUrl, isMessageForwarded } from '../../_shared/messageUtils.ts';
 
 // Create Supabase client
 const supabaseClient = createClient(
@@ -18,10 +19,15 @@ const supabaseClient = createClient(
 
 export async function handleOtherMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
-    const { isChannelPost, isForwarded, correlationId } = context;
+    const { isChannelPost, correlationId } = context;
+    // Use the utility function to determine if message is forwarded
+    const isForwarded = isMessageForwarded(message);
     
     // Log the start of message processing
     console.log(`[${correlationId}] Processing non-media message ${message.message_id} in chat ${message.chat.id}`);
+    
+    // Generate message URL using our utility function
+    const message_url = constructTelegramMessageUrl(message);
     
     // Store message data in the other_messages table
     const { data, error } = await supabaseClient
@@ -37,6 +43,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
         processing_state: 'completed',
         is_forward: isForwarded,
         correlation_id: correlationId,
+        message_url: message_url, // Add the constructed URL
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
@@ -56,14 +63,20 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         message_type: 'text',
-        is_forward: isForwarded
+        is_forward: isForwarded,
+        message_url: message_url
       }
     );
     
     console.log(`[${correlationId}] Successfully processed text message ${message.message_id}`);
     
     return new Response(
-      JSON.stringify({ success: true, messageId: data.id, correlationId }),
+      JSON.stringify({ 
+        success: true, 
+        messageId: data.id, 
+        correlationId,
+        message_url: message_url 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
