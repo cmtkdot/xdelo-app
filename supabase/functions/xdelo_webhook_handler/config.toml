@@ -1,6 +1,6 @@
 
 project_id = "xjhhehxcxkiumnwbirel"
-name = "analyze-with-ai"
+name = "xdelo_webhook_handler"
 version = 1
-path = "analyze-with-ai"
+path = "xdelo_webhook_handler"
 verify_jwt = false

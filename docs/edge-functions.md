@@ -140,7 +140,7 @@ This document provides an overview of all active edge functions in the project, 
 ### log-operation
 **Purpose**: Logs frontend operations to audit system
 **Dependencies**:
-- `_shared/cors.ts`
+- `_shared/standardizedHandler.ts`
 - Database tables: `unified_audit_logs`
 
 ### user-data
@@ -153,22 +153,39 @@ This document provides an overview of all active edge functions in the project, 
 ### generic-webhook
 **Purpose**: General webhook endpoint for external integrations
 **Dependencies**:
-- `_shared/cors.ts`
+- `_shared/standardizedHandler.ts`
 - Database tables: `webhook_logs`
 
-### create-ayd-session
-**Purpose**: Creates "Ask Your Database" sessions
+### xdelo_webhook_handler
+**Purpose**: Template for standardized webhook processing
 **Dependencies**:
-- AYD API
-- Environment variables: `AYD_API_KEY`, `AYD_CHATBOT_ID`
+- `_shared/standardizedHandler.ts`
+- `_shared/supabase.ts`
+- Database tables: `webhook_logs`, `unified_audit_logs`
 
 ### openai-request
 **Purpose**: Proxy for OpenAI API requests
 **Dependencies**:
 - OpenAI API
-- `_shared/cors.ts`
+- `_shared/standardizedHandler.ts`
+
+### example-handler
+**Purpose**: Example implementation of standardized handler pattern
+**Dependencies**:
+- `_shared/standardizedHandler.ts`
+- Database tables: `unified_audit_logs`
 
 ## Shared Libraries
+
+### _shared/standardizedHandler.ts
+**Purpose**: Provides standardized patterns for edge functions
+**Used by**: Many edge functions for consistent error handling, CORS, and responses
+**Key Features**:
+- Correlation ID tracking
+- Standardized success/error responses
+- CORS handling
+- Request/response logging
+- Fetch with retry
 
 ### _shared/mediaUtils.ts
 **Purpose**: Centralized utilities for media file operations
@@ -192,15 +209,23 @@ This document provides an overview of all active edge functions in the project, 
 **Purpose**: Shared logic for parsing message captions
 **Used by**: `manual-caption-parser`, `parse-caption-with-ai`
 
+### _shared/databaseOperations.ts
+**Purpose**: Common database operation utilities
+**Used by**: Multiple functions for consistent database interaction
+**Key Features**:
+- Error logging
+- Message status updates
+- Event logging
+
 ## Migration Strategy
 
 When considering updates to edge functions:
 
-1. **Documentation First**: Update this document when adding/modifying functions
-2. **Deprecation Path**: Mark functions as deprecated before removal
-3. **Dependency Mapping**: Check cross-function dependencies before changes
-4. **Backward Compatibility**: Maintain compatibility with existing frontend code
-5. **Gradual Transition**: Phase out deprecated functions over time
+1. **Standardized Approach**: Use `xdelo_createStandardizedHandler` for new functions
+2. **Correlation ID**: Ensure all functions track correlation IDs through the entire request lifecycle
+3. **Error Handling**: Use standardized error responses via `xdelo_createErrorResponse`
+4. **Success Format**: Return consistent success responses via `xdelo_createSuccessResponse`
+5. **Logging**: Implement structured logging throughout functions
 
 ## Function Organization
 

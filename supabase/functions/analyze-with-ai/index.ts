@@ -1,34 +1,50 @@
 
-import { createHandler } from '../_shared/baseHandler.ts';
 import { OpenAI } from "https://esm.sh/openai@4.20.1";
+import { 
+  xdelo_createStandardizedHandler, 
+  xdelo_createSuccessResponse, 
+  xdelo_createErrorResponse,
+  xdelo_fetchWithRetry
+} from '../_shared/standardizedHandler.ts';
+import { createSupabaseClient } from '../_shared/supabase.ts';
 
-export default createHandler(async (req: Request) => {
-  const { messageId, caption } = await req.json();
-
-  if (!messageId || !caption) {
-    return new Response(
-      JSON.stringify({ error: 'Missing required parameters' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) {
-    console.error('Missing OpenAI API key');
-    return new Response(
-      JSON.stringify({ error: 'Configuration error: Missing API key' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  const openai = new OpenAI({
-    apiKey,
-    timeout: 15000, // 15 second timeout
-  });
-
+// Define the main handler function
+const handleAIAnalysis = async (req: Request, correlationId: string): Promise<Response> => {
   try {
-    console.log(`Processing AI analysis for message ${messageId}`);
-    
+    // Parse request body
+    const { messageId, caption } = await req.json();
+
+    if (!messageId || !caption) {
+      return xdelo_createErrorResponse('Missing required parameters: messageId and caption', correlationId, 400);
+    }
+
+    // Get OpenAI API key from environment
+    const apiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!apiKey) {
+      console.error(JSON.stringify({
+        level: 'error',
+        message: 'Missing OpenAI API key',
+        correlation_id: correlationId,
+        timestamp: new Date().toISOString()
+      }));
+      return xdelo_createErrorResponse('Configuration error: Missing API key', correlationId, 500);
+    }
+
+    // Initialize OpenAI client
+    const openai = new OpenAI({
+      apiKey,
+      timeout: 15000, // 15 second timeout
+    });
+
+    console.log(JSON.stringify({
+      level: 'info',
+      message: 'Processing AI analysis',
+      message_id: messageId,
+      caption_length: caption.length,
+      correlation_id: correlationId,
+      timestamp: new Date().toISOString()
+    }));
+
     // Define a retry mechanism
     const maxRetries = 2;
     let retries = 0;
@@ -78,7 +94,15 @@ export default createHandler(async (req: Request) => {
         break;
       } catch (err) {
         error = err;
-        console.error(`AI analysis attempt ${retries + 1} failed:`, err);
+        console.error(JSON.stringify({
+          level: 'warn',
+          message: `AI analysis attempt ${retries + 1} failed`,
+          error: err.message,
+          message_id: messageId,
+          retry: retries + 1,
+          correlation_id: correlationId,
+          timestamp: new Date().toISOString()
+        }));
         
         // Exponential backoff
         if (retries < maxRetries) {
@@ -95,35 +119,63 @@ export default createHandler(async (req: Request) => {
       throw error || new Error('Failed to get response from AI after retries');
     }
 
+    // Get the result content
     const result = response.choices[0].message.content;
-    console.log('AI analysis completed successfully');
+    console.log(JSON.stringify({
+      level: 'info',
+      message: 'AI analysis completed successfully',
+      message_id: messageId,
+      result_length: result.length,
+      correlation_id: correlationId,
+      timestamp: new Date().toISOString()
+    }));
 
     try {
       // Verify we have valid JSON output
       const parsedResult = JSON.parse(result);
-      return new Response(
-        JSON.stringify({ success: true, data: parsedResult }),
-        { headers: { 'Content-Type': 'application/json' } }
-      );
+      
+      // Log success to unified_audit_logs
+      const supabase = createSupabaseClient();
+      await supabase
+        .from('unified_audit_logs')
+        .insert({
+          event_type: 'ai_analysis_completed',
+          entity_id: messageId,
+          metadata: {
+            correlation_id: correlationId,
+            confidence: parsedResult.extraction_confidence?.overall || 0,
+            timestamp: new Date().toISOString()
+          },
+          correlation_id: correlationId
+        });
+      
+      return xdelo_createSuccessResponse(parsedResult, correlationId);
     } catch (parseError) {
-      console.error('Invalid JSON returned from AI:', parseError);
-      return new Response(
-        JSON.stringify({ 
-          error: 'AI returned invalid format', 
-          partialResult: result 
-        }),
-        { status: 422, headers: { 'Content-Type': 'application/json' } }
-      );
+      console.error(JSON.stringify({
+        level: 'error',
+        message: 'Invalid JSON returned from AI',
+        error: parseError.message,
+        partial_result: result,
+        message_id: messageId,
+        correlation_id: correlationId,
+        timestamp: new Date().toISOString()
+      }));
+      
+      return xdelo_createErrorResponse('AI returned invalid format', correlationId, 422);
     }
   } catch (error) {
-    console.error('Error during AI analysis:', error);
-    return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        errorType: error.name,
-        status: 'failed'
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    console.error(JSON.stringify({
+      level: 'error',
+      message: 'Error during AI analysis',
+      error: error.message,
+      stack: error.stack,
+      correlation_id: correlationId,
+      timestamp: new Date().toISOString()
+    }));
+    
+    return xdelo_createErrorResponse(error.message, correlationId, 500);
   }
-});
+};
+
+// Use our standardized handler
+export default xdelo_createStandardizedHandler(handleAIAnalysis);
