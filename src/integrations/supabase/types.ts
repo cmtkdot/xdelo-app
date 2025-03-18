@@ -9,36 +9,6 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      credentials_entity: {
-        Row: {
-          createdAt: string
-          data: string
-          id: number
-          name: string
-          nodesAccess: Json
-          type: string
-          updatedAt: string
-        }
-        Insert: {
-          createdAt?: string
-          data: string
-          id?: number
-          name: string
-          nodesAccess: Json
-          type: string
-          updatedAt?: string
-        }
-        Update: {
-          createdAt?: string
-          data?: string
-          id?: number
-          name?: string
-          nodesAccess?: Json
-          type?: string
-          updatedAt?: string
-        }
-        Relationships: []
-      }
       deleted_messages: {
         Row: {
           analyzed_content: Json | null
@@ -96,69 +66,6 @@ export type Database = {
           telegram_data?: Json | null
           telegram_message_id?: number | null
           user_id?: string | null
-        }
-        Relationships: []
-      }
-      execution_entity: {
-        Row: {
-          data: string
-          finished: boolean
-          id: number
-          mode: string
-          retryOf: string | null
-          retrySuccessId: string | null
-          startedAt: string
-          stoppedAt: string | null
-          waitTill: string | null
-          workflowData: Json
-          workflowId: string | null
-        }
-        Insert: {
-          data: string
-          finished: boolean
-          id?: number
-          mode: string
-          retryOf?: string | null
-          retrySuccessId?: string | null
-          startedAt: string
-          stoppedAt?: string | null
-          waitTill?: string | null
-          workflowData: Json
-          workflowId?: string | null
-        }
-        Update: {
-          data?: string
-          finished?: boolean
-          id?: number
-          mode?: string
-          retryOf?: string | null
-          retrySuccessId?: string | null
-          startedAt?: string
-          stoppedAt?: string | null
-          waitTill?: string | null
-          workflowData?: Json
-          workflowId?: string | null
-        }
-        Relationships: []
-      }
-      function_backup: {
-        Row: {
-          created_at: string | null
-          function_definition: string | null
-          function_name: string | null
-          id: string
-        }
-        Insert: {
-          created_at?: string | null
-          function_definition?: string | null
-          function_name?: string | null
-          id?: string
-        }
-        Update: {
-          created_at?: string | null
-          function_definition?: string | null
-          function_name?: string | null
-          id?: string
         }
         Relationships: []
       }
@@ -2657,27 +2564,6 @@ export type Database = {
         }
         Relationships: []
       }
-      tag_entity: {
-        Row: {
-          createdAt: string
-          id: number
-          name: string
-          updatedAt: string
-        }
-        Insert: {
-          createdAt?: string
-          id?: number
-          name: string
-          updatedAt?: string
-        }
-        Update: {
-          createdAt?: string
-          id?: number
-          name?: string
-          updatedAt?: string
-        }
-        Relationships: []
-      }
       unified_audit_logs: {
         Row: {
           chat_id: number | null
@@ -2873,13 +2759,6 @@ export type Database = {
             columns: ["workflowId"]
             isOneToOne: false
             referencedRelation: "workflow_entity"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "FK_5e29bfe9e22c5d6567f509d4a46"
-            columns: ["tagId"]
-            isOneToOne: false
-            referencedRelation: "tag_entity"
             referencedColumns: ["id"]
           },
         ]
@@ -3920,6 +3799,10 @@ export type Database = {
           validated_count: number
           error_count: number
         }[]
+      }
+      xdelo_add_missing_columns_to_other_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       xdelo_check_media_group_content: {
         Args: {

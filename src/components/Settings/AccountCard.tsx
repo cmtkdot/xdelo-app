@@ -5,11 +5,11 @@ import { useToast } from "@/hooks/useToast";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 
-interface AccountCardProps {
+export interface AccountCardProps {
   userEmail?: string | null;
 }
 
-export const AccountCard = ({ userEmail }: AccountCardProps = {}) => {
+export const AccountCard = ({ userEmail }: AccountCardProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
