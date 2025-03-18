@@ -1,5 +1,9 @@
 
-import { createHandler } from '../_shared/baseHandler.ts';
+import { 
+  xdelo_createStandardizedHandler, 
+  xdelo_createSuccessResponse, 
+  xdelo_createErrorResponse 
+} from '../_shared/standardizedHandler.ts';
 import { createSupabaseClient } from '../_shared/supabase.ts';
 
 interface LogRequest {
@@ -12,7 +16,7 @@ interface LogRequest {
   correlationId?: string;
 }
 
-export default createHandler(async (req: Request) => {
+const handleLogOperation = async (req: Request, correlationId: string): Promise<Response> => {
   // Parse request body
   const { 
     eventType, 
@@ -21,29 +25,26 @@ export default createHandler(async (req: Request) => {
     newState, 
     metadata = {}, 
     errorMessage,
-    correlationId = crypto.randomUUID()
+    correlationId: requestCorrelationId
   } = await req.json() as LogRequest;
+  
+  // Use provided correlation ID or the one from our handler
+  const finalCorrelationId = requestCorrelationId || correlationId;
   
   // Validate request
   if (!eventType) {
-    return new Response(
-      JSON.stringify({ error: 'Event type is required' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
+    return xdelo_createErrorResponse('Event type is required', finalCorrelationId, 400);
   }
   
   if (!entityId) {
-    return new Response(
-      JSON.stringify({ error: 'Entity ID is required' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
+    return xdelo_createErrorResponse('Entity ID is required', finalCorrelationId, 400);
   }
   
   // Add correlation ID and timestamp to metadata
   const enhancedMetadata = {
     ...metadata,
     logged_at: new Date().toISOString(),
-    correlation_id: correlationId,
+    correlation_id: finalCorrelationId,
     logged_from: 'edge_function'
   };
   
@@ -66,43 +67,25 @@ export default createHandler(async (req: Request) => {
         new_state: newState,
         metadata: enhancedMetadata,
         error_message: errorMessage,
-        correlation_id: correlationId
+        correlation_id: finalCorrelationId
       })
       .select('id')
       .single();
     
     if (error) {
       console.error('Error logging operation:', error);
-      
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: error.message,
-          correlationId
-        }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
+      return xdelo_createErrorResponse(error.message, finalCorrelationId, 500);
     }
     
-    return new Response(
-      JSON.stringify({
-        success: true,
-        logId: data.id,
-        correlationId,
-        timestamp: enhancedMetadata.logged_at
-      }),
-      { headers: { 'Content-Type': 'application/json' } }
-    );
+    return xdelo_createSuccessResponse({
+      logId: data.id,
+      timestamp: enhancedMetadata.logged_at
+    }, finalCorrelationId);
   } catch (error) {
     console.error('Exception logging operation:', error);
-    
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message,
-        correlationId
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    return xdelo_createErrorResponse(error.message, finalCorrelationId, 500);
   }
-});
+};
+
+// Export the handler using our standardized wrapper
+export default xdelo_createStandardizedHandler(handleLogOperation);

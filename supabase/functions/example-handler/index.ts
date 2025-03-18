@@ -1,9 +1,12 @@
 
-import { createHandler } from '../_shared/baseHandler.ts';
+import { 
+  xdelo_createStandardizedHandler, 
+  xdelo_createSuccessResponse
+} from '../_shared/standardizedHandler.ts';
 import { createSupabaseClient } from '../_shared/supabase.ts';
 
 // Define the main handler function
-export default createHandler(async (req: Request, correlationId: string) => {
+const handleExample = async (req: Request, correlationId: string): Promise<Response> => {
   // Parse request body
   const body = await req.json();
   console.log(`Request with correlationId ${correlationId} received with body:`, body);
@@ -29,16 +32,14 @@ export default createHandler(async (req: Request, correlationId: string) => {
   }
   
   // Return a success response
-  return new Response(
-    JSON.stringify({
-      success: true,
+  return xdelo_createSuccessResponse(
+    {
       message: 'Request processed successfully',
-      correlation_id: correlationId,
       timestamp: new Date().toISOString()
-    }),
-    { 
-      status: 200, 
-      headers: { 'Content-Type': 'application/json' }
-    }
+    },
+    correlationId
   );
-});
+};
+
+// Export the handler using our standardized wrapper
+export default xdelo_createStandardizedHandler(handleExample);
