@@ -1,6 +1,4 @@
 
-import { Message } from '@/types/entities/Message';
-
 /**
  * Result type for media operations
  */

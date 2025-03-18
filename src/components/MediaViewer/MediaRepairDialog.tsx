@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 
 interface MediaRepairDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onConfirm: () => Promise<void>;
   isLoading: boolean;
   error?: string;
@@ -14,15 +14,15 @@ interface MediaRepairDialogProps {
 }
 
 export const MediaRepairDialog: React.FC<MediaRepairDialogProps> = ({
-  isOpen,
-  onClose,
+  open,
+  onOpenChange,
   onConfirm,
   isLoading,
   error,
   title = "Repair Media"
 }) => {
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -35,7 +35,7 @@ export const MediaRepairDialog: React.FC<MediaRepairDialogProps> = ({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button onClick={onConfirm} disabled={isLoading}>

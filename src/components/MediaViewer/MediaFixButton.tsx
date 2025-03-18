@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Wrench } from "lucide-react";
 import { MediaRepairDialog } from "./MediaRepairDialog";
@@ -23,27 +23,42 @@ export function MediaFixButton({
   variant = "outline",
   size = "sm"
 }: MediaFixButtonProps) {
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string>();
+  
   const { repairMediaBatch } = useMediaUtils();
 
-  const handleOpenDialog = () => {
-    setDialogOpen(true);
-  };
-
-  const handleComplete = () => {
-    if (onComplete) {
-      onComplete();
+  const handleConfirm = async () => {
+    setIsLoading(true);
+    setError(undefined);
+    
+    try {
+      // Combine message IDs from both props
+      const combinedMessageIds = [
+        ...(messageIds || []),
+        ...(messages?.map(m => m.id) || [])
+      ].filter(Boolean);
+      
+      const result = await repairMediaBatch(combinedMessageIds);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to repair media');
+      }
+      
+      setOpen(false);
+      if (onComplete) {
+        onComplete();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Combine message IDs from both props
-  const combinedMessageIds = [
-    ...(messageIds || []),
-    ...(messages?.map(m => m.id) || [])
-  ].filter(Boolean);
-
   // Don't render if there are no messages to repair and no media group ID
-  if (combinedMessageIds.length === 0 && !mediaGroupId) {
+  if ((messageIds?.length === 0 && !messages?.length) && !mediaGroupId) {
     return null;
   }
 
@@ -52,7 +67,7 @@ export function MediaFixButton({
       <Button 
         variant={variant} 
         size={size}
-        onClick={handleOpenDialog}
+        onClick={() => setOpen(true)}
         title="Open media repair tool to fix issues with media files"
       >
         <Wrench className="w-4 h-4 mr-2" />
@@ -60,17 +75,11 @@ export function MediaFixButton({
       </Button>
 
       <MediaRepairDialog
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          setDialogOpen(open);
-          if (!open) {
-            handleComplete();
-          }
-        }}
-        messageIds={combinedMessageIds}
-        messages={messages}
-        mediaGroupId={mediaGroupId}
-        onComplete={handleComplete}
+        open={open}
+        onOpenChange={setOpen}
+        onConfirm={handleConfirm}
+        isLoading={isLoading}
+        error={error}
       />
     </>
   );
