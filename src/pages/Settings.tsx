@@ -69,19 +69,18 @@ export default function Settings() {
       setIsRunningMissingColumnsRepair(true);
       
       // Call the edge function directly
-      const { data, error } = await supabase.functions.invoke('xdelo_run_fix_missing_columns');
+      const { data, error } = await supabase.functions.invoke<FixMissingColumnsResult>('xdelo_run_fix_missing_columns');
         
       if (error) {
         throw error;
       }
       
-      const result = data as FixMissingColumnsResult;
-      setMissingColumnsResult(result);
+      setMissingColumnsResult(data);
       
       toast({
         title: "Database Repair Complete",
-        description: result.message || `Added columns: ${(result.columns_added || []).join(', ')}`,
-        variant: result.success ? "default" : "destructive"
+        description: data.message || `Added columns: ${(data.columns_added || []).join(', ')}`,
+        variant: data.success ? "default" : "destructive"
       });
     } catch (error) {
       console.error('Error fixing missing columns:', error);

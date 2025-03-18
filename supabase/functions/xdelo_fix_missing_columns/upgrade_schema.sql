@@ -153,6 +153,24 @@ BEGIN
 END;
 $$;
 
+-- Create the function for URL construction from telegram_data
+CREATE OR REPLACE FUNCTION xdelo_construct_message_url_from_data(telegram_data JSONB)
+RETURNS TEXT AS $$
+DECLARE
+  v_chat_id BIGINT;
+  v_message_id INT;
+  v_chat_type TEXT;
+BEGIN
+  -- Extract the necessary fields
+  v_chat_id := (telegram_data->'chat'->>'id')::BIGINT;
+  v_message_id := (telegram_data->>'message_id')::INT;
+  v_chat_type := telegram_data->'chat'->>'type';
+  
+  -- Call the message URL construction function
+  RETURN xdelo_construct_telegram_message_url(v_chat_type, v_chat_id, v_message_id);
+END;
+$$ LANGUAGE plpgsql;
+
 -- Create the xdelo_run_fix_missing_columns function to be called via RPC
 CREATE OR REPLACE FUNCTION xdelo_run_fix_missing_columns()
 RETURNS JSONB SECURITY DEFINER AS $$
