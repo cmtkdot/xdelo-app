@@ -6,16 +6,18 @@ import { Message } from '@/types';
 import { useMediaUtils } from '@/hooks/useMediaUtils';
 import { Loader2 } from 'lucide-react';
 
-interface MediaEditDialogProps {
+export interface MediaEditDialogProps {
   media: Message;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
 }
 
 export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
   media,
   open,
-  onOpenChange
+  onOpenChange,
+  onSuccess
 }) => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -33,6 +35,9 @@ export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
     try {
       await fixContentDispositionForMessage(media.id);
       onOpenChange(false);
+      if (onSuccess) {
+        onSuccess();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
