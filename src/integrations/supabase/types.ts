@@ -3965,8 +3965,7 @@ export type Database = {
             Args: {
               chat_type: Database["public"]["Enums"]["telegram_chat_type"]
               chat_id: number
-              message_id: string
-              telegram_message_id?: number
+              telegram_message_id: number
             }
             Returns: string
           }

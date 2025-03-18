@@ -23,16 +23,19 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
     // Log the start of message processing
     console.log(`[${correlationId}] Processing non-media message ${message.message_id} in chat ${message.chat.id}`);
     
+    // Extract text content from the message
+    const messageText = message.text || message.caption || '';
+    
     // Store message data in the other_messages table
     const { data, error } = await supabaseClient
       .from('other_messages')
       .insert({
-        telegram_message_id: message.message_id,
+        // Don't include telegram_message_id directly - it will be extracted from telegram_data
         chat_id: message.chat.id,
         chat_type: message.chat.type,
         chat_title: message.chat.title,
         message_type: isChannelPost ? 'channel_post' : 'message',
-        message_text: message.text || message.caption || '',
+        message_text: messageText,
         telegram_data: message,
         processing_state: 'completed',
         is_forward: isForwarded,
@@ -53,7 +56,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
       data.id,
       correlationId,
       {
-        telegram_message_id: message.message_id,
+        message_id: message.message_id,
         chat_id: message.chat.id,
         message_type: 'text',
         is_forward: isForwarded
@@ -75,7 +78,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
       "system",
       context.correlationId,
       {
-        telegram_message_id: message.message_id,
+        message_id: message.message_id,
         chat_id: message.chat.id,
         handler_type: 'other_message'
       },
