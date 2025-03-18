@@ -14,7 +14,7 @@ export default function Settings() {
       
       <div className="grid gap-6 md:grid-cols-2">
         <AccountCard />
-        <TelegramCard />
+        <TelegramCard botToken={null} webhookUrl={null} />
       </div>
       
       <h2 className="text-xl font-semibold mt-8 mb-4">Database Maintenance</h2>

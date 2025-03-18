@@ -3,13 +3,13 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/useToast";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 
 interface AccountCardProps {
-  userEmail: string | null;
+  userEmail?: string | null;
 }
 
-export const AccountCard = ({ userEmail }: AccountCardProps) => {
+export const AccountCard = ({ userEmail }: AccountCardProps = {}) => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
