@@ -7,7 +7,6 @@ import { Spinner } from '@/components/ui/spinner';
 import { Message } from '@/types/entities/Message';
 import { Button } from '@/components/ui/button';
 import { getVideoMetadata, getVideoDimensions } from '@/utils/mediaUtils';
-import { supabase } from '@/integrations/supabase/client';
 
 interface VideoPlayerProps {
   src: string;
@@ -28,65 +27,12 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isRepairing, setIsRepairing] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   
   // Get proper dimensions from telegram_data if available
   const dimensions = getVideoDimensions(message);
   const aspectRatio = dimensions.width / dimensions.height;
-
-  // Handle requesting a file to be redownloaded if it fails to load
-  const handleRequestRedownload = async () => {
-    if (!message.id) return;
-    
-    try {
-      setIsRepairing(true);
-      
-      // Mark the message for redownload
-      const { error } = await supabase
-        .from('messages')
-        .update({
-          needs_redownload: true,
-          redownload_reason: 'manually_requested',
-          redownload_flagged_at: new Date().toISOString()
-        })
-        .eq('id', message.id);
-        
-      if (error) throw error;
-      
-      // Trigger the redownload process via edge function
-      const { data, error: functionError } = await supabase.functions.invoke('redownload-missing-files', {
-        body: { 
-          messageIds: [message.id],
-          limit: 1
-        }
-      });
-      
-      if (functionError) throw functionError;
-      
-      if (data?.successful > 0) {
-        setError(null);
-        setIsLoading(true);
-        
-        if (videoRef.current) {
-          // Reload the video with the new URL
-          const newSrc = data.results[0]?.public_url || 
-            `${src.split('?')[0]}?cache=${Date.now()}`;
-          
-          videoRef.current.src = newSrc;
-          videoRef.current.load();
-        }
-      } else {
-        setError('File could not be repaired. Please try again later.');
-      }
-    } catch (err) {
-      console.error('Error requesting file redownload:', err);
-      setError('Failed to repair file. Please try again later.');
-    } finally {
-      setIsRepairing(false);
-    }
-  };
 
   const handleLoadSuccess = () => {
     setIsLoading(false);
@@ -177,36 +123,14 @@ export function VideoPlayer({
             <p className="text-xs text-center mb-3 text-muted-foreground">
               The video format may not be supported by your browser or the file may be corrupted.
             </p>
-            <div className="flex gap-2">
-              <Button 
-                variant="default" 
-                onClick={handleRetry}
-                className="flex items-center gap-2"
-                disabled={isRepairing}
-              >
-                <RefreshCw className="h-4 w-4" />
-                Retry
-              </Button>
-              
-              <Button
-                variant="outline"
-                onClick={handleRequestRedownload}
-                className="flex items-center gap-2"
-                disabled={isRepairing}
-              >
-                {isRepairing ? (
-                  <>
-                    <Spinner size="sm" className="mr-2" />
-                    Repairing...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4" />
-                    Repair File
-                  </>
-                )}
-              </Button>
-            </div>
+            <Button 
+              variant="default" 
+              onClick={handleRetry}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Retry
+            </Button>
           </div>
         </div>
       )}

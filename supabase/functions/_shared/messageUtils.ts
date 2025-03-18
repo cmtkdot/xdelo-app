@@ -1,3 +1,4 @@
+
 import { supabaseClient } from './supabase.ts';
 
 /**
@@ -198,111 +199,6 @@ export async function xdelo_syncMediaGroupContent(
     return true;
   } catch (error) {
     console.error(`[${correlationId}] Exception syncing media group content:`, error);
-    return false;
-  }
-}
-
-/**
- * Find a working file within the same media group when a file_id fails
- * 
- * @param mediaGroupId The media group ID to search within
- * @param fileUniqueId The original file's unique ID
- * @param excludeMessageId Optional message ID to exclude from search
- * @returns The first message found with a valid file_id, or null if none found
- */
-export async function xdelo_findAlternativeFileInMediaGroup(
-  mediaGroupId: string,
-  fileUniqueId: string,
-  excludeMessageId?: string
-): Promise<any | null> {
-  if (!mediaGroupId || !fileUniqueId) {
-    return null;
-  }
-
-  try {
-    console.log(`Searching for alternative file in media group ${mediaGroupId} with file_unique_id ${fileUniqueId}`);
-    
-    // Find all messages in the same media group with the same file_unique_id
-    let query = supabaseClient
-      .from('messages')
-      .select('*')
-      .eq('media_group_id', mediaGroupId)
-      .eq('file_unique_id', fileUniqueId)
-      .eq('needs_redownload', false) // Prefer messages not already flagged for redownload
-      .order('created_at', { ascending: false });
-      
-    if (excludeMessageId) {
-      query = query.neq('id', excludeMessageId);
-    }
-    
-    const { data, error } = await query;
-    
-    if (error) {
-      console.error('Error finding alternative file in media group:', error);
-      return null;
-    }
-    
-    if (!data || data.length === 0) {
-      console.log('No alternative files found in media group');
-      return null;
-    }
-    
-    console.log(`Found ${data.length} potential alternative files in the media group`);
-    
-    // Find the first one with a valid file_id
-    for (const message of data) {
-      if (message.file_id && !message.file_id_expires_at) {
-        console.log(`Using alternative file from message ${message.id}`);
-        return message;
-      }
-    }
-    
-    // If no clear valid file_id, just return the first one and hope for the best
-    console.log(`Using first available message ${data[0].id} (no clearly valid file_id found)`);
-    return data[0];
-  } catch (error) {
-    console.error('Exception finding alternative file in media group:', error);
-    return null;
-  }
-}
-
-/**
- * Mark a message as needing redownload due to expired file_id
- */
-export async function xdelo_markMessageForRedownload(
-  messageId: string, 
-  reason: string = 'expired_file_id'
-): Promise<boolean> {
-  try {
-    const { error } = await supabaseClient
-      .from('messages')
-      .update({
-        needs_redownload: true,
-        redownload_reason: reason,
-        redownload_flagged_at: new Date().toISOString(),
-        file_id_expires_at: new Date().toISOString(), // Mark the current file_id as expired
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', messageId);
-      
-    if (error) {
-      console.error(`Error marking message ${messageId} for redownload:`, error);
-      return false;
-    }
-    
-    // Log the event
-    await supabaseClient.from('unified_audit_logs').insert({
-      event_type: 'message_flagged_for_redownload',
-      entity_id: messageId,
-      metadata: {
-        reason,
-        timestamp: new Date().toISOString()
-      }
-    });
-    
-    return true;
-  } catch (error) {
-    console.error(`Exception marking message ${messageId} for redownload:`, error);
     return false;
   }
 }

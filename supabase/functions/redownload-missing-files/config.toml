@@ -1,10 +1,7 @@
 
 project_id = "xjhhehxcxkiumnwbirel"
 name = "redownload-missing-files"
-entrypoint = "index.ts"
+description = "Redownloads missing or corrupted files from Telegram"
+version = 1
+verify_jwt = false
 
-[build]
-command = ""
-
-[deploy]
-release_channel = "production"
