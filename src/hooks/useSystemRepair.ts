@@ -61,7 +61,7 @@ export function useSystemRepair() {
     setResults(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke('xdelo_file_repair', {
+      const { data, error } = await supabase.functions.invoke('file_repair', {
         body: {
           options: {
             ...options,
@@ -99,7 +99,7 @@ export function useSystemRepair() {
     setResults(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke('xdelo_file_repair', {
+      const { data, error } = await supabase.functions.invoke('file_repair', {
         body: {
           options: {
             resetStalled: true,
@@ -132,11 +132,79 @@ export function useSystemRepair() {
     }
   };
 
+  const cleanupLegacyFunctions = async () => {
+    setIsRepairing(true);
+    setResults(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('cleanup_legacy_functions', {
+        body: {}
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      setResults(data);
+      toast({
+        title: "Legacy Functions Cleanup Complete",
+        description: "Unused legacy functions have been removed.",
+      });
+      return data;
+    } catch (error: any) {
+      console.error("Error cleaning up legacy functions:", error);
+      toast({
+        title: "Cleanup Failed",
+        description: error.message || "An error occurred",
+        variant: "destructive",
+      });
+      setResults({ error: error.message });
+      return { error: error.message };
+    } finally {
+      setIsRepairing(false);
+    }
+  };
+
+  const analyzeDatabaseFunctions = async () => {
+    setIsRepairing(true);
+    setResults(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('migrate_db_functions', {
+        body: { mode: 'analyze' }
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      setResults(data);
+      toast({
+        title: "Database Function Analysis Complete",
+        description: `Analyzed ${data.results?.total_functions || 0} database functions.`,
+      });
+      return data;
+    } catch (error: any) {
+      console.error("Error analyzing database functions:", error);
+      toast({
+        title: "Analysis Failed",
+        description: error.message || "An error occurred",
+        variant: "destructive",
+      });
+      setResults({ error: error.message });
+      return { error: error.message };
+    } finally {
+      setIsRepairing(false);
+    }
+  };
+
   return {
     isRepairing,
     results,
     repairSystem,
     repairProcessingSystem,
-    resetStalledProcessing
+    resetStalledProcessing,
+    cleanupLegacyFunctions,
+    analyzeDatabaseFunctions
   };
 }

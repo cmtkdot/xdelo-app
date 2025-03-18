@@ -202,3 +202,35 @@ export async function reprocessMessage(messageId: string, options: {
     ...options
   });
 }
+
+/**
+ * Clean up legacy functions
+ */
+export async function cleanupLegacyFunctions() {
+  return invokeFunctionWrapper('cleanup_legacy_functions', {});
+}
+
+/**
+ * Execute SQL migration
+ */
+export async function executeSqlMigration(query: string, params: any[] = [], description: string = "Manual SQL migration") {
+  return invokeFunctionWrapper('execute_sql_migration', {
+    query,
+    params,
+    description
+  });
+}
+
+/**
+ * Repair media in batch
+ */
+export async function repairMediaBatch(messageIds: string[], options: {
+  forceRedownload?: boolean;
+  fixContentDisposition?: boolean;
+  fixMimeTypes?: boolean;
+} = {}) {
+  return invokeFunctionWrapper('repair_media_batch', {
+    message_ids: messageIds,
+    repair_options: options
+  });
+}

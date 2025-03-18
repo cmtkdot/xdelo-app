@@ -1,7 +1,7 @@
 
 # Supabase Edge Functions Documentation
 
-This document provides an overview of all active edge functions in the project, their purposes, dependencies, and relationships.
+This document provides an overview of all active edge functions in the project, their purposes, dependencies, and relationships. Recently, we removed legacy `xdelo_` prefixed functions and standardized the naming conventions.
 
 ## Core Functions
 
@@ -23,15 +23,15 @@ This document provides an overview of all active edge functions in the project, 
 **Purpose**: Processes message captions without AI using pattern matching
 **Dependencies**:
 - `_shared/captionParser.ts`
-- `xdelo_sync_media_group` (for propagating changes to media groups)
+- `sync_media_group` (for propagating changes to media groups)
 
-### xdelo_reprocess_message
+### reprocess_message
 **Purpose**: Reprocesses messages that failed initial processing
 **Dependencies**:
 - `manual-caption-parser` or `parse-caption-with-ai` (based on configuration)
 - `_shared/databaseOperations.ts`
 
-### xdelo_sync_media_group
+### sync_media_group
 **Purpose**: Synchronizes captions and analysis across media group members
 **Dependencies**:
 - `_shared/supabase.ts`
@@ -39,7 +39,7 @@ This document provides an overview of all active edge functions in the project, 
 
 ## Media Management Functions
 
-### xdelo_unified_media_repair
+### unified_media_repair
 **Purpose**: Comprehensive media file repair and validation utility
 **Dependencies**:
 - `_shared/mediaUtils.ts`
@@ -47,20 +47,20 @@ This document provides an overview of all active edge functions in the project, 
 - Storage bucket: `telegram-media`
 - Database tables: `messages`
 
-### redownload-missing-files (Legacy)
+### redownload-missing-files
 **Purpose**: Attempts to recover media files from Telegram
 **Dependencies**:
 - Telegram Bot API
 - `_shared/mediaUtils.ts`
 - Storage bucket: `telegram-media`
 
-### xdelo_file_repair (Legacy)
+### file_repair
 **Purpose**: Repairs file storage issues like invalid content-type
 **Dependencies**:
 - `_shared/mediaUtils.ts`
 - Storage bucket: `telegram-media`
 
-### xdelo_standardize_storage_paths
+### standardize_storage_paths
 **Purpose**: Ensures consistent storage paths for media files
 **Dependencies**:
 - `_shared/supabase.ts`
@@ -86,7 +86,7 @@ This document provides an overview of all active edge functions in the project, 
 **Purpose**: Creates analysis tasks for message captions
 **Dependencies**:
 - `parse-caption-with-ai`
-- Database function: `xdelo_analyze_message_caption`
+- Database function: `analyze_message_caption`
 
 ### analyze-with-ai
 **Purpose**: General-purpose AI analysis for various content
@@ -94,10 +94,10 @@ This document provides an overview of all active edge functions in the project, 
 - OpenAI API
 - `_shared/cors.ts`
 
-### xdelo_process_captions
+### process_captions
 **Purpose**: Triggered by database to process new captions
 **Dependencies**:
-- Database function: `xdelo_process_caption_workflow`
+- Database function: `process_caption_workflow`
 - Database triggers: on message insert/update
 
 ### product-matching
@@ -106,36 +106,13 @@ This document provides an overview of all active edge functions in the project, 
 - `product-matching/matching-utils.ts`
 - Database tables: `gl_products`, `messages`
 
-### process-audio-upload
-**Purpose**: Handles audio file uploads and transcription
-**Dependencies**:
-- `_shared/cors.ts`
-- Storage bucket: `audio-uploads`
-- OpenAI API (for transcription)
-
-## Telegram Management Functions
-
-### delete-telegram-message
-**Purpose**: Deletes messages from Telegram and database
-**Dependencies**:
-- Telegram Bot API
-- `_shared/cors.ts`
-- Database tables: `messages`, `unified_audit_logs`
-
-### update-telegram-caption
-**Purpose**: Updates message captions in Telegram
-**Dependencies**:
-- Telegram Bot API
-- `_shared/cors.ts`
-- Database tables: `messages`
-
 ## Utility Functions
 
-### xdelo_clear_all_messages
+### clear_all_messages
 **Purpose**: Administrative function to clear all messages
 **Dependencies**:
 - `_shared/supabase.ts`
-- Database function: `xdelo_clear_all_messages`
+- Database function: `clear_all_messages`
 
 ### log-operation
 **Purpose**: Logs frontend operations to audit system
@@ -143,30 +120,23 @@ This document provides an overview of all active edge functions in the project, 
 - `_shared/cors.ts`
 - Database tables: `unified_audit_logs`
 
-### user-data
-**Purpose**: Retrieves user-specific data
+### cleanup_legacy_functions
+**Purpose**: Removes deprecated legacy functions
 **Dependencies**:
 - `_shared/cors.ts`
-- `_shared/jwt-verification.ts`
-- `_shared/errorHandler.ts`
+- Database tables: `unified_audit_logs`
 
-### generic-webhook
-**Purpose**: General webhook endpoint for external integrations
+### execute_sql_migration
+**Purpose**: Executes SQL migrations for system maintenance
 **Dependencies**:
 - `_shared/cors.ts`
-- Database tables: `webhook_logs`
+- Database function: `execute_sql_query`
 
-### create-ayd-session
-**Purpose**: Creates "Ask Your Database" sessions
+### migrate_db_functions
+**Purpose**: Analyzes and migrates database functions
 **Dependencies**:
-- AYD API
-- Environment variables: `AYD_API_KEY`, `AYD_CHATBOT_ID`
-
-### openai-request
-**Purpose**: Proxy for OpenAI API requests
-**Dependencies**:
-- OpenAI API
 - `_shared/cors.ts`
+- Database tables: `unified_audit_logs`
 
 ## Shared Libraries
 
@@ -206,13 +176,13 @@ When considering updates to edge functions:
 
 Functions follow these naming conventions:
 
-- `xdelo_*` prefix: Database-integrated functions with triggers/hooks
-- Kebab-case names: Standard HTTP endpoint functions
-- No prefix: Legacy functions (maintain for compatibility)
+- Kebab-case names: Standard HTTP endpoint functions (e.g., `analyze-with-ai`)
+- Snake_case names: Database-integrated functions (e.g., `process_captions`)
+- No prefix: All functions use consistent naming without prefixes
 
 ## Error Handling
 
-Most functions implement standardized error handling with:
+Functions implement standardized error handling with:
 - Correlation ID tracking
 - Error logging to `unified_audit_logs`
 - Consistent error response format
