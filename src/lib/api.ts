@@ -23,10 +23,8 @@ async function invokeFunctionWrapper<T = any>(
   }
 ): Promise<ApiResponse<T>> {
   try {
-    // Generate a correlation ID for tracking
     const correlationId = crypto.randomUUID();
     
-    // Set up the request
     const { data, error } = await supabase.functions.invoke(functionName, {
       method: options?.method || 'POST',
       body: payload,
@@ -61,16 +59,6 @@ async function invokeFunctionWrapper<T = any>(
 }
 
 /**
- * Redownload a file from its media group
- */
-export async function redownloadMediaFile(messageId: string, mediaGroupId?: string) {
-  return invokeFunctionWrapper('redownload-from-media-group', { 
-    messageId,
-    mediaGroupId
-  });
-}
-
-/**
  * Log an operation to the unified audit system
  */
 export async function logOperation(
@@ -99,7 +87,7 @@ export async function analyzeWithAI(messageId: string, caption: string) {
  * Manually parse a caption
  */
 export async function parseCaption(messageId: string, caption?: string, isEdit = false) {
-  return invokeFunctionWrapper('manual-caption-parser', {
+  return invokeFunctionWrapper('parse-caption-with-ai', {
     messageId,
     caption,
     isEdit,
