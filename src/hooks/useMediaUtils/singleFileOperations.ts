@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { RepairResult, SyncCaptionResult } from "./types";
 import { analyzeWithAI, parseCaption } from "@/lib/api";
@@ -208,7 +209,7 @@ export function useSingleFileOperations(
       // Call the RPC function to sync the caption
       const { data, error } = await supabase
         .rpc('xdelo_sync_media_group_content', { 
-          source_message_id: messageId 
+          p_source_message_id: messageId 
         });
       
       if (error) {
@@ -220,13 +221,21 @@ export function useSingleFileOperations(
         };
       }
       
-      return {
+      // Check if data is available and has the expected structure
+      const syncResult: SyncCaptionResult = {
         success: true,
-        message: data?.message || 'Caption synchronized successfully',
-        synced: data?.synced || 0,
-        skipped: data?.skipped || 0,
-        data
+        message: 'Caption synchronized successfully'
       };
+      
+      // Only try to access properties if data exists and is an object
+      if (data && typeof data === 'object') {
+        syncResult.message = data.message || syncResult.message;
+        syncResult.synced = data.synced || 0;
+        syncResult.skipped = data.skipped || 0;
+        syncResult.data = data;
+      }
+      
+      return syncResult;
     } catch (error) {
       console.error('Error in syncMessageCaption:', error);
       return {

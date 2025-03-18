@@ -35,7 +35,7 @@ export function MediaFixTools({ message, onEdit }: MediaFixToolsProps) {
     if (result.success) {
       toast({
         title: "Caption synced",
-        description: `Successfully synced caption to ${result.synced} messages in the group`,
+        description: `Successfully synced caption to ${result.synced || 0} messages in the group`,
       });
     } else {
       toast({

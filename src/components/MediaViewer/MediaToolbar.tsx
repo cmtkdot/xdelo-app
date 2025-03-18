@@ -77,7 +77,7 @@ export function MediaToolbar({
     if (result.success) {
       toast({
         title: "Caption synced",
-        description: `Successfully synced caption to ${result.synced} messages in the group`,
+        description: `Successfully synced caption to ${result.synced || 0} messages in the group`,
       });
     } else {
       toast({
@@ -169,7 +169,7 @@ export function MediaToolbar({
                 variant="outline" 
                 size="sm"
                 disabled={isProcessingAny}
-                onClick={() => currentMedia && handleRepairAction(syncMessageCaption, currentMedia.id)}
+                onClick={handleSyncCaption}
                 className="flex items-center gap-1"
               >
                 <Copy className="h-4 w-4" />
