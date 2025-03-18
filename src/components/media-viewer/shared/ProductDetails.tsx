@@ -28,8 +28,6 @@ export function ProductDetails({ mainMedia, className }: ProductDetailsProps) {
     analyzedContent.vendor_uid ||
     analyzedContent.product_code ||
     analyzedContent.quantity ||
-    analyzedContent.unit_price ||
-    analyzedContent.total_price ||
     analyzedContent.purchase_date
   );
 
@@ -114,27 +112,30 @@ export function ProductDetails({ mainMedia, className }: ProductDetailsProps) {
             </div>
           )}
           
-          <div className="flex flex-col sm:flex-row gap-2">
-            {analyzedContent.unit_price && (
-              <div className="flex items-center space-x-2 p-2 rounded-md bg-muted/10 flex-1">
-                <DollarSign className="h-4 w-4 text-primary" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Unit Price</p>
-                  <p className="text-sm font-medium">${analyzedContent.unit_price.toFixed(2)}</p>
+          {/* Only show price section if either unit_price or total_price exists */}
+          {(analyzedContent.unit_price || analyzedContent.total_price) && (
+            <div className="flex flex-col sm:flex-row gap-2">
+              {analyzedContent.unit_price !== undefined && (
+                <div className="flex items-center space-x-2 p-2 rounded-md bg-muted/10 flex-1">
+                  <DollarSign className="h-4 w-4 text-primary" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Unit Price</p>
+                    <p className="text-sm font-medium">${analyzedContent.unit_price.toFixed(2)}</p>
+                  </div>
                 </div>
-              </div>
-            )}
-            
-            {analyzedContent.total_price && (
-              <div className="flex items-center space-x-2 p-2 rounded-md bg-muted/10 flex-1">
-                <DollarSign className="h-4 w-4 text-primary" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Total Price</p>
-                  <p className="text-sm font-medium">${analyzedContent.total_price.toFixed(2)}</p>
+              )}
+              
+              {analyzedContent.total_price !== undefined && (
+                <div className="flex items-center space-x-2 p-2 rounded-md bg-muted/10 flex-1">
+                  <DollarSign className="h-4 w-4 text-primary" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Price</p>
+                    <p className="text-sm font-medium">${analyzedContent.total_price.toFixed(2)}</p>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       )}
       

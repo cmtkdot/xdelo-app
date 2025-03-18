@@ -7,10 +7,12 @@ export interface AnalyzedContent {
   vendor_uid?: string;
   purchase_date?: string;
   quantity?: number;
+  unit_price?: number;
+  total_price?: number;
   notes?: string;
   parsing_metadata?: {
     method: 'manual' | 'ai';
-    confidence: number;
+    confidence?: number; // Made confidence optional
     timestamp: string;
     needs_ai_analysis?: boolean;
   };

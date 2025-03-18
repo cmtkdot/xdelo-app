@@ -101,21 +101,27 @@ export function useMessageTableState(initialMessages: Message[]) {
 
   const handleAnalyzedContentChange = (id: string, field: keyof AnalyzedContent, value: string | number) => {
     setMessages(prev =>
-      prev.map(message =>
-        message.id === id
-          ? {
-              ...message,
-              analyzed_content: {
-                ...(message.analyzed_content as AnalyzedContent || {}),
-                [field]: value,
-                parsing_metadata: {
-                  method: 'manual' as const,
-                  timestamp: new Date().toISOString()
-                }
-              }
-            }
-          : message
-      )
+      prev.map(message => {
+        if (message.id !== id) return message;
+        
+        // Create or update analyzed_content
+        const currentContent = message.analyzed_content || {};
+        const updatedContent: AnalyzedContent = {
+          ...currentContent,
+          [field]: value,
+          parsing_metadata: {
+            ...(currentContent.parsing_metadata || {}),
+            method: 'manual' as const,
+            timestamp: new Date().toISOString()
+            // No confidence field - we don't use it anymore
+          }
+        };
+        
+        return {
+          ...message,
+          analyzed_content: updatedContent
+        };
+      })
     );
   };
 
