@@ -25,7 +25,7 @@ export function useSingleFileOperations(
       addProcessingMessageId(messageId);
       
       // Call the edge function to process the message
-      const { data, error } = await supabase.functions.invoke('xdelo_process_message', {
+      const { data, error } = await supabase.functions.invoke('process_message', {
         body: { messageId }
       });
       
@@ -76,7 +76,7 @@ export function useSingleFileOperations(
       addProcessingMessageId(messageId);
       
       // Call the edge function to reupload media
-      const { data, error } = await supabase.functions.invoke('xdelo_reupload_media', {
+      const { data, error } = await supabase.functions.invoke('reupload_media', {
         body: { messageId }
       });
       
@@ -122,7 +122,7 @@ export function useSingleFileOperations(
       addProcessingMessageId(messageId);
       
       // Call the edge function to fix content disposition
-      const { data, error } = await supabase.functions.invoke('xdelo_fix_content_disposition', {
+      const { data, error } = await supabase.functions.invoke('fix_content_disposition', {
         body: { messageId }
       });
       
@@ -168,7 +168,7 @@ export function useSingleFileOperations(
       addProcessingMessageId(message.id);
       
       // Call the edge function to reanalyze caption
-      const { data, error } = await supabase.functions.invoke('xdelo_analyze_caption', {
+      const { data, error } = await supabase.functions.invoke('analyze_caption', {
         body: { 
           messageId: message.id,
           caption: message.caption
@@ -237,11 +237,11 @@ export function useSingleFileOperations(
       }
       
       // Call the edge function to sync the media group
-      const { data, error } = await supabase.functions.invoke('xdelo_sync_media_group', {
+      const { data, error } = await supabase.functions.invoke('sync_media_group', {
         body: { 
-          message_id: messageId,
-          media_group_id: mediaGroupId,
-          force: true
+          sourceMessageId: messageId,
+          mediaGroupId: mediaGroupId,
+          forceSync: true
         }
       });
       

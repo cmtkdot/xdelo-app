@@ -1,0 +1,4 @@
+
+[authorization]
+read = "service_role"
+write = "service_role"

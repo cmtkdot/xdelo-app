@@ -63,7 +63,7 @@ async function invokeFunctionWrapper<T = any>(
 /**
  * Redownload a file from its media group
  */
-export async function xdelo_redownloadMediaFile(messageId: string, mediaGroupId?: string) {
+export async function redownloadMediaFile(messageId: string, mediaGroupId?: string) {
   return invokeFunctionWrapper('redownload-from-media-group', { 
     messageId,
     mediaGroupId
@@ -100,7 +100,7 @@ export async function repairFile(messageId: string, options: {
   updateMimeType?: boolean;
   standardizePath?: boolean;
 }) {
-  return invokeFunctionWrapper('xdelo_file_repair', {
+  return invokeFunctionWrapper('file_repair', {
     messageId,
     ...options
   });
@@ -132,7 +132,7 @@ export async function parseCaption(messageId: string, caption?: string, isEdit =
  * Sync a media group's content
  */
 export async function syncMediaGroup(mediaGroupId: string, sourceMessageId: string) {
-  return invokeFunctionWrapper('xdelo_sync_media_group', {
+  return invokeFunctionWrapper('sync_media_group', {
     mediaGroupId,
     sourceMessageId,
     forceSync: true
@@ -167,14 +167,14 @@ export async function standardizeStoragePaths(options: {
   limit?: number;
   dryRun?: boolean;
 }) {
-  return invokeFunctionWrapper('xdelo_standardize_storage_paths', options);
+  return invokeFunctionWrapper('standardize_storage_paths', options);
 }
 
 /**
  * Fix content disposition
  */
 export async function fixContentDisposition(messageId: string) {
-  return invokeFunctionWrapper('xdelo_fix_content_disposition', {
+  return invokeFunctionWrapper('fix_content_disposition', {
     messageId
   });
 }
@@ -187,7 +187,7 @@ export async function fixMediaUrls(options: {
   fixMissingPublicUrls?: boolean;
   regenerateUrls?: boolean;
 }) {
-  return invokeFunctionWrapper('xdelo_fix_media_urls', options);
+  return invokeFunctionWrapper('fix_media_urls', options);
 }
 
 /**
@@ -197,7 +197,7 @@ export async function reprocessMessage(messageId: string, options: {
   forceRedownload?: boolean;
   reanalyzeCaption?: boolean;
 }) {
-  return invokeFunctionWrapper('xdelo_reprocess_message', {
+  return invokeFunctionWrapper('reprocess_message', {
     messageId,
     ...options
   });
