@@ -1,9 +1,0 @@
-
-project_id = "xjhhehxcxkiumnwbirel"
-
-[api]
-schema_path = "supabase/schema.graphql"
-endpoint = "/api/graphql"
-
-[functions.xdelo_fix_missing_columns]
-verify_jwt = false

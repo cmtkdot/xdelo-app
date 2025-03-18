@@ -1,74 +1,51 @@
 
-import { useState } from "react";
-import { useSingleFileOperations } from "./singleFileOperations";
-import { useBatchOperations } from "./batchOperations";
-import { RepairResult, SyncCaptionResult, StandardizeResult } from "./types";
+import { createMediaProcessingState } from './utils';
+import { useSingleFileOperations } from './singleFileOperations';
+import { useBatchOperations } from './batchOperations';
 
-export const useMediaUtils = () => {
-  const [processingMessageIds, setProcessingMessageIds] = useState<Record<string, boolean>>({});
-  const [isProcessing, setIsProcessing] = useState(false);
+/**
+ * A consolidated hook for media operations with improved organization
+ */
+export function useMediaUtils() {
+  // Create state management
+  const [
+    { isProcessing, processingMessageIds },
+    { setIsProcessing, addProcessingMessageId, removeProcessingMessageId }
+  ] = createMediaProcessingState();
 
-  // Track processing state for individual messages
-  const addProcessingMessageId = (id: string) => {
-    setProcessingMessageIds(prev => ({ ...prev, [id]: true }));
-  };
-
-  const removeProcessingMessageId = (id: string) => {
-    setProcessingMessageIds(prev => {
-      const updated = { ...prev };
-      delete updated[id];
-      return updated;
-    });
-  };
-
-  // Single file operations
+  // Initialize single file operations
   const {
+    processMessage,
     reuploadMediaFromTelegram,
     fixContentDispositionForMessage,
-    processMessage,
     reanalyzeMessageCaption,
-    syncMessageCaption,
-    standardizeStoragePaths: standardizeStoragePathSingle
-  } = useSingleFileOperations(
-    addProcessingMessageId,
-    removeProcessingMessageId
-  );
+    syncMessageCaption
+  } = useSingleFileOperations(addProcessingMessageId, removeProcessingMessageId);
 
-  // Batch operations
+  // Initialize batch operations
   const {
-    checkMissingFiles,
-    fixAllContentDispositions,
-    processAllPendingMessages,
-    reanalyzeAllCaptions,
     standardizeStoragePaths,
     fixMediaUrls,
-    repairMediaBatch
-  } = useBatchOperations(
-    setIsProcessing,
-    addProcessingMessageId,
-    removeProcessingMessageId
-  );
+    repairMediaBatch,
+    processAllPendingMessages
+  } = useBatchOperations(setIsProcessing, addProcessingMessageId, removeProcessingMessageId);
 
   return {
-    // Processing state tracking
-    processingMessageIds,
+    // State
     isProcessing,
+    processingMessageIds,
     
-    // Single file operations
-    reuploadMediaFromTelegram,
+    // Single message operations
     fixContentDispositionForMessage,
+    reuploadMediaFromTelegram,
     processMessage,
     reanalyzeMessageCaption,
     syncMessageCaption,
-    standardizeStoragePathSingle,
     
     // Batch operations
-    checkMissingFiles,
-    fixAllContentDispositions,
-    processAllPendingMessages,
-    reanalyzeAllCaptions,
     standardizeStoragePaths,
     fixMediaUrls,
-    repairMediaBatch
+    repairMediaBatch,
+    processAllPendingMessages,
   };
-};
+}
