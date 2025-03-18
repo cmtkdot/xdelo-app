@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/useToast';
+import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/supabase';
 import { ArrowRight, Loader2 } from 'lucide-react';
 
@@ -27,7 +27,7 @@ export function FixMessageUrlsCard() {
       toast({
         title: 'Message URLs Fixed',
         description: data.message || 'Message URL generation has been updated successfully',
-        variant: 'success',
+        variant: 'default',
       });
     } catch (error: any) {
       console.error('Error fixing message URLs:', error);

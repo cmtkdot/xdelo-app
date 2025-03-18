@@ -35,13 +35,14 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
     const { data, error } = await supabaseClient
       .from('other_messages')
       .insert({
-        // Don't include telegram_message_id directly - it will be extracted from telegram_data
+        // Use chat_id and message_id directly from the message object
         chat_id: message.chat.id,
         chat_type: message.chat.type,
         chat_title: message.chat.title,
         message_type: isChannelPost ? 'channel_post' : 'message',
         message_text: messageText,
         telegram_data: message,
+        telegram_message_id: message.message_id, // Explicitly add telegram_message_id field
         processing_state: 'completed',
         is_forward: isForwarded,
         forward_info: forwardInfo,
@@ -118,8 +119,10 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
               message_type: message.channel_post ? 'channel_post' : 'message',
               message_text: message.text || message.caption || '',
               telegram_data: message,
+              telegram_message_id: message.message_id, // Explicitly add telegram_message_id field
               processing_state: 'stored_only',
               is_forward: !!message.forward_from || !!message.forward_from_chat || !!message.forward_origin,
+              forward_info: isForwarded ? extractForwardInfo(message) : null, // Extract forward info here too
               correlation_id: context.correlationId,
               retry_count: MAX_RETRY_COUNT,
               error_message: `Max retry count reached: ${error.message}`,
@@ -178,8 +181,10 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
             message_type: message.channel_post ? 'channel_post' : 'message',
             message_text: message.text || message.caption || '',
             telegram_data: message,
+            telegram_message_id: message.message_id, // Explicitly add telegram_message_id field
             processing_state: 'error',
             is_forward: !!message.forward_from || !!message.forward_from_chat || !!message.forward_origin,
+            forward_info: isForwarded ? extractForwardInfo(message) : null, // Extract forward info here too
             correlation_id: context.correlationId,
             retry_count: 1,
             error_message: error.message,
@@ -258,4 +263,3 @@ function extractForwardInfo(message: TelegramMessage): Record<string, any> | nul
   
   return forwardInfo;
 }
-

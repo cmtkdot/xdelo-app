@@ -161,6 +161,33 @@ BEGIN
   WHEN (OLD.telegram_data IS DISTINCT FROM NEW.telegram_data)
   EXECUTE FUNCTION xdelo_set_message_url_on_other_message();
   
+  -- Add processing_state enum type if needed
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_type 
+      WHERE typname = 'processing_state_type'
+    ) THEN
+      CREATE TYPE processing_state_type AS ENUM (
+        'pending', 
+        'processing', 
+        'completed', 
+        'error', 
+        'initialized',
+        'stored_only'
+      );
+    ELSE
+      -- If the type exists but doesn't have 'stored_only'
+      BEGIN
+        ALTER TYPE processing_state_type ADD VALUE 'stored_only' AFTER 'initialized';
+      EXCEPTION
+        WHEN duplicate_object THEN
+          -- Value already exists, ignore
+      END;
+    END IF;
+  END
+  $$;
+  
   -- Return success
   v_result := jsonb_build_object(
     'status', 'success',
@@ -174,31 +201,3 @@ BEGIN
   RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
-
--- Add processing_state enum type if needed
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_type 
-    WHERE typname = 'processing_state_type'
-  ) THEN
-    CREATE TYPE processing_state_type AS ENUM (
-      'pending', 
-      'processing', 
-      'completed', 
-      'error', 
-      'initialized',
-      'stored_only'
-    );
-  ELSE
-    -- If the type exists but doesn't have 'stored_only'
-    BEGIN
-      ALTER TYPE processing_state_type ADD VALUE 'stored_only' AFTER 'initialized';
-    EXCEPTION
-      WHEN duplicate_object THEN
-        -- Value already exists, ignore
-    END;
-  END IF;
-END
-$$;
-
