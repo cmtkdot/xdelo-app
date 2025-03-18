@@ -1,6 +1,6 @@
 
 import { logMessageOperation } from './logger.ts';
-import { supabaseClient as supabase } from '../../_shared/supabase.ts';
+import { createSupabaseClient } from '../../_shared/supabase.ts';
 import { 
   xdelo_isViewableMimeType, 
   xdelo_getUploadOptions,
@@ -76,6 +76,9 @@ export const redownloadMissingFile = async (message: MessageRecord): Promise<{su
       }
     );
     
+    // Create Supabase client
+    const supabase = createSupabaseClient();
+    
     // Update the message record with minimal fields since public_url is updated by uploadMediaToStorage
     const { error: updateError } = await supabase
       .from('messages')
@@ -112,6 +115,9 @@ export const redownloadMissingFile = async (message: MessageRecord): Promise<{su
     console.error('Error in redownloadMissingFile:', error);
     
     try {
+      // Create Supabase client
+      const supabase = createSupabaseClient();
+      
       // Update the message with the error
       await supabase
         .from('messages')
