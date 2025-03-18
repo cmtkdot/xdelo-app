@@ -1,30 +1,24 @@
 
-import { Message } from '@/types/entities/Message';
-
-/**
- * Result type for media operations
- */
 export interface RepairResult {
   success: boolean;
   message?: string;
-  successful?: number;
-  failed?: number;
   error?: string;
   data?: any;
 }
 
-/**
- * State types for media operations
- */
-export interface MediaUtilsState {
-  isProcessing: boolean;
-  processingMessageIds: Record<string, boolean>;
-}
-
-/**
- * Sync Caption Result
- */
-export interface SyncCaptionResult extends RepairResult {
+export interface SyncCaptionResult {
+  success: boolean;
+  message: string;
+  error?: string;
   synced?: number;
   skipped?: number;
+  data?: any;
+}
+
+export interface StandardizeResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+  successful?: number;
+  failed?: number;
 }

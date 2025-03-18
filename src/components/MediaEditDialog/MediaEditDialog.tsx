@@ -63,7 +63,7 @@ export function MediaEditDialog({
       
       setSyncStatus('Updating and analyzing caption...');
       
-      // Fix: Pass the messageId directly as a string instead of an object
+      // Pass the messageId directly as a string
       const result = await syncMessageCaption(media.id);
       
       if (!result?.success) {

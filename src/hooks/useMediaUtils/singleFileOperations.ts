@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { RepairResult, SyncCaptionResult } from "./types";
+import { RepairResult, SyncCaptionResult, StandardizeResult } from "./types";
 import { analyzeWithAI, parseCaption } from "@/lib/api";
 
 /**
@@ -247,7 +247,7 @@ export function useSingleFileOperations(
       // Only try to access properties if data exists and is an object
       if (data && typeof data === 'object' && !Array.isArray(data)) {
         syncResult.message = (data.message as string) || syncResult.message;
-        syncResult.synced = (data.synced as number) || 0;
+        syncResult.synced = (data.updated_count as number) || 0;
         syncResult.skipped = (data.skipped as number) || 0;
         syncResult.data = data;
       }
@@ -265,11 +265,46 @@ export function useSingleFileOperations(
     }
   };
 
+  /**
+   * Standardizes storage paths for media files
+   */
+  const standardizeStoragePaths = async (limit: number = 100): Promise<StandardizeResult> => {
+    try {
+      console.log(`Standardizing storage paths for up to ${limit} messages`);
+      
+      const { data, error } = await supabase
+        .rpc('xdelo_fix_public_urls', { p_limit: limit });
+      
+      if (error) {
+        console.error('Error standardizing storage paths:', error);
+        return {
+          success: false,
+          error: error.message,
+          message: 'Failed to standardize storage paths'
+        };
+      }
+      
+      return {
+        success: true,
+        message: `Updated ${data?.length || 0} message URLs`,
+        successful: data?.length || 0
+      };
+    } catch (error) {
+      console.error('Error in standardizeStoragePaths:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        message: 'An unexpected error occurred while standardizing storage paths'
+      };
+    }
+  };
+
   return {
     reuploadMediaFromTelegram,
     fixContentDispositionForMessage,
     processMessage,
     reanalyzeMessageCaption,
-    syncMessageCaption
+    syncMessageCaption,
+    standardizeStoragePaths
   };
 }
