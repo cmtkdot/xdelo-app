@@ -26,7 +26,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
     // Log the start of message processing
     console.log(`[${correlationId}] Processing non-media message ${message.message_id} in chat ${message.chat.id}`);
     
-    // Generate message URL using our utility function
+    // Generate message URL using our utility function from _shared/messageUtils.ts
     const message_url = constructTelegramMessageUrl(message);
     
     // Store message data in the other_messages table

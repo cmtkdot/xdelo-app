@@ -1,10 +1,10 @@
 
 import { AccountCard } from "@/components/Settings/AccountCard";
 import { DatabaseFixCard } from "@/components/Settings/DatabaseFixCard";
-import { useUser } from "@/hooks/useUser";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function SettingsPage() {
-  const { user } = useUser();
+  const { user } = useAuth();
 
   return (
     <div className="container py-10">

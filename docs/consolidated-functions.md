@@ -40,6 +40,7 @@ The following complex functions have been permanently removed:
 7. ~~xdelo_check_processing_queue~~ - Removed queue management complexity
 8. ~~xdelo_reset_processing_state~~ - Removed manual state reset mechanism
 9. ~~xdelo_fallback_caption_parser~~ - Consolidated into main caption processing
+10. ~~xdelo_construct_telegram_message_url~~ - Replaced with JavaScript utility function
 
 ## Media Utils Consolidation
 
