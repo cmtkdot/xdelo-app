@@ -68,20 +68,36 @@ export default function Settings() {
     try {
       setIsRunningMissingColumnsRepair(true);
       
-      // Call the edge function directly
-      const { data, error } = await supabase.functions.invoke<FixMissingColumnsResult>('xdelo_run_fix_missing_columns');
+      // First try using RPC
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('xdelo_run_fix_missing_columns');
+      
+      if (rpcError) {
+        // If RPC fails, try the Edge Function
+        console.log('RPC failed, trying Edge Function');
+        const { data, error } = await supabase.functions.invoke<FixMissingColumnsResult>('xdelo_run_fix_missing_columns');
         
-      if (error) {
-        throw error;
+        if (error) {
+          throw error;
+        }
+        
+        setMissingColumnsResult(data);
+        
+        toast({
+          title: "Database Repair Complete",
+          description: data.message || `Added columns: ${(data.columns_added || []).join(', ')}`,
+          variant: data.success ? "default" : "destructive"
+        });
+      } else {
+        // RPC succeeded
+        setMissingColumnsResult(rpcData as FixMissingColumnsResult);
+        
+        toast({
+          title: "Database Repair Complete",
+          description: rpcData.message || `Added columns: ${(rpcData.columns_added || []).join(', ')}`,
+          variant: rpcData.success ? "default" : "destructive"
+        });
       }
-      
-      setMissingColumnsResult(data);
-      
-      toast({
-        title: "Database Repair Complete",
-        description: data.message || `Added columns: ${(data.columns_added || []).join(', ')}`,
-        variant: data.success ? "default" : "destructive"
-      });
     } catch (error) {
       console.error('Error fixing missing columns:', error);
       toast({
@@ -124,8 +140,8 @@ export default function Settings() {
           
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground mb-4">
-              This will add missing columns to the database tables, such as forward_info, retry_count, 
-              and last_error_at to the other_messages table.
+              This will add missing columns to the database tables, such as forward_info, telegram_message_id,
+              retry_count, last_error_at and message_url to the other_messages table.
             </p>
             
             {missingColumnsResult.success !== undefined && (

@@ -32,7 +32,7 @@ const handleFixMissingColumns = async (req: Request, correlationId: string) => {
   try {
     // Execute the SQL function to add missing columns
     const { data, error } = await supabase
-      .rpc('xdelo_add_missing_columns_to_other_messages');
+      .rpc('xdelo_run_fix_missing_columns');
     
     if (error) {
       throw error;

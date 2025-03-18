@@ -108,6 +108,32 @@ BEGIN
     END;
   END IF;
 
+  -- Create the function for URL construction from telegram_data
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc 
+    WHERE proname = 'xdelo_construct_message_url_from_data'
+  ) THEN
+    -- Create the function for URL construction
+    CREATE OR REPLACE FUNCTION xdelo_construct_message_url_from_data(telegram_data JSONB)
+    RETURNS TEXT AS $$
+    DECLARE
+      v_chat_id BIGINT;
+      v_message_id INT;
+      v_chat_type TEXT;
+    BEGIN
+      -- Extract the necessary fields
+      v_chat_id := (telegram_data->'chat'->>'id')::BIGINT;
+      v_message_id := (telegram_data->>'message_id')::INT;
+      v_chat_type := telegram_data->'chat'->>'type';
+      
+      -- Call the message URL construction function
+      RETURN xdelo_construct_telegram_message_url(v_chat_type, v_chat_id, v_message_id);
+    END;
+    $$ LANGUAGE plpgsql;
+    
+    v_missing_columns := array_append(v_missing_columns, 'xdelo_construct_message_url_from_data function');
+  END IF;
+
   -- Create triggers for message_url generation if they don't exist
   IF NOT EXISTS (
     SELECT 1 FROM pg_trigger 
@@ -136,6 +162,37 @@ BEGIN
     v_missing_columns := array_append(v_missing_columns, 'set_message_url_on_other_message_update trigger');
   END IF;
 
+  -- Create the xdelo_set_message_url_on_other_message function if it doesn't exist
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc 
+    WHERE proname = 'xdelo_set_message_url_on_other_message'
+  ) THEN
+    -- Create an improved message URL generator for other_messages
+    CREATE OR REPLACE FUNCTION xdelo_set_message_url_on_other_message()
+    RETURNS TRIGGER AS $$
+    DECLARE
+      v_message_id INTEGER;
+      v_chat_id BIGINT;
+      v_chat_type TEXT;
+    BEGIN
+      -- Extract data from telegram_data JSONB field
+      v_message_id := (NEW.telegram_data->>'message_id')::INTEGER;
+      v_chat_id := (NEW.telegram_data->'chat'->>'id')::BIGINT;
+      v_chat_type := NEW.telegram_data->'chat'->>'type';
+
+      -- Only proceed if we have valid data
+      IF v_message_id IS NOT NULL AND v_chat_id IS NOT NULL AND v_chat_type IS NOT NULL THEN
+        -- Use the existing function to construct the URL
+        NEW.message_url := xdelo_construct_telegram_message_url(v_chat_type, v_chat_id, v_message_id);
+      END IF;
+
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+    
+    v_missing_columns := array_append(v_missing_columns, 'xdelo_set_message_url_on_other_message function');
+  END IF;
+
   -- Build result object
   v_result := jsonb_build_object(
     'success', true,
@@ -152,24 +209,6 @@ BEGIN
   RETURN v_result;
 END;
 $$;
-
--- Create the function for URL construction from telegram_data
-CREATE OR REPLACE FUNCTION xdelo_construct_message_url_from_data(telegram_data JSONB)
-RETURNS TEXT AS $$
-DECLARE
-  v_chat_id BIGINT;
-  v_message_id INT;
-  v_chat_type TEXT;
-BEGIN
-  -- Extract the necessary fields
-  v_chat_id := (telegram_data->'chat'->>'id')::BIGINT;
-  v_message_id := (telegram_data->>'message_id')::INT;
-  v_chat_type := telegram_data->'chat'->>'type';
-  
-  -- Call the message URL construction function
-  RETURN xdelo_construct_telegram_message_url(v_chat_type, v_chat_id, v_message_id);
-END;
-$$ LANGUAGE plpgsql;
 
 -- Create the xdelo_run_fix_missing_columns function to be called via RPC
 CREATE OR REPLACE FUNCTION xdelo_run_fix_missing_columns()
