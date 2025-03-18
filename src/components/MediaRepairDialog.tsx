@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Progress } from "@/components/ui/progress";
 import { AlertCircle, CheckCircle2, Wrench } from "lucide-react";
-import type { Message } from '@/types/MessagesTypes';
+import type { Message } from '@/types';
 import { useMediaUtils } from '@/hooks/useMediaUtils';
 
 export interface MediaRepairDialogProps {

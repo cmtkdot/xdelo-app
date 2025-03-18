@@ -1,80 +1,148 @@
 
-import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
-import { Button } from '../ui/button';
-import { Message } from '@/types';
+import React, { useState, useEffect } from 'react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { useToast } from "@/hooks/useToast"
 import { useMediaUtils } from '@/hooks/useMediaUtils';
-import { Loader2 } from 'lucide-react';
 
-export interface MediaEditDialogProps {
-  media: Message;
+interface MediaEditDialogProps {
+  media: { id: string; caption?: string; media_group_id?: string };
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onClose?: () => void;
+  onSave?: (newCaption: string) => void;
   onSuccess?: () => void;
 }
 
-export const MediaEditDialog: React.FC<MediaEditDialogProps> = ({
-  media,
-  open,
-  onOpenChange,
-  onSuccess
-}) => {
+export function MediaEditDialog({ 
+  media, 
+  open, 
+  onOpenChange, 
+  onClose,
+  onSave, 
+  onSuccess 
+}: MediaEditDialogProps) {
+  const [newCaption, setNewCaption] = useState(media?.caption || "");
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  
-  const { 
-    fixContentDispositionForMessage,
-    reuploadMediaFromTelegram,
-    fixMediaUrls,
-    standardizeStoragePaths
-  } = useMediaUtils();
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const { toast } = useToast();
+  const { syncMessageCaption } = useMediaUtils();
 
-  const handleFixContentDisposition = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      await fixContentDispositionForMessage(media.id);
-      onOpenChange(false);
-      if (onSuccess) {
-        onSuccess();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setIsLoading(false);
+  const handleOpenChange = (isOpen: boolean) => {
+    onOpenChange(isOpen);
+    if (!isOpen && onClose) {
+      onClose();
     }
   };
 
+  useEffect(() => {
+    if (media) {
+      setNewCaption(media.caption || "");
+    }
+  }, [media]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setError(null);
+    setSyncStatus(null);
+    
+    try {
+      if (!media) throw new Error("No media found");
+      
+      setSyncStatus('Updating and analyzing caption...');
+      
+      // Use the updated caption sync hook to handle the update and sync
+      const result = await syncMessageCaption({ messageId: media.id });
+      
+      if (!result?.success) {
+        throw new Error(result?.message || 'Failed to process caption update');
+      }
+      
+      setSyncStatus('Caption updated and synced');
+      
+      // Call the onSave callback if provided
+      onSave && onSave(newCaption);
+      
+      // Allow parent to refresh data after successful save
+      setTimeout(() => {
+        onSuccess && onSuccess();
+      }, 1500); // Small delay to ensure sync completes
+      
+    } catch (err: any) {
+      console.error('Error updating caption:', err);
+      setError(err.message || 'Error updating caption');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setNewCaption(e.target.value);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit Media</DialogTitle>
-        </DialogHeader>
-
-        {error && (
-          <div className="text-red-500 text-sm mb-4">
-            {error}
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Edit Media Caption</AlertDialogTitle>
+          <AlertDialogDescription>
+            Update the caption for this media item.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="name" className="text-right">
+              Caption
+            </Label>
+            <div className="col-span-3">
+              <Textarea
+                id="caption"
+                value={newCaption}
+                onChange={handleChange}
+                className="col-span-3"
+              />
+            </div>
           </div>
-        )}
-
-        <div className="space-y-4">
-          <Button 
-            onClick={handleFixContentDisposition}
-            disabled={isLoading}
-            className="w-full"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Fixing content disposition...
-              </>
-            ) : (
-              'Fix Content Disposition'
-            )}
-          </Button>
+          {syncStatus && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Sync Status
+              </Label>
+              <div className="col-span-3">
+                <p className="text-sm text-muted-foreground">{syncStatus}</p>
+              </div>
+            </div>
+          )}
+          {error && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Error
+              </Label>
+              <div className="col-span-3">
+                <p className="text-sm text-red-500">{error}</p>
+              </div>
+            </div>
+          )}
         </div>
-      </DialogContent>
-    </Dialog>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isSaving}>Cancel</AlertDialogCancel>
+          <Button type="submit" onClick={handleSave} disabled={isSaving}>
+            {isSaving ? "Saving..." : "Save changes"}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
-};
+}

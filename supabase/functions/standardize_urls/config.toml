@@ -1,9 +1,0 @@
-
-project_id = "xjhhehxcxkiumnwbirel"
-name = "standardize_urls"
-description = "Standardizes public URLs for media files"
-version = 1
-verify_jwt = true
-
-[functions.standardize_urls.jwt]
-optional = true

@@ -63,7 +63,7 @@ async function invokeFunctionWrapper<T = any>(
 /**
  * Redownload a file from its media group
  */
-export async function redownloadMediaFile(messageId: string, mediaGroupId?: string) {
+export async function xdelo_redownloadMediaFile(messageId: string, mediaGroupId?: string) {
   return invokeFunctionWrapper('redownload-from-media-group', { 
     messageId,
     mediaGroupId
@@ -100,7 +100,7 @@ export async function repairFile(messageId: string, options: {
   updateMimeType?: boolean;
   standardizePath?: boolean;
 }) {
-  return invokeFunctionWrapper('file_repair', {
+  return invokeFunctionWrapper('xdelo_file_repair', {
     messageId,
     ...options
   });
@@ -132,7 +132,7 @@ export async function parseCaption(messageId: string, caption?: string, isEdit =
  * Sync a media group's content
  */
 export async function syncMediaGroup(mediaGroupId: string, sourceMessageId: string) {
-  return invokeFunctionWrapper('sync_media_group', {
+  return invokeFunctionWrapper('xdelo_sync_media_group', {
     mediaGroupId,
     sourceMessageId,
     forceSync: true
@@ -167,14 +167,14 @@ export async function standardizeStoragePaths(options: {
   limit?: number;
   dryRun?: boolean;
 }) {
-  return invokeFunctionWrapper('standardize_storage_paths', options);
+  return invokeFunctionWrapper('xdelo_standardize_storage_paths', options);
 }
 
 /**
  * Fix content disposition
  */
 export async function fixContentDisposition(messageId: string) {
-  return invokeFunctionWrapper('fix_content_disposition', {
+  return invokeFunctionWrapper('xdelo_fix_content_disposition', {
     messageId
   });
 }
@@ -187,7 +187,7 @@ export async function fixMediaUrls(options: {
   fixMissingPublicUrls?: boolean;
   regenerateUrls?: boolean;
 }) {
-  return invokeFunctionWrapper('fix_media_urls', options);
+  return invokeFunctionWrapper('xdelo_fix_media_urls', options);
 }
 
 /**
@@ -197,40 +197,8 @@ export async function reprocessMessage(messageId: string, options: {
   forceRedownload?: boolean;
   reanalyzeCaption?: boolean;
 }) {
-  return invokeFunctionWrapper('reprocess_message', {
+  return invokeFunctionWrapper('xdelo_reprocess_message', {
     messageId,
     ...options
-  });
-}
-
-/**
- * Clean up legacy functions
- */
-export async function cleanupLegacyFunctions() {
-  return invokeFunctionWrapper('cleanup_legacy_functions', {});
-}
-
-/**
- * Execute SQL migration
- */
-export async function executeSqlMigration(query: string, params: any[] = [], description: string = "Manual SQL migration") {
-  return invokeFunctionWrapper('execute_sql_migration', {
-    query,
-    params,
-    description
-  });
-}
-
-/**
- * Repair media in batch
- */
-export async function repairMediaBatch(messageIds: string[], options: {
-  forceRedownload?: boolean;
-  fixContentDisposition?: boolean;
-  fixMimeTypes?: boolean;
-} = {}) {
-  return invokeFunctionWrapper('repair_media_batch', {
-    message_ids: messageIds,
-    repair_options: options
   });
 }

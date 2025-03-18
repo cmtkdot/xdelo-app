@@ -24,7 +24,7 @@ export function useBatchOperations(
       setIsProcessing(true);
       
       // Call the edge function to standardize storage paths
-      const { data, error } = await supabase.functions.invoke('standardize_storage_paths', {
+      const { data, error } = await supabase.functions.invoke('xdelo_standardize_storage_paths', {
         body: { limit }
       });
       
@@ -70,7 +70,7 @@ export function useBatchOperations(
       setIsProcessing(true);
       
       // Call the edge function to fix media URLs
-      const { data, error } = await supabase.functions.invoke('fix_media_urls', {
+      const { data, error } = await supabase.functions.invoke('xdelo_fix_media_urls', {
         body: { limit }
       });
       
@@ -119,8 +119,8 @@ export function useBatchOperations(
       messageIds.forEach(id => addProcessingMessageId(id));
       
       // Call the edge function to repair media batch
-      const { data, error } = await supabase.functions.invoke('repair_media_batch', {
-        body: { message_ids: messageIds }
+      const { data, error } = await supabase.functions.invoke('xdelo_repair_media_batch', {
+        body: { messageIds }
       });
       
       if (error) {
@@ -167,7 +167,7 @@ export function useBatchOperations(
       setIsProcessing(true);
       
       // Call the edge function to process all pending messages
-      const { data, error } = await supabase.functions.invoke('process_pending_messages', {
+      const { data, error } = await supabase.functions.invoke('xdelo_process_pending_messages', {
         body: { limit: 100 }
       });
       
