@@ -19,6 +19,7 @@ import {
   MessageInput,
 } from '../types.ts';
 import { createMessage, checkDuplicateFile } from '../dbOperations.ts';
+import { constructTelegramMessageUrl } from '../../_shared/messageUtils.ts';
 
 // Get Telegram bot token from environment
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
@@ -439,7 +440,8 @@ async function xdelo_handleNewMediaMessage(
       edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
     }] : [],
     storage_exists: true, // We just uploaded it
-    storage_path_standardized: true // We're using our standardized paths
+    storage_path_standardized: true, // We're using our standardized paths
+    message_url: constructTelegramMessageUrl(message) // Add message URL using the utility function
   };
 
   // Create the message record
@@ -588,19 +590,65 @@ async function xdelo_handleRemovedCaption(
   try {
     console.log(`[${correlationId}] Caption removed, checking for media group sync from group ${mediaGroupId}`);
     
-    // Use the RPC function to check and sync with media group
-    const { error: syncError } = await supabaseClient.rpc(
-      'xdelo_check_media_group_content',
-      {
-        p_media_group_id: mediaGroupId,
-        p_message_id: messageId,
-        p_correlation_id: correlationId
-      }
+    // Replace RPC call with direct query to find messages in the same media group
+    const { data: groupMessages, error: queryError } = await supabaseClient
+      .from('messages')
+      .select('id, caption, analyzed_content')
+      .eq('media_group_id', mediaGroupId)
+      .order('created_at', { ascending: true });
+      
+    if (queryError) {
+      console.error(`[${correlationId}] Error querying media group messages:`, queryError);
+      return;
+    }
+    
+    if (!groupMessages || groupMessages.length === 0) {
+      console.log(`[${correlationId}] No messages found in media group ${mediaGroupId}`);
+      return;
+    }
+    
+    // Find if any message in the group has analyzed content to sync
+    const messageWithContent = groupMessages.find(msg => 
+      msg.id !== messageId && 
+      msg.caption && 
+      msg.analyzed_content
     );
     
-    if (syncError) {
-      console.error(`[${correlationId}] Error checking media group content:`, syncError);
+    if (!messageWithContent) {
+      console.log(`[${correlationId}] No analyzed content found in media group ${mediaGroupId} to sync`);
+      return;
     }
+    
+    // Sync the analyzed content to our message
+    const { error: updateError } = await supabaseClient
+      .from('messages')
+      .update({
+        analyzed_content: messageWithContent.analyzed_content,
+        group_caption_synced: true,
+        is_original_caption: false,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', messageId);
+      
+    if (updateError) {
+      console.error(`[${correlationId}] Error updating message with synced content:`, updateError);
+      return;
+    }
+    
+    console.log(`[${correlationId}] Successfully synced content from message ${messageWithContent.id} to message ${messageId}`);
+    
+    // Log the sync operation
+    await supabaseClient.from('unified_audit_logs').insert({
+      event_type: 'media_group_synced',
+      entity_id: messageId,
+      metadata: {
+        media_group_id: mediaGroupId,
+        source_message_id: messageWithContent.id,
+        operation: 'caption_removal_sync'
+      },
+      correlation_id: correlationId
+    });
+    
   } catch (error) {
     console.error(`[${correlationId}] Failed to sync with media group after caption removal:`, error);
   }
@@ -617,41 +665,117 @@ async function xdelo_checkMediaGroupSync(
   try {
     console.log(`[${correlationId}] Message ${messageId} has no caption but is part of media group ${mediaGroupId}, checking for content`);
     
-    // Use the RPC function to check and sync with media group
-    const { data: syncResult, error: syncError } = await supabaseClient.rpc(
-      'xdelo_check_media_group_content',
-      {
-        p_media_group_id: mediaGroupId,
-        p_message_id: messageId,
-        p_correlation_id: correlationId
-      }
+    // Replace RPC call with direct query to find messages in the same media group
+    const { data: groupMessages, error: queryError } = await supabaseClient
+      .from('messages')
+      .select('id, caption, analyzed_content, created_at')
+      .eq('media_group_id', mediaGroupId)
+      .order('created_at', { ascending: true });
+      
+    if (queryError) {
+      console.error(`[${correlationId}] Error querying media group messages:`, queryError);
+      return;
+    }
+    
+    if (!groupMessages || groupMessages.length === 0) {
+      console.log(`[${correlationId}] No messages found in media group ${mediaGroupId}`);
+      return;
+    }
+    
+    // Find if any message in the group has analyzed content to sync
+    const messageWithContent = groupMessages.find(msg => 
+      msg.id !== messageId && 
+      msg.caption && 
+      msg.analyzed_content
     );
     
-    if (syncError) {
-      console.error(`[${correlationId}] Error checking media group content:`, syncError);
-    } else if (syncResult && syncResult.success) {
-      console.log(`[${correlationId}] Successfully synced content from media group ${mediaGroupId} to message ${messageId}`);
-    } else if (syncResult && !syncResult.success) {
-      console.log(`[${correlationId}] No content to sync: ${syncResult.reason}`);
+    if (!messageWithContent) {
+      console.log(`[${correlationId}] No analyzed content found in media group ${mediaGroupId} to sync. Scheduling a delayed re-check.`);
       
       // If no content to sync, set a delayed re-check
-      console.log(`[${correlationId}] Scheduling a delayed re-check for media group ${mediaGroupId} after 10 seconds`);
       setTimeout(async () => {
         try {
           console.log(`[${correlationId}] Performing delayed re-check for message ${messageId} in group ${mediaGroupId}`);
-          await supabaseClient.rpc(
-            'xdelo_check_media_group_content',
-            {
-              p_media_group_id: mediaGroupId,
-              p_message_id: messageId,
-              p_correlation_id: correlationId
-            }
+          
+          // Re-query for messages in case they've been updated
+          const { data: refreshedMessages, error: refreshError } = await supabaseClient
+            .from('messages')
+            .select('id, caption, analyzed_content')
+            .eq('media_group_id', mediaGroupId)
+            .order('created_at', { ascending: true });
+            
+          if (refreshError || !refreshedMessages || refreshedMessages.length === 0) {
+            console.log(`[${correlationId}] Still no messages found in delayed re-check for group ${mediaGroupId}`);
+            return;
+          }
+          
+          const refreshedSourceMsg = refreshedMessages.find(msg => 
+            msg.id !== messageId && 
+            msg.caption && 
+            msg.analyzed_content
           );
+          
+          if (!refreshedSourceMsg) {
+            console.log(`[${correlationId}] No content found in delayed re-check for group ${mediaGroupId}`);
+            return;
+          }
+          
+          // Sync the analyzed content to our message
+          const { error: updateError } = await supabaseClient
+            .from('messages')
+            .update({
+              analyzed_content: refreshedSourceMsg.analyzed_content,
+              group_caption_synced: true,
+              is_original_caption: false,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', messageId);
+            
+          if (updateError) {
+            console.error(`[${correlationId}] Error updating message in delayed re-check:`, updateError);
+            return;
+          }
+          
+          console.log(`[${correlationId}] Successfully synced content in delayed re-check from message ${refreshedSourceMsg.id} to message ${messageId}`);
+          
         } catch (delayedError) {
           console.error(`[${correlationId}] Delayed media group check failed:`, delayedError);
         }
       }, 10000); // 10 second delay
+      
+      return;
     }
+    
+    // Sync the analyzed content to our message
+    const { error: updateError } = await supabaseClient
+      .from('messages')
+      .update({
+        analyzed_content: messageWithContent.analyzed_content,
+        group_caption_synced: true,
+        is_original_caption: false,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', messageId);
+      
+    if (updateError) {
+      console.error(`[${correlationId}] Error updating message with synced content:`, updateError);
+      return;
+    }
+    
+    console.log(`[${correlationId}] Successfully synced content from message ${messageWithContent.id} to message ${messageId}`);
+    
+    // Log the sync operation
+    await supabaseClient.from('unified_audit_logs').insert({
+      event_type: 'media_group_synced',
+      entity_id: messageId,
+      metadata: {
+        media_group_id: mediaGroupId,
+        source_message_id: messageWithContent.id,
+        operation: 'initial_sync'
+      },
+      correlation_id: correlationId
+    });
+    
   } catch (error) {
     console.error(`[${correlationId}] Failed to check media group sync:`, error);
   }

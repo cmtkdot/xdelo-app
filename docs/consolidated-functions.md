@@ -41,6 +41,10 @@ The following complex functions have been permanently removed:
 8. ~~xdelo_reset_processing_state~~ - Removed manual state reset mechanism
 9. ~~xdelo_fallback_caption_parser~~ - Consolidated into main caption processing
 10. ~~xdelo_construct_telegram_message_url~~ - Replaced with JavaScript utility function
+11. ~~xdelo_check_media_group_content~~ - Replaced with direct JavaScript queries
+12. ~~xdelo_sync_media_group_from_message~~ - Replaced with JavaScript implementation
+13. ~~xdelo_media_group_content_details~~ - Consolidated into JavaScript utility
+14. ~~xdelo_find_media_group_source~~ - Replaced with JavaScript query logic
 
 ## Media Utils Consolidation
 
@@ -52,3 +56,21 @@ We've consolidated all media utility functions with the xdelo_ prefix for consis
 4. **xdelo_uploadMediaToStorage** - Consistent storage upload  
 
 This simplified approach focuses on the core functionality needed for the Telegram bot message processing flow, making the system more maintainable and easier to understand.
+
+## Message URL Construction
+
+Message URL construction has been moved entirely to JavaScript:
+
+1. **constructTelegramMessageUrl** - Creates shareable URLs for Telegram messages
+   - Located in `_shared/messageUtils.ts`
+   - More maintainable than SQL-based URL construction
+   - Handles all chat ID formats correctly
+
+## Media Group Synchronization
+
+Media group handling is now implemented directly in JavaScript:
+
+1. Logic in `mediaMessageHandler.ts` directly queries for related messages
+2. Synchronizes content between messages in the same media group
+3. Provides better logging and error handling than the previous RPC approach
+4. Implements delayed recheck for race conditions when messages arrive out of order
