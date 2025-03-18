@@ -4367,7 +4367,12 @@ export type Database = {
         | "ignored"
         | "resolved"
       sync_status: "pending" | "synced" | "error" | "locked"
-      telegram_chat_type: "private" | "group" | "supergroup" | "channel"
+      telegram_chat_type:
+        | "private"
+        | "group"
+        | "supergroup"
+        | "channel"
+        | "unknown"
       telegram_other_message_type:
         | "text"
         | "callback_query"

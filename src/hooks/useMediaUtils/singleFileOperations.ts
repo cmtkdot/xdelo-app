@@ -206,10 +206,27 @@ export function useSingleFileOperations(
       // Log the start of the operation
       console.log(`Syncing caption for message: ${messageId}`);
       
+      // First, fetch media_group_id for the message
+      const { data: messageData, error: messageError } = await supabase
+        .from('messages')
+        .select('media_group_id')
+        .eq('id', messageId)
+        .single();
+      
+      if (messageError || !messageData?.media_group_id) {
+        console.error('Error fetching message or no media group found:', messageError);
+        return {
+          success: false,
+          error: messageError?.message || 'No media group found',
+          message: 'Failed to find media group for message'
+        };
+      }
+      
       // Call the RPC function to sync the caption
       const { data, error } = await supabase
         .rpc('xdelo_sync_media_group_content', { 
-          p_source_message_id: messageId 
+          p_source_message_id: messageId,
+          p_media_group_id: messageData.media_group_id
         });
       
       if (error) {
@@ -228,10 +245,10 @@ export function useSingleFileOperations(
       };
       
       // Only try to access properties if data exists and is an object
-      if (data && typeof data === 'object') {
-        syncResult.message = data.message || syncResult.message;
-        syncResult.synced = data.synced || 0;
-        syncResult.skipped = data.skipped || 0;
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        syncResult.message = (data.message as string) || syncResult.message;
+        syncResult.synced = (data.synced as number) || 0;
+        syncResult.skipped = (data.skipped as number) || 0;
         syncResult.data = data;
       }
       
