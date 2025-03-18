@@ -13,6 +13,14 @@ import { Spinner } from '@/components/ui/spinner';
 import { Database } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 
+interface FixMissingColumnsResult {
+  success: boolean;
+  message?: string;
+  columns_added?: string[];
+  error?: string;
+  details?: any;
+}
+
 export default function Settings() {
   const [telegramSettings, setTelegramSettings] = useState<{
     botToken: string | null;
@@ -23,7 +31,9 @@ export default function Settings() {
   });
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isRunningMissingColumnsRepair, setIsRunningMissingColumnsRepair] = useState(false);
-  const [missingColumnsResult, setMissingColumnsResult] = useState<{success?: boolean; message?: string; columns_added?: string[]}>({});
+  const [missingColumnsResult, setMissingColumnsResult] = useState<FixMissingColumnsResult>({
+    success: false
+  });
   const supabase = useSupabase();
   const { toast } = useToast();
 
@@ -58,31 +68,21 @@ export default function Settings() {
     try {
       setIsRunningMissingColumnsRepair(true);
       
-      // Try to use RPC function first
-      const { data, error } = await supabase
-        .rpc('xdelo_run_fix_missing_columns');
+      // Call the edge function directly
+      const { data, error } = await supabase.functions.invoke('xdelo_run_fix_missing_columns');
         
       if (error) {
-        // If RPC fails, try the edge function
-        const { data: edgeFunctionData, error: edgeFunctionError } = await supabase.functions.invoke('xdelo_fix_missing_columns');
-        
-        if (edgeFunctionError) throw edgeFunctionError;
-        
-        setMissingColumnsResult(edgeFunctionData);
-        toast({
-          title: "Database Repair Complete",
-          description: edgeFunctionData.message || `Added columns: ${(edgeFunctionData.columns_added || []).join(', ')}`,
-          variant: edgeFunctionData.success ? "default" : "destructive"
-        });
-      } else {
-        // RPC succeeded
-        setMissingColumnsResult(data);
-        toast({
-          title: "Database Repair Complete",
-          description: data.message || `Added columns: ${(data.columns_added || []).join(', ')}`,
-          variant: data.success ? "default" : "destructive"
-        });
+        throw error;
       }
+      
+      const result = data as FixMissingColumnsResult;
+      setMissingColumnsResult(result);
+      
+      toast({
+        title: "Database Repair Complete",
+        description: result.message || `Added columns: ${(result.columns_added || []).join(', ')}`,
+        variant: result.success ? "default" : "destructive"
+      });
     } catch (error) {
       console.error('Error fixing missing columns:', error);
       toast({
