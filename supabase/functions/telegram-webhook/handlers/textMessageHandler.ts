@@ -29,7 +29,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
     const messageText = message.text || message.caption || '';
     
     // Prepare forward info if applicable
-    const forwardInfo = isForwarded ? extractForwardInfo(message) : null;
+    const forwardInfo = context.isForwarded ? extractForwardInfo(message) : null;
     
     // Store message data in the other_messages table
     const { data, error } = await supabaseClient
@@ -44,7 +44,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
         telegram_data: message,
         telegram_message_id: message.message_id, // Explicitly add telegram_message_id field
         processing_state: 'completed',
-        is_forward: isForwarded,
+        is_forward: context.isForwarded,
         forward_info: forwardInfo,
         correlation_id: correlationId,
         retry_count: 0,
@@ -67,7 +67,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
         message_id: message.message_id,
         chat_id: message.chat.id,
         message_type: 'text',
-        is_forward: isForwarded
+        is_forward: context.isForwarded
       }
     );
     
@@ -122,7 +122,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
               telegram_message_id: message.message_id, // Explicitly add telegram_message_id field
               processing_state: 'stored_only',
               is_forward: !!message.forward_from || !!message.forward_from_chat || !!message.forward_origin,
-              forward_info: isForwarded ? extractForwardInfo(message) : null, // Extract forward info here too
+              forward_info: context.isForwarded ? extractForwardInfo(message) : null, // Extract forward info here too
               correlation_id: context.correlationId,
               retry_count: MAX_RETRY_COUNT,
               error_message: `Max retry count reached: ${error.message}`,
@@ -184,7 +184,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
             telegram_message_id: message.message_id, // Explicitly add telegram_message_id field
             processing_state: 'error',
             is_forward: !!message.forward_from || !!message.forward_from_chat || !!message.forward_origin,
-            forward_info: isForwarded ? extractForwardInfo(message) : null, // Extract forward info here too
+            forward_info: context.isForwarded ? extractForwardInfo(message) : null, // Extract forward info here too
             correlation_id: context.correlationId,
             retry_count: 1,
             error_message: error.message,

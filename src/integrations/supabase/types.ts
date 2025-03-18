@@ -2365,9 +2365,11 @@ export type Database = {
           edit_date: string | null
           edit_history: Json | null
           error_message: string | null
+          forward_info: Json | null
           id: string
           is_edited: boolean
           is_forward: string | null
+          last_error_at: string | null
           message_text: string | null
           message_type: string
           message_url: string | null
@@ -2380,6 +2382,7 @@ export type Database = {
           product_name: string | null
           product_quantity: number | null
           purchase_date: string | null
+          retry_count: number | null
           telegram_data: Json | null
           telegram_message_id: number
           updated_at: string
@@ -2396,9 +2399,11 @@ export type Database = {
           edit_date?: string | null
           edit_history?: Json | null
           error_message?: string | null
+          forward_info?: Json | null
           id?: string
           is_edited?: boolean
           is_forward?: string | null
+          last_error_at?: string | null
           message_text?: string | null
           message_type: string
           message_url?: string | null
@@ -2411,6 +2416,7 @@ export type Database = {
           product_name?: string | null
           product_quantity?: number | null
           purchase_date?: string | null
+          retry_count?: number | null
           telegram_data?: Json | null
           telegram_message_id: number
           updated_at?: string
@@ -2427,9 +2433,11 @@ export type Database = {
           edit_date?: string | null
           edit_history?: Json | null
           error_message?: string | null
+          forward_info?: Json | null
           id?: string
           is_edited?: boolean
           is_forward?: string | null
+          last_error_at?: string | null
           message_text?: string | null
           message_type?: string
           message_url?: string | null
@@ -2442,6 +2450,7 @@ export type Database = {
           product_name?: string | null
           product_quantity?: number | null
           purchase_date?: string | null
+          retry_count?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number
           updated_at?: string
