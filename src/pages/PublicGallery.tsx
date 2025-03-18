@@ -9,10 +9,11 @@ import { GalleryCard } from "@/components/PublicGallery/GalleryCard";
 import { GalleryFilters } from "@/components/PublicGallery/GalleryFilters";
 import { EmptyState } from "@/components/PublicGallery/EmptyState";
 import { LoadMoreButton } from "@/components/PublicGallery/LoadMoreButton";
+import { SearchToolbar } from "@/components/PublicGallery/SearchToolbar";
+import { usePublicGallerySearch } from "@/hooks/publicGallery/usePublicGallerySearch";
 
 const PublicGallery = () => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [filteredMessages, setFilteredMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
@@ -21,6 +22,15 @@ const PublicGallery = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMoreItems, setHasMoreItems] = useState(true);
   const itemsPerPage = 16;
+  
+  // Use our custom hook to handle search
+  const { 
+    searchTerm, 
+    filteredMessages, 
+    isSearching, 
+    handleSearch, 
+    clearSearch 
+  } = usePublicGallerySearch({ messages });
 
   const fetchMessages = async (page = 1, append = false) => {
     if (page === 1) {
@@ -75,16 +85,20 @@ const PublicGallery = () => {
     fetchMessages();
   }, []);
 
-  // Apply filters whenever messages or filter change
-  useEffect(() => {
+  // Apply content-type filter to the already search-filtered messages
+  const applyMediaTypeFilter = (messages: Message[]) => {
     if (filter === "all") {
-      setFilteredMessages(messages);
+      return messages;
     } else if (filter === "images") {
-      setFilteredMessages(messages.filter(m => m.mime_type?.startsWith('image/')));
+      return messages.filter(m => m.mime_type?.startsWith('image/'));
     } else if (filter === "videos") {
-      setFilteredMessages(messages.filter(m => m.mime_type?.startsWith('video/')));
+      return messages.filter(m => m.mime_type?.startsWith('video/'));
     }
-  }, [messages, filter]);
+    return messages;
+  };
+
+  // Get the final filtered messages by applying both search and media type filters
+  const finalFilteredMessages = applyMediaTypeFilter(filteredMessages);
 
   const handleMediaClick = (message: Message) => {
     if (message.media_group_id) {
@@ -100,7 +114,17 @@ const PublicGallery = () => {
     <div className="container mx-auto px-4 py-6 md:py-8 max-w-7xl">
       <div className="mb-6 animate-fade-in">
         <h1 className="text-3xl font-bold mb-4 text-center md:text-left">Public Gallery</h1>
-        <GalleryFilters filter={filter} setFilter={setFilter} />
+        
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+          <GalleryFilters filter={filter} setFilter={setFilter} />
+          <SearchToolbar
+            searchTerm={searchTerm}
+            onSearch={handleSearch}
+            onClear={clearSearch}
+            placeholder="Search products, vendors, codes..."
+            isSearching={isSearching}
+          />
+        </div>
       </div>
       
       {isLoading ? (
@@ -110,7 +134,7 @@ const PublicGallery = () => {
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
-            {filteredMessages.map(message => (
+            {finalFilteredMessages.map(message => (
               <GalleryCard 
                 key={message.id} 
                 message={message} 
@@ -119,13 +143,18 @@ const PublicGallery = () => {
             ))}
           </div>
 
-          {filteredMessages.length === 0 && <EmptyState />}
+          {finalFilteredMessages.length === 0 && (
+            <EmptyState message={searchTerm ? "No results found for your search" : undefined} />
+          )}
 
-          <LoadMoreButton 
-            onClick={loadMore} 
-            isLoading={isLoadingMore}
-            hasMoreItems={hasMoreItems} 
-          />
+          {/* Only show load more button when not searching */}
+          {!searchTerm && (
+            <LoadMoreButton 
+              onClick={loadMore} 
+              isLoading={isLoadingMore}
+              hasMoreItems={hasMoreItems} 
+            />
+          )}
 
           <MediaViewer 
             isOpen={isViewerOpen} 

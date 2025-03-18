@@ -701,7 +701,7 @@ export type Database = {
           last_modified_at: string | null
           last_sync_time: string | null
           main_date_of_sale: string | null
-          main_line_total: string | null
+          main_line_total: number | null
           main_product_sale_note: string | null
           main_qty_sold: number | null
           main_renamed_product_name: string | null
@@ -723,7 +723,7 @@ export type Database = {
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_sale?: string | null
-          main_line_total?: string | null
+          main_line_total?: number | null
           main_product_sale_note?: string | null
           main_qty_sold?: number | null
           main_renamed_product_name?: string | null
@@ -745,7 +745,7 @@ export type Database = {
           last_modified_at?: string | null
           last_sync_time?: string | null
           main_date_of_sale?: string | null
-          main_line_total?: string | null
+          main_line_total?: number | null
           main_product_sale_note?: string | null
           main_qty_sold?: number | null
           main_renamed_product_name?: string | null
@@ -783,6 +783,7 @@ export type Database = {
           pdf_url: string | null
           rowids_accountsid: string | null
           rowids_accountsid_new: string | null
+          rowids_estimate_id: string | null
           sb_accounts_id: string | null
           sb_estimates_id: string | null
           sb_pdf_generated_at: string | null
@@ -813,6 +814,7 @@ export type Database = {
           pdf_url?: string | null
           rowids_accountsid?: string | null
           rowids_accountsid_new?: string | null
+          rowids_estimate_id?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
           sb_pdf_generated_at?: string | null
@@ -843,6 +845,7 @@ export type Database = {
           pdf_url?: string | null
           rowids_accountsid?: string | null
           rowids_accountsid_new?: string | null
+          rowids_estimate_id?: string | null
           sb_accounts_id?: string | null
           sb_estimates_id?: string | null
           sb_pdf_generated_at?: string | null
@@ -1003,15 +1006,7 @@ export type Database = {
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "gl_products_sb_vpay_id_fkey"
-            columns: ["sb_vpay_id"]
-            isOneToOne: false
-            referencedRelation: "gl_vendor_payments"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       gl_purchase_orders: {
         Row: {
@@ -2623,33 +2618,6 @@ export type Database = {
         }
         Relationships: []
       }
-      storage_validations: {
-        Row: {
-          error_message: string | null
-          file_unique_id: string
-          id: string
-          is_valid: boolean | null
-          last_checked_at: string | null
-          storage_path: string
-        }
-        Insert: {
-          error_message?: string | null
-          file_unique_id: string
-          id?: string
-          is_valid?: boolean | null
-          last_checked_at?: string | null
-          storage_path: string
-        }
-        Update: {
-          error_message?: string | null
-          file_unique_id?: string
-          id?: string
-          is_valid?: boolean | null
-          last_checked_at?: string | null
-          storage_path?: string
-        }
-        Relationships: []
-      }
       sync_matches: {
         Row: {
           applied: boolean | null
@@ -2707,21 +2675,6 @@ export type Database = {
           id?: number
           name?: string
           updatedAt?: string
-        }
-        Relationships: []
-      }
-      trigger_backup: {
-        Row: {
-          trigger_definition: string | null
-          trigger_name: string | null
-        }
-        Insert: {
-          trigger_definition?: string | null
-          trigger_name?: string | null
-        }
-        Update: {
-          trigger_definition?: string | null
-          trigger_name?: string | null
         }
         Relationships: []
       }
@@ -3815,6 +3768,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      xan_fix_vendor_payments: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       xan_generate_share_id: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -3917,6 +3874,12 @@ export type Database = {
       }
       xan_recalculate_purchase_order_totals: {
         Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      xan_repair_relationships: {
+        Args: {
+          p_table_name?: string
+        }
         Returns: Json
       }
       xan_repair_table_relationships: {
