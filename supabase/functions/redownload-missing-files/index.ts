@@ -1,364 +1,271 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders } from "../_shared/cors.ts";
-import { 
-  xdelo_getFileInfo, 
-  xdelo_downloadFile, 
-  xdelo_validateAndFixStoragePath,
-  xdelo_getStandardFilename 
-} from "../_shared/mediaUtils.ts";
-import { supabaseClient as supabase } from "../_shared/supabase.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { xdelo_fetchWithRetry } from "../_shared/mediaUtils/fetchUtils.ts";
 
-// Function to validate if a file exists based on its public URL
-async function fileExists(publicURL: string): Promise<boolean> {
+// CORS headers for cross-origin requests
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+/**
+ * Logs operations for tracking and debugging
+ */
+async function logOperation(
+  supabase: any,
+  eventType: string,
+  entityId: string,
+  metadata: Record<string, any> = {},
+  correlationId: string,
+  errorMessage?: string
+) {
   try {
-    const response = await fetch(publicURL, { method: 'HEAD' });
-    return response.status !== 404;
-  } catch (error) {
-    console.error('Error checking file existence:', error);
-    return false;
-  }
-}
-
-// Function to download file from another message in the same media group
-async function downloadFromMediaGroup(message: any): Promise<string | null> {
-  try {
-    // Exit early if no media group ID
-    if (!message.media_group_id) {
-      throw new Error('Message is not part of a media group');
-    }
-
-    console.log(`Searching media group ${message.media_group_id} for file ${message.file_unique_id}`);
-
-    // Get standardized storage path first
-    const { data: storagePath, error: pathError } = await supabase.rpc(
-      'xdelo_standardize_storage_path',
-      {
-        p_file_unique_id: message.file_unique_id,
-        p_mime_type: message.mime_type
-      }
-    );
-
-    if (pathError) {
-      console.error(`Error getting standardized path: ${pathError.message}`);
-      throw pathError;
-    }
-
-    // Find another message in the same media group with the same file_unique_id
-    // that has a valid public_url
-    const { data: groupMessages, error: groupError } = await supabase
-      .from('messages')
-      .select('id, public_url, storage_path')
-      .eq('media_group_id', message.media_group_id)
-      .eq('file_unique_id', message.file_unique_id)
-      .neq('id', message.id) // Not the current message
-      .order('created_at', { ascending: false });
-
-    if (groupError) {
-      throw new Error(`Failed to query media group: ${groupError.message}`);
-    }
-
-    if (!groupMessages || groupMessages.length === 0) {
-      return null;
-    }
-
-    // Check each message for a working public URL
-    for (const groupMessage of groupMessages) {
-      if (groupMessage.public_url && await fileExists(groupMessage.public_url)) {
-        console.log(`Found valid file in media group: ${groupMessage.id}`);
-
-        // We found a working URL, now copy it to our message
-        await supabase
-          .from('messages')
-          .update({
-            public_url: groupMessage.public_url,
-            storage_path: storagePath, // Use standardized path
-            needs_redownload: false,
-            redownload_completed_at: new Date().toISOString(),
-            redownload_attempts: (message.redownload_attempts || 0) + 1,
-            error_message: null
-          })
-          .eq('id', message.id);
-
-        return groupMessage.public_url;
-      }
-    }
-    
-    // Try using the redownload-from-media-group endpoint as fallback
-    try {
-      console.log(`No valid URL found in group. Attempting redownload-from-media-group for message ${message.id}`);
-      
-      const redownloadResponse = await fetch(
-        `${Deno.env.get('SUPABASE_URL')}/functions/v1/redownload-from-media-group`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-          },
-          body: JSON.stringify({
-            messageId: message.id,
-            mediaGroupId: message.media_group_id,
-            correlationId: crypto.randomUUID()
-          })
-        }
-      );
-      
-      if (!redownloadResponse.ok) {
-        const errorText = await redownloadResponse.text();
-        console.error(`Redownload from media group failed: ${errorText}`);
-        return null;
-      }
-      
-      const result = await redownloadResponse.json();
-      console.log(`Redownload from media group succeeded:`, result);
-      
-      return result.success ? 
-        `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${result.storagePath}` : 
-        null;
-    } catch (redownloadError) {
-      console.error('Error calling redownload function:', redownloadError);
-      return null;
-    }
-  } catch (error) {
-    console.error('Error downloading from media group:', error);
-    throw error;
-  }
-}
-
-// Function to download directly from Telegram API using bot token
-async function downloadFromTelegram(message: any): Promise<string | null> {
-  try {
-    const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
-    if (!botToken) {
-      throw new Error('Telegram bot token not found in environment variables');
-    }
-
-    if (!message.file_id) {
-      throw new Error('No file_id available for direct download');
-    }
-
-    // Get file path from Telegram
-    const getFileUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${message.file_id}`;
-    const getFileResponse = await fetch(getFileUrl);
-    const getFileData = await getFileResponse.json();
-
-    if (!getFileData.ok || !getFileData.result.file_path) {
-      throw new Error(`Failed to get file path: ${JSON.stringify(getFileData)}`);
-    }
-
-    // Download the file using the file path
-    const filePath = getFileData.result.file_path;
-    const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
-    
-    const fileResponse = await fetch(downloadUrl);
-    if (!fileResponse.ok) {
-      throw new Error(`Failed to download file: ${fileResponse.statusText}`);
-    }
-
-    // Get file data as blob
-    const fileBlob = await fileResponse.blob();
-    
-    // Get standardized storage path
-    const { data: storagePath, error: pathError } = await supabase.rpc(
-      'xdelo_standardize_storage_path',
-      {
-        p_file_unique_id: message.file_unique_id,
-        p_mime_type: message.mime_type
-      }
-    );
-
-    if (pathError) {
-      throw new Error(`Failed to get standardized path: ${pathError.message}`);
-    }
-
-    // Upload to Supabase storage with proper content disposition
-    const uploadOptions = xdelo_getUploadOptions(message.mime_type);
-    const { error: uploadError } = await supabase.storage
-      .from('telegram-media')
-      .upload(storagePath, fileBlob, uploadOptions);
-
-    if (uploadError) {
-      throw new Error(`Failed to upload to storage: ${uploadError.message}`);
-    }
-
-    // Get public URL
-    const publicURL = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${storagePath}`;
-
-    // Update message record
     await supabase
-      .from('messages')
-      .update({
-        public_url: publicURL,
-        storage_path: storagePath,
-        needs_redownload: false,
-        redownload_completed_at: new Date().toISOString(),
-        redownload_attempts: (message.redownload_attempts || 0) + 1,
-        error_message: null,
-        file_id_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-      })
-      .eq('id', message.id);
-
-    return publicURL;
-  } catch (error) {
-    console.error('Error downloading from Telegram:', error);
-    throw error;
+      .from('unified_audit_logs')
+      .insert({
+        event_type: eventType,
+        entity_id: entityId,
+        metadata,
+        correlation_id: correlationId,
+        error_message: errorMessage
+      });
+  } catch (err) {
+    console.error('Error logging operation:', err);
   }
 }
 
-// Main function to handle redownloading missing files
-async function redownloadMissingFile(message: any) {
-  // Validate required fields
-  if (!message.file_unique_id) {
-    throw new Error(`Missing file_unique_id for message ${message.id}.`);
-  }
-
-  // Check if the file already exists
-  if (message.public_url && await fileExists(message.public_url)) {
-    console.log(`File already exists for message ${message.id}.`);
-    return {
-      message_id: message.id,
-      file_unique_id: message.file_unique_id,
-      success: true,
-      public_url: message.public_url
-    };
-  }
-
-  // First try to download from media group (fastest option)
-  if (message.media_group_id) {
-    try {
-      console.log(`Attempting media group download for message ${message.id}`);
-      const publicURL = await downloadFromMediaGroup(message);
-      if (publicURL) {
-        return {
-          message_id: message.id,
-          file_unique_id: message.file_unique_id,
-          success: true,
-          public_url: publicURL,
-          method: 'media_group'
-        };
-      }
-    } catch (error) {
-      console.warn(`Media group download failed: ${error.message}`);
-      // Continue to next method
-    }
-  }
-
-  // If not found in media group, try direct Telegram download
-  try {
-    console.log(`Attempting direct Telegram download for message ${message.id}`);
-    const publicURL = await downloadFromTelegram(message);
-    if (publicURL) {
-      return {
-        message_id: message.id,
-        file_unique_id: message.file_unique_id,
-        success: true,
-        public_url: publicURL,
-        method: 'telegram_api'
-      };
-    }
-  } catch (error) {
-    console.error(`Telegram download failed: ${error.message}`);
-    
-    // Update the message status with error
-    await supabase
-      .from('messages')
-      .update({
-        redownload_attempts: (message.redownload_attempts || 0) + 1,
-        error_message: `Download failed: ${error.message}`
-      })
-      .eq('id', message.id);
-    
-    throw error;
-  }
-
-  throw new Error(`Failed to download file for message ${message.id}.`);
-}
-
-// Serve the HTTP request
-serve(async (req) => {
-  // Handle preflight CORS
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+/**
+ * Fetches a file from Telegram and uploads it to Supabase storage
+ */
+async function downloadAndStoreFile(
+  supabase: any,
+  fileId: string,
+  storagePath: string,
+  telegramToken: string,
+  correlationId: string,
+  messageId: string
+): Promise<{ success: boolean; error?: string; newUrl?: string }> {
+  console.log(`[${correlationId}] Attempting to redownload file ${fileId} to ${storagePath}`);
   
   try {
-    const { messageIds, limit = 10 } = await req.json();
+    // Step 1: Get the file path from Telegram
+    console.log(`[${correlationId}] Getting file info from Telegram for ${fileId}`);
+    const getFileUrl = `https://api.telegram.org/bot${telegramToken}/getFile?file_id=${fileId}`;
     
-    // Get messages that need redownload
-    let query = supabase
+    const fileInfoResponse = await xdelo_fetchWithRetry(getFileUrl, {}, 5, 800);
+    const fileInfo = await fileInfoResponse.json();
+    
+    if (!fileInfo.ok || !fileInfo.result.file_path) {
+      const errorMsg = `Failed to get file path: ${fileInfo.description || 'Unknown error'}`;
+      console.error(`[${correlationId}] ${errorMsg}`);
+      return { success: false, error: errorMsg };
+    }
+    
+    // Step 2: Download the file from Telegram
+    console.log(`[${correlationId}] Downloading file from Telegram: ${fileInfo.result.file_path}`);
+    const downloadUrl = `https://api.telegram.org/file/bot${telegramToken}/${fileInfo.result.file_path}`;
+    
+    const fileResponse = await xdelo_fetchWithRetry(downloadUrl, {}, 5, 800);
+    if (!fileResponse.ok) {
+      const errorMsg = `Failed to download file: ${fileResponse.statusText}`;
+      console.error(`[${correlationId}] ${errorMsg}`);
+      return { success: false, error: errorMsg };
+    }
+    
+    const fileBlob = await fileResponse.blob();
+    console.log(`[${correlationId}] Downloaded file size: ${fileBlob.size} bytes`);
+    
+    // Step 3: Upload to Supabase Storage
+    console.log(`[${correlationId}] Uploading file to Supabase storage: ${storagePath}`);
+    const { data: uploadData, error: uploadError } = await supabase
+      .storage
+      .from('telegram-media')
+      .upload(storagePath, fileBlob, {
+        contentType: fileBlob.type,
+        upsert: true,
+        cacheControl: '3600'
+      });
+    
+    if (uploadError) {
+      console.error(`[${correlationId}] Upload error:`, uploadError);
+      return { success: false, error: `Upload failed: ${uploadError.message}` };
+    }
+
+    // Step 4: Get the public URL
+    console.log(`[${correlationId}] Getting public URL for uploaded file`);
+    const { data: urlData } = await supabase
+      .storage
+      .from('telegram-media')
+      .getPublicUrl(storagePath);
+    
+    if (!urlData || !urlData.publicUrl) {
+      const errorMsg = 'Failed to get public URL for file';
+      console.error(`[${correlationId}] ${errorMsg}`);
+      return { success: false, error: errorMsg };
+    }
+    
+    // Step 5: Update the message record with the new URL and storage info
+    console.log(`[${correlationId}] Updating message ${messageId} with new URL`);
+    const { error: updateError } = await supabase
       .from('messages')
-      .select('*')
-      .limit(limit);
+      .update({
+        public_url: urlData.publicUrl,
+        storage_path: storagePath,
+        storage_exists: true,
+        needs_redownload: false,
+        redownload_reason: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', messageId);
     
-    // If specific message IDs were provided, use them
-    if (messageIds && messageIds.length > 0) {
-      query = query.in('id', messageIds);
-    } else {
-      // Otherwise get messages flagged for redownload
-      query = query.eq('needs_redownload', true);
+    if (updateError) {
+      console.error(`[${correlationId}] Update error:`, updateError);
+      return { success: false, error: `Database update failed: ${updateError.message}` };
     }
     
-    const { data: messages, error } = await query;
-    
-    if (error) throw error;
-    
-    const results = [];
-    const successful = [];
-    const failed = [];
-    
-    // Process each message sequentially
-    for (const message of messages) {
-      try {
-        // Attempt to redownload the media file
-        const result = await redownloadMissingFile(message);
-        successful.push(message.id);
-        results.push({
-          message_id: message.id,
-          file_unique_id: message.file_unique_id,
-          success: true,
-          public_url: result.public_url,
-          method: result.method
-        });
-      } catch (error) {
-        console.error(`Error redownloading file for message ${message.id}:`, error);
-        
-        // Update message with error information
-        const { error: updateError } = await supabase
-          .from('messages')
-          .update({
-            redownload_attempts: (message.redownload_attempts || 0) + 1,
-            error_message: error.message
-          })
-          .eq('id', message.id);
-          
-        if (updateError) {
-          console.error(`Error updating message ${message.id} error status:`, updateError);
-        }
-        
-        failed.push(message.id);
-        results.push({
-          message_id: message.id,
-          file_unique_id: message.file_unique_id,
-          success: false,
-          error: error.message
-        });
-      }
-    }
-    
-    return new Response(
-      JSON.stringify({
-        success: true,
-        processed: messages.length,
-        successful: successful.length,
-        failed: failed.length,
-        results
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    // Success
+    console.log(`[${correlationId}] Successfully redownloaded and stored file for message ${messageId}`);
+    return { 
+      success: true,
+      newUrl: urlData.publicUrl
+    };
   } catch (error) {
+    console.error(`[${correlationId}] Error in downloadAndStoreFile:`, error);
+    return { 
+      success: false, 
+      error: `Unexpected error: ${error.message}` 
+    };
+  }
+}
+
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  // Create a correlation ID for this operation
+  const correlationId = `repair_${crypto.randomUUID()}`;
+  console.log(`[${correlationId}] Starting file repair operation`);
+
+  try {
+    // Get environment variables
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const telegramToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Missing Supabase credentials');
+    }
+    
+    if (!telegramToken) {
+      throw new Error('Missing Telegram Bot Token');
+    }
+    
+    // Create Supabase client
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Parse request body
+    const { messageId, fileId, storagePath } = await req.json();
+    console.log(`[${correlationId}] Repair parameters - messageId: ${messageId}, fileId: ${fileId}, storagePath: ${storagePath}`);
+    
+    if (!messageId || !fileId || !storagePath) {
+      const errorMsg = 'Missing required parameters: messageId, fileId, and storagePath are required';
+      console.error(`[${correlationId}] ${errorMsg}`);
+      
+      await logOperation(
+        supabase, 
+        'media_repair_failed', 
+        messageId || 'unknown', 
+        { error: errorMsg }, 
+        correlationId,
+        errorMsg
+      );
+      
+      return new Response(
+        JSON.stringify({ success: false, error: errorMsg }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+    
+    // Log the start of the repair operation
+    await logOperation(
+      supabase,
+      'media_repair_started',
+      messageId,
+      {
+        file_id: fileId,
+        storage_path: storagePath
+      },
+      correlationId
+    );
+    
+    // Attempt to redownload and store the file
+    const result = await downloadAndStoreFile(
+      supabase,
+      fileId,
+      storagePath,
+      telegramToken,
+      correlationId,
+      messageId
+    );
+    
+    // Log the result
+    if (result.success) {
+      await logOperation(
+        supabase,
+        'media_repair_completed',
+        messageId,
+        {
+          file_id: fileId,
+          storage_path: storagePath,
+          new_url: result.newUrl
+        },
+        correlationId
+      );
+      
+      console.log(`[${correlationId}] Repair operation successful for message ${messageId}`);
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'File successfully redownloaded',
+          publicUrl: result.newUrl
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } else {
+      await logOperation(
+        supabase,
+        'media_repair_failed',
+        messageId,
+        {
+          file_id: fileId,
+          storage_path: storagePath,
+          error: result.error
+        },
+        correlationId,
+        result.error
+      );
+      
+      console.error(`[${correlationId}] Repair operation failed: ${result.error}`);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: result.error
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+  } catch (error) {
+    console.error(`[${correlationId}] Unexpected error:`, error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      { status: 400, headers: corsHeaders }
+      JSON.stringify({ 
+        success: false, 
+        error: `Unexpected error: ${error.message}`,
+        correlationId
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });

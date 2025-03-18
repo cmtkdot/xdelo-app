@@ -153,6 +153,7 @@ export type Database = {
       gl_column_mappings: {
         Row: {
           data_type: string
+          glide_app_table_id: string | null
           glide_column_id: string
           glide_column_name: string
           id: number
@@ -161,6 +162,7 @@ export type Database = {
         }
         Insert: {
           data_type: string
+          glide_app_table_id?: string | null
           glide_column_id: string
           glide_column_name: string
           id?: never
@@ -169,6 +171,7 @@ export type Database = {
         }
         Update: {
           data_type?: string
+          glide_app_table_id?: string | null
           glide_column_id?: string
           glide_column_name?: string
           id?: never
