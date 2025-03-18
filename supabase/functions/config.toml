@@ -48,17 +48,3 @@ verify_jwt = false
 verify_jwt = false
 [functions.validate-storage-files]
 verify_jwt = false
-[functions.xdelo_clear_all_messages]
-verify_jwt = false
-[functions.xdelo_file_repair]
-verify_jwt = false
-[functions.xdelo_process_captions]
-verify_jwt = false
-[functions.xdelo_reprocess_message]
-verify_jwt = false
-[functions.xdelo_standardize_storage_paths]
-verify_jwt = false
-[functions.xdelo_sync_media_group]
-verify_jwt = false
-[functions.xdelo_unified_media_repair]
-verify_jwt = false
