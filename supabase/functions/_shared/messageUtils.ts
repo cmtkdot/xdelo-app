@@ -48,6 +48,31 @@ export function constructTelegramMessageUrl(message: any): string | undefined {
 }
 
 /**
+ * Check if a message is forwarded from another source
+ */
+export function isMessageForwarded(message: any): boolean {
+  if (!message) {
+    return false;
+  }
+  
+  // Check for standard forward fields
+  if (message.forward_from || 
+      message.forward_from_chat || 
+      message.forward_date || 
+      message.forward_signature || 
+      message.forward_sender_name) {
+    return true;
+  }
+  
+  // Check for forwarded from channel posts which use forward_from_message_id
+  if (message.forward_from_message_id) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
  * Finds other messages in the same media group and retrieves their info
  */
 export async function xdelo_findMediaGroupMessages(
