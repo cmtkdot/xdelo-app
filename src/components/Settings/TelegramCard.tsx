@@ -39,7 +39,7 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
       const { error } = await supabase
         .from('settings')
         .update({ webhook_url: editedWebhookUrl })
-        .eq('id', 1); // Assuming there's only one settings record
+        .eq('id', '1'); // Converting number to string to fix the type error
 
       if (error) throw error;
       toast.success("Webhook URL updated successfully");
