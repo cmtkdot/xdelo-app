@@ -8,9 +8,10 @@ import { ProductMatchRequest, ProductMatchResponse, GlProduct } from './types.ts
 console.log('Product matching function started')
 
 interface WebhookPayload {
-  type: 'MATCH_PRODUCT' | 'BULK_MATCH';
+  type: string;
   request?: ProductMatchRequest;
-  message_ids?: string[];
+  messageIds?: string[];
+  batch?: boolean;
 }
 
 serve(async (req) => {
@@ -24,35 +25,32 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const payload: WebhookPayload = await req.json()
-    let response: ProductMatchResponse;
-
-    switch (payload.type) {
-      case 'MATCH_PRODUCT':
-        if (!payload.request) {
-          throw new Error('Match request is required')
+    const payload = await req.json();
+    
+    // Handle different request types
+    if (payload.messageIds && Array.isArray(payload.messageIds)) {
+      // This is a batch request with multiple message IDs
+      const response = await processBulkMatch(payload.messageIds, supabaseClient);
+      return new Response(
+        JSON.stringify(response),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
         }
-        response = await processProductMatch(payload.request, supabaseClient)
-        break
-      
-      case 'BULK_MATCH':
-        if (!payload.message_ids || !Array.isArray(payload.message_ids)) {
-          throw new Error('message_ids array is required for bulk matching')
+      );
+    } else if (payload.request) {
+      // This is a single product match request
+      const response = await processProductMatch(payload.request, supabaseClient);
+      return new Response(
+        JSON.stringify(response),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
         }
-        response = await processBulkMatch(payload.message_ids, supabaseClient)
-        break
-
-      default:
-        throw new Error('Invalid operation type')
+      );
+    } else {
+      throw new Error('Invalid request format. Expected "messageIds" array or "request" object.');
     }
-
-    return new Response(
-      JSON.stringify(response),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
-    )
   } catch (error) {
     console.error('Error:', error.message)
     return new Response(
@@ -67,7 +65,7 @@ serve(async (req) => {
 
 async function processProductMatch(
   request: ProductMatchRequest,
-  supabase: SupabaseClient
+  supabase: any
 ): Promise<ProductMatchResponse> {
   try {
     const { data: products, error: queryError } = await supabase
@@ -108,17 +106,21 @@ async function processProductMatch(
 
 async function processBulkMatch(
   message_ids: string[],
-  supabase: SupabaseClient
+  supabase: any
 ): Promise<ProductMatchResponse> {
   try {
+    console.log(`Processing batch match for ${message_ids.length} messages`);
+    
     const { data: messages, error: messagesError } = await supabase
       .from('messages')
-      .select('*')
+      .select('id, product_name, vendor_uid, purchase_date, analyzed_content')
       .in('id', message_ids)
 
     if (messagesError) {
       throw new Error(`Failed to fetch messages: ${messagesError.message}`)
     }
+
+    console.log(`Found ${messages.length} messages to process`);
 
     const { data: products, error: productsError } = await supabase
       .from('gl_products')
@@ -130,64 +132,99 @@ async function processBulkMatch(
       throw new Error(`Failed to fetch products: ${productsError.message}`)
     }
 
+    console.log(`Found ${products.length} products for matching`);
+    
     const glProducts = products as GlProduct[];
     const matchResults = [];
 
     for (const message of messages) {
-      const { matches, bestMatch } = findBestProductMatch(
-        glProducts,
-        message.product_name || '',
+      try {
+        console.log(`Processing message ${message.id}`);
+        
+        // Extract product data from message or analyzed_content
+        const productName = message.product_name || (message.analyzed_content?.product_name as string) || '';
+        const vendorUid = message.vendor_uid || (message.analyzed_content?.vendor_uid as string) || '';
+        const purchaseDate = message.purchase_date || (message.analyzed_content?.purchase_date as string) || '';
+        
+        const { matches, bestMatch } = findBestProductMatch(
+          glProducts,
+          productName,
+          '',  // vendorName - not typically in messages
+          '',  // poNumber - not typically in messages
+          vendorUid,
+          purchaseDate
+        );
 
-        message.vendor_uid,        message.po_number,
-        message.vendor_uid,
-        message.purchase_date
-      )
+        // If we have a match with sufficient confidence, record it
+        if (bestMatch && bestMatch.confidence >= 0.6) {
+          try {
+            const { error: matchError } = await supabase
+              .from('sync_matches')
+              .upsert({
+                message_id: message.id,
+                product_id: bestMatch.product_id,
+                confidence: bestMatch.confidence,
+                match_fields: bestMatch.matchedFields || [],
+                status: bestMatch.confidence >= 0.75 ? 'approved' : 'pending',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              });
 
-      if (bestMatch && bestMatch.confidence_score >= 0.6) {
-        const { error: matchError } = await supabase
-          .from('sync_matches')
-          .upsert({
-            message_id: message.id,
-            product_id: bestMatch.product_id,
-            match_priority: bestMatch.match_priority,
-            confidence_score: bestMatch.confidence_score,
-            match_details: bestMatch.match_details,
-            status: bestMatch.confidence_score >= 0.75 ? 'approved' : 'pending',
-            applied: bestMatch.confidence_score >= 0.75
-          })
-
-        if (matchError) {
-          console.error(`Error recording match for message ${message.id}:`, matchError)
-          continue
+            if (matchError) {
+              console.error(`Error recording match for message ${message.id}:`, matchError);
+            }
+            
+            // If high confidence, update the message record
+            if (bestMatch.confidence >= 0.75) {
+              await supabase
+                .from('messages')
+                .update({
+                  glide_row_id: bestMatch.product_id,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', message.id);
+            }
+          } catch (dbError) {
+            console.error(`Database error for message ${message.id}:`, dbError);
+          }
         }
 
-        if (bestMatch.confidence_score >= 0.75) {
-          await supabase
-            .from('messages')
-            .update({
-              glide_row_id: bestMatch.glide_id,
-              product_to_messages_low_confidence: false,
-              last_match_attempt_at: new Date().toISOString()
-            })
-            .eq('id', message.id)
-        }
-
+        // Add detailed result to our response
         matchResults.push({
+          success: true,
           messageId: message.id,
-          match: bestMatch
-        })
+          message_id: message.id,  // For compatibility
+          productName: productName,
+          vendorUid: vendorUid,
+          bestMatch: bestMatch ? {
+            ...bestMatch,
+            message_id: message.id,
+            product_name: (products.find(p => p.id === bestMatch.product_id) || {}).new_product_name || 'Unknown'
+          } : null
+        });
+      } catch (messageError) {
+        console.error(`Error processing message ${message.id}:`, messageError);
+        matchResults.push({
+          success: false,
+          messageId: message.id,
+          message_id: message.id,
+          error: messageError.message
+        });
       }
     }
 
     return {
       success: true,
-      data: {
-        matches: matchResults.map(r => r.match),
-        bestMatch: null
+      results: matchResults,
+      summary: {
+        total: matchResults.length,
+        matched: matchResults.filter(r => r.success && r.bestMatch).length,
+        unmatched: matchResults.filter(r => r.success && !r.bestMatch).length,
+        failed: matchResults.filter(r => !r.success).length
       }
     }
   } catch (error) {
-    console.error('Error in bulk matching:', error)
+    console.error('Error in bulk matching:', error);
     return {
       success: false,
       error: error.message
