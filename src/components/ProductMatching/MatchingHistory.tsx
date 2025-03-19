@@ -5,7 +5,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2, RefreshCw, Search, FileSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/useToast";
+import { useToast } from '@/hooks/useToast';
+
+interface MatchLogMetadata {
+  matchCount: number;
+  hasBestMatch: boolean;
+  bestMatchConfidence: number;
+  bestMatchProductId: string | null;
+  timestamp: string;
+}
 
 interface MatchLog {
   id: string;
@@ -13,13 +21,7 @@ interface MatchLog {
   event_type: string;
   message_id: string;
   user_id: string | null;
-  metadata: {
-    matchCount: number;
-    hasBestMatch: boolean;
-    bestMatchConfidence: number;
-    bestMatchProductId: string | null;
-    timestamp: string;
-  };
+  metadata: MatchLogMetadata;
 }
 
 export const MatchingHistory = () => {
@@ -31,16 +33,33 @@ export const MatchingHistory = () => {
   const loadMatchLogs = async () => {
     setIsLoading(true);
     try {
+      // Using the unified_audit_logs table instead of event_logs
       const { data, error } = await supabase
-        .from('event_logs')
+        .from('unified_audit_logs')
         .select('*')
         .eq('event_type', 'PRODUCT_MATCHING')
-        .order('created_at', { ascending: false })
+        .order('event_timestamp', { ascending: false })
         .limit(50);
       
       if (error) throw error;
       
-      setLogs(data || []);
+      // Transform the data to match our expected MatchLog type
+      const transformedLogs: MatchLog[] = (data || []).map(log => ({
+        id: log.id,
+        created_at: log.event_timestamp,
+        event_type: log.event_type,
+        message_id: log.entity_id || '',
+        user_id: log.user_id,
+        metadata: log.metadata as MatchLogMetadata || {
+          matchCount: 0,
+          hasBestMatch: false,
+          bestMatchConfidence: 0,
+          bestMatchProductId: null,
+          timestamp: log.event_timestamp
+        }
+      }));
+      
+      setLogs(transformedLogs);
     } catch (error) {
       console.error("Error loading match logs:", error);
       toast({
