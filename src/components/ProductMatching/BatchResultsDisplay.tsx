@@ -69,7 +69,7 @@ export const BatchResultsDisplay: React.FC<BatchResultsDisplayProps> = ({ result
                 <span className="ml-2 text-sm">{matchedPercent}%</span>
               </div>
             </div>
-            <Progress value={matchedPercent} className="h-2 bg-gray-100" indicatorClassName="bg-green-500" />
+            <Progress value={matchedPercent} className="h-2 bg-gray-100" />
           </div>
 
           <div className="space-y-4">
@@ -85,7 +85,7 @@ export const BatchResultsDisplay: React.FC<BatchResultsDisplayProps> = ({ result
                 <span className="ml-2 text-sm">{unmatchedPercent}%</span>
               </div>
             </div>
-            <Progress value={unmatchedPercent} className="h-2 bg-gray-100" indicatorClassName="bg-amber-500" />
+            <Progress value={unmatchedPercent} className="h-2 bg-gray-100" />
           </div>
 
           <div className="space-y-4">
@@ -101,7 +101,7 @@ export const BatchResultsDisplay: React.FC<BatchResultsDisplayProps> = ({ result
                 <span className="ml-2 text-sm">{failedPercent}%</span>
               </div>
             </div>
-            <Progress value={failedPercent} className="h-2 bg-gray-100" indicatorClassName="bg-red-500" />
+            <Progress value={failedPercent} className="h-2 bg-gray-100" />
           </div>
 
           {results.matched > 0 && (
@@ -112,7 +112,6 @@ export const BatchResultsDisplay: React.FC<BatchResultsDisplayProps> = ({ result
                   <Progress 
                     value={results.averageConfidence * 100} 
                     className="h-2 bg-gray-100 flex-1" 
-                    indicatorClassName="bg-blue-500" 
                   />
                   <span className="ml-2 text-sm font-medium">
                     {Math.round(results.averageConfidence * 100)}%
