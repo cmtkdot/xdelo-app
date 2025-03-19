@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AccountCard } from "@/components/Settings/AccountCard";
 import { TelegramCard } from "@/components/Settings/Telegram";
 import { DangerZoneCard } from "@/components/Settings/DangerZoneCard";
+import { DatabaseFixCard } from "@/components/Settings/DatabaseFixCard";
 
 const Settings = () => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -41,6 +42,7 @@ const Settings = () => {
         botToken={botToken} 
         webhookUrl={webhookUrl}
       />
+      <DatabaseFixCard />
       <DangerZoneCard />
     </div>
   );

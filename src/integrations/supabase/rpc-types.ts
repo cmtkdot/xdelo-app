@@ -23,11 +23,10 @@ declare module "@supabase/supabase-js" {
 
     // Add RPC for ensuring matching config column
     rpc<T = any>(
-      fn: "xdelo_ensure_matching_config_column",
+      fn: "xdelo_ensure_matching_config",
       params?: {}
     ): { data: T; error: null } | { data: null; error: Error };
 
     // Add any other custom RPC functions here...
   }
 }
-

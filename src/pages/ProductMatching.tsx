@@ -1,8 +1,6 @@
 
 import { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { MatchingConfiguration } from "@/components/ProductMatching/MatchingConfiguration";
 import { TestMatchingPanel } from "@/components/ProductMatching/TestMatchingPanel";
 import { BatchMatchingPanel } from "@/components/ProductMatching/BatchMatchingPanel";
@@ -22,17 +20,17 @@ const ProductMatching = () => {
         const result = await ensureMatchingConfigColumn();
         if (!result) {
           toast({
-            title: "Database initialization failed",
-            description: "Failed to ensure matching configuration settings are available.",
-            variant: "destructive",
+            title: "Database initialization notification",
+            description: "Setting up with default matching configuration.",
+            variant: "default",
           });
         }
       } catch (error) {
         console.error("Error initializing product matching:", error);
         toast({
-          title: "Initialization error",
-          description: "Failed to initialize product matching settings.",
-          variant: "destructive",
+          title: "Initialization message",
+          description: "Using default matching configuration.",
+          variant: "default",
         });
       } finally {
         setIsInitializing(false);

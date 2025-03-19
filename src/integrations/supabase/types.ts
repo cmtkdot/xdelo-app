@@ -341,6 +341,7 @@ export type Database = {
           status: string | null
           submitted_date: string | null
           total_amount: number | null
+          total_paid: number | null
           updated_at: string | null
           void_date: string | null
         }
@@ -360,6 +361,7 @@ export type Database = {
           status?: string | null
           submitted_date?: string | null
           total_amount?: number | null
+          total_paid?: number | null
           updated_at?: string | null
           void_date?: string | null
         }
@@ -379,6 +381,7 @@ export type Database = {
           status?: string | null
           submitted_date?: string | null
           total_amount?: number | null
+          total_paid?: number | null
           updated_at?: string | null
           void_date?: string | null
         }
@@ -568,6 +571,7 @@ export type Database = {
           status: Database["public"]["Enums"]["document_status_type"] | null
           submitted_timestamp: string | null
           total_amount: number | null
+          total_paid: number | null
           updated_at: string | null
           user_email: string | null
           void_date: string | null
@@ -589,6 +593,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["document_status_type"] | null
           submitted_timestamp?: string | null
           total_amount?: number | null
+          total_paid?: number | null
           updated_at?: string | null
           user_email?: string | null
           void_date?: string | null
@@ -610,6 +615,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["document_status_type"] | null
           submitted_timestamp?: string | null
           total_amount?: number | null
+          total_paid?: number | null
           updated_at?: string | null
           user_email?: string | null
           void_date?: string | null
@@ -784,6 +790,7 @@ export type Database = {
           status: Database["public"]["Enums"]["document_status_type"] | null
           submitted_date: string | null
           total_amount: number | null
+          total_paid: number | null
           updated_at: string | null
           void_date: string | null
         }
@@ -801,6 +808,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["document_status_type"] | null
           submitted_date?: string | null
           total_amount?: number | null
+          total_paid?: number | null
           updated_at?: string | null
           void_date?: string | null
         }
@@ -818,6 +826,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["document_status_type"] | null
           submitted_date?: string | null
           total_amount?: number | null
+          total_paid?: number | null
           updated_at?: string | null
           void_date?: string | null
         }
@@ -2157,9 +2166,18 @@ export type Database = {
       }
       gl_business_metrics: {
         Row: {
-          invoice_count: number | null
-          month: string | null
-          total_sales: number | null
+          total_customers: number | null
+          total_estimates: number | null
+          total_invoice_amount: number | null
+          total_invoices: number | null
+          total_outstanding_balance: number | null
+          total_payments_made: number | null
+          total_payments_received: number | null
+          total_products: number | null
+          total_purchase_amount: number | null
+          total_purchase_balance: number | null
+          total_purchase_orders: number | null
+          total_vendors: number | null
         }
         Relationships: []
       }
@@ -2800,21 +2818,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      xan_recent_logs: {
-        Row: {
-          app_name: string | null
-          glide_table: string | null
-          glide_table_display_name: string | null
-          id: string | null
-          message: string | null
-          records_processed: number | null
-          started_at: string | null
-          status: string | null
-          supabase_table: string | null
-          sync_direction: string | null
-        }
-        Relationships: []
       }
     }
     Functions: {
