@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/useToast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, CheckCircle, XCircle, ArrowRight } from "lucide-react";
-import { GlProduct } from "@/types/GlProducts";
+import { Loader2, CheckCircle, XCircle } from "lucide-react";
+import { GlProduct, xdelo_convertToGlProduct } from "@/types/GlProducts";
 
 interface ProductRecommendationProps {
   messageId?: string;
@@ -50,7 +50,12 @@ export const ProductRecommendationCard = ({ messageId, onApprove, onReject }: Pr
             .in('id', productIds);
 
           if (productError) throw productError;
-          setProducts(productData || []);
+          
+          // Convert raw product data to GlProduct type before setting in state
+          if (productData) {
+            const convertedProducts = productData.map(product => xdelo_convertToGlProduct(product));
+            setProducts(convertedProducts);
+          }
         }
       }
     } catch (error) {
