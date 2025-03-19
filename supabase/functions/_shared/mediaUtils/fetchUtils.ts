@@ -1,5 +1,5 @@
 
-import { xdelo_fetchWithRetry } from '../baseHandler.ts';
+import { xdelo_fetchWithRetry } from '../standardizedHandler.ts';
 
 // Export the fetch utility from baseHandler for consistency
 export { xdelo_fetchWithRetry };
