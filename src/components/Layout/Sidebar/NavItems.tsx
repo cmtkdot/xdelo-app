@@ -11,6 +11,7 @@ import {
   Zap, 
   Music,
   GalleryHorizontal,
+  Search,
   LucideIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ export const navItems: NavItem[] = [
   { name: "AI Chat", Icon: FileText, path: "/ai-chat", group: "data" },
   { name: "Audio Upload", Icon: Music, path: "/audio-upload", group: "data" },
   { name: "Make Automations", Icon: Zap, path: "/make-automations", group: "data" },
+  { name: "Product Matching", Icon: Search, path: "/product-matching", group: "data" },
   
   { name: "Settings", Icon: Settings, path: "/settings", group: "settings", divider: true },
 ];
