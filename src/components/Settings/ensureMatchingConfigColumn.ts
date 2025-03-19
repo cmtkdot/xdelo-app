@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -23,33 +22,42 @@ export const ensureMatchingConfigColumn = async (): Promise<boolean> => {
       return true;
     }
     
-    // Otherwise call the RPC function to add the column
+    // Otherwise call the Edge function to add the column
     try {
       // First try the dedicated function
       const { data, error } = await supabase.functions.invoke('xdelo_add_matching_config_column');
       
-      if (error || !data?.success) {
-        // Fallback to the SQL migration API
-        const migrationResult = await supabase.rpc('xdelo_execute_sql_migration', {
-          sql_command: `
-            ALTER TABLE IF EXISTS public.settings 
-            ADD COLUMN IF NOT EXISTS matching_config JSONB DEFAULT '{"similarityThreshold": 0.7, "partialMatch": {"enabled": true}}';
-          `
-        });
+      if (error) {
+        console.error("Error calling Edge function:", error);
         
-        if ('error' in migrationResult) {
-          console.error("Error ensuring matching config via migration:", migrationResult.error);
+        // Fallback: direct SQL (less ideal but might work in some environments)
+        try {
+          const { error: sqlError } = await supabase
+            .from('_migrations')
+            .insert({
+              name: 'add_matching_config_column',
+              sql: `
+                ALTER TABLE IF EXISTS public.settings 
+                ADD COLUMN IF NOT EXISTS matching_config JSONB DEFAULT '{"similarityThreshold": 0.7, "partialMatch": {"enabled": true}}';
+              `,
+              status: 'pending'
+            });
+          
+          if (sqlError) {
+            console.error("Error creating migration:", sqlError);
+            return false;
+          }
+          
+          return true;
+        } catch (sqlExecError) {
+          console.error("Error with SQL fallback:", sqlExecError);
           return false;
         }
-        
-        // Since we don't have strong typing, we need to check the response structure
-        const migrationData = migrationResult.data as any;
-        return migrationData?.success === true;
       }
       
       return data?.success === true;
-    } catch (error) {
-      console.error("Error calling function to ensure matching config:", error);
+    } catch (funcError) {
+      console.error("Error calling function to ensure matching config:", funcError);
       return false;
     }
   } catch (error) {

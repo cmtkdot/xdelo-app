@@ -60,22 +60,24 @@ export const getPendingSyncItems = async (tableName: string, limit = 10) => {
       throw new Error('Invalid table name');
     }
     
-    // Use a type cast to work around the type limitations
-    // This is safer than using 'any' directly
-    const query = supabase
-      .from(tableName as any)
-      .select('*')
-      .eq('sync_status', 'pending')
-      .order('updated_at', { ascending: true })
-      .limit(limit);
+    // Use a generic approach that works with any table
+    try {
+      // This works around TypeScript's strict table name checking
+      const { data, error } = await (supabase as any)
+        .from(tableName)
+        .select('*')
+        .eq('sync_status', 'pending')
+        .order('updated_at', { ascending: true })
+        .limit(limit);
+        
+      if (error) {
+        throw error;
+      }
       
-    const { data, error } = await query;
-    
-    if (error) {
-      throw error;
+      return { success: true, data };
+    } catch (queryError) {
+      throw queryError;
     }
-    
-    return { success: true, data };
   } catch (error) {
     console.error(`Error getting pending sync items from ${tableName}:`, error);
     

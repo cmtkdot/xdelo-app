@@ -1,6 +1,5 @@
 
 import { useState, useEffect, useCallback } from "react";
-import { FilterValues } from "@/types";
 import { Filter, X } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
@@ -12,14 +11,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 
-interface ProductFiltersProps {
+export interface FilterValues {
+  search?: string;
+  vendors?: string[];
+  sortOrder?: "asc" | "desc";
+  sortField?: "created_at" | "purchase_date";
+  dateRange?: { from: Date; to: Date } | null;
+  showUntitled?: boolean;
+  processingState?: string[];
+}
+
+export interface ProductFiltersProps {
   vendors: string[];
-  filters: FilterValues;
-  onFilterChange: (filters: FilterValues) => void;
+  filters: any;
+  onFilterChange: (filters: any) => void;
 }
 
 export default function ProductFilters({ vendors, filters, onFilterChange }: ProductFiltersProps) {
-  const [search, setSearch] = useState(filters.search);
+  const [search, setSearch] = useState(filters.search || "");
   const [selectedVendors, setSelectedVendors] = useState<string[]>(filters.vendors || []);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder || "desc");
   const [sortField, setSortField] = useState<"created_at" | "purchase_date">(filters.sortField || "created_at");
