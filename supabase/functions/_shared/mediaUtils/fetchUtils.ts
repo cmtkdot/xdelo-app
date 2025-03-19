@@ -1,7 +1,7 @@
 
 import { xdelo_fetchWithRetry } from '../standardizedHandler.ts';
 
-// Export the fetch utility from baseHandler for consistency
+// Export the fetch utility from standardizedHandler for consistency
 export { xdelo_fetchWithRetry };
 
 // Simple rate limiter for API calls
