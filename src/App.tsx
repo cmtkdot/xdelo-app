@@ -24,6 +24,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicGallery = lazy(() => import("./pages/PublicGallery"));
 const SqlConsole = lazy(() => import('./pages/SqlConsole'));
 const MakeAutomations = lazy(() => import('./pages/MakeAutomations'));
+const TableDemo = lazy(() => import('./pages/table-demo'));
 
 import { AppSidebar } from "@/components/Layout/Sidebar";
 
@@ -156,6 +157,7 @@ function App() {
                     <Route path="/audio-upload" element={<AudioUpload />} />
                     <Route path="/sql-console" element={<SqlConsole />} />
                     <Route path="/make-automations" element={<MakeAutomations />} />
+                    <Route path="/table-demo" element={<TableDemo />} />
                     <Route path="*" element={<NotFound />} />
                   </Route>
                 </Routes>
