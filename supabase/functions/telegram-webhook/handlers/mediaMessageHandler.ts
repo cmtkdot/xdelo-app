@@ -1,5 +1,4 @@
-
-import { supabaseClient } from '../../_shared/supabase.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { 
   xdelo_downloadMediaFromTelegram,
@@ -19,6 +18,18 @@ import {
   MessageInput,
 } from '../types.ts';
 import { createMessage, checkDuplicateFile } from '../dbOperations.ts';
+
+// Create Supabase client
+const supabaseClient = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  }
+);
 
 // Get Telegram bot token from environment
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
