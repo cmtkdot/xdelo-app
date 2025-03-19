@@ -27,6 +27,17 @@ declare module "@supabase/supabase-js" {
       params?: {}
     ): { data: T; error: null } | { data: null; error: Error };
 
+    // Add RPC for the new product matching configuration functions
+    rpc<T = any>(
+      fn: "xdelo_get_product_matching_config",
+      params?: {}
+    ): { data: T; error: null } | { data: null; error: Error };
+
+    rpc<T = any>(
+      fn: "xdelo_update_product_matching_config",
+      params: { p_config: Record<string, any> }
+    ): { data: T; error: null } | { data: null; error: Error };
+
     // Add any other custom RPC functions here...
   }
 }

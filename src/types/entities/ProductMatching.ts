@@ -18,6 +18,7 @@ export interface ProductMatchingConfig {
   partialMatch: {
     enabled: boolean;
     minLength?: number;
+    dateFormat?: string;
   };
   weightedScoring?: {
     name: number;

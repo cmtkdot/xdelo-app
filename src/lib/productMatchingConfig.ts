@@ -9,7 +9,8 @@ export const DEFAULT_CONFIG: ProductMatchingConfig = {
   similarityThreshold: 0.7,
   partialMatch: {
     enabled: true,
-    minLength: 2
+    minLength: 2,
+    dateFormat: "YYYY-MM-DD"
   },
   weightedScoring: {
     name: 0.4,
@@ -26,24 +27,16 @@ export const CONFIG = DEFAULT_CONFIG;
  */
 export const fetchMatchingConfig = async (): Promise<ProductMatchingConfig> => {
   try {
+    // Use the new RPC function to get configuration
     const { data, error } = await supabase
-      .from('settings')
-      .select('matching_config, product_matching_config')
-      .single();
+      .rpc('xdelo_get_product_matching_config');
     
     if (error) {
       console.warn("Could not fetch matching configuration, using defaults", error);
       return DEFAULT_CONFIG;
     }
     
-    // Try to use matching_config first, if it exists, otherwise fall back to product_matching_config
-    if (data && data.matching_config) {
-      return data.matching_config as ProductMatchingConfig;
-    } else if (data && data.product_matching_config) {
-      return data.product_matching_config as ProductMatchingConfig;
-    }
-    
-    return DEFAULT_CONFIG;
+    return data as ProductMatchingConfig;
   } catch (err) {
     console.error("Error fetching product matching configuration:", err);
     return DEFAULT_CONFIG;
@@ -55,52 +48,35 @@ export const fetchMatchingConfig = async (): Promise<ProductMatchingConfig> => {
  */
 export const updateMatchingConfig = async (config: Partial<ProductMatchingConfig>): Promise<ProductMatchingConfig> => {
   try {
-    // First get the current config
-    const { data: currentData, error: fetchError } = await supabase
-      .from('settings')
-      .select('id, matching_config, product_matching_config')
-      .single();
+    // Get current config to merge with updates
+    const currentConfig = await fetchMatchingConfig();
     
-    if (fetchError) {
-      console.warn("Could not fetch current config, creating new entry", fetchError);
-      // Create a new settings entry with the config
-      const { error: insertError } = await supabase
-        .from('settings')
-        .insert([{ matching_config: { ...DEFAULT_CONFIG, ...config } }]);
-      
-      if (insertError) {
-        console.error("Failed to insert new matching configuration:", insertError);
-      }
-      
-      return { ...DEFAULT_CONFIG, ...config };
-    }
-    
-    // Determine which column to use - prefer matching_config if it exists
-    const useMatchingConfig = currentData && 'matching_config' in currentData;
-    const currentConfigField = useMatchingConfig ? 'matching_config' : 'product_matching_config';
-    const currentConfig = currentData?.[currentConfigField] || DEFAULT_CONFIG;
-    
-    // Merge with current config or default
+    // Merge with current config
     const updatedConfig = {
       ...currentConfig,
-      ...config
+      ...config,
+      partialMatch: {
+        ...currentConfig.partialMatch,
+        ...(config.partialMatch || {})
+      },
+      weightedScoring: {
+        ...currentConfig.weightedScoring,
+        ...(config.weightedScoring || {})
+      }
     };
     
-    // Update in database
-    const updateData: Record<string, any> = {
-      [useMatchingConfig ? 'matching_config' : 'product_matching_config']: updatedConfig
-    };
+    // Use the new RPC function to update configuration
+    const { data, error } = await supabase
+      .rpc('xdelo_update_product_matching_config', {
+        p_config: updatedConfig
+      });
     
-    const { error: updateError } = await supabase
-      .from('settings')
-      .update(updateData)
-      .eq('id', currentData?.id || 0);
-    
-    if (updateError) {
-      console.error("Failed to update matching configuration:", updateError);
+    if (error) {
+      console.error("Failed to update matching configuration:", error);
+      return updatedConfig;
     }
     
-    return updatedConfig;
+    return data as ProductMatchingConfig;
   } catch (err) {
     console.error("Error updating product matching configuration:", err);
     return { ...DEFAULT_CONFIG, ...config };

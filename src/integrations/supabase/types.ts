@@ -1834,6 +1834,45 @@ export type Database = {
         }
         Relationships: []
       }
+      product_matching_config: {
+        Row: {
+          created_at: string
+          id: string
+          partial_match_date_format: string | null
+          partial_match_enabled: boolean
+          partial_match_min_length: number | null
+          similarity_threshold: number
+          updated_at: string
+          weight_name: number | null
+          weight_purchase_date: number | null
+          weight_vendor: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          partial_match_date_format?: string | null
+          partial_match_enabled?: boolean
+          partial_match_min_length?: number | null
+          similarity_threshold?: number
+          updated_at?: string
+          weight_name?: number | null
+          weight_purchase_date?: number | null
+          weight_vendor?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          partial_match_date_format?: string | null
+          partial_match_enabled?: boolean
+          partial_match_min_length?: number | null
+          similarity_threshold?: number
+          updated_at?: string
+          weight_name?: number | null
+          weight_purchase_date?: number | null
+          weight_vendor?: number | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -3536,6 +3575,10 @@ export type Database = {
           forward_count: number
         }[]
       }
+      xdelo_get_product_matching_config: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       xdelo_handle_duplicate_detection: {
         Args: {
           p_file_unique_id: string
@@ -3742,6 +3785,12 @@ export type Database = {
             }
             Returns: Json
           }
+      xdelo_update_product_matching_config: {
+        Args: {
+          p_config: Json
+        }
+        Returns: Json
+      }
       xdelo_validate_message_ids: {
         Args: {
           p_message_id: string
