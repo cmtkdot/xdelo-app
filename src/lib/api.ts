@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -58,6 +57,20 @@ async function invokeFunctionWrapper<T = any>(
       correlationId: crypto.randomUUID()
     };
   }
+}
+
+/**
+ * Get Telegram webhook information
+ */
+export async function getTelegramWebhookInfo(token: string) {
+  return invokeFunctionWrapper('xdelo_get-telegram-webhook-info', { token });
+}
+
+/**
+ * Set Telegram webhook
+ */
+export async function setTelegramWebhook(token: string) {
+  return invokeFunctionWrapper('xdelo_set-telegram-webhook', { token });
 }
 
 /**
