@@ -1,0 +1,10 @@
+
+name = "xdelo_add_matching_config_column"
+path = "/xdelo_add_matching_config_column"
+entrypoint = "index.ts"
+verify_jwt = true
+
+[permissions]
+database = ["table:settings:all"]
+storage = []
+content = []

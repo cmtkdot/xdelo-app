@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/useToast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Check, AlertCircle } from "lucide-react";
+import { Loader2, Check } from "lucide-react";
 import { CONFIG } from "@/lib/productMatchingConfig";
 
 const ProductMatchingCard = () => {
@@ -26,14 +26,35 @@ const ProductMatchingCard = () => {
   // Load current configuration from the database
   useEffect(() => {
     const loadConfig = async () => {
+      // First check if the settings table has a matching_config column
+      const { data: tableInfo, error: schemaError } = await supabase
+        .from('settings')
+        .select('*')
+        .limit(1);
+      
+      if (schemaError) {
+        console.error("Error checking settings schema:", schemaError);
+        return;
+      }
+      
+      // If the table doesn't have a product_matching_config column, we'll try matching_config
+      const configColumn = tableInfo && tableInfo[0] && 'matching_config' in tableInfo[0] 
+        ? 'matching_config' 
+        : 'product_matching_config';
+      
       const { data, error } = await supabase
         .from('settings')
-        .select('product_matching_config')
+        .select(configColumn)
         .single();
       
-      if (!error && data?.product_matching_config) {
+      if (error) {
+        console.error("Error loading product matching config:", error);
+        return;
+      }
+
+      if (data && data[configColumn]) {
         try {
-          const config = JSON.parse(data.product_matching_config);
+          const config = JSON.parse(data[configColumn]);
           setThreshold(config.similarityThreshold || 0.7);
           setEnablePartialMatching(config.partialMatch?.enabled !== false);
         } catch (err) {
@@ -58,14 +79,39 @@ const ProductMatchingCard = () => {
         }
       };
       
+      // Check if settings table already has records
+      const { data: existingSettings } = await supabase
+        .from('settings')
+        .select('id')
+        .limit(1);
+      
+      // Determine if settings table has a matching_config column
+      const { data: tableInfo } = await supabase
+        .from('settings')
+        .select('*')
+        .limit(1);
+      
+      const configColumn = tableInfo && tableInfo[0] && 'matching_config' in tableInfo[0] 
+        ? 'matching_config' 
+        : 'product_matching_config';
+      
+      // Prepare upsert data
+      const upsertData: Record<string, any> = {
+        updated_at: new Date().toISOString()
+      };
+      
+      // Set the appropriate config column
+      upsertData[configColumn] = JSON.stringify(updatedConfig);
+      
+      // Add ID if it exists
+      if (existingSettings && existingSettings.length > 0) {
+        upsertData.id = existingSettings[0].id;
+      }
+      
       // Save to settings table
       const { error } = await supabase
         .from('settings')
-        .upsert({ 
-          id: 1, // Assuming there's only one settings record
-          product_matching_config: JSON.stringify(updatedConfig),
-          updated_at: new Date().toISOString()
-        });
+        .upsert(upsertData);
       
       if (error) throw error;
       

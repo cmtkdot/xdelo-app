@@ -2801,25 +2801,6 @@ export type Database = {
         }
         Relationships: []
       }
-      xan_mapping_status: {
-        Row: {
-          app_name: string | null
-          connection_id: string | null
-          current_status: string | null
-          enabled: boolean | null
-          error_count: number | null
-          glide_table: string | null
-          glide_table_display_name: string | null
-          last_sync_completed_at: string | null
-          last_sync_started_at: string | null
-          mapping_id: string | null
-          records_processed: number | null
-          supabase_table: string | null
-          sync_direction: string | null
-          total_records: number | null
-        }
-        Relationships: []
-      }
       xan_recent_logs: {
         Row: {
           app_name: string | null
