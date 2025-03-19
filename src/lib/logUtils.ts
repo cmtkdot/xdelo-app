@@ -59,7 +59,7 @@ export const logEvent = async (
       // Fallback to event_logs if it exists
       try {
         const { error: legacyError } = await supabase.rpc('xdelo_log_event', {
-          p_event_type: eventType,
+          p_event_type: eventType.toString(),
           p_message_id: entityId,
           p_metadata: metadata
         });

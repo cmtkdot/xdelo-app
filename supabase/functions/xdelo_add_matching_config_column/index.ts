@@ -1,109 +1,81 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders } from "../_shared/cors.ts";
-import { createSupabaseClient } from "../_shared/supabase.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+
+interface WebResponse {
+  success: boolean;
+  message?: string;
+  data?: any;
+  error?: any;
+}
 
 serve(async (req) => {
-  // Handle CORS
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
-  
   try {
-    const supabase = createSupabaseClient();
+    // Create Supabase client
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Check if the settings table has the matching_config column
+    const { data: tableInfo, error: infoError } = await supabase
+      .from('settings')
+      .select('*')
+      .limit(1);
     
-    // Check if the settings table exists
-    const { data: tableExists, error: tableCheckError } = await supabase.rpc('pg_query', {
-      query_text: `
-        SELECT EXISTS (
-          SELECT FROM information_schema.tables 
-          WHERE table_schema = 'public'
-          AND table_name = 'settings'
-        );
-      `
-    });
-    
-    if (tableCheckError) {
-      throw new Error(`Error checking if settings table exists: ${tableCheckError.message}`);
+    if (infoError) {
+      console.error("Error checking settings table:", infoError);
+      throw new Error(`Error checking settings table: ${infoError.message}`);
     }
     
-    if (!tableExists || !tableExists[0]?.exists) {
-      // Create settings table if it doesn't exist
-      const { error: createTableError } = await supabase.rpc('pg_query', {
-        query_text: `
-          CREATE TABLE IF NOT EXISTS public.settings (
-            id SERIAL PRIMARY KEY,
-            bot_token TEXT,
-            webhook_url TEXT,
-            matching_config JSONB,
-            created_at TIMESTAMPTZ DEFAULT now(),
-            updated_at TIMESTAMPTZ DEFAULT now()
-          );
-        `
-      });
+    // Check if matching_config column already exists
+    if (tableInfo && tableInfo.length > 0 && 'matching_config' in tableInfo[0]) {
+      // Column already exists, no need to add it
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Matching config column already exists",
+        } as WebResponse),
+        { headers: { "Content-Type": "application/json" } }
+      );
+    }
+    
+    // Add the column if it doesn't exist
+    const query = `
+      ALTER TABLE IF EXISTS public.settings 
+      ADD COLUMN IF NOT EXISTS matching_config JSONB DEFAULT '{"similarityThreshold": 0.7, "partialMatch": {"enabled": true}}';
       
-      if (createTableError) {
-        throw new Error(`Error creating settings table: ${createTableError.message}`);
-      }
-    } else {
-      // Check if matching_config column exists
-      const { data: columnExists, error: columnCheckError } = await supabase.rpc('pg_query', {
-        query_text: `
-          SELECT EXISTS (
-            SELECT FROM information_schema.columns
-            WHERE table_schema = 'public'
-            AND table_name = 'settings'
-            AND column_name = 'matching_config'
-          );
-        `
-      });
-      
-      if (columnCheckError) {
-        throw new Error(`Error checking if matching_config column exists: ${columnCheckError.message}`);
-      }
-      
-      // Add matching_config column if it doesn't exist
-      if (!columnExists || !columnExists[0]?.exists) {
-        const { error: addColumnError } = await supabase.rpc('pg_query', {
-          query_text: `
-            ALTER TABLE public.settings
-            ADD COLUMN IF NOT EXISTS matching_config JSONB;
-          `
-        });
-        
-        if (addColumnError) {
-          throw new Error(`Error adding matching_config column: ${addColumnError.message}`);
-        }
-      }
+      CREATE INDEX IF NOT EXISTS idx_product_matching_text 
+      ON public.gl_products USING gin(main_product_name gin_trgm_ops, main_vendor_product_name gin_trgm_ops);
+    `;
+    
+    const { error: alterError } = await supabase.rpc(
+      'xdelo_execute_sql_migration',
+      { sql_command: query }
+    );
+    
+    if (alterError) {
+      console.error("Error executing SQL migration:", alterError);
+      throw new Error(`Error adding matching_config column: ${alterError.message}`);
     }
     
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Settings table and matching_config column verified"
-      }),
-      {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json"
-        }
-      }
+        message: "Successfully added matching_config column to settings table",
+      } as WebResponse),
+      { headers: { "Content-Type": "application/json" } }
     );
+    
   } catch (error) {
-    console.error("Error in migration:", error);
+    console.error("Error in xdelo_add_matching_config_column:", error);
     
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message
-      }),
-      {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json"
-        },
-        status: 500
-      }
+        message: "Error adding matching_config column",
+        error: error.message,
+      } as WebResponse),
+      { headers: { "Content-Type": "application/json" }, status: 500 }
     );
   }
 });

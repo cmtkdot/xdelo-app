@@ -78,7 +78,7 @@ async function logSync(log: SyncLogEntry) {
   try {
     const eventType = getEventType(log.operation, log.status);
     
-    const metadata = {
+    const metadata: Record<string, any> = {
       operation: log.operation,
       status: log.status,
       ...log.details
@@ -96,6 +96,15 @@ async function logSync(log: SyncLogEntry) {
     return { success: false, error };
   }
 }
+
+// Export a function to log message operations for compatibility with other modules
+export const logMessageOperation = async (
+  eventType: LogEventType, 
+  messageId: string, 
+  metadata: Record<string, any> = {}
+) => {
+  await logEvent(eventType, messageId, metadata);
+};
 
 export function getSyncStatusColor(status?: string) {
   switch (status) {
@@ -125,4 +134,9 @@ export function getSyncEventIcon(eventType: string) {
   }
 }
 
-export default syncLogger;
+export default {
+  ...syncLogger,
+  logMessageOperation,
+  getSyncStatusColor,
+  getSyncEventIcon
+};

@@ -1,8 +1,7 @@
+
 import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from '@/hooks/useToast';
-import { useUser } from '@/hooks/useUser';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { LogEventType, logEvent } from "@/lib/logUtils";
 
 interface UseSingleFileOperationsResult {
@@ -19,19 +18,20 @@ export function useSingleFileOperations(): UseSingleFileOperationsResult {
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
-  const { user } = useUser();
-  const isMobile = useMediaQuery('(max-width: 768px)');
-
+  
   /**
    * Upload a file to Supabase storage
    * @param file The file to upload
-   * @param storagePath Optional storage path, defaults to user ID
+   * @param storagePath Optional storage path
    * @returns The public URL of the uploaded file, or null on failure
    */
   const uploadFile = async (file: File, storagePath?: string): Promise<string | null> => {
     setIsUploading(true);
     try {
+      // Get current user ID from Supabase auth
+      const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id;
+      
       if (!userId) {
         throw new Error("User ID not available");
       }
@@ -49,6 +49,8 @@ export function useSingleFileOperations(): UseSingleFileOperationsResult {
       }
 
       const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/message_media/${data.path}`;
+      
+      const isMobile = window.innerWidth <= 768;
       toast({
         title: "Upload successful",
         description: isMobile ? "File uploaded" : `File uploaded to ${data.path}`,
@@ -92,6 +94,7 @@ export function useSingleFileOperations(): UseSingleFileOperationsResult {
         throw new Error(`File deletion failed: ${error.message}`);
       }
 
+      const isMobile = window.innerWidth <= 768;
       toast({
         title: "Deletion successful",
         description: isMobile ? "File deleted" : `File deleted from ${filePath}`,
@@ -110,21 +113,21 @@ export function useSingleFileOperations(): UseSingleFileOperationsResult {
     }
   };
 
-// Log completion of sync operation
-const logSyncCompletion = async (entityId: string, details: any) => {
-  try {
-    await logEvent(
-      LogEventType.SYNC_COMPLETED,
-      entityId,
-      {
-        ...details,
-        timestamp: new Date().toISOString()
-      }
-    );
-  } catch (error) {
-    console.error("Failed to log sync completion:", error);
-  }
-};
+  // Log completion of sync operation
+  const logSyncCompletion = async (entityId: string, details: any) => {
+    try {
+      await logEvent(
+        LogEventType.SYNC_COMPLETED,
+        entityId,
+        {
+          ...details,
+          timestamp: new Date().toISOString()
+        }
+      );
+    } catch (error) {
+      console.error("Failed to log sync completion:", error);
+    }
+  };
 
   return {
     isUploading,

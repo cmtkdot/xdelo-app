@@ -2380,9 +2380,23 @@ export type Database = {
         }
         Relationships: []
       }
+      gl_recent_logs: {
+        Row: {
+          app_name: string | null
+          glide_table: string | null
+          glide_table_display_name: string | null
+          id: string | null
+          message: string | null
+          records_processed: number | null
+          started_at: string | null
+          status: string | null
+          supabase_table: string | null
+          sync_direction: string | null
+        }
+        Relationships: []
+      }
       gl_sync_stats: {
         Row: {
-          avg_duration_seconds: number | null
           failed_syncs: number | null
           successful_syncs: number | null
           sync_date: string | null
@@ -2398,6 +2412,14 @@ export type Database = {
           last_sync_time: string | null
           sync_status: string | null
           table_name: string | null
+        }
+        Relationships: []
+      }
+      gl_tables_view: {
+        Row: {
+          table_name: unknown | null
+          table_schema: string | null
+          table_type: string | null
         }
         Relationships: []
       }
@@ -2915,6 +2937,15 @@ export type Database = {
           count: number
         }[]
       }
+      gl_get_account_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          customer_count: number
+          vendor_count: number
+          dual_count: number
+          total_count: number
+        }[]
+      }
       gl_get_business_stats: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -2932,12 +2963,78 @@ export type Database = {
           total_purchase_balance: number
         }[]
       }
+      gl_get_invoice_metrics: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          invoice_count: number
+          estimate_count: number
+          total_invoice_amount: number
+          total_payments_received: number
+          total_outstanding_balance: number
+        }[]
+      }
+      gl_get_purchase_order_metrics: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          po_count: number
+          total_purchase_amount: number
+          total_payments_made: number
+          total_purchase_balance: number
+        }[]
+      }
+      gl_get_schema_tables: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          table_name: string
+          table_type: string
+          table_schema: string
+        }[]
+      }
+      gl_get_sync_errors: {
+        Args: {
+          p_mapping_id: string
+          p_limit?: number
+          p_include_resolved?: boolean
+        }
+        Returns: {
+          id: string
+          mapping_id: string
+          error_type: string
+          error_message: string
+          record_data: Json
+          retryable: boolean
+          created_at: string
+          resolved_at: string
+          resolution_notes: string
+        }[]
+      }
+      gl_get_table_columns: {
+        Args: {
+          table_name: string
+        }
+        Returns: {
+          column_name: string
+          data_type: string
+        }[]
+      }
       gl_import_data_from_json: {
         Args: {
           table_name: string
           data: Json
         }
         Returns: number
+      }
+      gl_is_customer: {
+        Args: {
+          account_type: string
+        }
+        Returns: boolean
+      }
+      gl_is_vendor: {
+        Args: {
+          account_type: string
+        }
+        Returns: boolean
       }
       gl_log_migration_completion: {
         Args: {
@@ -2946,6 +3043,22 @@ export type Database = {
           details?: Json
         }
         Returns: string
+      }
+      gl_resolve_sync_error: {
+        Args: {
+          p_error_id: string
+          p_resolution_notes?: string
+        }
+        Returns: boolean
+      }
+      gl_validate_column_mapping: {
+        Args: {
+          p_mapping_id: string
+        }
+        Returns: {
+          is_valid: boolean
+          validation_message: string
+        }[]
       }
       glsync_get_account_summary: {
         Args: {
@@ -3278,46 +3391,6 @@ export type Database = {
           "": unknown[]
         }
         Returns: number
-      }
-      xan_get_account_stats: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          customer_count: number
-          vendor_count: number
-          dual_count: number
-          total_count: number
-        }[]
-      }
-      xan_get_invoice_metrics: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          invoice_count: number
-          estimate_count: number
-          total_invoice_amount: number
-          total_payments_received: number
-          total_outstanding_balance: number
-        }[]
-      }
-      xan_get_purchase_order_metrics: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          po_count: number
-          total_purchase_amount: number
-          total_payments_made: number
-          total_purchase_balance: number
-        }[]
-      }
-      xan_is_customer: {
-        Args: {
-          account_type: string
-        }
-        Returns: boolean
-      }
-      xan_is_vendor: {
-        Args: {
-          account_type: string
-        }
-        Returns: boolean
       }
       xdelo_add_missing_columns_to_other_messages: {
         Args: Record<PropertyKey, never>

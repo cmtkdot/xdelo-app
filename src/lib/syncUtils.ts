@@ -1,19 +1,26 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { GlProduct } from "@/types";
 import { logEvent, LogEventType } from "@/lib/logUtils";
+
+// Use the internal version of GlProduct that has the required fields
+interface InternalGlProduct {
+  id: string;
+  glide_id?: string | null;
+  sync_status?: string;
+  [key: string]: any;
+}
 
 /**
  * Checks if a product has been synced to Glide
  */
-export const isProductSynced = (product: GlProduct) => {
+export const isProductSynced = (product: InternalGlProduct) => {
   return product.glide_id && product.sync_status === 'synced';
 };
 
 /**
  * Checks if a product is pending sync
  */
-export const isProductPendingSync = (product: GlProduct) => {
+export const isProductPendingSync = (product: InternalGlProduct) => {
   return product.sync_status === 'pending';
 };
 
@@ -48,8 +55,9 @@ export const logSyncWarning = async (
  */
 export const getPendingSyncItems = async (tableName: string, limit = 10) => {
   try {
+    // Using any to avoid type checking issues with dynamic table names
     const { data, error } = await supabase
-      .from(tableName)
+      .from(tableName as any)
       .select('*')
       .eq('sync_status', 'pending')
       .order('updated_at', { ascending: true })

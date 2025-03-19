@@ -1,15 +1,12 @@
+
 import { useState } from 'react';
-import { useSupabaseClient, useSession } from '@supabase/auth-helpers-react';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/useToast';
-import { useRouter } from 'next/router';
 import { logEvent, LogEventType } from "@/lib/logUtils";
 
 export function useMessageOperations() {
   const [isLoading, setIsLoading] = useState(false);
-  const supabase = useSupabaseClient();
   const { toast } = useToast();
-  const router = useRouter();
-  const { session, auth } = useSession();
 
   // Function to handle message updates
   const updateMessage = async (messageId: string, updates: any) => {
@@ -57,7 +54,8 @@ export function useMessageOperations() {
         description: 'The message has been deleted successfully.',
       });
 
-      router.push('/');
+      // Redirect to home page
+      window.location.href = '/';
     } catch (error) {
       toast({
         title: 'Failed to delete message',
@@ -77,7 +75,6 @@ export function useMessageOperations() {
         messageId,
         {
           action,
-          user_id: auth?.user?.id,
           timestamp: new Date().toISOString(),
           ...details
         }

@@ -46,10 +46,10 @@ export const MatchingHistory = () => {
         // Transform the data to match our expected MatchLog type
         const transformedLogs: MatchLog[] = data.map(log => ({
           id: log.id,
-          created_at: log.event_timestamp || log.created_at,
+          created_at: log.event_timestamp || new Date(log.created_at || Date.now()).toISOString(),
           event_type: log.event_type,
           entity_id: log.entity_id,
-          metadata: log.metadata as MatchLogMetadata
+          metadata: transformMetadata(log.metadata)
         }));
         
         setLogs(transformedLogs);
@@ -66,6 +66,28 @@ export const MatchingHistory = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  // Helper function to safely transform metadata from Json to MatchLogMetadata
+  const transformMetadata = (rawMetadata: any): MatchLogMetadata => {
+    if (!rawMetadata) {
+      return {
+        matchCount: 0,
+        hasBestMatch: false,
+        bestMatchConfidence: 0,
+        bestMatchProductId: null,
+        timestamp: new Date().toISOString()
+      };
+    }
+    
+    // Ensure we have proper types
+    return {
+      matchCount: typeof rawMetadata.matchCount === 'number' ? rawMetadata.matchCount : 0,
+      hasBestMatch: !!rawMetadata.hasBestMatch,
+      bestMatchConfidence: typeof rawMetadata.bestMatchConfidence === 'number' ? rawMetadata.bestMatchConfidence : 0,
+      bestMatchProductId: rawMetadata.bestMatchProductId || null,
+      timestamp: rawMetadata.timestamp || new Date().toISOString()
+    };
   };
   
   useEffect(() => {

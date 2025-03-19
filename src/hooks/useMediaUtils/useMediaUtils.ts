@@ -15,12 +15,11 @@ export function useMediaUtils() {
 
   // Initialize single file operations
   const {
-    processMessage,
-    reuploadMediaFromTelegram,
-    fixContentDispositionForMessage,
-    reanalyzeMessageCaption,
-    syncMessageCaption
-  } = useSingleFileOperations(addProcessingMessageId, removeProcessingMessageId);
+    isUploading,
+    isDeleting,
+    uploadFile,
+    deleteFile
+  } = useSingleFileOperations();
 
   // Initialize batch operations
   const {
@@ -34,13 +33,12 @@ export function useMediaUtils() {
     // State
     isProcessing,
     processingMessageIds,
+    isUploading,
+    isDeleting,
     
-    // Single message operations
-    fixContentDispositionForMessage,
-    reuploadMediaFromTelegram,
-    processMessage,
-    reanalyzeMessageCaption,
-    syncMessageCaption,
+    // Single file operations
+    uploadFile,
+    deleteFile,
     
     // Batch operations
     standardizeStoragePaths,
