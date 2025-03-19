@@ -11,13 +11,31 @@ import {
   PuzzleIcon,
   PanelLeftClose
 } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { cn } from "@/lib/utils";
 
-export const NavItems = () => {
-  const location = useLocation();
-  const currentPath = location.pathname;
+interface NavItemProps {
+  title: string;
+  href: string;
+  icon: React.ReactNode;
+  isActive: boolean;
+  onClick?: () => void;
+}
 
-  const navItems = [
+interface NavItemsProps {
+  currentPath: string;
+  onNavigate?: (path: string) => void;
+  isExpanded?: boolean;
+  isMobile?: boolean;
+}
+
+export const NavItems: React.FC<NavItemsProps> = ({ 
+  currentPath, 
+  onNavigate,
+  isExpanded = true,
+  isMobile = false
+}) => {
+  const navItems: NavItemProps[] = [
     {
       title: "Dashboard",
       href: "/",
@@ -80,5 +98,37 @@ export const NavItems = () => {
     },
   ];
 
-  return navItems;
+  const handleClick = (path: string) => {
+    if (onNavigate) {
+      onNavigate(path);
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      {navItems.map((item) => (
+        <div
+          key={item.title}
+          onClick={() => handleClick(item.href)}
+          className={cn(
+            "flex items-center px-3 py-2 text-sm rounded-md cursor-pointer transition-colors",
+            item.isActive 
+              ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white" 
+              : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white",
+            isMobile && "mobile-touch-target h-auto min-h-[44px]",
+            !isExpanded && !isMobile && "justify-center"
+          )}
+        >
+          <div className={cn("flex-shrink-0", item.isActive ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400")}>
+            {item.icon}
+          </div>
+          {(isExpanded || isMobile) && (
+            <span className={cn("ml-3", !isExpanded && "sr-only")}>
+              {item.title}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 };

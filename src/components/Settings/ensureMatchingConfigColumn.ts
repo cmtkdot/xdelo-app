@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -24,29 +25,45 @@ export const ensureMatchingConfigColumn = async (): Promise<boolean> => {
     
     // Otherwise call the Edge function to add the column
     try {
-      // First try the dedicated function
+      // First try the dedicated Edge function
       const { data, error } = await supabase.functions.invoke('xdelo_add_matching_config_column');
       
       if (error) {
         console.error("Error calling Edge function:", error);
         
-        // Fallback: use RPC function or direct SQL if available
-        const { error: rpcError } = await supabase.rpc(
-          'execute_sql_migration' as any,
-          { 
-            sql_command: `
-              ALTER TABLE IF EXISTS public.settings 
-              ADD COLUMN IF NOT EXISTS matching_config JSONB DEFAULT '{"similarityThreshold": 0.7, "partialMatch": {"enabled": true}}';
-            `
+        // Fallback: try the dedicated RPC function if available
+        try {
+          const { data: rpcData, error: rpcError } = await supabase.rpc(
+            "xdelo_ensure_matching_config_column"
+          );
+          
+          if (rpcError) {
+            console.error("RPC function error:", rpcError);
+            
+            // Last fallback: use generic SQL migration function
+            const { data: sqlData, error: sqlError } = await supabase.rpc(
+              "execute_sql_migration" as any,
+              { 
+                sql_command: `
+                  ALTER TABLE IF EXISTS public.settings 
+                  ADD COLUMN IF NOT EXISTS matching_config JSONB DEFAULT '{"similarityThreshold": 0.7, "partialMatch": {"enabled": true}}';
+                `
+              }
+            );
+            
+            if (sqlError) {
+              console.error("SQL migration error:", sqlError);
+              return false;
+            }
+            
+            return true;
           }
-        );
-        
-        if (rpcError) {
-          console.error("RPC function error:", rpcError);
+          
+          return true;
+        } catch (rpcError) {
+          console.error("Error executing RPC function:", rpcError);
           return false;
         }
-        
-        return true;
       }
       
       return true;

@@ -7,7 +7,6 @@ import { ProductPagination } from "@/components/ProductGallery/ProductPagination
 import { PageContainer } from "@/components/Layout/PageContainer";
 import { logEvent, LogEventType } from "@/lib/logUtils";
 import { useToast } from "@/hooks/useToast";
-import { Button } from "@/components/ui/button";
 import { GlProduct, convertToGlProduct } from "@/types/GlProducts";
 
 interface FilterState {
@@ -87,9 +86,9 @@ export default function ProductGallery() {
           description: "Failed to retrieve products from the database.",
           variant: "destructive",
         });
-      } else {
+      } else if (data) {
         // Convert database products to GlProduct type using the converter
-        const productList = data?.map(item => convertToGlProduct(item)) || [];
+        const productList = data.map(item => convertToGlProduct(item));
         setProducts(productList);
       }
     } finally {
@@ -177,11 +176,11 @@ export default function ProductGallery() {
           onFilterChange={handleFilterChange} 
         />
         <div className="mt-6">
-          {/* Use the existing component with proper props */}
           <ProductGrid 
-            products={currentProducts as any} 
+            products={currentProducts} 
             onEdit={handleEditProduct}
             onDelete={handleDeleteProduct}
+            isDeleting={loading}
           />
         </div>
         <ProductPagination
