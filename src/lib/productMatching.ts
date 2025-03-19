@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { AnalyzedContent, MatchResult } from "@/types";
@@ -40,7 +39,7 @@ const findMatches = async (
       .select('*');
 
     if (product_name) {
-      query = query.ilike('main_product_name', `%${product_name}%`);
+      query = query.ilike('new_product_name', `%${product_name}%`);
     }
 
     const { data: products, error: productsError } = await query;
@@ -56,23 +55,23 @@ const findMatches = async (
       let confidence = 0;
       const matchedFields: string[] = [];
 
-      if (product_name && product.main_new_product_name) {
-        const similarity = stringSimilarity(product_name, product.main_new_product_name);
+      if (product_name && product.new_product_name) {
+        const similarity = stringSimilarity(product_name, product.new_product_name);
         if (similarity > similarityThreshold) {
           confidence += similarity * 0.4;
           matchedFields.push('product_name');
         }
       }
 
-      if (vendor_uid && product.main_vendor_product_name) {
-        if (vendor_uid === product.main_vendor_product_name) {
+      if (vendor_uid && product.vendor_product_name) {
+        if (vendor_uid === product.vendor_product_name) {
           confidence += 0.3;
           matchedFields.push('vendor_uid');
         }
       }
 
-      if (purchase_date && product.main_product_purchase_date) {
-        if (purchase_date === product.main_product_purchase_date) {
+      if (purchase_date && product.product_purchase_date) {
+        if (purchase_date === product.product_purchase_date) {
           confidence += 0.3;
           matchedFields.push('purchase_date');
         }
@@ -85,7 +84,7 @@ const findMatches = async (
           score: confidence,
           matches: {
             product_name: {
-              value: product.main_new_product_name || '',
+              value: product.new_product_name || '',
               score: matchedFields.includes('product_name') ? confidence : 0
             }
           },
