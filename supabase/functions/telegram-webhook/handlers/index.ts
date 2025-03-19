@@ -1,5 +1,6 @@
 
-// Re-export handlers with proper handling for circular dependencies
-export { handleMediaMessage } from './mediaMessageHandler.ts';
-export { handleOtherMessage } from './textMessageHandler.ts';
-export { handleEditedMessage } from './editedMessageHandler.ts';
+import { handleMediaMessage } from './mediaMessageHandler.ts';
+import { handleOtherMessage } from './textMessageHandler.ts';
+import { handleEditedMessage } from './editedMessageHandler.ts';
+
+export { handleMediaMessage, handleOtherMessage, handleEditedMessage };
