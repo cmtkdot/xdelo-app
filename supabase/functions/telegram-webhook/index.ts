@@ -92,6 +92,7 @@ serve(async (req: Request) => {
       has_media: !!(message.photo || message.video || message.document),
       has_caption: !!message.caption,
       caption_length: message.caption?.length,
+      caption_preview: message.caption ? `${message.caption.substring(0, 50)}${message.caption.length > 50 ? '...' : ''}` : null,
       media_group_id: message.media_group_id,
       media_type: message.photo ? 'photo' : message.video ? 'video' : message.document ? 'document' : 'none'
     });

@@ -19,13 +19,17 @@ const supabaseClient = createClient(
 
 export async function handleEditedMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
-    const { correlationId, isEdit } = context;
+    const { correlationId, isEdit, logger } = context;
     
     if (!isEdit) {
       throw new Error('Invalid context for edited message handler');
     }
     
-    console.log(`[${correlationId}] Processing edited message ${message.message_id} in chat ${message.chat.id}`);
+    logger?.info(`✏️ Processing edited message ${message.message_id} in chat ${message.chat.id}`, {
+      has_caption: !!message.caption,
+      caption_preview: message.caption ? `${message.caption.substring(0, 50)}${message.caption.length > 50 ? '...' : ''}` : null,
+      edited_at: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+    });
     
     // Check if this has media
     if (message.photo || message.video || message.document) {
@@ -48,18 +52,36 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
     if (existingMessage) {
       // Prepare edit history
       let editHistory = existingMessage.edit_history || [];
+      
+      // Compare text to log what changed
+      const previousText = existingMessage.message_text || '';
+      const newText = message.text || message.caption || '';
+      const textDifferent = previousText !== newText;
+      
       editHistory.push({
         timestamp: new Date().toISOString(),
-        previous_text: existingMessage.message_text,
-        new_text: message.text || message.caption || '',
+        previous_text: previousText,
+        new_text: newText,
         edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
       });
+      
+      // Log what changed
+      if (textDifferent) {
+        logger?.info(`📝 Message text changed in edit`, {
+          previous_length: previousText.length,
+          new_length: newText.length,
+          previous_preview: previousText.substring(0, 30) + (previousText.length > 30 ? '...' : ''),
+          new_preview: newText.substring(0, 30) + (newText.length > 30 ? '...' : '')
+        });
+      } else {
+        logger?.info(`🔄 Message edited but text content unchanged`);
+      }
       
       // Update the message
       const { error } = await supabaseClient
         .from('other_messages')
         .update({
-          message_text: message.text || message.caption || '',
+          message_text: newText,
           telegram_data: message,
           message_url: message_url, // Update the URL
           updated_at: new Date().toISOString(),
@@ -70,6 +92,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         .eq('id', existingMessage.id);
         
       if (error) {
+        logger?.error(`❌ Failed to update edited message in database`, { error });
         throw error;
       }
       
@@ -82,11 +105,16 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
           telegram_message_id: message.message_id,
           chat_id: message.chat.id,
           edit_type: 'text_message',
-          message_url: message_url
+          message_url: message_url,
+          text_changed: textDifferent
         }
       );
       
-      console.log(`[${correlationId}] Successfully updated edited message ${message.message_id}`);
+      logger?.success(`✅ Successfully updated edited message ${message.message_id}`, {
+        message_id: message.message_id,
+        db_id: existingMessage.id,
+        edit_count: (existingMessage.edit_count || 0) + 1
+      });
       
       return new Response(
         JSON.stringify({ 
@@ -99,7 +127,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else {
-      console.log(`[${correlationId}] Original message not found, creating new record`);
+      logger?.info(`🆕 Original message not found, creating new record for edited message ${message.message_id}`);
       
       // If original message not found, create a new one
       const { handleOtherMessage } = await import('./textMessageHandler.ts');
@@ -109,7 +137,11 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       });
     }
   } catch (error) {
-    console.error(`Error handling edited message:`, error);
+    context.logger?.error(`❌ Error handling edited message:`, { 
+      error: error.message,
+      stack: error.stack,
+      message_id: message.message_id
+    });
     
     // Log the error
     await xdelo_logProcessingEvent(
