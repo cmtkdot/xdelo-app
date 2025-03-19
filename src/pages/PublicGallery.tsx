@@ -1,4 +1,3 @@
-
 import { Message } from "@/types/MessagesTypes";
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,6 +8,7 @@ import { GalleryCard } from "@/components/PublicGallery/GalleryCard";
 import { GalleryFilters } from "@/components/PublicGallery/GalleryFilters";
 import { EmptyState } from "@/components/PublicGallery/EmptyState";
 import { LoadMoreButton } from "@/components/PublicGallery/LoadMoreButton";
+import { GalleryTableView } from "@/components/PublicGallery/GalleryTableView";
 
 const PublicGallery = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -20,6 +20,7 @@ const PublicGallery = () => {
   const [filter, setFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMoreItems, setHasMoreItems] = useState(true);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const itemsPerPage = 16;
 
   const fetchMessages = async (page = 1, append = false) => {
@@ -96,11 +97,38 @@ const PublicGallery = () => {
     setIsViewerOpen(true);
   };
 
+  // CRUD operations for messages
+  const handleDeleteMessage = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({ deleted_from_telegram: true })
+        .eq('id', id);
+
+      if (error) {
+        toast.error("Failed to delete item");
+        console.error("Error deleting message:", error);
+        return;
+      }
+
+      // Update local state by removing the deleted message
+      setMessages(prev => prev.filter(message => message.id !== id));
+      toast.success("Item deleted successfully");
+    } catch (error) {
+      console.error("Error in delete operation:", error);
+      toast.error("An error occurred");
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-6 md:py-8 max-w-7xl">
       <div className="mb-6 animate-fade-in">
-        <h1 className="text-3xl font-bold mb-4 text-center md:text-left">Public Gallery</h1>
-        <GalleryFilters filter={filter} setFilter={setFilter} />
+        <GalleryFilters 
+          filter={filter} 
+          setFilter={setFilter} 
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+        />
       </div>
       
       {isLoading ? (
@@ -109,23 +137,33 @@ const PublicGallery = () => {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
-            {filteredMessages.map(message => (
-              <GalleryCard 
-                key={message.id} 
-                message={message} 
-                onClick={handleMediaClick} 
+          {viewMode === 'grid' ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
+                {filteredMessages.map(message => (
+                  <GalleryCard 
+                    key={message.id} 
+                    message={message} 
+                    onClick={handleMediaClick} 
+                  />
+                ))}
+              </div>
+
+              {filteredMessages.length === 0 && <EmptyState />}
+
+              <LoadMoreButton 
+                onClick={loadMore} 
+                isLoading={isLoadingMore}
+                hasMoreItems={hasMoreItems} 
               />
-            ))}
-          </div>
-
-          {filteredMessages.length === 0 && <EmptyState />}
-
-          <LoadMoreButton 
-            onClick={loadMore} 
-            isLoading={isLoadingMore}
-            hasMoreItems={hasMoreItems} 
-          />
+            </>
+          ) : (
+            <GalleryTableView 
+              messages={filteredMessages} 
+              onMediaClick={handleMediaClick}
+              onDeleteMessage={handleDeleteMessage}
+            />
+          )}
 
           <MediaViewer 
             isOpen={isViewerOpen} 
