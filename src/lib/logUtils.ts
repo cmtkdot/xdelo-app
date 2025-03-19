@@ -39,7 +39,7 @@ export interface EventLogData {
  * Logs an event to the unified audit logs system
  */
 export const logEvent = async (
-  eventType: string | LogEventType,
+  eventType: LogEventType | string,
   entityId: string,
   metadata: EventLogData = {}
 ) => {

@@ -1,81 +1,110 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { corsHeaders } from "../_shared/cors.ts";
+import { supabaseClient } from "../_shared/supabase.ts";
 
-interface WebResponse {
+interface ResponseData {
   success: boolean;
   message?: string;
-  data?: any;
-  error?: any;
+  error?: string;
 }
 
-serve(async (req) => {
-  try {
-    // Create Supabase client
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// Main handler for the function
+Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
 
-    // Check if the settings table has the matching_config column
-    const { data: tableInfo, error: infoError } = await supabase
+  try {
+    // Execute the function
+    const result = await ensureMatchingConfig();
+
+    // Return the result
+    return new Response(
+      JSON.stringify(result),
+      {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        },
+        status: result.success ? 200 : 400
+      }
+    );
+  } catch (error) {
+    console.error("Error in add matching config column function:", error);
+    
+    const errorResponse: ResponseData = {
+      success: false,
+      error: error.message,
+      message: "Failed to add matching_config column to settings table"
+    };
+    
+    return new Response(
+      JSON.stringify(errorResponse),
+      {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        },
+        status: 500
+      }
+    );
+  }
+});
+
+/**
+ * Ensures that the matching_config column exists in the settings table
+ */
+async function ensureMatchingConfig(): Promise<ResponseData> {
+  try {
+    // Check if the settings table has a matching_config column
+    const { data: tableInfo, error: infoError } = await supabaseClient
       .from('settings')
       .select('*')
       .limit(1);
     
     if (infoError) {
-      console.error("Error checking settings table:", infoError);
-      throw new Error(`Error checking settings table: ${infoError.message}`);
+      return { 
+        success: false, 
+        error: infoError.message,
+        message: "Error checking settings table"
+      };
     }
     
-    // Check if matching_config column already exists
+    // If the table already has the column, we don't need to create it
     if (tableInfo && tableInfo.length > 0 && 'matching_config' in tableInfo[0]) {
-      // Column already exists, no need to add it
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: "Matching config column already exists",
-        } as WebResponse),
-        { headers: { "Content-Type": "application/json" } }
-      );
+      return { 
+        success: true, 
+        message: "matching_config column already exists"
+      };
     }
     
-    // Add the column if it doesn't exist
-    const query = `
-      ALTER TABLE IF EXISTS public.settings 
-      ADD COLUMN IF NOT EXISTS matching_config JSONB DEFAULT '{"similarityThreshold": 0.7, "partialMatch": {"enabled": true}}';
-      
-      CREATE INDEX IF NOT EXISTS idx_product_matching_text 
-      ON public.gl_products USING gin(main_product_name gin_trgm_ops, main_vendor_product_name gin_trgm_ops);
-    `;
+    // Add the matching_config column to the settings table
+    const { error } = await supabaseClient.rpc('xdelo_execute_sql_migration', {
+      sql_command: `
+        ALTER TABLE IF EXISTS public.settings 
+        ADD COLUMN IF NOT EXISTS matching_config JSONB DEFAULT '{"similarityThreshold": 0.7, "partialMatch": {"enabled": true}}';
+      `
+    });
     
-    const { error: alterError } = await supabase.rpc(
-      'xdelo_execute_sql_migration',
-      { sql_command: query }
-    );
-    
-    if (alterError) {
-      console.error("Error executing SQL migration:", alterError);
-      throw new Error(`Error adding matching_config column: ${alterError.message}`);
-    }
-    
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: "Successfully added matching_config column to settings table",
-      } as WebResponse),
-      { headers: { "Content-Type": "application/json" } }
-    );
-    
-  } catch (error) {
-    console.error("Error in xdelo_add_matching_config_column:", error);
-    
-    return new Response(
-      JSON.stringify({
-        success: false,
-        message: "Error adding matching_config column",
+    if (error) {
+      return { 
+        success: false, 
         error: error.message,
-      } as WebResponse),
-      { headers: { "Content-Type": "application/json" }, status: 500 }
-    );
+        message: "Error adding matching_config column"
+      };
+    }
+    
+    return { 
+      success: true, 
+      message: "Added matching_config column to settings table"
+    };
+  } catch (error) {
+    console.error("Error in ensureMatchingConfig:", error);
+    return { 
+      success: false, 
+      error: error.message,
+      message: "Exception when adding matching_config column"
+    };
   }
-});
+}

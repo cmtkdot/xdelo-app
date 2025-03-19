@@ -1878,6 +1878,7 @@ export type Database = {
           bot_token: string | null
           created_at: string | null
           id: string
+          product_matching_config: Json | null
           updated_at: string | null
           webhook_url: string | null
         }
@@ -1885,6 +1886,7 @@ export type Database = {
           bot_token?: string | null
           created_at?: string | null
           id?: string
+          product_matching_config?: Json | null
           updated_at?: string | null
           webhook_url?: string | null
         }
@@ -1892,6 +1894,7 @@ export type Database = {
           bot_token?: string | null
           created_at?: string | null
           id?: string
+          product_matching_config?: Json | null
           updated_at?: string | null
           webhook_url?: string | null
         }
@@ -2134,84 +2137,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      xan_relationship_definitions: {
-        Row: {
-          created_at: string
-          description: string | null
-          glide_column: string
-          id: string
-          is_active: boolean
-          reference_glide_column: string
-          reference_id_column: string
-          reference_table: string
-          relationship_type: string
-          source_table: string
-          supabase_column: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          description?: string | null
-          glide_column: string
-          id?: string
-          is_active?: boolean
-          reference_glide_column?: string
-          reference_id_column?: string
-          reference_table: string
-          relationship_type?: string
-          source_table: string
-          supabase_column: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          description?: string | null
-          glide_column?: string
-          id?: string
-          is_active?: boolean
-          reference_glide_column?: string
-          reference_id_column?: string
-          reference_table?: string
-          relationship_type?: string
-          source_table?: string
-          supabase_column?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      xan_relationship_validation_history: {
-        Row: {
-          checked_at: string
-          glide_column: string
-          id: string
-          missing_count: number
-          notes: string | null
-          repaired_count: number | null
-          supabase_column: string
-          table_name: string
-        }
-        Insert: {
-          checked_at?: string
-          glide_column: string
-          id?: string
-          missing_count: number
-          notes?: string | null
-          repaired_count?: number | null
-          supabase_column: string
-          table_name: string
-        }
-        Update: {
-          checked_at?: string
-          glide_column?: string
-          id?: string
-          missing_count?: number
-          notes?: string | null
-          repaired_count?: number | null
-          supabase_column?: string
-          table_name?: string
-        }
-        Relationships: []
       }
     }
     Views: {
@@ -2822,6 +2747,59 @@ export type Database = {
           width?: number | null
         }
         Relationships: []
+      }
+      v_product_matching_history: {
+        Row: {
+          event_timestamp: string | null
+          event_type: string | null
+          id: string | null
+          message_id: string | null
+          metadata: Json | null
+        }
+        Insert: {
+          event_timestamp?: string | null
+          event_type?: string | null
+          id?: string | null
+          message_id?: string | null
+          metadata?: Json | null
+        }
+        Update: {
+          event_timestamp?: string | null
+          event_type?: string | null
+          id?: string | null
+          message_id?: string | null
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_forwards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_compatibility"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       xan_recent_logs: {
         Row: {

@@ -1,10 +1,18 @@
 
-name = "xdelo_add_matching_config_column"
-path = "/xdelo_add_matching_config_column"
-entrypoint = "index.ts"
-verify_jwt = true
+# config.toml
 
-[permissions]
-database = ["table:settings:all"]
-storage = []
-content = []
+# The port the server will listen on - same as in the package.json script
+port = 54321
+
+# Whether to run the function in development mode (allows debugging)
+dev = false
+
+# Whether to import maps are enabled
+import_map = false
+
+# The entrypoint for the function
+entrypoint = "./index.ts"
+
+# Any environment variables needed for the function
+# Note: These override any environment variables set at the Supabase project level
+# env_vars = { KEY = "value" }

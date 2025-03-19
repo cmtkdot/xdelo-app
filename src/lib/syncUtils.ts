@@ -60,14 +60,17 @@ export const getPendingSyncItems = async (tableName: string, limit = 10) => {
       throw new Error('Invalid table name');
     }
     
-    // Using a more generic approach that should work with any table
-    const { data, error } = await supabase
-      .from(tableName)
+    // Use a type cast to work around the type limitations
+    // This is safer than using 'any' directly
+    const query = supabase
+      .from(tableName as any)
       .select('*')
       .eq('sync_status', 'pending')
       .order('updated_at', { ascending: true })
       .limit(limit);
       
+    const { data, error } = await query;
+    
     if (error) {
       throw error;
     }

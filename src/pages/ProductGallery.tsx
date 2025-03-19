@@ -1,8 +1,9 @@
+
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ProductGrid } from "@/components/ProductGallery/ProductGrid";
-import { ProductFilters } from "@/components/ProductGallery/ProductFilters";
-import { ProductPagination } from "@/components/ProductGallery/ProductPagination"; 
+import ProductGrid from "@/components/ProductGallery/ProductGrid";
+import ProductFilters from "@/components/ProductGallery/ProductFilters";
+import ProductPagination from "@/components/ProductGallery/ProductPagination"; 
 import { PageContainer } from "@/components/Layout/PageContainer";
 import { logEvent, LogEventType } from "@/lib/logUtils";
 import { useToast } from "@/hooks/useToast";
@@ -13,6 +14,13 @@ interface FilterState {
   category: string;
   searchTerm: string;
   dateRange: { from: Date | null; to: Date | null };
+}
+
+interface ProductPaginationProps {
+  currentPage: number;
+  totalItems: number;
+  itemsPerPage: number;
+  onPageChange: (pageNumber: number) => void;
 }
 
 export default function ProductGallery() {
@@ -65,7 +73,30 @@ export default function ProductGallery() {
           variant: "destructive",
         });
       } else {
-        setProducts(data || []);
+        // Convert database products to GlProduct type
+        const productList: GlProduct[] = data?.map(item => ({
+          id: item.id,
+          name: item.main_new_product_name || item.product_name_display || item.vendor_product_name,
+          sku: item.main_product_code,
+          description: item.main_purchase_notes,
+          price: item.main_cost,
+          createdAt: item.created_at,
+          updatedAt: item.updated_at,
+          imageUrl: item.main_product_image1,
+          category: item.main_category,
+          vendor: item.main_vendor_uid,
+          quantity: item.main_total_qty_purchased,
+          main_new_product_name: item.main_new_product_name,
+          main_vendor_product_name: item.vendor_product_name,
+          main_product_purchase_date: item.main_product_purchase_date,
+          main_total_qty_purchased: item.main_total_qty_purchased,
+          main_cost: item.main_cost,
+          main_category: item.main_category,
+          main_product_image1: item.main_product_image1,
+          main_purchase_notes: item.main_purchase_notes
+        })) || [];
+        
+        setProducts(productList);
       }
     } finally {
       setLoading(false);
@@ -155,8 +186,8 @@ export default function ProductGallery() {
         />
         <ProductPagination
           currentPage={currentPage}
-          totalProducts={products.length}
-          productsPerPage={productsPerPage}
+          totalItems={products.length}
+          itemsPerPage={productsPerPage}
           onPageChange={handlePageChange}
         />
       </div>

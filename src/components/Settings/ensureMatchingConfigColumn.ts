@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -28,19 +29,21 @@ export const ensureMatchingConfigColumn = async (): Promise<boolean> => {
       const { data, error } = await supabase.functions.invoke('xdelo_add_matching_config_column');
       
       if (error || !data?.success) {
-        // Fallback to the SQL migration function
-        const { data: migrationData, error: migrationError } = await supabase.rpc('xdelo_execute_sql_migration', {
+        // Fallback to the SQL migration API
+        const migrationResult = await supabase.rpc('xdelo_execute_sql_migration', {
           sql_command: `
             ALTER TABLE IF EXISTS public.settings 
             ADD COLUMN IF NOT EXISTS matching_config JSONB DEFAULT '{"similarityThreshold": 0.7, "partialMatch": {"enabled": true}}';
           `
         });
         
-        if (migrationError) {
-          console.error("Error ensuring matching config via migration:", migrationError);
+        if ('error' in migrationResult) {
+          console.error("Error ensuring matching config via migration:", migrationResult.error);
           return false;
         }
         
+        // Since we don't have strong typing, we need to check the response structure
+        const migrationData = migrationResult.data as any;
         return migrationData?.success === true;
       }
       
