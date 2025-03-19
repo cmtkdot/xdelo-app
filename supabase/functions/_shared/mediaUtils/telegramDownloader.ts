@@ -1,7 +1,7 @@
 
-import { xdelo_fetchWithRetry, rateLimitTracker } from './fetchUtils';
-import { xdelo_generateStoragePath } from './storagePaths';
-import { corsHeaders } from './corsUtils';
+import { xdelo_fetchWithRetry, rateLimitTracker } from './fetchUtils.ts';
+import { xdelo_generateStoragePath } from './storagePaths.ts';
+import { corsHeaders } from './corsUtils.ts';
 
 // Download media from Telegram with improved error handling
 export async function xdelo_downloadMediaFromTelegram(
