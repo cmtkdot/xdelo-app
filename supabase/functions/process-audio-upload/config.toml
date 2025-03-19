@@ -1,6 +1,4 @@
 
 project_id = "xjhhehxcxkiumnwbirel"
-name = "process-audio-upload"
-version = 1
-path = "process-audio-upload"
 verify_jwt = false
+

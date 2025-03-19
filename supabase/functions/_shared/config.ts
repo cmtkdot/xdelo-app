@@ -28,8 +28,6 @@ export const CONFIG = {
     RATE_LIMIT_EXCEEDED: 'Rate limit exceeded',
     STORAGE_NOT_AVAILABLE: 'Storage service unavailable',
     STORAGE_FILE_NOT_FOUND: 'File not found in storage',
-    TELEGRAM_BOT_TOKEN_MISSING: 'Telegram bot token is missing',
-    WEBHOOK_URL_MISSING: 'Webhook URL is not configured',
   },
   
   // Success messages
@@ -48,7 +46,6 @@ export const CONFIG = {
     STORAGE_VALIDATOR: 'validate-storage-files',
     FILE_REPAIR: 'xdelo_file_repair',
     CONTENT_DISPOSITION: 'xdelo_fix_content_disposition',
-    WEBHOOK_VALIDATOR: 'xdelo_validate_webhook',
   },
 
   // Storage buckets
@@ -62,14 +59,6 @@ export const CONFIG = {
   API: {
     TELEGRAM_API: 'https://api.telegram.org',
     DEFAULT_TIMEOUT_MS: 10000,
-  },
-  
-  // Telegram settings
-  TELEGRAM: {
-    WEBHOOK_PATH: 'telegram-webhook',
-    WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET || '',
-    MAX_CONNECTIONS: 10,
-    ALLOWED_UPDATES: ['message', 'edited_message', 'channel_post', 'edited_channel_post'],
   },
   
   // Logging levels

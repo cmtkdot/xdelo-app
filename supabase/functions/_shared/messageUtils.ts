@@ -1,5 +1,5 @@
 
-import { createSupabaseClient } from './supabase.ts';
+import { supabaseClient } from './supabase.ts';
 
 /**
  * Construct a shareable message URL for a Telegram message
@@ -84,8 +84,7 @@ export async function xdelo_findMediaGroupMessages(
   }
 
   try {
-    const supabase = createSupabaseClient();
-    let query = supabase
+    let query = supabaseClient
       .from('messages')
       .select('*')
       .eq('media_group_id', mediaGroupId)
@@ -121,9 +120,8 @@ export async function xdelo_findMessageWithContent(
   }
   
   try {
-    const supabase = createSupabaseClient();
     // Find messages in the group with a caption and analyzed content
-    let query = supabase
+    let query = supabaseClient
       .from('messages')
       .select('*')
       .eq('media_group_id', mediaGroupId)
@@ -159,9 +157,8 @@ export async function xdelo_syncMediaGroupContent(
   correlationId?: string
 ): Promise<boolean> {
   try {
-    const supabase = createSupabaseClient();
     // Get source message content
-    const { data: sourceMessage, error: sourceError } = await supabase
+    const { data: sourceMessage, error: sourceError } = await supabaseClient
       .from('messages')
       .select('analyzed_content, caption')
       .eq('id', sourceMessageId)
@@ -173,7 +170,7 @@ export async function xdelo_syncMediaGroupContent(
     }
     
     // Update target message with content from source
-    const { error: updateError } = await supabase
+    const { error: updateError } = await supabaseClient
       .from('messages')
       .update({
         analyzed_content: sourceMessage.analyzed_content,
@@ -189,7 +186,7 @@ export async function xdelo_syncMediaGroupContent(
     }
     
     // Log the sync event
-    await supabase.from('unified_audit_logs').insert({
+    await supabaseClient.from('unified_audit_logs').insert({
       event_type: 'media_group_content_synced',
       entity_id: targetMessageId,
       metadata: {

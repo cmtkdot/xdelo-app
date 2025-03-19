@@ -1,6 +1,0 @@
-
-project_id = "xjhhehxcxkiumnwbirel"
-name = "xdelo_validate_webhook"
-version = 1
-path = "xdelo_validate_webhook"
-verify_jwt = false

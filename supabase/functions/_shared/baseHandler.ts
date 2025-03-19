@@ -1,220 +1,198 @@
 
-import { corsHeaders, handleOptionsRequest } from './cors.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders, handleOptionsRequest, createCorsResponse, isPreflightRequest } from './cors.ts';
 
-/**
- * Security level for edge functions
- */
-export enum SecurityLevel {
-  PUBLIC = 'public',
-  AUTHENTICATED = 'authenticated',
-  SERVICE_ROLE = 'service_role'
+type EdgeFunctionHandler = (req: Request) => Promise<Response>;
+
+interface HandlerOptions {
+  enableCors?: boolean;
+  enableMetrics?: boolean;
+  enableLogging?: boolean;
+  requireAuth?: boolean;
 }
 
-/**
- * Options for the edge function handler
- */
-export interface HandlerOptions {
-  enableCors: boolean;
-  enableLogging: boolean;
-  securityLevel: SecurityLevel;
-}
-
-/**
- * Default handler options
- */
 const defaultOptions: HandlerOptions = {
   enableCors: true,
+  enableMetrics: true,
   enableLogging: true,
-  securityLevel: SecurityLevel.PUBLIC
+  requireAuth: false,
 };
 
 /**
- * Create a Supabase client
+ * Creates a standardized handler function for edge functions
  */
-export function createSupabaseClient() {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+export function createHandler(
+  handlerFn: EdgeFunctionHandler,
+  options: Partial<HandlerOptions> = {}
+): (req: Request) => Promise<Response> {
+  // Merge options with defaults
+  const config = { ...defaultOptions, ...options };
   
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase credentials');
-  }
-  
-  return createClient(supabaseUrl, supabaseKey);
-}
+  return async (req: Request) => {
+    // Handle CORS preflight requests
+    if (config.enableCors && isPreflightRequest(req)) {
+      return handleOptionsRequest();
+    }
 
-/**
- * Helper function for retrying API requests
- */
-export async function xdelo_fetchWithRetry(
-  url: string,
-  options: RequestInit = {},
-  maxRetries = 3,
-  baseDelay = 500
-): Promise<Response> {
-  let retries = 0;
-  
-  while (true) {
     try {
-      const response = await fetch(url, options);
+      // Generate a correlation ID for request tracking
+      const correlationId = req.headers.get('x-correlation-id') || crypto.randomUUID();
+      const startTime = Date.now();
       
-      if (response.ok || retries >= maxRetries) {
+      // Add correlation ID to headers for logging
+      const headers = new Headers(req.headers);
+      headers.set('X-Correlation-ID', correlationId);
+      
+      // Create a new request with the correlation ID
+      const enhancedRequest = new Request(req.url, {
+        method: req.method,
+        headers,
+        body: req.body,
+        redirect: req.redirect
+      });
+      
+      // Log the request if enabled
+      if (config.enableLogging) {
+        console.log(`[${correlationId}] ${req.method} ${new URL(req.url).pathname}`);
+      }
+      
+      // Check authentication if required
+      if (config.requireAuth) {
+        const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+        if (!token) {
+          return createCorsResponse({ 
+            error: 'Missing authorization token',
+            success: false 
+          }, { status: 401 });
+        }
+        
+        // Token validation would go here
+        // For now, we just check its presence
+      }
+      
+      // Call the handler function
+      const response = await handlerFn(enhancedRequest);
+      
+      // Calculate duration
+      const duration = Date.now() - startTime;
+      
+      if (!config.enableCors) {
         return response;
       }
       
-      // If we get rate limited, wait longer
-      const delay = response.status === 429
-        ? baseDelay * Math.pow(2, retries) + Math.random() * 1000
-        : baseDelay * Math.pow(2, retries);
+      // Add performance metrics headers if enabled
+      const enhancedHeaders: Record<string, string> = {};
       
-      console.log(`Request failed with status ${response.status}, retrying in ${delay}ms...`);
-      
-      await new Promise(resolve => setTimeout(resolve, delay));
-      retries++;
-    } catch (error) {
-      if (retries >= maxRetries) {
-        throw error;
+      if (config.enableMetrics) {
+        enhancedHeaders['X-Correlation-ID'] = correlationId;
+        enhancedHeaders['X-Processing-Time'] = `${duration}ms`;
+        enhancedHeaders['X-Function-Version'] = '1.0';
       }
       
-      const delay = baseDelay * Math.pow(2, retries);
-      console.log(`Request failed with error: ${error.message}, retrying in ${delay}ms...`);
+      // Clone the response with CORS headers
+      const enhancedResponse = new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: {
+          ...Object.fromEntries(response.headers.entries()),
+          ...corsHeaders,
+          ...enhancedHeaders
+        }
+      });
       
-      await new Promise(resolve => setTimeout(resolve, delay));
-      retries++;
+      // Log the response if enabled
+      if (config.enableLogging) {
+        console.log(`[${correlationId}] Completed in ${duration}ms with status ${response.status}`);
+      }
+      
+      return enhancedResponse;
+      
+    } catch (error) {
+      console.error('Error in edge function:', error);
+      
+      // Return standardized error response
+      return createCorsResponse({
+        success: false,
+        error: error.message || 'Unknown error',
+        errorType: error.name || 'UnknownError',
+        timestamp: new Date().toISOString()
+      }, { status: 500 });
     }
-  }
+  };
 }
 
 /**
- * Create a standardized handler for edge functions
+ * Type-safe wrapper for HTTP methods
  */
-export function createHandler(
-  handlerFn: (req: Request, correlationId?: string) => Promise<Response>,
+export function createMethodHandler<T>(
+  methods: { [K in 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH']?: (req: Request, body?: T) => Promise<Response> },
   options: Partial<HandlerOptions> = {}
-) {
-  // Merge the provided options with the defaults
-  const config = { ...defaultOptions, ...options };
-  
-  return async (req: Request): Promise<Response> => {
-    // Handle CORS preflight requests if CORS is enabled
-    if (config.enableCors && req.method === 'OPTIONS') {
-      return handleOptionsRequest();
-    }
+): EdgeFunctionHandler {
+  return createHandler(async (req: Request) => {
+    const method = req.method.toUpperCase();
     
-    // Generate a correlation ID for request tracking
-    const correlationId = crypto.randomUUID();
-    const startTime = performance.now();
+    // Check if method is supported
+    const handler = methods[method as keyof typeof methods];
     
-    // Log the request if logging is enabled
-    if (config.enableLogging) {
-      try {
-        console.log(JSON.stringify({
-          level: 'INFO',
-          message: 'Request received',
-          method: req.method,
-          url: req.url,
-          correlation_id: correlationId,
-          timestamp: new Date().toISOString()
-        }));
-      } catch (e) {
-        // Fallback simple logging if JSON.stringify fails
-        console.log(`[${correlationId}] Request received: ${req.method} ${req.url}`);
-      }
+    if (!handler) {
+      return createCorsResponse({
+        success: false,
+        error: `Method ${method} not allowed`
+      }, { status: 405 });
     }
     
     try {
-      // Call the handler function with the request and correlation ID
-      const response = await handlerFn(req, correlationId);
-      
-      // Log the response if logging is enabled
-      if (config.enableLogging) {
-        const duration = performance.now() - startTime;
-        try {
-          console.log(JSON.stringify({
-            level: 'INFO',
-            message: 'Response sent',
-            status: response.status,
-            correlation_id: correlationId,
-            duration_ms: duration.toFixed(2),
-            timestamp: new Date().toISOString()
-          }));
-        } catch (e) {
-          // Fallback simple logging if JSON.stringify fails
-          console.log(`[${correlationId}] Response sent: ${response.status} (${duration.toFixed(2)}ms)`);
+      // Parse body for methods that may have one
+      let body: T | undefined;
+      if (['POST', 'PUT', 'PATCH'].includes(method)) {
+        const contentType = req.headers.get('content-type') || '';
+        
+        if (contentType.includes('application/json')) {
+          body = await req.json() as T;
         }
       }
       
-      // Add CORS headers to the response if CORS is enabled
-      if (config.enableCors) {
-        const responseHeaders = new Headers(response.headers);
-        
-        // Add CORS headers
-        Object.entries(corsHeaders).forEach(([key, value]) => {
-          responseHeaders.set(key, value);
-        });
-        
-        // Create a new response with the CORS headers
-        return new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: responseHeaders
-        });
-      }
-      
-      return response;
+      // Call the handler with the body if needed
+      return await handler(req, body);
     } catch (error) {
-      // Log the error if logging is enabled
-      if (config.enableLogging) {
-        const duration = performance.now() - startTime;
-        try {
-          console.error(JSON.stringify({
-            level: 'ERROR',
-            message: 'Error processing request',
-            error: error.message,
-            stack: error.stack,
-            correlation_id: correlationId,
-            duration_ms: duration.toFixed(2),
-            timestamp: new Date().toISOString()
-          }));
-        } catch (e) {
-          // Fallback simple logging if JSON.stringify fails
-          console.error(`[${correlationId}] Error processing request: ${error.message}`);
-          console.error(error.stack);
-        }
-      }
+      console.error(`Error in ${method} handler:`, error);
       
-      // Create a standardized error response
-      const errorResponse = new Response(
-        JSON.stringify({
-          error: error.message || 'Internal server error',
-          success: false,
-          correlation_id: correlationId,
-          timestamp: new Date().toISOString()
-        }),
-        {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-      
-      // Add CORS headers to the error response if CORS is enabled
-      if (config.enableCors) {
-        const errorHeaders = new Headers(errorResponse.headers);
-        
-        // Add CORS headers
-        Object.entries(corsHeaders).forEach(([key, value]) => {
-          errorHeaders.set(key, value);
-        });
-        
-        // Create a new response with the CORS headers
-        return new Response(errorResponse.body, {
-          status: errorResponse.status,
-          statusText: errorResponse.statusText,
-          headers: errorHeaders
-        });
-      }
-      
-      return errorResponse;
+      return createCorsResponse({
+        success: false,
+        error: error.message || 'Unknown error',
+        errorType: error.name || 'UnknownError'
+      }, { status: 500 });
     }
-  };
+  }, options);
+}
+
+/**
+ * Helper to create a simple success response
+ */
+export function createSuccessResponse(data: any, message?: string): Response {
+  return createCorsResponse({
+    success: true,
+    data,
+    message,
+    timestamp: new Date().toISOString()
+  });
+}
+
+/**
+ * Helper to create a simple error response
+ */
+export function createErrorResponse(
+  error: Error | string, 
+  status = 500, 
+  additionalData: Record<string, any> = {}
+): Response {
+  const errorMessage = typeof error === 'string' ? error : error.message;
+  const errorType = typeof error === 'string' ? 'Error' : error.name;
+  
+  return createCorsResponse({
+    success: false,
+    error: errorMessage,
+    errorType,
+    timestamp: new Date().toISOString(),
+    ...additionalData
+  }, { status });
 }

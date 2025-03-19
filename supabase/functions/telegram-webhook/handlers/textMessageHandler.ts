@@ -4,7 +4,18 @@ import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
 import { constructTelegramMessageUrl, isMessageForwarded } from '../../_shared/messageUtils.ts';
-import { createSupabaseClient } from '../../_shared/supabase.ts';
+
+// Create Supabase client
+const supabaseClient = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  }
+);
 
 export async function handleOtherMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
@@ -17,9 +28,6 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
     
     // Generate message URL using our utility function from _shared/messageUtils.ts
     const message_url = constructTelegramMessageUrl(message);
-    
-    // Create Supabase client
-    const supabaseClient = createSupabaseClient();
     
     // Store message data in the other_messages table
     const { data, error } = await supabaseClient

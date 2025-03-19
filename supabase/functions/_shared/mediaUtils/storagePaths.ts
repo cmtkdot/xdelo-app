@@ -1,5 +1,5 @@
 
-import { xdelo_getExtensionFromMimeType } from './mimeTypes.ts';
+import { xdelo_getExtensionFromMimeType } from './mimeTypes';
 
 // Standardize storage path generation
 export function xdelo_generateStoragePath(fileUniqueId: string, mimeType: string): string {

@@ -2,6 +2,7 @@
 import { Message } from "@/types/MessagesTypes";
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { MediaViewer } from '@/components/MediaViewer/MediaViewer';
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { GalleryCard } from "@/components/PublicGallery/GalleryCard";
@@ -10,15 +11,13 @@ import { EmptyState } from "@/components/PublicGallery/EmptyState";
 import { LoadMoreButton } from "@/components/PublicGallery/LoadMoreButton";
 import { SearchToolbar } from "@/components/PublicGallery/SearchToolbar";
 import { usePublicGallerySearch } from "@/hooks/publicGallery/usePublicGallerySearch";
-import { PublicGalleryDetail } from "@/components/PublicGallery/PublicGalleryDetail";
 
 const PublicGallery = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [selectedMedia, setSelectedMedia] = useState<Message[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMoreItems, setHasMoreItems] = useState(true);
@@ -101,37 +100,14 @@ const PublicGallery = () => {
   // Get the final filtered messages by applying both search and media type filters
   const finalFilteredMessages = applyMediaTypeFilter(filteredMessages);
 
-  // Handler for opening the detail view
-  const handleOpenDetail = (message: Message) => {
-    setSelectedMessage(message);
-    setSelectedIndex(finalFilteredMessages.findIndex(m => m.id === message.id));
-    setIsDetailOpen(true);
-  };
-
-  // Get related messages for the current selection (for media groups)
-  const getRelatedMessages = (): Message[] => {
-    if (!selectedMessage?.media_group_id) return [];
-    
-    return messages.filter(
-      m => m.media_group_id === selectedMessage.media_group_id && m.id !== selectedMessage.id
-    );
-  };
-
-  // Navigation handlers for the detail view
-  const handlePreviousItem = () => {
-    if (selectedIndex > 0) {
-      const prevIndex = selectedIndex - 1;
-      setSelectedIndex(prevIndex);
-      setSelectedMessage(finalFilteredMessages[prevIndex]);
+  const handleMediaClick = (message: Message) => {
+    if (message.media_group_id) {
+      const groupMedia = messages.filter(m => m.media_group_id === message.media_group_id);
+      setSelectedMedia(groupMedia);
+    } else {
+      setSelectedMedia([message]);
     }
-  };
-
-  const handleNextItem = () => {
-    if (selectedIndex < finalFilteredMessages.length - 1) {
-      const nextIndex = selectedIndex + 1;
-      setSelectedIndex(nextIndex);
-      setSelectedMessage(finalFilteredMessages[nextIndex]);
-    }
+    setIsViewerOpen(true);
   };
 
   return (
@@ -162,7 +138,7 @@ const PublicGallery = () => {
               <GalleryCard 
                 key={message.id} 
                 message={message} 
-                onClick={handleOpenDetail} 
+                onClick={handleMediaClick} 
               />
             ))}
           </div>
@@ -180,19 +156,11 @@ const PublicGallery = () => {
             />
           )}
 
-          {/* Detail view */}
-          {selectedMessage && (
-            <PublicGalleryDetail
-              isOpen={isDetailOpen}
-              onClose={() => setIsDetailOpen(false)}
-              message={selectedMessage}
-              relatedMessages={getRelatedMessages()}
-              onPrevious={handlePreviousItem}
-              onNext={handleNextItem}
-              hasPrevious={selectedIndex > 0}
-              hasNext={selectedIndex < finalFilteredMessages.length - 1}
-            />
-          )}
+          <MediaViewer 
+            isOpen={isViewerOpen} 
+            onClose={() => setIsViewerOpen(false)} 
+            currentGroup={selectedMedia} 
+          />
         </>
       )}
     </div>
