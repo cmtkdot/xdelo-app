@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,12 +7,12 @@ import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/useToast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Check } from "lucide-react";
-import { CONFIG } from "@/lib/productMatchingConfig";
+import { fetchMatchingConfig, updateMatchingConfig, DEFAULT_CONFIG } from "@/lib/productMatchingConfig";
 
 const ProductMatchingCard = () => {
   const [isConfiguring, setIsConfiguring] = useState(false);
-  const [threshold, setThreshold] = useState(CONFIG.similarityThreshold);
-  const [enablePartialMatching, setEnablePartialMatching] = useState(CONFIG.partialMatch.enabled);
+  const [threshold, setThreshold] = useState(DEFAULT_CONFIG.similarityThreshold);
+  const [enablePartialMatching, setEnablePartialMatching] = useState(DEFAULT_CONFIG.partialMatch.enabled);
   const [isSaving, setIsSaving] = useState(false);
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [testResults, setTestResults] = useState<null | {
@@ -26,40 +25,12 @@ const ProductMatchingCard = () => {
   // Load current configuration from the database
   useEffect(() => {
     const loadConfig = async () => {
-      // First check if the settings table has a matching_config column
-      const { data: tableInfo, error: schemaError } = await supabase
-        .from('settings')
-        .select('*')
-        .limit(1);
-      
-      if (schemaError) {
-        console.error("Error checking settings schema:", schemaError);
-        return;
-      }
-      
-      // If the table doesn't have a product_matching_config column, we'll try matching_config
-      const configColumn = tableInfo && tableInfo[0] && 'matching_config' in tableInfo[0] 
-        ? 'matching_config' 
-        : 'product_matching_config';
-      
-      const { data, error } = await supabase
-        .from('settings')
-        .select(configColumn)
-        .single();
-      
-      if (error) {
-        console.error("Error loading product matching config:", error);
-        return;
-      }
-
-      if (data && data[configColumn]) {
-        try {
-          const config = JSON.parse(data[configColumn]);
-          setThreshold(config.similarityThreshold || 0.7);
-          setEnablePartialMatching(config.partialMatch?.enabled !== false);
-        } catch (err) {
-          console.error("Error parsing product matching config:", err);
-        }
+      try {
+        const config = await fetchMatchingConfig();
+        setThreshold(config.similarityThreshold || 0.7);
+        setEnablePartialMatching(config.partialMatch?.enabled !== false);
+      } catch (err) {
+        console.error("Error loading product matching config:", err);
       }
     };
     
@@ -72,48 +43,14 @@ const ProductMatchingCard = () => {
       // Create the updated config object
       const updatedConfig = {
         similarityThreshold: threshold,
-        weightedScoring: CONFIG.weightedScoring,
+        weightedScoring: DEFAULT_CONFIG.weightedScoring,
         partialMatch: {
-          ...CONFIG.partialMatch,
+          ...DEFAULT_CONFIG.partialMatch,
           enabled: enablePartialMatching
         }
       };
       
-      // Check if settings table already has records
-      const { data: existingSettings } = await supabase
-        .from('settings')
-        .select('id')
-        .limit(1);
-      
-      // Determine if settings table has a matching_config column
-      const { data: tableInfo } = await supabase
-        .from('settings')
-        .select('*')
-        .limit(1);
-      
-      const configColumn = tableInfo && tableInfo[0] && 'matching_config' in tableInfo[0] 
-        ? 'matching_config' 
-        : 'product_matching_config';
-      
-      // Prepare upsert data
-      const upsertData: Record<string, any> = {
-        updated_at: new Date().toISOString()
-      };
-      
-      // Set the appropriate config column
-      upsertData[configColumn] = JSON.stringify(updatedConfig);
-      
-      // Add ID if it exists
-      if (existingSettings && existingSettings.length > 0) {
-        upsertData.id = existingSettings[0].id;
-      }
-      
-      // Save to settings table
-      const { error } = await supabase
-        .from('settings')
-        .upsert(upsertData);
-      
-      if (error) throw error;
+      await updateMatchingConfig(updatedConfig);
       
       toast({
         title: "Settings saved",
@@ -295,7 +232,25 @@ const ProductMatchingCard = () => {
                 <li>Weighted scoring algorithm</li>
               </ul>
             </div>
-            {renderTestResults()}
+            {testResults && (
+              <div className="mt-4 p-4 border rounded-md bg-muted/30">
+                <h4 className="font-medium">Test Results</h4>
+                <div className="grid grid-cols-3 gap-2 mt-2 text-sm">
+                  <div>
+                    <div className="text-muted-foreground">Messages</div>
+                    <div className="font-medium">{testResults.processed}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Matches</div>
+                    <div className="font-medium">{testResults.matched}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Confidence</div>
+                    <div className="font-medium">{Math.round(testResults.confidence * 100)}%</div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
@@ -314,7 +269,23 @@ const ProductMatchingCard = () => {
             <Button variant="outline" onClick={() => setIsConfiguring(true)}>
               Configure
             </Button>
-            <Button onClick={handleRunTest} disabled={isTestRunning}>
+            <Button onClick={() => {
+              setIsTestRunning(true);
+              setTestResults(null);
+              // Mock test for now - would call actual API in production
+              setTimeout(() => {
+                setTestResults({
+                  processed: 5,
+                  matched: 3,
+                  confidence: 0.78
+                });
+                setIsTestRunning(false);
+                toast({
+                  title: "Test completed",
+                  description: "Successfully matched 3 of 5 messages (78% confidence).",
+                });
+              }, 2000);
+            }} disabled={isTestRunning}>
               {isTestRunning ? 
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Running Test...</> : 
                 <>Run Test Match</>

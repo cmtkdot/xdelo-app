@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,19 +6,18 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/useToast";
-import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Save, Check, Settings2 } from "lucide-react";
-import { CONFIG } from "@/lib/productMatchingConfig";
+import { fetchMatchingConfig, updateMatchingConfig } from "@/lib/productMatchingConfig";
 import { FeatureCard } from "./FeatureCard";
 
 export const MatchingConfiguration = () => {
   const [isEditing, setIsEditing] = useState(false);
-  const [threshold, setThreshold] = useState(CONFIG.similarityThreshold);
-  const [enablePartialMatching, setEnablePartialMatching] = useState(CONFIG.partialMatch.enabled);
-  const [vendorMinLength, setVendorMinLength] = useState(CONFIG.partialMatch.vendorMinLength);
-  const [weightProduct, setWeightProduct] = useState(CONFIG.weightedScoring.productName);
-  const [weightVendor, setWeightVendor] = useState(CONFIG.weightedScoring.vendorUid);
-  const [weightDate, setWeightDate] = useState(CONFIG.weightedScoring.purchaseDate);
+  const [threshold, setThreshold] = useState(0.7);
+  const [enablePartialMatching, setEnablePartialMatching] = useState(true);
+  const [vendorMinLength, setVendorMinLength] = useState(2);
+  const [weightProduct, setWeightProduct] = useState(0.4);
+  const [weightVendor, setWeightVendor] = useState(0.3);
+  const [weightDate, setWeightDate] = useState(0.3);
   
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -30,51 +28,21 @@ export const MatchingConfiguration = () => {
     const loadConfig = async () => {
       setIsLoading(true);
       try {
-        // First check if the settings table has a matching_config column
-        const { data: tableInfo, error: schemaError } = await supabase
-          .from('settings')
-          .select('*')
-          .limit(1);
+        const config = await fetchMatchingConfig();
+        setThreshold(config.similarityThreshold || 0.7);
         
-        if (schemaError) {
-          console.error("Error checking settings schema:", schemaError);
-          return;
+        if (config.weightedScoring) {
+          setWeightProduct(config.weightedScoring.name || 0.4);
+          setWeightVendor(config.weightedScoring.vendor || 0.3);
+          setWeightDate(config.weightedScoring.purchaseDate || 0.3);
         }
         
-        // If the table doesn't have a product_matching_config column, we'll try matching_config
-        const configColumn = tableInfo && tableInfo[0] && 'matching_config' in tableInfo[0] 
-          ? 'matching_config' 
-          : 'product_matching_config';
-        
-        const { data, error } = await supabase
-          .from('settings')
-          .select(configColumn)
-          .single();
-        
-        if (error) {
-          console.error("Error loading product matching config:", error);
-          return;
+        if (config.partialMatch) {
+          setEnablePartialMatching(config.partialMatch.enabled !== false);
+          setVendorMinLength(config.partialMatch.minLength || 2);
         }
-
-        if (data && data[configColumn]) {
-          try {
-            const config = JSON.parse(data[configColumn]);
-            setThreshold(config.similarityThreshold || 0.7);
-            
-            if (config.weightedScoring) {
-              setWeightProduct(config.weightedScoring.productName || 0.4);
-              setWeightVendor(config.weightedScoring.vendorUid || 0.3);
-              setWeightDate(config.weightedScoring.purchaseDate || 0.3);
-            }
-            
-            if (config.partialMatch) {
-              setEnablePartialMatching(config.partialMatch.enabled !== false);
-              setVendorMinLength(config.partialMatch.vendorMinLength || 2);
-            }
-          } catch (err) {
-            console.error("Error parsing product matching config:", err);
-          }
-        }
+      } catch (err) {
+        console.error("Error loading product matching config:", err);
       } finally {
         setIsLoading(false);
       }
@@ -104,52 +72,18 @@ export const MatchingConfiguration = () => {
       const updatedConfig = {
         similarityThreshold: threshold,
         weightedScoring: {
-          productName: weightProduct,
-          vendorUid: weightVendor,
+          name: weightProduct,
+          vendor: weightVendor,
           purchaseDate: weightDate
         },
         partialMatch: {
           enabled: enablePartialMatching,
-          vendorMinLength: vendorMinLength,
-          dateFormat: CONFIG.partialMatch.dateFormat
+          minLength: vendorMinLength,
+          dateFormat: "YYYY-MM-DD"
         }
       };
       
-      // Check if settings table already has records
-      const { data: existingSettings } = await supabase
-        .from('settings')
-        .select('id')
-        .limit(1);
-      
-      // Determine if settings table has a matching_config column
-      const { data: tableInfo } = await supabase
-        .from('settings')
-        .select('*')
-        .limit(1);
-      
-      const configColumn = tableInfo && tableInfo[0] && 'matching_config' in tableInfo[0] 
-        ? 'matching_config' 
-        : 'product_matching_config';
-      
-      // Prepare upsert data
-      const upsertData: Record<string, any> = {
-        updated_at: new Date().toISOString()
-      };
-      
-      // Set the appropriate config column
-      upsertData[configColumn] = JSON.stringify(updatedConfig);
-      
-      // Add ID if it exists
-      if (existingSettings && existingSettings.length > 0) {
-        upsertData.id = existingSettings[0].id;
-      }
-      
-      // Save to settings table
-      const { error } = await supabase
-        .from('settings')
-        .upsert(upsertData);
-      
-      if (error) throw error;
+      await updateMatchingConfig(updatedConfig);
       
       toast({
         title: "Settings saved",
