@@ -11,6 +11,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { BatchProcessingTable } from "./BatchProcessingTable";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { AnalyzedContent } from "@/types/utils/AnalyzedContent";
 
 interface BatchResults {
   total: number;
@@ -84,14 +85,27 @@ export const BatchMatchingPanel = () => {
       const totalMessages = messages.length;
       
       // Create initial processing state for all messages
-      const initialProcessingState = messages.map(msg => ({
-        id: msg.id,
-        productName: msg.product_name || (msg.analyzed_content && typeof msg.analyzed_content === 'object' ? msg.analyzed_content.product_name : undefined),
-        vendorUid: msg.vendor_uid || (msg.analyzed_content && typeof msg.analyzed_content === 'object' ? msg.analyzed_content.vendor_uid : undefined),
-        purchaseDate: msg.purchase_date || (msg.analyzed_content && typeof msg.analyzed_content === 'object' ? msg.analyzed_content.purchase_date : undefined),
-        status: 'processing' as const,
-        processingStartedAt: new Date().toISOString(),
-      }));
+      const initialProcessingState = messages.map(msg => {
+        // Safely extract properties from analyzed_content
+        let productName: string | undefined;
+        let vendorUid: string | undefined;
+        let purchaseDate: string | undefined;
+        
+        if (msg.analyzed_content && typeof msg.analyzed_content === 'object' && !Array.isArray(msg.analyzed_content)) {
+          productName = (msg.analyzed_content as Record<string, any>).product_name;
+          vendorUid = (msg.analyzed_content as Record<string, any>).vendor_uid;
+          purchaseDate = (msg.analyzed_content as Record<string, any>).purchase_date;
+        }
+        
+        return {
+          id: msg.id,
+          productName: msg.product_name || productName,
+          vendorUid: msg.vendor_uid || vendorUid,
+          purchaseDate: msg.purchase_date || purchaseDate,
+          status: 'processing' as const,
+          processingStartedAt: new Date().toISOString(),
+        };
+      });
       
       setProcessedMessages(initialProcessingState);
       
