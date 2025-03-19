@@ -1,6 +1,7 @@
 
 import { AccountCard } from "@/components/Settings/AccountCard";
-import { TelegramCard, ProductMatchingCard } from "@/components/Settings/Telegram";
+import { TelegramCard } from "@/components/Settings/Telegram";
+import { ProductMatchingCard } from "@/components/Settings/ProductMatchingCard";
 import { DatabaseFixCard } from "@/components/Settings/DatabaseFixCard";
 import { useAuth } from "@/hooks/useAuth";
 

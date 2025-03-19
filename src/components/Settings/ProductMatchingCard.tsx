@@ -1,28 +1,73 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/useToast";
 import { supabase } from "@/integrations/supabase/client";
+import { Loader2, Check, AlertCircle } from "lucide-react";
+import { CONFIG } from "@/lib/productMatchingConfig";
 
 const ProductMatchingCard = () => {
   const [isConfiguring, setIsConfiguring] = useState(false);
-  const [threshold, setThreshold] = useState(0.7);
-  const [enablePartialMatching, setEnablePartialMatching] = useState(true);
+  const [threshold, setThreshold] = useState(CONFIG.similarityThreshold);
+  const [enablePartialMatching, setEnablePartialMatching] = useState(CONFIG.partialMatch.enabled);
   const [isSaving, setIsSaving] = useState(false);
   const [isTestRunning, setIsTestRunning] = useState(false);
+  const [testResults, setTestResults] = useState<null | {
+    processed: number;
+    matched: number;
+    confidence: number;
+  }>(null);
   const { toast } = useToast();
+
+  // Load current configuration from the database
+  useEffect(() => {
+    const loadConfig = async () => {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('product_matching_config')
+        .single();
+      
+      if (!error && data?.product_matching_config) {
+        try {
+          const config = JSON.parse(data.product_matching_config);
+          setThreshold(config.similarityThreshold || 0.7);
+          setEnablePartialMatching(config.partialMatch?.enabled !== false);
+        } catch (err) {
+          console.error("Error parsing product matching config:", err);
+        }
+      }
+    };
+    
+    loadConfig();
+  }, []);
 
   const handleSaveSettings = async () => {
     setIsSaving(true);
     try {
-      // In a real implementation, we would save these settings to the database
-      // For now, just simulate a successful save
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Create the updated config object
+      const updatedConfig = {
+        similarityThreshold: threshold,
+        weightedScoring: CONFIG.weightedScoring,
+        partialMatch: {
+          ...CONFIG.partialMatch,
+          enabled: enablePartialMatching
+        }
+      };
+      
+      // Save to settings table
+      const { error } = await supabase
+        .from('settings')
+        .upsert({ 
+          id: 1, // Assuming there's only one settings record
+          product_matching_config: JSON.stringify(updatedConfig),
+          updated_at: new Date().toISOString()
+        });
+      
+      if (error) throw error;
       
       toast({
         title: "Settings saved",
@@ -31,6 +76,7 @@ const ProductMatchingCard = () => {
       
       setIsConfiguring(false);
     } catch (error) {
+      console.error("Error saving settings:", error);
       toast({
         title: "Error saving settings",
         description: "There was a problem saving your settings.",
@@ -43,6 +89,7 @@ const ProductMatchingCard = () => {
 
   const handleRunTest = async () => {
     setIsTestRunning(true);
+    setTestResults(null);
     try {
       // Get 5 recent messages with analyzed content
       const { data: messages, error } = await supabase
@@ -63,12 +110,46 @@ const ProductMatchingCard = () => {
         return;
       }
 
-      // Simulate matching process
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // For each message, run the matching algorithm
+      let matchCount = 0;
+      let totalConfidence = 0;
+
+      for (const message of messages) {
+        // Call the product matching endpoint
+        const { data: matchingResult, error: matchingError } = await supabase
+          .functions.invoke('product-matching', {
+            body: { 
+              messageId: message.id,
+              config: {
+                similarityThreshold: threshold,
+                partialMatchEnabled: enablePartialMatching
+              }
+            }
+          });
+
+        if (matchingError) {
+          console.error("Error in product matching test:", matchingError);
+          continue;
+        }
+
+        if (matchingResult?.bestMatch) {
+          matchCount++;
+          totalConfidence += matchingResult.bestMatch.confidence;
+        }
+      }
+
+      // Store and display results
+      const results = {
+        processed: messages.length,
+        matched: matchCount,
+        confidence: matchCount > 0 ? totalConfidence / matchCount : 0
+      };
+
+      setTestResults(results);
 
       toast({
         title: "Test completed",
-        description: `Successfully tested matching on ${messages.length} messages.`,
+        description: `Successfully matched ${matchCount} of ${messages.length} messages (${Math.round(results.confidence * 100)}% confidence).`,
       });
     } catch (error) {
       console.error("Error running test:", error);
@@ -80,6 +161,30 @@ const ProductMatchingCard = () => {
     } finally {
       setIsTestRunning(false);
     }
+  };
+
+  const renderTestResults = () => {
+    if (!testResults) return null;
+
+    return (
+      <div className="mt-4 p-4 border rounded-md bg-muted/30">
+        <h4 className="font-medium">Test Results</h4>
+        <div className="grid grid-cols-3 gap-2 mt-2 text-sm">
+          <div>
+            <div className="text-muted-foreground">Messages</div>
+            <div className="font-medium">{testResults.processed}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Matches</div>
+            <div className="font-medium">{testResults.matched}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Confidence</div>
+            <div className="font-medium">{Math.round(testResults.confidence * 100)}%</div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -144,6 +249,7 @@ const ProductMatchingCard = () => {
                 <li>Weighted scoring algorithm</li>
               </ul>
             </div>
+            {renderTestResults()}
           </div>
         )}
       </CardContent>
@@ -154,7 +260,7 @@ const ProductMatchingCard = () => {
               Cancel
             </Button>
             <Button onClick={handleSaveSettings} disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save Settings"}
+              {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : <><Check className="mr-2 h-4 w-4" /> Save Settings</>}
             </Button>
           </>
         ) : (
@@ -163,7 +269,10 @@ const ProductMatchingCard = () => {
               Configure
             </Button>
             <Button onClick={handleRunTest} disabled={isTestRunning}>
-              {isTestRunning ? "Running Test..." : "Run Test Match"}
+              {isTestRunning ? 
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Running Test...</> : 
+                <>Run Test Match</>
+              }
             </Button>
           </>
         )}

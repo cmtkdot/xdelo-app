@@ -326,6 +326,7 @@ export type Database = {
       }
       gl_estimates: {
         Row: {
+          add_note: string | null
           approved_date: string | null
           balance: number | null
           converted_to_invoice: string | null
@@ -344,6 +345,7 @@ export type Database = {
           void_date: string | null
         }
         Insert: {
+          add_note?: string | null
           approved_date?: string | null
           balance?: number | null
           converted_to_invoice?: string | null
@@ -362,6 +364,7 @@ export type Database = {
           void_date?: string | null
         }
         Update: {
+          add_note?: string | null
           approved_date?: string | null
           balance?: number | null
           converted_to_invoice?: string | null
@@ -965,6 +968,7 @@ export type Database = {
         Row: {
           amount: number | null
           created_at: string | null
+          date_of_payment: string | null
           glide_row_id: string
           id: string
           notes: string | null
@@ -977,6 +981,7 @@ export type Database = {
         Insert: {
           amount?: number | null
           created_at?: string | null
+          date_of_payment?: string | null
           glide_row_id: string
           id?: string
           notes?: string | null
@@ -989,6 +994,7 @@ export type Database = {
         Update: {
           amount?: number | null
           created_at?: string | null
+          date_of_payment?: string | null
           glide_row_id?: string
           id?: string
           notes?: string | null
