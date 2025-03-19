@@ -260,7 +260,7 @@ const logMatchingOperation = async (
 ) => {
   try {
     await logEvent(
-      "PRODUCT_MATCHING", // Using string instead of enum to fix the error
+      LogEventType.PRODUCT_MATCHING,
       messageId,
       {
         matchCount: matches.length,

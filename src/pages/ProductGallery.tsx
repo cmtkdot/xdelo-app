@@ -102,13 +102,28 @@ const ProductGallery = () => {
     };
   }, [queryClient]);
 
-  const handleEdit = async (media: Message) => {
+  const logUserAction = async (action: string, details: any = {}) => {
     try {
       await logEvent(
         LogEventType.USER_ACTION,
-        media.id,
+        details.productId || 'gallery',
         {
-          action: 'start_edit',
+          action,
+          user_id: user?.id,
+          timestamp: new Date().toISOString(),
+          ...details
+        }
+      );
+    } catch (error) {
+      console.error("Error logging user action:", error);
+    }
+  };
+
+  const handleEdit = async (media: Message) => {
+    try {
+      await logUserAction(
+        'start_edit',
+        {
           media_group_id: media.media_group_id
         }
       );

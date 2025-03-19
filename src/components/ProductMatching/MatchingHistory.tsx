@@ -19,8 +19,7 @@ interface MatchLog {
   id: string;
   created_at: string;
   event_type: string;
-  message_id: string;
-  user_id: string | null;
+  entity_id: string;
   metadata: MatchLogMetadata;
 }
 
@@ -33,7 +32,7 @@ export const MatchingHistory = () => {
   const loadMatchLogs = async () => {
     setIsLoading(true);
     try {
-      // Using the unified_audit_logs table instead of event_logs
+      // Use the unified_audit_logs table
       const { data, error } = await supabase
         .from('unified_audit_logs')
         .select('*')
@@ -43,23 +42,20 @@ export const MatchingHistory = () => {
       
       if (error) throw error;
       
-      // Transform the data to match our expected MatchLog type
-      const transformedLogs: MatchLog[] = (data || []).map(log => ({
-        id: log.id,
-        created_at: log.event_timestamp,
-        event_type: log.event_type,
-        message_id: log.entity_id || '',
-        user_id: log.user_id,
-        metadata: log.metadata as MatchLogMetadata || {
-          matchCount: 0,
-          hasBestMatch: false,
-          bestMatchConfidence: 0,
-          bestMatchProductId: null,
-          timestamp: log.event_timestamp
-        }
-      }));
-      
-      setLogs(transformedLogs);
+      if (data) {
+        // Transform the data to match our expected MatchLog type
+        const transformedLogs: MatchLog[] = data.map(log => ({
+          id: log.id,
+          created_at: log.event_timestamp || log.created_at,
+          event_type: log.event_type,
+          entity_id: log.entity_id,
+          metadata: log.metadata as MatchLogMetadata
+        }));
+        
+        setLogs(transformedLogs);
+      } else {
+        setLogs([]);
+      }
     } catch (error) {
       console.error("Error loading match logs:", error);
       toast({
@@ -81,7 +77,7 @@ export const MatchingHistory = () => {
     
     const searchTermLower = searchTerm.toLowerCase();
     return (
-      log.message_id.toLowerCase().includes(searchTermLower) ||
+      log.entity_id.toLowerCase().includes(searchTermLower) ||
       (log.metadata?.bestMatchProductId || "").toLowerCase().includes(searchTermLower)
     );
   });
@@ -146,7 +142,7 @@ export const MatchingHistory = () => {
                     
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                       <div className="text-muted-foreground">Message ID:</div>
-                      <div className="font-mono text-xs truncate">{log.message_id}</div>
+                      <div className="font-mono text-xs truncate">{log.entity_id}</div>
                       
                       {log.metadata?.hasBestMatch && (
                         <>

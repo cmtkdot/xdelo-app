@@ -1,10 +1,9 @@
-
 import { useState, useCallback } from 'react';
 import { Message } from '@/types/entities/Message';
 import { useToast } from '@/hooks/useToast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
-import { logEvent, LogEventType } from '@/lib/logUtils';
+import { LogEventType, logEvent } from '@/lib/logUtils';
 
 /**
  * Result type for media operations
@@ -524,6 +523,21 @@ export function useMediaUtils() {
       setIsProcessing(false);
     }
   }, [queryClient, toast]);
+
+  const logSyncCompletion = async (entityId: string, details: any) => {
+    try {
+      await logEvent(
+        LogEventType.SYNC_COMPLETED,
+        entityId,
+        {
+          ...details,
+          timestamp: new Date().toISOString()
+        }
+      );
+    } catch (error) {
+      console.error("Failed to log sync completion:", error);
+    }
+  };
 
   return {
     // State

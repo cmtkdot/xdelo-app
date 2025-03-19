@@ -2,6 +2,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export enum LogEventType {
+  // Message events
   MESSAGE_RECEIVED = "MESSAGE_RECEIVED",
   MESSAGE_PROCESSED = "MESSAGE_PROCESSED",
   MESSAGE_ERROR = "MESSAGE_ERROR",
@@ -10,9 +11,24 @@ export enum LogEventType {
   CAPTION_PARSED = "CAPTION_PARSED",
   MESSAGE_UPDATED = "MESSAGE_UPDATED",
   MESSAGE_DELETED = "MESSAGE_DELETED",
-  PRODUCT_MATCHING = "PRODUCT_MATCHING",
+  
+  // Sync events
   SYNC_OPERATION = "SYNC_OPERATION",
-  SYSTEM_EVENT = "SYSTEM_EVENT"
+  SYNC_STARTED = "SYNC_STARTED",
+  SYNC_COMPLETED = "SYNC_COMPLETED",
+  SYNC_FAILED = "SYNC_FAILED",
+  SYNC_PRODUCTS = "SYNC_PRODUCTS",
+  
+  // Product matching
+  PRODUCT_MATCHING = "PRODUCT_MATCHING",
+  
+  // System events
+  SYSTEM_EVENT = "SYSTEM_EVENT",
+  SYSTEM_WARNING = "SYSTEM_WARNING",
+  SYSTEM_ERROR = "SYSTEM_ERROR",
+  
+  // User events
+  USER_ACTION = "USER_ACTION"
 }
 
 export interface EventLogData {
