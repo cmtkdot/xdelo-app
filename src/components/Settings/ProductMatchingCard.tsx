@@ -22,7 +22,6 @@ const ProductMatchingCard = () => {
   }>(null);
   const { toast } = useToast();
 
-  // Load current configuration from the database
   useEffect(() => {
     const loadConfig = async () => {
       try {
@@ -40,7 +39,6 @@ const ProductMatchingCard = () => {
   const handleSaveSettings = async () => {
     setIsSaving(true);
     try {
-      // Create the updated config object
       const updatedConfig = {
         similarityThreshold: threshold,
         weightedScoring: DEFAULT_CONFIG.weightedScoring,
@@ -74,7 +72,6 @@ const ProductMatchingCard = () => {
     setIsTestRunning(true);
     setTestResults(null);
     try {
-      // Get 5 recent messages with analyzed content
       const { data: messages, error } = await supabase
         .from('messages')
         .select('id, analyzed_content')
@@ -93,12 +90,10 @@ const ProductMatchingCard = () => {
         return;
       }
 
-      // For each message, run the matching algorithm
       let matchCount = 0;
       let totalConfidence = 0;
 
       for (const message of messages) {
-        // Call the product matching endpoint
         const { data: matchingResult, error: matchingError } = await supabase
           .functions.invoke('product-matching', {
             body: { 
@@ -121,7 +116,6 @@ const ProductMatchingCard = () => {
         }
       }
 
-      // Store and display results
       const results = {
         processed: messages.length,
         matched: matchCount,
@@ -146,7 +140,7 @@ const ProductMatchingCard = () => {
     }
   };
 
-  const renderTestResults = () => {
+  function renderTestResults() {
     if (!testResults) return null;
 
     return (
@@ -168,7 +162,7 @@ const ProductMatchingCard = () => {
         </div>
       </div>
     );
-  };
+  }
 
   return (
     <Card>
@@ -232,25 +226,7 @@ const ProductMatchingCard = () => {
                 <li>Weighted scoring algorithm</li>
               </ul>
             </div>
-            {testResults && (
-              <div className="mt-4 p-4 border rounded-md bg-muted/30">
-                <h4 className="font-medium">Test Results</h4>
-                <div className="grid grid-cols-3 gap-2 mt-2 text-sm">
-                  <div>
-                    <div className="text-muted-foreground">Messages</div>
-                    <div className="font-medium">{testResults.processed}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Matches</div>
-                    <div className="font-medium">{testResults.matched}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Confidence</div>
-                    <div className="font-medium">{Math.round(testResults.confidence * 100)}%</div>
-                  </div>
-                </div>
-              </div>
-            )}
+            {testResults && renderTestResults()}
           </div>
         )}
       </CardContent>
@@ -269,23 +245,7 @@ const ProductMatchingCard = () => {
             <Button variant="outline" onClick={() => setIsConfiguring(true)}>
               Configure
             </Button>
-            <Button onClick={() => {
-              setIsTestRunning(true);
-              setTestResults(null);
-              // Mock test for now - would call actual API in production
-              setTimeout(() => {
-                setTestResults({
-                  processed: 5,
-                  matched: 3,
-                  confidence: 0.78
-                });
-                setIsTestRunning(false);
-                toast({
-                  title: "Test completed",
-                  description: "Successfully matched 3 of 5 messages (78% confidence).",
-                });
-              }, 2000);
-            }} disabled={isTestRunning}>
+            <Button onClick={handleRunTest} disabled={isTestRunning}>
               {isTestRunning ? 
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Running Test...</> : 
                 <>Run Test Match</>

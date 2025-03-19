@@ -898,6 +898,36 @@ export type Database = {
         }
         Relationships: []
       }
+      gl_sync_audit: {
+        Row: {
+          created_at: string | null
+          details: Json | null
+          id: string
+          operation: string
+          record_id: string | null
+          table_name: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          operation: string
+          record_id?: string | null
+          table_name: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          operation?: string
+          record_id?: string | null
+          table_name?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       gl_sync_errors: {
         Row: {
           created_at: string | null

@@ -20,7 +20,7 @@ export interface ProductMatchingConfig {
     minLength?: number;
     dateFormat?: string;
   };
-  weightedScoring?: {
+  weightedScoring: {
     name: number;
     vendor: number;
     purchaseDate: number;
@@ -51,4 +51,41 @@ export interface MatchBatchResult {
   averageConfidence: number;
   failedMessages: string[];
   completedAt: string;
+}
+
+/**
+ * Interface for product match recommendations
+ */
+export interface MatchRecommendation {
+  id: string;
+  messageId: string;
+  productId: string;
+  confidence: number;
+  matchFields: string[];
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Interface for gl_products fields we need for matching
+ */
+export interface MatchableProduct {
+  id: string;
+  productName: string;
+  vendorCode: string;
+  purchaseDate: string;
+  displayName: string;
+}
+
+/**
+ * Interface for custom mapping fields
+ */
+export interface CustomMapping {
+  id: string;
+  messageField: string;
+  productField: string;
+  weight: number;
+  matchType: 'exact' | 'partial' | 'fuzzy';
+  isEnabled: boolean;
 }
