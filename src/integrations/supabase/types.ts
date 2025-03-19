@@ -939,6 +939,8 @@ export type Database = {
           resolution_notes: string | null
           resolved: boolean | null
           resolved_at: string | null
+          retried: boolean | null
+          retried_at: string | null
           retryable: boolean | null
           updated_at: string | null
         }
@@ -952,6 +954,8 @@ export type Database = {
           resolution_notes?: string | null
           resolved?: boolean | null
           resolved_at?: string | null
+          retried?: boolean | null
+          retried_at?: string | null
           retryable?: boolean | null
           updated_at?: string | null
         }
@@ -965,6 +969,8 @@ export type Database = {
           resolution_notes?: string | null
           resolved?: boolean | null
           resolved_at?: string | null
+          retried?: boolean | null
+          retried_at?: string | null
           retryable?: boolean | null
           updated_at?: string | null
         }
@@ -2321,8 +2327,11 @@ export type Database = {
       }
       gl_mapping_status: {
         Row: {
+          app_id: string | null
           app_name: string | null
+          column_mappings: Json | null
           connection_id: string | null
+          created_at: string | null
           current_status: string | null
           enabled: boolean | null
           error_count: number | null
@@ -2335,6 +2344,7 @@ export type Database = {
           supabase_table: string | null
           sync_direction: string | null
           total_records: number | null
+          updated_at: string | null
         }
         Relationships: []
       }
@@ -2398,9 +2408,11 @@ export type Database = {
       gl_recent_logs: {
         Row: {
           app_name: string | null
+          completed_at: string | null
           glide_table: string | null
           glide_table_display_name: string | null
           id: string | null
+          mapping_id: string | null
           message: string | null
           records_processed: number | null
           started_at: string | null
@@ -2433,8 +2445,6 @@ export type Database = {
       gl_tables_view: {
         Row: {
           table_name: unknown | null
-          table_schema: string | null
-          table_type: string | null
         }
         Relationships: []
       }
@@ -2996,6 +3006,13 @@ export type Database = {
         }
         Returns: undefined
       }
+      gl_count_table_records: {
+        Args: {
+          table_name: string
+          search_term?: string
+        }
+        Returns: number
+      }
       gl_get_account_stats: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3049,24 +3066,53 @@ export type Database = {
           table_schema: string
         }[]
       }
-      gl_get_sync_errors: {
-        Args: {
-          p_mapping_id: string
-          p_limit?: number
-          p_include_resolved?: boolean
-        }
+      gl_get_schema_tables_fixed: {
+        Args: Record<PropertyKey, never>
         Returns: {
-          id: string
-          mapping_id: string
-          error_type: string
-          error_message: string
-          record_data: Json
-          retryable: boolean
-          created_at: string
-          resolved_at: string
-          resolution_notes: string
+          table_name: string
+          table_type: string
+          table_schema: string
         }[]
       }
+      gl_get_sync_errors:
+        | {
+            Args: {
+              p_mapping_id: string
+              p_limit?: number
+              p_include_resolved?: boolean
+            }
+            Returns: {
+              id: string
+              mapping_id: string
+              error_type: string
+              error_message: string
+              record_data: Json
+              retryable: boolean
+              created_at: string
+              resolved_at: string
+              resolution_notes: string
+            }[]
+          }
+        | {
+            Args: {
+              p_mapping_id: string
+              p_limit?: number
+              p_include_resolved?: boolean
+            }
+            Returns: {
+              id: string
+              mapping_id: string
+              error_type: string
+              error_message: string
+              record_data: Json
+              retryable: boolean
+              created_at: string
+              resolved_at: string
+              resolution_notes: string
+              retried: boolean
+              retried_at: string
+            }[]
+          }
       gl_get_table_columns: {
         Args: {
           table_name: string
@@ -3074,7 +3120,18 @@ export type Database = {
         Returns: {
           column_name: string
           data_type: string
+          is_nullable: boolean
+          is_primary_key: boolean
         }[]
+      }
+      gl_get_table_records: {
+        Args: {
+          table_name: string
+          page?: number
+          page_size?: number
+          search_term?: string
+        }
+        Returns: Json[]
       }
       gl_import_data_from_json: {
         Args: {
@@ -3103,12 +3160,28 @@ export type Database = {
         }
         Returns: string
       }
+      gl_record_sync_error: {
+        Args: {
+          p_mapping_id: string
+          p_error_type: string
+          p_error_message: string
+          p_record_data?: Json
+          p_retryable?: boolean
+        }
+        Returns: string
+      }
       gl_resolve_sync_error: {
         Args: {
           p_error_id: string
           p_resolution_notes?: string
         }
         Returns: boolean
+      }
+      gl_retry_failed_sync: {
+        Args: {
+          p_mapping_id: string
+        }
+        Returns: string
       }
       gl_sync_data: {
         Args: {
@@ -3117,15 +3190,25 @@ export type Database = {
         }
         Returns: Json
       }
-      gl_validate_column_mapping: {
-        Args: {
-          p_mapping_id: string
-        }
-        Returns: {
-          is_valid: boolean
-          validation_message: string
-        }[]
-      }
+      gl_validate_column_mapping:
+        | {
+            Args: {
+              p_mapping_id: string
+            }
+            Returns: {
+              is_valid: boolean
+              validation_message: string
+            }[]
+          }
+        | {
+            Args: {
+              p_mapping_id: string
+            }
+            Returns: {
+              is_valid: boolean
+              validation_message: string
+            }[]
+          }
       glsync_get_account_summary: {
         Args: {
           account_id: string

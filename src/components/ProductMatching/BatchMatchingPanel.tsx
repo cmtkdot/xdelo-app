@@ -86,9 +86,9 @@ export const BatchMatchingPanel = () => {
       // Create initial processing state for all messages
       const initialProcessingState = messages.map(msg => ({
         id: msg.id,
-        productName: msg.product_name || (msg.analyzed_content?.product_name as string),
-        vendorUid: msg.vendor_uid || (msg.analyzed_content?.vendor_uid as string),
-        purchaseDate: msg.purchase_date || (msg.analyzed_content?.purchase_date as string),
+        productName: msg.product_name || (msg.analyzed_content && typeof msg.analyzed_content === 'object' ? msg.analyzed_content.product_name : undefined),
+        vendorUid: msg.vendor_uid || (msg.analyzed_content && typeof msg.analyzed_content === 'object' ? msg.analyzed_content.vendor_uid : undefined),
+        purchaseDate: msg.purchase_date || (msg.analyzed_content && typeof msg.analyzed_content === 'object' ? msg.analyzed_content.purchase_date : undefined),
         status: 'processing' as const,
         processingStartedAt: new Date().toISOString(),
       }));
