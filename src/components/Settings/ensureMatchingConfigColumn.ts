@@ -8,8 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 export const ensureMatchingConfigColumn = async (): Promise<boolean> => {
   try {
     // Directly execute SQL to ensure the column exists
-    const { error } = await supabase.rpc(
-      "execute_sql_migration",
+    const { data, error } = await supabase.rpc(
+      "xdelo_execute_sql_migration",
       { 
         sql_command: `
           ALTER TABLE IF EXISTS public.settings 

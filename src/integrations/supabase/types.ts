@@ -2918,6 +2918,12 @@ export type Database = {
           count: number
         }[]
       }
+      gl_admin_execute_sql: {
+        Args: {
+          sql_query: string
+        }
+        Returns: undefined
+      }
       gl_get_account_stats: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3031,6 +3037,13 @@ export type Database = {
           p_resolution_notes?: string
         }
         Returns: boolean
+      }
+      gl_sync_data: {
+        Args: {
+          connection_id: string
+          mapping_id: string
+        }
+        Returns: Json
       }
       gl_validate_column_mapping: {
         Args: {
