@@ -557,6 +557,7 @@ export type Database = {
         Row: {
           amount_paid: number | null
           balance: number | null
+          balance_total: number | null
           created_at: string | null
           created_timestamp: string | null
           doc_glideforeverlink: string | null
@@ -564,13 +565,13 @@ export type Database = {
           glide_row_id: string
           id: string
           invoice_order_date: string | null
+          invoice_total: number | null
           invoice_uid: string | null
           notes: string | null
           processed: boolean | null
           rowid_accounts: string | null
           status: Database["public"]["Enums"]["document_status_type"] | null
           submitted_timestamp: string | null
-          total_amount: number | null
           total_paid: number | null
           updated_at: string | null
           user_email: string | null
@@ -579,6 +580,7 @@ export type Database = {
         Insert: {
           amount_paid?: number | null
           balance?: number | null
+          balance_total?: number | null
           created_at?: string | null
           created_timestamp?: string | null
           doc_glideforeverlink?: string | null
@@ -586,13 +588,13 @@ export type Database = {
           glide_row_id: string
           id?: string
           invoice_order_date?: string | null
+          invoice_total?: number | null
           invoice_uid?: string | null
           notes?: string | null
           processed?: boolean | null
           rowid_accounts?: string | null
           status?: Database["public"]["Enums"]["document_status_type"] | null
           submitted_timestamp?: string | null
-          total_amount?: number | null
           total_paid?: number | null
           updated_at?: string | null
           user_email?: string | null
@@ -601,6 +603,7 @@ export type Database = {
         Update: {
           amount_paid?: number | null
           balance?: number | null
+          balance_total?: number | null
           created_at?: string | null
           created_timestamp?: string | null
           doc_glideforeverlink?: string | null
@@ -608,13 +611,13 @@ export type Database = {
           glide_row_id?: string
           id?: string
           invoice_order_date?: string | null
+          invoice_total?: number | null
           invoice_uid?: string | null
           notes?: string | null
           processed?: boolean | null
           rowid_accounts?: string | null
           status?: Database["public"]["Enums"]["document_status_type"] | null
           submitted_timestamp?: string | null
-          total_amount?: number | null
           total_paid?: number | null
           updated_at?: string | null
           user_email?: string | null
