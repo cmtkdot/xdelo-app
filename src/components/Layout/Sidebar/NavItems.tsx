@@ -1,98 +1,84 @@
 
-import React from "react";
 import { 
-  Home, 
-  PanelTopOpen, 
-  Image as ImageIcon, 
-  PanelLeft, 
-  FileText, 
+  BarChart2, 
+  Inbox, 
+  Image, 
   Settings, 
+  FileAudio, 
   Database, 
-  Zap, 
-  Music,
-  GalleryHorizontal,
-  Search,
-  LucideIcon
+  Bot,
+  FileText,
+  PuzzleIcon,
+  PanelLeftClose
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { useLocation } from "react-router-dom";
 
-interface NavItem {
-  name: string;
-  Icon: LucideIcon;
-  path: string;
-  group?: 'main' | 'data' | 'settings';
-  divider?: boolean;
-}
+export const NavItems = () => {
+  const location = useLocation();
+  const currentPath = location.pathname;
 
-interface NavItemsProps {
-  currentPath: string;
-  onNavigate: (path: string) => void;
-  isMobile?: boolean;
-  isExpanded?: boolean;
-}
+  const navItems = [
+    {
+      title: "Dashboard",
+      href: "/",
+      icon: <BarChart2 className="h-5 w-5" />,
+      isActive: currentPath === "/",
+    },
+    {
+      title: "Messages",
+      href: "/messages-enhanced",
+      icon: <Inbox className="h-5 w-5" />,
+      isActive: currentPath.includes("messages"),
+    },
+    {
+      title: "Products",
+      href: "/gallery",
+      icon: <Image className="h-5 w-5" />,
+      isActive: currentPath === "/gallery",
+    },
+    {
+      title: "Product Matching",
+      href: "/product-matching",
+      icon: <PuzzleIcon className="h-5 w-5" />,
+      isActive: currentPath === "/product-matching",
+    },
+    {
+      title: "Media Table",
+      href: "/media-table",
+      icon: <FileText className="h-5 w-5" />,
+      isActive: currentPath === "/media-table",
+    },
+    {
+      title: "AI Chat",
+      href: "/ai-chat",
+      icon: <Bot className="h-5 w-5" />,
+      isActive: currentPath === "/ai-chat",
+    },
+    {
+      title: "Audio Upload",
+      href: "/audio-upload",
+      icon: <FileAudio className="h-5 w-5" />,
+      isActive: currentPath === "/audio-upload",
+    },
+    {
+      title: "SQL Console",
+      href: "/sql-console",
+      icon: <Database className="h-5 w-5" />,
+      isActive: currentPath === "/sql-console",
+    },
+    {
+      title: "Automations",
+      href: "/make-automations",
+      icon: <PanelLeftClose className="h-5 w-5" />,
+      isActive: currentPath === "/make-automations",
+    },
+    {
+      title: "Settings",
+      href: "/settings",
+      icon: <Settings className="h-5 w-5" />,
+      isActive: currentPath === "/settings",
+    },
+  ];
 
-export const navItems: NavItem[] = [
-  { name: "Dashboard", Icon: Home, path: "/", group: "main" },
-  { name: "Messages", Icon: PanelTopOpen, path: "/messages-enhanced", group: "main" },
-  { name: "Gallery", Icon: ImageIcon, path: "/gallery", group: "main" },
-  { name: "Public Gallery", Icon: GalleryHorizontal, path: "/p/public", group: "main" },
-  
-  { name: "Media Table", Icon: PanelLeft, path: "/media-table", group: "data", divider: true },
-  { name: "SQL Console", Icon: Database, path: "/sql-console", group: "data" },
-  { name: "AI Chat", Icon: FileText, path: "/ai-chat", group: "data" },
-  { name: "Audio Upload", Icon: Music, path: "/audio-upload", group: "data" },
-  { name: "Make Automations", Icon: Zap, path: "/make-automations", group: "data" },
-  { name: "Product Matching", Icon: Search, path: "/product-matching", group: "data" },
-  
-  { name: "Settings", Icon: Settings, path: "/settings", group: "settings", divider: true },
-];
-
-export const NavItems: React.FC<NavItemsProps> = ({ 
-  currentPath, 
-  onNavigate, 
-  isMobile = false,
-  isExpanded = true
-}) => {
-  return (
-    <>
-      {navItems.map((item) => {
-        const isActive = currentPath === item.path;
-        const Icon = item.Icon;
-        
-        return (
-          <React.Fragment key={item.path}>
-            {item.divider && (isExpanded || isMobile) && (
-              <div className="h-px bg-gray-200 dark:bg-gray-800 my-3 mx-2" />
-            )}
-            <Button
-              variant={isActive ? "secondary" : "ghost"}
-              className={cn(
-                "flex items-center transition-all duration-150 ease-in-out group w-full text-left",
-                isMobile 
-                  ? "px-4 py-2.5 text-sm font-medium rounded-md mobile-touch-target h-auto min-h-[44px]"
-                  : "px-2 py-2 text-sm font-medium rounded-md"
-              )}
-              onClick={() => onNavigate(item.path)}
-            >
-              <Icon className={cn(
-                "flex-shrink-0 w-5 h-5 transition-colors duration-150",
-                isActive 
-                  ? "text-primary" 
-                  : "text-muted-foreground group-hover:text-foreground"
-              )} />
-              {(isExpanded || isMobile) && (
-                <span className={cn(
-                  "transition-opacity duration-150",
-                  isMobile ? "ml-4" : "ml-4"
-                )}>
-                  {item.name}
-                </span>
-              )}
-            </Button>
-          </React.Fragment>
-        );
-      })}
-    </>
-  );
+  return navItems;
 };

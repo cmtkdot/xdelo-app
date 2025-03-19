@@ -30,32 +30,26 @@ export const ensureMatchingConfigColumn = async (): Promise<boolean> => {
       if (error) {
         console.error("Error calling Edge function:", error);
         
-        // Fallback: direct SQL (less ideal but might work in some environments)
-        try {
-          const { error: sqlError } = await supabase
-            .from('_migrations')
-            .insert({
-              name: 'add_matching_config_column',
-              sql: `
-                ALTER TABLE IF EXISTS public.settings 
-                ADD COLUMN IF NOT EXISTS matching_config JSONB DEFAULT '{"similarityThreshold": 0.7, "partialMatch": {"enabled": true}}';
-              `,
-              status: 'pending'
-            });
-          
-          if (sqlError) {
-            console.error("Error creating migration:", sqlError);
-            return false;
+        // Fallback: use RPC function or direct SQL if available
+        const { error: rpcError } = await supabase.rpc(
+          'execute_sql_migration' as any,
+          { 
+            sql_command: `
+              ALTER TABLE IF EXISTS public.settings 
+              ADD COLUMN IF NOT EXISTS matching_config JSONB DEFAULT '{"similarityThreshold": 0.7, "partialMatch": {"enabled": true}}';
+            `
           }
-          
-          return true;
-        } catch (sqlExecError) {
-          console.error("Error with SQL fallback:", sqlExecError);
+        );
+        
+        if (rpcError) {
+          console.error("RPC function error:", rpcError);
           return false;
         }
+        
+        return true;
       }
       
-      return data?.success === true;
+      return true;
     } catch (funcError) {
       console.error("Error calling function to ensure matching config:", funcError);
       return false;

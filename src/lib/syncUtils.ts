@@ -60,18 +60,31 @@ export const getPendingSyncItems = async (tableName: string, limit = 10) => {
       throw new Error('Invalid table name');
     }
     
-    // Use a generic approach that works with any table
+    // Use a generic approach that works with any table using the rpc call
     try {
-      // This works around TypeScript's strict table name checking
-      const { data, error } = await (supabase as any)
-        .from(tableName)
-        .select('*')
-        .eq('sync_status', 'pending')
-        .order('updated_at', { ascending: true })
-        .limit(limit);
+      const { data, error } = await supabase.rpc(
+        'get_pending_sync_items' as any,
+        { 
+          p_table_name: tableName,
+          p_limit: limit
+        }
+      );
         
       if (error) {
-        throw error;
+        console.error(`Error in getPendingSyncItems RPC: ${error.message}`);
+        // Fallback to direct query if RPC fails
+        const { data: directData, error: directError } = await supabase
+          .from(tableName as any)
+          .select('*')
+          .eq('sync_status', 'pending')
+          .order('updated_at', { ascending: true })
+          .limit(limit);
+          
+        if (directError) {
+          throw directError;
+        }
+        
+        return { success: true, data: directData };
       }
       
       return { success: true, data };

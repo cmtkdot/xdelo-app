@@ -39,7 +39,7 @@ export interface EventLogData {
  * Logs an event to the unified audit logs system
  */
 export const logEvent = async (
-  eventType: LogEventType,
+  eventType: LogEventType | string,
   entityId: string,
   metadata: EventLogData = {}
 ) => {
@@ -58,11 +58,14 @@ export const logEvent = async (
       
       // Fallback to event_logs if it exists
       try {
-        const { error: legacyError } = await supabase.rpc('xdelo_log_event', {
-          p_event_type: String(eventType),
-          p_message_id: entityId,
-          p_metadata: metadata
-        });
+        const { error: legacyError } = await supabase.rpc(
+          'xdelo_log_event' as any,
+          {
+            p_event_type: String(eventType),
+            p_message_id: entityId,
+            p_metadata: metadata
+          }
+        );
         
         if (legacyError) {
           console.error("Failed to log event using fallback method:", legacyError.message);

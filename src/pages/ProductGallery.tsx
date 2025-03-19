@@ -32,14 +32,18 @@ export default function ProductGallery() {
   // Load vendors for filter
   useEffect(() => {
     const fetchVendors = async () => {
-      const { data } = await supabase
-        .from("gl_products")
-        .select("vendor_uid")
-        .not("vendor_uid", "is", null);
-        
-      if (data) {
-        const uniqueVendors = Array.from(new Set(data.map(p => p.vendor_uid))).filter(Boolean);
-        setVendors(uniqueVendors as string[]);
+      try {
+        const { data } = await supabase
+          .from("gl_products")
+          .select("vendor_product_name")
+          .not("vendor_product_name", "is", null);
+          
+        if (data) {
+          const uniqueVendors = Array.from(new Set(data.map(p => p.vendor_product_name))).filter(Boolean);
+          setVendors(uniqueVendors as string[]);
+        }
+      } catch (error) {
+        console.error("Error fetching vendors:", error);
       }
     };
     
@@ -172,12 +176,14 @@ export default function ProductGallery() {
           filters={filterState}
           onFilterChange={handleFilterChange} 
         />
-        <ProductGrid
-          products={[]} // This is intentionally empty as we're not updating the existing functionality
-          loading={loading}
-          onEdit={() => {}} // No-op to maintain compatibility
-          onDelete={() => Promise.resolve()} // No-op to maintain compatibility
-        />
+        <div className="mt-6">
+          {/* Use the existing component with proper props */}
+          <ProductGrid 
+            products={currentProducts as any} 
+            onEdit={handleEditProduct}
+            onDelete={handleDeleteProduct}
+          />
+        </div>
         <ProductPagination
           currentPage={currentPage}
           totalPages={Math.ceil(products.length / productsPerPage)}
