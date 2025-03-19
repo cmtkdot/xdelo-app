@@ -1,6 +1,5 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-import { corsHeaders } from '../../_shared/cors.ts';
+import { corsHeaders, handleOptionsRequest, createCorsResponse } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
 
@@ -82,15 +81,12 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       
       console.log(`[${correlationId}] Successfully updated edited message ${message.message_id}`);
       
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          messageId: existingMessage.id, 
-          correlationId,
-          action: 'updated'
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return createCorsResponse({ 
+        success: true, 
+        messageId: existingMessage.id, 
+        correlationId,
+        action: 'updated'
+      });
     } else {
       console.log(`[${correlationId}] Original message not found, creating new record`);
       
@@ -117,13 +113,10 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       error.message
     );
     
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message || 'Unknown error processing edited message',
-        correlationId: context.correlationId
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    );
+    return createCorsResponse({ 
+      success: false, 
+      error: error.message || 'Unknown error processing edited message',
+      correlationId: context.correlationId
+    }, { status: 500 });
   }
 }

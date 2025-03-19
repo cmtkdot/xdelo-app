@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-import { corsHeaders } from '../../_shared/cors.ts';
+import { corsHeaders, handleOptionsRequest, createCorsResponse } from '../../_shared/cors.ts';
 import { 
   xdelo_downloadMediaFromTelegram,
   xdelo_uploadMediaToStorage,
@@ -75,13 +75,10 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       console.error(`[${context.correlationId}] Failed to log error:`, logError);
     }
     
-    return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        correlationId: context.correlationId 
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    );
+    return createCorsResponse({ 
+      error: error.message,
+      correlationId: context.correlationId 
+    }, { status: 500 });
   }
 }
 
@@ -257,10 +254,7 @@ async function xdelo_handleEditedMediaMessage(
       console.error('Error logging edit operation:', logError);
     }
 
-    return new Response(
-      JSON.stringify({ success: true }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return createCorsResponse({ success: true });
   }
   
   // If existing message not found, handle as new message
@@ -366,10 +360,7 @@ async function xdelo_handleNewMediaMessage(
       );
     }
 
-    return new Response(
-      JSON.stringify({ success: true, duplicate: true, correlationId }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return createCorsResponse({ success: true, duplicate: true, correlationId });
   }
 
   // Process media for new message with improved approach
@@ -506,10 +497,7 @@ async function xdelo_handleNewMediaMessage(
     );
   }
 
-  return new Response(
-    JSON.stringify({ success: true, id: result.id, correlationId }),
-    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
+  return createCorsResponse({ success: true, id: result.id, correlationId });
 }
 
 /**

@@ -1,22 +1,21 @@
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage } from './handlers/textMessageHandler.ts';
 import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
-import { corsHeaders } from '../_shared/cors.ts';
+import { corsHeaders, handleOptionsRequest, createCorsResponse } from '../_shared/cors.ts';
 import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
 
 serve(async (req: Request) => {
-  // Handle CORS preflight requests
+  // 1. Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return handleOptionsRequest();
   }
 
+  // 2. Generate correlation ID
+  const correlationId = crypto.randomUUID();
+
   try {
-    // Generate a correlation ID for tracing
-    const correlationId = crypto.randomUUID();
-    
-    // Log webhook received event
+    // 3. Log webhook received event
     await xdelo_logProcessingEvent(
       "webhook_received",
       "system",
@@ -27,38 +26,32 @@ serve(async (req: Request) => {
       }
     );
 
-    // Parse the update from Telegram
+    // 4. Parse the update from Telegram
     let update;
     try {
       update = await req.json();
       console.log(`[${correlationId}] Received Telegram update: ${JSON.stringify(Object.keys(update))}`);
     } catch (error) {
       console.error(`[${correlationId}] Failed to parse request body:`, error);
-      return new Response(JSON.stringify({ 
+      return createCorsResponse({
         success: false, 
         error: 'Invalid JSON in request body',
         correlationId
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
-      });
+      }, { status: 400 });
     }
 
-    // Get the message object, checking for different types of updates
+    // 5. Get the message object, checking for different types of updates
     const message = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
     if (!message) {
       console.log(`[${correlationId}] No processable content in update:`, Object.keys(update));
-      return new Response(JSON.stringify({ 
+      return createCorsResponse({
         success: false, 
         message: "No processable content",
         correlationId
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
-      });
+      }, { status: 400 });
     }
 
-    // Determine message context
+    // 6. Determine message context
     const context = {
       isChannelPost: !!update.channel_post || !!update.edited_channel_post,
       isForwarded: !!message.forward_from || !!message.forward_from_chat || !!message.forward_origin,
@@ -67,12 +60,12 @@ serve(async (req: Request) => {
       previousMessage: update.edited_message || update.edited_channel_post
     };
 
-    // Log the message type we're about to process
+    // 7. Log the message type we're about to process
     console.log(`[${correlationId}] Processing message ${message.message_id} in chat ${message.chat?.id}, ` +
       `is_edit: ${context.isEdit}, is_forwarded: ${context.isForwarded}, ` +
       `has_media: ${!!(message.photo || message.video || message.document)}`);
 
-    // Handle different message types
+    // 8. Handle different message types
     let response;
     
     try {
@@ -111,26 +104,19 @@ serve(async (req: Request) => {
         handlerError.message || "Unknown handler error"
       );
       
-      // Return error response but with 200 status to acknowledge to Telegram
-      // (Telegram will retry if we return non-200 status)
-      return new Response(JSON.stringify({ 
+      // Return error response with 200 status to acknowledge to Telegram
+      return createCorsResponse({
         success: false, 
         error: handlerError.message,
         correlationId
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200 // Still return 200 to prevent Telegram from retrying
-      });
+      }, { status: 200 }); // Still return 200 to prevent Telegram from retrying
     }
   } catch (error) {
     console.error('Unhandled error processing webhook:', error);
-    return new Response(JSON.stringify({ 
+    return createCorsResponse({
       success: false, 
       error: error.message || 'Unknown error',
-      correlationId: crypto.randomUUID()
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500
-    });
+      correlationId
+    }, { status: 500 });
   }
 });
