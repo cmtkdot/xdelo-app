@@ -6,13 +6,15 @@ import { Loader2, RefreshCw, Search, FileSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from '@/hooks/useToast';
+import { MatchLogMetadata } from "@/types/entities/ProductMatching";
 
-interface MatchLogMetadata {
-  matchCount: number;
-  hasBestMatch: boolean;
-  bestMatchConfidence: number;
-  bestMatchProductId: string | null;
-  timestamp: string;
+interface AuditLog {
+  id: string;
+  event_timestamp: string;
+  event_type: string;
+  entity_id: string;
+  metadata: any;
+  created_at?: string; // This might be missing in some databases
 }
 
 interface MatchLog {
@@ -44,9 +46,9 @@ export const MatchingHistory = () => {
       
       if (data) {
         // Transform the data to match our expected MatchLog type
-        const transformedLogs: MatchLog[] = data.map(log => ({
+        const transformedLogs: MatchLog[] = data.map((log: AuditLog) => ({
           id: log.id,
-          created_at: log.event_timestamp || new Date(log.created_at || Date.now()).toISOString(),
+          created_at: log.event_timestamp || (log.created_at || new Date().toISOString()),
           event_type: log.event_type,
           entity_id: log.entity_id,
           metadata: transformMetadata(log.metadata)

@@ -22,15 +22,33 @@ export const ensureMatchingConfigColumn = async (): Promise<boolean> => {
       return true;
     }
     
-    // Otherwise call the custom function to add the column
-    const { data, error } = await supabase.functions.invoke('xdelo_add_matching_config_column');
-    
-    if (error) {
-      console.error("Error ensuring matching config:", error);
+    // Otherwise call the RPC function to add the column
+    try {
+      // First try the dedicated function
+      const { data, error } = await supabase.functions.invoke('xdelo_add_matching_config_column');
+      
+      if (error || !data?.success) {
+        // Fallback to the SQL migration function
+        const { data: migrationData, error: migrationError } = await supabase.rpc('xdelo_execute_sql_migration', {
+          sql_command: `
+            ALTER TABLE IF EXISTS public.settings 
+            ADD COLUMN IF NOT EXISTS matching_config JSONB DEFAULT '{"similarityThreshold": 0.7, "partialMatch": {"enabled": true}}';
+          `
+        });
+        
+        if (migrationError) {
+          console.error("Error ensuring matching config via migration:", migrationError);
+          return false;
+        }
+        
+        return migrationData?.success === true;
+      }
+      
+      return data?.success === true;
+    } catch (error) {
+      console.error("Error calling function to ensure matching config:", error);
       return false;
     }
-    
-    return data?.success || false;
   } catch (error) {
     console.error("Error in ensureMatchingConfigColumn:", error);
     return false;

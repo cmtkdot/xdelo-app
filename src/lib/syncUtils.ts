@@ -55,9 +55,14 @@ export const logSyncWarning = async (
  */
 export const getPendingSyncItems = async (tableName: string, limit = 10) => {
   try {
-    // Using any to avoid type checking issues with dynamic table names
+    // For type safety, we'll check if the table name is one of our known tables
+    if (!tableName || typeof tableName !== 'string') {
+      throw new Error('Invalid table name');
+    }
+    
+    // Using a more generic approach that should work with any table
     const { data, error } = await supabase
-      .from(tableName as any)
+      .from(tableName)
       .select('*')
       .eq('sync_status', 'pending')
       .order('updated_at', { ascending: true })

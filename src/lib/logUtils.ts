@@ -48,7 +48,7 @@ export const logEvent = async (
     const { error: unifiedError } = await supabase
       .from('unified_audit_logs')
       .insert({
-        event_type: eventType,
+        event_type: String(eventType),
         entity_id: entityId,
         metadata
       });
@@ -59,7 +59,7 @@ export const logEvent = async (
       // Fallback to event_logs if it exists
       try {
         const { error: legacyError } = await supabase.rpc('xdelo_log_event', {
-          p_event_type: eventType.toString(),
+          p_event_type: String(eventType),
           p_message_id: entityId,
           p_metadata: metadata
         });
