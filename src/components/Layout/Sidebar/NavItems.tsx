@@ -66,7 +66,7 @@ export const NavItems: React.FC<NavItemsProps> = ({
             <Button
               variant={isActive ? "secondary" : "ghost"}
               className={cn(
-                "flex items-center transition-all duration-150 ease-in-out group w-full justify-start",
+                "flex items-center transition-all duration-150 ease-in-out group w-full text-left",
                 isMobile 
                   ? "px-4 py-2.5 text-sm font-medium rounded-md mobile-touch-target h-auto min-h-[44px]"
                   : "px-2 py-2 text-sm font-medium rounded-md"
@@ -82,7 +82,7 @@ export const NavItems: React.FC<NavItemsProps> = ({
               {(isExpanded || isMobile) && (
                 <span className={cn(
                   "transition-opacity duration-150",
-                  isMobile ? "" : "ml-3"
+                  isMobile ? "ml-4" : "ml-4"
                 )}>
                   {item.name}
                 </span>

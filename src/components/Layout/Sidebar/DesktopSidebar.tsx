@@ -45,9 +45,9 @@ export const DesktopSidebar = () => {
       onMouseLeave={() => setExpanded(false)}
     >
       <div className="flex flex-col h-full py-4">
-        <div className="flex items-center justify-center h-16 px-4">
+        <div className="flex items-center justify-center h-16 px-4 mb-2">
           {expanded ? (
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">XDELO</h1>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white text-left">XDELO</h1>
           ) : (
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">X</h1>
           )}
@@ -69,7 +69,7 @@ export const DesktopSidebar = () => {
           >
             <LogOut className="flex-shrink-0 w-5 h-5 text-muted-foreground group-hover:text-foreground" />
             {expanded && (
-              <span className="ml-3 transition-opacity duration-150">
+              <span className="ml-4 transition-opacity duration-150">
                 Logout
               </span>
             )}
