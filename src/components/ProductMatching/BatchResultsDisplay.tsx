@@ -1,6 +1,9 @@
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import React from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { BarChart, CheckCircle2, AlertCircle, HelpCircle } from "lucide-react";
 
 interface BatchResults {
   total: number;
@@ -19,96 +22,120 @@ interface BatchResultsDisplayProps {
   results: BatchResults | null;
 }
 
-export const BatchResultsDisplay = ({ results }: BatchResultsDisplayProps) => {
+export const BatchResultsDisplay: React.FC<BatchResultsDisplayProps> = ({ results }) => {
   if (!results) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart className="h-5 w-5" />
-            Batch Results
-          </CardTitle>
+          <CardTitle>Batch Results</CardTitle>
+          <CardDescription>
+            Run a batch match to see results
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center justify-center h-40 text-center">
-            <p className="text-muted-foreground">Run a batch operation to see results here</p>
-          </div>
+        <CardContent className="flex flex-col items-center justify-center h-[200px] text-center text-muted-foreground">
+          <BarChart className="h-12 w-12 mb-2 text-muted-foreground/50" />
+          <p>No results to display yet</p>
+          <p className="text-sm mt-1">Batch match results will appear here</p>
         </CardContent>
       </Card>
     );
   }
 
-  const matchRate = results.total > 0 ? (results.matched / results.total) * 100 : 0;
+  // Calculate percentages
+  const matchedPercent = results.total > 0 ? Math.round((results.matched / results.total) * 100) : 0;
+  const unmatchedPercent = results.total > 0 ? Math.round((results.unmatched / results.total) * 100) : 0;
+  const failedPercent = results.total > 0 ? Math.round((results.failed / results.total) * 100) : 0;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <BarChart className="h-5 w-5" />
-          Batch Results
-        </CardTitle>
+        <CardTitle>Batch Results</CardTitle>
+        <CardDescription>
+          Processed {results.total} messages
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <div className="text-sm text-muted-foreground">Match Rate</div>
-              <div className="text-2xl font-bold">
-                {matchRate.toFixed(1)}%
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                <span>Matched</span>
+              </div>
+              <div className="flex items-center">
+                <Badge variant="outline" className="bg-green-50 text-green-700">
+                  {results.matched} of {results.total}
+                </Badge>
+                <span className="ml-2 text-sm">{matchedPercent}%</span>
               </div>
             </div>
-            <div className="space-y-1">
-              <div className="text-sm text-muted-foreground">Avg. Confidence</div>
-              <div className="text-2xl font-bold">
-                {(results.averageConfidence * 100).toFixed(1)}%
-              </div>
-            </div>
+            <Progress value={matchedPercent} className="h-2 bg-gray-100" indicatorClassName="bg-green-500" />
           </div>
-          
-          <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-md p-2 bg-green-50 dark:bg-green-900/20">
-              <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                <CheckCircle className="h-4 w-4" />
-                <span className="text-xs font-medium">Matched</span>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <HelpCircle className="mr-2 h-4 w-4 text-amber-500" />
+                <span>Unmatched</span>
               </div>
-              <div className="text-xl font-bold text-green-700 dark:text-green-300 mt-1">
-                {results.matched}
-              </div>
-            </div>
-            
-            <div className="rounded-md p-2 bg-amber-50 dark:bg-amber-900/20">
-              <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                <XCircle className="h-4 w-4" />
-                <span className="text-xs font-medium">Unmatched</span>
-              </div>
-              <div className="text-xl font-bold text-amber-700 dark:text-amber-300 mt-1">
-                {results.unmatched}
+              <div className="flex items-center">
+                <Badge variant="outline" className="bg-amber-50 text-amber-700">
+                  {results.unmatched} of {results.total}
+                </Badge>
+                <span className="ml-2 text-sm">{unmatchedPercent}%</span>
               </div>
             </div>
-            
-            <div className="rounded-md p-2 bg-red-50 dark:bg-red-900/20">
-              <div className="flex items-center gap-1 text-red-600 dark:text-red-400">
-                <AlertCircle className="h-4 w-4" />
-                <span className="text-xs font-medium">Failed</span>
-              </div>
-              <div className="text-xl font-bold text-red-700 dark:text-red-300 mt-1">
-                {results.failed}
-              </div>
-            </div>
+            <Progress value={unmatchedPercent} className="h-2 bg-gray-100" indicatorClassName="bg-amber-500" />
           </div>
-          
-          {results.topMatches.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-sm font-medium">Top Matches</div>
-              <div className="space-y-2">
-                {results.topMatches.map((match, index) => (
-                  <div key={index} className="flex justify-between items-center p-2 bg-muted/30 rounded-md">
-                    <div className="text-sm truncate max-w-[200px]">{match.productName}</div>
-                    <div className="text-sm font-medium">{(match.confidence * 100).toFixed(0)}%</div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <AlertCircle className="mr-2 h-4 w-4 text-red-500" />
+                <span>Failed</span>
+              </div>
+              <div className="flex items-center">
+                <Badge variant="outline" className="bg-red-50 text-red-700">
+                  {results.failed} of {results.total}
+                </Badge>
+                <span className="ml-2 text-sm">{failedPercent}%</span>
+              </div>
+            </div>
+            <Progress value={failedPercent} className="h-2 bg-gray-100" indicatorClassName="bg-red-500" />
+          </div>
+
+          {results.matched > 0 && (
+            <>
+              <div className="pt-2 border-t">
+                <h4 className="text-sm font-medium mb-3">Average Match Confidence</h4>
+                <div className="flex items-center">
+                  <Progress 
+                    value={results.averageConfidence * 100} 
+                    className="h-2 bg-gray-100 flex-1" 
+                    indicatorClassName="bg-blue-500" 
+                  />
+                  <span className="ml-2 text-sm font-medium">
+                    {Math.round(results.averageConfidence * 100)}%
+                  </span>
+                </div>
+              </div>
+
+              {results.topMatches && results.topMatches.length > 0 && (
+                <div className="pt-2 border-t">
+                  <h4 className="text-sm font-medium mb-3">Top Matches</h4>
+                  <div className="space-y-2">
+                    {results.topMatches.map((match, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-sm">
+                        <div className="truncate max-w-[70%]">{match.productName}</div>
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                          {Math.round(match.confidence * 100)}%
+                        </Badge>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </CardContent>
