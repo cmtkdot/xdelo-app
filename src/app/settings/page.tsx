@@ -1,6 +1,6 @@
 
 import { AccountCard } from "@/components/Settings/AccountCard";
-import { TelegramCard } from "@/components/Settings/Telegram";
+import { TelegramCard, ProductMatchingCard } from "@/components/Settings/Telegram";
 import { DatabaseFixCard } from "@/components/Settings/DatabaseFixCard";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -14,6 +14,7 @@ export default function SettingsPage() {
       <div className="space-y-6">
         <AccountCard userEmail={user?.email} />
         <TelegramCard botToken={null} webhookUrl={null} />
+        <ProductMatchingCard />
         <DatabaseFixCard />
       </div>
     </div>
