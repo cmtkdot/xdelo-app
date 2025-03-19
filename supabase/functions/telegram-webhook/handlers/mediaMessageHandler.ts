@@ -12,15 +12,10 @@ import { triggerAnalysis } from '../analysisHandler.ts';
 import { constructTelegramMessageUrl, isMessageForwarded } from '../../_shared/messageUtils.ts';
 import { createMessage, updateMessage } from '../dbOperations.ts';
 import { Logger } from '../utils/logger.ts';
+import { CONFIG } from '../../_shared/config.ts';
 
 // Create a logger instance
 const logger = new Logger('mediaMessageHandler');
-
-// Initialize Telegram bot token from environment variable
-const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
-if (!TELEGRAM_BOT_TOKEN) {
-  throw new Error('Missing TELEGRAM_BOT_TOKEN environment variable');
-}
 
 export async function handleMediaMessage(
   message: TelegramMessage, 
@@ -30,7 +25,12 @@ export async function handleMediaMessage(
     // Create Supabase client
     const supabase = createSupabaseClient();
     
-    const { correlationId, isEdit, isChannelPost } = context;
+    const { correlationId, isEdit, isChannelPost, botToken } = context;
+    
+    // Check if we have a valid bot token
+    if (!botToken) {
+      throw new Error(CONFIG.ERROR_MESSAGES.TELEGRAM_BOT_TOKEN_MISSING);
+    }
     
     // Log the start of message processing with correlation ID
     console.log(`[${correlationId}] Processing media message ${message.message_id} in chat ${message.chat.id}`);
@@ -71,14 +71,10 @@ export async function handleMediaMessage(
     // Process message media using our shared utility
     const processResult = await xdelo_processMessageMedia(
       message,
-      TELEGRAM_BOT_TOKEN,
-      {
-        correlationId,
-        forwardInfo,
-        isEdit,
-        isChannelPost,
-        message_url
-      }
+      message.photo?.at(-1)?.file_id || message.video?.file_id || message.document?.file_id,
+      message.photo?.at(-1)?.file_unique_id || message.video?.file_unique_id || message.document?.file_unique_id,
+      botToken,
+      null
     );
     
     if (!processResult.success) {
@@ -87,16 +83,70 @@ export async function handleMediaMessage(
     
     console.log(`[${correlationId}] Media processed successfully for message ${message.message_id}`);
     
+    // Store the message in the database
+    let messageId: string;
+    
+    if (isEdit && message.message_id) {
+      // For edited messages, find the existing message
+      const { data: existingMessages } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('telegram_message_id', message.message_id.toString())
+        .eq('chat_id', message.chat.id)
+        .limit(1);
+        
+      if (existingMessages && existingMessages.length > 0) {
+        messageId = existingMessages[0].id;
+        
+        // Update the existing message
+        await updateMessage(
+          messageId,
+          message,
+          processResult.fileInfo,
+          isEdit,
+          isChannelPost,
+          isForwarded,
+          forwardInfo,
+          message_url,
+          correlationId
+        );
+      } else {
+        // Create a new message if we couldn't find the edited one
+        messageId = await createMessage(
+          message,
+          processResult.fileInfo,
+          isEdit,
+          isChannelPost,
+          isForwarded,
+          forwardInfo,
+          message_url,
+          correlationId
+        );
+      }
+    } else {
+      // Create a new message
+      messageId = await createMessage(
+        message,
+        processResult.fileInfo,
+        isEdit,
+        isChannelPost,
+        isForwarded,
+        forwardInfo,
+        message_url,
+        correlationId
+      );
+    }
+    
     // If we successfully processed the media and have a message ID, we can trigger analysis
-    if (processResult.messageId) {
-      console.log(`[${correlationId}] Triggering analysis for message ${processResult.messageId}`);
+    if (messageId) {
+      console.log(`[${correlationId}] Triggering analysis for message ${messageId}`);
       
       // Only trigger caption analysis if there's actual text to analyze
       const hasContent = message.caption && message.caption.trim().length > 0;
       
       if (hasContent) {
         // Trigger analysis for the message
-        await triggerAnalysis(processResult.messageId, correlationId, supabase, logger);
+        await triggerAnalysis(messageId, correlationId, supabase, logger);
       } else {
         console.log(`[${correlationId}] Skipping analysis as message has no caption`);
         
@@ -107,7 +157,7 @@ export async function handleMediaMessage(
             processing_state: 'completed',
             processing_completed_at: new Date().toISOString(),
           })
-          .eq('id', processResult.messageId);
+          .eq('id', messageId);
       }
     }
     
@@ -115,9 +165,9 @@ export async function handleMediaMessage(
     return new Response(
       JSON.stringify({ 
         success: true, 
-        messageId: processResult.messageId, 
+        messageId, 
         correlationId,
-        message_url: message_url 
+        message_url 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
