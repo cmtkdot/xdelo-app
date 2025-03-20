@@ -1,21 +1,23 @@
-<<<<<<< HEAD
 import React from "react";
-=======
-
-import React from 'react';
->>>>>>> newmai
-import { 
-  LayoutDashboard, 
-  MessageSquare, 
-  Package, 
-  Settings, 
-<<<<<<< HEAD
-  Database, 
-  Zap, 
+import {
+  LayoutDashboard,
+  MessageSquare,
+  Package,
+  Settings,
+  Database,
+  Zap,
   Music,
   GalleryHorizontal,
+  GitCompare,
+  Users,
+  GitPullRequest,
+  PanelLeft,
+  PanelTopOpen,
+  FileText,
+  Home,
+  ImageIcon,
+  Table,
   LucideIcon,
-  Table
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -24,16 +26,9 @@ interface NavItem {
   name: string;
   Icon: LucideIcon;
   path: string;
-  group?: 'main' | 'data' | 'settings';
+  group?: "main" | "data" | "settings";
   divider?: boolean;
 }
-=======
-  GitCompare, 
-  Users, 
-  Database,
-  GitPullRequest
-} from 'lucide-react';
->>>>>>> newmai
 
 interface NavItemsProps {
   currentPath: string;
@@ -42,69 +37,86 @@ interface NavItemsProps {
   isMobile?: boolean;
 }
 
-<<<<<<< HEAD
-export const navItems: NavItem[] = [
-  { name: "Dashboard", Icon: Home, path: "/", group: "main" },
-  { name: "Messages", Icon: PanelTopOpen, path: "/messages-enhanced", group: "main" },
-  { name: "Gallery", Icon: ImageIcon, path: "/gallery", group: "main" },
-  { name: "Public Gallery", Icon: GalleryHorizontal, path: "/p/public", group: "main" },
-  
-  { name: "Media Table", Icon: PanelLeft, path: "/media-table", group: "data", divider: true },
-  { name: "Table Demo", Icon: Table, path: "/table-demo", group: "data" },
-  { name: "SQL Console", Icon: Database, path: "/sql-console", group: "data" },
-  { name: "AI Chat", Icon: FileText, path: "/ai-chat", group: "data" },
-  { name: "Audio Upload", Icon: Music, path: "/audio-upload", group: "data" },
-  { name: "Make Automations", Icon: Zap, path: "/make-automations", group: "data" },
-  
-  { name: "Settings", Icon: Settings, path: "/settings", group: "settings", divider: true },
-];
-=======
-export const NavItems: React.FC<NavItemsProps> = ({ currentPath, onNavigate, isExpanded = true, isMobile = false }) => {
+export const NavItems: React.FC<NavItemsProps> = ({
+  currentPath,
+  onNavigate,
+  isExpanded = true,
+  isMobile = false,
+}) => {
   const items = [
-    { 
-      title: 'Dashboard', 
-      href: '/', 
+    {
+      title: "Dashboard",
+      href: "/",
       icon: <LayoutDashboard size={20} />,
-      isActive: currentPath === '/' 
+      isActive: currentPath === "/",
     },
-    { 
-      title: 'Messages', 
-      href: '/messages-enhanced', 
-      icon: <MessageSquare size={20} />, 
-      isActive: currentPath === '/messages-enhanced' 
+    {
+      title: "Messages",
+      href: "/messages-enhanced",
+      icon: <MessageSquare size={20} />,
+      isActive: currentPath === "/messages-enhanced",
     },
-    { 
-      title: 'Products', 
-      href: '/gl-products', 
-      icon: <Package size={20} />, 
-      isActive: currentPath === '/gl-products' 
+    {
+      title: "Gallery",
+      href: "/gallery",
+      icon: <ImageIcon size={20} />,
+      isActive: currentPath === "/gallery",
     },
-    { 
-      title: 'Vendors', 
-      href: '/vendors', 
-      icon: <Users size={20} />, 
-      isActive: currentPath === '/vendors' 
+    {
+      title: "Public Gallery",
+      href: "/p/public",
+      icon: <GalleryHorizontal size={20} />,
+      isActive: currentPath === "/p/public",
     },
-    { 
-      title: 'Product Matching', 
-      href: '/product-matching', 
-      icon: <GitCompare size={20} />, 
-      isActive: currentPath === '/product-matching' 
+    {
+      title: "Media Table",
+      href: "/media-table",
+      icon: <PanelLeft size={20} />,
+      isActive: currentPath === "/media-table",
     },
-    { 
-      title: 'SQL Console', 
-      href: '/sql-console', 
-      icon: <Database size={20} />, 
-      isActive: currentPath === '/sql-console' 
+    {
+      title: "Table Demo",
+      href: "/table-demo",
+      icon: <Table size={20} />,
+      isActive: currentPath === "/table-demo",
     },
-    { 
-      title: 'Settings', 
-      href: '/settings', 
-      icon: <Settings size={20} />, 
-      isActive: currentPath === '/settings' 
+    {
+      title: "Product Matching",
+      href: "/product-matching",
+      icon: <GitCompare size={20} />,
+      isActive: currentPath === "/product-matching",
+    },
+    {
+      title: "SQL Console",
+      href: "/sql-console",
+      icon: <Database size={20} />,
+      isActive: currentPath === "/sql-console",
+    },
+    {
+      title: "AI Chat",
+      href: "/ai-chat",
+      icon: <FileText size={20} />,
+      isActive: currentPath === "/ai-chat",
+    },
+    {
+      title: "Audio Upload",
+      href: "/audio-upload",
+      icon: <Music size={20} />,
+      isActive: currentPath === "/audio-upload",
+    },
+    {
+      title: "Make Automations",
+      href: "/make-automations",
+      icon: <Zap size={20} />,
+      isActive: currentPath === "/make-automations",
+    },
+    {
+      title: "Settings",
+      href: "/settings",
+      icon: <Settings size={20} />,
+      isActive: currentPath === "/settings",
     },
   ];
->>>>>>> newmai
 
   return (
     <div className="space-y-1">

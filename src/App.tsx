@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -25,11 +24,8 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicGallery = lazy(() => import("./pages/PublicGallery"));
 const SqlConsole = lazy(() => import('./pages/SqlConsole'));
 const MakeAutomations = lazy(() => import('./pages/MakeAutomations'));
-<<<<<<< HEAD
 const TableDemo = lazy(() => import('./pages/table-demo'));
-=======
 const ProductMatching = lazy(() => import('./pages/ProductMatching'));
->>>>>>> newmai
 
 import { AppSidebar } from "@/components/Layout/Sidebar";
 
@@ -162,11 +158,8 @@ function App() {
                     <Route path="/audio-upload" element={<AudioUpload />} />
                     <Route path="/sql-console" element={<SqlConsole />} />
                     <Route path="/make-automations" element={<MakeAutomations />} />
-<<<<<<< HEAD
                     <Route path="/table-demo" element={<TableDemo />} />
-=======
                     <Route path="/product-matching" element={<ProductMatching />} />
->>>>>>> newmai
                     <Route path="*" element={<NotFound />} />
                   </Route>
                 </Routes>
