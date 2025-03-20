@@ -10,6 +10,7 @@ interface SearchToolbarProps {
   onClearSearch: () => void;
   isSearching?: boolean;
   className?: string;
+  placeholder?: string;
 }
 
 export function SearchToolbar({
@@ -17,7 +18,8 @@ export function SearchToolbar({
   onSearchChange,
   onClearSearch,
   isSearching = false,
-  className = ''
+  className = '',
+  placeholder = 'Search products...'
 }: SearchToolbarProps) {
   return (
     <div className={`relative flex-1 max-w-md ${className}`}>
@@ -25,7 +27,7 @@ export function SearchToolbar({
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
           type="search"
-          placeholder="Search products..."
+          placeholder={placeholder}
           className="pl-8 pr-8 h-9"
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value)}

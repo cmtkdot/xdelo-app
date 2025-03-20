@@ -71,8 +71,11 @@ const findMatches = async (
         }
       }
 
-      if (purchase_date && product.main_product_purchase_date) {
-        if (purchase_date === product.main_product_purchase_date) {
+      if (purchase_date && product.product_purchase_date) {
+        const purchaseDateStr = new Date(purchase_date).toDateString();
+        const productPurchaseDateStr = new Date(product.product_purchase_date).toDateString();
+        
+        if (purchaseDateStr === productPurchaseDateStr) {
           confidence += 0.3;
           matchedFields.push('purchase_date');
         }

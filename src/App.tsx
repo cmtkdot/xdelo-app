@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -21,10 +22,13 @@ const AIChat = lazy(() => import("./pages/AIChat"));
 const Settings = lazy(() => import("./pages/Settings"));
 const AudioUpload = lazy(() => import("./pages/AudioUpload"));
 const NotFound = lazy(() => import("./pages/NotFound"));
-const PublicGallery = lazy(() => import("./pages/PublicGallery"));
 const SqlConsole = lazy(() => import('./pages/SqlConsole'));
 const MakeAutomations = lazy(() => import('./pages/MakeAutomations'));
 const TableDemo = lazy(() => import('./pages/table-demo'));
+const ProductMatching = lazy(() => import('./pages/ProductMatching'));
+
+// Load the public gallery - this needs to be accessible without auth
+const PublicGallery = lazy(() => import("./pages/PublicGallery"));
 
 import { AppSidebar } from "@/components/Layout/Sidebar";
 
@@ -121,6 +125,7 @@ function App() {
                 <Routes>
                   <Route path="/auth" element={<Auth />} />
                   
+                  {/* Public routes - accessible without authentication */}
                   <Route path="/p/public" element={
                     <Suspense fallback={<PageLoader />}>
                       <PublicGallery />
@@ -132,6 +137,7 @@ function App() {
                     </Suspense>
                   } />
                   
+                  {/* Protected routes - require authentication */}
                   <Route element={
                     <ProtectedRoute>
                       <NavigationProvider>
@@ -160,6 +166,7 @@ function App() {
                     <Route path="/sql-console" element={<SqlConsole />} />
                     <Route path="/make-automations" element={<MakeAutomations />} />
                     <Route path="/table-demo" element={<TableDemo />} />
+                    <Route path="/product-matching" element={<ProductMatching />} />
                     <Route path="*" element={<NotFound />} />
                   </Route>
                 </Routes>
