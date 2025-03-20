@@ -1,8 +1,6 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
-import { xdelo_parseCaption } from '../_shared/captionParser.ts';
 import { 
   getMessage, 
   updateMessageWithAnalysis, 
@@ -17,6 +15,47 @@ import {
   updateMessageWithError
 } from '../_shared/errorHandler.ts';
 import { SecurityLevel } from '../_shared/jwt-verification.ts';
+
+// Define corsHeaders here since we deleted the import
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-correlation-id',
+  'Access-Control-Max-Age': '86400', // 24 hours caching for preflight requests
+};
+
+// Define a simple version of xdelo_parseCaption since we deleted the import
+function xdelo_parseCaption(
+  caption: string | null | undefined,
+  options: {
+    extractPurchaseDate?: boolean;
+    extractProductCode?: boolean;
+    extractVendorUid?: boolean;
+    extractPricing?: boolean;
+  } = {}
+): ParsedContent {
+  // Simple implementation of the parser
+  if (!caption) {
+    return {
+      parsing_metadata: {}
+    };
+  }
+  
+  const lines = caption.split('\n').map(line => line.trim()).filter(Boolean);
+  
+  const result: ParsedContent = {
+    caption,
+    raw_lines: lines,
+    raw_text: caption,
+    parsing_metadata: {}
+  };
+  
+  if (lines.length > 0) {
+    result.product_name = lines[0];
+  }
+  
+  return result;
+}
 
 const supabaseClient = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',

@@ -29,32 +29,35 @@ export function constructTelegramMessageUrl(
       chatId = messageOrChatId;
       msgId = messageId;
     } else {
-      console.warn('Invalid parameters for constructTelegramMessageUrl');
+      console.warn('Cannot construct Telegram URL: invalid parameters');
       return undefined;
     }
-    
-    // For public channels with username
+
+    // Private chats don't have shareable URLs
+    if (typeof chatId === 'number' && chatId > 0) {
+      // This is a private chat (positive ID)
+      return undefined;
+    }
+
+    // For public channels with usernames
     if (username) {
       return `https://t.me/${username}/${msgId}`;
     }
     
-    // Private chat URLs cannot be constructed
-    if (chatId > 0) {
-      return undefined;
-    }
-    
-    // For private channels/groups
-    if (chatId < 0) {
-      // Check if it's a supergroup/channel (-100 prefix)
+    // For public channels and supergroups (negative IDs)
+    // Supergroups and channels have a specific format for their URLs
+    if (typeof chatId === 'number' && chatId < 0) {
       const chatIdStr = chatId.toString();
+      
+      // Determine if this is a supergroup/channel
+      // Supergroups start with -100, channels start with -1
       if (chatIdStr.startsWith('-100')) {
-        // Remove the -100 prefix
-        const channelId = chatIdStr.substring(4);
-        return `https://t.me/c/${channelId}/${msgId}`;
-      } else {
-        // Regular group - strip the minus sign
-        const groupId = Math.abs(chatId);
-        return `https://t.me/g/${groupId}/${msgId}`;
+        // This is a supergroup or channel, remove the -100 prefix
+        const publicId = chatIdStr.substring(4);
+        return `https://t.me/c/${publicId}/${msgId}`;
+      } else if (chatIdStr.startsWith('-')) {
+        // Regular group, not publicly accessible
+        return undefined;
       }
     }
     
