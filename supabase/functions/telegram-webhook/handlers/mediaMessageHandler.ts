@@ -3,10 +3,10 @@ import { corsHeaders } from '../../_shared/cors.ts';
 import { 
   xdelo_downloadMediaFromTelegram,
   xdelo_uploadMediaToStorage,
-  xdelo_validateAndFixStoragePath,
-  xdelo_isViewableMimeType,
-  xdelo_detectMimeType
-} from '../../_shared/mediaUtils.ts';
+  xdelo_generateStoragePath,
+  xdelo_detectMimeType,
+  xdelo_isViewableMimeType
+} from '../../_shared/mediaUtils/index.ts';
 import {
   xdelo_findExistingFile,
   xdelo_processMessageMedia
@@ -133,64 +133,142 @@ async function xdelo_handleEditedMediaMessage(
           message.photo[message.photo.length - 1] : 
           message.video || message.document;
           
+        // Validate that we have a valid file to process
+        if (!telegramFile) {
+          throw new Error(`No valid media content found in edited message ${message.message_id}`);
+        }
+
+        // Validate file_id integrity
+        if (!telegramFile.file_id || telegramFile.file_id.length < 10) {
+          logger?.error(`Invalid file_id format in edited message ${message.message_id}`, {
+            file_id_length: telegramFile.file_id?.length || 0,
+            media_type: message.photo ? 'photo' : message.video ? 'video' : 'document'
+          });
+          throw new Error(`Invalid file_id format in edited message ${message.message_id}`);
+        }
+
+        // Log complete file information for debugging
+        logger?.info(`Processing edited media file with complete details`, {
+          file_id_length: telegramFile.file_id.length,
+          file_unique_id: telegramFile.file_unique_id,
+          media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
+          mime_type: message.document?.mime_type || message.video?.mime_type || 'unknown'
+        });
+          
         // Get mime type
         const detectedMimeType = xdelo_detectMimeType(message);
         
-        // Process the new media file
-        const mediaProcessResult = await xdelo_processMessageMedia(
-          message,
-          telegramFile.file_id,
-          telegramFile.file_unique_id,
-          TELEGRAM_BOT_TOKEN,
-          existingMessage.id // Use existing message ID
-        );
-        
-        if (!mediaProcessResult.success) {
-          throw new Error(`Failed to process edited media: ${mediaProcessResult.error}`);
-        }
-        
-        // If successful, update the message with new media info
-        const { data: updateResult, error: updateError } = await supabaseClient
-          .from('messages')
-          .update({
-            caption: message.caption,
-            file_id: telegramFile.file_id,
-            file_unique_id: telegramFile.file_unique_id,
-            mime_type: detectedMimeType,
-            width: telegramFile.width,
-            height: telegramFile.height,
-            duration: message.video?.duration,
-            file_size: telegramFile.file_size,
-            edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
-            edit_count: (existingMessage.edit_count || 0) + 1,
-            edit_history: editHistory,
-            processing_state: message.caption ? 'pending' : existingMessage.processing_state,
-            storage_path: mediaProcessResult.fileInfo.storage_path,
-            public_url: mediaProcessResult.fileInfo.public_url,
-            last_edited_at: new Date().toISOString()
-          })
-          .eq('id', existingMessage.id);
-          
-        if (updateError) {
-          throw new Error(`Failed to update message with new media: ${updateError.message}`);
-        }
-        
-        // Log the edit operation
+        // Process the new media file with safe handling
         try {
-          await xdelo_logProcessingEvent(
-            "message_media_edited",
-            existingMessage.id,
-            correlationId,
-            {
-              message_id: message.message_id,
-              chat_id: message.chat.id,
+          const mediaProcessResult = await xdelo_processMessageMedia(
+            message,
+            telegramFile.file_id,
+            telegramFile.file_unique_id,
+            TELEGRAM_BOT_TOKEN || '',
+            existingMessage.id // Use existing message ID
+          );
+          
+          if (!mediaProcessResult.success) {
+            logger?.error(`Failed to process edited media: ${mediaProcessResult.error}`, {
+              file_id_length: telegramFile.file_id.length,
+              error: mediaProcessResult.error
+            });
+            
+            // Update message with error information but keep existing data
+            const { error: updateError } = await supabaseClient
+              .from('messages')
+              .update({
+                edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
+                edit_count: (existingMessage.edit_count || 0) + 1,
+                edit_history: editHistory,
+                processing_state: 'edit_download_failed',
+                needs_redownload: true,
+                download_error: mediaProcessResult.error,
+                last_edited_at: new Date().toISOString()
+              })
+              .eq('id', existingMessage.id);
+              
+            // Log the error
+            await xdelo_logProcessingEvent(
+              "edit_media_download_failed",
+              existingMessage.id,
+              correlationId,
+              {
+                message_id: message.message_id,
+                chat_id: message.chat.id,
+                file_id: telegramFile.file_id,
+                file_id_length: telegramFile.file_id.length,
+                file_unique_id: telegramFile.file_unique_id,
+                error: mediaProcessResult.error
+              },
+              mediaProcessResult.error
+            );
+            
+            return new Response(
+              JSON.stringify({ 
+                success: false, 
+                error: mediaProcessResult.error,
+                needs_redownload: true,
+                correlationId 
+              }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+            );
+          }
+          
+          // If successful, update the message with new media info using safe property access
+          const { data: updateResult, error: updateError } = await supabaseClient
+            .from('messages')
+            .update({
+              caption: message.caption,
               file_id: telegramFile.file_id,
               file_unique_id: telegramFile.file_unique_id,
-              storage_path: mediaProcessResult.fileInfo.storage_path
-            }
-          );
-        } catch (logError) {
-          logger?.error(`Failed to log media edit operation: ${logError.message}`);
+              mime_type: detectedMimeType,
+              // Safe access to properties that might not exist on document type
+              width: 'width' in telegramFile ? telegramFile.width : undefined,
+              height: 'height' in telegramFile ? telegramFile.height : undefined,
+              duration: message.video?.duration,
+              file_size: telegramFile.file_size,
+              edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
+              edit_count: (existingMessage.edit_count || 0) + 1,
+              edit_history: editHistory,
+              processing_state: message.caption ? 'pending' : existingMessage.processing_state,
+              storage_path: mediaProcessResult.fileInfo.storage_path,
+              public_url: mediaProcessResult.fileInfo.public_url,
+              last_edited_at: new Date().toISOString()
+            })
+            .eq('id', existingMessage.id);
+            
+          if (updateError) {
+            throw new Error(`Failed to update message with new media: ${updateError.message}`);
+          }
+          
+          // Log the edit operation
+          try {
+            await xdelo_logProcessingEvent(
+              "message_media_edited",
+              existingMessage.id,
+              correlationId,
+              {
+                message_id: message.message_id,
+                chat_id: message.chat.id,
+                file_id: telegramFile.file_id,
+                file_id_length: telegramFile.file_id.length,
+                file_unique_id: telegramFile.file_unique_id,
+                storage_path: mediaProcessResult.fileInfo.storage_path
+              }
+            );
+          } catch (logError) {
+            logger?.error(`Failed to log media edit operation: ${logError.message}`);
+          }
+        } catch (mediaError) {
+          // Handle media processing errors specifically
+          logger?.error(`Error processing edited media: ${
+            mediaError instanceof Error ? mediaError.message : String(mediaError)}`, {
+            message_id: message.message_id,
+            file_id_length: telegramFile.file_id.length
+          });
+          
+          throw mediaError;
         }
       } catch (mediaError) {
         logger?.error(`Error processing edited media: ${mediaError.message}`);
@@ -332,108 +410,222 @@ async function xdelo_handleNewMediaMessage(
       message_url: messageUrl
     });
     
-    // Prepare the message data
+    // Safely extract the Telegram file with proper validation
     const telegramFile = message.photo ? 
       message.photo[message.photo.length - 1] : 
       message.video || message.document;
     
-    // Process media
-    const mediaResult = await xdelo_processMessageMedia(
-      message,
-      telegramFile.file_id,
-      telegramFile.file_unique_id,
-      TELEGRAM_BOT_TOKEN
-    );
-    
-    if (!mediaResult.success) {
-      throw new Error(`Failed to process media: ${mediaResult.error}`);
+    // Validate that we have a valid file to process
+    if (!telegramFile) {
+      throw new Error(`No valid media content found in message ${message.message_id}`);
     }
-    
-    // Prepare forward info if message is forwarded
-    const forwardInfo: ForwardInfo | undefined = message.forward_origin ? {
-      is_forwarded: true,
-      forward_origin_type: message.forward_origin.type,
-      forward_from_chat_id: message.forward_origin.chat?.id,
-      forward_from_chat_title: message.forward_origin.chat?.title,
-      forward_from_chat_type: message.forward_origin.chat?.type,
-      forward_from_message_id: message.forward_origin.message_id,
-      forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
-      original_chat_id: message.forward_origin.chat?.id,
-      original_chat_title: message.forward_origin.chat?.title,
-      original_message_id: message.forward_origin.message_id
-    } : undefined;
-    
-    // Create message input
-    const messageInput: MessageInput = {
-      telegram_message_id: message.message_id,
-      chat_id: message.chat.id,
-      chat_type: message.chat.type,
-      chat_title: message.chat.title,
-      caption: message.caption,
-      media_group_id: message.media_group_id,
-      file_id: telegramFile.file_id,
-      file_unique_id: telegramFile.file_unique_id,
-      mime_type: mediaResult.fileInfo.mime_type,
-      mime_type_original: message.document?.mime_type || message.video?.mime_type,
-      storage_path: mediaResult.fileInfo.storage_path,
-      public_url: mediaResult.fileInfo.public_url,
-      width: telegramFile.width,
-      height: telegramFile.height,
-      duration: message.video?.duration,
-      file_size: telegramFile.file_size || mediaResult.fileInfo.file_size,
-      correlation_id: correlationId,
-      processing_state: message.caption ? 'pending' : 'initialized',
-      is_edited_channel_post: context.isChannelPost,
-      forward_info: forwardInfo,
-      telegram_data: message,
-      edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : undefined,
-      is_forward: context.isForwarded,
-      edit_history: context.isEdit ? [{
-        timestamp: new Date().toISOString(),
-        is_initial_edit: true,
-        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
-      }] : [],
-      storage_exists: true,
-      storage_path_standardized: true,
-      message_url: messageUrl
-    };
-    
-    // Create the message
-    const result = await createMessage(supabaseClient, messageInput, logger);
-    
-    if (!result.success) {
-      logger?.error(`Failed to create message: ${result.error_message}`, {
-        message_id: message.message_id,
-        chat_id: message.chat.id
+
+    // Validate file_id integrity
+    if (!telegramFile.file_id || telegramFile.file_id.length < 10) {
+      logger?.error(`Invalid file_id format in message ${message.message_id}`, {
+        file_id_length: telegramFile.file_id?.length || 0,
+        media_type: message.photo ? 'photo' : message.video ? 'video' : 'document'
       });
+      throw new Error(`Invalid file_id format in message ${message.message_id}`);
+    }
+
+    // Validate file_unique_id
+    if (!telegramFile.file_unique_id) {
+      throw new Error(`Missing file_unique_id in message ${message.message_id}`);
+    }
+
+    // Log complete file information for debugging
+    logger?.info(`Processing media file with complete details`, {
+      file_id_length: telegramFile.file_id.length,
+      file_unique_id: telegramFile.file_unique_id,
+      media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
+      mime_type: message.document?.mime_type || message.video?.mime_type || 'unknown'
+    });
+    
+    // Try to process media with robust error handling
+    try {
+      const mediaResult = await xdelo_processMessageMedia(
+        message,
+        telegramFile.file_id,
+        telegramFile.file_unique_id,
+        TELEGRAM_BOT_TOKEN || ''
+      );
       
-      // Also try to log to the database
-      await xdelo_logProcessingEvent(
-        "message_creation_failed",
-        message.message_id.toString(),
-        correlationId,
-        {
-          message_id: message.message_id,
+      if (!mediaResult.success) {
+        logger?.error(`Failed to process media: ${mediaResult.error}`, {
+          file_id_length: telegramFile.file_id.length,
+          error: mediaResult.error
+        });
+        
+        // Create a fallback record with download failure information
+        const fallbackMessageInput: MessageInput = {
+          telegram_message_id: message.message_id,
           chat_id: message.chat.id,
-          error: result.error_message
+          chat_type: message.chat.type,
+          chat_title: message.chat.title,
+          caption: message.caption,
+          media_group_id: message.media_group_id,
+          file_id: telegramFile.file_id,
+          file_unique_id: telegramFile.file_unique_id,
+          mime_type: xdelo_detectMimeType(message),
+          mime_type_original: message.document?.mime_type || message.video?.mime_type,
+          // Use a placeholder storage path
+          storage_path: `failed-download-${telegramFile.file_unique_id}`,
+          // Safe access to properties that might not exist on document type
+          width: 'width' in telegramFile ? telegramFile.width : undefined,
+          height: 'height' in telegramFile ? telegramFile.height : undefined,
+          duration: message.video?.duration,
+          file_size: telegramFile.file_size,
+          correlation_id: correlationId,
+          processing_state: 'download_failed',
+          telegram_data: message,
+          storage_exists: false,
+          needs_redownload: true,
+          message_url: messageUrl
+        };
+        
+        // Create the message record despite download failure
+        const fallbackResult = await createMessage(
+          supabaseClient, 
+          fallbackMessageInput, 
+          {
+            error: (msg: string, data: any) => logger?.error(msg, data) || console.error(msg, data),
+            info: (msg: string, data?: any) => logger?.info(msg, data) || console.log(msg, data),
+            warn: (msg: string, data?: any) => logger?.warn(msg, data) || console.warn(msg, data)
+          }
+        );
+        
+        await xdelo_logProcessingEvent(
+          "media_download_failed",
+          message.message_id.toString(),
+          correlationId,
+          {
+            message_id: message.message_id,
+            chat_id: message.chat.id,
+            file_id_length: telegramFile.file_id.length,
+            file_unique_id: telegramFile.file_unique_id,
+            error: mediaResult.error
+          }
+        );
+        
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: mediaResult.error,
+            needs_redownload: true,
+            id: fallbackResult.id,
+            correlationId 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        );
+      }
+      
+      // Successfully processed media, continue with regular flow
+      // Prepare forward info if message is forwarded
+      const forwardInfo: ForwardInfo | undefined = message.forward_origin ? {
+        is_forwarded: true,
+        forward_origin_type: message.forward_origin.type,
+        forward_from_chat_id: message.forward_origin.chat?.id,
+        forward_from_chat_title: message.forward_origin.chat?.title,
+        forward_from_chat_type: message.forward_origin.chat?.type,
+        forward_from_message_id: message.forward_origin.message_id,
+        forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
+        original_chat_id: message.forward_origin.chat?.id,
+        original_chat_title: message.forward_origin.chat?.title,
+        original_message_id: message.forward_origin.message_id
+      } : undefined;
+      
+      // Create message input with safe property access
+      const messageInput: MessageInput = {
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        chat_type: message.chat.type,
+        chat_title: message.chat.title,
+        caption: message.caption,
+        media_group_id: message.media_group_id,
+        file_id: telegramFile.file_id,
+        file_unique_id: telegramFile.file_unique_id,
+        mime_type: mediaResult.fileInfo.mime_type,
+        mime_type_original: message.document?.mime_type || message.video?.mime_type,
+        storage_path: mediaResult.fileInfo.storage_path,
+        public_url: mediaResult.fileInfo.public_url,
+        // Safe access to properties that might not exist on document type
+        width: 'width' in telegramFile ? telegramFile.width : undefined,
+        height: 'height' in telegramFile ? telegramFile.height : undefined,
+        duration: message.video?.duration,
+        file_size: telegramFile.file_size || mediaResult.fileInfo.file_size,
+        correlation_id: correlationId,
+        processing_state: message.caption ? 'pending' : 'initialized',
+        is_edited_channel_post: context.isChannelPost,
+        forward_info: forwardInfo,
+        telegram_data: message,
+        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : undefined,
+        is_forward: context.isForwarded,
+        edit_history: context.isEdit ? [{
+          timestamp: new Date().toISOString(),
+          is_initial_edit: true,
+          edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+        }] : [],
+        storage_exists: true,
+        storage_path_standardized: true,
+        message_url: messageUrl
+      };
+      
+      // Create the message with logger adapter
+      const result = await createMessage(
+        supabaseClient, 
+        messageInput, 
+        {
+          error: (msg: string, data: any) => logger?.error(msg, data) || console.error(msg, data),
+          info: (msg: string, data?: any) => logger?.info(msg, data) || console.log(msg, data),
+          warn: (msg: string, data?: any) => logger?.warn(msg, data) || console.warn(msg, data)
         }
       );
       
-      throw new Error(result.error_message || 'Failed to create message record');
+      if (!result.success) {
+        logger?.error(`Failed to create message: ${result.error_message}`, {
+          message_id: message.message_id,
+          chat_id: message.chat.id
+        });
+        
+        // Also try to log to the database
+        await xdelo_logProcessingEvent(
+          "message_creation_failed",
+          message.message_id.toString(),
+          correlationId,
+          {
+            message_id: message.message_id,
+            chat_id: message.chat.id,
+            error: result.error_message
+          }
+        );
+        
+        throw new Error(result.error_message || 'Failed to create message record');
+      }
+      
+      // Log the success
+      logger?.success(`Successfully created new media message: ${result.id}`, {
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
+        storage_path: mediaResult.fileInfo.storage_path
+      });
+      
+      return new Response(
+        JSON.stringify({ success: true, id: result.id, correlationId }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } catch (mediaError) {
+      // Handle media processing errors
+      logger?.error(`Media processing error: ${
+        mediaError instanceof Error ? mediaError.message : String(mediaError)}`, {
+        message_id: message.message_id,
+        error_type: typeof mediaError,
+        file_id_length: telegramFile.file_id.length
+      });
+      
+      throw mediaError;
     }
-    
-    // Log the success
-    logger?.success(`Successfully created new media message: ${result.id}`, {
-      telegram_message_id: message.message_id,
-      chat_id: message.chat.id,
-      media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
-      storage_path: mediaResult.fileInfo.storage_path
-    });
-    
-    return new Response(
-      JSON.stringify({ success: true, id: result.id, correlationId }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
   } catch (createError) {
     logger?.error(`Error creating new media message: ${
       createError instanceof Error ? createError.message : String(createError)}`, {
