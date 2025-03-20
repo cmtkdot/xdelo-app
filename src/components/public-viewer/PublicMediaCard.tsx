@@ -275,27 +275,28 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
       {/* Hover State: Bottom Bar (only visible on hover) */}
       <div className="absolute inset-x-0 bottom-0 p-3 bg-black/70 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
         <div className="flex items-center gap-2">
-          {/* Product Name and Quantity in one row */}
-          <div className="flex-1 flex items-center gap-2">
+          {/* Product Name */}
+          <div className="flex-1">
             {message.product_name && (
               <span className="text-white text-sm font-medium line-clamp-1">
                 {message.product_name}
               </span>
             )}
-            
+          </div>
+          
+          {/* Date and Quantity in right column */}
+          <div className="flex flex-col items-end">
+            {compactDate && (
+              <span className="text-white/80 text-xs">
+                {compactDate}
+              </span>
+            )}
             {message.product_quantity && (
               <span className="text-white/90 text-xs whitespace-nowrap">
                 Qty: {message.product_quantity}
               </span>
             )}
           </div>
-          
-          {/* Compact date */}
-          {compactDate && (
-            <span className="text-white/80 text-xs">
-              {compactDate}
-            </span>
-          )}
         </div>
         
         {/* Product code pill using vendor color scheme */}
