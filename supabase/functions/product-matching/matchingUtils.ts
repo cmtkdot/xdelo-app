@@ -1,173 +1,111 @@
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GlProduct, ProductMatch, NAME_MATCH_WEIGHTS, PRIORITY_LEVELS } from './types.ts';
 
-/**
- * Calculate string similarity using Levenshtein distance
- */
-function calculateStringSimilarity(str1: string, str2: string): number {
-  const longer = str1.length > str2.length ? str1 : str2;
-  const shorter = str1.length > str2.length ? str2 : str1;
-  const longerLength = longer.length;
+import { MatchResult } from './types.ts';
 
-  if (longerLength === 0) return 1.0;
-
-  const distance = levenshteinDistance(longer.toLowerCase(), shorter.toLowerCase());
-  return (longerLength - distance) / longerLength;
-}
-
-/**
- * Calculate Levenshtein distance between two strings
- */
-function levenshteinDistance(str1: string, str2: string): number {
-  const matrix: number[][] = [];
-
-  for (let i = 0; i <= str1.length; i++) {
-    matrix[i] = [i];
+// Function to calculate string similarity using Levenshtein distance
+function stringSimilarity(str1: string, str2: string): number {
+  if (!str1 || !str2) return 0;
+  
+  const s1 = str1.toLowerCase();
+  const s2 = str2.toLowerCase();
+  
+  // Calculate Levenshtein distance
+  const track = Array(s2.length + 1).fill(null).map(() => 
+    Array(s1.length + 1).fill(null));
+  
+  for (let i = 0; i <= s1.length; i += 1) {
+    track[0][i] = i;
   }
-
-  for (let j = 0; j <= str2.length; j++) {
-    matrix[0][j] = j;
+  
+  for (let j = 0; j <= s2.length; j += 1) {
+    track[j][0] = j;
   }
-
-  for (let i = 1; i <= str1.length; i++) {
-    for (let j = 1; j <= str2.length; j++) {
-      if (str1[i - 1] === str2[j - 1]) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j] + 1
-        );
-      }
+  
+  for (let j = 1; j <= s2.length; j += 1) {
+    for (let i = 1; i <= s1.length; i += 1) {
+      const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
+      track[j][i] = Math.min(
+        track[j][i - 1] + 1, // deletion
+        track[j - 1][i] + 1, // insertion
+        track[j - 1][i - 1] + indicator, // substitution
+      );
     }
   }
-
-  return matrix[str1.length][str2.length];
+  
+  const distance = track[s2.length][s1.length];
+  const maxLength = Math.max(s1.length, s2.length);
+  
+  // Return similarity ratio (1 - normalized distance)
+  return maxLength > 0 ? 1 - distance / maxLength : 1;
 }
 
-/**
- * Calculate match score for a product
- */
-export function calculateProductMatch(
-  searchName: string,
-  candidate: GlProduct,
+// Function to find product matches
+export function findProductMatches(
+  products: any[],
+  productName: string,
   vendorName?: string,
   poNumber?: string,
   vendorUid?: string,
-  purchaseDate?: string
-): ProductMatch {
-  let confidence_score = 0;
-  let match_priority = 4; // Start with lowest priority
-  const matchDetails: string[] = [];
-  const match_criteria = {
-    name_match: false,
-    vendor_match: false,
-    po_match: false,
-    date_match: false
-  };
-
-  // Normalize strings for comparison
-  const normalizedSearch = searchName.toLowerCase().trim();
-  const normalizedProductName = candidate.main_product_name?.toLowerCase().trim() || '';
-  const normalizedVendorProductName = candidate.main_vendor_product_name?.toLowerCase().trim() || '';
-  const normalizedVendorUid = candidate.main_vendor_uid?.toLowerCase().trim() || '';
-
-  // Calculate name similarities
-  const productNameSimilarity = calculateStringSimilarity(normalizedSearch, normalizedProductName);
-  const vendorProductNameSimilarity = calculateStringSimilarity(normalizedSearch, normalizedVendorProductName);
-
-  // Apply weights to name matches
-  const weightedNameScore = Math.max(
-    productNameSimilarity * NAME_MATCH_WEIGHTS.MAIN_PRODUCT_NAME,
-    vendorProductNameSimilarity * NAME_MATCH_WEIGHTS.MAIN_VENDOR_PRODUCT_NAME
-  );
-
-  // Set initial confidence based on name match
-  confidence_score = weightedNameScore;
-  match_criteria.name_match = weightedNameScore > 0.8;
-
-  // Check vendor match
-  if (vendorName && vendorUid) {
-    const vendorMatch = normalizedVendorUid === vendorUid.toLowerCase().trim();
-    if (vendorMatch) {
-      confidence_score += 0.1;
-      match_criteria.vendor_match = true;
-      matchDetails.push('Vendor match');
+  minConfidence: number = 0.6
+): MatchResult[] {
+  if (!productName || !products || products.length === 0) {
+    return [];
+  }
+  
+  // Preprocess input for better matching
+  const normalizedInput = productName.toLowerCase().trim();
+  
+  const matches: MatchResult[] = [];
+  
+  for (const product of products) {
+    // Calculate similarity for product name
+    const nameSimilarity = stringSimilarity(normalizedInput, product.product_name || '');
+    
+    // Additional matching factors
+    let vendorMatch = 0;
+    if (vendorName && product.vendor_name) {
+      vendorMatch = stringSimilarity(vendorName, product.vendor_name) * 0.2;
+    }
+    
+    let vendorUidMatch = 0;
+    if (vendorUid && product.vendor_uid) {
+      vendorUidMatch = stringSimilarity(vendorUid, product.vendor_uid) * 0.3;
+    }
+    
+    let poMatch = 0;
+    if (poNumber && product.po_number) {
+      poMatch = stringSimilarity(poNumber, product.po_number) * 0.2;
+    }
+    
+    // Calculate final confidence score
+    const confidenceScore = nameSimilarity * 0.6 + vendorMatch + vendorUidMatch + poMatch;
+    
+    if (confidenceScore >= minConfidence) {
+      matches.push({
+        product_name: product.product_name || 'Unknown',
+        product_id: product.id || product.product_id,
+        confidence_score: confidenceScore,
+        match_details: `Name similarity: ${(nameSimilarity * 100).toFixed(0)}%${
+          vendorMatch ? `, Vendor match: ${(vendorMatch * 100 / 0.2).toFixed(0)}%` : ''
+        }${
+          vendorUidMatch ? `, Vendor ID match: ${(vendorUidMatch * 100 / 0.3).toFixed(0)}%` : ''
+        }`,
+        vendor_uid: product.vendor_uid,
+        product_code: product.product_code,
+        glide_id: product.rowid,
+        match_priority: confidenceScore >= 0.8 ? 'high' : confidenceScore >= 0.7 ? 'medium' : 'low'
+      });
     }
   }
-
-  // Check PO match
-  if (poNumber && candidate.rowid_purchase_order_row_id) {
-    const poMatch = candidate.rowid_purchase_order_row_id.toLowerCase().includes(poNumber.toLowerCase());
-    if (poMatch) {
-      confidence_score += 0.2;
-      match_criteria.po_match = true;
-      matchDetails.push('PO match');
-    }
-  }
-
-  // Check purchase date match
-  if (purchaseDate && candidate.main_product_purchase_date) {
-    const dateMatch = new Date(purchaseDate).toDateString() === 
-                     new Date(candidate.main_product_purchase_date).toDateString();
-    if (dateMatch) {
-      confidence_score += 0.1;
-      match_criteria.date_match = true;
-      matchDetails.push('Purchase date match');
-    }
-  }
-
-  // Cap confidence at 1.0
-  confidence_score = Math.min(confidence_score, 1);
-
-  // Determine priority level based on match criteria
-  if (match_criteria.po_match && confidence_score >= PRIORITY_LEVELS.EXACT_PO_HIGH_NAME.minConfidence) {
-    match_priority = PRIORITY_LEVELS.EXACT_PO_HIGH_NAME.level;
-  } else if (match_criteria.name_match && match_criteria.vendor_match && match_criteria.date_match) {
-    match_priority = PRIORITY_LEVELS.EXACT_NAME_VENDOR_DATE.level;
-  } else if (match_criteria.po_match && confidence_score >= PRIORITY_LEVELS.EXACT_PO_FUZZY_NAME.minConfidence) {
-    match_priority = PRIORITY_LEVELS.EXACT_PO_FUZZY_NAME.level;
-  } else if (confidence_score >= PRIORITY_LEVELS.FUZZY_NAME_VENDOR_DATE.minConfidence) {
-    match_priority = PRIORITY_LEVELS.FUZZY_NAME_VENDOR_DATE.level;
-  }
-
-  return {
-    product_id: candidate.id,
-    glide_id: candidate.glide_id,
-    confidence_score,
-    match_priority,
-    match_details: matchDetails.join(', '),
-    match_criteria
-  };
+  
+  // Sort by confidence score descending
+  return matches.sort((a, b) => b.confidence_score - a.confidence_score);
 }
 
-/**
- * Find best matching product from candidates
- */
-export function findBestProductMatch(
-  candidates: GlProduct[],
-  searchName: string,
-  vendorName?: string,
-  poNumber?: string,
-  vendorUid?: string,
-  purchaseDate?: string,
-  minConfidence = PRIORITY_LEVELS.FUZZY_NAME_VENDOR_DATE.minConfidence
-): { matches: ProductMatch[], bestMatch: ProductMatch | null } {
-  const matches: ProductMatch[] = candidates.map(candidate => 
-    calculateProductMatch(searchName, candidate, vendorName, poNumber, vendorUid, purchaseDate)
-  ).filter(match => match.confidence_score >= minConfidence);
-
-  // Sort matches by priority first, then confidence
-  matches.sort((a, b) => {
-    if (a.match_priority !== b.match_priority) {
-      return a.match_priority - b.match_priority; // Lower priority number is better
-    }
-    return b.confidence_score - a.confidence_score; // Higher confidence is better
-  });
-
-  return {
-    matches,
-    bestMatch: matches.length > 0 ? matches[0] : null
-  };
+// Function to find the best match
+export function findBestMatch(matches: MatchResult[]): MatchResult | null {
+  if (!matches || matches.length === 0) {
+    return null;
+  }
+  
+  return matches[0];
 }
