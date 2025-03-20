@@ -360,7 +360,7 @@ const ProductMatchingPage = () => {
                       <div className="text-sm text-muted-foreground">Total</div>
                       <div className="text-2xl font-bold">{batchResults.total}</div>
                       <Progress value={(batchResults.processed / batchResults.total) * 100} className="h-1 mt-2" />
-                    </Card>
+                    </CardContent>
                   </Card>
                   
                   <Card>
@@ -368,7 +368,7 @@ const ProductMatchingPage = () => {
                       <div className="text-sm text-muted-foreground">Processed</div>
                       <div className="text-2xl font-bold">{batchResults.processed}</div>
                       <Progress value={(batchResults.processed / batchResults.total) * 100} className="h-1 mt-2" />
-                    </Card>
+                    </CardContent>
                   </Card>
                   
                   <Card>
@@ -376,7 +376,7 @@ const ProductMatchingPage = () => {
                       <div className="text-sm text-muted-foreground">Matched</div>
                       <div className="text-2xl font-bold text-green-600">{batchResults.matched}</div>
                       <Progress value={(batchResults.matched / batchResults.total) * 100} className="h-1 mt-2 bg-green-100" />
-                    </Card>
+                    </CardContent>
                   </Card>
                   
                   <Card>
@@ -384,7 +384,7 @@ const ProductMatchingPage = () => {
                       <div className="text-sm text-muted-foreground">Failed</div>
                       <div className="text-2xl font-bold text-red-600">{batchResults.failed}</div>
                       <Progress value={(batchResults.failed / batchResults.total) * 100} className="h-1 mt-2 bg-red-100" />
-                    </Card>
+                    </CardContent>
                   </Card>
                 </div>
               )}
