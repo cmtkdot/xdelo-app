@@ -7,10 +7,6 @@ import {
   xdelo_isViewableMimeType,
   xdelo_detectMimeType
 } from '../../_shared/mediaUtils.ts';
-import {
-  xdelo_findExistingFile,
-  xdelo_processMessageMedia
-} from '../../_shared/mediaStorage.ts';
 import { 
   TelegramMessage, 
   MessageContext, 
@@ -102,7 +98,7 @@ async function xdelo_handleEditedMediaMessage(
 
   if (existingMessage) {
     // Store previous state in edit_history
-    let editHistory = existingMessage.edit_history || [];
+    const editHistory = existingMessage.edit_history || [];
     editHistory.push({
       timestamp: new Date().toISOString(),
       previous_caption: existingMessage.caption,

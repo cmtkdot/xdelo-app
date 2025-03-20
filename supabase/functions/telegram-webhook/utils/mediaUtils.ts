@@ -1,9 +1,6 @@
-
-import { logMessageOperation } from './logger.ts';
-import { supabaseClient as supabase } from '../../_shared/supabase.ts';
+import { logMessageOperation } from '../../../_shared/logger.ts'
+import { supabaseClient as supabase } from '../../_shared/supabase.ts'
 import { 
-  xdelo_isViewableMimeType, 
-  xdelo_getUploadOptions,
   xdelo_detectMimeType,
   xdelo_validateAndFixStoragePath,
   xdelo_downloadMediaFromTelegram,
@@ -145,8 +142,6 @@ export const redownloadMissingFile = async (message: MessageRecord): Promise<{su
 
 // Export all functions from the shared mediaUtils for backward compatibility
 export { 
-  xdelo_isViewableMimeType, 
-  xdelo_getUploadOptions,
   xdelo_detectMimeType,
   xdelo_validateAndFixStoragePath,
   xdelo_downloadMediaFromTelegram,
