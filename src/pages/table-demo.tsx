@@ -1,13 +1,44 @@
-import { DataTable } from "@/components/ui/data-table";
 
-export default function TableDemoPage() {
+import React from 'react';
+import { DataTable } from '@/components/ui/data-table';
+
+type Person = {
+  id: string;
+  name: string;
+  email: string;
+};
+
+const columns = [
+  {
+    accessorKey: "name",
+    header: "Name",
+  },
+  {
+    accessorKey: "email",
+    header: "Email",
+  },
+];
+
+export default function TableDemo() {
+  const data: Person[] = [
+    {
+      id: "1",
+      name: "John Doe",
+      email: "john@example.com",
+    },
+    {
+      id: "2",
+      name: "Jane Smith",
+      email: "jane@example.com",
+    },
+  ];
+
   return (
-    <div className="container py-10">
-      <h1 className="text-3xl font-bold mb-6">Advanced Data Table Example</h1>
-      <p className="text-gray-500 mb-8">
-        This example showcases a fully featured data table with filtering, sorting, pagination, and row selection.
-      </p>
-      <DataTable />
+    <div className="container mx-auto py-10">
+      <DataTable
+        columns={columns}
+        data={data}
+      />
     </div>
   );
-} 
+}
