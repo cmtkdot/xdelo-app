@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/PublicGallery/EmptyState";
 import { LoadMoreButton } from "@/components/PublicGallery/LoadMoreButton";
 import { GalleryTableView } from "@/components/PublicGallery/GalleryTableView";
 import { usePublicGallerySearch } from "@/hooks/publicGallery/usePublicGallerySearch";
+import { usePublicGalleryCustomSearch } from "@/hooks/usePublicGalleryCustomSearch";
 
 const PublicGallery = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -31,7 +32,10 @@ const PublicGallery = () => {
     isSearching, 
     handleSearch, 
     clearSearch 
-  } = usePublicGallerySearch({ messages });
+  } = usePublicGalleryCustomSearch({ messages });
+
+  // Use the existing hook for server-side search and pagination
+  const gallerySearch = usePublicGallerySearch();
 
   const fetchMessages = async (page = 1, append = false) => {
     if (page === 1) {

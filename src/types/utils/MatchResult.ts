@@ -6,4 +6,6 @@ export interface MatchResult {
   match_details?: string;
   vendor_uid?: string;
   product_code?: string;
+  glide_id?: string;
+  match_priority?: 'high' | 'medium' | 'low';
 }
