@@ -1,4 +1,3 @@
-
 // Logger utility for Telegram webhook with correlation ID tracking and emoji support
 export class Logger {
   private correlationId: string;
@@ -141,4 +140,46 @@ export function formatWebhookSummary(
   }
   
   return summary;
+}
+
+/**
+ * Log a message operation to both console and database
+ * This is used by various handlers to keep a consistent log format
+ */
+export async function logMessageOperation(
+  eventType: string,
+  entityId: string,
+  metadata: Record<string, any> = {},
+  errorMessage?: string
+): Promise<void> {
+  try {
+    // Create a formatted summary for the console
+    const summary = formatWebhookSummary(
+      eventType, 
+      entityId, 
+      !eventType.includes('error') && !eventType.includes('failed'),
+      metadata
+    );
+    
+    // Log to console
+    console.log(summary, metadata);
+    
+    // Import supabase client from _shared to avoid circular dependency
+    const { supabaseClient } = await import('../../_shared/supabase.ts');
+    
+    // Log to database
+    const { error } = await supabaseClient.from('unified_audit_logs').insert({
+      event_type: eventType,
+      entity_id: entityId,
+      correlation_id: metadata.correlation_id || crypto.randomUUID(),
+      metadata,
+      error_message: errorMessage
+    });
+    
+    if (error) {
+      console.error(`Error logging operation ${eventType}:`, error);
+    }
+  } catch (e) {
+    console.error(`Failed to log message operation ${eventType}:`, e);
+  }
 }

@@ -1,45 +1,63 @@
-
 import { supabaseClient } from './supabase.ts';
 
 /**
  * Construct a shareable message URL for a Telegram message
+ * @param messageOrChatId Either a full message object, or a chat ID
+ * @param messageId Optional message ID if first param is a chat ID
  */
-export function constructTelegramMessageUrl(message: any): string | undefined {
+export function constructTelegramMessageUrl(
+  messageOrChatId: any,
+  messageId?: number
+): string | undefined {
   try {
-    if (!message || !message.chat || !message.message_id) {
-      console.warn('Cannot construct Telegram URL: missing message data');
+    let chatId: number;
+    let msgId: number;
+    let username: string | undefined;
+    
+    // Handle both function signatures
+    if (typeof messageOrChatId === 'object' && messageOrChatId !== null) {
+      // Called with a message object
+      if (!messageOrChatId.chat || !messageOrChatId.message_id) {
+        console.warn('Cannot construct Telegram URL: missing message data');
+        return undefined;
+      }
+      chatId = messageOrChatId.chat.id;
+      msgId = messageOrChatId.message_id;
+      username = messageOrChatId.chat.username;
+    } else if (typeof messageOrChatId === 'number' && typeof messageId === 'number') {
+      // Called with separate chat ID and message ID
+      chatId = messageOrChatId;
+      msgId = messageId;
+    } else {
+      console.warn('Invalid parameters for constructTelegramMessageUrl');
       return undefined;
     }
     
-    const { chat, message_id } = message;
-    const chatId = chat.id;
+    // For public channels with username
+    if (username) {
+      return `https://t.me/${username}/${msgId}`;
+    }
     
     // Private chat URLs cannot be constructed
     if (chatId > 0) {
       return undefined;
     }
     
-    // For public channels with username
-    if (chat.username) {
-      return `https://t.me/${chat.username}/${message_id}`;
-    }
-    
     // For private channels/groups
-    // Format depends on the chat ID format (different for supergroups/channels vs regular groups)
     if (chatId < 0) {
-      // Supergroups and channels (usually have 13 digit IDs starting with -100)
-      if (chatId < -1000000000000) {
-        // For supergroups/channels with 13+ digit IDs: extract the ID without the -100 prefix
-        const chatIdStr = Math.abs(chatId).toString();
-        const idWithoutPrefix = chatIdStr.substring(3);
-        return `https://t.me/c/${idWithoutPrefix}/${message_id}`;
+      // Check if it's a supergroup/channel (-100 prefix)
+      const chatIdStr = chatId.toString();
+      if (chatIdStr.startsWith('-100')) {
+        // Remove the -100 prefix
+        const channelId = chatIdStr.substring(4);
+        return `https://t.me/c/${channelId}/${msgId}`;
       } else {
-        // For regular groups: just use the abs value of the ID
-        return `https://t.me/c/${Math.abs(chatId)}/${message_id}`;
+        // Regular group - strip the minus sign
+        const groupId = Math.abs(chatId);
+        return `https://t.me/g/${groupId}/${msgId}`;
       }
     }
     
-    // Fallback
     return undefined;
   } catch (error) {
     console.error('Error constructing Telegram URL:', error);

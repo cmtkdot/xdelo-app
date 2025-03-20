@@ -1,12 +1,14 @@
-import { logMessageOperation } from '../../../_shared/logger.ts'
+import { logMessageOperation } from './logger.ts'
 import { supabaseClient as supabase } from '../../_shared/supabase.ts'
 import { 
+  xdelo_isViewableMimeType,
+  xdelo_getUploadOptions,
   xdelo_detectMimeType,
   xdelo_validateAndFixStoragePath,
   xdelo_downloadMediaFromTelegram,
   xdelo_uploadMediaToStorage,
   xdelo_processMessageMedia
-} from '../../_shared/mediaUtils/index.ts';
+} from '../../_shared/mediaUtils.ts';
 
 // Declare Deno type for Edge Functions
 declare const Deno: {
@@ -140,8 +142,34 @@ export const redownloadMissingFile = async (message: MessageRecord): Promise<{su
   }
 };
 
+// Stub for xdelo_findExistingFile if it's not available in mediaUtils.ts
+export const xdelo_findExistingFile = async (
+  supabaseClient: any,
+  fileUniqueId: string
+): Promise<{ exists: boolean; message?: any }> => {
+  // Implementation that would normally be in the shared file
+  const { data, error } = await supabaseClient
+    .from('messages')
+    .select('*')
+    .eq('file_unique_id', fileUniqueId)
+    .limit(1);
+
+  if (error) {
+    console.error('Error checking for existing file:', error);
+    return { exists: false };
+  }
+
+  if (data && data.length > 0) {
+    return { exists: true, message: data[0] };
+  }
+
+  return { exists: false };
+};
+
 // Export all functions from the shared mediaUtils for backward compatibility
 export { 
+  xdelo_isViewableMimeType,
+  xdelo_getUploadOptions,
   xdelo_detectMimeType,
   xdelo_validateAndFixStoragePath,
   xdelo_downloadMediaFromTelegram,

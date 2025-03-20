@@ -2,16 +2,11 @@ import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage } from './handlers/textMessageHandler.ts';
 import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
-import { corsHeaders, handleOptionsRequest, createCorsResponse } from '../_shared/cors.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
 import { Logger } from './utils/logger.ts';
 
 serve(async (req: Request) => {
-<<<<<<< HEAD
-  // 1. Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return handleOptionsRequest();
-=======
   // Generate a correlation ID for tracing
   const correlationId = crypto.randomUUID();
   
@@ -22,16 +17,9 @@ serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     logger.debug('Received OPTIONS request, returning CORS headers');
     return new Response(null, { headers: corsHeaders });
->>>>>>> newmai
   }
 
-  // 2. Generate correlation ID
-  const correlationId = crypto.randomUUID();
-
   try {
-<<<<<<< HEAD
-    // 3. Log webhook received event
-=======
     // Log webhook received event
     logger.info('Webhook received', {
       method: req.method,
@@ -39,7 +27,6 @@ serve(async (req: Request) => {
       headers: Object.fromEntries(req.headers.entries()),
     });
     
->>>>>>> newmai
     await xdelo_logProcessingEvent(
       "webhook_received",
       "system",
@@ -50,7 +37,7 @@ serve(async (req: Request) => {
       }
     );
 
-    // 4. Parse the update from Telegram
+    // Parse the update from Telegram
     let update;
     try {
       update = await req.json();
@@ -59,36 +46,32 @@ serve(async (req: Request) => {
         update_id: update.update_id
       });
     } catch (error) {
-<<<<<<< HEAD
-      console.error(`[${correlationId}] Failed to parse request body:`, error);
-      return createCorsResponse({
-=======
       logger.error('Failed to parse request body', { error: error.message });
       return new Response(JSON.stringify({ 
->>>>>>> newmai
         success: false, 
         error: 'Invalid JSON in request body',
         correlationId
-      }, { status: 400 });
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      });
     }
 
-    // 5. Get the message object, checking for different types of updates
+    // Get the message object, checking for different types of updates
     const message = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
     if (!message) {
-<<<<<<< HEAD
-      console.log(`[${correlationId}] No processable content in update:`, Object.keys(update));
-      return createCorsResponse({
-=======
       logger.warn('No processable content in update', { update_keys: Object.keys(update) });
       return new Response(JSON.stringify({ 
->>>>>>> newmai
         success: false, 
         message: "No processable content",
         correlationId
-      }, { status: 400 });
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      });
     }
 
-    // 6. Determine message context
+    // Determine message context
     const context = {
       isChannelPost: !!update.channel_post || !!update.edited_channel_post,
       isForwarded: !!message.forward_from || !!message.forward_from_chat || !!message.forward_origin,
@@ -98,12 +81,6 @@ serve(async (req: Request) => {
       logger // Add logger to context so handlers can use it
     };
 
-<<<<<<< HEAD
-    // 7. Log the message type we're about to process
-    console.log(`[${correlationId}] Processing message ${message.message_id} in chat ${message.chat?.id}, ` +
-      `is_edit: ${context.isEdit}, is_forwarded: ${context.isForwarded}, ` +
-      `has_media: ${!!(message.photo || message.video || message.document)}`);
-=======
     // Log message details with sensitive data masked
     logger.info('Processing message', {
       message_id: message.message_id,
@@ -118,9 +95,8 @@ serve(async (req: Request) => {
       media_group_id: message.media_group_id,
       media_type: message.photo ? 'photo' : message.video ? 'video' : message.document ? 'document' : 'none'
     });
->>>>>>> newmai
 
-    // 8. Handle different message types
+    // Handle different message types
     let response;
     
     try {
@@ -172,22 +148,18 @@ serve(async (req: Request) => {
         handlerError.message || "Unknown handler error"
       );
       
-      // Return error response with 200 status to acknowledge to Telegram
-      return createCorsResponse({
+      // Return error response but with 200 status to acknowledge to Telegram
+      // (Telegram will retry if we return non-200 status)
+      return new Response(JSON.stringify({ 
         success: false, 
         error: handlerError.message,
         correlationId
-      }, { status: 200 }); // Still return 200 to prevent Telegram from retrying
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200 // Still return 200 to prevent Telegram from retrying
+      });
     }
   } catch (error) {
-<<<<<<< HEAD
-    console.error('Unhandled error processing webhook:', error);
-    return createCorsResponse({
-      success: false, 
-      error: error.message || 'Unknown error',
-      correlationId
-    }, { status: 500 });
-=======
     logger.error('Unhandled error processing webhook', { 
       error: error.message,
       stack: error.stack
@@ -201,6 +173,5 @@ serve(async (req: Request) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500
     });
->>>>>>> newmai
   }
 });
