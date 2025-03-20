@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/generalUtils';
 import { Message } from '@/types';
 import { isVideoMessage } from '@/utils/mediaUtils';
 import { FileX } from 'lucide-react';
