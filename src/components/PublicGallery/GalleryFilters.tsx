@@ -1,66 +1,84 @@
-import { Button } from "@/components/ui/button";
-import { Grid3X3, ImageIcon, Film, Grid, Table } from "lucide-react";
+
+import React from 'react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Grid, List, Image, Video, FileText } from 'lucide-react';
+import { SearchToolbar } from './SearchToolbar';
 
 interface GalleryFiltersProps {
   filter: string;
   setFilter: (filter: string) => void;
   viewMode: 'grid' | 'table';
   setViewMode: (mode: 'grid' | 'table') => void;
+  searchTerm?: string;
+  onSearchChange?: (value: string) => void;
+  onClearSearch?: () => void;
+  isSearching?: boolean;
 }
 
-export const GalleryFilters = ({ filter, setFilter, viewMode, setViewMode }: GalleryFiltersProps) => {
+export function GalleryFilters({ 
+  filter, 
+  setFilter, 
+  viewMode, 
+  setViewMode,
+  searchTerm = '',
+  onSearchChange = () => {},
+  onClearSearch = () => {},
+  isSearching = false
+}: GalleryFiltersProps) {
   return (
-    <div className="flex flex-wrap justify-between gap-2 mb-4">
-      <div className="flex flex-wrap gap-2">
-        <Button 
-          variant={filter === "all" ? "default" : "outline"} 
-          onClick={() => setFilter("all")}
-          className="transition-all duration-200 ease-in-out"
-          size="sm"
-        >
-          <Grid3X3 className="mr-2 h-4 w-4" />
-          All
-        </Button>
-        <Button 
-          variant={filter === "images" ? "default" : "outline"} 
-          onClick={() => setFilter("images")}
-          className="transition-all duration-200 ease-in-out"
-          size="sm"
-        >
-          <ImageIcon className="mr-2 h-4 w-4" />
-          Images
-        </Button>
-        <Button 
-          variant={filter === "videos" ? "default" : "outline"} 
-          onClick={() => setFilter("videos")}
-          className="transition-all duration-200 ease-in-out"
-          size="sm"
-        >
-          <Film className="mr-2 h-4 w-4" />
-          Videos
-        </Button>
+    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+      <div className="flex flex-wrap gap-3 items-center">
+        <Tabs value={filter} onValueChange={setFilter} className="w-auto">
+          <TabsList>
+            <TabsTrigger value="all" className="flex items-center gap-1">
+              <FileText className="h-4 w-4" />
+              <span>All</span>
+            </TabsTrigger>
+            <TabsTrigger value="images" className="flex items-center gap-1">
+              <Image className="h-4 w-4" />
+              <span>Images</span>
+            </TabsTrigger>
+            <TabsTrigger value="videos" className="flex items-center gap-1">
+              <Video className="h-4 w-4" />
+              <span>Videos</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        
+        {searchTerm !== undefined && onSearchChange && (
+          <SearchToolbar
+            searchTerm={searchTerm}
+            onSearchChange={onSearchChange}
+            onClearSearch={onClearSearch}
+            isSearching={isSearching}
+            className="my-1"
+          />
+        )}
       </div>
       
-      <div className="flex gap-2">
-        <Button 
-          variant={viewMode === "grid" ? "default" : "outline"} 
-          onClick={() => setViewMode("grid")}
-          className="transition-all duration-200 ease-in-out"
-          size="sm"
-        >
-          <Grid className="mr-2 h-4 w-4" />
-          Grid
-        </Button>
-        <Button 
-          variant={viewMode === "table" ? "default" : "outline"} 
-          onClick={() => setViewMode("table")}
-          className="transition-all duration-200 ease-in-out"
-          size="sm"
-        >
-          <Table className="mr-2 h-4 w-4" />
-          Table
-        </Button>
+      <div className="flex-shrink-0 flex">
+        <div className="border rounded-md overflow-hidden flex">
+          <Button 
+            variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => setViewMode('grid')}
+            className="rounded-none border-0"
+          >
+            <Grid className="h-4 w-4" />
+            <span className="sr-only">Grid View</span>
+          </Button>
+          <Button 
+            variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => setViewMode('table')}
+            className="rounded-none border-0"
+          >
+            <List className="h-4 w-4" />
+            <span className="sr-only">Table View</span>
+          </Button>
+        </div>
       </div>
     </div>
   );
-};
+}

@@ -11,7 +11,6 @@ import type { Session } from "@supabase/supabase-js";
 import Auth from "./pages/Auth";
 import { MobileBottomNav } from "./components/Layout/MobileBottomNav";
 import { useIsMobile } from "./hooks/useMobile";
-import PublicGallery from './pages/PublicGallery';
 
 // Lazy load page components for better performance
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -121,6 +120,7 @@ function App() {
               <Router>
                 <Routes>
                   <Route path="/auth" element={<Auth />} />
+                  
                   <Route path="/p/public" element={
                     <Suspense fallback={<PageLoader />}>
                       <PublicGallery />
@@ -131,7 +131,7 @@ function App() {
                       <PublicGallery />
                     </Suspense>
                   } />
-                  <Route path="/test-gallery" element={<PublicGallery />} />
+                  
                   <Route element={
                     <ProtectedRoute>
                       <NavigationProvider>

@@ -1,3 +1,4 @@
+
 import { Message } from "@/types";
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,6 +10,7 @@ import { GalleryFilters } from "@/components/PublicGallery/GalleryFilters";
 import { EmptyState } from "@/components/PublicGallery/EmptyState";
 import { LoadMoreButton } from "@/components/PublicGallery/LoadMoreButton";
 import { GalleryTableView } from "@/components/PublicGallery/GalleryTableView";
+import { usePublicGallerySearch } from "@/hooks/publicGallery/usePublicGallerySearch";
 
 const PublicGallery = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -140,6 +142,10 @@ const PublicGallery = () => {
           setFilter={setFilter} 
           viewMode={viewMode}
           setViewMode={setViewMode}
+          searchTerm={searchTerm}
+          onSearchChange={handleSearch}
+          onClearSearch={clearSearch}
+          isSearching={isSearching}
         />
       </div>
       
@@ -152,7 +158,7 @@ const PublicGallery = () => {
           {viewMode === 'grid' ? (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
-                {filteredMessages.map(message => (
+                {finalFilteredMessages.map(message => (
                   <GalleryCard 
                     key={message.id} 
                     message={message} 
@@ -161,7 +167,7 @@ const PublicGallery = () => {
                 ))}
               </div>
 
-              {filteredMessages.length === 0 && <EmptyState />}
+              {finalFilteredMessages.length === 0 && <EmptyState />}
 
               <LoadMoreButton 
                 onClick={loadMore} 
@@ -171,7 +177,7 @@ const PublicGallery = () => {
             </>
           ) : (
             <GalleryTableView 
-              messages={filteredMessages} 
+              messages={finalFilteredMessages} 
               onMediaClick={handleMediaClick}
               onDeleteMessage={handleDeleteMessage}
             />

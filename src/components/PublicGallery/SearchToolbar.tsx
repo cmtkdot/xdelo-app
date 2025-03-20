@@ -1,51 +1,47 @@
 
 import React from 'react';
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Search, X } from "lucide-react";
+import { Input } from '@/components/ui/input';
+import { Search, X } from 'lucide-react';
+import { Button } from '../ui/button';
 
 interface SearchToolbarProps {
   searchTerm: string;
-  onSearch: (term: string) => void;
-  onClear: () => void;
-  placeholder?: string;
-  className?: string;
+  onSearchChange: (value: string) => void;
+  onClearSearch: () => void;
   isSearching?: boolean;
+  className?: string;
 }
 
-export const SearchToolbar = ({
+export function SearchToolbar({
   searchTerm,
-  onSearch,
-  onClear,
-  placeholder = "Search products...",
-  className = "",
-  isSearching = false
-}: SearchToolbarProps) => {
+  onSearchChange,
+  onClearSearch,
+  isSearching = false,
+  className = ''
+}: SearchToolbarProps) {
   return (
-    <div className={`relative w-full max-w-md ${className}`}>
-      <div className="relative flex items-center">
-        <Search className="absolute left-2.5 h-4 w-4 text-muted-foreground" />
-        
+    <div className={`relative flex-1 max-w-md ${className}`}>
+      <div className="relative">
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
-          type="text"
-          placeholder={placeholder}
+          type="search"
+          placeholder="Search products..."
+          className="pl-8 pr-8 h-9"
           value={searchTerm}
-          onChange={(e) => onSearch(e.target.value)}
-          className="pl-9 pr-10 py-2 w-full bg-background"
+          onChange={(e) => onSearchChange(e.target.value)}
         />
-        
         {searchTerm && (
           <Button
-            type="button"
             variant="ghost"
             size="sm"
-            onClick={onClear}
-            className="absolute right-1 h-7 w-7 p-0 hover:bg-transparent"
+            className="absolute right-0 top-0 p-1 h-9 w-9"
+            onClick={onClearSearch}
           >
             <X className="h-4 w-4" />
+            <span className="sr-only">Clear search</span>
           </Button>
         )}
       </div>
     </div>
   );
-};
+}
