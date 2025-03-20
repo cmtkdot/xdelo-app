@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -61,9 +60,23 @@ async function invokeFunctionWrapper<T = any>(
 }
 
 /**
+ * Get Telegram webhook information
+ */
+export async function getTelegramWebhookInfo(token: string) {
+  return invokeFunctionWrapper('xdelo_get-telegram-webhook-info', { token });
+}
+
+/**
+ * Set Telegram webhook
+ */
+export async function setTelegramWebhook(token: string) {
+  return invokeFunctionWrapper('xdelo_set-telegram-webhook', { token });
+}
+
+/**
  * Redownload a file from its media group
  */
-export async function xdelo_redownloadMediaFile(messageId: string, mediaGroupId?: string) {
+export async function redownloadMediaFile(messageId: string, mediaGroupId?: string) {
   return invokeFunctionWrapper('redownload-from-media-group', { 
     messageId,
     mediaGroupId
@@ -76,33 +89,12 @@ export async function xdelo_redownloadMediaFile(messageId: string, mediaGroupId?
 export async function logOperation(
   eventType: string,
   entityId: string,
-  metadata: Record<string, any> = {},
-  previousState?: Record<string, any>,
-  newState?: Record<string, any>,
-  errorMessage?: string
+  metadata: Record<string, any> = {}
 ) {
   return invokeFunctionWrapper('log-operation', {
     eventType,
     entityId,
-    metadata,
-    previousState,
-    newState,
-    errorMessage,
-    correlationId: crypto.randomUUID()
-  });
-}
-
-/**
- * Repair a file in storage
- */
-export async function repairFile(messageId: string, options: {
-  forceRedownload?: boolean;
-  updateMimeType?: boolean;
-  standardizePath?: boolean;
-}) {
-  return invokeFunctionWrapper('xdelo_file_repair', {
-    messageId,
-    ...options
+    metadata
   });
 }
 
@@ -129,17 +121,6 @@ export async function parseCaption(messageId: string, caption?: string, isEdit =
 }
 
 /**
- * Sync a media group's content
- */
-export async function syncMediaGroup(mediaGroupId: string, sourceMessageId: string) {
-  return invokeFunctionWrapper('xdelo_sync_media_group', {
-    mediaGroupId,
-    sourceMessageId,
-    forceSync: true
-  });
-}
-
-/**
  * Delete a message and its associated media files
  */
 export async function deleteMessage(messageId: string, cascade = true) {
@@ -158,47 +139,4 @@ export async function validateStorageFiles(options: {
   fixMissingFiles?: boolean;
 }) {
   return invokeFunctionWrapper('validate-storage-files', options);
-}
-
-/**
- * Standardize storage paths
- */
-export async function standardizeStoragePaths(options: {
-  limit?: number;
-  dryRun?: boolean;
-}) {
-  return invokeFunctionWrapper('xdelo_standardize_storage_paths', options);
-}
-
-/**
- * Fix content disposition
- */
-export async function fixContentDisposition(messageId: string) {
-  return invokeFunctionWrapper('xdelo_fix_content_disposition', {
-    messageId
-  });
-}
-
-/**
- * Fix media URLs
- */
-export async function fixMediaUrls(options: {
-  limit?: number;
-  fixMissingPublicUrls?: boolean;
-  regenerateUrls?: boolean;
-}) {
-  return invokeFunctionWrapper('xdelo_fix_media_urls', options);
-}
-
-/**
- * Reprocess a message
- */
-export async function reprocessMessage(messageId: string, options: {
-  forceRedownload?: boolean;
-  reanalyzeCaption?: boolean;
-}) {
-  return invokeFunctionWrapper('xdelo_reprocess_message', {
-    messageId,
-    ...options
-  });
 }

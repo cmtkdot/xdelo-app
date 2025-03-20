@@ -21,7 +21,10 @@ const PublicGallery = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMoreItems, setHasMoreItems] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+<<<<<<< HEAD
   const [searchTerm, setSearchTerm] = useState('');
+=======
+>>>>>>> newmai
   const itemsPerPage = 16;
 
   const fetchMessages = async (page = 1, append = false) => {

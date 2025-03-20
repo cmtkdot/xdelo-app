@@ -1,11 +1,15 @@
+<<<<<<< HEAD
 import React from "react";
+=======
+
+import React from 'react';
+>>>>>>> newmai
 import { 
-  Home, 
-  PanelTopOpen, 
-  Image as ImageIcon, 
-  PanelLeft, 
-  FileText, 
+  LayoutDashboard, 
+  MessageSquare, 
+  Package, 
   Settings, 
+<<<<<<< HEAD
   Database, 
   Zap, 
   Music,
@@ -23,14 +27,22 @@ interface NavItem {
   group?: 'main' | 'data' | 'settings';
   divider?: boolean;
 }
+=======
+  GitCompare, 
+  Users, 
+  Database,
+  GitPullRequest
+} from 'lucide-react';
+>>>>>>> newmai
 
 interface NavItemsProps {
   currentPath: string;
   onNavigate: (path: string) => void;
-  isMobile?: boolean;
   isExpanded?: boolean;
+  isMobile?: boolean;
 }
 
+<<<<<<< HEAD
 export const navItems: NavItem[] = [
   { name: "Dashboard", Icon: Home, path: "/", group: "main" },
   { name: "Messages", Icon: PanelTopOpen, path: "/messages-enhanced", group: "main" },
@@ -46,52 +58,70 @@ export const navItems: NavItem[] = [
   
   { name: "Settings", Icon: Settings, path: "/settings", group: "settings", divider: true },
 ];
+=======
+export const NavItems: React.FC<NavItemsProps> = ({ currentPath, onNavigate, isExpanded = true, isMobile = false }) => {
+  const items = [
+    { 
+      title: 'Dashboard', 
+      href: '/', 
+      icon: <LayoutDashboard size={20} />,
+      isActive: currentPath === '/' 
+    },
+    { 
+      title: 'Messages', 
+      href: '/messages-enhanced', 
+      icon: <MessageSquare size={20} />, 
+      isActive: currentPath === '/messages-enhanced' 
+    },
+    { 
+      title: 'Products', 
+      href: '/gl-products', 
+      icon: <Package size={20} />, 
+      isActive: currentPath === '/gl-products' 
+    },
+    { 
+      title: 'Vendors', 
+      href: '/vendors', 
+      icon: <Users size={20} />, 
+      isActive: currentPath === '/vendors' 
+    },
+    { 
+      title: 'Product Matching', 
+      href: '/product-matching', 
+      icon: <GitCompare size={20} />, 
+      isActive: currentPath === '/product-matching' 
+    },
+    { 
+      title: 'SQL Console', 
+      href: '/sql-console', 
+      icon: <Database size={20} />, 
+      isActive: currentPath === '/sql-console' 
+    },
+    { 
+      title: 'Settings', 
+      href: '/settings', 
+      icon: <Settings size={20} />, 
+      isActive: currentPath === '/settings' 
+    },
+  ];
+>>>>>>> newmai
 
-export const NavItems: React.FC<NavItemsProps> = ({ 
-  currentPath, 
-  onNavigate, 
-  isMobile = false,
-  isExpanded = true
-}) => {
   return (
-    <>
-      {navItems.map((item) => {
-        const isActive = currentPath === item.path;
-        const Icon = item.Icon;
-        
-        return (
-          <React.Fragment key={item.path}>
-            {item.divider && (isExpanded || isMobile) && (
-              <div className="h-px bg-gray-200 dark:bg-gray-800 my-3 mx-2" />
-            )}
-            <Button
-              variant={isActive ? "secondary" : "ghost"}
-              className={cn(
-                "flex items-center transition-all duration-150 ease-in-out group w-full justify-start",
-                isMobile 
-                  ? "px-4 py-2.5 text-sm font-medium rounded-md mobile-touch-target h-auto min-h-[44px]"
-                  : "px-2 py-2 text-sm font-medium rounded-md"
-              )}
-              onClick={() => onNavigate(item.path)}
-            >
-              <Icon className={cn(
-                "flex-shrink-0 w-5 h-5 transition-colors duration-150",
-                isActive 
-                  ? "text-primary" 
-                  : "text-muted-foreground group-hover:text-foreground"
-              )} />
-              {(isExpanded || isMobile) && (
-                <span className={cn(
-                  "transition-opacity duration-150",
-                  isMobile ? "" : "ml-3"
-                )}>
-                  {item.name}
-                </span>
-              )}
-            </Button>
-          </React.Fragment>
-        );
-      })}
-    </>
+    <div className="space-y-1">
+      {items.map((item) => (
+        <button
+          key={item.href}
+          onClick={() => onNavigate(item.href)}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
+            item.isActive
+              ? "bg-primary text-primary-foreground"
+              : "hover:bg-muted"
+          }`}
+        >
+          {item.icon}
+          {(isExpanded || isMobile) && <span>{item.title}</span>}
+        </button>
+      ))}
+    </div>
   );
 };

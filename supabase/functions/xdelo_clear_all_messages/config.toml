@@ -1,9 +1,0 @@
-
-# This config file is used to deploy the Edge Function to Supabase
-# More info: https://supabase.com/docs/guides/functions/edge-functions
-
-# The provided schema matches the one used by Supabase
-# Schema: project_ref -> edge_functions -> function_name -> import_map (optional)
-
-[build]
-command = ""

@@ -93,6 +93,27 @@ export async function createMessage(
       messageData.correlation_id.toString() : 
       crypto.randomUUID().toString();
     
+    // Validate required fields
+    if (!messageData.file_unique_id) {
+      throw new Error("Missing required field: file_unique_id");
+    }
+    
+    if (!messageData.chat_id) {
+      throw new Error("Missing required field: chat_id");
+    }
+    
+    if (!messageData.telegram_message_id) {
+      throw new Error("Missing required field: telegram_message_id");
+    }
+    
+    if (!messageData.storage_path) {
+      throw new Error("Missing required field: storage_path");
+    }
+    
+    if (!messageData.public_url) {
+      throw new Error("Missing required field: public_url");
+    }
+    
     logger.info?.('Creating message with correlation_id', { 
       correlation_id: correlationId,
       file_unique_id: messageData.file_unique_id
@@ -101,11 +122,16 @@ export async function createMessage(
     // First check if a message with this file_unique_id already exists
     // This is our primary duplicate detection mechanism
     if (messageData.file_unique_id) {
-      const { data: existingFile } = await supabase
+      const { data: existingFile, error: queryError } = await supabase
         .from('messages')
         .select('id, file_unique_id, storage_path, telegram_message_id, chat_id, public_url')
         .eq('file_unique_id', messageData.file_unique_id)
         .maybeSingle();
+        
+      if (queryError) {
+        logger.error('Error checking for existing file:', queryError);
+        throw new Error(`Database query error: ${queryError.message}`);
+      }
 
       if (existingFile) {
         logger.info?.('Found existing file with same file_unique_id', { 
@@ -141,7 +167,7 @@ export async function createMessage(
     const safeMessageData = {
       telegram_message_id: messageData.telegram_message_id,
       chat_id: messageData.chat_id,
-      chat_type: messageData.chat_type,
+      chat_type: messageData.chat_type || 'unknown',
       chat_title: messageData.chat_title,
       caption: messageData.caption,
       media_group_id: messageData.media_group_id,
@@ -156,12 +182,22 @@ export async function createMessage(
       public_url: messageData.public_url, // Use the URL set by the uploader
       correlation_id: correlationId,
       processing_state: 'pending' as ProcessingState,
-      telegram_data: messageData.telegram_data,
+      telegram_data: messageData.telegram_data || {},
       forward_info: messageData.forward_info,
       is_edited_channel_post: messageData.is_edited_channel_post,
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      message_url: messageData.message_url
     };
+    
+    // Log the data being inserted
+    logger.info?.('Inserting message data', {
+      correlation_id: correlationId,
+      telegram_message_id: safeMessageData.telegram_message_id,
+      chat_id: safeMessageData.chat_id,
+      file_unique_id: safeMessageData.file_unique_id,
+      storage_path: safeMessageData.storage_path
+    });
 
     // Insert message data directly
     const { data, error } = await supabase
@@ -170,7 +206,23 @@ export async function createMessage(
       .select('id')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // Enhanced error logging
+      logger.error('Database insert error:', error);
+      
+      // Include more diagnostic information
+      if (typeof error === 'object') {
+        for (const [key, value] of Object.entries(error)) {
+          logger.error(`Error detail - ${key}:`, value);
+        }
+      }
+      
+      throw error;
+    }
+
+    if (!data || !data.id) {
+      throw new Error('No ID returned from insert operation');
+    }
 
     const messageId = data.id;
 
@@ -189,12 +241,34 @@ export async function createMessage(
 
     return { id: messageId, success: true };
   } catch (error) {
-    logger.error('Error creating message:', error);
+    // Enhanced error logging with better error object handling
+    const errorMessage = error instanceof Error 
+      ? `${error.message}${error.stack ? ` (${error.stack})` : ''}`
+      : (typeof error === 'object' ? JSON.stringify(error) : String(error));
+      
+    logger.error('Error creating message:', errorMessage);
+    
+    // Include error object structure for better debugging
+    if (typeof error === 'object') {
+      logger.error('Error object structure:', {
+        type: typeof error,
+        constructor: error.constructor?.name,
+        keys: Object.keys(error),
+        code: 'code' in error ? (error as any).code : undefined,
+        message: 'message' in error ? (error as any).message : undefined
+      });
+    }
+    
+    // Extract error code with fallback
+    const errorCode = error instanceof Error && 'code' in error 
+      ? (error as any).code 
+      : (typeof error === 'object' && 'code' in error ? (error as any).code : 'DB_INSERT_ERROR');
+    
     return { 
       id: '', 
       success: false, 
-      error_message: error instanceof Error ? error.message : String(error),
-      error_code: error instanceof Error && 'code' in error ? (error as {code?: string}).code : 'DB_INSERT_ERROR' 
+      error_message: errorMessage,
+      error_code: errorCode
     };
   }
 }
@@ -440,17 +514,27 @@ export async function checkDuplicateFile(
   fileUniqueId: string
 ): Promise<Message | null> {
   try {
-    if (!fileUniqueId) return null;
+    if (!fileUniqueId) {
+      console.warn('Attempted to check for duplicate file with empty fileUniqueId');
+      return null;
+    }
     
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('messages')
       .select('*')
       .eq('file_unique_id', fileUniqueId)
       .maybeSingle();
+      
+    if (error) {
+      console.error('Error checking for duplicate file:', error);
+      // Don't throw - we want graceful fallback to creating a new record
+      return null;
+    }
     
     return data;
   } catch (error) {
-    console.error('Error checking for duplicate file:', error);
+    console.error('Exception checking for duplicate file:', 
+      error instanceof Error ? error.message : String(error));
     return null;
   }
 }
@@ -472,13 +556,19 @@ async function logMessageEvent(
   }
 ): Promise<void> {
   try {
+    // Validate entity_id is provided
+    if (!data.entity_id) {
+      console.error('Missing entity_id in logMessageEvent, generating UUID');
+      data.entity_id = crypto.randomUUID();
+    }
+    
     // Ensure metadata always has a timestamp
     const metadata = {
       ...(data.metadata || {}),
       event_timestamp: new Date().toISOString()
     };
 
-    await supabase.from('unified_audit_logs').insert({
+    const { error } = await supabase.from('unified_audit_logs').insert({
       event_type: eventType,
       entity_id: data.entity_id,
       telegram_message_id: data.telegram_message_id,
@@ -490,7 +580,36 @@ async function logMessageEvent(
       event_timestamp: new Date().toISOString(),
       correlation_id: metadata.correlation_id
     });
+    
+    if (error) {
+      console.error('Error logging event:', error);
+      
+      // Try with minimized payload if the original is too large
+      if (data.previous_state || data.new_state) {
+        console.warn('Retrying with simplified payload');
+        const { error: retryError } = await supabase.from('unified_audit_logs').insert({
+          event_type: eventType,
+          entity_id: data.entity_id,
+          telegram_message_id: data.telegram_message_id,
+          chat_id: data.chat_id,
+          metadata: {
+            ...metadata,
+            previous_state_simplified: true,
+            new_state_simplified: true,
+            original_error: error.message,
+          },
+          error_message: data.error_message,
+          event_timestamp: new Date().toISOString(),
+          correlation_id: metadata.correlation_id
+        });
+        
+        if (retryError) {
+          console.error('Error logging simplified event:', retryError);
+        }
+      }
+    }
   } catch (error) {
-    console.error('Error logging event:', error);
+    console.error('Exception in logMessageEvent:', 
+      error instanceof Error ? error.message : String(error));
   }
 }

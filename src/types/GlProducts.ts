@@ -1,4 +1,3 @@
-
 import type { SyncStatus } from "@/types";
 import type { GlProduct as BaseGlProduct } from "@/types/entities/Product";
 
@@ -32,15 +31,21 @@ export interface GlProduct extends Omit<BaseGlProduct, 'name' | 'createdAt'> {
  */
 export const xdelo_convertToGlProduct = (data: any): GlProduct => {
   return {
-    ...data,
+    id: data.id,
+    main_new_product_name: data.new_product_name || '',
+    main_vendor_product_name: data.vendor_product_name || '',
+    main_product_purchase_date: data.product_purchase_date || '',
+    main_total_qty_purchased: data.total_qty_purchased || 0,
+    main_cost: data.cost || 0,
+    main_category: data.category || '',
+    main_product_image1: data.product_image1 || '',
+    main_purchase_notes: data.purchase_notes || '',
     cart_rename: String(data.cart_rename || ''), // Always convert cart_rename to string
-    main_product_image1: data.main_product_image1 || '',
-    main_purchase_notes: data.main_purchase_notes || '',
-    product_name_display: data.product_name_display || '',
+    product_name_display: data.product_name_display || data.new_product_name || data.vendor_product_name || '',
     created_at: data.created_at || new Date().toISOString(),
     updated_at: data.updated_at || new Date().toISOString(),
     sync_status: data.sync_status || 'pending'
-  };
+  } as GlProduct;
 };
 
 // Keep the old function name for backward compatibility

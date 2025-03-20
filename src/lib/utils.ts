@@ -78,26 +78,9 @@ export { cn } from './generalUtils';
 import { findMatches, matchProduct, updateProduct } from './productMatching';
 export { findMatches, matchProduct, updateProduct };
 
-// Export our sync utils with consistent xdelo_ naming
-import { 
-  xdelo_logSyncOperation, 
-  xdelo_logSyncOperationBatch, 
-  xdelo_logSyncWarning,
-  // Also export legacy names for backward compatibility
-  logSyncOperation, 
-  logSyncOperationBatch, 
-  logSyncWarning 
-} from './syncUtils';
-
-export { 
-  xdelo_logSyncOperation, 
-  xdelo_logSyncOperationBatch, 
-  xdelo_logSyncWarning,
-  // Legacy exports
-  logSyncOperation, 
-  logSyncOperationBatch, 
-  logSyncWarning 
-};
+// Export from logUtils
+import { logEvent, LogEventType } from './logUtils';
+export { logEvent, LogEventType };
 
 /**
  * Parses quantity from a caption using multiple pattern matching strategies

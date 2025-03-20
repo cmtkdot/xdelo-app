@@ -1,60 +1,84 @@
 
-import { Message } from "@/types";
-import { ProductGroup } from "@/components/ProductGroup";
+import React from 'react';
 import { cn } from "@/lib/utils";
+import { GlProduct } from '@/types/GlProducts';
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { FileEdit, Trash2 } from "lucide-react";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 interface ProductGridProps {
-  products: Message[][];
-  onEdit: (media: Message) => void;
-  onDelete: ((media: Message, deleteTelegram?: boolean) => Promise<void>) | undefined;
-  onView: (group: Message[]) => void;
+  products: GlProduct[];
+  onEdit: (product: GlProduct) => void;
+  onDelete: (product: GlProduct) => Promise<void>;
   className?: string;
   isDeleting?: boolean;
 }
 
-export const ProductGrid = ({
-  products = [], // Provide default empty array
+export const ProductGrid: React.FC<ProductGridProps> = ({
+  products = [],
   onEdit,
   onDelete,
-  onView,
   className,
   isDeleting = false
-}: ProductGridProps) => {
-  // Guard against undefined products
+}) => {
   if (!products || !Array.isArray(products)) {
     return null;
   }
-
-  console.log('Number of products:', products.length); // Debug log
 
   return (
     <div
       className={cn(
         "grid gap-4 sm:gap-5",
-        // Default to 2 columns on mobile
         "grid-cols-2",
-        // 3 columns on medium screens
         "md:grid-cols-3",
-        // 4 columns on large screens
         "lg:grid-cols-4",
         className
       )}
     >
-      {products.map((group, index) => {
-        // Ensure we have valid messages in the group
-        if (!group || group.length === 0) return null;
-        
-        return (
-          <ProductGroup
-            key={group[0]?.id || index}
-            group={group}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onView={() => onView(group)}
-            isDeleting={isDeleting}
-          />
-        );
-      })}
+      {products.map((product) => (
+        <Card key={product.id}>
+          <CardContent className="p-2">
+            <AspectRatio ratio={1 / 1}>
+              <img
+                src={product.main_product_image1 || '/placeholder.svg'}
+                alt={product.main_new_product_name || 'Product'}
+                className="w-full h-full object-cover rounded-md"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = '/placeholder.svg';
+                  target.classList.add('bg-gray-200');
+                }}
+              />
+            </AspectRatio>
+            <p className="text-sm mt-2 truncate font-medium">
+              {product.main_new_product_name || product.product_name_display || 'No product name'}
+            </p>
+            <p className="text-xs text-gray-500 mt-1 truncate">
+              {product.main_vendor_product_name || 'No vendor'}
+            </p>
+          </CardContent>
+          <CardFooter className="flex justify-between items-center p-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onEdit(product)}
+            >
+              <FileEdit className="w-4 h-4 mr-2" />
+              Edit
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => onDelete(product)}
+              disabled={isDeleting}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
+          </CardFooter>
+        </Card>
+      ))}
     </div>
   );
 };

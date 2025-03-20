@@ -3,12 +3,16 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types/MessagesTypes';
 import { useToast } from '@/hooks/useToast';
-import { logMessageOperation } from '@/lib/syncLogger';
-import { LogEventType } from '@/types/api/LogEventType';
+import { logEvent, LogEventType } from '@/lib/logUtils';
 
 export function useTelegramOperations() {
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
+
+  // Helper function to log message operations
+  const logMessageOperation = async (eventType: LogEventType, messageId: string, metadata: any = {}) => {
+    await logEvent(eventType, messageId, metadata);
+  };
 
   const handleDelete = useCallback(async (message: Message, deleteTelegram: boolean = false): Promise<void> => {
     try {
