@@ -1,7 +1,7 @@
 
-import { corsHeaders } from '../_shared/cors';
-import { standardHandler } from '../_shared/standardHandler';
-import { supabase } from '../_shared/supabase';
+import { corsHeaders } from '../_shared/cors.ts';
+import { standardHandler } from '../_shared/standardHandler.ts';
+import { supabase } from '../_shared/supabase.ts';
 
 // Define the interface for batch repair request
 interface BatchRepairRequest {

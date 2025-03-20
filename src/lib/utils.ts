@@ -1,133 +1,108 @@
 
-import { Message } from "@/types/entities/Message";
-import { AnalyzedContent } from "@/types/utils/AnalyzedContent";
-import { MediaItem } from "@/types/entities/MediaItem";
+import { type ClassValue, clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
+import { findProductMatches, findBestMatch, updateProduct } from "./productMatching"
 
-// Common formatters
-export function formatDate(date: Date): string {
-  return new Date(date).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
 }
 
-/**
- * Converts a Message to a MediaItem for use in the MediaViewer
- */
-export const messageToMediaItem = (message: Message): MediaItem => {
-  // Determine media type from mime_type
-  let type: 'image' | 'video' | 'document' | 'audio' | 'unknown' = 'unknown';
+export function formatDate(input: string | number): string {
+  const date = new Date(input)
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  })
+}
+
+export function absoluteUrl(path: string) {
+  return `${process.env.NEXT_PUBLIC_APP_URL || ""}${path}`
+}
+
+// Function to safely parse dates into readable formats
+export function formatDateString(dateString: string | null | undefined): string {
+  if (!dateString) return 'N/A';
   
-  if (message.mime_type) {
-    if (message.mime_type.startsWith('image/')) {
-      type = 'image';
-    } else if (message.mime_type.startsWith('video/')) {
-      type = 'video';
-    } else if (message.mime_type.startsWith('audio/')) {
-      type = 'audio';
-    } else if (message.mime_type.startsWith('application/')) {
-      type = 'document';
+  try {
+    const date = new Date(dateString);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return 'Invalid Date';
     }
+    
+    // Format the date
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+    
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Date Error';
+  }
+}
+
+// Function to truncate text with ellipsis
+export function truncateText(text: string, maxLength: number): string {
+  if (!text) return '';
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
+}
+
+// Extract initials from a name
+export function getInitials(name: string): string {
+  if (!name) return '';
+  
+  const words = name.trim().split(/\s+/);
+  if (words.length === 0) return '';
+  
+  if (words.length === 1) {
+    return words[0].substring(0, 2).toUpperCase();
   }
   
-  return {
-    id: message.id,
-    public_url: message.public_url || '',
-    type: type,
-    thumbnail: type === 'image' ? message.public_url : undefined,
-    width: message.width,
-    height: message.height,
-    title: message.analyzed_content?.product_name || message.caption,
-    description: message.caption,
-    mimeType: message.mime_type,
-    fileSize: message.file_size,
-    duration: message.duration,
-    uploadedAt: message.created_at,
-    // Include legacy fields for compatibility
-    mime_type: message.mime_type,
-    file_unique_id: message.file_unique_id,
-    analyzed_content: message.analyzed_content,
-    created_at: message.created_at,
-    caption: message.caption,
-    file_size: message.file_size,
-    content_disposition: message.content_disposition,
-    storage_path: message.storage_path,
-    processing_state: message.processing_state
-  };
-};
-
-/**
- * Helper function to determine media type from MIME type
- */
-function getMediaType(mimeType: string): 'image' | 'video' | 'document' | 'audio' | 'unknown' {
-  if (!mimeType) return 'unknown';
-  
-  if (mimeType.startsWith('image/')) return 'image';
-  if (mimeType.startsWith('video/')) return 'video';
-  if (mimeType.startsWith('audio/')) return 'audio';
-  if (mimeType.startsWith('application/')) return 'document';
-  
-  return 'unknown';
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 }
 
-// Export from generalUtils
-export { cn } from './generalUtils';
+// Function to generate a color hash based on string
+export function stringToColor(str: string): string {
+  if (!str) return '#CCCCCC';
+  
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  let color = '#';
+  for (let i = 0; i < 3; i++) {
+    const value = (hash >> (i * 8)) & 0xFF;
+    color += ('00' + value.toString(16)).slice(-2);
+  }
+  
+  return color;
+}
 
-// Explicitly import and re-export from productMatching to avoid conflicts
-import { findMatches, matchProduct, updateProduct } from './productMatching';
-export { findMatches, matchProduct, updateProduct };
-
-// Export our sync utils with consistent xdelo_ naming
-import { 
-  xdelo_logSyncOperation, 
-  xdelo_logSyncOperationBatch, 
-  xdelo_logSyncWarning,
-  // Also export legacy names for backward compatibility
-  logSyncOperation, 
-  logSyncOperationBatch, 
-  logSyncWarning 
-} from './syncUtils';
-
+// Export the product matching functions for use elsewhere
 export { 
-  xdelo_logSyncOperation, 
-  xdelo_logSyncOperationBatch, 
-  xdelo_logSyncWarning,
-  // Legacy exports
-  logSyncOperation, 
-  logSyncOperationBatch, 
-  logSyncWarning 
+  findProductMatches, 
+  findBestMatch,
+  updateProduct
 };
 
-/**
- * Parses quantity from a caption using multiple pattern matching strategies
- * @param caption The caption text to parse
- * @returns The extracted quantity value and pattern used, or null if no quantity found
- */
-export function parseQuantity(caption: string): { value: number; pattern: string } | null {
-  if (!caption) return null;
-
-  // Look for patterns like "x2", "x 2", "qty: 2", "quantity: 2"
-  const patterns = [
-    { regex: /qty:\s*(\d+)/i, name: 'qty-prefix' },               // qty: 2
-    { regex: /quantity:\s*(\d+)/i, name: 'quantity-prefix' },     // quantity: 2
-    { regex: /(\d+)\s*(?:pcs|pieces)/i, name: 'pcs-suffix' },     // 2 pcs or 2 pieces
-    { regex: /(\d+)\s*(?:units?)/i, name: 'units-suffix' },       // 2 unit or 2 units
-    { regex: /^.*?#.*?(?:\s+|$)(\d+)(?:\s|$)/i, name: 'after-code' }, // number after product code
-    { regex: /(\d+)\s*(?=\s|$)/, name: 'standalone' },            // standalone number
-    { regex: /x\s*(\d+)/i, name: 'x-prefix' },                    // x2 or x 2 (moved to end)
-    { regex: /(\d+)x/i, name: 'x-suffix' }                        // 18x (new pattern)
-  ];
-
-  for (const { regex, name } of patterns) {
-    const match = caption.match(regex);
-    if (match && match[1]) {
-      const quantity = parseInt(match[1], 10);
-      if (!isNaN(quantity) && quantity > 0 && quantity < 10000) {
-        return { value: quantity, pattern: name };
-      }
-    }
-  }
-
-  return null;
+// Format currency values
+export function formatCurrency(amount: number | string | null | undefined): string {
+  if (amount === null || amount === undefined) return '$0.00';
+  
+  const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  
+  if (isNaN(numAmount)) return '$0.00';
+  
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(numAmount);
 }

@@ -90,7 +90,9 @@ export function findProductMatches(
           vendorUidMatch ? `, Vendor ID match: ${(vendorUidMatch * 100 / 0.3).toFixed(0)}%` : ''
         }`,
         vendor_uid: product.vendor_uid,
-        product_code: product.product_code
+        product_code: product.product_code,
+        glide_id: product.rowid,
+        match_priority: confidenceScore >= 0.8 ? 'high' : confidenceScore >= 0.7 ? 'medium' : 'low'
       });
     }
   }
@@ -107,3 +109,10 @@ export function findBestMatch(matches: MatchResult[]): MatchResult | null {
   
   return matches[0];
 }
+
+// Wrapper function to support legacy code
+export const matchProduct = findProductMatches;
+export const updateProduct = (product: any, updates: any) => {
+  return {...product, ...updates};
+};
+export const findMatches = findProductMatches;

@@ -1,94 +1,123 @@
 
-import { useState, useEffect, useMemo } from 'react';
-import { Message } from '@/types';
-import { useDebounce } from '@/hooks/useDebounce';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useDebounce } from '../useDebounce';
 
-interface UsePublicGallerySearchProps {
-  messages: Message[];
-  debounceTime?: number;
-}
-
-export function usePublicGallerySearch({ 
-  messages, 
-  debounceTime = 300 
-}: UsePublicGallerySearchProps) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
+export function usePublicGallerySearch(initialQuery = '', limit = 20) {
+  const [query, setQuery] = useState(initialQuery);
+  const [results, setResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [count, setCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   
-  const debouncedSearchTerm = useDebounce(searchTerm, debounceTime);
+  const [filters, setFilters] = useState<{
+    [key: string]: string | boolean | null;
+  }>({
+    vendorUid: null,
+    dateRange: null,
+    sort: 'newest',
+  });
   
-  // Reset search state when messages change
-  useEffect(() => {
-    setIsSearching(false);
-  }, [messages]);
+  const debouncedQuery = useDebounce(query, 300);
   
-  // Set searching state while debouncing
-  useEffect(() => {
-    if (searchTerm !== debouncedSearchTerm) {
-      setIsSearching(true);
-    } else {
-      setIsSearching(false);
-    }
-  }, [searchTerm, debouncedSearchTerm]);
-  
-  // Filter messages based on search term
-  const filteredMessages = useMemo(() => {
-    if (!debouncedSearchTerm) return messages;
-    
-    setIsSearching(true);
+  const search = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     
     try {
-      const searchLowerCase = debouncedSearchTerm.toLowerCase();
+      // Start with the base query
+      let dbQuery = supabase
+        .from('messages')
+        .select('*', { count: 'exact' })
+        .eq('deleted_from_telegram', false)
+        .not('analyzed_content', 'is', null);
       
-      const results = messages.filter(message => {
-        // Search in caption
-        if (message.caption && message.caption.toLowerCase().includes(searchLowerCase)) {
-          return true;
+      // Apply the search query if provided
+      if (debouncedQuery) {
+        dbQuery = dbQuery.or(
+          `caption.ilike.%${debouncedQuery}%,analyzed_content->product_name.ilike.%${debouncedQuery}%,analyzed_content->product_code.ilike.%${debouncedQuery}%`
+        );
+      }
+      
+      // Apply vendor filter
+      if (filters.vendorUid && typeof filters.vendorUid === 'string') {
+        dbQuery = dbQuery.eq('analyzed_content->>vendor_uid', filters.vendorUid);
+      }
+      
+      // Apply date range filter
+      if (filters.dateRange) {
+        const today = new Date();
+        let startDate;
+        
+        if (filters.dateRange === '7days') {
+          startDate = new Date(today);
+          startDate.setDate(today.getDate() - 7);
+        } else if (filters.dateRange === '30days') {
+          startDate = new Date(today);
+          startDate.setDate(today.getDate() - 30);
+        } else if (filters.dateRange === '90days') {
+          startDate = new Date(today);
+          startDate.setDate(today.getDate() - 90);
         }
         
-        // Search in analyzed_content if available
-        if (message.analyzed_content) {
-          const content = message.analyzed_content as any;
-          if (content.product_name && content.product_name.toLowerCase().includes(searchLowerCase)) {
-            return true;
-          }
-          if (content.vendor_uid && content.vendor_uid.toLowerCase().includes(searchLowerCase)) {
-            return true;
-          }
-          if (content.product_code && content.product_code.toLowerCase().includes(searchLowerCase)) {
-            return true;
-          }
-          if (content.notes && content.notes.toLowerCase().includes(searchLowerCase)) {
-            return true;
-          }
+        if (startDate) {
+          dbQuery = dbQuery.gte('created_at', startDate.toISOString());
         }
-        
-        return false;
-      });
+      }
       
-      return results;
+      // Apply sorting
+      if (filters.sort === 'newest') {
+        dbQuery = dbQuery.order('created_at', { ascending: false });
+      } else if (filters.sort === 'oldest') {
+        dbQuery = dbQuery.order('created_at', { ascending: true });
+      }
+      
+      // Calculate pagination
+      const from = (page - 1) * limit;
+      const to = from + limit - 1;
+      
+      // Execute the query with pagination
+      const { data, count: totalCount, error: queryError } = await dbQuery.range(from, to);
+      
+      if (queryError) {
+        throw queryError;
+      }
+      
+      setResults(data || []);
+      setCount(totalCount || 0);
+      setHasMore(totalCount ? from + data.length < totalCount : false);
+    } catch (err) {
+      setError(err.message || 'An error occurred while searching');
+      console.error('Search error:', err);
     } finally {
-      setIsSearching(false);
+      setLoading(false);
     }
-  }, [messages, debouncedSearchTerm]);
+  }, [debouncedQuery, filters, page, limit]);
   
-  const handleSearch = (value: string) => {
-    setSearchTerm(value);
-    if (value) {
-      setIsSearching(true);
-    }
-  };
+  // Trigger search when debounced query or filters change
+  useEffect(() => {
+    search();
+  }, [search]);
   
-  const clearSearch = () => {
-    setSearchTerm('');
-    setIsSearching(false);
-  };
+  // Reset page when query or filters change
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQuery, filters]);
   
   return {
-    searchTerm,
-    filteredMessages,
-    isSearching,
-    handleSearch,
-    clearSearch
+    query,
+    setQuery,
+    results,
+    loading,
+    error,
+    count,
+    page,
+    setPage,
+    hasMore,
+    filters,
+    setFilters,
+    search, // Exposed for manual refresh
   };
 }
