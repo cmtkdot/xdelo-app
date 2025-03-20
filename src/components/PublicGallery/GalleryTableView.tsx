@@ -1,4 +1,4 @@
-import { Message } from "@/types/MessagesTypes";
+import { Message } from "@/types";
 import {
   ColumnDef,
   ColumnFiltersState,

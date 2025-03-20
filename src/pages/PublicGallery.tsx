@@ -1,4 +1,4 @@
-import { Message } from "@/types/MessagesTypes";
+import { Message } from "@/types";
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { MediaViewer } from '@/components/MediaViewer/MediaViewer';
