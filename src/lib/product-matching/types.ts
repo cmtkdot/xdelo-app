@@ -139,4 +139,4 @@ export interface MatchableProduct {
   vendor_uid?: string | null;
   product_purchase_date?: string | null;
   [key: string]: any;
-} 
+}
