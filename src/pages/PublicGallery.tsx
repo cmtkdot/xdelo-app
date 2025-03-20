@@ -1,28 +1,56 @@
 import { Message } from "@/types";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { MediaViewer } from '@/components/MediaViewer/MediaViewer';
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import { GalleryCard } from "@/components/PublicGallery/GalleryCard";
 import { GalleryFilters } from "@/components/PublicGallery/GalleryFilters";
 import { EmptyState } from "@/components/PublicGallery/EmptyState";
 import { LoadMoreButton } from "@/components/PublicGallery/LoadMoreButton";
 import { GalleryTableView } from "@/components/PublicGallery/GalleryTableView";
+import { PublicMediaViewer, PublicMediaCard, usePublicViewer } from "@/components/public-viewer";
 
 const PublicGallery = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [filteredMessages, setFilteredMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const [selectedMedia, setSelectedMedia] = useState<Message[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMoreItems, setHasMoreItems] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const itemsPerPage = 16;
+
+  // Prepare media groups for the viewer
+  const mediaGroups = useMemo(() => {
+    const groups: Record<string, Message[]> = {};
+    
+    // Group messages by media_group_id or individually
+    filteredMessages.forEach(message => {
+      if (message.media_group_id) {
+        groups[message.media_group_id] = groups[message.media_group_id] || [];
+        groups[message.media_group_id].push(message);
+      } else {
+        // For messages without a group, use the message ID as a key
+        groups[message.id] = [message];
+      }
+    });
+    
+    // Convert record to array of arrays
+    return Object.values(groups);
+  }, [filteredMessages]);
+
+  // Use the public viewer hook
+  const {
+    isOpen,
+    currentGroup,
+    hasNext,
+    hasPrevious,
+    openViewer,
+    closeViewer,
+    goToNextGroup,
+    goToPreviousGroup,
+  } = usePublicViewer(mediaGroups);
 
   const fetchMessages = async (page = 1, append = false) => {
     if (page === 1) {
@@ -99,14 +127,21 @@ const PublicGallery = () => {
     setFilteredMessages(result);
   }, [messages, filter, searchTerm]);
 
+  // Function to find and open the correct group based on clicked item
   const handleMediaClick = (message: Message) => {
-    if (message.media_group_id) {
-      const groupMedia = messages.filter(m => m.media_group_id === message.media_group_id);
-      setSelectedMedia(groupMedia);
-    } else {
-      setSelectedMedia([message]);
+    // Find which group this message belongs to
+    const groupIndex = mediaGroups.findIndex(group => 
+      group.some(item => item.id === message.id)
+    );
+    
+    if (groupIndex !== -1) {
+      const group = mediaGroups[groupIndex];
+      // Find index of this message within its group
+      const messageIndex = group.findIndex(item => item.id === message.id);
+      
+      // Open viewer with this group and position it at the clicked message
+      openViewer(group, messageIndex);
     }
-    setIsViewerOpen(true);
   };
 
   // CRUD operations for messages
@@ -153,10 +188,10 @@ const PublicGallery = () => {
             <>
               <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
                 {filteredMessages.map(message => (
-                  <GalleryCard 
+                  <PublicMediaCard 
                     key={message.id} 
                     message={message} 
-                    onClick={handleMediaClick} 
+                    onClick={() => handleMediaClick(message)} 
                   />
                 ))}
               </div>
@@ -177,10 +212,15 @@ const PublicGallery = () => {
             />
           )}
 
-          <MediaViewer 
-            isOpen={isViewerOpen} 
-            onClose={() => setIsViewerOpen(false)} 
-            currentGroup={selectedMedia} 
+          {/* New Public Media Viewer */}
+          <PublicMediaViewer
+            isOpen={isOpen}
+            onClose={closeViewer}
+            currentGroup={currentGroup}
+            onPrevious={goToPreviousGroup}
+            onNext={goToNextGroup}
+            hasPrevious={hasPrevious}
+            hasNext={hasNext}
           />
         </>
       )}

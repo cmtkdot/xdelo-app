@@ -183,23 +183,51 @@ export function GalleryTableView({ messages, onMediaClick, onDeleteMessage }: Ga
         const message = row.original;
         const mimeType = message.mime_type || "";
         
+        const handlePreviewClick = (e: React.MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // Add visual feedback for the click
+          const row = (e.currentTarget as HTMLElement).closest('tr');
+          if (row) {
+            row.classList.add('bg-primary/10');
+            setTimeout(() => {
+              row.classList.remove('bg-primary/10');
+            }, 300);
+          }
+          
+          console.log('Table preview clicked for message:', message.id);
+          onMediaClick(message);
+        };
+        
         return (
-          <div className="relative h-12 w-12 cursor-pointer" onClick={() => onMediaClick(message)}>
+          <div 
+            className="relative h-12 w-12 cursor-pointer hover:opacity-80 transition-opacity" 
+            onClick={handlePreviewClick}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                handlePreviewClick(e as unknown as React.MouseEvent);
+              }
+            }}
+          >
             {mimeType.startsWith("image/") ? (
               <img 
                 src={message.public_url} 
                 alt={message.caption || "Preview"} 
                 className="h-full w-full object-cover rounded"
+                onClick={handlePreviewClick}
               />
             ) : mimeType.startsWith("video/") ? (
-              <div className="h-full w-full bg-gray-100 rounded flex items-center justify-center">
+              <div className="h-full w-full bg-gray-100 rounded flex items-center justify-center hover:bg-gray-200">
                 <svg className="h-6 w-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
             ) : (
-              <div className="h-full w-full bg-gray-100 rounded flex items-center justify-center">
+              <div className="h-full w-full bg-gray-100 rounded flex items-center justify-center hover:bg-gray-200">
                 <span className="text-xs text-gray-500">File</span>
               </div>
             )}
@@ -211,11 +239,42 @@ export function GalleryTableView({ messages, onMediaClick, onDeleteMessage }: Ga
     {
       accessorKey: "caption",
       header: "Caption",
-      cell: ({ row }) => (
-        <div className="font-medium max-w-[300px] truncate">
-          {row.original.caption || "No caption"}
-        </div>
-      ),
+      cell: ({ row }) => {
+        const message = row.original;
+        
+        const handleCaptionClick = (e: React.MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // Add visual feedback for the click
+          const row = (e.currentTarget as HTMLElement).closest('tr');
+          if (row) {
+            row.classList.add('bg-primary/10');
+            setTimeout(() => {
+              row.classList.remove('bg-primary/10');
+            }, 300);
+          }
+          
+          console.log('Table caption clicked for message:', message.id);
+          onMediaClick(message);
+        };
+        
+        return (
+          <div 
+            className="font-medium max-w-[300px] truncate cursor-pointer hover:text-primary transition-colors"
+            onClick={handleCaptionClick}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                handleCaptionClick(e as unknown as React.MouseEvent);
+              }
+            }}
+          >
+            {message.caption || "No caption"}
+          </div>
+        );
+      },
       filterFn: captionFilterFn,
     },
     {
@@ -250,6 +309,58 @@ export function GalleryTableView({ messages, onMediaClick, onDeleteMessage }: Ga
         return row.original.created_at 
           ? new Date(row.original.created_at).toLocaleDateString() 
           : "Unknown";
+      },
+    },
+    {
+      accessorKey: "product_name",
+      header: "Product",
+      cell: ({ row }) => {
+        const productName = row.original.product_name;
+        return productName ? (
+          <div className="font-medium max-w-[200px] truncate">
+            {productName}
+          </div>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        );
+      },
+    },
+    {
+      accessorKey: "product_code",
+      header: "Code",
+      cell: ({ row }) => {
+        const productCode = row.original.product_code;
+        return productCode ? (
+          <Badge variant="outline" className="font-mono text-xs">
+            {productCode}
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        );
+      },
+    },
+    {
+      accessorKey: "vendor_uid",
+      header: "Vendor",
+      cell: ({ row }) => {
+        const vendor = row.original.vendor_uid;
+        return vendor ? (
+          <div className="max-w-[120px] truncate">
+            {vendor}
+          </div>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        );
+      },
+    },
+    {
+      accessorKey: "purchase_date",
+      header: "Purchase Date",
+      cell: ({ row }) => {
+        const date = row.original.purchase_date;
+        return date 
+          ? new Date(date).toLocaleDateString() 
+          : <span className="text-muted-foreground">-</span>;
       },
     },
     {

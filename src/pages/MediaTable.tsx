@@ -34,19 +34,12 @@ const MediaTable = () => {
     };
   }, [queryClient]);
 
-  // Use the new hook with filter for messages with analyzed_content and caption
+  // Use the hook with filter for messages with analyzed_content
   const { messages, isLoading, error } = useEnhancedMessages({
     limit: 100,
     enableRealtime: true,
     grouped: false // We want a flat list for the table
   });
-
-  // Filter for messages with analyzed content and non-empty caption
-  const filteredMessages = messages.filter(msg => 
-    msg.analyzed_content && 
-    msg.caption && 
-    msg.caption.trim() !== ''
-  );
 
   // Handle loading state with better skeleton UI
   if (isLoading) {
@@ -59,14 +52,14 @@ const MediaTable = () => {
             <Skeleton className="h-10 w-[100px]" />
           </div>
           <div className="space-y-2">
-            <div className="grid grid-cols-8 gap-4">
-              {Array.from({ length: 8 }).map((_, i) => (
+            <div className="grid grid-cols-7 gap-4">
+              {Array.from({ length: 7 }).map((_, i) => (
                 <Skeleton key={i} className="h-8" />
               ))}
             </div>
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="grid grid-cols-8 gap-4">
-                {Array.from({ length: 8 }).map((_, j) => (
+              <div key={i} className="grid grid-cols-7 gap-4">
+                {Array.from({ length: 7 }).map((_, j) => (
                   <Skeleton key={j} className="h-12" />
                 ))}
               </div>
@@ -98,15 +91,17 @@ const MediaTable = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Media Table</h1>
         <div className="text-sm text-muted-foreground">
-          Showing {filteredMessages.length} out of {messages.length} messages
+          Showing {messages.length} messages
         </div>
       </div>
       
-      {filteredMessages.length > 0 ? (
-        <MessagesTable messages={filteredMessages} />
+      {messages.length > 0 ? (
+        <Card className="p-6">
+          <MediaTable messages={messages} />
+        </Card>
       ) : (
         <Card className="p-6 text-center">
-          <p className="text-muted-foreground">No messages with analyzed content found.</p>
+          <p className="text-muted-foreground">No messages found.</p>
           <p className="text-xs mt-2">Try uploading media with captions or analyzing existing media.</p>
         </Card>
       )}
@@ -114,4 +109,4 @@ const MediaTable = () => {
   );
 };
 
-export default MediaTable;
+export default MediaTablePage;

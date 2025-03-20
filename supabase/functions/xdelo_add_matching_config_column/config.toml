@@ -1,6 +1,0 @@
-
-# This function adds the matching_config column to the settings table
-# Used by the ProductMatching feature
-
-[functions.xdelo_add_matching_config_column]
-verify_jwt = false
