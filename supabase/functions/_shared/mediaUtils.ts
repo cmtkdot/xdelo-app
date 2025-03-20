@@ -91,10 +91,9 @@ export function xdelo_getExtensionFromMimeType(mimeType: string): string {
 export function xdelo_detectMimeType(telegramData: any): string {
   if (!telegramData) return 'application/octet-stream';
   
-  // Enhanced logging for media type detection
+  // Log the telegram data for debugging
   console.log('Detecting MIME type from telegram data:', JSON.stringify({
     has_photo: !!telegramData.photo,
-    photo_count: telegramData.photo?.length || 0,
     has_document: !!telegramData.document,
     has_video: !!telegramData.video,
     document_mime_type: telegramData.document?.mime_type,
@@ -427,19 +426,13 @@ export async function xdelo_downloadMediaFromTelegram(
       throw new Error('Telegram bot token is required');
     }
     
-    // Important: Log the FULL file_id for debugging
-    console.log(`Starting download process for file with ID length ${fileId.length}`);
-    console.log(`File unique ID: ${fileUniqueId}`);
-    
-    // Properly URL encode the file_id to handle special characters
-    const encodedFileId = encodeURIComponent(fileId);
-    console.log(`Using encoded file_id for Telegram API: encoded length=${encodedFileId.length}`);
+    console.log(`Starting download process for file ${fileId} (${fileUniqueId})`);
     
     // Get file info from Telegram with improved retry logic
-    console.log(`Fetching file info for encoded file_id`);
+    console.log(`Fetching file info for ${fileId}`);
     
     const fileInfoResponse = await xdelo_fetchWithRetry(
-      `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${encodedFileId}`,
+      `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${fileId}`,
       { 
         method: 'GET',
         headers: {
@@ -533,20 +526,11 @@ export async function xdelo_downloadMediaFromTelegram(
       message: error.message,
       code: error.code || 'UNKNOWN',
       stack: error.stack,
-      file_id_length: fileId ? fileId.length : 0,
+      file_id: fileId,
       file_unique_id: fileUniqueId
     };
     
     console.error('Download error details:', JSON.stringify(errorDetails, null, 2));
-    
-    // Specific handling for file_id errors
-    if (error.message && (
-      error.message.includes('wrong file_id') || 
-      error.message.includes('Bad Request') ||
-      error.message.includes('file is temporarily unavailable')
-    )) {
-      console.error('Telegram file_id error detected, likely invalid or expired file_id');
-    }
     
     return {
       success: false,
