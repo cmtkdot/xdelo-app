@@ -1,66 +1,64 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/useToast";
+import { Loader2, Save, ZapIcon } from "lucide-react";
+import { fetchMatchingConfig, updateMatchingConfig, DEFAULT_CONFIG } from "@/lib/product-matching/config";
+import { ProductMatchingConfig } from "@/lib/product-matching/types";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Check } from "lucide-react";
-import { fetchMatchingConfig, updateMatchingConfig, DEFAULT_CONFIG } from "@/lib/productMatchingConfig";
 
 const ProductMatchingCard = () => {
-  const [isConfiguring, setIsConfiguring] = useState(false);
-  const [threshold, setThreshold] = useState(DEFAULT_CONFIG.similarityThreshold);
-  const [enablePartialMatching, setEnablePartialMatching] = useState(DEFAULT_CONFIG.partialMatch.enabled);
+  const [config, setConfig] = useState<ProductMatchingConfig>(DEFAULT_CONFIG);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isTestRunning, setIsTestRunning] = useState(false);
-  const [testResults, setTestResults] = useState<null | {
-    processed: number;
-    matched: number;
-    confidence: number;
-  }>(null);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    confidence?: number;
+    productName?: string;
+    error?: string;
+  } | null>(null);
   const { toast } = useToast();
 
+  // Load config on component mount
   useEffect(() => {
-    const loadConfig = async () => {
+    async function loadConfig() {
       try {
         const config = await fetchMatchingConfig();
-        setThreshold(config.similarityThreshold || 0.7);
-        setEnablePartialMatching(config.partialMatch?.enabled !== false);
+        setConfig(config);
       } catch (err) {
         console.error("Error loading product matching config:", err);
+        toast({
+          title: "Error loading configuration",
+          description: "Could not load product matching settings.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
       }
-    };
-    
-    loadConfig();
-  }, []);
+    }
 
-  const handleSaveSettings = async () => {
+    loadConfig();
+  }, [toast]);
+
+  // Save config
+  const handleSave = async () => {
     setIsSaving(true);
     try {
-      const updatedConfig = {
-        similarityThreshold: threshold,
-        weightedScoring: DEFAULT_CONFIG.weightedScoring,
-        partialMatch: {
-          ...DEFAULT_CONFIG.partialMatch,
-          enabled: enablePartialMatching
-        }
-      };
-      
-      await updateMatchingConfig(updatedConfig);
-      
+      await updateMatchingConfig(config);
       toast({
         title: "Settings saved",
         description: "Your product matching settings have been updated.",
       });
-      
-      setIsConfiguring(false);
-    } catch (error) {
-      console.error("Error saving settings:", error);
+    } catch (err) {
+      console.error("Error saving settings:", err);
       toast({
         title: "Error saving settings",
-        description: "There was a problem saving your settings.",
+        description: "Your changes could not be saved.",
         variant: "destructive",
       });
     } finally {
@@ -68,99 +66,102 @@ const ProductMatchingCard = () => {
     }
   };
 
-  const handleRunTest = async () => {
-    setIsTestRunning(true);
-    setTestResults(null);
+  // Update a config value
+  const updateConfig = (key: string, value: any) => {
+    if (key.includes('.')) {
+      const [section, subKey] = key.split('.');
+      setConfig(prev => ({
+        ...prev,
+        [section]: {
+          ...prev[section as keyof ProductMatchingConfig],
+          [subKey]: value,
+        },
+      }));
+    } else {
+      setConfig(prev => ({
+        ...prev,
+        [key]: value,
+      }));
+    }
+  };
+
+  // Test the configuration with a random message
+  const handleTest = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    
     try {
-      const { data: messages, error } = await supabase
+      // Get a recent message with caption
+      const { data: message, error: messageError } = await supabase
         .from('messages')
-        .select('id, analyzed_content')
+        .select('id, caption, analyzed_content')
         .not('analyzed_content', 'is', null)
         .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (error) throw error;
-
-      if (!messages || messages.length === 0) {
-        toast({
-          title: "No messages available",
-          description: "No messages with analyzed content were found to test.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      let matchCount = 0;
-      let totalConfidence = 0;
-
-      for (const message of messages) {
-        const { data: matchingResult, error: matchingError } = await supabase
-          .functions.invoke('product-matching', {
-            body: { 
+        .limit(1)
+        .single();
+        
+      if (messageError) throw messageError;
+      
+      // Test match
+      const { data: matchResult, error: matchingError } = await supabase
+        .functions.invoke('product-matching', {
+          body: {
+            request: {
               messageId: message.id,
-              config: {
-                similarityThreshold: threshold,
-                partialMatchEnabled: enablePartialMatching
-              }
-            }
-          });
-
-        if (matchingError) {
-          console.error("Error in product matching test:", matchingError);
-          continue;
-        }
-
-        if (matchingResult?.bestMatch) {
-          matchCount++;
-          totalConfidence += matchingResult.bestMatch.confidence;
-        }
+              minConfidence: config.minConfidence
+            },
+            config
+          }
+        });
+        
+      if (matchingError) throw matchingError;
+      
+      if (matchResult.bestMatch) {
+        // Get product details
+        const { data: product } = await supabase
+          .from('gl_products')
+          .select('new_product_name')
+          .eq('id', matchResult.bestMatch.product_id)
+          .single();
+          
+        setTestResult({
+          success: true,
+          confidence: matchResult.bestMatch.confidence,
+          productName: product?.new_product_name || 'Unknown Product'
+        });
+      } else {
+        setTestResult({
+          success: false
+        });
       }
-
-      const results = {
-        processed: messages.length,
-        matched: matchCount,
-        confidence: matchCount > 0 ? totalConfidence / matchCount : 0
-      };
-
-      setTestResults(results);
-
-      toast({
-        title: "Test completed",
-        description: `Successfully matched ${matchCount} of ${messages.length} messages (${Math.round(results.confidence * 100)}% confidence).`,
-      });
     } catch (error) {
-      console.error("Error running test:", error);
+      console.error("Error in product matching test:", error);
+      setTestResult({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
       toast({
         title: "Test failed",
         description: "There was an error running the product matching test.",
         variant: "destructive",
       });
     } finally {
-      setIsTestRunning(false);
+      setIsTesting(false);
     }
   };
 
-  function renderTestResults() {
-    if (!testResults) return null;
-
+  if (isLoading) {
     return (
-      <div className="mt-4 p-4 border rounded-md bg-muted/30">
-        <h4 className="font-medium">Test Results</h4>
-        <div className="grid grid-cols-3 gap-2 mt-2 text-sm">
-          <div>
-            <div className="text-muted-foreground">Messages</div>
-            <div className="font-medium">{testResults.processed}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">Matches</div>
-            <div className="font-medium">{testResults.matched}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">Confidence</div>
-            <div className="font-medium">{Math.round(testResults.confidence * 100)}%</div>
-          </div>
-        </div>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Product Matching</CardTitle>
+          <CardDescription>Loading configuration...</CardDescription>
+        </CardHeader>
+        <CardContent className="flex justify-center items-center py-6">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
     );
   }
 
@@ -168,91 +169,125 @@ const ProductMatchingCard = () => {
     <Card>
       <CardHeader>
         <CardTitle>Product Matching</CardTitle>
-        <CardDescription>
-          Configure how messages are matched to products in your inventory
-        </CardDescription>
+        <CardDescription>Configure how products are matched to messages</CardDescription>
       </CardHeader>
-      <CardContent>
-        {isConfiguring ? (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <Label htmlFor="threshold">Matching Threshold: {threshold}</Label>
-                <span className="text-sm text-muted-foreground">{(threshold * 100).toFixed(0)}%</span>
-              </div>
-              <Slider
-                id="threshold"
-                min={0.5}
-                max={0.95}
-                step={0.05}
-                value={[threshold]}
-                onValueChange={(values) => setThreshold(values[0])}
-              />
-              <p className="text-xs text-muted-foreground">
-                Higher values require closer matches. Recommended: 0.7 (70%)
-              </p>
+      <CardContent className="space-y-6">
+        <div className="space-y-4">
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <Label htmlFor="similarity-threshold">
+                Similarity Threshold ({Math.round(config.similarityThreshold * 100)}%)
+              </Label>
+              <Badge variant="outline">
+                {config.similarityThreshold < 0.5
+                  ? "Lenient"
+                  : config.similarityThreshold < 0.7
+                  ? "Moderate"
+                  : config.similarityThreshold < 0.9
+                  ? "Strict"
+                  : "Very Strict"}
+              </Badge>
             </div>
-
-            <div className="flex items-center justify-between space-x-2">
-              <Label htmlFor="partial-matching">Enable Partial Matching</Label>
-              <Switch
-                id="partial-matching"
-                checked={enablePartialMatching}
-                onCheckedChange={setEnablePartialMatching}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Allow partial matches for vendor codes and purchase dates
+            <Slider
+              id="similarity-threshold"
+              min={0.1}
+              max={1}
+              step={0.05}
+              value={[config.similarityThreshold]}
+              onValueChange={(value) => updateConfig('similarityThreshold', value[0])}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Sets the required similarity between product names
             </p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Matching Threshold</p>
-                <p className="text-sm text-muted-foreground">{(threshold * 100).toFixed(0)}%</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Partial Matching</p>
-                <p className="text-sm text-muted-foreground">{enablePartialMatching ? "Enabled" : "Disabled"}</p>
-              </div>
+
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <Label htmlFor="min-confidence">
+                Minimum Confidence ({Math.round(config.minConfidence * 100)}%)
+              </Label>
+              <Badge variant="outline">
+                {config.minConfidence < 0.5
+                  ? "Low"
+                  : config.minConfidence < 0.7
+                  ? "Medium"
+                  : "High"}
+              </Badge>
             </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium">Features</p>
-              <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
-                <li>Product name similarity matching</li>
-                <li>Vendor code exact & partial matching</li>
-                <li>Purchase date exact & partial matching</li>
-                <li>Weighted scoring algorithm</li>
-              </ul>
-            </div>
-            {testResults && renderTestResults()}
+            <Slider
+              id="min-confidence"
+              min={0.1}
+              max={1}
+              step={0.05}
+              value={[config.minConfidence]}
+              onValueChange={(value) => updateConfig('minConfidence', value[0])}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Required confidence level for a match to be considered valid
+            </p>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="use-partial-match"
+              checked={config.partialMatch.enabled}
+              onCheckedChange={(value) => updateConfig('partialMatch.enabled', value)}
+            />
+            <Label htmlFor="use-partial-match">Enable Partial Matching</Label>
+          </div>
+        </div>
+
+        <div className="rounded-md bg-secondary/50 p-4">
+          <h3 className="font-medium mb-2">Matching Methods</h3>
+          <ul className="space-y-1 text-sm">
+            <li>Product name similarity matching</li>
+            <li>Vendor ID matching</li>
+            <li>Purchase date matching</li>
+          </ul>
+        </div>
+
+        {testResult && (
+          <div className={`p-4 rounded-md ${
+            testResult.success 
+              ? "bg-green-50 border border-green-200 text-green-800" 
+              : "bg-amber-50 border border-amber-200 text-amber-800"
+          }`}>
+            <h3 className="font-medium">Test Result</h3>
+            {testResult.success ? (
+              <p className="text-sm mt-1">
+                Matched with {Math.round((testResult.confidence || 0) * 100)}% confidence to "{testResult.productName}"
+              </p>
+            ) : (
+              <p className="text-sm mt-1">
+                {testResult.error || "No product match found with current settings"}
+              </p>
+            )}
           </div>
         )}
       </CardContent>
       <CardFooter className="flex justify-between">
-        {isConfiguring ? (
-          <>
-            <Button variant="outline" onClick={() => setIsConfiguring(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveSettings} disabled={isSaving}>
-              {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : <><Check className="mr-2 h-4 w-4" /> Save Settings</>}
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button variant="outline" onClick={() => setIsConfiguring(true)}>
-              Configure
-            </Button>
-            <Button onClick={handleRunTest} disabled={isTestRunning}>
-              {isTestRunning ? 
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Running Test...</> : 
-                <>Run Test Match</>
-              }
-            </Button>
-          </>
-        )}
+        <Button 
+          variant="outline" 
+          onClick={handleTest} 
+          disabled={isTesting || isSaving}
+        >
+          {isTesting ? (
+            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Testing</>
+          ) : (
+            <><ZapIcon className="mr-2 h-4 w-4" /> Test Settings</>
+          )}
+        </Button>
+        
+        <Button 
+          onClick={handleSave} 
+          disabled={isSaving || isTesting}
+        >
+          {isSaving ? (
+            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving</>
+          ) : (
+            <><Save className="mr-2 h-4 w-4" /> Save Settings</>
+          )}
+        </Button>
       </CardFooter>
     </Card>
   );

@@ -1,15 +1,11 @@
-
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { 
+  MatchResult,
+  BatchMatchResult as LibBatchMatchResult
+} from "@/lib/product-matching/types";
 
-export interface ProductMatch {
-  product_id: string;
-  product_name?: string;
-  confidence: number;
-  match_fields?: string[];
-  matchedFields?: string[];
-  message_id?: string;
-}
+export interface ProductMatch extends MatchResult {}
 
 export interface ProductMatchResult {
   success: boolean;
@@ -21,24 +17,20 @@ export interface ProductMatchResult {
   duration?: number;
 }
 
-export interface BatchMatchResult {
-  success: boolean;
-  results?: any[];
-  summary?: {
-    total: number;
-    matched: number;
-    unmatched: number;
-    failed: number;
-  };
-  error?: string;
-}
+export interface BatchMatchResult extends LibBatchMatchResult {}
 
+/**
+ * Hook for product matching functionality
+ */
 export function useProductMatching() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ProductMatchResult | null>(null);
   const [batchResult, setBatchResult] = useState<BatchMatchResult | null>(null);
 
+  /**
+   * Test product matching with a message or custom text
+   */
   const testProductMatch = async (options: {
     messageId?: string;
     customText?: string;
@@ -81,6 +73,9 @@ export function useProductMatching() {
     }
   };
   
+  /**
+   * Batch match multiple messages
+   */
   const batchMatchMessages = async (messageIds: string[], minConfidence?: number) => {
     setIsLoading(true);
     setError(null);
@@ -109,6 +104,9 @@ export function useProductMatching() {
     }
   };
   
+  /**
+   * Clear all results
+   */
   const clearResults = () => {
     setResult(null);
     setBatchResult(null);
