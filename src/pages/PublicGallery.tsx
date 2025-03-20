@@ -1,5 +1,4 @@
-
-import { Message } from "@/types/MessagesTypes";
+import { Message } from "@/types";
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { MediaViewer } from '@/components/MediaViewer/MediaViewer';
@@ -9,11 +8,11 @@ import { GalleryCard } from "@/components/PublicGallery/GalleryCard";
 import { GalleryFilters } from "@/components/PublicGallery/GalleryFilters";
 import { EmptyState } from "@/components/PublicGallery/EmptyState";
 import { LoadMoreButton } from "@/components/PublicGallery/LoadMoreButton";
-import { SearchToolbar } from "@/components/PublicGallery/SearchToolbar";
-import { usePublicGallerySearch } from "@/hooks/publicGallery/usePublicGallerySearch";
+import { GalleryTableView } from "@/components/PublicGallery/GalleryTableView";
 
 const PublicGallery = () => {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [filteredMessages, setFilteredMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
@@ -21,16 +20,8 @@ const PublicGallery = () => {
   const [filter, setFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMoreItems, setHasMoreItems] = useState(true);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const itemsPerPage = 16;
-  
-  // Use our custom hook to handle search
-  const { 
-    searchTerm, 
-    filteredMessages, 
-    isSearching, 
-    handleSearch, 
-    clearSearch 
-  } = usePublicGallerySearch({ messages });
 
   const fetchMessages = async (page = 1, append = false) => {
     if (page === 1) {
@@ -85,20 +76,16 @@ const PublicGallery = () => {
     fetchMessages();
   }, []);
 
-  // Apply content-type filter to the already search-filtered messages
-  const applyMediaTypeFilter = (messages: Message[]) => {
+  // Apply filters whenever messages or filter change
+  useEffect(() => {
     if (filter === "all") {
-      return messages;
+      setFilteredMessages(messages);
     } else if (filter === "images") {
-      return messages.filter(m => m.mime_type?.startsWith('image/'));
+      setFilteredMessages(messages.filter(m => m.mime_type?.startsWith('image/')));
     } else if (filter === "videos") {
-      return messages.filter(m => m.mime_type?.startsWith('video/'));
+      setFilteredMessages(messages.filter(m => m.mime_type?.startsWith('video/')));
     }
-    return messages;
-  };
-
-  // Get the final filtered messages by applying both search and media type filters
-  const finalFilteredMessages = applyMediaTypeFilter(filteredMessages);
+  }, [messages, filter]);
 
   const handleMediaClick = (message: Message) => {
     if (message.media_group_id) {
@@ -110,21 +97,38 @@ const PublicGallery = () => {
     setIsViewerOpen(true);
   };
 
+  // CRUD operations for messages
+  const handleDeleteMessage = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({ deleted_from_telegram: true })
+        .eq('id', id);
+
+      if (error) {
+        toast.error("Failed to delete item");
+        console.error("Error deleting message:", error);
+        return;
+      }
+
+      // Update local state by removing the deleted message
+      setMessages(prev => prev.filter(message => message.id !== id));
+      toast.success("Item deleted successfully");
+    } catch (error) {
+      console.error("Error in delete operation:", error);
+      toast.error("An error occurred");
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-6 md:py-8 max-w-7xl">
       <div className="mb-6 animate-fade-in">
-        <h1 className="text-3xl font-bold mb-4 text-center md:text-left">Public Gallery</h1>
-        
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-          <GalleryFilters filter={filter} setFilter={setFilter} />
-          <SearchToolbar
-            searchTerm={searchTerm}
-            onSearch={handleSearch}
-            onClear={clearSearch}
-            placeholder="Search products, vendors, codes..."
-            isSearching={isSearching}
-          />
-        </div>
+        <GalleryFilters 
+          filter={filter} 
+          setFilter={setFilter} 
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+        />
       </div>
       
       {isLoading ? (
@@ -133,26 +137,31 @@ const PublicGallery = () => {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
-            {finalFilteredMessages.map(message => (
-              <GalleryCard 
-                key={message.id} 
-                message={message} 
-                onClick={handleMediaClick} 
+          {viewMode === 'grid' ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
+                {filteredMessages.map(message => (
+                  <GalleryCard 
+                    key={message.id} 
+                    message={message} 
+                    onClick={handleMediaClick} 
+                  />
+                ))}
+              </div>
+
+              {filteredMessages.length === 0 && <EmptyState />}
+
+              <LoadMoreButton 
+                onClick={loadMore} 
+                isLoading={isLoadingMore}
+                hasMoreItems={hasMoreItems} 
               />
-            ))}
-          </div>
-
-          {finalFilteredMessages.length === 0 && (
-            <EmptyState message={searchTerm ? "No results found for your search" : undefined} />
-          )}
-
-          {/* Only show load more button when not searching */}
-          {!searchTerm && (
-            <LoadMoreButton 
-              onClick={loadMore} 
-              isLoading={isLoadingMore}
-              hasMoreItems={hasMoreItems} 
+            </>
+          ) : (
+            <GalleryTableView 
+              messages={filteredMessages} 
+              onMediaClick={handleMediaClick}
+              onDeleteMessage={handleDeleteMessage}
             />
           )}
 
