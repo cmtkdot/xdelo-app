@@ -9,6 +9,7 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
+  VisibilityState,
 } from "@tanstack/react-table"
 import {
   Table,
@@ -22,12 +23,20 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { MediaViewer } from "@/components/ui/media-viewer"
-import { Edit2, Save, X, ArrowUpDown, Search, ExternalLink } from "lucide-react"
+import { Edit2, Save, X, ArrowUpDown, Search, ExternalLink, Settings2 } from "lucide-react"
 import { MediaEditDialog } from "@/components/MediaEditDialog/MediaEditDialog"
 import { isVideoMessage, getVideoDuration, getTelegramMessageUrl } from "@/utils/mediaUtils"
 import { useToast } from "@/hooks/useToast"
 import { Message } from "@/types/entities/Message"
 import { format } from "date-fns"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 interface MediaTableProps {
   messages: Message[]
@@ -42,12 +51,32 @@ function formatDuration(seconds: number): string {
 export function MediaTable({ messages }: MediaTableProps) {
   const [sorting, setSorting] = useState<SortingState>([{ id: "created_at", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
+    preview: true,
+    product: true,
+    purchaseOrder: true,
+    purchaseDate: true,
+    vendor: true,
+    notes: true,
+    actions: true,
+  })
   const [globalFilter, setGlobalFilter] = useState("")
   const [editingMessage, setEditingMessage] = useState<Message | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isViewerOpen, setIsViewerOpen] = useState(false)
   const [selectedMedia, setSelectedMedia] = useState<Message[]>([])
   const { toast } = useToast()
+
+  // Column display names mapping
+  const columnDisplayNames: Record<string, string> = {
+    preview: "Preview",
+    product: "Product",
+    purchaseOrder: "PO UID",
+    purchaseDate: "Purchase Date",
+    vendor: "Vendor",
+    notes: "Notes",
+    actions: "Actions"
+  }
 
   const handleMediaClick = (message: Message) => {
     if (message.media_group_id) {
@@ -75,6 +104,7 @@ export function MediaTable({ messages }: MediaTableProps) {
     {
       id: "preview",
       header: "Preview",
+      enableHiding: false,
       cell: ({ row }) => {
         const message = row.original
         const mimeType = message.mime_type || ""
@@ -122,10 +152,11 @@ export function MediaTable({ messages }: MediaTableProps) {
           </div>
         )
       },
-      enableSorting: false,
     },
     {
       accessorKey: "product_name",
+      id: "product",
+      enableHiding: true,
       header: ({ column }) => {
         return (
           <Button
@@ -149,6 +180,8 @@ export function MediaTable({ messages }: MediaTableProps) {
     },
     {
       accessorKey: "purchase_order",
+      id: "purchaseOrder",
+      enableHiding: true,
       header: ({ column }) => {
         return (
           <Button
@@ -168,6 +201,8 @@ export function MediaTable({ messages }: MediaTableProps) {
     },
     {
       accessorKey: "analyzed_content.purchase_date",
+      id: "purchaseDate",
+      enableHiding: true,
       header: ({ column }) => {
         return (
           <Button
@@ -192,6 +227,8 @@ export function MediaTable({ messages }: MediaTableProps) {
     },
     {
       accessorKey: "vendor_uid",
+      id: "vendor",
+      enableHiding: true,
       header: ({ column }) => {
         return (
           <Button
@@ -211,6 +248,8 @@ export function MediaTable({ messages }: MediaTableProps) {
     },
     {
       accessorKey: "notes",
+      id: "notes",
+      enableHiding: true,
       header: ({ column }) => {
         return (
           <Button
@@ -234,6 +273,7 @@ export function MediaTable({ messages }: MediaTableProps) {
     },
     {
       id: "actions",
+      enableHiding: false,
       header: "",
       cell: ({ row }) => {
         const message = row.original
@@ -277,6 +317,7 @@ export function MediaTable({ messages }: MediaTableProps) {
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
+    onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -285,6 +326,7 @@ export function MediaTable({ messages }: MediaTableProps) {
       sorting,
       columnFilters,
       globalFilter,
+      columnVisibility,
     },
   })
 
@@ -300,16 +342,62 @@ export function MediaTable({ messages }: MediaTableProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="relative w-72">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search all columns..."
-            value={globalFilter}
-            onChange={(e) => handleGlobalFilterChange(e.target.value)}
-            className="pl-8 w-full"
-          />
+      <div className="flex items-center justify-between mb-6">
+        {/* Left side controls */}
+        <div className="flex-1 flex items-center gap-6">
+          <div className="relative w-72">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search all columns..."
+              value={globalFilter}
+              onChange={(e) => handleGlobalFilterChange(e.target.value)}
+              className="pl-8 w-full"
+            />
+          </div>
+          
+          <div className="flex-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="secondary" 
+                  size="default" 
+                  className="flex items-center gap-2 px-4 h-10 shadow-sm hover:shadow-md transition-all duration-200"
+                >
+                  <Settings2 className="h-4 w-4" />
+                  <span>View Columns</span>
+                  <Badge variant="outline" className="ml-2 font-normal bg-background">
+                    {table.getAllColumns().filter((column) => column.getIsVisible()).length}
+                  </Badge>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[200px] p-2">
+                <DropdownMenuLabel className="font-normal text-xs text-muted-foreground">
+                  Toggle columns to show/hide
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {table
+                  .getAllColumns()
+                  .filter((column) => column.getCanHide())
+                  .map((column) => {
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={column.id}
+                        checked={column.getIsVisible()}
+                        onCheckedChange={(value) =>
+                          column.toggleVisibility(!!value)
+                        }
+                        className="capitalize"
+                      >
+                        {columnDisplayNames[column.id] || column.id}
+                      </DropdownMenuCheckboxItem>
+                    )
+                  })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
+
+        {/* Right side pagination */}
         <div className="flex items-center space-x-2">
           <Button
             variant="outline"
