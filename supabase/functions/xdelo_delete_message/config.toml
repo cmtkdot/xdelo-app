@@ -1,4 +1,0 @@
-
-project_id = ""
-name = "xdelo_delete_message"
-entrypoint = "/index.ts"

@@ -10,8 +10,8 @@ export function useTelegramOperations() {
   const { toast } = useToast();
 
   // Helper function to log message operations
-  const logMessageOperation = async (eventType: LogEventType, entityId: string, metadata: any = {}) => {
-    await logEvent(eventType, entityId, metadata);
+  const logMessageOperation = async (eventType: LogEventType, messageId: string, metadata: any = {}) => {
+    await logEvent(eventType, messageId, metadata);
   };
 
   const handleDelete = useCallback(async (message: Message, deleteTelegram: boolean = false): Promise<void> => {
