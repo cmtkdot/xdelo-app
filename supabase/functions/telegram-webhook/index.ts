@@ -4,12 +4,9 @@ import { handleOtherMessage } from './handlers/textMessageHandler.ts';
 import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
 import { corsHeaders, createCorsResponse, handleOptionsRequest, isPreflightRequest } from '../_shared/cors.ts';
 import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
-import { Logger } from './utils/logger.ts';
-import { SecurityLevel } from '../_shared/jwt-verification.ts';
+import { Logger } from '../_shared/logger/index.ts';
 
-// Explicitly mark this function as public (no JWT verification)
-const securityLevel = SecurityLevel.PUBLIC;
-
+// No JWT verification - publicly accessible endpoint
 serve(async (req: Request) => {
   // Generate a correlation ID for tracing
   const correlationId = crypto.randomUUID().toString();
@@ -37,8 +34,7 @@ serve(async (req: Request) => {
       correlationId,
       {
         source: "telegram-webhook",
-        timestamp: new Date().toISOString(),
-        security_level: securityLevel
+        timestamp: new Date().toISOString()
       }
     );
 

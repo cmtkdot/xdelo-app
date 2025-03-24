@@ -1,4 +1,3 @@
-
 export interface AnalysisRequest {
   messageId: string;
   caption?: string;
@@ -6,6 +5,7 @@ export interface AnalysisRequest {
   correlationId?: string;
   isEdit?: boolean;
   trigger_source?: string;
+  method?: 'manual' | 'direct';
 }
 
 export interface MediaGroupResult {
@@ -13,4 +13,4 @@ export interface MediaGroupResult {
   synced_count: number;
   media_group_id: string;
   error?: string;
-}
+} 

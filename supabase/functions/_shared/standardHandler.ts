@@ -1,11 +1,5 @@
-
 import { corsHeaders } from "./cors.ts";
-
-export enum SecurityLevel {
-  PUBLIC = "public",
-  AUTHENTICATED = "authenticated",
-  SERVICE_ROLE = "service_role"
-}
+import { SecurityLevel } from "./securityLevel.ts";
 
 export interface HandlerOptions {
   securityLevel: SecurityLevel;
