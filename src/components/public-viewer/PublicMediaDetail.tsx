@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react'
 import { Message } from '@/types/entities/Message'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -8,7 +9,10 @@ import {
   Eye, 
   Pencil, 
   Trash2, 
-  ExternalLink
+  ExternalLink,
+  Download,
+  Image,
+  Video
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MediaDisplay } from '@/components/media-viewer/shared/MediaDisplay'
@@ -24,6 +28,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useTelegramOperations } from '@/hooks/useTelegramOperations'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Badge } from '@/components/ui/badge'
+import { format } from 'date-fns'
 
 interface PublicMediaDetailProps {
   isOpen: boolean
@@ -119,6 +125,33 @@ export function PublicMediaDetail({
       window.open(`https://t.me/c/${chatId}/${messageId}`, '_blank')
     }
   }
+
+  const handleDownload = () => {
+    if (currentMessage?.public_url) {
+      // Create an anchor element and trigger download
+      const a = document.createElement('a')
+      a.href = currentMessage.public_url
+      a.download = `media-${currentMessage.id}${getFileExtension(currentMessage)}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    }
+  }
+
+  const getFileExtension = (message: Message) => {
+    if (!message.mime_type) return '';
+    
+    if (message.mime_type.startsWith('image/')) {
+      const format = message.mime_type.split('/')[1];
+      return format === 'jpeg' ? '.jpg' : `.${format}`;
+    }
+    
+    if (message.mime_type.startsWith('video/')) {
+      return `.${message.mime_type.split('/')[1]}`;
+    }
+    
+    return '';
+  }
   
   // Handle keyboard navigation
   useEffect(() => {
@@ -152,10 +185,10 @@ export function PublicMediaDetail({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="sm:max-w-5xl p-0 gap-0 bg-background/95 backdrop-blur-md">
-          <div className="relative h-[80vh] flex flex-col">
+        <DialogContent className="sm:max-w-5xl p-0 gap-0 bg-background/95 backdrop-blur-md max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="relative flex-1 flex flex-col overflow-hidden">
             {/* Header/Tools */}
-            <div className="p-4 border-b flex justify-between items-center">
+            <div className="p-4 border-b flex justify-between items-center shrink-0">
               <div className="flex gap-2 items-center">
                 <h2 className="text-lg font-medium">Media Viewer</h2>
                 {currentMessage.product_name && (
@@ -163,8 +196,29 @@ export function PublicMediaDetail({
                     ({currentMessage.product_name})
                   </span>
                 )}
+                {currentMessage.mime_type && (
+                  <Badge variant="outline" className="ml-2">
+                    {currentMessage.mime_type.startsWith('image/') ? (
+                      <><Image className="h-3 w-3 mr-1" /> Image</>
+                    ) : currentMessage.mime_type.startsWith('video/') ? (
+                      <><Video className="h-3 w-3 mr-1" /> Video</>
+                    ) : (
+                      currentMessage.mime_type
+                    )}
+                  </Badge>
+                )}
               </div>
               <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleDownload}
+                  className="flex items-center gap-1"
+                >
+                  <Download className="h-4 w-4" />
+                  <span className="hidden sm:inline">Download</span>
+                </Button>
+                
                 {currentMessage.chat_id && currentMessage.telegram_message_id && (
                   <Button 
                     variant="outline" 
@@ -212,13 +266,13 @@ export function PublicMediaDetail({
             )}
 
             {/* Media Display */}
-            <div className="flex-1 flex items-center justify-center p-4 bg-black/30">
+            <div className="flex-1 flex items-center justify-center p-4 bg-black/30 overflow-hidden">
               <MediaDisplay message={currentMessage} />
             </div>
 
             {/* Thumbnails/Pagination */}
             {currentGroup.length > 1 && (
-              <div className="p-2 flex justify-center gap-2 bg-background/20">
+              <div className="p-2 flex justify-center gap-2 bg-background/20 shrink-0">
                 {currentGroup.map((item, idx) => (
                   <button
                     key={item.id}
@@ -232,12 +286,73 @@ export function PublicMediaDetail({
               </div>
             )}
 
-            {/* Caption/Details */}
-            {currentMessage?.caption && (
-              <div className="p-4 bg-background/10 max-h-32 overflow-y-auto">
-                <p className="text-sm whitespace-pre-line">{currentMessage.caption}</p>
+            {/* Metadata Section */}
+            <div className="shrink-0 bg-background/10 border-t">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+                <div>
+                  {currentMessage?.caption && (
+                    <div className="mb-4">
+                      <h3 className="text-sm font-medium mb-1">Caption</h3>
+                      <p className="text-sm whitespace-pre-line bg-background/20 p-3 rounded-md max-h-28 overflow-y-auto">
+                        {currentMessage.caption}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="space-y-2">
+                  {currentMessage.product_name && (
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-xs font-medium text-muted-foreground">Product:</div>
+                      <div className="text-xs col-span-2">{currentMessage.product_name}</div>
+                    </div>
+                  )}
+                  
+                  {currentMessage.vendor_uid && (
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-xs font-medium text-muted-foreground">Vendor:</div>
+                      <div className="text-xs col-span-2">{currentMessage.vendor_uid}</div>
+                    </div>
+                  )}
+                  
+                  {currentMessage.purchase_date && (
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-xs font-medium text-muted-foreground">Purchase Date:</div>
+                      <div className="text-xs col-span-2">
+                        {format(new Date(currentMessage.purchase_date), 'MMM dd, yyyy')}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {currentMessage.created_at && (
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-xs font-medium text-muted-foreground">Added:</div>
+                      <div className="text-xs col-span-2">
+                        {format(new Date(currentMessage.created_at), 'MMM dd, yyyy HH:mm')}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {currentMessage.file_size && (
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-xs font-medium text-muted-foreground">Size:</div>
+                      <div className="text-xs col-span-2">
+                        {Math.round(currentMessage.file_size / 1024)} KB
+                      </div>
+                    </div>
+                  )}
+                  
+                  {(currentMessage.width && currentMessage.height) && (
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-xs font-medium text-muted-foreground">Dimensions:</div>
+                      <div className="text-xs col-span-2">
+                        {currentMessage.width} × {currentMessage.height}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
