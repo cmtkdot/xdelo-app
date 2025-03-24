@@ -14,7 +14,7 @@ export const DatabaseFixCard = () => {
     try {
       setIsRunning(true);
       
-      const { data, error } = await supabase.functions.invoke('run-migrations');
+      const { data, error } = await supabase.functions.invoke('xdelo_run_migrations');
       
       if (error) throw error;
       
