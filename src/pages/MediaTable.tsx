@@ -1,3 +1,4 @@
+
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -97,7 +98,7 @@ const MediaTable = () => {
       
       {messages.length > 0 ? (
         <Card className="p-6">
-          <MediaTable messages={messages} />
+          <MessagesTable messages={messages} />
         </Card>
       ) : (
         <Card className="p-6 text-center">
@@ -109,4 +110,4 @@ const MediaTable = () => {
   );
 };
 
-export default MediaTablePage;
+export default MediaTable;
