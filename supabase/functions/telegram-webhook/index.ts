@@ -127,7 +127,7 @@ const telegramWebhookHandler = createStandardHandler(async (req: Request, correl
       // Log the error to the database
       await xdelo_logProcessingEvent(
         "message_processing_failed",
-        message.message_id.toString(),
+        crypto.randomUUID(),
         correlationId,
         {
           message_id: message.message_id,
