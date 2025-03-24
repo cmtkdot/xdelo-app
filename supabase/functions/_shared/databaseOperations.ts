@@ -1,110 +1,124 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-
-// Create Supabase client
-const supabaseClient = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    }
-  }
-);
+// Shared database operations for edge functions
+import { createSupabaseClient } from "./supabase.ts";
 
 /**
- * Log a processing event to the unified_audit_logs table
+ * Log a processing event to the audit log
  */
 export async function xdelo_logProcessingEvent(
   eventType: string,
   entityId: string,
   correlationId: string,
-  metadata: Record<string, unknown>,
+  metadata: Record<string, any> = {},
   errorMessage?: string
 ) {
   try {
-    // Ensure metadata has a timestamp
-    const enhancedMetadata = {
-      ...metadata,
-      timestamp: metadata.timestamp || new Date().toISOString(),
-      correlation_id: correlationId,
-      logged_from: 'edge_function'
-    };
+    const supabase = createSupabaseClient();
     
-    await supabaseClient.from('unified_audit_logs').insert({
+    // Ensure correlation ID is a string
+    const corrId = correlationId?.toString() || crypto.randomUUID().toString();
+    
+    const { error } = await supabase.from("unified_audit_logs").insert({
       event_type: eventType,
-      entity_id: entityId,
-      metadata: enhancedMetadata,
-      error_message: errorMessage,
-      correlation_id: correlationId,
-      event_timestamp: new Date().toISOString()
+      entity_id: entityId.toString(),
+      correlation_id: corrId,
+      metadata: metadata,
+      error_message: errorMessage
     });
-  } catch (error) {
-    console.error(`Error logging event: ${eventType}`, error);
+    
+    if (error) {
+      console.error(`Error logging event: ${error.message}`, { eventType, entityId });
+    }
+  } catch (e) {
+    console.error(`Exception in logProcessingEvent: ${e.message}`);
   }
 }
 
 /**
- * Update message processing state
+ * Process a message caption by calling the direct caption processor edge function
  */
-export async function updateMessageState(
+export async function xdelo_processMessageCaption(
   messageId: string,
-  state: 'pending' | 'processing' | 'completed' | 'error',
-  errorMessage?: string
+  caption?: string,
+  correlationId?: string,
+  isEdit: boolean = false
 ) {
   try {
-    const updates: Record<string, unknown> = {
-      processing_state: state,
-      updated_at: new Date().toISOString()
-    };
+    // Create a new correlation ID if one wasn't provided
+    const corrId = correlationId?.toString() || crypto.randomUUID().toString();
     
-    if (state === 'processing') {
-      updates.processing_started_at = new Date().toISOString();
-    } else if (state === 'completed') {
-      updates.processing_completed_at = new Date().toISOString();
-      updates.error_message = null;
-    } else if (state === 'error' && errorMessage) {
-      updates.error_message = errorMessage;
-      updates.last_error_at = new Date().toISOString();
+    // Call the direct-caption-processor edge function
+    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/direct-caption-processor`;
+    
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
+      },
+      body: JSON.stringify({
+        messageId,
+        caption,
+        correlationId: corrId,
+        isEdit
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Edge function error: ${errorText || response.statusText}`);
     }
     
-    const { error } = await supabaseClient
-      .from('messages')
-      .update(updates)
-      .eq('id', messageId);
-      
-    if (error) {
-      console.error(`Error updating message state: ${error.message}`);
-      return false;
-    }
-    
-    return true;
+    const result = await response.json();
+    return result;
   } catch (error) {
-    console.error(`Error updating message state: ${error.message}`);
-    return false;
+    console.error(`Error processing caption for message ${messageId}: ${error.message}`);
+    
+    // Log the error
+    await xdelo_logProcessingEvent(
+      "caption_processing_failed",
+      messageId,
+      correlationId || crypto.randomUUID().toString(),
+      { error: error.message },
+      error.message
+    );
+    
+    throw error;
   }
 }
 
 /**
- * Get message by ID
+ * Sync analyzed content across all messages in a media group
  */
-export async function getMessageById(messageId: string) {
+export async function xdelo_syncMediaGroupContent(
+  mediaGroupId: string,
+  sourceMessageId: string,
+  correlationId: string
+) {
   try {
-    const { data, error } = await supabaseClient
-      .from('messages')
-      .select('*')
-      .eq('id', messageId)
-      .single();
-      
+    const supabase = createSupabaseClient();
+    
+    // Ensure correlation ID is a string
+    const corrId = correlationId?.toString() || crypto.randomUUID().toString();
+    
+    const { data, error } = await supabase.rpc(
+      "xdelo_sync_media_group_content",
+      {
+        p_media_group_id: mediaGroupId,
+        p_source_message_id: sourceMessageId,
+        p_correlation_id: corrId,
+        p_force_sync: true,
+        p_sync_edit_history: false
+      }
+    );
+    
     if (error) {
-      console.error(`Error getting message: ${error.message}`);
-      return null;
+      throw new Error(`Failed to sync media group: ${error.message}`);
     }
     
     return data;
   } catch (error) {
-    console.error(`Error getting message: ${error.message}`);
-    return null;
+    console.error(`Error syncing media group: ${error.message}`);
+    throw error;
   }
 }

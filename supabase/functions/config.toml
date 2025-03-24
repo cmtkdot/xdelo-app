@@ -1,3 +1,4 @@
+
 project_id = "xjhhehxcxkiumnwbirel"
 base_url = "https://xjhhehxcxkiumnwbirel.supabase.co"
 
@@ -18,6 +19,8 @@ verify_jwt = false
 verify_jwt = false
 [functions.update-telegram-caption]
 verify_jwt = false
+[functions.direct-caption-processor]
+verify_jwt = false
 
 # User-authenticated functions
 [functions.user-data]
@@ -29,8 +32,6 @@ verify_jwt = true
 
 # Other utility functions
 [functions.cleanup-storage-on-delete]
-verify_jwt = false
-[functions.create-analyze-message-caption]
 verify_jwt = false
 [functions.direct-caption-processor]
 verify_jwt = false
