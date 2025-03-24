@@ -185,122 +185,57 @@ export function PublicMediaDetail({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="sm:max-w-5xl p-0 gap-0 bg-background/95 backdrop-blur-md max-h-[90vh] overflow-hidden flex flex-col">
-          <div className="relative flex-1 flex flex-col overflow-hidden">
-            {/* Header/Tools */}
-            <div className="p-4 border-b flex justify-between items-center shrink-0">
-              <div className="flex gap-2 items-center">
-                <h2 className="text-lg font-medium">Media Viewer</h2>
-                {currentMessage.product_name && (
-                  <span className="text-sm text-muted-foreground">
-                    ({currentMessage.product_name})
-                  </span>
-                )}
-                {currentMessage.mime_type && (
-                  <Badge variant="outline" className="ml-2">
-                    {currentMessage.mime_type.startsWith('image/') ? (
-                      <><Image className="h-3 w-3 mr-1" /> Image</>
-                    ) : currentMessage.mime_type.startsWith('video/') ? (
-                      <><Video className="h-3 w-3 mr-1" /> Video</>
-                    ) : (
-                      currentMessage.mime_type
-                    )}
-                  </Badge>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={handleDownload}
-                  className="flex items-center gap-1"
-                >
-                  <Download className="h-4 w-4" />
-                  <span className="hidden sm:inline">Download</span>
-                </Button>
-                
-                {currentMessage.chat_id && currentMessage.telegram_message_id && (
+        <DialogContent className="sm:max-w-6xl p-0 gap-0 max-h-[90vh] overflow-hidden">
+          {/* Desktop: Two-column layout with details on left, media on right */}
+          <div className="grid grid-cols-1 md:grid-cols-2 h-full">
+            {/* Left column - Details Panel */}
+            <div className="bg-background/95 backdrop-blur-md overflow-y-auto max-h-[90vh] border-r">
+              <div className="p-4 border-b flex justify-between items-center">
+                <div className="flex gap-2 items-center">
+                  <h2 className="text-lg font-medium">Media Details</h2>
+                  {currentMessage.product_name && (
+                    <span className="text-sm text-muted-foreground">
+                      ({currentMessage.product_name})
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-2">
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={openTelegramLink}
-                    className="flex items-center gap-1"
+                    onClick={handleDeleteClick}
+                    className="flex items-center gap-1 text-destructive"
                   >
-                    <ExternalLink className="h-4 w-4" />
-                    <span className="hidden sm:inline">Telegram</span>
+                    <Trash2 className="h-4 w-4" />
+                    <span className="hidden sm:inline">Delete</span>
                   </Button>
-                )}
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={handleDeleteClick}
-                  className="flex items-center gap-1 text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span className="hidden sm:inline">Delete</span>
-                </Button>
-              </div>
-            </div>
-            
-            {/* Previous/Next Group Controls */}
-            {canNavigatePrev && (
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="absolute left-2 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
-                onClick={handlePrevious}
-              >
-                <ChevronLeft className="h-8 w-8" />
-              </Button>
-            )}
-            
-            {canNavigateNext && (
-              <Button 
-                variant="ghost" 
-                size="icon"
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
-                onClick={handleNext}
-              >
-                <ChevronRight className="h-8 w-8" />
-              </Button>
-            )}
-
-            {/* Media Display */}
-            <div className="flex-1 flex items-center justify-center p-4 bg-black/30 overflow-hidden">
-              <MediaDisplay message={currentMessage} />
-            </div>
-
-            {/* Thumbnails/Pagination */}
-            {currentGroup.length > 1 && (
-              <div className="p-2 flex justify-center gap-2 bg-background/20 shrink-0">
-                {currentGroup.map((item, idx) => (
-                  <button
-                    key={item.id}
-                    className={cn(
-                      "w-2 h-2 rounded-full transition-all",
-                      idx === currentIndex ? "bg-primary w-4" : "bg-muted-foreground/50"
-                    )}
-                    onClick={() => setCurrentIndex(idx)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Metadata Section */}
-            <div className="shrink-0 bg-background/10 border-t">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-                <div>
-                  {currentMessage?.caption && (
-                    <div className="mb-4">
-                      <h3 className="text-sm font-medium mb-1">Caption</h3>
-                      <p className="text-sm whitespace-pre-line bg-background/20 p-3 rounded-md max-h-28 overflow-y-auto">
-                        {currentMessage.caption}
-                      </p>
-                    </div>
-                  )}
                 </div>
+              </div>
+              
+              {/* Metadata Section */}
+              <div className="p-4 space-y-4">
+                {currentMessage?.caption && (
+                  <div>
+                    <h3 className="text-sm font-medium mb-1">Caption</h3>
+                    <p className="text-sm whitespace-pre-line bg-background/20 p-3 rounded-md max-h-48 overflow-y-auto">
+                      {currentMessage.caption}
+                    </p>
+                  </div>
+                )}
                 
-                <div className="space-y-2">
+                <div className="space-y-3">
+                  {currentMessage.mime_type && (
+                    <Badge variant="outline" className="mb-2">
+                      {currentMessage.mime_type.startsWith('image/') ? (
+                        <><Image className="h-3 w-3 mr-1" /> Image</>
+                      ) : currentMessage.mime_type.startsWith('video/') ? (
+                        <><Video className="h-3 w-3 mr-1" /> Video</>
+                      ) : (
+                        currentMessage.mime_type
+                      )}
+                    </Badge>
+                  )}
+                  
                   {currentMessage.product_name && (
                     <div className="grid grid-cols-3 gap-2">
                       <div className="text-xs font-medium text-muted-foreground">Product:</div>
@@ -351,7 +286,78 @@ export function PublicMediaDetail({
                     </div>
                   )}
                 </div>
+                
+                <div className="flex gap-2 pt-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={handleDownload}
+                    className="flex items-center gap-1"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span>Download</span>
+                  </Button>
+                  
+                  {currentMessage.chat_id && currentMessage.telegram_message_id && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={openTelegramLink}
+                      className="flex items-center gap-1"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      <span>Telegram</span>
+                    </Button>
+                  )}
+                </div>
               </div>
+            </div>
+            
+            {/* Right column - Media Display */}
+            <div className="bg-black/70 flex flex-col relative">
+              {/* Previous/Next Group Controls */}
+              {canNavigatePrev && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="absolute left-2 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
+                  onClick={handlePrevious}
+                >
+                  <ChevronLeft className="h-8 w-8" />
+                </Button>
+              )}
+              
+              {canNavigateNext && (
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
+                  onClick={handleNext}
+                >
+                  <ChevronRight className="h-8 w-8" />
+                </Button>
+              )}
+              
+              {/* Media Display */}
+              <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
+                <MediaDisplay message={currentMessage} />
+              </div>
+              
+              {/* Thumbnails/Pagination for multi-image groups */}
+              {currentGroup.length > 1 && (
+                <div className="p-2 flex justify-center gap-2 bg-background/20 shrink-0">
+                  {currentGroup.map((item, idx) => (
+                    <button
+                      key={item.id}
+                      className={cn(
+                        "w-2 h-2 rounded-full transition-all",
+                        idx === currentIndex ? "bg-primary w-4" : "bg-muted-foreground/50"
+                      )}
+                      onClick={() => setCurrentIndex(idx)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </DialogContent>
