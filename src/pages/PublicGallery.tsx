@@ -1,4 +1,3 @@
-
 import { Message } from "@/types";
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -278,6 +277,7 @@ const PublicGallery = () => {
             onNext={goToNextGroup}
             hasPrevious={hasPrevious}
             hasNext={hasNext}
+            onDelete={handleDeleteMessage}
           />
         </>
       )}
