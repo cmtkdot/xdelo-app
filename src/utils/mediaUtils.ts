@@ -81,3 +81,61 @@ export function sortMediaGroupItems(items: Message[]): Message[] {
     return 0;
   });
 }
+
+/**
+ * Get color class for processing state
+ */
+export function getProcessingStateColor(state: string): string {
+  switch (state) {
+    case 'completed':
+      return 'bg-green-500/20 text-green-700 border-green-500/50';
+    case 'processing':
+      return 'bg-blue-500/20 text-blue-700 border-blue-500/50';
+    case 'error':
+      return 'bg-red-500/20 text-red-700 border-red-500/50';
+    case 'pending':
+      return 'bg-yellow-500/20 text-yellow-700 border-yellow-500/50';
+    case 'initialized':
+      return 'bg-gray-500/20 text-gray-700 border-gray-500/50';
+    default:
+      return 'bg-gray-500/20 text-gray-700 border-gray-500/50';
+  }
+}
+
+/**
+ * Get video metadata from message
+ */
+export function getVideoMetadata(message: Message): any {
+  if (!message.telegram_data) return null;
+  
+  const td = message.telegram_data as any;
+  return td.video || (td.message?.video) || null;
+}
+
+/**
+ * Get video dimensions from message
+ */
+export function getVideoDimensions(message: Message): { width: number; height: number } {
+  const metadata = getVideoMetadata(message);
+  
+  if (metadata && metadata.width && metadata.height) {
+    return {
+      width: metadata.width,
+      height: metadata.height
+    };
+  }
+  
+  // Default 16:9 aspect ratio if dimensions not available
+  return { width: 16, height: 9 };
+}
+
+/**
+ * Find the main media file in a group of messages (typically the first image or video)
+ */
+export function getMainMediaFromGroup(group: Message[]): Message | null {
+  if (!group || group.length === 0) return null;
+  
+  // Sort to prioritize images first, then videos
+  const sorted = sortMediaGroupItems(group);
+  return sorted[0];
+}
