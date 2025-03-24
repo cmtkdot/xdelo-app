@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import {
   ColumnDef,
@@ -37,7 +38,7 @@ export const MediaTable: React.FC<MediaTableProps> = ({ data, onEdit, onView, on
       id: "select",
       header: ({ table }) => (
         <Checkbox
-          checked={table.getIsAllPageRowsSelected()}
+          checked={table.getIsAllPageRowsSelected() || undefined}
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
           aria-label="Select all"
         />
