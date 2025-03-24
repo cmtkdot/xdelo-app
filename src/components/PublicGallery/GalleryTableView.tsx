@@ -2,7 +2,6 @@
 import React from 'react';
 import { Message } from '@/types';
 import { MediaTable } from "@/components/MediaTable/MediaTable";
-import { format } from 'date-fns';
 
 interface GalleryTableViewProps {
   messages: Message[];

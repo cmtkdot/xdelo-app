@@ -1,12 +1,13 @@
-import { MediaViewer as BaseMediaViewer } from '@/components/media-viewer/MediaViewer';
-import type { MediaViewerProps } from '@/components/media-viewer/MediaViewer';
+
+import { PublicMediaViewer } from '@/components/public-viewer/PublicMediaViewer';
+import type { MediaViewerProps } from '@/components/public-viewer/PublicMediaViewer';
 
 export type { MediaViewerProps };
 
 /**
- * MediaViewer component that delegates to the MediaViewer implementation
+ * MediaViewer component that delegates to the PublicMediaViewer implementation
  * This provides a compatibility layer for existing code
  */
 export function MediaViewer(props: MediaViewerProps) {
-  return <BaseMediaViewer {...props} />;
+  return <PublicMediaViewer {...props} />;
 }
