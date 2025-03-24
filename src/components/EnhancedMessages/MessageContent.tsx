@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,7 +7,7 @@ import { Message } from '@/types';
 import { MessageGridView } from './MessageGridView';
 import { MessageListView } from './MessageListView';
 import { useMessagesStore } from '@/hooks/useMessagesStore';
-import { useFilteredMessages } from '@/hooks/useFilteredMessages';
+import { useFilteredMessages } from '@/hooks/filteredMessages';
 
 interface MessageContentProps {
   onSelect: (message: Message) => void;
@@ -59,7 +58,6 @@ export function MessageContent({
     );
   }
 
-  // Extract messages from pagination groups safely
   const extractMessages = (messageGroups: Message[][]) => {
     if (!messageGroups || !Array.isArray(messageGroups) || messageGroups.length === 0) {
       return [];

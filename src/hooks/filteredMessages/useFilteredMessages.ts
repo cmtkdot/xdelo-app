@@ -1,7 +1,7 @@
 
 import { useMemo } from 'react';
 import { Message } from '@/types';
-import { useEnhancedMessages } from '../useEnhancedMessages';
+import { useEnhancedMessages } from '../enhancedMessages';
 import { useMessagesStore } from '../useMessagesStore';
 import { useFiltersNormalization } from './useFiltersNormalization';
 import { useClientSideFiltering } from './useClientSideFiltering';
