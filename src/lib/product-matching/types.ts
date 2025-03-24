@@ -56,6 +56,19 @@ export interface MatchResult {
     vendorMatch: boolean;
     dateMatch: boolean;
   };
+  // Additional properties for backward compatibility
+  isMatch?: boolean;
+  score?: number;
+  matches?: Record<string, { value: string; score: number }>;
+  message_id?: string;
+  product_id?: string;
+  match_fields?: string[];
+  match_date?: string;
+  matchType?: string;
+  details?: {
+    matchedFields: string[];
+    confidence: number;
+  };
 }
 
 /**
@@ -75,6 +88,15 @@ export interface BatchMatchResult {
     productId?: string;
     error?: string;
   }>;
+  // For backward compatibility
+  success?: boolean;
+  error?: string;
+  summary?: {
+    total: number;
+    matched: number;
+    unmatched: number;
+    failed: number;
+  };
 }
 
 /**
@@ -85,6 +107,12 @@ export interface MatchLogMetadata {
   bestMatchConfidence: number;
   bestMatchProductId: string | null;
   timestamp: string;
+  // For backward compatibility
+  messageId?: string;
+  hasMatch?: boolean;
+  confidence?: number;
+  matchedProductId?: string;
+  matchedFields?: string[];
 }
 
 /**
@@ -92,7 +120,12 @@ export interface MatchLogMetadata {
  */
 export interface MatchableProduct {
   id: string;
-  name: string;
-  vendor: string;
-  purchaseDate: string;
+  new_product_name?: string;
+  name?: string;
+  vendor?: string;
+  vendor_uid?: string;
+  vendor_product_name?: string;
+  purchaseDate?: string;
+  product_purchase_date?: string;
+  display_name?: string;
 }
