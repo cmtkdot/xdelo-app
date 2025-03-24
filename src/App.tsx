@@ -18,13 +18,12 @@ import Dashboard from "./pages/Dashboard";
 
 // Lazy load other page components for better performance
 const MessagesEnhanced = lazy(() => import("./pages/MessagesEnhanced"));
-const ProductGallery = lazy(() => import("./pages/ProductGallery"));
+const PublicGallery = lazy(() => import("./pages/PublicGallery"));
 const MediaTable = lazy(() => import("./pages/MediaTable"));
 const AIChat = lazy(() => import("./pages/AIChat"));
 const Settings = lazy(() => import("./pages/Settings"));
 const AudioUpload = lazy(() => import("./pages/AudioUpload"));
 const NotFound = lazy(() => import("./pages/NotFound"));
-const PublicGallery = lazy(() => import("./pages/PublicGallery"));
 const SqlConsole = lazy(() => import('./pages/SqlConsole'));
 const MakeAutomations = lazy(() => import('./pages/MakeAutomations'));
 const TableDemo = lazy(() => import('./pages/table-demo'));
@@ -124,6 +123,7 @@ function App() {
               <Router>
                 <Routes>
                   <Route path="/auth" element={<Auth />} />
+                  {/* Public routes that don't require authentication */}
                   <Route path="/p/public" element={
                     <Suspense fallback={<PageLoader />}>
                       <PublicGallery />
@@ -134,6 +134,8 @@ function App() {
                       <PublicGallery />
                     </Suspense>
                   } />
+                  
+                  {/* Protected routes that require authentication */}
                   <Route element={
                     <ProtectedRoute>
                       <NavigationProvider>
@@ -151,47 +153,15 @@ function App() {
                       </NavigationProvider>
                     </ProtectedRoute>
                   }>
-                    {/* Load Dashboard directly (not lazily) to avoid the import error */}
                     <Route path="/" element={<Dashboard />} />
-                    <Route path="/messages" element={<Navigate to="/messages-enhanced" replace />} />
                     <Route path="/messages-enhanced" element={
                       <Suspense fallback={<PageLoader />}>
                         <MessagesEnhanced />
                       </Suspense>
                     } />
-                    <Route path="/gallery" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <ProductGallery />
-                      </Suspense>
-                    } />
                     <Route path="/media-table" element={
                       <Suspense fallback={<PageLoader />}>
                         <MediaTable />
-                      </Suspense>
-                    } />
-                    <Route path="/ai-chat" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <AIChat />
-                      </Suspense>
-                    } />
-                    <Route path="/settings" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <Settings />
-                      </Suspense>
-                    } />
-                    <Route path="/audio-upload" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <AudioUpload />
-                      </Suspense>
-                    } />
-                    <Route path="/sql-console" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <SqlConsole />
-                      </Suspense>
-                    } />
-                    <Route path="/make-automations" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <MakeAutomations />
                       </Suspense>
                     } />
                     <Route path="/table-demo" element={
@@ -202,6 +172,31 @@ function App() {
                     <Route path="/product-matching" element={
                       <Suspense fallback={<PageLoader />}>
                         <ProductMatching />
+                      </Suspense>
+                    } />
+                    <Route path="/sql-console" element={
+                      <Suspense fallback={<PageLoader />}>
+                        <SqlConsole />
+                      </Suspense>
+                    } />
+                    <Route path="/ai-chat" element={
+                      <Suspense fallback={<PageLoader />}>
+                        <AIChat />
+                      </Suspense>
+                    } />
+                    <Route path="/audio-upload" element={
+                      <Suspense fallback={<PageLoader />}>
+                        <AudioUpload />
+                      </Suspense>
+                    } />
+                    <Route path="/make-automations" element={
+                      <Suspense fallback={<PageLoader />}>
+                        <MakeAutomations />
+                      </Suspense>
+                    } />
+                    <Route path="/settings" element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Settings />
                       </Suspense>
                     } />
                     <Route path="*" element={
