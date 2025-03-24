@@ -148,11 +148,15 @@ export function MediaViewerDetail({
   }
   
   const openTelegramLink = () => {
-    const chatId = currentMedia.chat_id?.toString().replace('-100', '')
-    const messageId = currentMedia.telegram_message_id
+    // Add safety checks to prevent undefined.replace() error
+    if (!currentMedia?.chat_id) return;
+    
+    const chatIdStr = currentMedia.chat_id.toString();
+    const chatId = chatIdStr.startsWith('-100') ? chatIdStr.replace('-100', '') : chatIdStr;
+    const messageId = currentMedia?.telegram_message_id;
     
     if (chatId && messageId) {
-      window.open(`https://t.me/c/${chatId}/${messageId}`, '_blank')
+      window.open(`https://t.me/c/${chatId}/${messageId}`, '_blank');
     }
   }
   
