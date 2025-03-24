@@ -1,122 +1,121 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { xdelo_parseCaption } from "../_shared/captionParser.ts";
-import { createSupabaseClient, handleSupabaseError } from "../_shared/supabase.ts";
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { corsHeaders } from "../_shared/cors.ts";
+import { createSupabaseClient } from "../_shared/supabase.ts";
+import { xdelo_logProcessingEvent } from "../_shared/databaseOperations.ts";
 
-// Set up CORS headers for browser clients
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+interface CaptionRequest {
+  messageId: string;
+  caption?: string;
+  correlationId?: string;
+  isEdit?: boolean;
+}
 
+// Direct caption processor function
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // Create Supabase client
     const supabase = createSupabaseClient();
-
+    
     // Parse the request body
-    const requestData = await req.json();
-    const { messageId, caption, correlationId = crypto.randomUUID().toString(), isEdit = false } = requestData;
-
+    const { messageId, caption, correlationId, isEdit = false } = await req.json() as CaptionRequest;
+    
     if (!messageId) {
       throw new Error("Missing required parameter: messageId");
     }
-
-    console.log(`Processing caption for message ${messageId}`, {
-      has_caption: !!caption,
-      correlation_id: correlationId,
-      is_edit: isEdit
-    });
-
-    // Fetch the message if no caption was provided
-    let captionToProcess = caption;
-    if (!captionToProcess) {
-      const { data: message, error: fetchError } = await supabase
-        .from("messages")
-        .select("caption")
-        .eq("id", messageId)
-        .single();
-
-      if (fetchError) {
-        handleSupabaseError(fetchError, "fetch message");
-      }
-
-      if (!message || !message.caption) {
-        throw new Error("No caption available for processing");
-      }
-
-      captionToProcess = message.caption;
-    }
-
-    // Use the shared xdelo_parseCaption function to analyze the caption
-    const parsedContent = xdelo_parseCaption(captionToProcess);
     
-    // Add metadata about this processing operation
-    parsedContent.parsing_metadata = {
-      method: 'direct',
-      timestamp: new Date().toISOString(),
-      original_caption: captionToProcess,
-      is_edit: isEdit,
-      correlation_id: correlationId
-    };
-
-    console.log("Parsed content result:", {
-      product_name: parsedContent.product_name,
-      vendor_uid: parsedContent.vendor_uid,
-      purchase_date: parsedContent.purchase_date,
-      parsing_success: parsedContent.parsing_success
-    });
-
-    // Update the message with the analyzed content
-    const { data: updatedMessage, error: updateError } = await supabase
-      .from("messages")
-      .update({
-        analyzed_content: parsedContent,
-        processing_state: "completed",
-        processing_completed_at: new Date().toISOString(),
-        is_original_caption: true,
-        correlation_id: correlationId
-      })
-      .eq("id", messageId)
-      .select()
-      .single();
-
-    if (updateError) {
-      handleSupabaseError(updateError, "update message");
+    // Generate a correlation ID if one isn't provided
+    const corrId = correlationId || crypto.randomUUID().toString();
+    
+    // Log the start of processing
+    await xdelo_logProcessingEvent(
+      "direct_caption_processing_started",
+      messageId,
+      corrId,
+      {
+        isEdit,
+        timestamp: new Date().toISOString(),
+      }
+    );
+    
+    // Call the database function to process the caption
+    const { data, error } = await supabase.rpc(
+      "xdelo_process_caption_workflow",
+      {
+        p_message_id: messageId,
+        p_correlation_id: corrId,
+        p_force: true
+      }
+    );
+    
+    if (error) {
+      throw new Error(`Database processing error: ${error.message}`);
     }
-
-    // Return success response
+    
+    // Log successful processing
+    await xdelo_logProcessingEvent(
+      "direct_caption_processing_completed",
+      messageId,
+      corrId,
+      {
+        success: true,
+        result: data,
+        isEdit,
+        timestamp: new Date().toISOString(),
+      }
+    );
+    
+    // Return the result
     return new Response(
       JSON.stringify({
         success: true,
-        message_id: messageId,
-        analyzed: true,
-        caption_length: captionToProcess.length,
-        has_media_group: !!updatedMessage?.media_group_id,
-        media_group_id: updatedMessage?.media_group_id
+        data,
+        messageId,
+        correlationId: corrId
       }),
       {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
       }
     );
-  } catch (error) {
-    console.error("Error in direct-caption-processor:", error.message);
     
-    // Return error response
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Error in direct-caption-processor:", errorMessage);
+    
+    // Log the error
+    try {
+      const messageId = await req.json().then((body: any) => body.messageId);
+      if (messageId) {
+        await xdelo_logProcessingEvent(
+          "direct_caption_processing_error",
+          messageId,
+          crypto.randomUUID().toString(),
+          { error: errorMessage },
+          errorMessage
+        );
+      }
+    } catch {
+      // Ignore errors in error logging
+    }
+    
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || "Unknown error occurred"
+        error: errorMessage
       }),
       {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400,
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
       }
     );
   }

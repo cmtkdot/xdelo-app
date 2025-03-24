@@ -311,7 +311,7 @@ BEGIN
         'media_group_id', p_media_group_id,
         'source_message_id', p_source_message_id,
         'total_messages', v_count,
-        'synced_count', v_updated_count,
+        'updated_count', v_updated_count,
         'skipped_count', v_count - v_updated_count - 1,
         'correlation_id', p_correlation_id
     );
@@ -361,14 +361,9 @@ BEGIN
         NEW.processing_state := 'initialized';
         NEW.correlation_id := v_correlation_id;
         
-        -- Process asynchronously after the transaction completes
-        PERFORM pg_notify(
-            'message_caption_processing',
-            json_build_object(
-                'message_id', NEW.id,
-                'correlation_id', v_correlation_id
-            )::TEXT
-        );
+        -- Perform the processing asynchronously after the transaction completes
+        -- Instead of using pg_notify, we'll directly call the processing function
+        PERFORM xdelo_process_caption_workflow(NEW.id, v_correlation_id);
     END IF;
     
     RETURN NEW;
@@ -382,43 +377,34 @@ BEFORE INSERT OR UPDATE OF caption ON messages
 FOR EACH ROW
 EXECUTE FUNCTION trg_process_caption();
 
--- Create a function to handle message caption processing notification
-CREATE OR REPLACE FUNCTION handle_message_caption_processing() RETURNS TRIGGER AS $$
+-- Create a function to find the best caption message in a media group
+CREATE OR REPLACE FUNCTION xdelo_find_caption_message(p_media_group_id TEXT) 
+RETURNS UUID AS $$
 DECLARE
-    v_payload JSONB;
     v_message_id UUID;
-    v_correlation_id TEXT;
-    v_result JSONB;
 BEGIN
-    -- Parse the payload
-    v_payload := payload::JSONB;
-    v_message_id := (v_payload->>'message_id')::UUID;
-    v_correlation_id := v_payload->>'correlation_id';
+    -- Find a message with caption and analyzed content
+    SELECT id INTO v_message_id
+    FROM messages 
+    WHERE media_group_id = p_media_group_id
+      AND caption IS NOT NULL 
+      AND caption != ''
+      AND analyzed_content IS NOT NULL
+      AND is_original_caption = true
+    ORDER BY created_at ASC 
+    LIMIT 1;
     
-    -- Process the caption
-    v_result := xdelo_process_caption_workflow(v_message_id, v_correlation_id);
+    -- If not found, try to find a message with caption
+    IF v_message_id IS NULL THEN
+        SELECT id INTO v_message_id
+        FROM messages 
+        WHERE media_group_id = p_media_group_id
+          AND caption IS NOT NULL 
+          AND caption != ''
+        ORDER BY created_at ASC 
+        LIMIT 1;
+    END IF;
     
-    -- Log the result
-    INSERT INTO unified_audit_logs (
-        event_type,
-        entity_id,
-        correlation_id,
-        metadata
-    ) VALUES (
-        'caption_processing_notification_handled',
-        v_message_id::TEXT,
-        v_correlation_id,
-        v_result
-    );
-    
-    RETURN NULL;
+    RETURN v_message_id;
 END;
 $$ LANGUAGE plpgsql;
-
--- Set up listener for async processing
-DROP TRIGGER IF EXISTS trg_message_caption_processing ON pg_notify;
-CREATE TRIGGER trg_message_caption_processing
-AFTER INSERT ON pg_notify
-FOR EACH ROW
-WHEN (NEW.channel = 'message_caption_processing')
-EXECUTE FUNCTION handle_message_caption_processing();
