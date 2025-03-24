@@ -5,20 +5,13 @@ import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
 import { Logger } from './utils/logger.ts';
+import { createStandardHandler, SecurityLevel } from '../_shared/standardHandler.ts';
 
-serve(async (req: Request) => {
-  // Generate a correlation ID for tracing
-  const correlationId = crypto.randomUUID();
-  
+// Create a handler function that explicitly uses the standardHandler with PUBLIC security level
+const telegramWebhookHandler = createStandardHandler(async (req: Request, correlationId: string) => {
   // Create a main logger for this request
   const logger = new Logger(correlationId, 'telegram-webhook');
   
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    logger.debug('Received OPTIONS request, returning CORS headers');
-    return new Response(null, { headers: corsHeaders });
-  }
-
   try {
     // Log webhook received event
     logger.info('Webhook received', {
@@ -78,7 +71,8 @@ serve(async (req: Request) => {
       correlationId,
       isEdit: !!update.edited_message || !!update.edited_channel_post,
       previousMessage: update.edited_message || update.edited_channel_post,
-      logger // Add logger to context so handlers can use it
+      logger, // Add logger to context so handlers can use it
+      startTime: new Date().toISOString() // Use ISO string for startTime to match the MessageContext type
     };
 
     // Log message details with sensitive data masked
@@ -119,7 +113,7 @@ serve(async (req: Request) => {
       logger.info('Successfully processed message', { 
         message_id: message.message_id,
         chat_id: message.chat?.id,
-        processing_time: Date.now() - new Date(context.startTime || Date.now()).getTime()
+        processing_time: Date.now() - new Date(context.startTime).getTime() // Convert ISO date string to timestamp for calculation
       });
       
       return response;
@@ -174,4 +168,7 @@ serve(async (req: Request) => {
       status: 500
     });
   }
-});
+}, { securityLevel: SecurityLevel.PUBLIC });
+
+// Serve the handler
+serve(telegramWebhookHandler);

@@ -1,0 +1,11 @@
+# Config for the webhook info function
+project_id = "xjhhehxcxkiumnwbirel"
+name = "xdelo_get-telegram-webhook-info"
+version = 1
+path = "xdelo_get-telegram-webhook-info"
+
+# Explicitly disable JWT verification
+verify_jwt = false
+
+# Allow API calls to Telegram
+allowed_http_hosts = ["api.telegram.org", "*"] 
