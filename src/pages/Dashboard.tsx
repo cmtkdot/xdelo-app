@@ -44,41 +44,55 @@ const Dashboard = () => {
 
   useEffect(() => {
     const fetchStats = async () => {
-      // Get total messages
-      const { count: totalMessages } = await supabase
-        .from('messages')
-        .select('*', { count: 'exact' });
+      try {
+        // Get total messages
+        const { count: totalMessages, error: messagesError } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact' });
 
-      // Get total products (unique product codes)
-      const { data: products } = await supabase
-        .from('messages')
-        .select('analyzed_content')
-        .not('analyzed_content', 'is', null);
+        if (messagesError) {
+          console.error('Error fetching message count:', messagesError);
+          return;
+        }
 
-      const uniqueProducts = new Set(
-        products
-          ?.map(msg => (msg.analyzed_content as AnalyzedContent)?.product_code)
-          .filter(Boolean)
-      );
+        // Get total products (unique product codes)
+        const { data: products, error: productsError } = await supabase
+          .from('messages')
+          .select('analyzed_content')
+          .not('analyzed_content', 'is', null);
 
-      // Get unique vendors
-      const uniqueVendors = new Set(
-        products
-          ?.map(msg => (msg.analyzed_content as AnalyzedContent)?.vendor_uid)
-          .filter(Boolean)
-      );
+        if (productsError) {
+          console.error('Error fetching products:', productsError);
+          return;
+        }
 
-      setStats({
-        totalMessages: totalMessages || 0,
-        totalProducts: uniqueProducts.size,
-        uniqueVendors: uniqueVendors.size
-      });
+        const uniqueProducts = new Set(
+          products
+            ?.map(msg => (msg.analyzed_content as AnalyzedContent)?.product_code)
+            .filter(Boolean)
+        );
+
+        // Get unique vendors
+        const uniqueVendors = new Set(
+          products
+            ?.map(msg => (msg.analyzed_content as AnalyzedContent)?.vendor_uid)
+            .filter(Boolean)
+        );
+
+        setStats({
+          totalMessages: totalMessages || 0,
+          totalProducts: uniqueProducts.size,
+          uniqueVendors: uniqueVendors.size
+        });
+      } catch (error) {
+        console.error('Error in fetchStats:', error);
+      }
     };
 
     fetchStats();
   }, []);
 
-  // Use the new hook with filter for messages with analyzed_content and caption
+  // Use the hook with filter for messages with analyzed_content and caption
   const { 
     messages, 
     isLoading, 
