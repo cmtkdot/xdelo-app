@@ -1,3 +1,4 @@
+
 import { Message } from "@/types";
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,6 +20,10 @@ const PublicGallery = () => {
   const [hasMoreItems, setHasMoreItems] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
+  const [vendorFilter, setVendorFilter] = useState<string[]>([]);
+  const [dateField, setDateField] = useState<'purchase_date' | 'created_at'>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [vendors, setVendors] = useState<string[]>([]);
   const itemsPerPage = 16;
 
   // Prepare media groups for the viewer
@@ -52,6 +57,31 @@ const PublicGallery = () => {
     goToPreviousGroup,
   } = usePublicViewer(mediaGroups);
 
+  // Fetch available vendors for filter
+  const fetchVendors = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('vendor_uid')
+        .is('deleted_from_telegram', false)
+        .not('vendor_uid', 'is', null)
+        .order('vendor_uid');
+
+      if (error) {
+        console.error("Error fetching vendors:", error);
+        return;
+      }
+
+      if (data) {
+        // Extract unique vendor values
+        const uniqueVendors = [...new Set(data.map(item => item.vendor_uid).filter(Boolean))];
+        setVendors(uniqueVendors);
+      }
+    } catch (err) {
+      console.error("Error in fetchVendors:", err);
+    }
+  };
+
   const fetchMessages = async (page = 1, append = false) => {
     if (page === 1) {
       setIsLoading(true);
@@ -60,12 +90,24 @@ const PublicGallery = () => {
     }
 
     try {
-      const { data, error } = await supabase
+      // Build the base query
+      let query = supabase
         .from('messages')
         .select('*')
-        .is('deleted_from_telegram', false)
-        .order('created_at', { ascending: false })
-        .range((page - 1) * itemsPerPage, page * itemsPerPage - 1);
+        .is('deleted_from_telegram', false);
+
+      // Apply vendor filter if any
+      if (vendorFilter.length > 0) {
+        query = query.in('vendor_uid', vendorFilter);
+      }
+
+      // Apply sort order
+      query = query.order(dateField, { ascending: sortOrder === 'asc' });
+
+      // Apply pagination
+      query = query.range((page - 1) * itemsPerPage, page * itemsPerPage - 1);
+
+      const { data, error } = await query;
 
       if (error) {
         console.error("Error fetching messages:", error);
@@ -103,7 +145,13 @@ const PublicGallery = () => {
 
   useEffect(() => {
     fetchMessages();
-  }, []);
+    fetchVendors();
+  }, [vendorFilter, dateField, sortOrder]);
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, vendorFilter, dateField, sortOrder]);
 
   // Apply filters whenever messages or filter change
   useEffect(() => {
@@ -175,6 +223,15 @@ const PublicGallery = () => {
           setFilter={setFilter} 
           viewMode={viewMode}
           setViewMode={setViewMode}
+          vendorFilter={vendorFilter}
+          vendors={vendors}
+          onVendorFilterChange={setVendorFilter}
+          dateField={dateField}
+          onDateFieldChange={setDateField}
+          sortOrder={sortOrder}
+          onSortOrderChange={setSortOrder}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
         />
       </div>
       
@@ -212,7 +269,7 @@ const PublicGallery = () => {
             />
           )}
 
-          {/* New Public Media Viewer */}
+          {/* Public Media Viewer */}
           <PublicMediaViewer
             isOpen={isOpen}
             onClose={closeViewer}

@@ -291,6 +291,21 @@ export function DataTable() {
     table.getColumn("status")?.setFilterValue(newFilterValue.length ? newFilterValue : undefined);
   };
 
+  const getCheckboxState = (
+    rowSelection: Record<string, boolean>,
+    rows: Row<any>[]
+  ): boolean | 'indeterminate' => {
+    if (Object.keys(rowSelection).length === 0) {
+      return false;
+    }
+    
+    if (Object.keys(rowSelection).length === rows.length) {
+      return true;
+    }
+    
+    return 'indeterminate';
+  };
+
   return (
     <div className="space-y-4 max-w-[1000px]">
       {/* Filters */}
@@ -716,4 +731,4 @@ function RowActions({ row }: { row: Row<Item> }) {
       </DropdownMenuContent>
     </DropdownMenu>
   );
-} 
+}
