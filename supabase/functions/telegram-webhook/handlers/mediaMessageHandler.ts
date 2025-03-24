@@ -61,7 +61,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     try {
       await xdelo_logProcessingEvent(
         "media_processing_error",
-        crypto.randomUUID(),
+        message.message_id.toString(),
         context.correlationId,
         {
           message_id: message.message_id,
@@ -309,7 +309,7 @@ async function xdelo_handleNewMediaMessage(
       // Log the duplicate detection
       await xdelo_logProcessingEvent(
         "duplicate_message_detected",
-        crypto.randomUUID(),
+        message.message_id.toString(),
         correlationId,
         {
           message_id: message.message_id,
@@ -410,7 +410,7 @@ async function xdelo_handleNewMediaMessage(
       // Also try to log to the database
       await xdelo_logProcessingEvent(
         "message_creation_failed",
-        crypto.randomUUID(),
+        message.message_id.toString(),
         correlationId,
         {
           message_id: message.message_id,
@@ -448,7 +448,7 @@ async function xdelo_handleNewMediaMessage(
     try {
       await xdelo_logProcessingEvent(
         "media_processing_error",
-        crypto.randomUUID(),
+        message.message_id.toString(),
         correlationId,
         {
           message_id: message.message_id,

@@ -118,15 +118,11 @@ export function PublicMediaDetail({
   }
   
   const openTelegramLink = () => {
-    // Add safety checks to prevent undefined.replace() error
-    if (!currentMessage?.chat_id) return;
-    
-    const chatIdStr = currentMessage.chat_id.toString();
-    const chatId = chatIdStr.startsWith('-100') ? chatIdStr.replace('-100', '') : chatIdStr;
-    const messageId = currentMessage?.telegram_message_id;
+    const chatId = currentMessage?.chat_id?.toString().replace('-100', '')
+    const messageId = currentMessage?.telegram_message_id
     
     if (chatId && messageId) {
-      window.open(`https://t.me/c/${chatId}/${messageId}`, '_blank');
+      window.open(`https://t.me/c/${chatId}/${messageId}`, '_blank')
     }
   }
 

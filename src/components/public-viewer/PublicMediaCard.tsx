@@ -79,13 +79,8 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
   const openTelegramLink = (e: React.MouseEvent) => {
     e.stopPropagation()
     e.preventDefault()
-    
-    // Add safety checks to prevent undefined.replace() error
-    if (!message?.chat_id) return;
-    
-    const chatIdStr = message.chat_id.toString();
-    const chatId = chatIdStr.startsWith('-100') ? chatIdStr.replace('-100', '') : chatIdStr;
-    const messageId = message?.telegram_message_id;
+    const chatId = message.chat_id?.toString().replace('-100', '')
+    const messageId = message.telegram_message_id
     
     if (chatId && messageId) {
       window.open(`https://t.me/c/${chatId}/${messageId}`, '_blank')

@@ -5,13 +5,20 @@ import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
 import { Logger } from './utils/logger.ts';
-import { createStandardHandler, SecurityLevel } from '../_shared/standardHandler.ts';
 
-// Create a handler function that explicitly uses the standardHandler with PUBLIC security level
-const telegramWebhookHandler = createStandardHandler(async (req: Request, correlationId: string) => {
+serve(async (req: Request) => {
+  // Generate a correlation ID for tracing
+  const correlationId = crypto.randomUUID();
+  
   // Create a main logger for this request
   const logger = new Logger(correlationId, 'telegram-webhook');
   
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    logger.debug('Received OPTIONS request, returning CORS headers');
+    return new Response(null, { headers: corsHeaders });
+  }
+
   try {
     // Log webhook received event
     logger.info('Webhook received', {
@@ -71,8 +78,7 @@ const telegramWebhookHandler = createStandardHandler(async (req: Request, correl
       correlationId,
       isEdit: !!update.edited_message || !!update.edited_channel_post,
       previousMessage: update.edited_message || update.edited_channel_post,
-      logger, // Add logger to context so handlers can use it
-      startTime: new Date().toISOString() // Use ISO string for startTime to match the MessageContext type
+      logger // Add logger to context so handlers can use it
     };
 
     // Log message details with sensitive data masked
@@ -113,7 +119,7 @@ const telegramWebhookHandler = createStandardHandler(async (req: Request, correl
       logger.info('Successfully processed message', { 
         message_id: message.message_id,
         chat_id: message.chat?.id,
-        processing_time: Date.now() - new Date(context.startTime).getTime() // Convert ISO date string to timestamp for calculation
+        processing_time: Date.now() - new Date(context.startTime || Date.now()).getTime()
       });
       
       return response;
@@ -127,7 +133,7 @@ const telegramWebhookHandler = createStandardHandler(async (req: Request, correl
       // Log the error to the database
       await xdelo_logProcessingEvent(
         "message_processing_failed",
-        crypto.randomUUID(),
+        message.message_id.toString(),
         correlationId,
         {
           message_id: message.message_id,
@@ -168,7 +174,4 @@ const telegramWebhookHandler = createStandardHandler(async (req: Request, correl
       status: 500
     });
   }
-}, { securityLevel: SecurityLevel.PUBLIC });
-
-// Serve the handler
-serve(telegramWebhookHandler);
+});
