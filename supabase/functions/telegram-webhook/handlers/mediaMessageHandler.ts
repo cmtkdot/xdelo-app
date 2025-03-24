@@ -11,6 +11,7 @@ import {
   xdelo_findExistingFile,
   xdelo_processMessageMedia
 } from '../../_shared/mediaStorage.ts';
+import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
 import { 
   TelegramMessage, 
   MessageContext, 
@@ -466,32 +467,5 @@ async function xdelo_handleNewMediaMessage(
     
     // Re-throw to be caught by the main handler
     throw createError;
-  }
-}
-
-/**
- * Import from shared/databaseOperations.ts
- */
-async function xdelo_logProcessingEvent(
-  eventType: string,
-  entityId: string,
-  correlationId: string,
-  metadata?: Record<string, any>,
-  errorMessage?: string
-): Promise<void> {
-  try {
-    const { error } = await supabaseClient.from('unified_audit_logs').insert({
-      event_type: eventType,
-      entity_id: entityId,
-      correlation_id: correlationId,
-      metadata,
-      error_message: errorMessage
-    });
-    
-    if (error) {
-      console.error(`Error logging event ${eventType}:`, error);
-    }
-  } catch (e) {
-    console.error(`Exception logging event ${eventType}:`, e);
   }
 }

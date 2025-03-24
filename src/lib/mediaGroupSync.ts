@@ -50,7 +50,16 @@ export async function syncMediaGroup(
     }
     
     console.log('Media group sync result:', data);
-    return data;
+    
+    // Fixed: Properly handle the data response
+    const result = {
+      success: true,
+      mediaGroupId,
+      sourceMessageId,
+      syncedCount: data && typeof data === 'object' ? (data.updated_count || 0) : 0
+    };
+    
+    return result;
     
   } catch (error: any) {
     console.error('Error in manual media group sync:', error);
@@ -95,7 +104,7 @@ export async function repairMediaGroups(limit = 10) {
         results.push({
           media_group_id: groupId,
           success: true,
-          synced_count: result.synced_count
+          synced_count: result.syncedCount
         });
       } catch (error) {
         results.push({

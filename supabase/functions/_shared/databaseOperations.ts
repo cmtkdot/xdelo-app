@@ -1,4 +1,3 @@
-
 // Shared database operations for edge functions
 import { createSupabaseClient } from "./supabase.ts";
 
@@ -35,7 +34,7 @@ export async function xdelo_logProcessingEvent(
 }
 
 /**
- * Process a message caption by calling the direct caption processor edge function
+ * Process a message caption by calling the caption parser edge function
  */
 export async function xdelo_processMessageCaption(
   messageId: string,
@@ -47,8 +46,8 @@ export async function xdelo_processMessageCaption(
     // Create a new correlation ID if one wasn't provided
     const corrId = correlationId?.toString() || crypto.randomUUID().toString();
     
-    // Call the direct-caption-processor edge function
-    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/direct-caption-processor`;
+    // Call the xdelo_caption_parser edge function
+    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/xdelo_caption_parser`;
     
     const response = await fetch(url, {
       method: "POST",
@@ -60,7 +59,9 @@ export async function xdelo_processMessageCaption(
         messageId,
         caption,
         correlationId: corrId,
-        isEdit
+        isEdit,
+        method: 'direct',
+        trigger_source: 'api'
       })
     });
     
