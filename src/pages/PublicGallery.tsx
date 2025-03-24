@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/PublicGallery/EmptyState";
 import { LoadMoreButton } from "@/components/PublicGallery/LoadMoreButton";
 import { GalleryTableView } from "@/components/PublicGallery/GalleryTableView";
 import { PublicMediaViewer, PublicMediaCard, usePublicViewer } from "@/components/public-viewer";
+import { useTelegramOperations } from "@/hooks/useTelegramOperations";
 
 const PublicGallery = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -25,6 +26,7 @@ const PublicGallery = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [vendors, setVendors] = useState<string[]>([]);
   const itemsPerPage = 16;
+  const { handleDelete, isProcessing } = useTelegramOperations();
 
   // Prepare media groups for the viewer
   const mediaGroups = useMemo(() => {
@@ -195,23 +197,26 @@ const PublicGallery = () => {
   // CRUD operations for messages
   const handleDeleteMessage = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('messages')
-        .update({ deleted_from_telegram: true })
-        .eq('id', id);
-
-      if (error) {
-        toast.error("Failed to delete item");
-        console.error("Error deleting message:", error);
+      // Find the message to delete
+      const messageToDelete = messages.find(message => message.id === id);
+      if (!messageToDelete) {
+        toast.error("Message not found");
         return;
       }
-
-      // Update local state by removing the deleted message
+      
+      // For UI responsiveness, update the local state immediately
       setMessages(prev => prev.filter(message => message.id !== id));
+      
+      // Now let the Telegram operations handle the actual deletion
+      await handleDelete(messageToDelete, false);
+      
       toast.success("Item deleted successfully");
     } catch (error) {
       console.error("Error in delete operation:", error);
-      toast.error("An error occurred");
+      toast.error("An error occurred during deletion");
+      
+      // Revert the optimistic update if the deletion failed
+      fetchMessages(currentPage);
     }
   };
 
@@ -278,6 +283,7 @@ const PublicGallery = () => {
             onNext={goToNextGroup}
             hasPrevious={hasPrevious}
             hasNext={hasNext}
+            onDelete={handleDeleteMessage}
           />
         </>
       )}

@@ -48,3 +48,5 @@ verify_jwt = false
 verify_jwt = false
 [functions.validate-storage-files]
 verify_jwt = false
+[functions.xdelo_delete_message]
+verify_jwt = false
