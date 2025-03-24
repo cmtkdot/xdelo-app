@@ -23,7 +23,7 @@ async function invokeFunctionWrapper<T = any>(
 ): Promise<ApiResponse<T>> {
   try {
     // Generate a correlation ID for tracking
-    const correlationId = crypto.randomUUID();
+    const correlationId = crypto.randomUUID().toString();
     
     // Set up the request
     const { data, error } = await supabase.functions.invoke(functionName, {
@@ -54,7 +54,7 @@ async function invokeFunctionWrapper<T = any>(
     return { 
       success: false, 
       error: error.message || "An unexpected error occurred",
-      correlationId: crypto.randomUUID()
+      correlationId: crypto.randomUUID().toString()
     };
   }
 }
@@ -102,10 +102,39 @@ export async function logOperation(
  * Process a message caption with AI
  */
 export async function analyzeWithAI(messageId: string, caption: string) {
-  return invokeFunctionWrapper('analyze-with-ai', {
-    messageId,
-    caption
-  });
+  try {
+    // Generate a correlation ID
+    const correlationId = crypto.randomUUID().toString();
+    
+    // Call the database function directly
+    const { data, error } = await supabase.rpc('xdelo_process_caption_workflow', {
+      p_message_id: messageId,
+      p_correlation_id: correlationId,
+      p_force: true
+    });
+    
+    if (error) {
+      console.error('Error invoking xdelo_process_caption_workflow:', error);
+      return { 
+        success: false, 
+        error: error.message || 'Error processing caption',
+        correlationId
+      };
+    }
+    
+    return { 
+      success: true, 
+      data,
+      correlationId
+    };
+  } catch (error: any) {
+    console.error('Exception in analyzeWithAI:', error);
+    return { 
+      success: false, 
+      error: error.message || "An unexpected error occurred",
+      correlationId: crypto.randomUUID().toString()
+    };
+  }
 }
 
 /**

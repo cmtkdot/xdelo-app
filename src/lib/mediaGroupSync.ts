@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 /**
@@ -31,19 +30,17 @@ export async function syncMediaGroup(
     }
     
     // Generate correlation ID
-    const correlationId = crypto.randomUUID();
+    const correlationId = crypto.randomUUID().toString();
     
-    // Trigger the sync operation
-    const { data, error } = await supabase.functions.invoke(
-      'xdelo_sync_media_group',
+    // Call the database function directly instead of the edge function
+    const { data, error } = await supabase.rpc(
+      'xdelo_sync_media_group_content',
       {
-        body: {
-          mediaGroupId,
-          sourceMessageId,
-          correlationId,
-          forceSync: options.force,
-          syncEditHistory: true
-        }
+        p_media_group_id: mediaGroupId,
+        p_source_message_id: sourceMessageId,
+        p_correlation_id: correlationId,
+        p_force_sync: options.force,
+        p_sync_edit_history: true
       }
     );
     

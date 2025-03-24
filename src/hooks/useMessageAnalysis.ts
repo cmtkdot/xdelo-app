@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
@@ -23,28 +22,19 @@ export function useMessageAnalysis() {
         throw new Error('Message ID is required for analysis');
       }
       
-      if (!message.caption) {
-        throw new Error('Message caption is required for analysis');
-      }
-      
       // Generate a correlation ID as a string
-      const correlationId = crypto.randomUUID();
+      const correlationId = crypto.randomUUID().toString();
       
       // Log analysis start
       console.log(`Starting analysis for message ${message.id} with correlation ID ${correlationId}`);
       
-      // Call parse-caption-with-ai directly for immediate processing
-      const { data: analysisData, error: analysisError } = await supabase.functions.invoke(
-        'parse-caption-with-ai',
-        {
-          body: { 
-            messageId: message.id, 
-            caption: message.caption,
-            media_group_id: message.media_group_id,
-            correlationId, 
-            isEdit: false,
-            retryCount: 0
-          }
+      // Call database function directly instead of edge function
+      const { data: analysisData, error: analysisError } = await supabase.rpc(
+        'xdelo_process_caption_workflow',
+        { 
+          p_message_id: message.id,
+          p_correlation_id: correlationId,
+          p_force: true
         }
       );
       
@@ -54,40 +44,19 @@ export function useMessageAnalysis() {
       
       console.log('Analysis result:', analysisData);
       
-      // If this is part of a media group, force sync the content to other messages immediately
-      if (message.media_group_id) {
-        try {
-          console.log(`Forcing direct sync for media group ${message.media_group_id}`);
-          
-          const { data: syncData, error: syncError } = await supabase.functions.invoke(
-            'xdelo_sync_media_group',
-            {
-              body: {
-                mediaGroupId: message.media_group_id,
-                sourceMessageId: message.id,
-                correlationId,
-                forceSync: true,
-                syncEditHistory: true
-              }
-            }
-          );
-          
-          if (syncError) {
-            console.warn('Media group sync warning:', syncError);
-          } else {
-            console.log('Media group sync result:', syncData);
-          }
-        } catch (syncError) {
-          console.warn('Media group sync error (non-fatal):', syncError);
-        }
-      }
-      
       toast({
         title: "Analysis Complete",
         description: "The message has been analyzed successfully."
       });
       
-      return analysisData?.data;
+      // Fetch updated message data
+      const { data: updatedMessage } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', message.id)
+        .single();
+      
+      return updatedMessage?.analyzed_content;
       
     } catch (error: any) {
       console.error('Error analyzing message:', error);

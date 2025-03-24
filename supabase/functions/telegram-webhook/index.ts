@@ -2,21 +2,25 @@ import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage } from './handlers/textMessageHandler.ts';
 import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
-import { corsHeaders } from '../_shared/cors.ts';
+import { corsHeaders, createCorsResponse, handleOptionsRequest, isPreflightRequest } from '../_shared/cors.ts';
 import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
 import { Logger } from './utils/logger.ts';
+import { SecurityLevel } from '../_shared/jwt-verification.ts';
+
+// Explicitly mark this function as public (no JWT verification)
+const securityLevel = SecurityLevel.PUBLIC;
 
 serve(async (req: Request) => {
   // Generate a correlation ID for tracing
-  const correlationId = crypto.randomUUID();
+  const correlationId = crypto.randomUUID().toString();
   
   // Create a main logger for this request
   const logger = new Logger(correlationId, 'telegram-webhook');
   
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
+  if (isPreflightRequest(req)) {
     logger.debug('Received OPTIONS request, returning CORS headers');
-    return new Response(null, { headers: corsHeaders });
+    return handleOptionsRequest();
   }
 
   try {
@@ -33,7 +37,8 @@ serve(async (req: Request) => {
       correlationId,
       {
         source: "telegram-webhook",
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        security_level: securityLevel
       }
     );
 
@@ -47,28 +52,22 @@ serve(async (req: Request) => {
       });
     } catch (error) {
       logger.error('Failed to parse request body', { error: error.message });
-      return new Response(JSON.stringify({ 
+      return createCorsResponse({ 
         success: false, 
         error: 'Invalid JSON in request body',
         correlationId
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
-      });
+      }, { status: 400 });
     }
 
     // Get the message object, checking for different types of updates
     const message = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
     if (!message) {
       logger.warn('No processable content in update', { update_keys: Object.keys(update) });
-      return new Response(JSON.stringify({ 
+      return createCorsResponse({ 
         success: false, 
         message: "No processable content",
         correlationId
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
-      });
+      }, { status: 400 });
     }
 
     // Determine message context
@@ -78,7 +77,8 @@ serve(async (req: Request) => {
       correlationId,
       isEdit: !!update.edited_message || !!update.edited_channel_post,
       previousMessage: update.edited_message || update.edited_channel_post,
-      logger // Add logger to context so handlers can use it
+      logger, // Add logger to context so handlers can use it
+      startTime: new Date().toISOString() // Track when processing started
     };
 
     // Log message details with sensitive data masked
@@ -119,10 +119,28 @@ serve(async (req: Request) => {
       logger.info('Successfully processed message', { 
         message_id: message.message_id,
         chat_id: message.chat?.id,
-        processing_time: Date.now() - new Date(context.startTime || Date.now()).getTime()
+        processing_time: Date.now() - new Date(context.startTime).getTime()
       });
       
-      return response;
+      // Ensure the response has CORS headers
+      if (response instanceof Response) {
+        // Clone the response and add CORS headers if not already present
+        const headers = new Headers(response.headers);
+        Object.entries(corsHeaders).forEach(([key, value]) => {
+          if (!headers.has(key)) {
+            headers.set(key, value);
+          }
+        });
+        
+        return new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers
+        });
+      }
+      
+      // If not a Response object, convert to one with CORS headers
+      return createCorsResponse(response);
     } catch (handlerError) {
       logger.error('Error in message handler', { 
         error: handlerError.message,
@@ -150,14 +168,11 @@ serve(async (req: Request) => {
       
       // Return error response but with 200 status to acknowledge to Telegram
       // (Telegram will retry if we return non-200 status)
-      return new Response(JSON.stringify({ 
+      return createCorsResponse({ 
         success: false, 
         error: handlerError.message,
         correlationId
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200 // Still return 200 to prevent Telegram from retrying
-      });
+      }, { status: 200 }); // Still return 200 to prevent Telegram from retrying
     }
   } catch (error) {
     logger.error('Unhandled error processing webhook', { 
@@ -165,13 +180,10 @@ serve(async (req: Request) => {
       stack: error.stack
     });
     
-    return new Response(JSON.stringify({ 
+    return createCorsResponse({ 
       success: false, 
       error: error.message || 'Unknown error',
       correlationId
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500
-    });
+    }, { status: 500 });
   }
 });
