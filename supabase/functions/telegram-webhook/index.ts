@@ -30,7 +30,7 @@ serve(async (req: Request) => {
     
     await xdelo_logProcessingEvent(
       "webhook_received",
-      "system",
+      crypto.randomUUID().toString(),
       correlationId,
       {
         source: "telegram-webhook",

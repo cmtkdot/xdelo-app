@@ -85,7 +85,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
     // Log the error
     await xdelo_logProcessingEvent(
       "message_processing_error",
-      "system",
+      crypto.randomUUID().toString(),
       context.correlationId,
       {
         telegram_message_id: message.message_id,
