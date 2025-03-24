@@ -1,6 +1,25 @@
 # Deprecated Edge Functions
 
-This document identifies edge functions that are deprecated or no longer used and can be safely removed.
+This document lists edge functions that are being deprecated as part of the caption processing cleanup.
+
+## Status Update (March 2024)
+
+The following edge functions have been removed as part of the caption processing cleanup:
+
+1. `manual-caption-parser` - Replaced by direct database functions
+2. `xdelo_caption_parser` - Replaced by direct database functions
+3. `analyze-with-ai` - Replaced by direct database functions
+4. `parse-caption-with-ai` - Replaced by direct database functions
+
+The config.toml file has been updated to remove references to these functions, and frontend code has been modified to use direct database RPC calls.
+
+## Migration Details
+
+All functionality from these edge functions has been migrated to database functions:
+
+- `xdelo_parse_caption` - SQL implementation of the caption parsing logic
+- `xdelo_direct_caption_processing` - Direct database caption processor
+- `xdelo_process_caption_workflow` - Main workflow orchestrator
 
 ## Overview
 

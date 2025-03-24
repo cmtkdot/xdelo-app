@@ -1,4 +1,4 @@
-// Logger utility with correlation ID tracking and emoji support
+// Unified logger utility with correlation ID tracking and emoji support
 export class Logger {
   private correlationId: string;
   private component: string;
@@ -13,6 +13,7 @@ export class Logger {
    */
   info(message: string, data: Record<string, any> = {}) {
     this._log('INFO', '🔵', message, data);
+    return this; // For chaining
   }
   
   /**
@@ -20,13 +21,17 @@ export class Logger {
    */
   warn(message: string, data: Record<string, any> = {}) {
     this._log('WARN', '🟠', message, data);
+    return this; // For chaining
   }
   
   /**
    * Log an error message with emoji
    */
-  error(message: string, data: Record<string, any> = {}) {
-    this._log('ERROR', '🔴', message, data);
+  error(message: string, error: unknown = {}) {
+    // Transform error into a suitable data object
+    const errorData = this._formatError(error);
+    this._log('ERROR', '🔴', message, errorData);
+    return this; // For chaining
   }
   
   /**
@@ -34,6 +39,7 @@ export class Logger {
    */
   debug(message: string, data: Record<string, any> = {}) {
     this._log('DEBUG', '🟣', message, data);
+    return this; // For chaining
   }
   
   /**
@@ -41,6 +47,42 @@ export class Logger {
    */
   success(message: string, data: Record<string, any> = {}) {
     this._log('SUCCESS', '🟢', message, data);
+    return this; // For chaining
+  }
+  
+  /**
+   * Format an error consistently
+   */
+  private _formatError(error: unknown): Record<string, any> {
+    if (error instanceof Error) {
+      return {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        ...this._extractErrorProperties(error)
+      };
+    } else if (typeof error === 'object' && error !== null) {
+      return { ...this._extractErrorProperties(error as Record<string, any>) };
+    } else if (typeof error === 'string') {
+      return { message: error };
+    } else {
+      return { error };
+    }
+  }
+  
+  /**
+   * Helper to extract properties from an error object
+   */
+  private _extractErrorProperties(error: Record<string, any>): Record<string, any> {
+    const result: Record<string, any> = {};
+    
+    // Extract common error properties
+    if ('code' in error) result.code = error.code;
+    if ('status' in error) result.status = error.status;
+    if ('statusCode' in error) result.statusCode = error.statusCode;
+    if ('data' in error) result.data = error.data;
+    
+    return result;
   }
   
   /**
@@ -88,12 +130,15 @@ export class Logger {
 }
 
 /**
+ * Create a logger with a generated correlation ID if none is provided
+ */
+export function createLogger(component: string, correlationId?: string): Logger {
+  const corrId = correlationId || crypto.randomUUID().toString();
+  return new Logger(corrId, component);
+}
+
+/**
  * Format a webhook event summary for quick understanding
- * @param eventType Type of event
- * @param entityId The entity being processed
- * @param isSuccess Whether the operation was successful
- * @param metadata Additional context
- * @returns Formatted summary string
  */
 export function formatWebhookSummary(
   eventType: string,
@@ -151,6 +196,25 @@ export function formatWebhookSummary(
   }
   
   return summary;
+}
+
+/**
+ * Convenience method to get a logger or fallback to console
+ * This unified approach simplifies logger creation across functions
+ */
+export function getLogger(componentOrLogger?: string | Logger | null, correlationId?: string): Logger {
+  // If given a Logger, return it directly
+  if (componentOrLogger instanceof Logger) {
+    return componentOrLogger;
+  }
+  
+  // If given a component name (string), create a new logger
+  if (typeof componentOrLogger === 'string') {
+    return createLogger(componentOrLogger, correlationId);
+  }
+  
+  // Default to a generic logger
+  return createLogger('generic', correlationId);
 }
 
 /**

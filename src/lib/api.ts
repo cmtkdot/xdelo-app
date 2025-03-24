@@ -141,12 +141,39 @@ export async function analyzeWithAI(messageId: string, caption: string) {
  * Manually parse a caption
  */
 export async function parseCaption(messageId: string, caption?: string, isEdit = false) {
-  return invokeFunctionWrapper('manual-caption-parser', {
-    messageId,
-    caption,
-    isEdit,
-    trigger_source: 'web_ui'
-  });
+  try {
+    // Generate a correlation ID
+    const correlationId = crypto.randomUUID().toString();
+    
+    // Call the database function directly instead of the edge function
+    const { data, error } = await supabase.rpc('xdelo_process_caption_workflow', {
+      p_message_id: messageId,
+      p_correlation_id: correlationId,
+      p_force: true
+    });
+    
+    if (error) {
+      console.error('Error invoking xdelo_process_caption_workflow:', error);
+      return { 
+        success: false, 
+        error: error.message || 'Error processing caption',
+        correlationId
+      };
+    }
+    
+    return { 
+      success: true, 
+      data,
+      correlationId
+    };
+  } catch (error: any) {
+    console.error('Exception in parseCaption:', error);
+    return { 
+      success: false, 
+      error: error.message || "An unexpected error occurred",
+      correlationId: crypto.randomUUID().toString()
+    };
+  }
 }
 
 /**

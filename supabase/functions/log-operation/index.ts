@@ -1,5 +1,4 @@
-
-import { createHandler } from '../_shared/baseHandler.ts';
+import { createEdgeHandler, HandlerContext } from '../_shared/edgeHandler.ts';
 import { createSupabaseClient } from '../_shared/supabase.ts';
 
 interface LogRequest {
@@ -12,7 +11,10 @@ interface LogRequest {
   correlationId?: string;
 }
 
-export default createHandler(async (req: Request) => {
+// Create the handler using the new edge handler
+const handler = createEdgeHandler(async (req: Request, context: HandlerContext) => {
+  const { logger, correlationId: requestCorrelationId } = context;
+  
   // Parse request body
   const { 
     eventType, 
@@ -21,7 +23,7 @@ export default createHandler(async (req: Request) => {
     newState, 
     metadata = {}, 
     errorMessage,
-    correlationId = crypto.randomUUID()
+    correlationId = requestCorrelationId || crypto.randomUUID()
   } = await req.json() as LogRequest;
   
   // Validate request
@@ -40,7 +42,7 @@ export default createHandler(async (req: Request) => {
   }
   
   // Add correlation ID and timestamp to metadata
-  const enhancedMetadata = {
+  const enhancedMetadata: Record<string, unknown> = {
     ...metadata,
     logged_at: new Date().toISOString(),
     correlation_id: correlationId,
@@ -54,6 +56,12 @@ export default createHandler(async (req: Request) => {
   
   // Create Supabase client
   const supabase = createSupabaseClient();
+  
+  logger.info('Logging operation', {
+    eventType, 
+    entityId,
+    correlationId
+  });
   
   try {
     // Insert log entry
@@ -72,7 +80,7 @@ export default createHandler(async (req: Request) => {
       .single();
     
     if (error) {
-      console.error('Error logging operation:', error);
+      logger.error('Error logging operation', error);
       
       return new Response(
         JSON.stringify({ 
@@ -94,15 +102,17 @@ export default createHandler(async (req: Request) => {
       { headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Exception logging operation:', error);
+    logger.error('Exception logging operation', error);
     
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
         correlationId
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 });
+
+export default handler;

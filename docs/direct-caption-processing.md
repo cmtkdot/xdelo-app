@@ -1,5 +1,7 @@
 # Direct Caption Processing
 
+**Update: The edge functions mentioned in this document have been removed and replaced with direct database functions.**
+
 This document outlines the simplified message caption processing flow that eliminates external dependencies and HTTP calls.
 
 ## Overview

@@ -1,55 +1,93 @@
 import { supabaseClient } from '../../_shared/supabase.ts';
-import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
-import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
+import { xdelo_logProcessingEvent, xdelo_createNonMediaMessage, LoggerInterface } from '../../_shared/databaseOperations.ts';
 import { constructTelegramMessageUrl, isMessageForwarded } from '../../_shared/messageUtils.ts';
+import { Logger } from '../../_shared/logger/index.ts';
+import { createSuccessResponse, createErrorResponse } from '../../_shared/edgeHandler.ts';
+
+/**
+ * Create a logger adapter that implements the LoggerInterface
+ * This ensures we always have a valid logger even if the context logger is undefined
+ */
+function createLoggerAdapter(logger?: Logger): LoggerInterface {
+  if (logger) {
+    return {
+      error: (message: string, error: unknown): void => {
+        logger.error(message, error);
+      },
+      info: (message: string, data?: unknown): void => {
+        if (data) {
+          logger.info(message, data as Record<string, any>);
+        } else {
+          logger.info(message);
+        }
+      },
+      warn: (message: string, data?: unknown): void => {
+        if (data) {
+          logger.warn(message, data as Record<string, any>);
+        } else {
+          logger.warn(message);
+        }
+      }
+    };
+  }
+  
+  // Fallback to console if no logger is provided
+  return {
+    error: (message: string, error: unknown): void => console.error(message, error),
+    info: (message: string, data?: unknown): void => console.info(message, data),
+    warn: (message: string, data?: unknown): void => console.warn(message, data)
+  };
+}
 
 export async function handleOtherMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
     const { isChannelPost, correlationId, logger } = context;
+    const loggerAdapter = createLoggerAdapter(logger);
+    
     // Use the utility function to determine if message is forwarded
     const isForwarded = isMessageForwarded(message);
     
     // Log the start of message processing
-    logger?.info(`📝 Processing non-media message ${message.message_id} in chat ${message.chat.id}`, {
+    loggerAdapter.info(`📝 Processing non-media message ${message.message_id} in chat ${message.chat.id}`, {
       message_text: message.text ? `${message.text.substring(0, 50)}${message.text.length > 50 ? '...' : ''}` : null,
       message_type: isChannelPost ? 'channel_post' : 'message',
       is_forwarded: isForwarded,
     });
     
-    // Generate message URL using our utility function from _shared/messageUtils.ts
-    const message_url = constructTelegramMessageUrl(message);
+    // Generate message URL using our utility function
+    const message_url = constructTelegramMessageUrl(message.chat.id, message.message_id);
     
-    // Store message data in the other_messages table
-    const { data, error } = await supabaseClient
-      .from('other_messages')
-      .insert({
-        telegram_message_id: message.message_id,
-        chat_id: message.chat.id,
-        chat_type: message.chat.type,
-        chat_title: message.chat.title,
-        message_type: isChannelPost ? 'channel_post' : 'message',
-        message_text: message.text || message.caption || '',
-        telegram_data: message,
-        processing_state: 'completed',
-        is_forward: isForwarded,
-        correlation_id: correlationId,
-        message_url: message_url, // Add the constructed URL
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .select('id')
-      .single();
+    // Prepare message data
+    const messageData = {
+      telegram_message_id: message.message_id,
+      chat_id: message.chat.id,
+      chat_type: message.chat.type,
+      chat_title: message.chat.title,
+      message_type: isChannelPost ? 'channel_post' : 'message',
+      message_text: message.text || message.caption || '',
+      telegram_data: message,
+      processing_state: 'completed',
+      is_forward: isForwarded,
+      correlation_id: correlationId,
+      message_url: message_url
+    };
+    
+    // Create the message using shared function
+    const result = await xdelo_createNonMediaMessage(
+      messageData,
+      loggerAdapter
+    );
       
-    if (error) {
-      logger?.error(`❌ Failed to store text message in database`, { error });
-      throw error;
+    if (!result.success) {
+      loggerAdapter.error(`❌ Failed to store text message in database`, { error: result.error_message });
+      throw new Error(result.error_message || 'Failed to create message');
     }
     
     // Log successful processing
     await xdelo_logProcessingEvent(
       "message_created",
-      data.id,
+      result.id,
       correlationId,
       {
         telegram_message_id: message.message_id,
@@ -60,25 +98,23 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
       }
     );
     
-    logger?.success(`✅ Successfully processed text message ${message.message_id}`, {
+    loggerAdapter.info(`✅ Successfully processed text message ${message.message_id}`, {
       message_id: message.message_id,
-      db_id: data.id,
+      db_id: result.id,
       message_url: message_url
     });
     
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        messageId: data.id, 
-        correlationId,
-        message_url: message_url 
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return createSuccessResponse({ 
+      success: true, 
+      messageId: result.id, 
+      correlationId,
+      message_url: message_url 
+    });
   } catch (error) {
-    context.logger?.error(`❌ Error processing non-media message:`, { 
-      error: error.message,
-      stack: error.stack,
+    const loggerAdapter = createLoggerAdapter(context.logger);
+    loggerAdapter.error(`❌ Error processing non-media message:`, { 
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
       message_id: message.message_id
     });
     
@@ -92,16 +128,13 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
         chat_id: message.chat.id,
         handler_type: 'other_message'
       },
-      error.message
+      error instanceof Error ? error.message : String(error)
     );
     
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message || 'Unknown error processing message',
-        correlationId: context.correlationId
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    return createErrorResponse(
+      error instanceof Error ? error.message : String(error),
+      500,
+      context.correlationId
     );
   }
 }

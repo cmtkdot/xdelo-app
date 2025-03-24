@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
@@ -29,7 +28,7 @@ export function useMessageAnalysis() {
       // Log analysis start
       console.log(`Starting analysis for message ${message.id} with correlation ID ${correlationId}`);
       
-      // Call database function directly instead of edge function
+      // Call database function directly
       const { data: analysisData, error: analysisError } = await supabase.rpc(
         'xdelo_process_caption_workflow',
         { 
@@ -57,25 +56,28 @@ export function useMessageAnalysis() {
         .eq('id', message.id)
         .single();
       
-      return updatedMessage?.analyzed_content;
-      
+      return { 
+        success: true, 
+        message: updatedMessage 
+      };
     } catch (error: any) {
-      console.error('Error analyzing message:', error);
+      console.error('Analysis error:', error);
       
-      // Set detailed error message
-      const errorMessage = error.message || 'Failed to analyze message';
       setErrors(prev => ({ 
         ...prev, 
-        [message.id]: errorMessage
+        [message.id]: error.message || 'Unknown error' 
       }));
       
       toast({
         title: "Analysis Failed",
-        description: errorMessage,
+        description: error.message || "Failed to analyze message",
         variant: "destructive"
       });
       
-      throw error;
+      return { 
+        success: false, 
+        error: error.message 
+      };
     } finally {
       setIsProcessing(prev => ({ ...prev, [message.id]: false }));
     }

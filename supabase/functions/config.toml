@@ -14,8 +14,6 @@ APP_ENV = "env(APP_ENV)"
 verify_jwt = false
 [functions.log-operation]
 verify_jwt = false
-[functions.xdelo_caption_parser]
-verify_jwt = false
 [functions.xdelo_delete_message]
 verify_jwt = false
 
@@ -31,9 +29,17 @@ verify_jwt = false
 [functions.unified-logging]
 verify_jwt = false
 
-# Note: The following functions have been removed or consolidated:
-# - manual-caption-parser (consolidated into xdelo_caption_parser)
-# - direct-caption-processor (consolidated into xdelo_caption_parser)
+# Note: The following files and functions have been removed or consolidated:
+# Functions:
+# - manual-caption-parser (replaced by direct database functions)
+# - xdelo_caption_parser (replaced by direct database functions)
+# - analyze-with-ai (replaced by direct database functions)
+# - parse-caption-with-ai (replaced by direct database functions)
+# - direct-caption-processor (consolidated into database functions)
 # - update-telegram-caption (removed)
 # - process-audio-upload (removed)
 # - validate-storage-files (removed)
+# 
+# Shared Files:
+# - _shared/captionParser.ts (functionality moved to database)
+# - _shared/mediaStorage.ts (duplicate of modular implementation in _shared/mediaUtils/)
