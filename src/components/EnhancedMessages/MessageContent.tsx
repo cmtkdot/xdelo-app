@@ -7,7 +7,7 @@ import { Message } from '@/types';
 import { MessageGridView } from './MessageGridView';
 import { MessageListView } from './MessageListView';
 import { useMessagesStore } from '@/hooks/useMessagesStore';
-import { useFilteredMessages } from '@/hooks/filteredMessages';
+import { useFilteredMessages } from '@/hooks/filteredMessages/useFilteredMessages';
 
 interface MessageContentProps {
   onSelect: (message: Message) => void;
