@@ -56,7 +56,12 @@ export const NavItems: React.FC<NavItemsProps> = ({
       icon: <MessageSquare size={20} />,
       isActive: currentPath === "/messages-enhanced",
     },
-    // Removed Gallery item
+    {
+      title: "Gallery",
+      href: "/gallery",
+      icon: <ImageIcon size={20} />,
+      isActive: currentPath === "/gallery",
+    },
     {
       title: "Public Gallery",
       href: "/p/public",
