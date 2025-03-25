@@ -3558,12 +3558,6 @@ export type Database = {
             }
             Returns: string
           }
-      xdelo_direct_caption_processing: {
-        Args: {
-          p_caption: string
-        }
-        Returns: Json
-      }
       xdelo_fail_message_processing: {
         Args: {
           p_message_id: string
@@ -3672,15 +3666,6 @@ export type Database = {
         }
         Returns: Json
       }
-      xdelo_handle_message_edit: {
-        Args: {
-          p_message_id: string
-          p_caption: string
-          p_is_edit?: boolean
-          p_correlation_id?: string
-        }
-        Returns: Json
-      }
       xdelo_handle_message_update: {
         Args: {
           p_message_id: string
@@ -3711,6 +3696,38 @@ export type Database = {
         }
         Returns: undefined
       }
+      xdelo_log_message_operation:
+        | {
+            Args: {
+              p_operation: string
+              p_message_id: string
+              p_details: Json
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_operation: string
+              p_message_id: string
+              p_metadata?: Json
+              p_error_message?: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_operation_type: Database["public"]["Enums"]["message_operation_type"]
+              p_source_message_id: string
+              p_target_message_id?: string
+              p_correlation_id?: string
+              p_telegram_message_id?: number
+              p_chat_id?: number
+              p_metadata?: Json
+              p_user_id?: string
+              p_error_message?: string
+            }
+            Returns: string
+          }
       xdelo_log_operation: {
         Args: {
           p_event_type: string

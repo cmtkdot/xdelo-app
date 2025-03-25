@@ -1,3 +1,4 @@
+
 # Supabase Edge Functions Documentation
 
 This document provides an overview of all active edge functions in the project, their purposes, dependencies, and relationships.
@@ -204,12 +205,6 @@ This document provides an overview of all active edge functions in the project, 
 ### _shared/captionParser.ts
 **Purpose**: Shared logic for parsing message captions
 **Used by**: `manual-caption-parser`, `parse-caption-with-ai`
-**Key Features**:
-- Product code extraction using regex patterns
-- Price and currency detection
-- Hashtag and vendor information parsing
-- URL extraction
-- Consistent parsing interface
 
 ## Migration Strategy
 

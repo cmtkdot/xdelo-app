@@ -21,12 +21,12 @@ declare module "@supabase/supabase-js" {
       }
     ): { data: T; error: null } | { data: null; error: Error };
 
-    // RPC for the logProcessingEvent function - Updated to accept both string and number entity IDs
+    // RPC for the logProcessingEvent function - Updated name to match the database function
     rpc<T = string>(
       fn: "xdelo_logprocessingevent", 
       params: { 
         p_event_type: string; 
-        p_entity_id: string | number;
+        p_entity_id: string;
         p_correlation_id: string;
         p_metadata?: Record<string, any>;
         p_error_message?: string;
@@ -83,34 +83,7 @@ declare module "@supabase/supabase-js" {
         p_force?: boolean;
       }
     ): { data: T; error: null } | { data: null; error: Error };
-    
-    // Add RPC for direct caption parsing
-    rpc<T = any>(
-      fn: "xdelo_parse_caption",
-      params: {
-        p_caption: string;
-      }
-    ): { data: T; error: null } | { data: null; error: Error };
 
-    // Add RPC for handling message edits
-    rpc<T = any>(
-      fn: "xdelo_handle_message_edit",
-      params: {
-        p_message_id: string;
-        p_caption: string;
-        p_is_edit?: boolean;
-        p_correlation_id?: string;
-      }
-    ): { data: T; error: null } | { data: null; error: Error };
-    
-    // Add RPC for completing message processing
-    rpc<T = any>(
-      fn: "xdelo_complete_message_processing",
-      params: {
-        p_message_id: string;
-        p_analyzed_content: Record<string, any>;
-        p_correlation_id?: string;
-      }
-    ): { data: T; error: null } | { data: null; error: Error };
+    // Add any other custom RPC functions here...
   }
 }

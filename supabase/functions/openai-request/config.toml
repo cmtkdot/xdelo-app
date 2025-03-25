@@ -1,6 +1,0 @@
-
-project_id = "xjhhehxcxkiumnwbirel"
-name = "openai-request"
-description = "Proxy for OpenAI API requests"
-version = 1
-verify_jwt = false

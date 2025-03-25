@@ -122,26 +122,18 @@ export async function createMessage(
     // First check if a message with this file_unique_id already exists
     // This is our primary duplicate detection mechanism
     if (messageData.file_unique_id) {
-      const { data: existingFiles, error: queryError } = await supabase
+      const { data: existingFile, error: queryError } = await supabase
         .from('messages')
         .select('id, file_unique_id, storage_path, telegram_message_id, chat_id, public_url')
-        .eq('file_unique_id', messageData.file_unique_id);
+        .eq('file_unique_id', messageData.file_unique_id)
+        .maybeSingle();
         
       if (queryError) {
         logger.error('Error checking for existing file:', queryError);
         throw new Error(`Database query error: ${queryError.message}`);
       }
 
-      if (existingFiles && existingFiles.length > 0) {
-        // If we found more than one file with this file_unique_id, log it but use the first one
-        if (existingFiles.length > 1) {
-          logger.warn?.(`Found ${existingFiles.length} files with same file_unique_id, using the first one`, {
-            file_unique_id: messageData.file_unique_id,
-            message_ids: existingFiles.map(f => f.id)
-          });
-        }
-        
-        const existingFile = existingFiles[0];
+      if (existingFile) {
         logger.info?.('Found existing file with same file_unique_id', { 
           existing_id: existingFile.id,
           file_unique_id: messageData.file_unique_id
@@ -154,7 +146,7 @@ export async function createMessage(
           chat_id: messageData.chat_id,
           metadata: {
             file_unique_id: messageData.file_unique_id,
-            correlation_id: messageData.correlation_id,
+            correlation_id: correlationId,
             existing_message_id: existingFile.id,
             new_telegram_message_id: messageData.telegram_message_id,
             new_chat_id: messageData.chat_id
@@ -540,7 +532,7 @@ export async function checkDuplicateFile(
       query = query.eq('telegram_message_id', telegramMessageId).eq('chat_id', chatId);
     }
     
-    const { data, error } = await query;
+    const { data, error } = await query.maybeSingle();
       
     if (error) {
       console.error('Error checking for duplicate file:', error);
@@ -548,7 +540,7 @@ export async function checkDuplicateFile(
       return false;
     }
     
-    return data && data.length > 0;
+    return !!data;
   } catch (error) {
     console.error('Exception checking for duplicate file:', 
       error instanceof Error ? error.message : String(error));
@@ -579,65 +571,50 @@ async function logMessageEvent(
       data.entity_id = crypto.randomUUID();
     }
     
-    // Prevent UUID conversion errors by ensuring entityId is not a simple number
-    const safeEntityId = typeof data.entity_id === 'number' || /^\d+$/.test(data.entity_id) 
-      ? `message_${data.entity_id}` 
-      : data.entity_id;
-    
     // Ensure metadata always has a timestamp
     const metadata = {
       ...(data.metadata || {}),
       event_timestamp: new Date().toISOString()
     };
 
-    // Use the RPC function for safe logging
-    const { error: rpcError } = await supabase.rpc(
-      'xdelo_logprocessingevent',
-      {
-        p_event_type: eventType,
-        p_entity_id: safeEntityId,
-        p_correlation_id: metadata.correlation_id || crypto.randomUUID(),
-        p_metadata: {
-          ...metadata,
-          telegram_message_id: data.telegram_message_id,
-          chat_id: data.chat_id,
-          previous_state: data.previous_state,
-          new_state: data.new_state
-        },
-        p_error_message: data.error_message
-      }
-    );
+    const { error } = await supabase.from('unified_audit_logs').insert({
+      event_type: eventType,
+      entity_id: data.entity_id,
+      telegram_message_id: data.telegram_message_id,
+      chat_id: data.chat_id,
+      previous_state: data.previous_state,
+      new_state: data.new_state,
+      metadata: metadata,
+      error_message: data.error_message,
+      event_timestamp: new Date().toISOString(),
+      correlation_id: metadata.correlation_id
+    });
     
-    if (rpcError) {
-      console.error('Error logging event with RPC:', rpcError);
+    if (error) {
+      console.error('Error logging event:', error);
       
-      // Fall back to direct insert with UUID conversion handling
-      try {
-        // Generate a valid UUID if needed
-        let validEntityId = safeEntityId;
-        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(safeEntityId)) {
-          validEntityId = crypto.randomUUID();
-          metadata.original_entity_id = safeEntityId;
-        }
-      
-        const { error } = await supabase.from('unified_audit_logs').insert({
+      // Try with minimized payload if the original is too large
+      if (data.previous_state || data.new_state) {
+        console.warn('Retrying with simplified payload');
+        const { error: retryError } = await supabase.from('unified_audit_logs').insert({
           event_type: eventType,
-          entity_id: validEntityId,
+          entity_id: data.entity_id,
           telegram_message_id: data.telegram_message_id,
           chat_id: data.chat_id,
-          previous_state: data.previous_state,
-          new_state: data.new_state,
-          metadata: metadata,
+          metadata: {
+            ...metadata,
+            previous_state_simplified: true,
+            new_state_simplified: true,
+            original_error: error.message,
+          },
           error_message: data.error_message,
           event_timestamp: new Date().toISOString(),
           correlation_id: metadata.correlation_id
         });
         
-        if (error) {
-          console.error('Error logging event with direct insert:', error);
+        if (retryError) {
+          console.error('Error logging simplified event:', retryError);
         }
-      } catch (insertError) {
-        console.error('Exception in direct logging:', insertError);
       }
     }
   } catch (error) {

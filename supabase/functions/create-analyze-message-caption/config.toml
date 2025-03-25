@@ -1,7 +1,0 @@
-
-project_id = "xjhhehxcxkiumnwbirel"
-name = "create-analyze-message-caption"
-description = "Analyzes message captions without using cross-database references"
-version = 1
-verify_jwt = false
-
