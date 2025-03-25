@@ -48,7 +48,7 @@ serve(async (req: Request) => {
     
     let finalSourceMessageId = sourceMessageId;
     
-    // If no source message ID provided, find the best one
+    // If no source message ID provided, try to find the best one
     if (!finalSourceMessageId) {
       const findResult = await findBestCaptionSource(mediaGroupId, correlationId);
       

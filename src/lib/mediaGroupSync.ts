@@ -13,7 +13,7 @@ export async function syncMediaGroup(
   try {
     console.log(`Manual media group sync initiated for group ${mediaGroupId}`);
     
-    // If source message ID is not provided, try to find the best message
+    // If source message ID is not provided, try to find the best one
     // to use as the source of truth for this group
     if (!sourceMessageId) {
       const { data: findResult } = await supabase.rpc<string>(

@@ -2691,6 +2691,24 @@ export type Database = {
         }
         Relationships: []
       }
+      v_message_processing_status: {
+        Row: {
+          completed: number | null
+          error: number | null
+          last_attempt: string | null
+          last_error: string | null
+          max_attempts: number | null
+          media_group_id: string | null
+          pending: number | null
+          processing: number | null
+          synced: number | null
+          total_messages: number | null
+          unsynced: number | null
+          with_analyzed_content: number | null
+          without_analyzed_content: number | null
+        }
+        Relationships: []
+      }
       v_messages_compatibility: {
         Row: {
           analyzed_content: Json | null
@@ -2976,12 +2994,6 @@ export type Database = {
           count: number
         }[]
       }
-      get_media_group_sync_status: {
-        Args: {
-          p_media_group_id: string
-        }
-        Returns: Json
-      }
       get_table_columns: {
         Args: {
           table_name: string
@@ -3238,15 +3250,6 @@ export type Database = {
           "": unknown
         }
         Returns: unknown
-      }
-      increment_field: {
-        Args: {
-          table_name: string
-          column_name: string
-          row_id: string
-          increment_by?: number
-        }
-        Returns: number
       }
       is_customer: {
         Args: {
@@ -3569,6 +3572,13 @@ export type Database = {
             }
             Returns: string
           }
+      xdelo_direct_caption_processing: {
+        Args: {
+          p_message_id: string
+          p_correlation_id?: string
+        }
+        Returns: Json
+      }
       xdelo_fail_message_processing: {
         Args: {
           p_message_id: string
@@ -3804,6 +3814,17 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_repair_inconsistent_messages: {
+        Args: {
+          p_limit?: number
+        }
+        Returns: {
+          media_group_id: string
+          source_message_id: string
+          updated_count: number
+          operation: string
+        }[]
+      }
       xdelo_repair_media_group_syncs: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3819,6 +3840,10 @@ export type Database = {
           caption_message_id: string
           updated_count: number
         }[]
+      }
+      xdelo_scheduled_repair_task: {
+        Args: Record<PropertyKey, never>
+        Returns: number
       }
       xdelo_set_message_processing: {
         Args: {
@@ -3866,14 +3891,6 @@ export type Database = {
             }
             Returns: Json
           }
-      xdelo_sync_media_group_content_with_lock: {
-        Args: {
-          p_media_group_id: string
-          p_source_message_id: string
-          p_correlation_id: string
-        }
-        Returns: Json
-      }
       xdelo_update_message_processing_state: {
         Args: {
           p_message_id: string

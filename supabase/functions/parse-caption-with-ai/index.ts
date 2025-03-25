@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { 
@@ -175,7 +176,7 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
         console.log(`Starting media group content sync for group ${media_group_id}, message ${messageId}, isEdit: ${isEdit}, force_reprocess: ${force_reprocess}`);
         
         const syncResponse = await fetch(
-          `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync-media-group`,
           {
             method: 'POST',
             headers: {
