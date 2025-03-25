@@ -1,6 +1,8 @@
+
 // Shared database operations for edge functions
 import { createSupabaseClient } from "./supabase.ts";
 import { ProcessingState, AnalyzedContent } from "./types.ts";
+import { Logger } from "./logger/index.ts";
 
 // Logger interface used by database operations
 export interface LoggerInterface {
@@ -412,48 +414,5 @@ export async function xdelo_updateMessageProcessingState(
       success: false, 
       error_message: error instanceof Error ? error.message : String(error)
     };
-  }
-}
-
-// Simple logger for Telegram webhook
-export class Logger implements LoggerInterface {
-  private correlationId: string;
-  private component: string;
-  
-  constructor(correlationId: string, component = 'telegram-webhook') {
-    this.correlationId = correlationId;
-    this.component = component;
-  }
-  
-  info(message: string, data: Record<string, any> = {}) {
-    console.log(JSON.stringify({
-      level: 'INFO',
-      correlation_id: this.correlationId,
-      component: this.component,
-      message,
-      ...data
-    }));
-  }
-  
-  warn(message: string, data: Record<string, any> = {}) {
-    console.log(JSON.stringify({
-      level: 'WARN',
-      correlation_id: this.correlationId,
-      component: this.component,
-      message,
-      ...data
-    }));
-  }
-  
-  error(message: string, error: unknown) {
-    console.error(JSON.stringify({
-      level: 'ERROR',
-      correlation_id: this.correlationId,
-      component: this.component,
-      message,
-      error: error instanceof Error ? 
-        error.message : 
-        (typeof error === 'object' ? JSON.stringify(error) : String(error))
-    }));
   }
 }

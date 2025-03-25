@@ -1,3 +1,4 @@
+
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { 
@@ -34,7 +35,6 @@ function isMessageForwarded(message: any): boolean {
 
 /**
  * Create a logger adapter that implements the LoggerInterface
- * This ensures we always have a valid logger even if the context logger is undefined
  */
 function createLoggerAdapter(logger?: Logger): LoggerInterface {
   if (logger) {
@@ -134,21 +134,6 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         throw new Error(result.error_message || 'Failed to update message');
       }
       
-      // Log the edit operation
-      try {
-        await xdelo_logProcessingEvent(
-          "message_text_edited",
-          existingMessage.id,
-          correlationId,
-          {
-            message_id: message.message_id,
-            chat_id: message.chat.id
-          }
-        );
-      } catch (logError) {
-        loggerAdapter.error(`Error logging edit operation: ${logError instanceof Error ? logError.message : String(logError)}`);
-      }
-      
       return createSuccessResponse({ 
         success: true, 
         messageId: existingMessage.id, 
@@ -188,21 +173,6 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       
       loggerAdapter.info(`Created new message record ${result.id} for edited message ${message.message_id}`);
       
-      // Log the operation
-      try {
-        await xdelo_logProcessingEvent(
-          "message_created_from_edit",
-          result.id,
-          correlationId,
-          {
-            message_id: message.message_id,
-            chat_id: message.chat.id
-          }
-        );
-      } catch (logError) {
-        loggerAdapter.error(`Error logging message creation: ${logError instanceof Error ? logError.message : String(logError)}`);
-      }
-      
       return createSuccessResponse({ 
         success: true, 
         messageId: result.id, 
@@ -212,10 +182,9 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
     }
   } catch (error) {
     const loggerAdapter = createLoggerAdapter(context.logger);
-    loggerAdapter.error(`Error processing edited message: ${error instanceof Error ? error.message : String(error)}`, { 
-      stack: error instanceof Error ? error.stack : undefined 
-    });
+    loggerAdapter.error(`Error processing edited message: ${error instanceof Error ? error.message : String(error)}`);
     
+    // Log error with minimal data
     await xdelo_logProcessingEvent(
       "edited_message_processing_error",
       crypto.randomUUID().toString(),
@@ -223,7 +192,6 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       {
         message_id: message.message_id,
         chat_id: message.chat.id,
-        original_entity_id: `${message.chat.id}_${message.message_id}`,
         error: error instanceof Error ? error.message : String(error)
       },
       error instanceof Error ? error.message : String(error)
