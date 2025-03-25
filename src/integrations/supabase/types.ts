@@ -3514,6 +3514,10 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_check_webhook_status: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       xdelo_cleanup_orphaned_audit_logs: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3677,21 +3681,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      xdelo_log_event: {
-        Args: {
-          p_event_type: Database["public"]["Enums"]["audit_event_type"]
-          p_entity_id: string
-          p_telegram_message_id?: number
-          p_chat_id?: number
-          p_previous_state?: Json
-          p_new_state?: Json
-          p_metadata?: Json
-          p_correlation_id?: string
-          p_user_id?: string
-          p_error_message?: string
-        }
-        Returns: undefined
-      }
       xdelo_log_event_flexible: {
         Args: {
           p_event_type: string
@@ -3760,6 +3749,16 @@ export type Database = {
           p_raw_data?: Json
         }
         Returns: undefined
+      }
+      xdelo_logprocessingevent: {
+        Args: {
+          p_event_type: string
+          p_entity_id: string
+          p_correlation_id: string
+          p_metadata?: Json
+          p_error_message?: string
+        }
+        Returns: string
       }
       xdelo_mark_for_redownload: {
         Args: {

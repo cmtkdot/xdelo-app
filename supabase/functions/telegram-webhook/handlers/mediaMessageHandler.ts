@@ -132,16 +132,9 @@ async function xdelo_handleEditedMediaMessage(
           message.photo[message.photo.length - 1] : 
           message.video || message.document;
           
-        // Validate file ID before proceeding
-        const { isValid, sanitizedFileId, error: validationError } = xdelo_validateFileId(telegramFile.file_id);
-        if (!isValid) {
-          logger?.error(`Invalid file ID: ${validationError}`, {
-            file_id: telegramFile.file_id,
-            message_id: message.message_id,
-            chat_id: message.chat.id
-          });
-          throw new Error(`Invalid file ID: ${validationError}`);
-        }
+        // Use simplified file ID validation
+        const { sanitizedFileId } = xdelo_validateFileId(telegramFile.file_id);
+        logger?.info(`Processing file ID: ${sanitizedFileId}`);
         
         // Get mime type
         const detectedMimeType = xdelo_detectMimeType(message);
@@ -354,16 +347,14 @@ async function xdelo_handleNewMediaMessage(
       throw new Error('Failed to extract media file information from message');
     }
     
-    // Validate the file ID
-    const { isValid, sanitizedFileId, error: validationError } = xdelo_validateFileId(telegramFile.file_id);
-    if (!isValid) {
-      logger?.error(`Invalid file ID: ${validationError}`, {
-        file_id: telegramFile.file_id,
-        message_id: message.message_id,
-        chat_id: message.chat.id
-      });
-      throw new Error(`Invalid file ID: ${validationError}`);
-    }
+    // Use simplified file ID validation
+    const { sanitizedFileId } = xdelo_validateFileId(telegramFile.file_id);
+    
+    logger?.info(`Processing file: ${sanitizedFileId.substring(0, 15)}... (type: ${mediaType})`, {
+      file_unique_id: telegramFile.file_unique_id,
+      message_id: message.message_id,
+      chat_id: message.chat.id
+    });
     
     // Process the media content
     const mediaProcessResult = await xdelo_processMessageMedia(

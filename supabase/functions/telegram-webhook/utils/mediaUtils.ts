@@ -77,7 +77,7 @@ class RateLimiter {
 export const rateLimitTracker = new RateLimiter(3, 500);
 
 /**
- * Validates a Telegram file ID to ensure it meets expected format
+ * Validates a Telegram file ID with a simplified approach
  * @param fileId The Telegram file ID to validate
  * @returns Object with validation result, sanitized ID and optional error
  */
@@ -86,6 +86,7 @@ export function xdelo_validateFileId(fileId: string): {
   sanitizedFileId: string;
   error?: string;
 } {
+  // Check for empty or undefined input
   if (!fileId) {
     return { 
       isValid: false, 
@@ -94,28 +95,19 @@ export function xdelo_validateFileId(fileId: string): {
     };
   }
   
-  // Telegram file IDs should not contain spaces, newlines or special characters
-  // They're typically alphanumeric with some hyphens and underscores
+  // Basic sanitization: just trim whitespace
   const sanitizedFileId = fileId.trim();
   
-  // Basic validation - file IDs are typically at least 20 chars
-  if (sanitizedFileId.length < 20) {
+  // Very minimal validation - just ensure it's not empty after trimming
+  if (sanitizedFileId.length === 0) {
     return { 
       isValid: false, 
       sanitizedFileId, 
-      error: `File ID seems too short (${sanitizedFileId.length} chars)` 
+      error: 'File ID is empty after trimming' 
     };
   }
   
-  // Check for invalid characters
-  if (!/^[A-Za-z0-9_-]+$/g.test(sanitizedFileId)) {
-    return { 
-      isValid: false, 
-      sanitizedFileId, 
-      error: 'File ID contains invalid characters' 
-    };
-  }
-  
+  // Accept all non-empty file IDs (Telegram's format may change)
   return { isValid: true, sanitizedFileId };
 }
 
@@ -464,7 +456,7 @@ export async function xdelo_uploadMediaToStorage(
 }
 
 /**
- * Download media from Telegram API
+ * Download media from Telegram API with simplified validation
  */
 export async function xdelo_downloadMediaFromTelegram(
   fileId: string,
@@ -493,8 +485,8 @@ export async function xdelo_downloadMediaFromTelegram(
       throw new Error('Telegram bot token is required');
     }
     
-    // Validate the file ID
-    const { isValid, sanitizedFileId, error: validationError } = xdelo_validateFileId(fileId);
+    // Use simplified validation that just sanitizes the input
+    const { sanitizedFileId, isValid, error: validationError } = xdelo_validateFileId(fileId);
     if (!isValid) {
       throw new Error(`Invalid file ID: ${validationError}`);
     }
@@ -508,6 +500,8 @@ export async function xdelo_downloadMediaFromTelegram(
     // First, get the file path from Telegram
     const getFileUrl = `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${sanitizedFileId}`;
     
+    console.log(`Getting file info for file_id: ${sanitizedFileId.substring(0, 10)}...`);
+    
     // Use rate limiter to prevent API throttling
     const getFileResponse = await rateLimitTracker.add(async () => 
       xdelo_fetchWithRetry(getFileUrl)
@@ -516,8 +510,11 @@ export async function xdelo_downloadMediaFromTelegram(
     const fileInfo = await getFileResponse.json();
     
     if (!fileInfo.ok || !fileInfo.result || !fileInfo.result.file_path) {
+      console.error('Failed to get file info from Telegram:', JSON.stringify(fileInfo));
       throw new Error(`Failed to get file info from Telegram: ${JSON.stringify(fileInfo)}`);
     }
+    
+    console.log(`File info received, downloading from path: ${fileInfo.result.file_path}`);
     
     // Now download the actual file
     const downloadUrl = `https://api.telegram.org/file/bot${telegramBotToken}/${fileInfo.result.file_path}`;
@@ -528,6 +525,7 @@ export async function xdelo_downloadMediaFromTelegram(
     
     // Create a blob from the response
     const blob = await downloadResponse.blob();
+    console.log(`Download complete, file size: ${blob.size} bytes`);
     
     // Return the downloaded file info
     return {
@@ -583,14 +581,15 @@ export async function xdelo_processMessageMedia(
       };
     }
 
-    // Validate the file ID
-    const { isValid, sanitizedFileId, error: validationError } = xdelo_validateFileId(fileId);
-    if (!isValid) {
-      throw new Error(`Invalid file ID: ${validationError}`);
-    }
+    // Use simplified file ID validation
+    const { sanitizedFileId } = xdelo_validateFileId(fileId);
+    
+    // Log the file ID being processed
+    console.log(`Processing file ID: ${sanitizedFileId.substring(0, 15)}...`);
 
     // Detect MIME type
     const detectedMimeType = xdelo_detectMimeType(message);
+    console.log(`Detected MIME type: ${detectedMimeType}`);
     
     // Download from Telegram
     const downloadResult = await xdelo_downloadMediaFromTelegram(
@@ -601,8 +600,11 @@ export async function xdelo_processMessageMedia(
     );
     
     if (!downloadResult.success || !downloadResult.blob) {
+      console.error('Download failed:', downloadResult.error);
       throw new Error(`Failed to download media: ${downloadResult.error || 'Unknown error'}`);
     }
+    
+    console.log(`Download successful, uploading to storage path: ${downloadResult.storagePath}`);
     
     // Upload to Supabase Storage
     const uploadResult = await xdelo_uploadMediaToStorage(
@@ -615,6 +617,8 @@ export async function xdelo_processMessageMedia(
     if (!uploadResult.success) {
       throw new Error(`Failed to upload media: ${uploadResult.error || 'Unknown error'}`);
     }
+    
+    console.log(`Upload successful, public URL: ${uploadResult.publicUrl?.substring(0, 50)}...`);
     
     // Return the file info
     return {
@@ -637,3 +641,4 @@ export async function xdelo_processMessageMedia(
     };
   }
 }
+
