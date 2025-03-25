@@ -57,7 +57,7 @@ export async function callUnifiedProcessor(
       data: data?.data,
       correlationId
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Exception in unified processor ${operation}:`, error);
     return {
       success: false,

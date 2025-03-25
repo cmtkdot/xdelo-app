@@ -2,9 +2,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { Message } from '@/types/entities/Message';
-import { Database } from '@/integrations/supabase/types';
-
-type DbMessage = Database['public']['Tables']['messages']['Row'];
 
 /**
  * Hook for message querying operations
@@ -40,12 +37,12 @@ export function useMediaQueries() {
         }
       });
       
-      const { data, error } = await query;
+      const response = await query;
       
-      // Convert the database response to Message type
-      const typedData = data as unknown as Message[] | null;
-      
-      return { data: typedData, error };
+      return { 
+        data: response.data as unknown as Message[] | null, 
+        error: response.error 
+      };
     } catch (error) {
       console.error('Error fetching messages:', error);
       return { data: null, error };
@@ -60,16 +57,16 @@ export function useMediaQueries() {
     error: any;
   }> => {
     try {
-      const { data, error } = await supabase
+      const response = await supabase
         .from('messages')
         .select('*')
         .eq('id', id)
         .single();
       
-      // Convert the database response to Message type
-      const typedData = data as unknown as Message | null;
-      
-      return { data: typedData, error };
+      return { 
+        data: response.data as unknown as Message | null, 
+        error: response.error 
+      };
     } catch (error) {
       console.error('Error fetching message by ID:', error);
       return { data: null, error };
@@ -81,18 +78,18 @@ export function useMediaQueries() {
    */
   const updateMessage = async (
     id: string,
-    data: Partial<Message>
+    updates: Partial<Message>
   ): Promise<{
     data: any;
     error: any;
   }> => {
     try {
-      // Convert Message type to database type before updating
-      const dbData = data as unknown as Partial<DbMessage>;
+      // Convert to a plain object to avoid type issues
+      const updateData = JSON.parse(JSON.stringify(updates));
       
       const result = await supabase
         .from('messages')
-        .update(dbData)
+        .update(updateData)
         .eq('id', id)
         .select()
         .single();

@@ -29,14 +29,17 @@ export interface UseMediaUtilsType {
   scheduleDelayedSync: (messageId: string, mediaGroupId: string) => Promise<any>;
   
   // File operations (from useMediaStorage)
-  uploadMedia?: (file: File, options?: any) => Promise<any>;
-  downloadMedia?: (url: string, filename?: string) => Promise<any>;
-  deleteMedia?: (path: string) => Promise<any>;
+  uploadMedia: (file: File, options?: any) => Promise<any>;
+  downloadMedia: (url: string, filename?: string) => Promise<any>;
+  deleteMedia: (path: string) => Promise<any>;
   
   // Query operations (from useMediaQueries)
-  getMessages?: (options?: any) => Promise<any>;
-  getMessageById?: (id: string) => Promise<any>;
-  updateMessage?: (id: string, data: any) => Promise<any>;
+  getMessages: (options?: any) => Promise<any>;
+  getMessageById: (id: string) => Promise<any>;
+  updateMessage: (id: string, data: any) => Promise<any>;
+  
+  // Optional properties for extensibility
+  [key: string]: any;
 }
 
 /**

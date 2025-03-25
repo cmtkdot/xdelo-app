@@ -2,7 +2,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types/entities/Message';
 import { useToast } from '@/hooks/useToast';
-import { scheduleDelayedSync } from './unifiedProcessor';
 
 export async function getMediaGroupMessages(mediaGroupId: string): Promise<Message[]> {
   if (!mediaGroupId) return [];
@@ -37,6 +36,31 @@ export async function syncMediaGroupCaptions(mediaGroupId: string, sourceMessage
     return true;
   } catch (error) {
     console.error('Exception syncing media group captions:', error);
+    return false;
+  }
+}
+
+// Schedule a delayed media group sync operation
+export async function scheduleDelayedSync(messageId: string, mediaGroupId: string): Promise<boolean> {
+  try {
+    // Call the unified processor to schedule a delayed sync
+    const { data, error } = await supabase.functions.invoke('xdelo_unified_processor', {
+      body: {
+        operation: 'delayed_sync',
+        messageId,
+        mediaGroupId,
+        correlationId: crypto.randomUUID()
+      }
+    });
+    
+    if (error) {
+      console.error('Error scheduling delayed sync:', error);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Exception scheduling delayed sync:', error);
     return false;
   }
 }
