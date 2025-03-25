@@ -82,8 +82,30 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     // Log the start of processing
     loggerAdapter.info(`Processing ${isEdit ? 'edited' : 'new'} media message`, {
       message_id: message.message_id,
-      chat_id: message.chat.id
+      chat_id: message.chat.id,
+      has_caption: !!message.caption,
+      media_group_id: message.media_group_id
     });
+    
+    // Log processing start event to database
+    try {
+      await xdelo_logProcessingEvent(
+        isEdit ? "media_edit_processing_started" : "media_processing_started",
+        crypto.randomUUID(),
+        correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          media_group_id: message.media_group_id,
+          media_type: message.photo ? 'photo' : 
+                      message.video ? 'video' : 
+                      message.document ? 'document' : 'unknown'
+        }
+      );
+    } catch (logError) {
+      loggerAdapter.warn("Failed to log processing start event", logError);
+      // Continue processing even if logging fails
+    }
     
     let response;
     
@@ -92,6 +114,24 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       response = await xdelo_handleEditedMediaMessage(message, context, previousMessage);
     } else {
       response = await xdelo_handleNewMediaMessage(message, context);
+    }
+    
+    // Log successful completion
+    try {
+      await xdelo_logProcessingEvent(
+        isEdit ? "media_edit_processing_completed" : "media_processing_completed",
+        crypto.randomUUID(),
+        correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          media_group_id: message.media_group_id,
+          processing_time_ms: Date.now() - new Date(context.startTime).getTime()
+        }
+      );
+    } catch (logError) {
+      loggerAdapter.warn("Failed to log processing completion event", logError);
+      // Continue processing even if logging fails
     }
     
     return response;
@@ -104,17 +144,29 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     try {
       await xdelo_logProcessingEvent(
         "media_processing_error",
-        crypto.randomUUID().toString(),
+        crypto.randomUUID(),
         context.correlationId,
         {
           message_id: message.message_id,
           chat_id: message.chat?.id,
-          error: errorMessage
+          error: errorMessage,
+          stack: error instanceof Error ? error.stack : undefined,
+          media_group_id: message.media_group_id,
+          media_type: message.photo ? 'photo' : 
+                      message.video ? 'video' : 
+                      message.document ? 'document' : 'unknown'
         },
         errorMessage
       );
     } catch (logError) {
       loggerAdapter.error(`Failed to log error to database`, logError);
+      // Log to console as fallback
+      console.error("Database logging failed during error handling", {
+        message_id: message.message_id,
+        chat_id: message.chat?.id,
+        error: errorMessage,
+        logging_error: logError instanceof Error ? logError.message : String(logError)
+      });
     }
     
     return createErrorResponse(errorMessage, 500, context.correlationId);

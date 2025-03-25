@@ -83,8 +83,28 @@ export async function handleTextMessage(
     loggerAdapter.info('Processing text message', {
       message_id: message.message_id,
       chat_id: message.chat.id,
-      username: message.from?.username
+      username: message.from?.username,
+      message_type: 'text',
+      correlation_id: correlationId
     });
+    
+    // Log processing start to database
+    try {
+      await xdelo_logProcessingEvent(
+        "text_processing_started",
+        crypto.randomUUID(),
+        correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          is_edit: context.isEdit,
+          is_forward: isMessageForwarded(message)
+        }
+      );
+    } catch (logError) {
+      loggerAdapter.warn("Failed to log processing start event", logError);
+      // Continue processing even if logging fails
+    }
     
     // Extract info about forwarded messages
     const isForwarded = isMessageForwarded(message);
@@ -99,6 +119,12 @@ export async function handleTextMessage(
         forward_signature: message.forward_signature,
         forward_sender_name: message.forward_sender_name
       };
+      
+      // Log forwarded message details
+      loggerAdapter.info("Processing forwarded message", {
+        original_source: forwardInfo.from_chat_id || forwardInfo.from_user_id,
+        original_message_id: forwardInfo.from_message_id
+      });
     }
     
     // Generate message URL using database function
@@ -141,7 +167,25 @@ export async function handleTextMessage(
       throw new Error(result.error_message || 'Failed to create text message record');
     }
     
-    // Log success
+    // Log success to database
+    try {
+      await xdelo_logProcessingEvent(
+        "text_processing_completed",
+        result.id,  // Use the actual message ID if available
+        correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          db_message_id: result.id,
+          processing_time_ms: Date.now() - new Date(context.startTime).getTime()
+        }
+      );
+    } catch (logError) {
+      loggerAdapter.warn("Failed to log processing completion", logError);
+      // Continue processing even if logging fails
+    }
+    
+    // Log success to console
     loggerAdapter.info(`Successfully created new text message: ${result.id}`);
     
     return createSuccessResponse({ success: true, id: result.id, correlationId });
@@ -154,15 +198,29 @@ export async function handleTextMessage(
         crypto.randomUUID(),
         correlationId,
         {
-          message_id: message.message_id,
-          chat_id: message.chat.id,
+          message_id: message?.message_id,
+          chat_id: message?.chat?.id,
           error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined
+          stack: error instanceof Error ? error.stack : undefined,
+          message_data: message ? {
+            message_id: message.message_id,
+            chat_id: message.chat?.id,
+            chat_type: message.chat?.type,
+            has_text: !!message.text,
+            is_forwarded: isMessageForwarded(message)
+          } : undefined
         },
         error instanceof Error ? error.message : String(error)
       );
     } catch (logError) {
       loggerAdapter.error('Failed to log error:', logError);
+      // Fallback to console
+      console.error("Database logging failed during error handling", {
+        message_id: message?.message_id,
+        chat_id: message?.chat?.id,
+        error: error instanceof Error ? error.message : String(error),
+        logging_error: logError instanceof Error ? logError.message : String(logError)
+      });
     }
     
     throw error;

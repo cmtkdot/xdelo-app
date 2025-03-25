@@ -30,7 +30,7 @@ interface UpdateProcessingStateParams {
  */
 export async function xdelo_logProcessingEvent(
   eventType: string,
-  entityId: string,
+  entityId: string | number,  // Accept number explicitly
   correlationId: string,
   metadata: Record<string, any> = {},
   errorMessage?: string
@@ -41,26 +41,10 @@ export async function xdelo_logProcessingEvent(
     // Ensure correlation ID is a string
     const corrId = correlationId?.toString() || crypto.randomUUID();
     
-    // Handle special cases where entityId might not be a valid UUID
-    let validEntityId: string;
+    // Generate a valid UUID, but preserve original entityId in metadata
+    const validEntityId = crypto.randomUUID();
     
-    // Always generate a new UUID for special strings like 'system'
-    if (typeof entityId !== 'string' || 
-        entityId === 'system' || 
-        entityId.length < 32 || 
-        !entityId.includes('-')) {
-      validEntityId = crypto.randomUUID();
-    } else {
-      // Try to use the original ID if it looks like a UUID
-      try {
-        // This will throw an error if entityId is not a valid UUID
-        validEntityId = entityId;
-      } catch (e) {
-        validEntityId = crypto.randomUUID();
-      }
-    }
-    
-    // Store original entity ID in metadata
+    // Store original entity ID in metadata for reference
     const enhancedMetadata = {
       ...metadata,
       original_entity_id: entityId
@@ -69,7 +53,7 @@ export async function xdelo_logProcessingEvent(
     // Insert with guaranteed valid UUID
     const { error } = await supabase.from("unified_audit_logs").insert({
       event_type: eventType,
-      entity_id: validEntityId,
+      entity_id: validEntityId,  // Always use a new UUID
       correlation_id: corrId,
       metadata: enhancedMetadata,
       error_message: errorMessage,
@@ -77,10 +61,32 @@ export async function xdelo_logProcessingEvent(
     });
     
     if (error) {
-      console.error(`Error logging event ${eventType}: ${error.message}`);
+      console.error(`Error logging event ${eventType}: ${error.message}`, {
+        original_entity_id: entityId,
+        correlation_id: corrId
+      });
+      
+      // Fallback to console logging when database logging fails
+      console.log(JSON.stringify({
+        level: 'ERROR',
+        message: 'Database logging failed, fallback log',
+        event_type: eventType,
+        entity_id_original: entityId,
+        correlation_id: corrId,
+        metadata: enhancedMetadata,
+        error_message: errorMessage,
+        event_timestamp: new Date().toISOString(),
+        logging_error: error.message
+      }));
     }
   } catch (e) {
-    console.error(`Exception in logProcessingEvent: ${e instanceof Error ? e.message : String(e)}`);
+    // Enhanced error logging for exceptions during logging
+    console.error(`Exception in logProcessingEvent: ${e instanceof Error ? e.message : String(e)}`, {
+      event_type: eventType,
+      entity_id: entityId,
+      correlation_id: correlationId,
+      timestamp: new Date().toISOString()
+    });
   }
 }
 
