@@ -1,18 +1,11 @@
 
 import { useState, useCallback } from 'react';
-import { MediaUtilsState } from './types';
+import { MediaProcessingState, MediaProcessingStateActions } from './types';
 
 /**
- * Create state management hooks for media operations
+ * Creates media processing state and actions
  */
-export function createMediaProcessingState(): [
-  MediaUtilsState,
-  {
-    setIsProcessing: (value: boolean) => void;
-    addProcessingMessageId: (id: string) => void;
-    removeProcessingMessageId: (id: string) => void;
-  }
-] {
+export function createMediaProcessingState(): [MediaProcessingState, MediaProcessingStateActions] {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessageIds, setProcessingMessageIds] = useState<Record<string, boolean>>({});
 
