@@ -1,4 +1,3 @@
-
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { xdelo_logProcessingEvent, xdelo_createNonMediaMessage, LoggerInterface } from '../../_shared/databaseOperations.ts';
@@ -56,11 +55,12 @@ export async function handleTextMessage(
     try {
       await xdelo_logProcessingEvent(
         "text_processing_started",
-        crypto.randomUUID(),
+        crypto.randomUUID().toString(),
         correlationId,
         {
           message_id: message.message_id,
           chat_id: message.chat.id,
+          correlation_id: correlationId,
           is_edit: context.isEdit,
           is_forward: isMessageForwarded(message)
         }
@@ -153,7 +153,7 @@ export async function handleTextMessage(
     try {
       await xdelo_logProcessingEvent(
         "text_message_processing_failed",
-        crypto.randomUUID(),
+        crypto.randomUUID().toString(),
         correlationId,
         {
           message_id: message?.message_id,

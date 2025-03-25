@@ -67,9 +67,9 @@ export class Logger {
       }
       
       // Generate a new UUID if not valid
-      return crypto.randomUUID();
+      return crypto.randomUUID().toString();
     } catch {
-      return crypto.randomUUID();
+      return crypto.randomUUID().toString();
     }
   }
 

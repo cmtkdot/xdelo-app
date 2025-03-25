@@ -74,7 +74,7 @@ export async function logErrorToDatabase(error: ErrorDetail): Promise<string | n
       .from("unified_audit_logs")
       .insert({
         event_type: "edge_function_error",
-        entity_id: error.messageId || crypto.randomUUID(),
+        entity_id: error.messageId || crypto.randomUUID().toString(),
         metadata: {
           function_name: error.functionName,
           error_time: new Date().toISOString(),

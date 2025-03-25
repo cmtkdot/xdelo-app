@@ -322,7 +322,7 @@ export async function xdelo_updateMessage(
     await xdelo_logProcessingEvent(
       'message_updated',
       existingMessage.id,
-      updateData.correlation_id?.toString() || crypto.randomUUID(),
+      updateData.correlation_id?.toString() || crypto.randomUUID().toString(),
       {
         telegram_message_id: messageId,
         chat_id: chatId
@@ -395,7 +395,7 @@ export async function xdelo_updateMessageProcessingState(
     await xdelo_logProcessingEvent(
       'processing_state_changed',
       params.messageId,
-      existingMessage?.correlation_id?.toString() || crypto.randomUUID(),
+      existingMessage?.correlation_id?.toString() || crypto.randomUUID().toString(),
       {
         telegram_message_id: existingMessage?.telegram_message_id,
         chat_id: existingMessage?.chat_id,

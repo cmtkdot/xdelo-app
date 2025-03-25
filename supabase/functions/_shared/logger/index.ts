@@ -152,3 +152,5 @@ export function getLogger(componentOrLogger?: string | Logger | null, correlatio
   // Default to a generic logger
   return createLogger('generic', correlationId);
 }
+correlationId);
+}

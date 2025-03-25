@@ -51,7 +51,7 @@ const handleUserData = async (req: Request, context: { correlationId: string, lo
     // Use the proper logging function with UUID handling
     await xdelo_logProcessingEvent(
       'user_data_accessed',
-      crypto.randomUUID(),
+      crypto.randomUUID().toString(),
       correlationId,
       {
         user_id: userId,
