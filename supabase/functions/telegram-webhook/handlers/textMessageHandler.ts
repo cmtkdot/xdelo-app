@@ -1,8 +1,7 @@
 import { supabaseClient } from '../../_shared/supabase.ts';
+import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
-import { xdelo_logProcessingEvent, xdelo_createNonMediaMessage, LoggerInterface } from '../../_shared/databaseOperations.ts';
-import { createLoggerAdapter } from '../../_shared/logger/adapter.ts';
-import { createSuccessResponse, createErrorResponse } from '../../_shared/edgeHandler.ts';
+import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
 
 /**
  * Check if a message is forwarded from another source
@@ -27,148 +26,107 @@ function isMessageForwarded(message: any): boolean {
   return false;
 }
 
-/**
- * Handle a non-media message from Telegram
- */
-export async function handleTextMessage(
-  message: TelegramMessage,
-  context: MessageContext
-): Promise<Response> {
-  const { correlationId } = context;
-  const loggerAdapter = createLoggerAdapter(context.logger, correlationId);
-  
+export async function handleOtherMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
-    // Check if message is valid
-    if (!message || !message.chat || !message.message_id) {
-      throw new Error('Invalid message format');
-    }
-    
-    // Log the handling of a text message
-    loggerAdapter.info('Processing text message', {
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-      username: message.from?.username,
-      message_type: 'text'
-    });
-    
-    // Log processing start to database - do this only once
-    try {
-      await xdelo_logProcessingEvent(
-        "text_processing_started",
-        crypto.randomUUID().toString(),
-        correlationId,
-        {
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          correlation_id: correlationId,
-          is_edit: context.isEdit,
-          is_forward: isMessageForwarded(message)
-        }
-      );
-    } catch (logError) {
-      loggerAdapter.warn("Failed to log processing start event", logError);
-      // Continue processing even if logging fails
-    }
-    
-    // Extract info about forwarded messages
+    const { isChannelPost, correlationId, logger } = context;
+    // Use the utility function to determine if message is forwarded
     const isForwarded = isMessageForwarded(message);
     
-    let forwardInfo = null;
-    if (isForwarded) {
-      forwardInfo = {
-        from_chat_id: message.forward_from_chat?.id,
-        from_message_id: message.forward_from_message_id,
-        from_user_id: message.forward_from?.id,
-        forward_date: message.forward_date ? new Date(message.forward_date * 1000).toISOString() : undefined,
-        forward_signature: message.forward_signature,
-        forward_sender_name: message.forward_sender_name
-      };
+    // Log the start of message processing
+    logger?.info(`Processing non-media message ${message.message_id} in chat ${message.chat.id}`, {
+      message_text: message.text ? `${message.text.substring(0, 50)}${message.text.length > 50 ? '...' : ''}` : null,
+      message_type: isChannelPost ? 'channel_post' : 'message',
+      is_forwarded: isForwarded,
+    });
+    
+    // Generate message URL
+    let message_url = undefined;
+    if (message.chat.username && message.message_id) {
+      message_url = `https://t.me/${message.chat.username}/${message.message_id}`;
     }
     
-    // Generate message URL using database function
-    const { data: message_url, error: urlError } = await supabaseClient.rpc(
-      'xdelo_construct_telegram_message_url', 
-      {
-        chat_type: message.chat.type || 'unknown',
+    // Store message data in the other_messages table
+    const { data, error } = await supabaseClient
+      .from('other_messages')
+      .insert({
+        telegram_message_id: message.message_id,
         chat_id: message.chat.id,
-        id: message.message_id
+        chat_type: message.chat.type,
+        chat_title: message.chat.title || message.chat.username || message.chat.first_name,
+        message_type: isChannelPost ? 'channel_post' : 'message',
+        message_text: message.text || message.caption || '',
+        telegram_data: message,
+        processing_state: 'completed',
+        is_forward: isForwarded,
+        correlation_id: correlationId,
+        message_url: message_url,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select('id')
+      .single();
+      
+    if (error) {
+      logger?.error(`Failed to store text message in database`, error);
+      throw error;
+    }
+    
+    // Log successful processing
+    await xdelo_logProcessingEvent(
+      "message_created",
+      data.id,
+      correlationId,
+      {
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        message_type: 'text',
+        is_forward: isForwarded,
+        message_url: message_url
       }
     );
     
-    if (urlError) {
-      loggerAdapter.warn('Error generating message URL', urlError);
-    }
-    
-    // Prepare message data for database
-    const messageData = {
-      telegram_message_id: message.message_id,
-      chat_id: message.chat.id,
-      chat_type: message.chat.type,
-      chat_title: message.chat.title,
-      text: message.text,
-      message_type: 'text',
-      from_user_id: message.from?.id,
-      from_username: message.from?.username,
-      correlation_id: correlationId,
-      is_forward: isForwarded,
-      is_edited: context.isEdit,
-      forward_info: forwardInfo,
-      media_group_id: message.media_group_id,
-      telegram_data: message,
+    logger?.info(`Successfully processed text message ${message.message_id}`, {
+      message_id: message.message_id,
+      db_id: data.id,
       message_url: message_url
-    };
+    });
     
-    // Save the text message to the database
-    const result = await xdelo_createNonMediaMessage(messageData, loggerAdapter);
-    
-    if (!result.success) {
-      throw new Error(result.error_message || 'Failed to create text message record');
-    }
-    
-    // Log success to database - do this only once
-    try {
-      await xdelo_logProcessingEvent(
-        "text_processing_completed",
-        result.id,  // Use the actual message ID if available
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        messageId: data.id, 
         correlationId,
-        {
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          db_message_id: result.id,
-          processing_time_ms: Date.now() - new Date(context.startTime).getTime()
-        }
-      );
-    } catch (logError) {
-      loggerAdapter.warn("Failed to log processing completion", logError);
-      // Continue processing even if logging fails
-    }
-    
-    // Log success to console
-    loggerAdapter.info(`Successfully created new text message: ${result.id}`);
-    
-    return createSuccessResponse({ success: true, id: result.id, correlationId });
+        message_url: message_url 
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   } catch (error) {
-    loggerAdapter.error('Error creating text message:', error);
+    context.logger?.error(`Error processing non-media message:`, { 
+      error: error.message,
+      stack: error.stack,
+      message_id: message.message_id
+    });
     
-    try {
-      await xdelo_logProcessingEvent(
-        "text_message_processing_failed",
-        crypto.randomUUID().toString(),
-        correlationId,
-        {
-          message_id: message?.message_id,
-          chat_id: message?.chat?.id,
-          error: error instanceof Error ? error.message : String(error),
-        },
-        error instanceof Error ? error.message : String(error)
-      );
-    } catch (logError) {
-      loggerAdapter.error('Failed to log error:', logError);
-    }
+    // Log the error
+    await xdelo_logProcessingEvent(
+      "message_processing_error",
+      message.message_id.toString(),
+      context.correlationId,
+      {
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        handler_type: 'other_message'
+      },
+      error.message
+    );
     
-    throw error;
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: error.message || 'Unknown error processing message',
+        correlationId: context.correlationId
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
   }
 }
-
-// Export handleOtherMessage as an alias for handleTextMessage
-export const handleOtherMessage = handleTextMessage;
