@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
@@ -17,15 +18,16 @@ const supabaseClient = createClient(
 );
 
 /**
- * Handler for edited messages (text only - media edits are handled by mediaMessageHandler)
+ * Handler for edited text messages (media edits are handled by mediaMessageHandler)
  */
 export async function handleEditedMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
     const { correlationId, logger } = context;
     
-    // Check if it contains media - if so, delegate to media handler
+    // Double-check that this is not a media message
     if (message.photo || message.video || message.document) {
-      logger?.info(`Edited message ${message.message_id} contains media, will be handled by media handler`);
+      // This shouldn't happen due to updated routing logic, but adding as a safeguard
+      logger?.warn(`Edited message ${message.message_id} contains media, will be redirected to media handler`);
       throw new Error('Edited message contains media, should be handled by mediaMessageHandler');
     }
     
