@@ -41,7 +41,7 @@ export async function xdelo_logProcessingEvent(
     // Ensure correlation ID is a string
     const corrId = correlationId?.toString() || crypto.randomUUID();
     
-    // Generate a valid UUID, but preserve original entityId in metadata
+    // Generate a valid UUID for entity_id regardless of input type
     const validEntityId = crypto.randomUUID();
     
     // Store original entity ID in metadata for reference

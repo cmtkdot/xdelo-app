@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/useToast";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
+import { Loader2, DatabaseZap } from "lucide-react";
 
 export const DatabaseFixCard = () => {
   const { toast } = useToast();
   const [isRunning, setIsRunning] = useState(false);
+  const [isFixingUuids, setIsFixingUuids] = useState(false);
 
   const handleRunMigrations = async () => {
     try {
@@ -40,6 +41,31 @@ export const DatabaseFixCard = () => {
     }
   };
 
+  const handleFixUuidLogging = async () => {
+    try {
+      setIsFixingUuids(true);
+      
+      const { data, error } = await supabase.rpc("xdelo_fix_audit_log_uuids");
+      
+      if (error) throw error;
+      
+      toast({
+        title: "UUID Logging Fixed",
+        description: `Successfully repaired ${data?.fixed_count || 0} audit log entries.`,
+      });
+    } catch (error: any) {
+      console.error('Error fixing UUID logging:', error);
+      
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fix UUID logging issues",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFixingUuids(false);
+    }
+  };
+
   return (
     <Card className="p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -49,20 +75,39 @@ export const DatabaseFixCard = () => {
             Run database fixes and migrations to ensure schema compatibility
           </p>
         </div>
-        <Button 
-          variant="outline" 
-          onClick={handleRunMigrations}
-          disabled={isRunning}
-        >
-          {isRunning ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Running...
-            </>
-          ) : (
-            "Run Fixes"
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleFixUuidLogging}
+            disabled={isFixingUuids || isRunning}
+          >
+            {isFixingUuids ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Fixing UUIDs...
+              </>
+            ) : (
+              <>
+                <DatabaseZap className="mr-2 h-4 w-4" />
+                Fix UUID Logging
+              </>
+            )}
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={handleRunMigrations}
+            disabled={isRunning || isFixingUuids}
+          >
+            {isRunning ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Running...
+              </>
+            ) : (
+              "Run Migrations"
+            )}
+          </Button>
+        </div>
       </div>
     </Card>
   );
