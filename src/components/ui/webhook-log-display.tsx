@@ -11,6 +11,11 @@ interface WebhookLogDisplayProps {
 export function WebhookLogDisplay({ log, showDetails = false }: WebhookLogDisplayProps) {
   const [isExpanded, setIsExpanded] = useState(showDetails);
 
+  // Handle case where log is undefined or null
+  if (!log) {
+    return <div className="text-sm text-muted-foreground">No log data available</div>;
+  }
+
   // Safely get the summary text from the log
   const getSummaryText = () => {
     if (!log) return "No log data available";
@@ -25,10 +30,6 @@ export function WebhookLogDisplay({ log, showDetails = false }: WebhookLogDispla
     
     return log.summary || `${cleanEventType} processed successfully`;
   };
-
-  if (!log) {
-    return <div className="text-sm text-muted-foreground">No log data available</div>;
-  }
 
   return (
     <div className="rounded-md border bg-muted/40 p-3 text-sm">

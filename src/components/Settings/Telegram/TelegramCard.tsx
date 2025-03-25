@@ -142,6 +142,7 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
         summary: "Webhook set successfully", 
         timestamp: new Date().toISOString() 
       });
+      
       setWebhookStatus('success');
       toast({
         title: "Success",
@@ -181,7 +182,7 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
     setIsLoading(true);
     
     try {
-      // Use upsert with explicit UUID instead of '1' for the id
+      // Use upsert with explicit string ID instead of a UUID
       const { error } = await supabase
         .from('settings')
         .upsert({ 
