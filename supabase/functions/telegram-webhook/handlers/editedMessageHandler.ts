@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-import { corsHeaders } from '../utils/cors.ts';
+import { corsHeaders, addCorsHeaders } from '../utils/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { xdelo_logProcessingEvent } from '../dbOperations.ts';
 import { constructTelegramMessageUrl, isMessageForwarded } from '../utils/messageUtils.ts';
@@ -165,27 +165,31 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       );
     }
   } catch (error) {
-    context.logger?.error(`Error processing edited message: ${error.message}`, { stack: error.stack });
+    logger?.error(`Error processing edited message: ${error.message}`, { 
+      stack: error.stack,
+      message_id: message.message_id
+    });
     
     await xdelo_logProcessingEvent(
-      "edited_message_processing_error",
-      `${message.chat.id}_${message.message_id}`,
-      context.correlationId,
+      "edit_processing_error",
+      message.message_id.toString(),
+      correlationId,
       {
         message_id: message.message_id,
         chat_id: message.chat.id,
-        error: error.message
+        error: error.message,
+        stack: error.stack
       },
       error.message
     );
     
-    return new Response(
+    return addCorsHeaders(new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message || 'Unknown error processing edited message',
-        correlationId: context.correlationId
+        error: error.message,
+        correlationId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    );
+    ));
   }
 }

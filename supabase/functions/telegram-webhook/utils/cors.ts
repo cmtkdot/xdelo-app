@@ -1,4 +1,3 @@
-
 // CORS headers for Supabase Edge Functions
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -33,4 +32,28 @@ export function createCorsResponse(
       },
     }
   );
+}
+
+// Add CORS headers to an existing response
+export function addCorsHeaders(response: Response): Response {
+  const newHeaders = new Headers(response.headers);
+  
+  // Add CORS headers
+  Object.entries(corsHeaders).forEach(([key, value]) => {
+    newHeaders.set(key, value);
+  });
+  
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders
+  });
+}
+
+// Handle preflight CORS requests
+export function handleCorsPreflightRequest(req: Request): Response | null {
+  if (isPreflightRequest(req)) {
+    return handleOptionsRequest();
+  }
+  return null;
 }

@@ -1,4 +1,3 @@
-
 import { corsHeaders, addCorsHeaders } from '../utils/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { xdelo_logProcessingEvent } from '../dbOperations.ts';
@@ -67,7 +66,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
       message_url: message_url
     });
     
-    return new Response(
+    return addCorsHeaders(new Response(
       JSON.stringify({ 
         success: true, 
         messageId: data.id, 
@@ -75,7 +74,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
         message_url: message_url 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    ));
   } catch (error) {
     context.logger?.error(`❌ Error processing non-media message:`, { 
       error: error.message,
@@ -96,13 +95,13 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
       error.message
     );
     
-    return new Response(
+    return addCorsHeaders(new Response(
       JSON.stringify({ 
         success: false, 
         error: error.message || 'Unknown error processing message',
         correlationId: context.correlationId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    );
+    ));
   }
 }

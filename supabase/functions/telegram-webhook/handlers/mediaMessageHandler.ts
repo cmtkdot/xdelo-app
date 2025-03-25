@@ -1,5 +1,5 @@
 import { supabaseClient } from '../utils/supabase.ts';
-import { corsHeaders } from '../utils/cors.ts';
+import { corsHeaders, addCorsHeaders } from '../utils/cors.ts';
 import { 
   xdelo_downloadMediaFromTelegram,
   xdelo_uploadMediaToStorage,
@@ -75,13 +75,13 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
         logError instanceof Error ? logError.message : String(logError)}`);
     }
     
-    return new Response(
+    return addCorsHeaders(new Response(
       JSON.stringify({ 
         error: errorMessage,
         correlationId: context.correlationId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    );
+    ));
   }
 }
 
@@ -275,10 +275,10 @@ async function xdelo_handleEditedMediaMessage(
       }
     }
 
-    return new Response(
+    return addCorsHeaders(new Response(
       JSON.stringify({ success: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    ));
   }
   
   // If existing message not found, handle as new message
@@ -390,10 +390,10 @@ async function xdelo_handleNewMediaMessage(
         }
       );
       
-      return new Response(
+      return addCorsHeaders(new Response(
         JSON.stringify({ success: true, duplicate: true, id: result.id, correlationId }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      ));
     }
     
     if (!result.success) {
@@ -425,10 +425,10 @@ async function xdelo_handleNewMediaMessage(
       storage_path: mediaResult.fileInfo.storage_path
     });
     
-    return new Response(
+    return addCorsHeaders(new Response(
       JSON.stringify({ success: true, id: result.id, correlationId }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    ));
   } catch (createError) {
     logger?.error(`Error creating new media message: ${
       createError instanceof Error ? createError.message : String(createError)}`, {
