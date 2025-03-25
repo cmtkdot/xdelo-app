@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { 
@@ -202,7 +203,7 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
         }
       } catch (syncError) {
         console.error(`Media group sync error (non-fatal): ${syncError.message}`);
-        await logErrorToDatabase(supabaseClient, {
+        await logErrorToDatabase({
           messageId,
           errorMessage: `Media group sync error: ${syncError.message}`,
           correlationId: requestCorrelationId,
@@ -228,14 +229,14 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
   } catch (error) {
     console.error(`Error analyzing caption: ${error.message}`);
     
-    await logErrorToDatabase(supabaseClient, {
+    await logErrorToDatabase({
       messageId,
       errorMessage: error.message,
       correlationId: requestCorrelationId,
       functionName: 'parse-caption-with-ai'
     });
     
-    await updateMessageWithError(supabaseClient, messageId, error.message, requestCorrelationId);
+    await updateMessageWithError(messageId, error.message, requestCorrelationId);
     
     if (queue_id) {
       await markQueueItemAsFailed(queue_id, error.message);

@@ -1,4 +1,5 @@
 
+
 // Standardized Supabase client for Edge Functions
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";

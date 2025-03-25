@@ -3558,6 +3558,12 @@ export type Database = {
             }
             Returns: string
           }
+      xdelo_direct_caption_processing: {
+        Args: {
+          p_caption: string
+        }
+        Returns: Json
+      }
       xdelo_fail_message_processing: {
         Args: {
           p_message_id: string
@@ -3666,6 +3672,15 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_handle_message_edit: {
+        Args: {
+          p_message_id: string
+          p_caption: string
+          p_is_edit?: boolean
+          p_correlation_id?: string
+        }
+        Returns: Json
+      }
       xdelo_handle_message_update: {
         Args: {
           p_message_id: string
@@ -3717,6 +3732,16 @@ export type Database = {
           p_raw_data?: Json
         }
         Returns: undefined
+      }
+      xdelo_logprocessingevent: {
+        Args: {
+          p_event_type: string
+          p_entity_id: string
+          p_correlation_id: string
+          p_metadata?: Json
+          p_error_message?: string
+        }
+        Returns: string
       }
       xdelo_mark_for_redownload: {
         Args: {
