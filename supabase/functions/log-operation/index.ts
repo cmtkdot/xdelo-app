@@ -1,5 +1,5 @@
 
-import { createHandler } from '../_shared/baseHandler.ts';
+import { createEdgeHandler, HandlerContext } from '../_shared/edgeHandler.ts';
 import { createSupabaseClient } from '../_shared/supabase.ts';
 
 interface LogRequest {
@@ -10,9 +10,13 @@ interface LogRequest {
   metadata?: Record<string, unknown>;
   errorMessage?: string;
   correlationId?: string;
+  userId?: string;
 }
 
-export default createHandler(async (req: Request) => {
+// Create the handler using the new edge handler
+const handler = createEdgeHandler(async (req: Request, context: HandlerContext) => {
+  const { logger, correlationId: requestCorrelationId } = context;
+  
   // Parse request body
   const { 
     eventType, 
@@ -21,7 +25,8 @@ export default createHandler(async (req: Request) => {
     newState, 
     metadata = {}, 
     errorMessage,
-    correlationId = crypto.randomUUID()
+    correlationId = requestCorrelationId || crypto.randomUUID(),
+    userId
   } = await req.json() as LogRequest;
   
   // Validate request
@@ -39,9 +44,30 @@ export default createHandler(async (req: Request) => {
     );
   }
   
+  // Ensure entityId is a valid UUID, if not, generate one and include the original ID in metadata
+  let validEntityId: string;
+  let enhancedMetadata = { ...metadata };
+
+  try {
+    // Try to parse as UUID to validate
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (entityId && uuidRegex.test(entityId)) {
+      validEntityId = entityId;
+    } else {
+      // Not a valid UUID, generate one and store original in metadata
+      validEntityId = crypto.randomUUID();
+      // Add the original ID to metadata
+      enhancedMetadata.original_entity_id = entityId;
+    }
+  } catch (e) {
+    // Any error, use a new UUID
+    validEntityId = crypto.randomUUID();
+    enhancedMetadata.original_entity_id = entityId;
+  }
+  
   // Add correlation ID and timestamp to metadata
-  const enhancedMetadata = {
-    ...metadata,
+  enhancedMetadata = {
+    ...enhancedMetadata,
     logged_at: new Date().toISOString(),
     correlation_id: correlationId,
     logged_from: 'edge_function'
@@ -55,24 +81,31 @@ export default createHandler(async (req: Request) => {
   // Create Supabase client
   const supabase = createSupabaseClient();
   
+  logger.info('Logging operation', {
+    eventType, 
+    entityId: validEntityId,
+    correlationId
+  });
+  
   try {
     // Insert log entry
     const { data, error } = await supabase
       .from('unified_audit_logs')
       .insert({
         event_type: eventType,
-        entity_id: entityId,
+        entity_id: validEntityId,
         previous_state: previousState,
         new_state: newState,
         metadata: enhancedMetadata,
         error_message: errorMessage,
-        correlation_id: correlationId
+        correlation_id: correlationId,
+        user_id: userId
       })
       .select('id')
       .single();
     
     if (error) {
-      console.error('Error logging operation:', error);
+      logger.error('Error logging operation', error);
       
       return new Response(
         JSON.stringify({ 
@@ -94,15 +127,17 @@ export default createHandler(async (req: Request) => {
       { headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Exception logging operation:', error);
+    logger.error('Exception logging operation', error);
     
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
         correlationId
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 });
+
+export default handler;
