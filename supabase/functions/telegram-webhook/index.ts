@@ -6,6 +6,7 @@ import { handleOtherMessage } from "./handlers/textMessageHandler.ts";
 import { handleEditedMessage } from "./handlers/editedMessageHandler.ts";
 import { createLoggerWithErrorHandling } from "./utils/logger.ts";
 import { v4 as uuidv4 } from "https://esm.sh/uuid@9.0.0";
+import { xdelo_processDelayedMediaGroupSync } from "./utils/databaseOperations.ts";
 
 /**
  * Check if a message contains media
@@ -94,6 +95,35 @@ serve(async (req) => {
       startTime: new Date().toISOString(),
       logger
     };
+    
+    // Process delayed media group sync if needed
+    if (message.media_group_id && !isEdit) {
+      // Start a background task to process delayed media group sync
+      // This ensures that even if the initial message doesn't have caption,
+      // we'll sync the group later
+      EdgeRuntime.waitUntil(
+        (async () => {
+          try {
+            logger.info("Starting delayed media group sync in background", {
+              media_group_id: message.media_group_id,
+              message_id: message.message_id,
+              correlation_id: correlationId
+            });
+            
+            // Wait a short delay to allow other messages in the group to arrive
+            await new Promise(resolve => setTimeout(resolve, 10000));
+            
+            // Process the delayed sync
+            await xdelo_processDelayedMediaGroupSync(message.media_group_id, correlationId);
+          } catch (err) {
+            logger.error("Error in delayed media group sync background task", {
+              media_group_id: message.media_group_id,
+              error: err.message
+            });
+          }
+        })()
+      );
+    }
     
     // IMPORTANT: Check for media first, regardless of whether it's an edit or not
     // This ensures all media messages go to the media handler

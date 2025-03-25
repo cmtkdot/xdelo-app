@@ -193,9 +193,9 @@ export async function handleEditedMessage(message: any, context: any) {
       has_caption: hasCaption(message)
     });
     
-    // Step 4: Directly process the caption and sync media group if needed
+    // Step 4: Directly process the caption and sync media group if needed using the unified processor
     if (hasCaption(message)) {
-      // Process the caption directly
+      // Process the caption directly using the unified processor
       const captionResult = await xdelo_processCaptionFromWebhook(
         existingMessage.id,
         correlationId,
@@ -208,7 +208,7 @@ export async function handleEditedMessage(message: any, context: any) {
         data: captionResult.data
       });
       
-      // If this message is part of a media group, sync the group
+      // If this message is part of a media group, sync the group using the unified processor
       if (existingMessage.media_group_id) {
         const syncResult = await xdelo_syncMediaGroupFromWebhook(
           existingMessage.media_group_id,

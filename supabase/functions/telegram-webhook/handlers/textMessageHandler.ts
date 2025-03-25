@@ -1,4 +1,3 @@
-
 import { supabaseClient } from '../utils/supabase.ts';
 import { corsHeaders } from '../utils/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
@@ -21,6 +20,30 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
     
     // Generate message URL
     const message_url = constructTelegramMessageUrl(message);
+    
+    // If this message has a media_group_id, it might be a caption-only message that's part of a media group
+    if (message.media_group_id && !isEdit) {
+      logger?.info(`Text message with media_group_id detected`, {
+        message_id: message.message_id,
+        media_group_id: message.media_group_id
+      });
+      
+      // Process the media group to sync caption to related media messages
+      try {
+        await xdelo_processDelayedMediaGroupSync(message.media_group_id, correlationId);
+        logger?.info(`Initiated delayed media group sync`, {
+          message_id: message.message_id,
+          media_group_id: message.media_group_id
+        });
+      } catch (syncError) {
+        logger?.warn(`Error initiating delayed media group sync`, {
+          message_id: message.message_id,
+          media_group_id: message.media_group_id,
+          error: syncError.message
+        });
+        // Continue processing the text message even if sync fails
+      }
+    }
     
     // If this is an edit, check if message exists
     if (isEdit) {

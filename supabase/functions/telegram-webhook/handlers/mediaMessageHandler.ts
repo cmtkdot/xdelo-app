@@ -23,6 +23,7 @@ import { createMessage, checkDuplicateFile } from '../dbOperations.ts';
 import { constructTelegramMessageUrl } from '../utils/messageUtils.ts';
 import { xdelo_logProcessingEvent } from '../utils/databaseOperations.ts';
 import { prepareEditHistoryEntry } from '../utils/messageUtils.ts';
+import { xdelo_syncMediaGroupFromWebhook, xdelo_processCaptionFromWebhook } from '../utils/databaseOperations.ts';
 
 // For Deno compatibility
 declare const Deno: {
@@ -57,6 +58,56 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       response = await xdelo_handleEditedMediaMessage(message, context, previousMessage);
     } else {
       response = await xdelo_handleNewMediaMessage(message, context);
+    }
+    
+    // After successful processing, trigger delayed media group sync if needed
+    if (message.media_group_id && response.status === 200) {
+      try {
+        const responseBody = await response.clone().json();
+        
+        // If this is a successful message with a caption, trigger media group sync
+        if (responseBody.success && message.caption) {
+          logger?.info("Starting background media group sync after successful message processing", {
+            message_id: message.message_id,
+            media_group_id: message.media_group_id,
+            message_id_db: responseBody.id || responseBody.messageId
+          });
+          
+          // Use waitUntil to not block the response
+          EdgeRuntime.waitUntil(
+            (async () => {
+              try {
+                // Allow some time for other messages in the group to be processed
+                await new Promise(resolve => setTimeout(resolve, 5000));
+                
+                // Use the unified processor for consistent group syncing
+                await xdelo_syncMediaGroupFromWebhook(
+                  message.media_group_id,
+                  responseBody.id || responseBody.messageId,
+                  correlationId,
+                  true, // Force sync to ensure it happens
+                  false // Don't sync edit history for new messages
+                );
+                
+                logger?.info("Background media group sync completed", {
+                  media_group_id: message.media_group_id,
+                  source_message_id: responseBody.id || responseBody.messageId
+                });
+              } catch (syncError) {
+                logger?.error("Error in background media group sync", {
+                  error: syncError.message,
+                  media_group_id: message.media_group_id,
+                  source_message_id: responseBody.id || responseBody.messageId
+                });
+              }
+            })()
+          );
+        }
+      } catch (parseError) {
+        logger?.warn("Could not parse response for background media group sync", {
+          error: parseError.message
+        });
+      }
     }
     
     return response;
@@ -566,6 +617,29 @@ async function xdelo_handleNewMediaMessage(
       );
       
       throw new Error(result.error_message || 'Failed to create message record');
+    }
+    
+    // Process caption immediately using unified processor if caption exists
+    if (message.caption) {
+      try {
+        logger?.info("Processing initial caption for new media message", {
+          message_id: result.id,
+          caption_length: message.caption.length
+        });
+        
+        // Use the unified processor
+        await xdelo_processCaptionFromWebhook(
+          result.id,
+          correlationId,
+          false // No need to force for initial processing
+        );
+      } catch (captionError) {
+        logger?.warn("Error processing initial caption, will be retried later", {
+          message_id: result.id,
+          error: captionError.message
+        });
+        // Don't fail the whole process for caption processing errors
+      }
     }
     
     // Log the success
