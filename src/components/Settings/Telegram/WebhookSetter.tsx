@@ -1,14 +1,15 @@
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, Check, Loader2 } from "lucide-react";
+import { Loader2, Check, AlertCircle } from "lucide-react";
 import { WebhookLogDisplay } from "@/components/ui/webhook-log-display";
 
 interface WebhookSetterProps {
   onSetWebhook: () => Promise<void>;
   isSettingWebhook: boolean;
   webhookStatus: 'idle' | 'success' | 'error';
-  webhookLog: any;
-  disabled: boolean;
+  webhookLog: any | null;
+  disabled?: boolean;
 }
 
 export function WebhookSetter({
@@ -16,7 +17,7 @@ export function WebhookSetter({
   isSettingWebhook,
   webhookStatus,
   webhookLog,
-  disabled
+  disabled = false
 }: WebhookSetterProps) {
   return (
     <div className="space-y-2 pt-2">
@@ -34,21 +35,21 @@ export function WebhookSetter({
           "Set Telegram Webhook"
         )}
       </Button>
-        
+      
       {webhookStatus === 'success' && (
         <div className="flex items-center text-green-500 mt-2">
           <Check className="h-4 w-4 mr-2" />
           <span className="text-sm">Webhook set successfully</span>
         </div>
       )}
-        
+      
       {webhookStatus === 'error' && (
         <div className="flex items-center text-red-500 mt-2">
           <AlertCircle className="h-4 w-4 mr-2" />
           <span className="text-sm">Failed to set webhook</span>
         </div>
       )}
-
+      
       {webhookLog && (
         <div className="mt-4">
           <h4 className="text-sm font-medium mb-2">Webhook Setup Log</h4>

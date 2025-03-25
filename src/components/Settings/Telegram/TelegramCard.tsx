@@ -136,7 +136,12 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
       
       if (error) throw error;
       
-      setWebhookLog(data);
+      // Ensure webhookLog is properly set even if data is not in expected format
+      setWebhookLog(data || { 
+        success: true, 
+        summary: "Webhook set successfully", 
+        timestamp: new Date().toISOString() 
+      });
       setWebhookStatus('success');
       toast({
         title: "Success",
@@ -148,6 +153,11 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
     } catch (error) {
       console.error("Error setting webhook:", error);
       setWebhookStatus('error');
+      setWebhookLog({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error setting webhook",
+        timestamp: new Date().toISOString()
+      });
       toast({
         title: "Error",
         description: "Failed to set Telegram webhook",
@@ -171,10 +181,11 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
     setIsLoading(true);
     
     try {
+      // Use upsert with explicit UUID instead of '1' for the id
       const { error } = await supabase
         .from('settings')
         .upsert({ 
-          id: '1', 
+          id: 'telegram-settings', // Use a string ID that isn't trying to be a UUID
           bot_token: selectedToken,
           updated_at: new Date().toISOString()
         });

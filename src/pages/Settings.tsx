@@ -20,7 +20,8 @@ const Settings = () => {
     const { data: settings, error } = await supabase
       .from('settings')
       .select('bot_token, webhook_url')
-      .single();
+      .eq('id', 'telegram-settings')
+      .maybeSingle(); // Use maybeSingle to handle the case where no record exists
 
     if (!error && settings) {
       setBotToken(settings.bot_token);
