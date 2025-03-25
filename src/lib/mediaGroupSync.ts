@@ -16,7 +16,7 @@ export async function syncMediaGroup(
     // If source message ID is not provided, try to find the best message
     // to use as the source of truth for this group
     if (!sourceMessageId) {
-      const { data: findResult } = await supabase.rpc(
+      const { data: findResult } = await supabase.rpc<string>(
         'xdelo_find_caption_message',
         { p_media_group_id: mediaGroupId }
       );
@@ -34,7 +34,10 @@ export async function syncMediaGroup(
     const correlationId = crypto.randomUUID().toString();
     
     // Call the database function directly instead of the edge function
-    const { data, error } = await supabase.rpc(
+    const { data, error } = await supabase.rpc<{
+      updated_count?: number;
+      [key: string]: any;
+    }>(
       'xdelo_sync_media_group_content',
       {
         p_media_group_id: mediaGroupId,
@@ -51,7 +54,7 @@ export async function syncMediaGroup(
     
     console.log('Media group sync result:', data);
     
-    // Fixed: Properly handle the data response
+    // Properly handle the data response
     const result = {
       success: true,
       mediaGroupId,

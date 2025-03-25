@@ -56,6 +56,34 @@ declare module "@supabase/supabase-js" {
       params?: {}
     ): { data: T; error: null } | { data: null; error: Error };
 
+    // Add RPC for media group synchronization with proper return type
+    rpc<T = { updated_count?: number; [key: string]: any }>(
+      fn: "xdelo_sync_media_group_content",
+      params: {
+        p_media_group_id: string;
+        p_source_message_id: string;
+        p_correlation_id: string;
+        p_force_sync?: boolean;
+        p_sync_edit_history?: boolean;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
+
+    // Add RPC for finding caption message
+    rpc<T = string>(
+      fn: "xdelo_find_caption_message",
+      params: { p_media_group_id: string }
+    ): { data: T; error: null } | { data: null; error: Error };
+
+    // Add RPC for processing captions
+    rpc<T = { success: boolean; message?: string; [key: string]: any }>(
+      fn: "xdelo_process_caption_workflow",
+      params: {
+        p_message_id: string;
+        p_correlation_id: string;
+        p_force?: boolean;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
+
     // Add any other custom RPC functions here...
   }
 }

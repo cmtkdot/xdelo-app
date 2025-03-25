@@ -196,7 +196,11 @@ export function useMediaUtils() {
       const correlationId = crypto.randomUUID().toString();
       
       // Call database function directly instead of edge function
-      const { data, error } = await supabase.rpc(
+      const { data, error } = await supabase.rpc<{
+        success: boolean;
+        message?: string;
+        [key: string]: any;
+      }>(
         'xdelo_process_caption_workflow',
         {
           p_message_id: message.id,
@@ -212,14 +216,17 @@ export function useMediaUtils() {
       // Refresh the data
       queryClient.invalidateQueries({ queryKey: ['messages'] });
       
-      if (data?.success) {
+      if (data && data.success) {
         toast({
           title: "Analysis Complete",
           description: data.message || "The message has been analyzed successfully."
         });
-        return data;
+        return {
+          success: true,
+          message: data.message || "Analysis completed successfully"
+        };
       } else {
-        throw new Error(data?.message || 'Analysis failed');
+        throw new Error((data && data.message) || 'Analysis failed');
       }
     } catch (error) {
       console.error('Error analyzing caption:', error);
