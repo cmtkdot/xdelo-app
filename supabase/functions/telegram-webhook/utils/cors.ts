@@ -1,37 +1,36 @@
-// CORS headers for cross-origin requests
+
+// CORS headers for Supabase Edge Functions
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-/**
- * Handle CORS preflight requests
- */
-export function handleCorsPreflightRequest(request: Request): Response | null {
-  if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: corsHeaders,
-      status: 204
-    });
-  }
-  return null;
+// Handle preflight OPTIONS request
+export function handleOptionsRequest() {
+  return new Response(null, { headers: corsHeaders });
 }
 
-/**
- * Add CORS headers to a Response
- */
-export function addCorsHeaders(response: Response): Response {
-  const newHeaders = new Headers(response.headers);
+// Check if a request is a preflight request
+export function isPreflightRequest(req: Request): boolean {
+  return req.method === 'OPTIONS';
+}
+
+// Create a response with CORS headers
+export function createCorsResponse(
+  body: any, 
+  options: { status?: number; headers?: Record<string, string> } = {}
+): Response {
+  const { status = 200, headers = {} } = options;
   
-  // Add CORS headers
-  Object.entries(corsHeaders).forEach(([key, value]) => {
-    newHeaders.set(key, value);
-  });
-  
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: newHeaders
-  });
-} 
+  return new Response(
+    typeof body === 'string' ? body : JSON.stringify(body),
+    {
+      status,
+      headers: {
+        'Content-Type': 'application/json',
+        ...corsHeaders,
+        ...headers,
+      },
+    }
+  );
+}

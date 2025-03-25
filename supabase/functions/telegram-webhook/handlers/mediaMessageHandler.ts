@@ -17,7 +17,7 @@ import {
   ForwardInfo,
   MessageInput,
 } from '../types.ts';
-import { createMessage, checkDuplicateFile, xdelo_logProcessingEvent } from '../dbOperations.ts';
+import { createMessage, xdelo_logProcessingEvent } from '../dbOperations.ts';
 import { constructTelegramMessageUrl } from '../utils/messageUtils.ts';
 
 // Get Telegram bot token from environment
