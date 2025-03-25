@@ -1,3 +1,4 @@
+
 import { corsHeaders } from "../../utils/cors.ts";
 import { supabaseClient } from "../../utils/supabase.ts";
 import { xdelo_processMessageMedia } from "../../utils/media/mediaStorage.ts";
@@ -111,7 +112,7 @@ export async function handleNewMediaMessage(message: any, context: any) {
         duration: message.video ? message.video.duration : null,
         storage_path: mediaResult.fileInfo.storage_path,
         public_url: mediaResult.fileInfo.public_url,
-        content_disposition: 'inline', // Default
+        // Removed content_disposition field
         processing_state: 'pending',
         telegram_data: message,
         is_forward: isForwarded,

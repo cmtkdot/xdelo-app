@@ -26,7 +26,7 @@ export async function xdelo_logProcessingEvent(
       { 
         p_event_type: eventType,
         p_entity_id: entityId,
-        p_correlation_id: correlationId,
+        p_correlation_id: correlationId || uuidv4(),  // Ensure correlationId is never undefined
         p_metadata: enhancedMetadata,
         p_error_message: errorMessage
       }
