@@ -7,19 +7,10 @@ import { TelegramMessage } from '../types.ts';
 
 /**
  * Construct a URL to the message in Telegram
- */
-export function constructTelegramMessageUrl(chatId: number, messageId: number): string {
-  // Convert private channel format (-100...) to public format
-  const chatIdStr = chatId.toString();
-  const formattedChatId = chatIdStr.startsWith('-100') ? chatIdStr.substring(4) : chatIdStr;
-  
-  return `https://t.me/c/${formattedChatId}/${messageId}`;
-}
-
-/**
- * Overloaded version that takes a message object directly
+ * Function overloading to accept either message object or chat ID and message ID
  */
 export function constructTelegramMessageUrl(message: TelegramMessage): string;
+export function constructTelegramMessageUrl(chatId: number, messageId: number): string;
 export function constructTelegramMessageUrl(chatIdOrMessage: number | TelegramMessage, messageId?: number): string {
   if (typeof chatIdOrMessage === 'object') {
     // First argument is a message object
