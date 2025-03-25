@@ -33,6 +33,7 @@ export class Logger {
       // Ensure we have a valid UUID for the entity_id
       const safeEntityId = this.validateEntityId(entityId);
       if (safeEntityId !== entityId) {
+        // Add the original entity ID to the metadata
         enhancedMetadata.original_entity_id = entityId;
       }
 
