@@ -3,10 +3,10 @@ import { supabaseClient } from "../_shared/supabase.ts";
 import { ParsedContent } from './types.ts';
 
 /**
- * Process a caption using AI
+ * Process a caption using the database function
  */
 export async function processCaption(caption: string): Promise<ParsedContent> {
-  // Use the direct caption processing function instead of OpenAI
+  // Use the direct caption processing database function
   const { data, error } = await supabaseClient.rpc(
     'xdelo_direct_caption_processing',
     {
@@ -33,7 +33,7 @@ export async function updateMessageWithParsedData(
   messageId: string, 
   parsedData: ParsedContent
 ): Promise<void> {
-  // Call the RPC function to update the message
+  // Call the RPC function to update the message with analyzed content
   const { error } = await supabaseClient.rpc(
     'xdelo_update_message_with_analyzed_content',
     {
