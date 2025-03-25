@@ -1,17 +1,11 @@
 
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { corsHeaders } from '../utils/cors.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { xdelo_logProcessingEvent } from '../utils/databaseOperations.ts';
+import { supabaseClient } from '../utils/supabase.ts';
+import { xdelo_logProcessingEvent, xdelo_processCaptionFromWebhook, xdelo_syncMediaGroupFromWebhook } from '../utils/databaseOperations.ts';
 import { handleMediaMessage } from './mediaMessageHandler.ts';
 import { handleOtherMessage } from './textMessageHandler.ts';
-
-// For Deno compatibility
-declare const Deno: {
-  env: {
-    get(key: string): string | undefined;
-  };
-};
+import { prepareEditHistoryEntry } from '../utils/messageUtils.ts';
 
 /**
  * Handle edited messages from Telegram
@@ -58,14 +52,9 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
     edit_date: message.edit_date
   });
 
-  // Create Supabase client
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-  const supabase = createClient(supabaseUrl, supabaseKey);
-
   try {
     // Check if this message exists in the other_messages table
-    const { data: existingMessage, error: fetchError } = await supabase
+    const { data: existingMessage, error: fetchError } = await supabaseClient
       .from('other_messages')
       .select('*')
       .eq('telegram_message_id', message.message_id)
@@ -99,7 +88,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       editHistory.push(previousContent);
 
       // Update the message
-      const { data: updatedMessage, error: updateError } = await supabase
+      const { data: updatedMessage, error: updateError } = await supabaseClient
         .from('other_messages')
         .update({
           message_text: message.text,
@@ -153,7 +142,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       );
     } else {
       // Message doesn't exist in other_messages, check if it exists in messages table
-      const { data: existingMediaMessage, error: mediaFetchError } = await supabase
+      const { data: existingMediaMessage, error: mediaFetchError } = await supabaseClient
         .from('messages')
         .select('*')
         .eq('telegram_message_id', message.message_id)
@@ -193,7 +182,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         });
         
         // Create a new text message but preserve the editing history
-        const { data: newTextMessage, error: createError } = await supabase
+        const { data: newTextMessage, error: createError } = await supabaseClient
           .from('other_messages')
           .insert({
             telegram_message_id: message.message_id,
@@ -226,7 +215,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         }
         
         // Update the original media message to mark it as converted
-        await supabase
+        await supabaseClient
           .from('messages')
           .update({
             converted_to_text: true,

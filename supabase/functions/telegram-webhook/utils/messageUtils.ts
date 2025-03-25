@@ -1,116 +1,71 @@
 
-/**
- * Utility functions for working with Telegram messages
- */
-
 import { TelegramMessage } from '../types.ts';
 
 /**
- * Construct a URL to the message in Telegram
- * Function overloading to accept either message object or chat ID and message ID
+ * Construct a Telegram message URL from chat ID and message ID
  */
-export function constructTelegramMessageUrl(message: TelegramMessage): string;
-export function constructTelegramMessageUrl(chatId: number, messageId: number): string;
-export function constructTelegramMessageUrl(chatIdOrMessage: number | TelegramMessage, messageId?: number): string {
-  if (typeof chatIdOrMessage === 'object') {
-    // First argument is a message object
-    return constructTelegramMessageUrl(
-      chatIdOrMessage.chat.id,
-      chatIdOrMessage.message_id
-    );
-  } else {
-    // First argument is chatId, second is messageId
-    const chatId = chatIdOrMessage;
-    // Convert private channel format (-100...) to public format
-    const chatIdStr = chatId.toString();
-    const formattedChatId = chatIdStr.startsWith('-100') ? chatIdStr.substring(4) : chatIdStr;
-    
-    return `https://t.me/c/${formattedChatId}/${messageId}`;
-  }
-}
-
-/**
- * Check if a message is a forwarded message
- */
-export function isMessageForwarded(message: TelegramMessage): boolean {
-  return !!(
-    message.forward_date || 
-    message.forward_from || 
-    message.forward_from_chat || 
-    message.forward_origin
-  );
-}
-
-/**
- * Check if a message contains media
- */
-export function hasMedia(message: TelegramMessage): boolean {
-  return !!(message.photo || message.video || message.document);
-}
-
-/**
- * Get the largest photo from a message
- */
-export function getLargestPhoto(message: TelegramMessage): any {
-  if (!message.photo || !message.photo.length) {
-    return null;
+export function constructTelegramMessageUrl(chatId: number, messageId: number): string {
+  // For channel posts (chatId starts with -100)
+  if (chatId.toString().startsWith('-100')) {
+    const channelId = chatId.toString().substring(4);
+    return `https://t.me/c/${channelId}/${messageId}`;
   }
   
-  // Photos are ordered by size, with the largest last
-  return message.photo[message.photo.length - 1];
+  // For private chats (we can't construct a URL)
+  return '';
 }
 
 /**
- * Prepare edit history entry for media or text messages
+ * Prepare an edit history entry based on what changed in the message
  */
 export function prepareEditHistoryEntry(
   existingMessage: any, 
-  message: TelegramMessage, 
-  changeType: 'caption' | 'media' | 'text' | 'media_to_text' | 'text_to_media'
-): any {
-  const base = {
-    timestamp: new Date().toISOString(),
+  newMessage: TelegramMessage, 
+  changeType: 'caption' | 'media' | 'text_to_media' | 'media_to_text'
+): Record<string, any> {
+  const timestamp = new Date().toISOString();
+  const editDate = newMessage.edit_date ? 
+    new Date(newMessage.edit_date * 1000).toISOString() : 
+    timestamp;
+  
+  // Base record
+  const historyEntry: Record<string, any> = {
+    timestamp,
+    edit_date: editDate,
     edit_source: 'telegram_edit',
-    edit_date: message.edit_date 
-      ? new Date(message.edit_date * 1000).toISOString() 
-      : new Date().toISOString()
+    change_type: changeType
   };
   
+  // Add specific fields based on change type
   switch (changeType) {
     case 'caption':
-      return {
-        ...base,
-        change_type: 'caption_changed',
-        previous_caption: existingMessage.caption,
-        new_caption: message.caption
-      };
+      historyEntry.previous_caption = existingMessage.caption;
+      historyEntry.new_caption = newMessage.caption;
+      break;
     case 'media':
-      return {
-        ...base,
-        change_type: 'media_changed',
-        previous_file_id: existingMessage.file_id,
-        previous_file_unique_id: existingMessage.file_unique_id
-      };
-    case 'text':
-      return {
-        ...base,
-        change_type: 'text_changed',
-        previous_text: existingMessage.message_text
-      };
-    case 'media_to_text':
-      return {
-        ...base,
-        change_type: 'media_removed',
-        previous_file_id: existingMessage.file_id,
-        previous_file_unique_id: existingMessage.file_unique_id
-      };
+      historyEntry.previous_file_id = existingMessage.file_id;
+      historyEntry.previous_file_unique_id = existingMessage.file_unique_id;
+      
+      // Determine new file details
+      const newFile = newMessage.photo ? 
+        newMessage.photo[newMessage.photo.length - 1] : 
+        newMessage.video || newMessage.document;
+        
+      if (newFile) {
+        historyEntry.new_file_id = newFile.file_id;
+        historyEntry.new_file_unique_id = newFile.file_unique_id;
+      }
+      break;
     case 'text_to_media':
-      return {
-        ...base,
-        change_type: 'media_added',
-        previous_text: existingMessage.message_text
-      };
-    default:
-      return base;
+      historyEntry.previous_message_text = existingMessage.message_text;
+      historyEntry.conversion_type = 'text_to_media';
+      break;
+    case 'media_to_text':
+      historyEntry.previous_file_id = existingMessage.file_id;
+      historyEntry.previous_file_unique_id = existingMessage.file_unique_id;
+      historyEntry.conversion_type = 'media_to_text';
+      break;
   }
+  
+  return historyEntry;
 }
