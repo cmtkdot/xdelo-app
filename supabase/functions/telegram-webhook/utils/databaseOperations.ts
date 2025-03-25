@@ -1,5 +1,5 @@
 
-import { supabaseClient } from './supabase.ts';
+import { supabaseClient } from "./supabase.ts";
 
 /**
  * Log a processing event to the unified_audit_logs table
