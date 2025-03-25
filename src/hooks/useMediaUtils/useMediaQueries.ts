@@ -2,6 +2,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { Message } from '@/types/entities/Message';
+import { AnalyzedContent } from '@/types/utils/AnalyzedContent';
 
 /**
  * Hook for message querying operations
@@ -85,7 +86,7 @@ export function useMediaQueries() {
   }> => {
     try {
       // Convert to a plain object to avoid type issues
-      const updateData = JSON.parse(JSON.stringify(updates));
+      const updateData = JSON.parse(JSON.stringify(updates)) as Record<string, any>;
       
       const result = await supabase
         .from('messages')

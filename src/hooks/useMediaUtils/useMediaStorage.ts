@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/useToast';
@@ -36,11 +35,7 @@ export function useMediaStorage() {
           contentType: options.contentType || file.type,
           cacheControl: '3600',
           upsert: false,
-          onUploadProgress: (progress) => {
-            const percent = Math.round((progress.loaded / progress.total) * 100);
-            setUploadProgress(percent);
-            if (options.onProgress) options.onProgress(percent);
-          }
+          // Handle progress manually since onUploadProgress isn't in FileOptions
         });
       
       if (error) throw error;
