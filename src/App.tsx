@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -18,7 +17,6 @@ import Dashboard from "./pages/Dashboard";
 
 // Lazy load other page components for better performance
 const MessagesEnhanced = lazy(() => import("./pages/MessagesEnhanced"));
-const ProductGallery = lazy(() => import("./pages/ProductGallery"));
 const MediaTable = lazy(() => import("./pages/MediaTable"));
 const AIChat = lazy(() => import("./pages/AIChat"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -160,9 +158,7 @@ function App() {
                       </Suspense>
                     } />
                     <Route path="/gallery" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <ProductGallery />
-                      </Suspense>
+                      <Navigate to="/p/public" replace />
                     } />
                     <Route path="/media-table" element={
                       <Suspense fallback={<PageLoader />}>

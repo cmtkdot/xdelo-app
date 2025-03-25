@@ -1,57 +1,13 @@
+
 import React, { useState, useEffect, useRef } from 'react'
 import { Message } from '@/types/entities/Message'
 import { 
   Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle 
+  DialogContent
 } from '@/components/ui/dialog'
-import { 
-  Tabs, 
-  TabsContent, 
-  TabsList, 
-  TabsTrigger 
-} from '@/components/ui/tabs'
-import { 
-  Accordion, 
-  AccordionContent, 
-  AccordionItem, 
-  AccordionTrigger 
-} from '@/components/ui/accordion'
-import { Button } from '@/components/ui/button'
-import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle
-} from '@/components/ui/alert-dialog'
-import { Textarea } from '@/components/ui/textarea'
-import { 
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Edit, 
-  Trash2, 
-  ExternalLink, 
-  Info, 
-  Database, 
-  Send
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { format } from 'date-fns'
-import { useTelegramOperations } from '@/hooks/useTelegramOperations'
 import { PublicMediaDetail } from './PublicMediaDetail'
 
-interface PublicMediaViewerProps {
+export interface MediaViewerProps {
   isOpen: boolean
   onClose: () => void
   currentGroup: Message[]
@@ -62,6 +18,7 @@ interface PublicMediaViewerProps {
   hasNext?: boolean
   onEdit?: (message: Message, newCaption: string) => Promise<void>
   onDelete?: (messageId: string) => Promise<void>
+  className?: string
 }
 
 export function PublicMediaViewer({
@@ -75,7 +32,8 @@ export function PublicMediaViewer({
   hasNext = false,
   onEdit,
   onDelete,
-}: PublicMediaViewerProps) {
+  className
+}: MediaViewerProps) {
   const [touchStart, setTouchStart] = useState<number | null>(null)
   const [touchEnd, setTouchEnd] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -151,4 +109,4 @@ export function PublicMediaViewer({
       />
     </div>
   )
-} 
+}
