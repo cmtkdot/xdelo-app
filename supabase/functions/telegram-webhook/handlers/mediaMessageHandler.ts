@@ -21,9 +21,9 @@ import {
 } from '../types.ts';
 import { createMessage, checkDuplicateFile } from '../dbOperations.ts';
 import { constructTelegramMessageUrl } from '../utils/messageUtils.ts';
-import { xdelo_logProcessingEvent } from '../utils/databaseOperations.ts';
+import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
 import { prepareEditHistoryEntry } from '../utils/messageUtils.ts';
-import { xdelo_syncMediaGroupFromWebhook, xdelo_processCaptionFromWebhook } from '../utils/databaseOperations.ts';
+import { xdelo_processCaptionFromWebhook, xdelo_syncMediaGroupFromWebhook } from '../../_shared/databaseOperations.ts';
 
 // For Deno compatibility
 declare const Deno: {
@@ -793,3 +793,4 @@ async function createIncompleteMediaRecord(
     throw error;
   }
 }
+

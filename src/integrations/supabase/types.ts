@@ -3602,6 +3602,10 @@ export type Database = {
         }
         Returns: string
       }
+      xdelo_fix_audit_log_uuids: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       xdelo_fix_edit_count_data_type: {
         Args: Record<PropertyKey, never>
         Returns: Json
