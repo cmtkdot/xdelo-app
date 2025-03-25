@@ -1,18 +1,16 @@
-import { supabaseClient } from '../utils/supabase.ts';
-import { corsHeaders } from '../utils/cors.ts';
+import { supabaseClient } from '../../_shared/supabase.ts';
+import { corsHeaders } from '../../_shared/cors.ts';
 import { 
   xdelo_downloadMediaFromTelegram,
   xdelo_uploadMediaToStorage,
   xdelo_validateAndFixStoragePath,
   xdelo_isViewableMimeType,
-  xdelo_detectMimeType,
-  xdelo_checkFileExistsInStorage
-} from '../utils/media/mediaUtils.ts';
+  xdelo_detectMimeType
+} from '../../_shared/mediaUtils.ts';
 import {
   xdelo_findExistingFile,
-  xdelo_processMessageMedia,
-  xdelo_handleExpiredFileId
-} from '../utils/media/mediaStorage.ts';
+  xdelo_processMessageMedia
+} from '../../_shared/mediaStorage.ts';
 import { 
   TelegramMessage, 
   MessageContext, 
@@ -20,16 +18,7 @@ import {
   MessageInput,
 } from '../types.ts';
 import { createMessage, checkDuplicateFile } from '../dbOperations.ts';
-import { constructTelegramMessageUrl } from '../utils/messageUtils.ts';
-import { xdelo_logProcessingEvent } from '../utils/databaseOperations.ts';
-import { prepareEditHistoryEntry } from '../utils/messageUtils.ts';
-
-// For Deno compatibility
-declare const Deno: {
-  env: {
-    get(key: string): string | undefined;
-  };
-};
+import { constructTelegramMessageUrl } from '../../_shared/messageUtils.ts';
 
 // Get Telegram bot token from environment
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
@@ -120,24 +109,22 @@ async function xdelo_handleEditedMediaMessage(
   }
 
   if (existingMessage) {
-    // Store previous state in edit_history using our utility function
-    const editHistory = existingMessage.edit_history || [];
-    
+    // Store previous state in edit_history
+    let editHistory = existingMessage.edit_history || [];
+    editHistory.push({
+      timestamp: new Date().toISOString(),
+      previous_caption: existingMessage.caption,
+      previous_processing_state: existingMessage.processing_state,
+      edit_source: 'telegram_edit',
+      edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+    });
+
     // Determine what has changed
     const captionChanged = existingMessage.caption !== message.caption;
     const hasNewMedia = message.photo || message.video || message.document;
     
-    // Track caption changes
-    if (captionChanged) {
-      editHistory.push(prepareEditHistoryEntry(existingMessage, message, 'caption'));
-    }
-    
     // If media has been updated, handle the new media
     if (hasNewMedia) {
-      editHistory.push(prepareEditHistoryEntry(existingMessage, message, 'media'));
-      
-      logger?.info(`Media has changed in edit for message ${message.message_id}`);
-      
       try {
         logger?.info(`Media has changed in edit for message ${message.message_id}`);
         
@@ -145,10 +132,6 @@ async function xdelo_handleEditedMediaMessage(
         const telegramFile = message.photo ? 
           message.photo[message.photo.length - 1] : 
           message.video || message.document;
-          
-        if (!telegramFile) {
-          throw new Error('Failed to extract file information from message');
-        }
           
         // Get mime type
         const detectedMimeType = xdelo_detectMimeType(message);
@@ -158,91 +141,34 @@ async function xdelo_handleEditedMediaMessage(
           message,
           telegramFile.file_id,
           telegramFile.file_unique_id,
-          TELEGRAM_BOT_TOKEN || '',
-          existingMessage.id, // Use existing message ID
-          correlationId  // Pass correlation ID for logging
+          TELEGRAM_BOT_TOKEN,
+          existingMessage.id // Use existing message ID
         );
         
         if (!mediaProcessResult.success) {
-          // Handle expired file ID case
-          if (mediaProcessResult.file_id_expired) {
-            logger?.warn(`File ID expired for edit of message ${message.message_id}`);
-            
-            // Flag message for later redownload
-            await xdelo_handleExpiredFileId(
-              existingMessage.id,
-              telegramFile.file_unique_id,
-              correlationId
-            );
-            
-            // Continue processing with the edit even if media download failed
-            // This allows caption changes to still be processed
-            
-            // Update the message with new details except media
-            const { error: updateError } = await supabaseClient
-              .from('messages')
-              .update({
-                caption: message.caption,
-                file_id: telegramFile.file_id, // Still update this for future retries
-                file_unique_id: telegramFile.file_unique_id,
-                mime_type: detectedMimeType,
-                edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
-                edit_count: (existingMessage.edit_count || 0) + 1,
-                edit_history: editHistory,
-                processing_state: message.caption ? 'pending' : existingMessage.processing_state,
-                needs_redownload: true,
-                redownload_reason: 'file_id_expired_during_edit',
-                redownload_flagged_at: new Date().toISOString(),
-                last_edited_at: new Date().toISOString()
-              })
-              .eq('id', existingMessage.id);
-            
-            if (updateError) {
-              logger?.error(`Failed to update message with expired file details: ${updateError.message}`);
-            }
-            
-            // Return success but indicate the file_id expired
-            return new Response(
-              JSON.stringify({ 
-                success: true, 
-                file_id_expired: true,
-                message: 'Message updated but media could not be downloaded - file ID expired',
-                correlationId 
-              }),
-              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
-          
           throw new Error(`Failed to process edited media: ${mediaProcessResult.error}`);
         }
         
-        // Prepare update data with type checks
-        const updateData: any = {
-          caption: message.caption,
-          file_id: telegramFile.file_id,
-          file_unique_id: telegramFile.file_unique_id,
-          mime_type: detectedMimeType,
-          edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
-          edit_count: (existingMessage.edit_count || 0) + 1,
-          edit_history: editHistory,
-          processing_state: message.caption ? 'pending' : existingMessage.processing_state,
-          storage_path: mediaProcessResult.fileInfo.storage_path,
-          public_url: mediaProcessResult.fileInfo.public_url,
-          storage_exists: true,
-          storage_path_standardized: true,
-          last_edited_at: new Date().toISOString()
-        };
-        
-        // Add optional fields only if they exist in telegramFile
-        if ('width' in telegramFile) updateData.width = telegramFile.width;
-        if ('height' in telegramFile) updateData.height = telegramFile.height;
-        if (message.video?.duration) updateData.duration = message.video.duration;
-        if (telegramFile.file_size) updateData.file_size = telegramFile.file_size;
-        
-        // Update the message with new media info
+        // If successful, update the message with new media info
         const { data: updateResult, error: updateError } = await supabaseClient
           .from('messages')
-          .update(updateData)
+          .update({
+            caption: message.caption,
+            file_id: telegramFile.file_id,
+            file_unique_id: telegramFile.file_unique_id,
+            mime_type: detectedMimeType,
+            width: telegramFile.width,
+            height: telegramFile.height,
+            duration: message.video?.duration,
+            file_size: telegramFile.file_size,
+            edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
+            edit_count: (existingMessage.edit_count || 0) + 1,
+            edit_history: editHistory,
+            processing_state: message.caption ? 'pending' : existingMessage.processing_state,
+            storage_path: mediaProcessResult.fileInfo.storage_path,
+            public_url: mediaProcessResult.fileInfo.public_url,
+            last_edited_at: new Date().toISOString()
+          })
           .eq('id', existingMessage.id);
           
         if (updateError) {
@@ -355,46 +281,7 @@ async function xdelo_handleEditedMediaMessage(
     );
   }
   
-  // If existing message not found, check in other_messages
-  const { data: existingTextMessage, error: textLookupError } = await supabaseClient
-    .from('other_messages')
-    .select('*')
-    .eq('telegram_message_id', message.message_id)
-    .eq('chat_id', message.chat.id)
-    .single();
-    
-  if (!textLookupError && existingTextMessage) {
-    // This was previously a text message that now has media added
-    logger?.info(`Message was previously a text message, now has media. Converting.`, {
-      message_id: message.message_id,
-      existing_id: existingTextMessage.id
-    });
-    
-    // Prepare edit history for the converted message
-    const editHistory = existingTextMessage.edit_history || [];
-    editHistory.push(prepareEditHistoryEntry(existingTextMessage, message, 'text_to_media'));
-    
-    // Process as new media message but preserve history
-    context.previousTextMessage = existingTextMessage;
-    context.conversionType = 'text_to_media';
-    context.editHistory = editHistory;
-    
-    // Update the original text message to mark it as converted
-    await supabaseClient
-      .from('other_messages')
-      .update({
-        converted_to_media: true,
-        edit_count: (existingTextMessage.edit_count || 0) + 1,
-        edit_history: editHistory,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', existingTextMessage.id);
-      
-    // Process as new media with history context
-    return await xdelo_handleNewMediaMessage(message, context);
-  }
-  
-  // If existing message not found in either table, handle as new message
+  // If existing message not found, handle as new message
   logger?.info(`Original message not found, creating new message for edit ${message.message_id}`);
   return await xdelo_handleNewMediaMessage(message, context);
 }
@@ -455,27 +342,8 @@ async function xdelo_handleNewMediaMessage(
       message,
       telegramFile.file_id,
       telegramFile.file_unique_id,
-      TELEGRAM_BOT_TOKEN || '',
-      undefined, // No message ID yet since this is a new message
-      correlationId
+      TELEGRAM_BOT_TOKEN
     );
-    
-    // Handle expired file ID case
-    if (!mediaResult.success && mediaResult.file_id_expired) {
-      logger?.warn(`File ID expired or invalid for new message ${message.message_id}`);
-      
-      // Still proceed with creating a record, but mark it for redownload
-      const storagePathEstimate = `${telegramFile.file_unique_id}.${xdelo_detectMimeType(message).split('/')[1]}`;
-      
-      // Create an incomplete record to be updated later
-      return await createIncompleteMediaRecord(
-        message,
-        telegramFile,
-        storagePathEstimate,
-        context,
-        true // needs redownload
-      );
-    }
     
     if (!mediaResult.success) {
       throw new Error(`Failed to process media: ${mediaResult.error}`);
@@ -495,22 +363,7 @@ async function xdelo_handleNewMediaMessage(
       original_message_id: message.forward_origin.message_id
     } : undefined;
     
-    // When creating a new media message, check if this is a conversion from text
-    // and preserve the edit history
-    const finalEditHistory = context.editHistory || 
-      (context.isEdit ? [{
-        timestamp: new Date().toISOString(),
-        is_initial_edit: true,
-        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
-      }] : []);
-    
-    // If this is a conversion from text, add a reference to the original text message
-    const additionalFields = context.conversionType === 'text_to_media' && context.previousTextMessage ? {
-      converted_from_text: true,
-      original_text_id: context.previousTextMessage.id,
-    } : {};
-    
-    // Create message input with preserved history
+    // Create message input
     const messageInput: MessageInput = {
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
@@ -535,13 +388,14 @@ async function xdelo_handleNewMediaMessage(
       telegram_data: message,
       edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : undefined,
       is_forward: context.isForwarded,
-      edit_history: finalEditHistory,
+      edit_history: context.isEdit ? [{
+        timestamp: new Date().toISOString(),
+        is_initial_edit: true,
+        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+      }] : [],
       storage_exists: true,
       storage_path_standardized: true,
-      message_url: messageUrl,
-      
-      // Add any additional conversion fields
-      ...additionalFields,
+      message_url: messageUrl
     };
     
     // Create the message
@@ -616,106 +470,28 @@ async function xdelo_handleNewMediaMessage(
 }
 
 /**
- * Create an incomplete media record when file_id has expired
- * but we want to create a record anyway for later processing
+ * Import from shared/databaseOperations.ts
  */
-async function createIncompleteMediaRecord(
-  message: TelegramMessage,
-  telegramFile: any,
-  estimatedStoragePath: string,
-  context: MessageContext,
-  needsRedownload: boolean
-): Promise<Response> {
-  const { correlationId, logger } = context;
-  
+async function xdelo_logProcessingEvent(
+  eventType: string,
+  entityId: string,
+  correlationId: string,
+  metadata?: Record<string, any>,
+  errorMessage?: string
+): Promise<void> {
   try {
-    // Generate best-effort public URL based on estimated storage path
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const estimatedPublicUrl = `${supabaseUrl}/storage/v1/object/public/telegram-media/${estimatedStoragePath}`;
-    
-    // Prepare forward info if message is forwarded
-    const forwardInfo: ForwardInfo | undefined = message.forward_origin ? {
-      is_forwarded: true,
-      forward_origin_type: message.forward_origin.type,
-      forward_from_chat_id: message.forward_origin.chat?.id,
-      forward_from_chat_title: message.forward_origin.chat?.title,
-      forward_from_chat_type: message.forward_origin.chat?.type,
-      forward_from_message_id: message.forward_origin.message_id,
-      forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
-      original_chat_id: message.forward_origin.chat?.id,
-      original_chat_title: message.forward_origin.chat?.title,
-      original_message_id: message.forward_origin.message_id
-    } : undefined;
-    
-    // Create incomplete message record
-    const messageInput: MessageInput = {
-      telegram_message_id: message.message_id,
-      chat_id: message.chat.id,
-      chat_type: message.chat.type,
-      chat_title: message.chat.title,
-      caption: message.caption,
-      media_group_id: message.media_group_id,
-      file_id: telegramFile.file_id,
-      file_unique_id: telegramFile.file_unique_id,
-      mime_type: xdelo_detectMimeType(message),
-      mime_type_original: message.document?.mime_type || message.video?.mime_type,
-      storage_path: estimatedStoragePath,
-      public_url: estimatedPublicUrl,
-      width: telegramFile.width,
-      height: telegramFile.height,
-      duration: message.video?.duration,
-      file_size: telegramFile.file_size,
+    const { error } = await supabaseClient.from('unified_audit_logs').insert({
+      event_type: eventType,
+      entity_id: entityId,
       correlation_id: correlationId,
-      processing_state: 'error', // Mark as error since media couldn't be processed
-      is_edited_channel_post: context.isChannelPost,
-      forward_info: forwardInfo,
-      telegram_data: message,
-      is_forward: context.isForwarded,
-      storage_exists: false, // Media not in storage yet
-      storage_path_standardized: true, // Path format is correct
-      needs_redownload: needsRedownload,
-      redownload_reason: 'file_id_expired',
-      redownload_flagged_at: new Date().toISOString(),
-      message_url: constructTelegramMessageUrl(message.chat.id, message.message_id),
-      error_message: 'File ID expired or temporarily unavailable'
-    };
+      metadata,
+      error_message: errorMessage
+    });
     
-    // Create the message
-    const result = await createMessage(supabaseClient, messageInput, logger);
-    
-    if (!result.success) {
-      throw new Error(result.error_message || 'Failed to create incomplete message record');
+    if (error) {
+      console.error(`Error logging event ${eventType}:`, error);
     }
-    
-    // Log the action
-    await xdelo_logProcessingEvent(
-      "incomplete_message_created",
-      result.id,
-      correlationId,
-      {
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        file_id: telegramFile.file_id,
-        file_unique_id: telegramFile.file_unique_id,
-        reason: 'file_id_expired'
-      }
-    );
-    
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        id: result.id, 
-        file_id_expired: true,
-        needs_redownload: true,
-        message: 'Created incomplete record - media download will be retried later',
-        correlationId 
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  } catch (error) {
-    logger?.error(`Failed to create incomplete media record: ${error.message}`);
-    
-    // Re-throw for handling by the main handler
-    throw error;
+  } catch (e) {
+    console.error(`Exception logging event ${eventType}:`, e);
   }
 }
