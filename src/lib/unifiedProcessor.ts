@@ -1,140 +1,120 @@
 
 import { supabase } from '@/integrations/supabase/client';
+import { v4 as uuidv4 } from 'uuid';
 
-type ProcessorOperation = 'process_caption' | 'sync_media_group' | 'reprocess' | 'delayed_sync';
+type UnifiedProcessorOperation = 'process_caption' | 'sync_media_group' | 'reprocess' | 'delayed_sync';
 
-interface ProcessorOptions {
-  messageId: string;
+interface ProcessorParams {
+  messageId?: string;
   mediaGroupId?: string;
   force?: boolean;
   correlationId?: string;
 }
 
 /**
- * Calls the unified processor edge function to handle various message operations
+ * Call the unified processor for media operations
  */
 export async function callUnifiedProcessor(
-  operation: ProcessorOperation,
-  options: ProcessorOptions
+  operation: UnifiedProcessorOperation,
+  params: ProcessorParams
 ): Promise<{
   success: boolean;
-  message?: string;
-  error?: string;
   data?: any;
+  error?: string;
+  correlationId: string;
 }> {
   try {
-    console.log(`Calling unified processor with operation: ${operation}`, options);
+    // Generate a correlation ID if not provided
+    const correlationId = params.correlationId || uuidv4();
     
-    // Generate correlation ID if not provided
-    const correlationId = options.correlationId || crypto.randomUUID().toString();
+    console.log(`Calling unified processor: ${operation}`, { 
+      ...params, 
+      correlationId 
+    });
     
-    // Call the edge function
+    // Call the unified processor edge function
     const { data, error } = await supabase.functions.invoke('xdelo_unified_processor', {
       body: {
         operation,
-        messageId: options.messageId,
-        mediaGroupId: options.mediaGroupId,
-        force: options.force || false,
+        messageId: params.messageId,
+        mediaGroupId: params.mediaGroupId,
+        force: params.force,
         correlationId
       }
     });
     
     if (error) {
-      console.error(`Error calling unified processor with operation ${operation}:`, error);
+      console.error(`Error in unified processor ${operation}:`, error);
       return {
         success: false,
         error: error.message,
-        message: `Failed to process operation: ${operation}`
+        correlationId
       };
     }
     
     return {
       success: true,
-      message: data.message || `Operation ${operation} completed successfully`,
-      data
+      data: data?.data,
+      correlationId
     };
-  } catch (error: any) {
-    console.error(`Exception calling unified processor with operation ${operation}:`, error);
+  } catch (error) {
+    console.error(`Exception in unified processor ${operation}:`, error);
     return {
       success: false,
       error: error.message,
-      message: `Exception during operation: ${operation}`
+      correlationId: params.correlationId || uuidv4()
     };
   }
 }
 
 /**
- * Process a message caption
+ * Process message caption through the unified processor
  */
 export async function processMessageCaption(
   messageId: string,
-  force: boolean = false
-): Promise<{
-  success: boolean;
-  message?: string;
-  error?: string;
-  data?: any;
-}> {
-  return callUnifiedProcessor('process_caption', {
-    messageId,
-    force
-  });
+  force: boolean = false,
+  correlationId?: string
+): Promise<any> {
+  return callUnifiedProcessor('process_caption', { messageId, force, correlationId });
 }
 
 /**
- * Sync a media group
+ * Synchronize media group content through the unified processor
  */
 export async function syncMediaGroup(
   sourceMessageId: string,
   mediaGroupId: string,
-  force: boolean = false
-): Promise<{
-  success: boolean;
-  message?: string;
-  error?: string;
-  data?: any;
-}> {
-  return callUnifiedProcessor('sync_media_group', {
-    messageId: sourceMessageId,
-    mediaGroupId,
-    force
+  force: boolean = false,
+  correlationId?: string
+): Promise<any> {
+  return callUnifiedProcessor('sync_media_group', { 
+    messageId: sourceMessageId, 
+    mediaGroupId, 
+    force, 
+    correlationId 
   });
 }
 
 /**
- * Process a delayed media group sync
- * (for cases where a group is initially received without caption)
- */
-export async function processDelayedMediaGroupSync(
-  mediaGroupId: string
-): Promise<{
-  success: boolean;
-  message?: string;
-  error?: string;
-  data?: any;
-}> {
-  // For delayed sync, we pass the media group ID as both parameters
-  // since we'll find the appropriate source message in the function
-  return callUnifiedProcessor('delayed_sync', {
-    messageId: 'auto-find', // This will be ignored in the function
-    mediaGroupId
-  });
-}
-
-/**
- * Reprocess a message completely
+ * Reprocess a message completely through the unified processor
  */
 export async function reprocessMessage(
   messageId: string,
-  force: boolean = true
-): Promise<{
-  success: boolean;
-  message?: string;
-  error?: string;
-  data?: any;
-}> {
-  return callUnifiedProcessor('reprocess', {
-    messageId,
-    force
+  force: boolean = true,
+  correlationId?: string
+): Promise<any> {
+  return callUnifiedProcessor('reprocess', { messageId, force, correlationId });
+}
+
+/**
+ * Process delayed media group synchronization
+ */
+export async function processDelayedMediaGroupSync(
+  mediaGroupId: string,
+  correlationId?: string
+): Promise<any> {
+  return callUnifiedProcessor('delayed_sync', { 
+    mediaGroupId, 
+    correlationId 
   });
 }
