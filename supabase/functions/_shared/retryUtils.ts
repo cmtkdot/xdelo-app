@@ -1,4 +1,3 @@
-
 /**
  * Utility functions for implementing retry logic in edge functions
  */
@@ -10,6 +9,7 @@ type RetryOptions = {
   jitterFactor?: number;
   retryableErrors?: Array<string | RegExp>;
   onRetry?: (attempt: number, error: Error, nextDelayMs: number) => void;
+  retryCondition?: (error: Error) => boolean;
 };
 
 const defaultRetryOptions: RetryOptions = {
@@ -41,6 +41,11 @@ const defaultRetryOptions: RetryOptions = {
 export function xdelo_isRetryableError(error: Error, options: RetryOptions = defaultRetryOptions): boolean {
   // If no error, it's not retryable
   if (!error) return false;
+  
+  // If custom retry condition is provided, use it
+  if (options.retryCondition) {
+    return options.retryCondition(error);
+  }
   
   const { retryableErrors = [] } = options;
 

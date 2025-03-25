@@ -57,8 +57,9 @@ export interface MessageContext {
   correlationId: string;
   isEdit: boolean;
   previousMessage?: any;
-  startTime?: string; // ISO date when processing started
+  startTime: number; // Timestamp when processing started
   logger?: Logger; // Logger instance
+  supabase?: any; // Direct Supabase client instance
 }
 
 /**

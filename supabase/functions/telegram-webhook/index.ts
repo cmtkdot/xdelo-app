@@ -5,6 +5,29 @@ import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
 import { Logger } from './utils/logger.ts';
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+
+// Create direct Supabase client with service role key
+function createDirectSupabaseClient(): SupabaseClient {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    throw new Error('Missing Supabase credentials in environment');
+  }
+  
+  return createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    },
+    global: {
+      headers: {
+        'X-Client-Info': 'telegram-webhook-direct',
+      },
+    },
+  });
+}
 
 serve(async (req: Request) => {
   // Generate a correlation ID for tracing
@@ -20,6 +43,9 @@ serve(async (req: Request) => {
   }
 
   try {
+    // Create direct Supabase client
+    const directClient = createDirectSupabaseClient();
+    
     // Log webhook received event
     logger.info('Webhook received', {
       method: req.method,
@@ -78,7 +104,9 @@ serve(async (req: Request) => {
       correlationId,
       isEdit: !!update.edited_message || !!update.edited_channel_post,
       previousMessage: update.edited_message || update.edited_channel_post,
-      logger // Add logger to context so handlers can use it
+      startTime: Date.now(),
+      logger,
+      supabase: directClient // Add direct Supabase client to context
     };
 
     // Log message details with sensitive data masked
@@ -119,7 +147,7 @@ serve(async (req: Request) => {
       logger.info('Successfully processed message', { 
         message_id: message.message_id,
         chat_id: message.chat?.id,
-        processing_time: Date.now() - new Date(context.startTime || Date.now()).getTime()
+        processing_time: Date.now() - context.startTime
       });
       
       return response;
@@ -130,23 +158,30 @@ serve(async (req: Request) => {
         message_id: message.message_id
       });
       
-      // Log the error to the database
-      await xdelo_logProcessingEvent(
-        "message_processing_failed",
-        message.message_id.toString(),
-        correlationId,
-        {
-          message_id: message.message_id,
-          chat_id: message.chat?.id,
-          is_edit: context.isEdit,
-          has_media: !!(message.photo || message.video || message.document),
-          handler_type: context.isEdit ? 'edited_message' : 
-                       (message.photo || message.video || message.document) ? 'media_message' : 'other_message',
-          error: handlerError.message,
-          error_stack: handlerError.stack
-        },
-        handlerError.message || "Unknown handler error"
-      );
+      // Log the error to the database using direct client
+      try {
+        await directClient.from('unified_audit_logs').insert({
+          event_type: "message_processing_failed",
+          entity_id: message.message_id.toString(),
+          metadata: {
+            message_id: message.message_id,
+            chat_id: message.chat?.id,
+            is_edit: context.isEdit,
+            has_media: !!(message.photo || message.video || message.document),
+            handler_type: context.isEdit ? 'edited_message' : 
+                        (message.photo || message.video || message.document) ? 'media_message' : 'other_message',
+            error: handlerError.message,
+            error_stack: handlerError.stack,
+            correlation_id: correlationId,
+            logged_from: 'edge_function_direct'
+          },
+          error_message: handlerError.message || "Unknown handler error",
+          correlation_id: correlationId,
+          event_timestamp: new Date().toISOString()
+        });
+      } catch (logError) {
+        logger.error('Failed to log error to database', { error: logError.message });
+      }
       
       // Return error response but with 200 status to acknowledge to Telegram
       // (Telegram will retry if we return non-200 status)
