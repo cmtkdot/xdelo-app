@@ -1,14 +1,11 @@
 
 import React, { useState } from 'react';
-import { cn } from '@/lib/generalUtils';
-import { Message } from '@/types';
+import { cn } from '@/lib/utils';
+import { VideoPlayer } from './VideoPlayer';
+import { ImageViewer } from './ImageViewer';
+import { MediaDisplayProps } from '../types';
 import { isVideoMessage } from '@/utils/mediaUtils';
 import { FileX } from 'lucide-react';
-
-interface MediaDisplayProps {
-  message: Message;
-  className?: string;
-}
 
 export function MediaDisplay({ message, className }: MediaDisplayProps) {
   const [mediaError, setMediaError] = useState(false);
@@ -51,19 +48,19 @@ export function MediaDisplay({ message, className }: MediaDisplayProps) {
       className
     )}>
       {isVideo ? (
-        <video 
+        <VideoPlayer 
           src={message.public_url} 
-          className="max-h-full max-w-full object-contain" 
-          controls
-          preload="metadata"
+          message={message} 
+          className="w-full max-h-full"
           onError={handleMediaError}
-          onLoadedData={handleMediaLoad}
+          onLoad={handleMediaLoad}
         />
       ) : (
-        <img
+        <ImageViewer
           src={message.public_url}
           alt={message.caption || "Media"}
-          className="max-h-full max-w-full object-contain"
+          message={message}
+          className="w-full h-full"
           onError={handleMediaError}
           onLoad={handleMediaLoad}
         />
