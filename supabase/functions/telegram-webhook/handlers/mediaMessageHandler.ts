@@ -1,23 +1,32 @@
 import { supabaseClient } from '../utils/supabase.ts';
-import { corsHeaders, addCorsHeaders } from '../utils/cors.ts';
+import { corsHeaders } from '../utils/cors.ts';
 import { 
   xdelo_downloadMediaFromTelegram,
   xdelo_uploadMediaToStorage,
   xdelo_validateAndFixStoragePath,
   xdelo_isViewableMimeType,
-  xdelo_detectMimeType,
+  xdelo_detectMimeType
+} from '../utils/media/mediaUtils.ts';
+import {
   xdelo_findExistingFile,
-  xdelo_processMessageMedia,
-  xdelo_validateFileId
-} from '../utils/mediaUtils.ts';
+  xdelo_processMessageMedia
+} from '../utils/media/mediaStorage.ts';
 import { 
   TelegramMessage, 
   MessageContext, 
   ForwardInfo,
   MessageInput,
 } from '../types.ts';
-import { xdelo_createMessage, xdelo_logProcessingEvent } from '../dbOperations.ts';
+import { createMessage, checkDuplicateFile } from '../dbOperations.ts';
 import { constructTelegramMessageUrl } from '../utils/messageUtils.ts';
+import { xdelo_logProcessingEvent } from '../utils/databaseOperations.ts';
+
+// For Deno compatibility
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
 
 // Get Telegram bot token from environment
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
@@ -74,13 +83,13 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
         logError instanceof Error ? logError.message : String(logError)}`);
     }
     
-    return addCorsHeaders(new Response(
+    return new Response(
       JSON.stringify({ 
         error: errorMessage,
         correlationId: context.correlationId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    ));
+    );
   }
 }
 
@@ -132,19 +141,19 @@ async function xdelo_handleEditedMediaMessage(
           message.photo[message.photo.length - 1] : 
           message.video || message.document;
           
-        // Use simplified file ID validation
-        const { sanitizedFileId } = xdelo_validateFileId(telegramFile.file_id);
-        logger?.info(`Processing file ID: ${sanitizedFileId}`);
-        
+        if (!telegramFile) {
+          throw new Error('Failed to extract file information from message');
+        }
+          
         // Get mime type
         const detectedMimeType = xdelo_detectMimeType(message);
         
         // Process the new media file
         const mediaProcessResult = await xdelo_processMessageMedia(
           message,
-          sanitizedFileId, // Use sanitized file ID
+          telegramFile.file_id,
           telegramFile.file_unique_id,
-          Deno.env.get('TELEGRAM_BOT_TOKEN') || '',
+          TELEGRAM_BOT_TOKEN || '',
           existingMessage.id // Use existing message ID
         );
         
@@ -152,26 +161,31 @@ async function xdelo_handleEditedMediaMessage(
           throw new Error(`Failed to process edited media: ${mediaProcessResult.error}`);
         }
         
-        // If successful, update the message with new media info
+        // Prepare update data with type checks
+        const updateData: any = {
+          caption: message.caption,
+          file_id: telegramFile.file_id,
+          file_unique_id: telegramFile.file_unique_id,
+          mime_type: detectedMimeType,
+          edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
+          edit_count: (existingMessage.edit_count || 0) + 1,
+          edit_history: editHistory,
+          processing_state: message.caption ? 'pending' : existingMessage.processing_state,
+          storage_path: mediaProcessResult.fileInfo.storage_path,
+          public_url: mediaProcessResult.fileInfo.public_url,
+          last_edited_at: new Date().toISOString()
+        };
+        
+        // Add optional fields only if they exist in telegramFile
+        if ('width' in telegramFile) updateData.width = telegramFile.width;
+        if ('height' in telegramFile) updateData.height = telegramFile.height;
+        if (message.video?.duration) updateData.duration = message.video.duration;
+        if (telegramFile.file_size) updateData.file_size = telegramFile.file_size;
+        
+        // Update the message with new media info
         const { data: updateResult, error: updateError } = await supabaseClient
           .from('messages')
-          .update({
-            caption: message.caption,
-            file_id: telegramFile.file_id,
-            file_unique_id: telegramFile.file_unique_id,
-            mime_type: detectedMimeType,
-            width: telegramFile.width,
-            height: telegramFile.height,
-            duration: message.video?.duration,
-            file_size: telegramFile.file_size,
-            edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
-            edit_count: (existingMessage.edit_count || 0) + 1,
-            edit_history: editHistory,
-            processing_state: message.caption ? 'pending' : existingMessage.processing_state,
-            storage_path: mediaProcessResult.fileInfo.storage_path,
-            public_url: mediaProcessResult.fileInfo.public_url,
-            last_edited_at: new Date().toISOString()
-          })
+          .update(updateData)
           .eq('id', existingMessage.id);
           
         if (updateError) {
@@ -278,37 +292,15 @@ async function xdelo_handleEditedMediaMessage(
       }
     }
 
-    return addCorsHeaders(new Response(
+    return new Response(
       JSON.stringify({ success: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    ));
+    );
   }
   
   // If existing message not found, handle as new message
   logger?.info(`Original message not found, creating new message for edit ${message.message_id}`);
   return await xdelo_handleNewMediaMessage(message, context);
-}
-
-/**
- * Helper function to extract forward information from a message
- */
-function extractForwardInfo(message: TelegramMessage): ForwardInfo | undefined {
-  if (!message.forward_origin) {
-    return undefined;
-  }
-  
-  return {
-    is_forwarded: true,
-    forward_origin_type: message.forward_origin.type,
-    forward_from_chat_id: message.forward_origin.chat?.id,
-    forward_from_chat_title: message.forward_origin.chat?.title,
-    forward_from_chat_type: message.forward_origin.chat?.type,
-    forward_from_message_id: message.forward_origin.message_id,
-    forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
-    original_chat_id: message.forward_origin.chat?.id,
-    original_chat_title: message.forward_origin.chat?.title,
-    original_message_id: message.forward_origin.message_id
-  };
 }
 
 /**
@@ -318,57 +310,77 @@ async function xdelo_handleNewMediaMessage(
   message: TelegramMessage, 
   context: MessageContext
 ): Promise<Response> {
-  const { correlationId, isChannelPost, isForwarded, logger } = context;
+  const { correlationId, logger } = context;
   
+  // First check if this is a duplicate message we've already processed
   try {
-    // Process forward information if present
-    const forwardInfo = isForwarded ? extractForwardInfo(message) : undefined;
-    
-    // Get the file details based on the media type
-    let telegramFile;
-    let mediaType = 'unknown';
-    
-    if (message.photo && message.photo.length > 0) {
-      // For photos, get the largest size (last in the array)
-      telegramFile = message.photo[message.photo.length - 1];
-      mediaType = 'photo';
-    } else if (message.video) {
-      telegramFile = message.video;
-      mediaType = 'video';
-    } else if (message.document) {
-      telegramFile = message.document;
-      mediaType = 'document';
-    } else {
-      throw new Error('Message does not contain valid media');
-    }
-    
-    // Ensure we have a telegramFile before proceeding
-    if (!telegramFile) {
-      throw new Error('Failed to extract media file information from message');
-    }
-    
-    // Use simplified file ID validation
-    const { sanitizedFileId } = xdelo_validateFileId(telegramFile.file_id);
-    
-    logger?.info(`Processing file: ${sanitizedFileId.substring(0, 15)}... (type: ${mediaType})`, {
-      file_unique_id: telegramFile.file_unique_id,
-      message_id: message.message_id,
-      chat_id: message.chat.id
-    });
-    
-    // Process the media content
-    const mediaProcessResult = await xdelo_processMessageMedia(
-      message,
-      sanitizedFileId, // Use sanitized file ID
-      telegramFile.file_unique_id,
-      Deno.env.get('TELEGRAM_BOT_TOKEN') || ''
+    const isDuplicate = await checkDuplicateFile(
+      supabaseClient,
+      message.message_id,
+      message.chat.id
     );
     
-    if (!mediaProcessResult.success) {
-      throw new Error(`Failed to process media: ${mediaProcessResult.error}`);
+    if (isDuplicate) {
+      logger?.info(`Duplicate message detected: ${message.message_id} in chat ${message.chat.id}`);
+      
+      // Log the duplicate detection
+      await xdelo_logProcessingEvent(
+        "duplicate_message_detected",
+        message.message_id.toString(),
+        correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          media_group_id: message.media_group_id
+        }
+      );
+      
+      return new Response(
+        JSON.stringify({ success: true, duplicate: true, correlationId }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
     
-    // Prepare message input with type-safety for different media types
+    // Process the media message
+    const messageUrl = constructTelegramMessageUrl(message.chat.id, message.message_id);
+    
+    logger?.info(`Processing new media message: ${message.message_id}`, {
+      chat_id: message.chat.id,
+      message_url: messageUrl
+    });
+    
+    // Prepare the message data
+    const telegramFile = message.photo ? 
+      message.photo[message.photo.length - 1] : 
+      message.video || message.document;
+    
+    // Process media
+    const mediaResult = await xdelo_processMessageMedia(
+      message,
+      telegramFile.file_id,
+      telegramFile.file_unique_id,
+      TELEGRAM_BOT_TOKEN
+    );
+    
+    if (!mediaResult.success) {
+      throw new Error(`Failed to process media: ${mediaResult.error}`);
+    }
+    
+    // Prepare forward info if message is forwarded
+    const forwardInfo: ForwardInfo | undefined = message.forward_origin ? {
+      is_forwarded: true,
+      forward_origin_type: message.forward_origin.type,
+      forward_from_chat_id: message.forward_origin.chat?.id,
+      forward_from_chat_title: message.forward_origin.chat?.title,
+      forward_from_chat_type: message.forward_origin.chat?.type,
+      forward_from_message_id: message.forward_origin.message_id,
+      forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
+      original_chat_id: message.forward_origin.chat?.id,
+      original_chat_title: message.forward_origin.chat?.title,
+      original_message_id: message.forward_origin.message_id
+    } : undefined;
+    
+    // Create message input
     const messageInput: MessageInput = {
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
@@ -378,57 +390,33 @@ async function xdelo_handleNewMediaMessage(
       media_group_id: message.media_group_id,
       file_id: telegramFile.file_id,
       file_unique_id: telegramFile.file_unique_id,
-      mime_type: mediaProcessResult.fileInfo.mime_type,
+      mime_type: mediaResult.fileInfo.mime_type,
       mime_type_original: message.document?.mime_type || message.video?.mime_type,
-      storage_path: mediaProcessResult.fileInfo.storage_path,
-      public_url: mediaProcessResult.fileInfo.public_url,
-      width: 'width' in telegramFile ? telegramFile.width : undefined,
-      height: 'height' in telegramFile ? telegramFile.height : undefined,
+      storage_path: mediaResult.fileInfo.storage_path,
+      public_url: mediaResult.fileInfo.public_url,
+      width: telegramFile.width,
+      height: telegramFile.height,
       duration: message.video?.duration,
-      file_size: telegramFile.file_size || mediaProcessResult.fileInfo.file_size,
+      file_size: telegramFile.file_size || mediaResult.fileInfo.file_size,
       correlation_id: correlationId,
       processing_state: message.caption ? 'pending' : 'initialized',
-      is_edited_channel_post: isChannelPost,
+      is_edited_channel_post: context.isChannelPost,
       forward_info: forwardInfo,
       telegram_data: message,
       edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : undefined,
-      is_forward: isForwarded,
-      edit_history: isForwarded ? [{
+      is_forward: context.isForwarded,
+      edit_history: context.isEdit ? [{
         timestamp: new Date().toISOString(),
         is_initial_edit: true,
-        edit_source: 'forward',
-        edit_date: forwardInfo?.forward_date
-      }] : undefined,
+        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+      }] : [],
       storage_exists: true,
       storage_path_standardized: true,
-      message_url: constructTelegramMessageUrl(message.chat.id, message.message_id)
+      message_url: messageUrl
     };
     
-    // Create the message - duplicate detection is built into this function
-    const result = await xdelo_createMessage(supabaseClient, messageInput, logger);
-    
-    // Check if this is a duplicate file that was detected by xdelo_createMessage
-    if (result.success && result.error_message === "File already exists in database") {
-      logger?.info(`Duplicate file detected: ${message.message_id} in chat ${message.chat.id}`);
-      
-      // Log the duplicate detection
-      await xdelo_logProcessingEvent(
-        "duplicate_file_detected",
-        message.message_id.toString(),
-        correlationId,
-        {
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          media_group_id: message.media_group_id,
-          file_unique_id: telegramFile.file_unique_id
-        }
-      );
-      
-      return addCorsHeaders(new Response(
-        JSON.stringify({ success: true, duplicate: true, id: result.id, correlationId }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      ));
-    }
+    // Create the message
+    const result = await createMessage(supabaseClient, messageInput, logger);
     
     if (!result.success) {
       logger?.error(`Failed to create message: ${result.error_message}`, {
@@ -455,14 +443,14 @@ async function xdelo_handleNewMediaMessage(
     logger?.success(`Successfully created new media message: ${result.id}`, {
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
-      media_type: mediaType,
-      storage_path: mediaProcessResult.fileInfo.storage_path
+      media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
+      storage_path: mediaResult.fileInfo.storage_path
     });
     
-    return addCorsHeaders(new Response(
+    return new Response(
       JSON.stringify({ success: true, id: result.id, correlationId }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    ));
+    );
   } catch (createError) {
     logger?.error(`Error creating new media message: ${
       createError instanceof Error ? createError.message : String(createError)}`, {
