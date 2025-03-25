@@ -1,3 +1,0 @@
-
-[build]
-watchPatterns = ["supabase/functions/xdelo_sync-media-group/**", "supabase/functions/_shared/**"]

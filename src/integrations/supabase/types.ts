@@ -1246,6 +1246,8 @@ export type Database = {
         Row: {
           analyzed_content: Json | null
           caption: string | null
+          caption_processing_attempts: number | null
+          caption_processing_metadata: Json | null
           chat_id: number | null
           chat_title: string | null
           chat_type: Database["public"]["Enums"]["telegram_chat_type"] | null
@@ -1287,6 +1289,7 @@ export type Database = {
           is_forwarded_from: string | null
           is_miscellaneous_item: boolean | null
           is_original_caption: boolean | null
+          last_caption_processing: string | null
           last_error_at: string | null
           last_processing_attempt: string | null
           media_group_id: string | null
@@ -1326,6 +1329,7 @@ export type Database = {
           storage_path: string | null
           storage_path_standardized: string | null
           sync_attempt: number | null
+          sync_result: Json | null
           telegram_data: Json | null
           telegram_message_id: number | null
           update_id: string | null
@@ -1337,6 +1341,8 @@ export type Database = {
         Insert: {
           analyzed_content?: Json | null
           caption?: string | null
+          caption_processing_attempts?: number | null
+          caption_processing_metadata?: Json | null
           chat_id?: number | null
           chat_title?: string | null
           chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
@@ -1378,6 +1384,7 @@ export type Database = {
           is_forwarded_from?: string | null
           is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
+          last_caption_processing?: string | null
           last_error_at?: string | null
           last_processing_attempt?: string | null
           media_group_id?: string | null
@@ -1417,6 +1424,7 @@ export type Database = {
           storage_path?: string | null
           storage_path_standardized?: string | null
           sync_attempt?: number | null
+          sync_result?: Json | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           update_id?: string | null
@@ -1428,6 +1436,8 @@ export type Database = {
         Update: {
           analyzed_content?: Json | null
           caption?: string | null
+          caption_processing_attempts?: number | null
+          caption_processing_metadata?: Json | null
           chat_id?: number | null
           chat_title?: string | null
           chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
@@ -1469,6 +1479,7 @@ export type Database = {
           is_forwarded_from?: string | null
           is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
+          last_caption_processing?: string | null
           last_error_at?: string | null
           last_processing_attempt?: string | null
           media_group_id?: string | null
@@ -1508,6 +1519,7 @@ export type Database = {
           storage_path?: string | null
           storage_path_standardized?: string | null
           sync_attempt?: number | null
+          sync_result?: Json | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           update_id?: string | null
@@ -2693,19 +2705,15 @@ export type Database = {
       }
       v_message_processing_status: {
         Row: {
-          completed: number | null
-          error: number | null
-          last_attempt: string | null
-          last_error: string | null
-          max_attempts: number | null
+          latest_update_time: string | null
           media_group_id: string | null
-          pending: number | null
-          processing: number | null
-          synced: number | null
+          messages_not_synced: number | null
+          messages_synced: number | null
+          messages_with_content: number | null
+          messages_without_content: number | null
+          oldest_message_time: string | null
+          status: string | null
           total_messages: number | null
-          unsynced: number | null
-          with_analyzed_content: number | null
-          without_analyzed_content: number | null
         }
         Relationships: []
       }
@@ -3532,6 +3540,10 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_check_webhook_status: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       xdelo_cleanup_orphaned_audit_logs: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3574,8 +3586,7 @@ export type Database = {
           }
       xdelo_direct_caption_processing: {
         Args: {
-          p_message_id: string
-          p_correlation_id?: string
+          p_caption: string
         }
         Returns: Json
       }
@@ -3687,6 +3698,15 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_handle_message_edit: {
+        Args: {
+          p_message_id: string
+          p_caption: string
+          p_is_edit?: boolean
+          p_correlation_id?: string
+        }
+        Returns: Json
+      }
       xdelo_handle_message_update: {
         Args: {
           p_message_id: string
@@ -3702,21 +3722,33 @@ export type Database = {
         }
         Returns: boolean
       }
-      xdelo_log_event: {
-        Args: {
-          p_event_type: Database["public"]["Enums"]["audit_event_type"]
-          p_entity_id: string
-          p_telegram_message_id?: number
-          p_chat_id?: number
-          p_previous_state?: Json
-          p_new_state?: Json
-          p_metadata?: Json
-          p_correlation_id?: string
-          p_user_id?: string
-          p_error_message?: string
-        }
-        Returns: undefined
-      }
+      xdelo_log_event:
+        | {
+            Args: {
+              p_event_type: Database["public"]["Enums"]["audit_event_type"]
+              p_entity_id: string
+              p_telegram_message_id?: number
+              p_chat_id?: number
+              p_previous_state?: Json
+              p_new_state?: Json
+              p_metadata?: Json
+              p_correlation_id?: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_event_type: string
+              p_entity_id: string
+              p_telegram_message_id?: number
+              p_chat_id?: number
+              p_previous_state?: Json
+              p_new_state?: Json
+              p_metadata?: Json
+              p_correlation_id?: string
+            }
+            Returns: string
+          }
       xdelo_log_event_flexible: {
         Args: {
           p_event_type: string
@@ -3732,38 +3764,20 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_log_message_operation:
-        | {
-            Args: {
-              p_operation: string
-              p_message_id: string
-              p_details: Json
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_operation: string
-              p_message_id: string
-              p_metadata?: Json
-              p_error_message?: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_operation_type: Database["public"]["Enums"]["message_operation_type"]
-              p_source_message_id: string
-              p_target_message_id?: string
-              p_correlation_id?: string
-              p_telegram_message_id?: number
-              p_chat_id?: number
-              p_metadata?: Json
-              p_user_id?: string
-              p_error_message?: string
-            }
-            Returns: string
-          }
+      xdelo_log_event_with_error: {
+        Args: {
+          p_event_type: string
+          p_entity_id: string
+          p_telegram_message_id?: number
+          p_chat_id?: number
+          p_previous_state?: Json
+          p_new_state?: Json
+          p_metadata?: Json
+          p_correlation_id?: string
+          p_error_message?: string
+        }
+        Returns: string
+      }
       xdelo_log_operation: {
         Args: {
           p_event_type: string
@@ -3785,6 +3799,16 @@ export type Database = {
           p_raw_data?: Json
         }
         Returns: undefined
+      }
+      xdelo_logprocessingevent: {
+        Args: {
+          p_event_type: string
+          p_entity_id: string
+          p_correlation_id: string
+          p_metadata?: Json
+          p_error_message?: string
+        }
+        Returns: string
       }
       xdelo_mark_for_redownload: {
         Args: {
@@ -3814,17 +3838,22 @@ export type Database = {
         }
         Returns: Json
       }
-      xdelo_repair_inconsistent_messages: {
-        Args: {
-          p_limit?: number
-        }
-        Returns: {
-          media_group_id: string
-          source_message_id: string
-          updated_count: number
-          operation: string
-        }[]
-      }
+      xdelo_repair_inconsistent_messages:
+        | {
+            Args: Record<PropertyKey, never>
+            Returns: {
+              message_id: string
+              repair_type: string
+              details: Json
+            }[]
+          }
+        | {
+            Args: {
+              p_limit?: number
+              p_repair_only_media_groups?: boolean
+            }
+            Returns: Json
+          }
       xdelo_repair_media_group_syncs: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3841,9 +3870,9 @@ export type Database = {
           updated_count: number
         }[]
       }
-      xdelo_scheduled_repair_task: {
+      xdelo_scheduled_message_repair: {
         Args: Record<PropertyKey, never>
-        Returns: number
+        Returns: Json
       }
       xdelo_set_message_processing: {
         Args: {

@@ -22,7 +22,7 @@ export function useSystemRepair() {
     setResults(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke('xdelo_repair-media', {
+      const { data, error } = await supabase.functions.invoke('xdelo_repair_media', {
         body: {
           options: {
             ...options,
@@ -60,7 +60,7 @@ export function useSystemRepair() {
     setResults(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke('xdelo_file-repair', {
+      const { data, error } = await supabase.functions.invoke('xdelo_file_repair', {
         body: {
           options: {
             ...options,
@@ -98,7 +98,7 @@ export function useSystemRepair() {
     setResults(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke('xdelo_file-repair', {
+      const { data, error } = await supabase.functions.invoke('xdelo_file_repair', {
         body: {
           options: {
             resetStalled: true,
