@@ -2,7 +2,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { Message } from '@/types/entities/Message';
-import { AnalyzedContent } from '@/types/utils/AnalyzedContent';
 
 /**
  * Hook for message querying operations
@@ -38,11 +37,11 @@ export function useMediaQueries() {
         }
       });
       
-      // Execute the query without type annotations that lead to excessive depth
+      // Execute the query
       const response = await query;
       
-      // Use type assertion after the fact
-      const typedData = response.data as Message[] | null;
+      // Use explicit type casting to avoid deep instantiation
+      const typedData = response.data as unknown as Message[] | null;
       
       return { 
         data: typedData, 
@@ -68,8 +67,8 @@ export function useMediaQueries() {
         .eq('id', id)
         .single();
       
-      // Use type assertion after the fact
-      const typedData = response.data as Message | null;
+      // Use explicit type casting to avoid deep instantiation
+      const typedData = response.data as unknown as Message | null;
       
       return { 
         data: typedData, 

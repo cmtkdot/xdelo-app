@@ -1271,6 +1271,7 @@ export type Database = {
           forward_from: Json | null
           forward_from_chat: Json | null
           forward_info: Json | null
+          from_id: string | null
           glide_row_id: string | null
           group_caption_synced: boolean | null
           group_first_message_time: string | null
@@ -1278,6 +1279,7 @@ export type Database = {
           group_message_count: string | null
           height: number | null
           id: string
+          is_bot: string | null
           is_channel_post: string | null
           is_duplicate: boolean | null
           is_duplicate_content: boolean | null
@@ -1294,6 +1296,7 @@ export type Database = {
           media_group_id: string | null
           media_group_sync: string | null
           message_caption_id: string | null
+          message_type: string | null
           message_url: string | null
           mime_type: string | null
           mime_type_original: string | null
@@ -1329,6 +1332,7 @@ export type Database = {
           storage_path_standardized: string | null
           sync_attempt: number | null
           telegram_data: Json | null
+          telegram_date: string | null
           telegram_message_id: number | null
           update_id: string | null
           updated_at: string
@@ -1364,6 +1368,7 @@ export type Database = {
           forward_from?: Json | null
           forward_from_chat?: Json | null
           forward_info?: Json | null
+          from_id?: string | null
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
@@ -1371,6 +1376,7 @@ export type Database = {
           group_message_count?: string | null
           height?: number | null
           id?: string
+          is_bot?: string | null
           is_channel_post?: string | null
           is_duplicate?: boolean | null
           is_duplicate_content?: boolean | null
@@ -1387,6 +1393,7 @@ export type Database = {
           media_group_id?: string | null
           media_group_sync?: string | null
           message_caption_id?: string | null
+          message_type?: string | null
           message_url?: string | null
           mime_type?: string | null
           mime_type_original?: string | null
@@ -1422,6 +1429,7 @@ export type Database = {
           storage_path_standardized?: string | null
           sync_attempt?: number | null
           telegram_data?: Json | null
+          telegram_date?: string | null
           telegram_message_id?: number | null
           update_id?: string | null
           updated_at?: string
@@ -1457,6 +1465,7 @@ export type Database = {
           forward_from?: Json | null
           forward_from_chat?: Json | null
           forward_info?: Json | null
+          from_id?: string | null
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
@@ -1464,6 +1473,7 @@ export type Database = {
           group_message_count?: string | null
           height?: number | null
           id?: string
+          is_bot?: string | null
           is_channel_post?: string | null
           is_duplicate?: boolean | null
           is_duplicate_content?: boolean | null
@@ -1480,6 +1490,7 @@ export type Database = {
           media_group_id?: string | null
           media_group_sync?: string | null
           message_caption_id?: string | null
+          message_type?: string | null
           message_url?: string | null
           mime_type?: string | null
           mime_type_original?: string | null
@@ -1515,6 +1526,7 @@ export type Database = {
           storage_path_standardized?: string | null
           sync_attempt?: number | null
           telegram_data?: Json | null
+          telegram_date?: string | null
           telegram_message_id?: number | null
           update_id?: string | null
           updated_at?: string
