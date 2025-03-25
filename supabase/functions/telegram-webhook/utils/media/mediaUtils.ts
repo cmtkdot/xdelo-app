@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from "../cors.ts";
 
@@ -141,7 +142,7 @@ export function xdelo_detectMimeType(telegramData: any): string {
   return 'application/octet-stream';
 }
 
-// Standardize storage path generation
+// Standardize storage path generation using file_unique_id (stable identifier)
 export function xdelo_generateStoragePath(fileUniqueId: string, mimeType: string): string {
   if (!fileUniqueId) {
     throw new Error('Missing file_unique_id for storage path generation');
@@ -225,12 +226,22 @@ async function xdelo_fetchWithRetry(
                             
       const isServerError = error.message.includes('5') && 
                            error.message.includes('HTTP error');
+                           
+      const isTelegramFileIdError = error.message.includes('wrong file_id') ||
+                                  error.message.includes('Bad Request') ||
+                                  error.message.includes('400');
       
       // Enhanced logging with error classification
       console.warn(`Fetch attempt ${retryCount}/${maxRetries} failed for ${url.substring(0, 100)}: 
         Error: ${error.message}
-        Type: ${isNetworkError ? 'Network Error' : isTimeoutError ? 'Timeout' : isServerError ? 'Server Error' : 'Other'}
+        Type: ${isTelegramFileIdError ? 'Telegram File ID Error' : isNetworkError ? 'Network Error' : isTimeoutError ? 'Timeout' : isServerError ? 'Server Error' : 'Other'}
         Will ${retryCount < maxRetries ? `retry in ${retryDelay}ms` : 'not retry'}`);
+      
+      // Exit early for file_id errors (no point in retrying)
+      if (isTelegramFileIdError && error.message.includes('wrong file_id')) {
+        console.error(`File ID error detected - no point in retrying: ${error.message}`);
+        throw new Error(`Telegram file ID error: ${error.message}`);
+      }
       
       // If we've reached max retries, throw the last error
       if (retryCount >= maxRetries) {
@@ -360,6 +371,7 @@ export async function xdelo_downloadMediaFromTelegram(
   mimeType?: string;
   error?: string;
   attempts?: number;
+  file_id_expired?: boolean;
 }> {
   try {
     if (!telegramBotToken) {
@@ -368,96 +380,130 @@ export async function xdelo_downloadMediaFromTelegram(
     
     console.log(`Starting download process for file ${fileId} (${fileUniqueId})`);
     
+    // Minimal sanitization - just trim any whitespace from fileId
+    const sanitizedFileId = fileId.trim();
+    
     // Get file info from Telegram with improved retry logic
-    console.log(`Fetching file info for ${fileId}`);
+    console.log(`Fetching file info for ${sanitizedFileId}`);
     
-    const fileInfoResponse = await xdelo_fetchWithRetry(
-      `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${fileId}`,
-      { 
-        method: 'GET',
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
+    try {
+      const fileInfoResponse = await xdelo_fetchWithRetry(
+        `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${encodeURIComponent(sanitizedFileId)}`,
+        { 
+          method: 'GET',
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        },
+        5,  // max retries
+        800 // initial delay
+      );
+      
+      const fileInfo = await fileInfoResponse.json();
+      
+      if (!fileInfo.ok) {
+        // Check for specific file_id issues
+        if (fileInfo.description && (
+          fileInfo.description.includes('wrong file_id') || 
+          fileInfo.description.includes('temporarily unavailable')
+        )) {
+          console.error(`Telegram file ID error: ${fileInfo.description}`);
+          return {
+            success: false,
+            error: `Telegram API error: ${fileInfo.description}`,
+            file_id_expired: true
+          };
         }
-      },
-      5,
-      800
-    );
-    
-    const fileInfo = await fileInfoResponse.json();
-    
-    if (!fileInfo.ok) {
-      throw new Error(`Telegram API error: ${JSON.stringify(fileInfo)}`);
-    }
-    
-    if (!fileInfo.result?.file_path) {
-      throw new Error(`Invalid file info response from Telegram: ${JSON.stringify(fileInfo)}`);
-    }
-    
-    console.log(`Successfully retrieved file path: ${fileInfo.result.file_path}`);
-    
-    // Download file from Telegram with enhanced retry logic
-    console.log(`Downloading file from path ${fileInfo.result.file_path}`);
-    
-    const fileDataResponse = await xdelo_fetchWithRetry(
-      `https://api.telegram.org/file/bot${telegramBotToken}/${fileInfo.result.file_path}`,
-      { 
-        method: 'GET',
-        headers: corsHeaders
-      },
-      5,
-      1000
-    );
-    
-    const fileData = await fileDataResponse.blob();
-    
-    // Validate the downloaded data
-    if (!fileData || fileData.size === 0) {
-      throw new Error('Downloaded empty file from Telegram');
-    }
-    
-    console.log(`Successfully downloaded file: ${fileData.size} bytes`);
-    
-    // Try to detect MIME type from file extension if not provided
-    let detectedMimeType = mimeType;
-    if (!detectedMimeType || detectedMimeType === 'application/octet-stream') {
-      // Extract extension from file_path
-      const extension = fileInfo.result.file_path.split('.').pop()?.toLowerCase();
-      if (extension) {
-        // Map common extensions back to MIME types
-        const extensionMimeMap: Record<string, string> = {
-          'jpg': 'image/jpeg',
-          'jpeg': 'image/jpeg',
-          'png': 'image/png',
-          'gif': 'image/gif',
-          'webp': 'image/webp',
-          'mp4': 'video/mp4',
-          'mov': 'video/quicktime',
-          'pdf': 'application/pdf',
-          'doc': 'application/msword',
-          'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'xls': 'application/vnd.ms-excel',
-          'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        };
         
-        if (extensionMimeMap[extension]) {
-          detectedMimeType = extensionMimeMap[extension];
-          console.log(`Detected MIME type from file extension: ${detectedMimeType}`);
+        throw new Error(`Telegram API error: ${JSON.stringify(fileInfo)}`);
+      }
+      
+      if (!fileInfo.result?.file_path) {
+        throw new Error(`Invalid file info response from Telegram: ${JSON.stringify(fileInfo)}`);
+      }
+      
+      console.log(`Successfully retrieved file path: ${fileInfo.result.file_path}`);
+      
+      // Download file from Telegram with enhanced retry logic
+      console.log(`Downloading file from path ${fileInfo.result.file_path}`);
+      
+      const fileDataResponse = await xdelo_fetchWithRetry(
+        `https://api.telegram.org/file/bot${telegramBotToken}/${fileInfo.result.file_path}`,
+        { 
+          method: 'GET',
+          headers: corsHeaders
+        },
+        5,   // max retries
+        1000 // initial delay
+      );
+      
+      const fileData = await fileDataResponse.blob();
+      
+      // Validate the downloaded data
+      if (!fileData || fileData.size === 0) {
+        throw new Error('Downloaded empty file from Telegram');
+      }
+      
+      console.log(`Successfully downloaded file: ${fileData.size} bytes`);
+      
+      // Try to detect MIME type from file extension if not provided
+      let detectedMimeType = mimeType;
+      if (!detectedMimeType || detectedMimeType === 'application/octet-stream') {
+        // Extract extension from file_path
+        const extension = fileInfo.result.file_path.split('.').pop()?.toLowerCase();
+        if (extension) {
+          // Map common extensions back to MIME types
+          const extensionMimeMap: Record<string, string> = {
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'webp': 'image/webp',
+            'mp4': 'video/mp4',
+            'mov': 'video/quicktime',
+            'pdf': 'application/pdf',
+            'doc': 'application/msword',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls': 'application/vnd.ms-excel',
+            'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          };
+          
+          if (extensionMimeMap[extension]) {
+            detectedMimeType = extensionMimeMap[extension];
+            console.log(`Detected MIME type from file extension: ${detectedMimeType}`);
+          }
         }
       }
+      
+      // Generate storage path consistently using file_unique_id
+      const storagePath = xdelo_generateStoragePath(fileUniqueId, detectedMimeType);
+      console.log(`Generated storage path: ${storagePath} with MIME type: ${detectedMimeType}`);
+      
+      return {
+        success: true,
+        blob: fileData,
+        storagePath,
+        mimeType: detectedMimeType,
+        attempts: 1
+      };
+    } catch (error) {
+      // Check if this is a file_id error from Telegram
+      if (error.message && (
+        error.message.includes('wrong file_id') || 
+        error.message.includes('Bad Request') ||
+        error.message.includes('temporarily unavailable')
+      )) {
+        console.error(`File ID error detected: ${error.message}`);
+        return {
+          success: false,
+          error: `File ID error: ${error.message}`,
+          file_id_expired: true
+        };
+      }
+      
+      throw error; // Rethrow other errors to be caught by outer handler
     }
-    
-    // Generate storage path
-    const storagePath = xdelo_generateStoragePath(fileUniqueId, detectedMimeType);
-    console.log(`Generated storage path: ${storagePath} with MIME type: ${detectedMimeType}`);
-    
-    return {
-      success: true,
-      blob: fileData,
-      storagePath,
-      mimeType: detectedMimeType,
-      attempts: 1
-    };
   } catch (error) {
     console.error('Error downloading media from Telegram:', error);
     
@@ -478,4 +524,41 @@ export async function xdelo_downloadMediaFromTelegram(
       attempts: 5
     };
   }
-} 
+}
+
+// Check if file exists in storage by path
+export async function xdelo_checkFileExistsInStorage(
+  storagePath: string,
+  bucket: string = 'telegram-media'
+): Promise<boolean> {
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Missing Supabase credentials');
+    }
+    
+    // Create a client
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.38.4');
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Check if file exists
+    const { data, error } = await supabase
+      .storage
+      .from(bucket)
+      .list('', {
+        search: storagePath
+      });
+    
+    if (error) {
+      console.error(`Error checking if file exists: ${error.message}`);
+      return false;
+    }
+    
+    return data.some(item => item.name === storagePath);
+  } catch (error) {
+    console.error(`Error checking storage: ${error.message}`);
+    return false;
+  }
+}

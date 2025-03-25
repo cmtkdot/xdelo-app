@@ -1,3 +1,4 @@
+
 import { supabaseClient } from '../utils/supabase.ts';
 import { corsHeaders } from '../utils/cors.ts';
 import { 
@@ -5,11 +6,13 @@ import {
   xdelo_uploadMediaToStorage,
   xdelo_validateAndFixStoragePath,
   xdelo_isViewableMimeType,
-  xdelo_detectMimeType
+  xdelo_detectMimeType,
+  xdelo_checkFileExistsInStorage
 } from '../utils/media/mediaUtils.ts';
 import {
   xdelo_findExistingFile,
-  xdelo_processMessageMedia
+  xdelo_processMessageMedia,
+  xdelo_handleExpiredFileId
 } from '../utils/media/mediaStorage.ts';
 import { 
   TelegramMessage, 
@@ -154,10 +157,60 @@ async function xdelo_handleEditedMediaMessage(
           telegramFile.file_id,
           telegramFile.file_unique_id,
           TELEGRAM_BOT_TOKEN || '',
-          existingMessage.id // Use existing message ID
+          existingMessage.id, // Use existing message ID
+          correlationId  // Pass correlation ID for logging
         );
         
         if (!mediaProcessResult.success) {
+          // Handle expired file ID case
+          if (mediaProcessResult.file_id_expired) {
+            logger?.warn(`File ID expired for edit of message ${message.message_id}`);
+            
+            // Flag message for later redownload
+            await xdelo_handleExpiredFileId(
+              existingMessage.id,
+              telegramFile.file_unique_id,
+              correlationId
+            );
+            
+            // Continue processing with the edit even if media download failed
+            // This allows caption changes to still be processed
+            
+            // Update the message with new details except media
+            const { error: updateError } = await supabaseClient
+              .from('messages')
+              .update({
+                caption: message.caption,
+                file_id: telegramFile.file_id, // Still update this for future retries
+                file_unique_id: telegramFile.file_unique_id,
+                mime_type: detectedMimeType,
+                edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
+                edit_count: (existingMessage.edit_count || 0) + 1,
+                edit_history: editHistory,
+                processing_state: message.caption ? 'pending' : existingMessage.processing_state,
+                needs_redownload: true,
+                redownload_reason: 'file_id_expired_during_edit',
+                redownload_flagged_at: new Date().toISOString(),
+                last_edited_at: new Date().toISOString()
+              })
+              .eq('id', existingMessage.id);
+            
+            if (updateError) {
+              logger?.error(`Failed to update message with expired file details: ${updateError.message}`);
+            }
+            
+            // Return success but indicate the file_id expired
+            return new Response(
+              JSON.stringify({ 
+                success: true, 
+                file_id_expired: true,
+                message: 'Message updated but media could not be downloaded - file ID expired',
+                correlationId 
+              }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          
           throw new Error(`Failed to process edited media: ${mediaProcessResult.error}`);
         }
         
@@ -173,6 +226,8 @@ async function xdelo_handleEditedMediaMessage(
           processing_state: message.caption ? 'pending' : existingMessage.processing_state,
           storage_path: mediaProcessResult.fileInfo.storage_path,
           public_url: mediaProcessResult.fileInfo.public_url,
+          storage_exists: true,
+          storage_path_standardized: true,
           last_edited_at: new Date().toISOString()
         };
         
@@ -359,8 +414,27 @@ async function xdelo_handleNewMediaMessage(
       message,
       telegramFile.file_id,
       telegramFile.file_unique_id,
-      TELEGRAM_BOT_TOKEN
+      TELEGRAM_BOT_TOKEN || '',
+      undefined, // No message ID yet since this is a new message
+      correlationId
     );
+    
+    // Handle expired file ID case
+    if (!mediaResult.success && mediaResult.file_id_expired) {
+      logger?.warn(`File ID expired or invalid for new message ${message.message_id}`);
+      
+      // Still proceed with creating a record, but mark it for redownload
+      const storagePathEstimate = `${telegramFile.file_unique_id}.${xdelo_detectMimeType(message).split('/')[1]}`;
+      
+      // Create an incomplete record to be updated later
+      return await createIncompleteMediaRecord(
+        message,
+        telegramFile,
+        storagePathEstimate,
+        context,
+        true // needs redownload
+      );
+    }
     
     if (!mediaResult.success) {
       throw new Error(`Failed to process media: ${mediaResult.error}`);
@@ -483,5 +557,110 @@ async function xdelo_handleNewMediaMessage(
     
     // Re-throw to be caught by the main handler
     throw createError;
+  }
+}
+
+/**
+ * Create an incomplete media record when file_id has expired
+ * but we want to create a record anyway for later processing
+ */
+async function createIncompleteMediaRecord(
+  message: TelegramMessage,
+  telegramFile: any,
+  estimatedStoragePath: string,
+  context: MessageContext,
+  needsRedownload: boolean
+): Promise<Response> {
+  const { correlationId, logger } = context;
+  
+  try {
+    // Generate best-effort public URL based on estimated storage path
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const estimatedPublicUrl = `${supabaseUrl}/storage/v1/object/public/telegram-media/${estimatedStoragePath}`;
+    
+    // Prepare forward info if message is forwarded
+    const forwardInfo: ForwardInfo | undefined = message.forward_origin ? {
+      is_forwarded: true,
+      forward_origin_type: message.forward_origin.type,
+      forward_from_chat_id: message.forward_origin.chat?.id,
+      forward_from_chat_title: message.forward_origin.chat?.title,
+      forward_from_chat_type: message.forward_origin.chat?.type,
+      forward_from_message_id: message.forward_origin.message_id,
+      forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
+      original_chat_id: message.forward_origin.chat?.id,
+      original_chat_title: message.forward_origin.chat?.title,
+      original_message_id: message.forward_origin.message_id
+    } : undefined;
+    
+    // Create incomplete message record
+    const messageInput: MessageInput = {
+      telegram_message_id: message.message_id,
+      chat_id: message.chat.id,
+      chat_type: message.chat.type,
+      chat_title: message.chat.title,
+      caption: message.caption,
+      media_group_id: message.media_group_id,
+      file_id: telegramFile.file_id,
+      file_unique_id: telegramFile.file_unique_id,
+      mime_type: xdelo_detectMimeType(message),
+      mime_type_original: message.document?.mime_type || message.video?.mime_type,
+      storage_path: estimatedStoragePath,
+      public_url: estimatedPublicUrl,
+      width: telegramFile.width,
+      height: telegramFile.height,
+      duration: message.video?.duration,
+      file_size: telegramFile.file_size,
+      correlation_id: correlationId,
+      processing_state: 'error', // Mark as error since media couldn't be processed
+      is_edited_channel_post: context.isChannelPost,
+      forward_info: forwardInfo,
+      telegram_data: message,
+      is_forward: context.isForwarded,
+      storage_exists: false, // Media not in storage yet
+      storage_path_standardized: true, // Path format is correct
+      needs_redownload: needsRedownload,
+      redownload_reason: 'file_id_expired',
+      redownload_flagged_at: new Date().toISOString(),
+      message_url: constructTelegramMessageUrl(message.chat.id, message.message_id),
+      error_message: 'File ID expired or temporarily unavailable'
+    };
+    
+    // Create the message
+    const result = await createMessage(supabaseClient, messageInput, logger);
+    
+    if (!result.success) {
+      throw new Error(result.error_message || 'Failed to create incomplete message record');
+    }
+    
+    // Log the action
+    await xdelo_logProcessingEvent(
+      "incomplete_message_created",
+      result.id,
+      correlationId,
+      {
+        message_id: message.message_id,
+        chat_id: message.chat.id,
+        file_id: telegramFile.file_id,
+        file_unique_id: telegramFile.file_unique_id,
+        reason: 'file_id_expired'
+      }
+    );
+    
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        id: result.id, 
+        file_id_expired: true,
+        needs_redownload: true,
+        message: 'Created incomplete record - media download will be retried later',
+        correlationId 
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    logger?.error(`Failed to create incomplete media record: ${error.message}`);
+    
+    // Re-throw for handling by the main handler
+    throw error;
   }
 }
