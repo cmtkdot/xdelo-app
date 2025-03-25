@@ -1,4 +1,6 @@
 
+import React from 'react';
+
 /**
  * Result type for repair operations
  */
@@ -38,8 +40,8 @@ export interface UseMediaUtilsType {
 }
 
 /**
- * Type for the context provider (not used yet but required by import)
+ * Type for the context provider
  */
-export interface MediaUtilsProvider {
+export interface MediaUtilsProviderProps {
   children: React.ReactNode;
 }

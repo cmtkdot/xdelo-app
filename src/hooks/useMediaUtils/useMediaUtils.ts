@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useToast } from '@/hooks/useToast';
 import { useMediaQueries } from './useMediaQueries';
@@ -36,7 +37,7 @@ export const useMediaUtils = (): UseMediaUtilsType => {
       });
       
       return result.data;
-    } catch (err) {
+    } catch (err: any) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMessage);
       
@@ -70,7 +71,7 @@ export const useMediaUtils = (): UseMediaUtilsType => {
       });
       
       return result.data;
-    } catch (err) {
+    } catch (err: any) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMessage);
       
@@ -104,7 +105,7 @@ export const useMediaUtils = (): UseMediaUtilsType => {
       });
       
       return result.data;
-    } catch (err) {
+    } catch (err: any) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMessage);
       
