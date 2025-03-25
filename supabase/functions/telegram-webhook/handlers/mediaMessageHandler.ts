@@ -17,7 +17,7 @@ import {
   ForwardInfo,
   MessageInput,
 } from '../types.ts';
-import { createMessage, xdelo_logProcessingEvent } from '../dbOperations.ts';
+import { xdelo_createMessage, xdelo_logProcessingEvent } from '../dbOperations.ts';
 import { constructTelegramMessageUrl } from '../utils/messageUtils.ts';
 
 // Get Telegram bot token from environment
@@ -371,9 +371,9 @@ async function xdelo_handleNewMediaMessage(
     };
     
     // Create the message - duplicate detection is built into this function
-    const result = await createMessage(supabaseClient, messageInput, logger);
+    const result = await xdelo_createMessage(supabaseClient, messageInput, logger);
     
-    // Check if this is a duplicate file that was detected by createMessage
+    // Check if this is a duplicate file that was detected by xdelo_createMessage
     if (result.success && result.error_message === "File already exists in database") {
       logger?.info(`Duplicate file detected: ${message.message_id} in chat ${message.chat.id}`);
       
