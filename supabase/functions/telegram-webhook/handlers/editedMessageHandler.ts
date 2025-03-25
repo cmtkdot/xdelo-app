@@ -1,5 +1,4 @@
-
-import { TelegramMessage, MessageContext } from '../../_shared/database/types.ts';
+import { TelegramMessage, MessageContext } from '../types.ts';
 import { corsHeaders } from '../utils/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { xdelo_logProcessingEvent } from '../utils/databaseOperations.ts';
@@ -19,9 +18,34 @@ declare const Deno: {
  * Media edits are handled by the mediaMessageHandler
  */
 export async function handleEditedMessage(message: TelegramMessage, context: MessageContext) {
-  // First, validate that this is not a media message
+  // First, validate that this is not a media message - if it is, redirect to media handler
   if (message.photo || message.video || message.document) {
-    throw new Error('Edited message contains media, should be handled by mediaMessageHandler');
+    context.logger?.warn('Edited message contains media, redirecting to mediaMessageHandler', {
+      message_id: message.message_id,
+      chat_id: message.chat?.id,
+      chat_type: message.chat?.type
+    });
+    
+    // Log this routing error for monitoring
+    try {
+      await xdelo_logProcessingEvent(
+        'routing_correction',
+        message.message_id.toString(),
+        context.correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat?.id,
+          original_handler: 'editedMessage',
+          redirected_to: 'mediaMessage',
+          reason: 'Message contains media but was routed to editedMessageHandler'
+        }
+      );
+    } catch (logError) {
+      console.error('Failed to log routing correction:', logError);
+    }
+    
+    // Forward to the media handler
+    return await handleMediaMessage(message, context);
   }
   
   const { logger } = context;

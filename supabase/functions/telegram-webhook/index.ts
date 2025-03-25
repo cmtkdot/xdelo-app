@@ -35,12 +35,14 @@ serve(async (req) => {
     let message;
     let isChannelPost = false;
     let isEdit = false;
+    let previousMessage = null;
     
     if (payload.message) {
       message = payload.message;
     } else if (payload.edited_message) {
       message = payload.edited_message;
       isEdit = true;
+      previousMessage = payload.edited_message;
     } else if (payload.channel_post) {
       message = payload.channel_post;
       isChannelPost = true;
@@ -48,6 +50,7 @@ serve(async (req) => {
       message = payload.edited_channel_post;
       isChannelPost = true;
       isEdit = true;
+      previousMessage = payload.edited_channel_post;
     } else {
       logger.info("Unsupported webhook type", { 
         payload_type: Object.keys(payload)[0] 
@@ -76,24 +79,38 @@ serve(async (req) => {
       isForwarded,
       correlationId,
       isEdit,
+      previousMessage,
       startTime: new Date().toISOString(),
       logger
     };
     
-    // Important: Check for media first, regardless of whether it's an edit or not
+    // IMPORTANT: Check for media first, regardless of whether it's an edit or not
+    // This ensures all media messages go to the media handler
     if (hasMedia(message)) {
-      logger.logRouting(message.message_id, "media", true, isEdit);
+      logger.info("Routing message to media handler", { 
+        message_id: message.message_id, 
+        has_media: true, 
+        is_edit: isEdit 
+      });
       return await handleMediaMessage(message, context);
     }
     
     // For edits of non-media messages
     if (isEdit) {
-      logger.logRouting(message.message_id, "edited", false, true);
+      logger.info("Routing message to edited handler", { 
+        message_id: message.message_id, 
+        has_media: false, 
+        is_edit: true 
+      });
       return await handleEditedMessage(message, context);
     }
     
     // For regular non-media messages
-    logger.logRouting(message.message_id, "text", false, false);
+    logger.info("Routing message to text handler", { 
+      message_id: message.message_id, 
+      has_media: false, 
+      is_edit: false 
+    });
     return await handleOtherMessage(message, context);
     
   } catch (error) {
