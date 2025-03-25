@@ -19,7 +19,8 @@ function createDirectSupabaseClient(): SupabaseClient {
   return createClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: {
       persistSession: false,
-      autoRefreshToken: false
+      autoRefreshToken: false,
+      detectSessionInUrl: false // Added to prevent JWT issues
     },
     global: {
       headers: {
@@ -128,17 +129,23 @@ serve(async (req: Request) => {
     let response;
     
     try {
-      // Handle edited messages
-      if (context.isEdit) {
+      // Check if message contains media first
+      const hasMedia = !!(message.photo || message.video || message.document);
+      
+      // Handle media messages (photos, videos, documents) - including edited ones
+      if (hasMedia) {
+        logger.info('Routing to media message handler', { 
+          message_id: message.message_id,
+          is_edit: context.isEdit
+        });
+        response = await handleMediaMessage(message, context);
+      }
+      // Handle edited text messages
+      else if (context.isEdit) {
         logger.info('Routing to edited message handler', { message_id: message.message_id });
         response = await handleEditedMessage(message, context);
       }
-      // Handle media messages (photos, videos, documents)
-      else if (message.photo || message.video || message.document) {
-        logger.info('Routing to media message handler', { message_id: message.message_id });
-        response = await handleMediaMessage(message, context);
-      }
-      // Handle other types of messages
+      // Handle other types of messages (text, stickers, etc.)
       else {
         logger.info('Routing to text message handler', { message_id: message.message_id });
         response = await handleOtherMessage(message, context);

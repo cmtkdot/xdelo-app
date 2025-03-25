@@ -30,6 +30,11 @@ export interface MessageInput {
   storage_path_standardized?: boolean;
   message_url?: string;
   text?: string;
+  // Fields for handling duplicate content
+  is_duplicate_content?: boolean;
+  analyzed_content?: any;
+  duplicate_of_message_id?: string;
+  old_analyzed_content?: any[];
 }
 
 export interface ForwardInfo {
@@ -46,6 +51,12 @@ export interface ForwardInfo {
   original_chat_id?: number;
   original_chat_title?: string;
   original_message_id?: number;
+}
+
+export interface MessageResult {
+  success: boolean;
+  id?: string;
+  error_message?: string;
 }
 
 /**

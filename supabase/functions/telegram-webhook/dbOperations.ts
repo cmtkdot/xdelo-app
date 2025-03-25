@@ -34,6 +34,90 @@ export async function checkDuplicateFile(
 }
 
 /**
+ * Check if file with same file_unique_id exists and return its details
+ * This allows us to update existing file analysis or link related messages
+ */
+export async function findExistingFileByUniqueId(
+  supabase = supabaseClient,
+  fileUniqueId: string,
+  logger?: Logger
+): Promise<{ exists: boolean; messageId?: string; analyzedContent?: any; }> {
+  try {
+    logger?.info(`Checking for existing file with unique ID: ${fileUniqueId}`);
+    
+    return await xdelo_withDatabaseRetry(`find_file_${fileUniqueId}`, async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('id, analyzed_content')
+        .eq('file_unique_id', fileUniqueId)
+        .order('created_at', { ascending: false }) // Get the most recent one
+        .limit(1);
+
+      if (error) {
+        logger?.error(`Error checking for existing file: ${error.message}`, { error });
+        return { exists: false };
+      }
+
+      if (data && data.length > 0) {
+        logger?.info(`Found existing file with same unique ID: ${data[0].id}`);
+        return { 
+          exists: true, 
+          messageId: data[0].id,
+          analyzedContent: data[0].analyzed_content
+        };
+      }
+
+      return { exists: false };
+    });
+  } catch (error) {
+    logger?.error(`Exception finding existing file: ${error.message}`, { error });
+    return { exists: false };
+  }
+}
+
+/**
+ * Update a message with analysis from a similar file
+ * Used when the same file is shared multiple times
+ */
+export async function updateWithExistingAnalysis(
+  supabase = supabaseClient,
+  messageId: string,
+  fileInfo: { analyzedContent: any },
+  logger?: Logger
+): Promise<boolean> {
+  try {
+    logger?.info(`Updating message ${messageId} with existing analysis`);
+    
+    // Create a timestamp for the update
+    const now = new Date().toISOString();
+    
+    return await xdelo_withDatabaseRetry(`update_with_analysis_${messageId}`, async () => {
+      const { error } = await supabase
+        .from('messages')
+        .update({
+          analyzed_content: fileInfo.analyzedContent,
+          processing_state: 'completed',
+          processing_completed_at: now,
+          is_duplicate_content: true,
+          updated_at: now
+        })
+        .eq('id', messageId);
+
+      if (error) {
+        logger?.error(`Error updating message with existing analysis: ${error.message}`, { error });
+        return false;
+      }
+
+      logger?.info(`Successfully updated message ${messageId} with existing analysis`);
+      return true;
+    });
+  } catch (error) {
+    logger?.error(`Exception updating with existing analysis: ${error.message}`, { error });
+    return false;
+  }
+}
+
+/**
  * Create a new message record with enhanced retry logic
  */
 export async function createMessage(
@@ -46,6 +130,25 @@ export async function createMessage(
     
     // Add timestamp to message record to prevent transaction conflicts
     const now = new Date().toISOString();
+    
+    // First check if we already have a file with the same unique ID
+    if (message.file_unique_id) {
+      const existingFile = await findExistingFileByUniqueId(supabase, message.file_unique_id, logger);
+      if (existingFile.exists && existingFile.analyzedContent) {
+        logger?.info(`Found existing file analysis for ${message.file_unique_id}`);
+        
+        // We'll still create the message record, but we'll mark it as a duplicate and
+        // copy over the existing analysis
+        message.is_duplicate_content = true;
+        message.analyzed_content = existingFile.analyzedContent;
+        message.processing_state = 'completed'; // Skip processing since we already have analysis
+        
+        // Create a reference to the original message
+        message.duplicate_of_message_id = existingFile.messageId;
+        
+        logger?.info(`Using existing analysis for ${message.file_unique_id} from message ${existingFile.messageId}`);
+      }
+    }
     
     // Ensure we have a clean-up function in case of errors
     const cleanupOnError = async (error: any) => {
@@ -112,7 +215,12 @@ export async function createMessage(
             updated_at: now,
             edit_history: message.edit_history || [],
             edit_date: message.edit_date,
-            is_edited: !!message.edit_history?.length
+            is_edited: !!message.edit_history?.length,
+            // Add new fields for duplicate content handling
+            is_duplicate_content: message.is_duplicate_content || false,
+            analyzed_content: message.analyzed_content || null,
+            duplicate_of_message_id: message.duplicate_of_message_id || null,
+            processing_completed_at: message.is_duplicate_content ? now : null
           })
           .select('id')
           .single();

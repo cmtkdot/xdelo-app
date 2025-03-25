@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { xdelo_withDatabaseRetry } from './retryUtils.ts';
 
@@ -9,7 +8,8 @@ const supabaseClient = createClient(
   {
     auth: {
       persistSession: false,
-      autoRefreshToken: false
+      autoRefreshToken: false,
+      detectSessionInUrl: false
     }
   }
 );
@@ -19,24 +19,41 @@ const supabaseClient = createClient(
  */
 export async function xdelo_logProcessingEvent(
   eventType: string,
-  entityId: string,
+  entityId: string | number,
   correlationId: string,
   metadata: Record<string, unknown>,
   errorMessage?: string
 ) {
   try {
-    // Ensure metadata has a timestamp
-    const enhancedMetadata = {
+    // Ensure entityId is always a string and a valid UUID if possible
+    const entityIdStr = String(entityId);
+    
+    // Enhance metadata for system events that don't have a valid UUID
+    let enhancedMetadata = {
       ...metadata,
       timestamp: metadata.timestamp || new Date().toISOString(),
       correlation_id: correlationId,
       logged_from: 'edge_function'
     };
     
+    // For system events or other non-UUID entityIds, use a generated UUID and include original in metadata
+    let actualEntityId = entityIdStr;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    
+    if (!UUID_REGEX.test(entityIdStr)) {
+      actualEntityId = crypto.randomUUID();
+      enhancedMetadata = {
+        ...enhancedMetadata,
+        original_entity_id: entityIdStr,
+        entity_type: entityIdStr === 'system' ? 'system' : 'unknown'
+      };
+      console.log(`Using generated UUID for non-UUID entity ID: ${entityIdStr} -> ${actualEntityId}`);
+    }
+    
     await xdelo_withDatabaseRetry(`log_processing_event_${eventType}`, async () => {
       const { error } = await supabaseClient.from('unified_audit_logs').insert({
         event_type: eventType,
-        entity_id: entityId,
+        entity_id: actualEntityId,
         metadata: enhancedMetadata,
         error_message: errorMessage,
         correlation_id: correlationId,
@@ -46,6 +63,7 @@ export async function xdelo_logProcessingEvent(
       if (error) throw error;
     });
   } catch (error) {
+    // Never throw from logging function - just log the error to console
     console.error(`Error logging event: ${eventType}`, error);
   }
 }

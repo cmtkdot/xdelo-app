@@ -1,4 +1,3 @@
-
 /**
  * Type definitions for RPC functions
  * This helps TypeScript recognize custom RPC functions in the project
@@ -30,6 +29,25 @@ declare module "@supabase/supabase-js" {
         p_correlation_id: string;
         p_metadata?: Record<string, any>;
         p_error_message?: string;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
+
+    // Add RPC for duplicate file handling
+    rpc<T = { success: boolean; message?: string; [key: string]: any }>(
+      fn: "xdelo_find_duplicate_file",
+      params: {
+        p_file_unique_id: string;
+        p_correlation_id?: string;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
+    
+    // Add RPC for updating a message with existing analysis
+    rpc<T = { success: boolean; message?: string; [key: string]: any }>(
+      fn: "xdelo_apply_duplicate_content_analysis",
+      params: {
+        p_target_message_id: string;
+        p_source_message_id: string;
+        p_correlation_id?: string;
       }
     ): { data: T; error: null } | { data: null; error: Error };
 

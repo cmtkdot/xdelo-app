@@ -17,8 +17,9 @@ import {
   ForwardInfo,
   MessageInput,
 } from '../types.ts';
-import { createMessage, checkDuplicateFile } from '../dbOperations.ts';
+import { createMessage, checkDuplicateFile, findExistingFileByUniqueId, updateWithExistingAnalysis } from '../dbOperations.ts';
 import { constructTelegramMessageUrl } from '../../_shared/messageUtils.ts';
+import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
 
 // Get Telegram bot token from environment
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
@@ -329,7 +330,7 @@ async function xdelo_handleNewMediaMessage(
   const { correlationId, logger, supabase } = context;
   const dbClient = supabase || supabaseClient;
   
-  // Check if this message is a duplicate
+  // First, check if this message is a duplicate webhook
   const isDuplicate = await checkDuplicateFile(dbClient, message.message_id, message.chat.id);
   
   if (isDuplicate) {
@@ -353,10 +354,18 @@ async function xdelo_handleNewMediaMessage(
     message_url: messageUrl
   });
   
-  // Prepare the message data
-  const telegramFile = message.photo ? 
-    message.photo[message.photo.length - 1] : 
-    message.video || message.document;
+  // Prepare the message data - safely extract the file information
+  // using null checks to avoid "possibly undefined" errors
+  let telegramFile;
+  if (message.photo && message.photo.length > 0) {
+    telegramFile = message.photo[message.photo.length - 1];
+  } else if (message.video) {
+    telegramFile = message.video;
+  } else if (message.document) {
+    telegramFile = message.document;
+  } else {
+    throw new Error("No media found in message");
+  }
   
   // Process media
   const mediaResult = await xdelo_processMessageMedia(
@@ -384,6 +393,33 @@ async function xdelo_handleNewMediaMessage(
     original_message_id: message.forward_origin.message_id
   } : undefined;
   
+  // Check if we have an existing file with the same file_unique_id
+  // This will allow us to reuse analysis from previously processed identical files
+  let hasExistingAnalysis = false;
+  let existingAnalysis = null;
+  let duplicateOfMessageId = null;
+  
+  try {
+    const { exists, messageId, analyzedContent } = await findExistingFileByUniqueId(
+      dbClient, 
+      telegramFile.file_unique_id,
+      logger
+    );
+    
+    if (exists && analyzedContent) {
+      hasExistingAnalysis = true;
+      existingAnalysis = analyzedContent;
+      duplicateOfMessageId = messageId;
+      
+      logger?.info(`Found existing analysis for file_unique_id: ${telegramFile.file_unique_id}`, {
+        source_message_id: messageId
+      });
+    }
+  } catch (error) {
+    // Just log the error but continue processing
+    logger?.warn(`Error checking for existing file: ${error.message}`, { error });
+  }
+  
   // Create message input
   const messageInput: MessageInput = {
     telegram_message_id: message.message_id,
@@ -398,12 +434,12 @@ async function xdelo_handleNewMediaMessage(
     mime_type_original: message.document?.mime_type || message.video?.mime_type,
     storage_path: mediaResult.fileInfo.storage_path,
     public_url: mediaResult.fileInfo.public_url,
-    width: telegramFile.width,
-    height: telegramFile.height,
+    width: "width" in telegramFile ? telegramFile.width : undefined,
+    height: "height" in telegramFile ? telegramFile.height : undefined,
     duration: message.video?.duration,
     file_size: telegramFile.file_size || mediaResult.fileInfo.file_size,
     correlation_id: correlationId,
-    processing_state: message.caption ? 'pending' : 'initialized',
+    processing_state: hasExistingAnalysis ? 'completed' : (message.caption ? 'pending' : 'initialized'),
     is_edited_channel_post: context.isChannelPost,
     forward_info: forwardInfo,
     telegram_data: message,
@@ -416,11 +452,15 @@ async function xdelo_handleNewMediaMessage(
     }] : [],
     storage_exists: true,
     storage_path_standardized: true,
-    message_url: messageUrl
+    message_url: messageUrl,
+    // Add fields for duplicate content handling
+    is_duplicate_content: hasExistingAnalysis,
+    analyzed_content: existingAnalysis,
+    duplicate_of_message_id: duplicateOfMessageId
   };
   
   // Create the message
-  const result = await createMessage(supabaseClient, messageInput, logger);
+  const result = await createMessage(dbClient, messageInput, logger);
   
   if (!result.success) {
     logger?.error(`Failed to create message: ${result.error_message}`, {
@@ -429,72 +469,45 @@ async function xdelo_handleNewMediaMessage(
     });
     
     // Also try to log to the database
-    await xdelo_logProcessingEvent(
-      "message_creation_failed",
-      message.message_id.toString(),
-      correlationId,
-      {
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        error: result.error_message
-      }
-    );
+    try {
+      await xdelo_logProcessingEvent(
+        "message_creation_failed",
+        String(message.message_id),
+        correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          error: result.error_message
+        }
+      );
+    } catch (logError) {
+      logger?.error(`Failed to log message creation failure: ${logError.message}`);
+    }
     
     throw new Error(result.error_message || 'Failed to create message record');
   }
   
   // Log the success
-  logger?.success(`Successfully created new media message: ${result.id}`, {
+  let responseMessage = "Successfully created new media message";
+  if (hasExistingAnalysis) {
+    responseMessage = "Created new message with existing analysis from duplicate file";
+  }
+  
+  logger?.success(`${responseMessage}: ${result.id}`, {
     telegram_message_id: message.message_id,
     chat_id: message.chat.id,
     media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
-    storage_path: mediaResult.fileInfo.storage_path
+    storage_path: mediaResult.fileInfo.storage_path,
+    is_duplicate_content: hasExistingAnalysis
   });
   
   return new Response(
-    JSON.stringify({ success: true, id: result.id, correlationId }),
+    JSON.stringify({ 
+      success: true, 
+      id: result.id, 
+      is_duplicate_content: hasExistingAnalysis,
+      correlationId 
+    }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
-}
-
-/**
- * Import from shared/databaseOperations.ts
- */
-async function xdelo_logProcessingEvent(
-  eventType: string,
-  entityId: string | number,
-  correlationId: string,
-  metadata?: Record<string, any>,
-  errorMessage?: string
-): Promise<void> {
-  try {
-    // Ensure entityId is always a string
-    const entityIdStr = String(entityId);
-    
-    // Enhanced metadata
-    const enhancedMetadata = {
-      ...(metadata || {}),
-      logged_at: new Date().toISOString(),
-      correlation_id: correlationId,
-      entity_id: entityIdStr, // Include entity_id in metadata for redundancy
-      event_type: eventType,  // Include event_type in metadata for redundancy
-      logged_from: 'edge_function_direct'
-    };
-    
-    const { error } = await supabaseClient.from('unified_audit_logs').insert({
-      event_type: eventType,
-      entity_id: entityIdStr,
-      correlation_id: correlationId,
-      metadata: enhancedMetadata,
-      error_message: errorMessage,
-      event_timestamp: new Date().toISOString()
-    });
-    
-    if (error) {
-      console.error(`Error logging event ${eventType}:`, error);
-    }
-  } catch (e) {
-    // Just log to console - never throw from here
-    console.error(`Exception logging event ${eventType}:`, e);
-  }
 }
