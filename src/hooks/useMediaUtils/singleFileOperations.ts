@@ -1,204 +1,306 @@
 
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/useToast';
+import { useCallback } from 'react';
 import { Message } from '@/types/entities/Message';
+import { useToast } from '@/hooks/useToast';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { logEvent, LogEventType } from '@/lib/logUtils';
+import { RepairResult } from './types';
 
-export function useSingleFileOperations() {
+/**
+ * Hook for single file media operations
+ */
+export function useSingleFileOperations(
+  addProcessingMessageId: (id: string) => void,
+  removeProcessingMessageId: (id: string) => void
+) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   /**
-   * Fix content disposition for a single file
+   * Process a message to extract and analyze its content
    */
-  const fixContentDisposition = async (message: Message): Promise<{
-    success: boolean;
-    message: string;
-    data?: any;
-  }> => {
+  const processMessage = useCallback(async (messageId: string): Promise<RepairResult> => {
     try {
-      if (!message.id) {
-        return {
-          success: false,
-          message: 'Message ID is required'
-        };
-      }
-
-      const { data, error } = await supabase.functions.invoke('xdelo_fix_content_disposition', {
-        body: { messageId: message.id }
+      addProcessingMessageId(messageId);
+      
+      // Call the edge function to process the message
+      const { data, error } = await supabase.functions.invoke('process-message', {
+        body: { messageId }
       });
-
+      
       if (error) {
-        console.error('Error fixing content disposition:', error);
-        toast({
-          title: 'Error',
-          description: `Failed to fix content disposition: ${error.message}`,
-          variant: 'destructive',
-        });
-        return {
-          success: false,
-          message: error.message || 'Failed to fix content disposition'
-        };
+        throw new Error(error.message || 'Failed to process message');
       }
-
+      
+      if (data?.success) {
+        toast({
+          title: "Message Processed",
+          description: data.message || "Message has been processed successfully."
+        });
+        
+        // Refresh data
+        queryClient.invalidateQueries({ queryKey: ['messages'] });
+        
+        return {
+          success: true,
+          message: data.message,
+          data
+        };
+      } else {
+        throw new Error(data?.message || 'Processing failed');
+      }
+    } catch (error) {
+      console.error('Error processing message:', error);
+      
       toast({
-        title: 'Success',
-        description: 'Content disposition fixed successfully',
+        title: "Processing Failed",
+        description: error.message || "Failed to process message",
+        variant: "destructive"
       });
-
-      return {
-        success: true,
-        message: 'Content disposition fixed successfully',
-        data
-      };
-    } catch (error: any) {
-      console.error('Exception in fixContentDisposition:', error);
-      toast({
-        title: 'Error',
-        description: `An unexpected error occurred: ${error.message}`,
-        variant: 'destructive',
-      });
+      
       return {
         success: false,
-        message: error.message || 'An unexpected error occurred'
+        message: error.message || 'Unknown error'
       };
+    } finally {
+      removeProcessingMessageId(messageId);
     }
-  };
+  }, [addProcessingMessageId, removeProcessingMessageId, queryClient, toast]);
 
   /**
-   * Reupload media from Telegram for a single file
+   * Reupload media from Telegram for a specific message
    */
-  const reuploadMediaFromTelegram = async (message: Message): Promise<{
-    success: boolean;
-    message: string;
-    data?: any;
-  }> => {
+  const reuploadMediaFromTelegram = useCallback(async (messageId: string): Promise<RepairResult> => {
     try {
-      if (!message.id) {
-        return {
-          success: false,
-          message: 'Message ID is required'
-        };
+      addProcessingMessageId(messageId);
+      
+      // Call the edge function to reupload media
+      const { data, error } = await supabase.functions.invoke('redownload-missing-files', {
+        body: { messageId }
+      });
+      
+      if (error) {
+        throw new Error(error.message || 'Failed to reupload media');
       }
+      
+      // Refresh the data
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+      
+      if (data?.success) {
+        toast({
+          title: 'Media Reuploaded',
+          description: 'File has been successfully reuploaded from Telegram.',
+        });
+        return data;
+      } else {
+        throw new Error(data?.message || 'Reupload failed');
+      }
+    } catch (error) {
+      console.error('Error reuploading media:', error);
+      
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to reupload media. Please try again.',
+        variant: 'destructive',
+      });
+      
+      return { 
+        success: false, 
+        message: error.message || 'Unknown error occurred'
+      };
+    } finally {
+      removeProcessingMessageId(messageId);
+    }
+  }, [addProcessingMessageId, removeProcessingMessageId, queryClient, toast]);
 
-      const { data, error } = await supabase.functions.invoke('xdelo_reupload_media', {
+  /**
+   * Fix content disposition for a single message
+   */
+  const fixContentDispositionForMessage = useCallback(async (messageId: string): Promise<RepairResult> => {
+    try {
+      addProcessingMessageId(messageId);
+      
+      // Call the edge function to fix content disposition
+      const { data, error } = await supabase.functions.invoke('media-management', {
+        body: { 
+          action: 'fix_content_disposition', 
+          messageId
+        }
+      });
+      
+      if (error) {
+        throw new Error(error.message || 'Failed to fix content disposition');
+      }
+      
+      // Refresh the data
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+      
+      if (data?.success) {
+        toast({
+          title: 'Content Disposition Fixed',
+          description: 'File metadata has been updated successfully.',
+        });
+        return data;
+      } else {
+        throw new Error(data?.message || 'Failed to fix content disposition');
+      }
+    } catch (error) {
+      console.error('Error fixing content disposition:', error);
+      
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to fix content disposition. Please try again.',
+        variant: 'destructive',
+      });
+      
+      return {
+        success: false,
+        message: error.message || 'Unknown error occurred'
+      };
+    } finally {
+      removeProcessingMessageId(messageId);
+    }
+  }, [addProcessingMessageId, removeProcessingMessageId, queryClient, toast]);
+
+  /**
+   * Reanalyze a message caption
+   */
+  const reanalyzeMessageCaption = useCallback(async (message: Message): Promise<RepairResult> => {
+    try {
+      addProcessingMessageId(message.id);
+      
+      // Call the edge function to reanalyze caption
+      const { data, error } = await supabase.functions.invoke('parse-caption-with-ai', {
         body: { 
           messageId: message.id,
-          forceRedownload: true 
+          caption: message.caption
         }
       });
-
+      
       if (error) {
-        console.error('Error reuploading media from Telegram:', error);
-        toast({
-          title: 'Error',
-          description: `Failed to reupload media: ${error.message}`,
-          variant: 'destructive',
-        });
-        return {
-          success: false,
-          message: error.message || 'Failed to reupload media from Telegram'
-        };
+        throw new Error(error.message || 'Failed to analyze caption');
       }
-
+      
+      // Refresh the data
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+      
+      if (data?.success) {
+        toast({
+          title: "Analysis Complete",
+          description: data.message || "The message has been analyzed successfully."
+        });
+        return data;
+      } else {
+        throw new Error(data?.message || 'Analysis failed');
+      }
+    } catch (error) {
+      console.error('Error analyzing caption:', error);
+      
       toast({
-        title: 'Success',
-        description: 'Media successfully reuploaded from Telegram',
+        title: "Analysis Failed",
+        description: error.message || "Failed to analyze message",
+        variant: "destructive"
       });
-
-      return {
-        success: true,
-        message: 'Media successfully reuploaded from Telegram',
-        data
-      };
-    } catch (error: any) {
-      console.error('Exception in reuploadMediaFromTelegram:', error);
-      toast({
-        title: 'Error',
-        description: `An unexpected error occurred: ${error.message}`,
-        variant: 'destructive',
-      });
+      
       return {
         success: false,
-        message: error.message || 'An unexpected error occurred'
+        message: error.message || 'Unknown error occurred'
       };
+    } finally {
+      removeProcessingMessageId(message.id);
     }
-  };
+  }, [addProcessingMessageId, removeProcessingMessageId, queryClient, toast]);
 
   /**
-   * Reanalyze caption for a message
+   * Sync caption across all messages in a media group
    */
-  const reanalyzeCaption = async (message: Message): Promise<{
-    success: boolean;
-    message: string;
-    data?: any;
-  }> => {
+  const syncMessageCaption = useCallback(async ({ messageId }: { messageId: string }): Promise<RepairResult> => {
     try {
-      if (!message.id) {
+      addProcessingMessageId(messageId);
+      
+      // Get the message first
+      const { data: message, error: messageError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', messageId)
+        .single();
+      
+      if (messageError || !message) {
+        throw new Error(`Could not find message: ${messageError?.message || 'Not found'}`);
+      }
+      
+      const mediaGroupId = message.media_group_id;
+      
+      if (!mediaGroupId) {
         return {
           success: false,
-          message: 'Message ID is required'
+          message: "Message is not part of a media group"
         };
       }
-
-      if (!message.caption) {
-        return {
-          success: false,
-          message: 'Message has no caption to analyze'
-        };
+      
+      // Call the edge function to sync the media group
+      const { data, error } = await supabase.functions.invoke('media-management', {
+        body: { 
+          action: 'sync_media_group',
+          sourceMessageId: messageId,
+          mediaGroupId,
+          force: true
+        }
+      });
+      
+      if (error) {
+        throw new Error(`Failed to sync media group: ${error.message}`);
       }
-
-      // Generate a correlation ID
-      const correlationId = crypto.randomUUID().toString();
-
-      // Call database function directly 
-      const { data, error } = await supabase.rpc(
-        'xdelo_process_caption_workflow',
+      
+      // Log the operation and refresh data
+      await logEvent(
+        LogEventType.SYNC_COMPLETED,
+        messageId,
         {
-          p_message_id: message.id,
-          p_correlation_id: correlationId,
-          p_force: true
+          operation: 'caption_sync',
+          media_group_id: mediaGroupId,
+          result: data
         }
       );
-
-      if (error) {
-        console.error('Error analyzing caption:', error);
-        toast({
-          title: 'Error',
-          description: `Failed to analyze caption: ${error.message}`,
-          variant: 'destructive',
-        });
-        return {
-          success: false,
-          message: error.message || 'Failed to analyze caption'
-        };
-      }
-
+      
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+      queryClient.invalidateQueries({ queryKey: ['media-groups'] });
+      
       toast({
-        title: 'Success',
-        description: 'Caption analyzed successfully',
+        title: "Caption Synced",
+        description: "Caption has been synced to all messages in the media group"
       });
-
+      
       return {
         success: true,
-        message: 'Caption analyzed successfully',
+        message: "Caption synced successfully",
         data
       };
-    } catch (error: any) {
-      console.error('Error in reanalyzeCaption:', error);
+      
+    } catch (error) {
+      console.error("Error syncing caption:", error);
+      
       toast({
-        title: 'Error',
-        description: `An unexpected error occurred: ${error.message}`,
-        variant: 'destructive',
+        title: "Sync Failed",
+        description: error.message || "Failed to sync caption to media group",
+        variant: "destructive"
       });
+      
       return {
         success: false,
-        message: error.message || 'An unexpected error occurred'
+        message: error.message || "Unknown error during caption sync"
       };
+    } finally {
+      removeProcessingMessageId(messageId);
     }
-  };
+  }, [addProcessingMessageId, removeProcessingMessageId, queryClient, toast]);
 
   return {
-    fixContentDisposition,
+    processMessage,
     reuploadMediaFromTelegram,
-    reanalyzeCaption
+    fixContentDispositionForMessage,
+    reanalyzeMessageCaption,
+    syncMessageCaption,
   };
 }

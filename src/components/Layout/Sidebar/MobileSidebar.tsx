@@ -57,14 +57,14 @@ export const MobileSidebar = () => {
             className="fixed left-0 top-0 bottom-0 w-[270px] bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 z-50 overflow-y-auto"
           >
             <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-800">
-              <h1 className="text-xl font-bold text-left">XDELO</h1>
+              <h1 className="text-xl font-bold">XDELO</h1>
               <Button variant="ghost" size="icon" onClick={closeNavigation}>
                 <X className="h-5 w-5" />
               </Button>
             </div>
 
-            <div className="py-4 px-2">
-              <nav className="space-y-1">
+            <div className="py-4">
+              <nav className="space-y-1 px-2">
                 <NavItems
                   currentPath={location.pathname}
                   onNavigate={handleNavigate}
@@ -72,14 +72,14 @@ export const MobileSidebar = () => {
                 />
               </nav>
 
-              <div className="mt-4">
+              <div className="mt-4 px-2">
                 <Button
                   variant="ghost"
-                  className="flex items-center w-full justify-start text-left px-4 py-2.5 text-sm font-medium mobile-touch-target h-auto min-h-[44px] mb-12"
+                  className="flex items-center w-full justify-start px-4 py-2.5 text-sm font-medium mobile-touch-target h-auto min-h-[44px] mb-12"
                   onClick={handleLogout}
                 >
                   <LogOut className="flex-shrink-0 w-5 h-5 text-muted-foreground" />
-                  <span className="ml-4">Logout</span>
+                  <span>Logout</span>
                 </Button>
               </div>
             </div>

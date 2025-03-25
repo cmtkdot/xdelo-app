@@ -12,20 +12,6 @@ This document provides an overview of all active edge functions in the project, 
 - `telegram-webhook/handlers/` (various handlers)
 - `_shared/mediaUtils.ts`
 
-### xdelo_set-telegram-webhook
-**Purpose**: Sets the webhook URL for the Telegram bot
-**Dependencies**:
-- `_shared/cors.ts`
-- Telegram Bot API
-- Database tables: `settings`, `make_webhook_logs`
-
-### xdelo_get-telegram-webhook-info
-**Purpose**: Retrieves detailed information about the configured webhook from Telegram
-**Dependencies**:
-- `_shared/cors.ts`
-- Telegram Bot API
-- Database tables: `make_webhook_logs`
-
 ### parse-caption-with-ai
 **Purpose**: Analyzes message captions with AI to extract product information
 **Dependencies**:

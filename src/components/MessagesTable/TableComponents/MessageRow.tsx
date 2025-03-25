@@ -1,7 +1,3 @@
-/**
- * @deprecated This component is no longer used. Row logic has been integrated into MessagesTable.tsx
- * Keep this file for reference until all usages have been migrated.
- */
 
 import { useState } from "react";
 import { TableCell, TableRow } from "@/components/ui/table";

@@ -1,164 +1,196 @@
 
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
-import { CalendarIcon, X } from 'lucide-react';
-import { format } from 'date-fns';
+import { useState, useEffect, useCallback } from "react";
+import { FilterValues } from "@/types";
+import { Filter, X } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { SearchFilter } from "./Filters/SearchFilter";
+import { VendorFilter } from "./Filters/VendorFilter";
+import { DateRangeFilter } from "./Filters/DateRangeFilter";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 
-export interface FilterState {
-  category: string;
-  searchTerm: string;
-  dateRange: { from: Date | null; to: Date | null };
-}
-
-export interface ProductFiltersProps {
+interface ProductFiltersProps {
   vendors: string[];
-  filters: FilterState;
-  onFilterChange: (newFilterState: Partial<FilterState>) => void;
+  filters: FilterValues;
+  onFilterChange: (filters: FilterValues) => void;
 }
 
-const ProductFilters: React.FC<ProductFiltersProps> = ({ vendors, filters, onFilterChange }) => {
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onFilterChange({ searchTerm: e.target.value });
-  };
+export default function ProductFilters({ vendors, filters, onFilterChange }: ProductFiltersProps) {
+  const [search, setSearch] = useState(filters.search);
+  const [selectedVendors, setSelectedVendors] = useState<string[]>(filters.vendors || []);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(filters.sortOrder || "desc");
+  const [sortField, setSortField] = useState<"created_at" | "purchase_date">(filters.sortField || "created_at");
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | null>(filters.dateRange || null);
+  const [showUntitled, setShowUntitled] = useState<boolean>(filters.showUntitled || false);
+  const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
-  const handleCategoryChange = (value: string) => {
-    onFilterChange({ category: value });
-  };
+  useEffect(() => {
+    let count = 0;
+    if (search) count++;
+    if (selectedVendors.length > 0) count++;
+    if (dateRange) count++;
+    if (sortField !== "created_at") count++;
+    if (showUntitled) count++;
+    setActiveFiltersCount(count);
+  }, [search, selectedVendors, dateRange, sortField, showUntitled]);
 
-  const handleDateFromChange = (date: Date | null) => {
-    onFilterChange({ 
-      dateRange: { ...filters.dateRange, from: date } 
-    });
-  };
-
-  const handleDateToChange = (date: Date | null) => {
-    onFilterChange({ 
-      dateRange: { ...filters.dateRange, to: date } 
-    });
-  };
-
-  const clearFilters = () => {
+  const handleFilterChange = useCallback(() => {
     onFilterChange({
-      category: "all",
-      searchTerm: "",
-      dateRange: { from: null, to: null },
+      search,
+      vendors: selectedVendors,
+      sortOrder,
+      sortField,
+      dateRange,
+      showUntitled,
+      processingState: ['completed']
     });
+  }, [search, selectedVendors, sortOrder, sortField, dateRange, showUntitled, onFilterChange]);
+
+  useEffect(() => {
+    handleFilterChange();
+  }, [handleFilterChange]);
+
+  const resetFilters = () => {
+    setSearch("");
+    setSelectedVendors([]);
+    setSortOrder("desc");
+    setSortField("created_at");
+    setDateRange(null);
+    setShowUntitled(false);
   };
 
-  const isFiltersApplied = 
-    filters.category !== "all" || 
-    filters.searchTerm !== "" || 
-    filters.dateRange.from !== null || 
-    filters.dateRange.to !== null;
+  const handleSortOrderChange = (value: string) => {
+    setSortOrder(value as "asc" | "desc");
+  };
+
+  const handleSortFieldChange = (value: string) => {
+    setSortField(value as "created_at" | "purchase_date");
+  };
+
+  const FilterContent = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <SearchFilter value={search} onChange={setSearch} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Vendor</Label>
+          <VendorFilter 
+            value={selectedVendors}
+            vendors={vendors} 
+            onChange={setSelectedVendors}
+          />
+        </div>
+
+        <DateRangeFilter value={dateRange} onChange={setDateRange} />
+
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Sort By</Label>
+          <Select value={sortField} onValueChange={handleSortFieldChange}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="created_at">Upload Date</SelectItem>
+              <SelectItem value="purchase_date">Purchase Date</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Sort Order</Label>
+          <Select value={sortOrder} onValueChange={handleSortOrderChange}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">Newest First</SelectItem>
+              <SelectItem value="asc">Oldest First</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="flex items-center space-x-2 pt-2">
+        <Checkbox 
+          id="show-untitled-products" 
+          checked={showUntitled}
+          onCheckedChange={(checked) => setShowUntitled(checked as boolean)}
+        />
+        <Label htmlFor="show-untitled-products" className="cursor-pointer">
+          Show untitled products
+        </Label>
+      </div>
+
+      {activeFiltersCount > 0 && (
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-sm text-muted-foreground">
+            {activeFiltersCount} active filter{activeFiltersCount !== 1 ? 's' : ''}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={resetFilters}
+            className="h-8 px-2 text-xs"
+          >
+            <X className="w-3 h-3 mr-1" />
+            Clear all
+          </Button>
+        </div>
+      )}
+    </div>
+  );
 
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <Input
-              placeholder="Search products..."
-              value={filters.searchTerm}
-              onChange={handleSearchChange}
-              className="w-full"
-            />
-          </div>
-          
-          <div className="w-full md:w-48">
-            <Select 
-              value={filters.category} 
-              onValueChange={handleCategoryChange}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {vendors.map(vendor => (
-                  <SelectItem key={vendor} value={vendor}>
-                    {vendor}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="flex space-x-2">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "justify-start text-left font-normal w-[120px]",
-                    !filters.dateRange.from && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {filters.dateRange.from ? (
-                    format(filters.dateRange.from, "PPP")
-                  ) : (
-                    <span>From date</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={filters.dateRange.from || undefined}
-                  onSelect={handleDateFromChange}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-            
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "justify-start text-left font-normal w-[120px]",
-                    !filters.dateRange.to && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {filters.dateRange.to ? (
-                    format(filters.dateRange.to, "PPP")
-                  ) : (
-                    <span>To date</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={filters.dateRange.to || undefined}
-                  onSelect={handleDateToChange}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-            
-            {isFiltersApplied && (
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={clearFilters}
-                className="flex-shrink-0"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
+    <>
+      {/* Desktop view */}
+      <div className="hidden md:block">
+        <FilterContent />
+      </div>
 
-export default ProductFilters;
+      {/* Mobile view */}
+      <div className="md:hidden">
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="outline" className="w-full">
+              <Filter className="w-4 h-4 mr-2" />
+              Filters
+              {activeFiltersCount > 0 && (
+                <Badge variant="secondary" className="ml-2">
+                  {activeFiltersCount}
+                </Badge>
+              )}
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="h-[85vh] px-4">
+            <SheetHeader>
+              <div className="flex items-center justify-between">
+                <SheetTitle>Filters</SheetTitle>
+                {activeFiltersCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetFilters}
+                    className="h-8"
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    Clear all
+                  </Button>
+                )}
+              </div>
+            </SheetHeader>
+            <div className="mt-4">
+              <FilterContent />
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
+  );
+}

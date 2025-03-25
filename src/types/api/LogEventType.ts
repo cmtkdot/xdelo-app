@@ -44,17 +44,5 @@ export enum LogEventType {
   SYNC_PRODUCTS = 'sync:products',
   
   // Batch operations
-  BATCH_OPERATION = 'batch:operation',
-  
-  // Webhook events (for consistency with telegram webhook)
-  WEBHOOK_RECEIVED = 'webhook:received',
-  WEBHOOK_PROCESSED = 'webhook:processed',
-  WEBHOOK_ERROR = 'webhook:error',
-  
-  // Audit events (for direct logging from RPC)
-  AUDIT_LOG = 'audit:log',
-  PROCESSING_EVENT = 'processing:event'
+  BATCH_OPERATION = 'batch:operation'
 }
-
-// Export as named and default export for maximum compatibility
-export default LogEventType;

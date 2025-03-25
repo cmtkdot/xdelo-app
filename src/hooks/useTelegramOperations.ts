@@ -3,11 +3,8 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types/MessagesTypes';
 import { useToast } from '@/hooks/useToast';
-import { createLogger } from '@/lib/logger';
-import { reprocessMessage } from '@/lib/unifiedProcessor';
-
-// Create a logger specific to telegram operations
-const logger = createLogger('telegram-operations');
+import { logMessageOperation } from '@/lib/syncLogger';
+import { LogEventType } from '@/types/api/LogEventType';
 
 export function useTelegramOperations() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -17,8 +14,8 @@ export function useTelegramOperations() {
     try {
       setIsProcessing(true);
       
-      // Log the operation with simplified logging
-      await logger.logEvent('MESSAGE_DELETED', message.id, {
+      // Log the operation
+      await logMessageOperation(LogEventType.MESSAGE_DELETED, message.id, {
         delete_from_telegram: deleteTelegram,
         file_unique_id: message.file_unique_id,
         media_group_id: message.media_group_id
@@ -59,8 +56,8 @@ export function useTelegramOperations() {
     try {
       setIsProcessing(true);
       
-      // Log the operation with simplified logging
-      await logger.logEvent('USER_ACTION', message.id, {
+      // Log the operation
+      await logMessageOperation(LogEventType.USER_ACTION, message.id, {
         action: 'forward',
         target_chat_id: chatId,
         file_unique_id: message.file_unique_id
@@ -99,17 +96,20 @@ export function useTelegramOperations() {
     try {
       setIsProcessing(true);
       
-      // Log the operation with simplified logging
-      await logger.logEvent('USER_ACTION', messageId, {
+      // Log the operation
+      await logMessageOperation(LogEventType.USER_ACTION, messageId, {
         action: 'manual_reprocess'
       });
       
-      // Use our new unified processor instead of the separate edge function
-      const result = await reprocessMessage(messageId, true);
+      // Call the Edge Function to handle reprocessing
+      const { data, error } = await supabase.functions.invoke('xdelo_reprocess_message', {
+        body: { 
+          messageId,
+          force: true
+        }
+      });
       
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to reprocess message');
-      }
+      if (error) throw new Error(error.message);
       
       toast({
         title: 'Message Reprocessed',

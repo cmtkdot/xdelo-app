@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Message } from '@/types';
 import { cn } from '@/lib/utils';
 import { MediaThumbnail } from './MediaThumbnail';
@@ -9,7 +9,7 @@ import { ListItemActions } from './ListItemActions';
 interface MessageListItemProps {
   message: Message;
   onSelect: (message: Message) => void;
-  onView: () => void;
+  onView: () => void;  // This is now just a callback with no params
   onEdit?: (message: Message) => void;
   onDelete?: (message: Message) => void;
   isSelected?: boolean;
@@ -27,12 +27,6 @@ export const MessageListItem: React.FC<MessageListItemProps> = ({
   isMobile,
   hasError
 }) => {
-  const [mediaError, setMediaError] = useState(hasError);
-  
-  const handleMediaError = () => {
-    setMediaError(true);
-  };
-  
   return (
     <div 
       className={cn(
@@ -43,15 +37,15 @@ export const MessageListItem: React.FC<MessageListItemProps> = ({
     >
       <MediaThumbnail 
         message={message}
-        hasError={mediaError}
-        onView={onView}
+        hasError={hasError}
+        onView={onView}  // Pass the callback directly
       />
       
       <MessageContent message={message} />
       
       <ListItemActions 
         message={message}
-        onView={onView}
+        onView={onView}  // Pass the callback directly
         onEdit={onEdit}
         onDelete={onDelete}
         isMobile={isMobile}

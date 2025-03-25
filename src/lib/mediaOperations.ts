@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types/entities/Message';
 
@@ -54,18 +55,13 @@ export async function reanalyzeMessageCaption(message: Message): Promise<RepairR
       };
     }
 
-    // Generate a correlation ID
-    const correlationId = crypto.randomUUID().toString();
-
-    // Call database function directly instead of edge function
-    const { data, error } = await supabase.rpc(
-      'xdelo_process_caption_workflow',
-      {
-        p_message_id: message.id,
-        p_correlation_id: correlationId,
-        p_force: true
+    const { data, error } = await supabase.functions.invoke('parse-caption-with-ai', {
+      body: {
+        messageId: message.id,
+        caption: message.caption,
+        isEdit: true
       }
-    );
+    });
 
     if (error) {
       console.error('Error analyzing caption:', error);
@@ -125,7 +121,7 @@ export async function fixContentDisposition(messageId: string): Promise<RepairRe
  */
 export async function reuploadMediaFromTelegram(messageId: string): Promise<RepairResult> {
   try {
-    const { data, error } = await supabase.functions.invoke('xdelo_reupload_media', {
+    const { data, error } = await supabase.functions.invoke('xdelo_unified_media_repair', {
       body: { 
         messageId,
         forceRedownload: true 

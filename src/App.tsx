@@ -12,11 +12,10 @@ import Auth from "./pages/Auth";
 import { MobileBottomNav } from "./components/Layout/MobileBottomNav";
 import { useIsMobile } from "./hooks/useMobile";
 
-// Import Dashboard directly to ensure it's properly loaded
-import Dashboard from "./pages/Dashboard";
-
-// Lazy load other page components for better performance
+// Lazy load page components for better performance
+const Dashboard = lazy(() => import("./pages/Dashboard"));
 const MessagesEnhanced = lazy(() => import("./pages/MessagesEnhanced"));
+const ProductGallery = lazy(() => import("./pages/ProductGallery"));
 const MediaTable = lazy(() => import("./pages/MediaTable"));
 const AIChat = lazy(() => import("./pages/AIChat"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -25,8 +24,6 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicGallery = lazy(() => import("./pages/PublicGallery"));
 const SqlConsole = lazy(() => import('./pages/SqlConsole'));
 const MakeAutomations = lazy(() => import('./pages/MakeAutomations'));
-const TableDemo = lazy(() => import('./pages/table-demo'));
-const ProductMatching = lazy(() => import('./pages/ProductMatching'));
 
 import { AppSidebar } from "@/components/Layout/Sidebar";
 
@@ -149,62 +146,17 @@ function App() {
                       </NavigationProvider>
                     </ProtectedRoute>
                   }>
-                    {/* Load Dashboard directly (not lazily) to avoid the import error */}
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/messages" element={<Navigate to="/messages-enhanced" replace />} />
-                    <Route path="/messages-enhanced" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <MessagesEnhanced />
-                      </Suspense>
-                    } />
-                    <Route path="/gallery" element={
-                      <Navigate to="/p/public" replace />
-                    } />
-                    <Route path="/media-table" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <MediaTable />
-                      </Suspense>
-                    } />
-                    <Route path="/ai-chat" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <AIChat />
-                      </Suspense>
-                    } />
-                    <Route path="/settings" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <Settings />
-                      </Suspense>
-                    } />
-                    <Route path="/audio-upload" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <AudioUpload />
-                      </Suspense>
-                    } />
-                    <Route path="/sql-console" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <SqlConsole />
-                      </Suspense>
-                    } />
-                    <Route path="/make-automations" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <MakeAutomations />
-                      </Suspense>
-                    } />
-                    <Route path="/table-demo" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <TableDemo />
-                      </Suspense>
-                    } />
-                    <Route path="/product-matching" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <ProductMatching />
-                      </Suspense>
-                    } />
-                    <Route path="*" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <NotFound />
-                      </Suspense>
-                    } />
+                    <Route path="/messages-enhanced" element={<MessagesEnhanced />} />
+                    <Route path="/gallery" element={<ProductGallery />} />
+                    <Route path="/media-table" element={<MediaTable />} />
+                    <Route path="/ai-chat" element={<AIChat />} />
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/audio-upload" element={<AudioUpload />} />
+                    <Route path="/sql-console" element={<SqlConsole />} />
+                    <Route path="/make-automations" element={<MakeAutomations />} />
+                    <Route path="*" element={<NotFound />} />
                   </Route>
                 </Routes>
               </Router>

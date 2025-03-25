@@ -1,169 +1,177 @@
 
-import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
-import { corsHeaders } from "./utils/cors.ts";
-import { handleMediaMessage } from "./handlers/mediaMessageHandler.ts";
-import { handleOtherMessage } from "./handlers/textMessageHandler.ts";
-import { handleEditedMessage } from "./handlers/editedMessageHandler.ts";
-import { createLoggerWithErrorHandling } from "./utils/logger.ts";
-import { v4 as uuidv4 } from "https://esm.sh/uuid@9.0.0";
-import { xdelo_processDelayedMediaGroupSync } from "./utils/databaseOperations.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
+import { handleOtherMessage } from './handlers/textMessageHandler.ts';
+import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
+import { corsHeaders } from '../_shared/cors.ts';
+import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
+import { Logger } from './utils/logger.ts';
 
-/**
- * Check if a message contains media
- */
-export function hasMedia(message: any): boolean {
-  return !!(message.photo || message.video || message.document);
-}
-
-/**
- * Check if a message has actual text content
- */
-export function hasText(message: any): boolean {
-  return typeof message.text === 'string' && message.text.trim().length > 0;
-}
-
-serve(async (req) => {
+serve(async (req: Request) => {
+  // Generate a correlation ID for tracing
+  const correlationId = crypto.randomUUID();
+  
+  // Create a main logger for this request
+  const logger = new Logger(correlationId, 'telegram-webhook');
+  
   // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+  if (req.method === 'OPTIONS') {
+    logger.debug('Received OPTIONS request, returning CORS headers');
+    return new Response(null, { headers: corsHeaders });
   }
-  
-  // Generate correlation ID for this request
-  const correlationId = uuidv4();
-  
-  // Create logger for this request
-  const { logger, handleError } = createLoggerWithErrorHandling(correlationId, "telegram-webhook");
-  
+
   try {
-    // Parse the incoming webhook payload
-    const payload = await req.json();
-    logger.info("Received webhook payload", { 
-      payload_keys: Object.keys(payload),
-      correlation_id: correlationId
+    // Log webhook received event
+    logger.info('Webhook received', {
+      method: req.method,
+      url: req.url,
+      headers: Object.fromEntries(req.headers.entries()),
     });
     
-    // Determine the type of update (message, edited_message, channel_post, etc.)
-    let message;
-    let isChannelPost = false;
-    let isEdit = false;
-    let previousMessage = null;
+    await xdelo_logProcessingEvent(
+      "webhook_received",
+      "system",
+      correlationId,
+      {
+        source: "telegram-webhook",
+        timestamp: new Date().toISOString()
+      }
+    );
+
+    // Parse the update from Telegram
+    let update;
+    try {
+      update = await req.json();
+      logger.info('Received Telegram update', { 
+        update_keys: Object.keys(update),
+        update_id: update.update_id
+      });
+    } catch (error) {
+      logger.error('Failed to parse request body', { error: error.message });
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Invalid JSON in request body',
+        correlationId
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      });
+    }
+
+    // Get the message object, checking for different types of updates
+    const message = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
+    if (!message) {
+      logger.warn('No processable content in update', { update_keys: Object.keys(update) });
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: "No processable content",
+        correlationId
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      });
+    }
+
+    // Determine message context
+    const context = {
+      isChannelPost: !!update.channel_post || !!update.edited_channel_post,
+      isForwarded: !!message.forward_from || !!message.forward_from_chat || !!message.forward_origin,
+      correlationId,
+      isEdit: !!update.edited_message || !!update.edited_channel_post,
+      previousMessage: update.edited_message || update.edited_channel_post,
+      logger // Add logger to context so handlers can use it
+    };
+
+    // Log message details with sensitive data masked
+    logger.info('Processing message', {
+      message_id: message.message_id,
+      chat_id: message.chat?.id,
+      chat_type: message.chat?.type,
+      is_edit: context.isEdit,
+      is_forwarded: context.isForwarded,
+      has_media: !!(message.photo || message.video || message.document),
+      has_caption: !!message.caption,
+      caption_length: message.caption?.length,
+      media_group_id: message.media_group_id,
+      media_type: message.photo ? 'photo' : message.video ? 'video' : message.document ? 'document' : 'none'
+    });
+
+    // Handle different message types
+    let response;
     
-    if (payload.message) {
-      message = payload.message;
-    } else if (payload.edited_message) {
-      message = payload.edited_message;
-      isEdit = true;
-      previousMessage = payload.edited_message;
-    } else if (payload.channel_post) {
-      message = payload.channel_post;
-      isChannelPost = true;
-    } else if (payload.edited_channel_post) {
-      message = payload.edited_channel_post;
-      isChannelPost = true;
-      isEdit = true;
-      previousMessage = payload.edited_channel_post;
-    } else {
-      logger.info("Unsupported webhook type", { 
-        payload_type: Object.keys(payload)[0],
-        correlation_id: correlationId
+    try {
+      // Handle edited messages
+      if (context.isEdit) {
+        logger.info('Routing to edited message handler', { message_id: message.message_id });
+        response = await handleEditedMessage(message, context);
+      }
+      // Handle media messages (photos, videos, documents)
+      else if (message.photo || message.video || message.document) {
+        logger.info('Routing to media message handler', { message_id: message.message_id });
+        response = await handleMediaMessage(message, context);
+      }
+      // Handle other types of messages
+      else {
+        logger.info('Routing to text message handler', { message_id: message.message_id });
+        response = await handleOtherMessage(message, context);
+      }
+      
+      logger.info('Successfully processed message', { 
+        message_id: message.message_id,
+        chat_id: message.chat?.id,
+        processing_time: Date.now() - new Date(context.startTime || Date.now()).getTime()
       });
       
-      return new Response(
-        JSON.stringify({ success: true, message: "Unsupported webhook type" }),
-        { 
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200
-        }
-      );
-    }
-    
-    // Check if this is a forwarded message
-    const isForwarded = !!(
-      message.forward_date || 
-      message.forward_from || 
-      message.forward_from_chat || 
-      message.forward_origin
-    );
-    
-    // Create context object for handlers
-    const context = {
-      isChannelPost,
-      isForwarded,
-      correlationId,
-      isEdit,
-      previousMessage,
-      startTime: new Date().toISOString(),
-      logger
-    };
-    
-    // Process delayed media group sync if needed
-    if (message.media_group_id && !isEdit) {
-      // Start a background task to process delayed media group sync
-      // This ensures that even if the initial message doesn't have caption,
-      // we'll sync the group later
-      EdgeRuntime.waitUntil(
-        (async () => {
-          try {
-            logger.info("Starting delayed media group sync in background", {
-              media_group_id: message.media_group_id,
-              message_id: message.message_id,
-              correlation_id: correlationId
-            });
-            
-            // Wait a short delay to allow other messages in the group to arrive
-            await new Promise(resolve => setTimeout(resolve, 10000));
-            
-            // Process the delayed sync
-            await xdelo_processDelayedMediaGroupSync(message.media_group_id, correlationId);
-          } catch (err) {
-            logger.error("Error in delayed media group sync background task", {
-              media_group_id: message.media_group_id,
-              error: err.message
-            });
-          }
-        })()
-      );
-    }
-    
-    // IMPORTANT: Check for media first, regardless of whether it's an edit or not
-    // This ensures all media messages go to the media handler
-    if (hasMedia(message)) {
-      logger.info("Routing message to media handler", { 
-        message_id: message.message_id, 
-        has_media: true, 
-        is_edit: isEdit,
-        correlation_id: correlationId
+      return response;
+    } catch (handlerError) {
+      logger.error('Error in message handler', { 
+        error: handlerError.message,
+        stack: handlerError.stack,
+        message_id: message.message_id
       });
-      return await handleMediaMessage(message, context);
-    }
-    
-    // For edits of non-media messages
-    if (isEdit) {
-      logger.info("Routing message to edited handler", { 
-        message_id: message.message_id, 
-        has_media: false, 
-        is_edit: true,
-        correlation_id: correlationId
+      
+      // Log the error to the database
+      await xdelo_logProcessingEvent(
+        "message_processing_failed",
+        message.message_id.toString(),
+        correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat?.id,
+          is_edit: context.isEdit,
+          has_media: !!(message.photo || message.video || message.document),
+          handler_type: context.isEdit ? 'edited_message' : 
+                       (message.photo || message.video || message.document) ? 'media_message' : 'other_message',
+          error: handlerError.message,
+          error_stack: handlerError.stack
+        },
+        handlerError.message || "Unknown handler error"
+      );
+      
+      // Return error response but with 200 status to acknowledge to Telegram
+      // (Telegram will retry if we return non-200 status)
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: handlerError.message,
+        correlationId
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200 // Still return 200 to prevent Telegram from retrying
       });
-      return await handleEditedMessage(message, context);
     }
-    
-    // For regular non-media messages
-    logger.info("Routing message to text handler", { 
-      message_id: message.message_id, 
-      has_media: false, 
-      is_edit: false,
-      correlation_id: correlationId
-    });
-    return await handleOtherMessage(message, context);
-    
   } catch (error) {
-    logger.error("Error processing webhook", {
+    logger.error('Unhandled error processing webhook', { 
       error: error.message,
-      stack: error.stack,
-      correlation_id: correlationId
+      stack: error.stack
     });
     
-    return handleError(error);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: error.message || 'Unknown error',
+      correlationId
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500
+    });
   }
 });

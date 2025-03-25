@@ -13,8 +13,6 @@ export const MessageContent: React.FC<MessageContentProps> = ({ message }) => {
   const productName = message.analyzed_content?.product_name;
   const vendorUid = message.analyzed_content?.vendor_uid;
   const productCode = message.analyzed_content?.product_code;
-  const purchaseDate = message.analyzed_content?.purchase_date;
-  const quantity = message.analyzed_content?.quantity;
   
   return (
     <div className="flex-grow min-w-0">
@@ -51,18 +49,6 @@ export const MessageContent: React.FC<MessageContentProps> = ({ message }) => {
         {productCode && (
           <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-muted/30">
             {productCode}
-          </Badge>
-        )}
-        
-        {quantity && (
-          <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
-            Qty: {quantity}
-          </Badge>
-        )}
-        
-        {purchaseDate && (
-          <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
-            {new Date(purchaseDate).toLocaleDateString()}
           </Badge>
         )}
       </div>

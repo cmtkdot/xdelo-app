@@ -6,9 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
 import { useSqlQuery } from '@/hooks/useSqlQuery';
+import { MigrationButton } from './MigrationButton';
 
 export function SqlConsole() {
-  const [sqlQuery, setSqlQuery] = useState('ALTER TABLE IF EXISTS public.settings ADD COLUMN IF NOT EXISTS matching_config JSONB DEFAULT \'{"similarityThreshold": 0.7, "partialMatch": {"enabled": true}}\';');
+  const [sqlQuery, setSqlQuery] = useState('');
   const { executeQuery, isExecuting, results } = useSqlQuery();
   const [activeTab, setActiveTab] = useState('table');
 
@@ -148,6 +149,9 @@ export function SqlConsole() {
           </CardFooter>
         )}
       </Card>
+      
+      {/* Add the migration button component */}
+      <MigrationButton />
     </div>
   );
 }
