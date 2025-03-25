@@ -6,9 +6,9 @@ import {
   TelegramMessage, 
   MessageContext, 
   ForwardInfo,
-  MessageInput
 } from '../../types.ts';
-import { createMessage } from '../../dbOperations.ts';
+import { MessageInput } from '../../database/types.ts';
+import { createMessage } from '../../database/messageOperations.ts';
 import { constructTelegramMessageUrl } from '../../utils/messageUtils.ts';
 import { xdelo_logProcessingEvent } from '../../../_shared/databaseOperations.ts';
 

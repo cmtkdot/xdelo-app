@@ -1,10 +1,14 @@
 import { supabaseClient } from '../utils/supabase.ts';
 import { corsHeaders } from '../utils/cors.ts';
+import { v4 as uuidv4 } from "https://esm.sh/uuid@9.0.0";
 import { TelegramMessage, MessageContext } from '../types.ts';
-import { xdelo_logProcessingEvent } from '../utils/databaseOperations.ts';
-import { constructTelegramMessageUrl, isMessageForwarded, prepareEditHistoryEntry } from '../utils/messageUtils.ts';
+import { createNonMediaMessage } from '../database/textMessageOperations.ts';
+import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
 
-export async function handleOtherMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
+/**
+ * Handle text-only messages from Telegram
+ */
+export async function handleTextMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
     const { isChannelPost, correlationId, logger, isEdit, previousMessage } = context;
     // Use the utility function to determine if message is forwarded
