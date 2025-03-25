@@ -1,10 +1,11 @@
+
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MessagesTable } from "@/components/MessagesTable/MessagesTable";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useEnhancedMessages } from "@/hooks/useEnhancedMessages";
+import { useEnhancedMessages } from "@/hooks/enhancedMessages";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -97,7 +98,7 @@ const MediaTable = () => {
       
       {messages.length > 0 ? (
         <Card className="p-6">
-          <MediaTable messages={messages} />
+          <MessagesTable messages={messages} />
         </Card>
       ) : (
         <Card className="p-6 text-center">
@@ -109,4 +110,4 @@ const MediaTable = () => {
   );
 };
 
-export default MediaTablePage;
+export default MediaTable;

@@ -18,7 +18,8 @@ export function useMediaUtils() {
     isUploading,
     isDeleting,
     uploadFile,
-    deleteFile
+    deleteFile,
+    reuploadMediaFromTelegram
   } = useSingleFileOperations();
 
   // Initialize batch operations
@@ -39,6 +40,7 @@ export function useMediaUtils() {
     // Single file operations
     uploadFile,
     deleteFile,
+    reuploadMediaFromTelegram,
     
     // Batch operations
     standardizeStoragePaths,
