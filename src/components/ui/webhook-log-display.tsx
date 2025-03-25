@@ -38,6 +38,11 @@ export function WebhookLogDisplay({ log, showDetails = false, onRetry }: Webhook
   
   // Create summary text
   const getSummaryText = () => {
+    // Add a check for undefined event_type
+    if (!log.event_type) {
+      return '⚠️ Unknown event type';
+    }
+    
     const eventName = log.event_type.replace(/_/g, ' ');
     
     if (log.status === 'success') {
@@ -67,7 +72,7 @@ export function WebhookLogDisplay({ log, showDetails = false, onRetry }: Webhook
           </Badge>
         </div>
         <CardDescription>
-          {log.event_type} • {formattedTime} • {log.duration_ms ? `${log.duration_ms}ms` : 'No duration'}
+          {log.event_type || 'Unknown event'} • {formattedTime} • {log.duration_ms ? `${log.duration_ms}ms` : 'No duration'}
         </CardDescription>
       </CardHeader>
       
