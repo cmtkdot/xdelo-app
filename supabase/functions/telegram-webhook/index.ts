@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage } from './handlers/textMessageHandler.ts';
@@ -71,6 +72,9 @@ serve(async (req: Request) => {
       });
     }
 
+    // Set start time for performance tracking
+    const startTime = Date.now();
+
     // Determine message context
     const context = {
       isChannelPost: !!update.channel_post || !!update.edited_channel_post,
@@ -78,7 +82,8 @@ serve(async (req: Request) => {
       correlationId,
       isEdit: !!update.edited_message || !!update.edited_channel_post,
       previousMessage: update.edited_message || update.edited_channel_post,
-      logger // Add logger to context so handlers can use it
+      logger, // Add logger to context so handlers can use it
+      startTime // Add start time for performance tracking
     };
 
     // Log message details with sensitive data masked
@@ -119,7 +124,7 @@ serve(async (req: Request) => {
       logger.info('Successfully processed message', { 
         message_id: message.message_id,
         chat_id: message.chat?.id,
-        processing_time: Date.now() - new Date(context.startTime || Date.now()).getTime()
+        processing_time: Date.now() - startTime
       });
       
       return response;
