@@ -41,6 +41,12 @@ export function prepareEditHistoryEntry(
     case 'caption':
       historyEntry.previous_caption = existingMessage.caption;
       historyEntry.new_caption = newMessage.caption;
+      
+      // Include analyzed content if available for better tracking
+      if (existingMessage.analyzed_content) {
+        historyEntry.previous_analyzed_content = existingMessage.analyzed_content;
+      }
+      
       break;
     case 'media':
       historyEntry.previous_file_id = existingMessage.file_id;
@@ -68,4 +74,30 @@ export function prepareEditHistoryEntry(
   }
   
   return historyEntry;
+}
+
+/**
+ * Extracts caption from a Telegram message
+ */
+export function extractCaption(message: TelegramMessage): string | undefined {
+  return message.caption || undefined;
+}
+
+/**
+ * Determines if a message has a caption
+ */
+export function hasCaption(message: TelegramMessage): boolean {
+  return typeof message.caption === 'string' && message.caption.trim().length > 0;
+}
+
+/**
+ * Helper function to safely parse JSON
+ */
+export function safeJsonParse(jsonString: string, fallback: any = {}): any {
+  try {
+    return JSON.parse(jsonString);
+  } catch (error) {
+    console.error('Error parsing JSON:', error);
+    return fallback;
+  }
 }

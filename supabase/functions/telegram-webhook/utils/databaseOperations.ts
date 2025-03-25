@@ -46,6 +46,8 @@ export async function xdelo_processCaptionFromWebhook(
   force: boolean = false
 ) {
   try {
+    console.log(`Processing caption for message ${messageId} with correlation ID ${correlationId}, force=${force}`);
+    
     const { data, error } = await supabaseClient.rpc(
       'xdelo_process_caption_workflow',
       {
@@ -60,6 +62,7 @@ export async function xdelo_processCaptionFromWebhook(
       return { success: false, error: error.message };
     }
     
+    console.log(`Caption processing completed for message ${messageId}:`, data);
     return { success: true, data };
   } catch (error) {
     console.error('Exception processing caption:', error);
@@ -85,6 +88,8 @@ export async function xdelo_syncMediaGroupFromWebhook(
       return { success: false, error: 'No media_group_id provided' };
     }
     
+    console.log(`Syncing media group ${mediaGroupId} from source message ${sourceMessageId}, correlation ID: ${correlationId}`);
+    
     const { data, error } = await supabaseClient.rpc(
       'xdelo_sync_media_group_content',
       {
@@ -101,6 +106,7 @@ export async function xdelo_syncMediaGroupFromWebhook(
       return { success: false, error: error.message };
     }
     
+    console.log(`Media group sync completed for ${mediaGroupId}:`, data);
     return { success: true, data };
   } catch (error) {
     console.error('Exception syncing media group:', error);
@@ -116,6 +122,8 @@ export async function xdelo_syncMediaGroupFromWebhook(
  */
 export async function xdelo_findCaptionMessage(mediaGroupId: string) {
   try {
+    console.log(`Finding caption message for media group ${mediaGroupId}`);
+    
     const { data, error } = await supabaseClient.rpc(
       'xdelo_find_caption_message',
       { p_media_group_id: mediaGroupId }
@@ -126,11 +134,39 @@ export async function xdelo_findCaptionMessage(mediaGroupId: string) {
       return { success: false, error: error.message };
     }
     
+    console.log(`Found caption message for media group ${mediaGroupId}:`, data);
     return { success: true, captionMessageId: data };
   } catch (error) {
     console.error('Exception finding caption message:', error);
     return { 
       success: false, 
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+/**
+ * Check if a message exists in the database
+ */
+export async function messageExists(telegramMessageId: number, chatId: number) {
+  try {
+    const { data, error } = await supabaseClient
+      .from('messages')
+      .select('id')
+      .eq('telegram_message_id', telegramMessageId)
+      .eq('chat_id', chatId)
+      .maybeSingle();
+      
+    if (error) {
+      console.error('Error checking if message exists:', error);
+      return { exists: false, error: error.message };
+    }
+    
+    return { exists: !!data, messageId: data?.id };
+  } catch (error) {
+    console.error('Exception checking if message exists:', error);
+    return { 
+      exists: false, 
       error: error instanceof Error ? error.message : String(error)
     };
   }

@@ -10,8 +10,15 @@ import { v4 as uuidv4 } from "https://esm.sh/uuid@9.0.0";
 /**
  * Check if a message contains media
  */
-function hasMedia(message: any): boolean {
+export function hasMedia(message: any): boolean {
   return !!(message.photo || message.video || message.document);
+}
+
+/**
+ * Check if a message has actual text content
+ */
+export function hasText(message: any): boolean {
+  return typeof message.text === 'string' && message.text.trim().length > 0;
 }
 
 serve(async (req) => {
@@ -29,7 +36,10 @@ serve(async (req) => {
   try {
     // Parse the incoming webhook payload
     const payload = await req.json();
-    logger.info("Received webhook payload", { payload_keys: Object.keys(payload) });
+    logger.info("Received webhook payload", { 
+      payload_keys: Object.keys(payload),
+      correlation_id: correlationId
+    });
     
     // Determine the type of update (message, edited_message, channel_post, etc.)
     let message;
@@ -53,7 +63,8 @@ serve(async (req) => {
       previousMessage = payload.edited_channel_post;
     } else {
       logger.info("Unsupported webhook type", { 
-        payload_type: Object.keys(payload)[0] 
+        payload_type: Object.keys(payload)[0],
+        correlation_id: correlationId
       });
       
       return new Response(
@@ -90,7 +101,8 @@ serve(async (req) => {
       logger.info("Routing message to media handler", { 
         message_id: message.message_id, 
         has_media: true, 
-        is_edit: isEdit 
+        is_edit: isEdit,
+        correlation_id: correlationId
       });
       return await handleMediaMessage(message, context);
     }
@@ -100,7 +112,8 @@ serve(async (req) => {
       logger.info("Routing message to edited handler", { 
         message_id: message.message_id, 
         has_media: false, 
-        is_edit: true 
+        is_edit: true,
+        correlation_id: correlationId
       });
       return await handleEditedMessage(message, context);
     }
@@ -109,14 +122,16 @@ serve(async (req) => {
     logger.info("Routing message to text handler", { 
       message_id: message.message_id, 
       has_media: false, 
-      is_edit: false 
+      is_edit: false,
+      correlation_id: correlationId
     });
     return await handleOtherMessage(message, context);
     
   } catch (error) {
     logger.error("Error processing webhook", {
       error: error.message,
-      stack: error.stack
+      stack: error.stack,
+      correlation_id: correlationId
     });
     
     return handleError(error);
