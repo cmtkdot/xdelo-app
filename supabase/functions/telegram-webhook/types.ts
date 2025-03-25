@@ -1,5 +1,4 @@
-import { Logger } from '../_shared/logger/index.ts';
-import { ProcessingState, AnalyzedContent } from "../_shared/types.ts";
+import { Logger } from './utils/logger.ts';
 
 export interface MessageInput {
   telegram_message_id: number;

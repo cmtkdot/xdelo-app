@@ -1,5 +1,5 @@
 
-import { createEdgeHandler, HandlerContext } from '../_shared/edgeHandler.ts';
+import { createHandler } from '../_shared/baseHandler.ts';
 import { createSupabaseClient } from '../_shared/supabase.ts';
 
 interface LogRequest {
@@ -10,13 +10,9 @@ interface LogRequest {
   metadata?: Record<string, unknown>;
   errorMessage?: string;
   correlationId?: string;
-  userId?: string;
 }
 
-// Create the handler using the edge handler
-const handler = createEdgeHandler(async (req: Request, context: HandlerContext) => {
-  const { logger, correlationId: requestCorrelationId } = context;
-  
+export default createHandler(async (req: Request) => {
   // Parse request body
   const { 
     eventType, 
@@ -25,8 +21,7 @@ const handler = createEdgeHandler(async (req: Request, context: HandlerContext) 
     newState, 
     metadata = {}, 
     errorMessage,
-    correlationId = requestCorrelationId || crypto.randomUUID().toString(),
-    userId
+    correlationId = crypto.randomUUID()
   } = await req.json() as LogRequest;
   
   // Validate request
@@ -44,37 +39,40 @@ const handler = createEdgeHandler(async (req: Request, context: HandlerContext) 
     );
   }
   
+  // Add correlation ID and timestamp to metadata
+  const enhancedMetadata = {
+    ...metadata,
+    logged_at: new Date().toISOString(),
+    correlation_id: correlationId,
+    logged_from: 'edge_function'
+  };
+  
+  // Add error message to metadata if provided
+  if (errorMessage) {
+    enhancedMetadata.error_message = errorMessage;
+  }
+  
   // Create Supabase client
   const supabase = createSupabaseClient();
   
-  logger.info('Logging operation', {
-    eventType, 
-    entityId,
-    correlationId
-  });
-  
   try {
-    // Use the standard database function to handle UUID conversion
-    const { data, error } = await supabase.rpc(
-      'xdelo_logprocessingevent',
-      {
-        p_event_type: eventType,
-        p_entity_id: entityId,
-        p_correlation_id: correlationId,
-        p_metadata: {
-          ...metadata,
-          previous_state: previousState,
-          new_state: newState,
-          logged_at: new Date().toISOString(),
-          logged_from: 'edge_function',
-          user_id: userId
-        },
-        p_error_message: errorMessage
-      }
-    );
+    // Insert log entry
+    const { data, error } = await supabase
+      .from('unified_audit_logs')
+      .insert({
+        event_type: eventType,
+        entity_id: entityId,
+        previous_state: previousState,
+        new_state: newState,
+        metadata: enhancedMetadata,
+        error_message: errorMessage,
+        correlation_id: correlationId
+      })
+      .select('id')
+      .single();
     
     if (error) {
-      logger.error('Error logging operation', error);
+      console.error('Error logging operation:', error);
       
       return new Response(
         JSON.stringify({ 
@@ -89,24 +87,22 @@ const handler = createEdgeHandler(async (req: Request, context: HandlerContext) 
     return new Response(
       JSON.stringify({
         success: true,
-        logId: data,
+        logId: data.id,
         correlationId,
-        timestamp: new Date().toISOString()
+        timestamp: enhancedMetadata.logged_at
       }),
       { headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    logger.error('Exception logging operation', error);
+    console.error('Exception logging operation:', error);
     
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error instanceof Error ? error.message : String(error),
+        error: error.message,
         correlationId
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 });
-
-export default handler;
