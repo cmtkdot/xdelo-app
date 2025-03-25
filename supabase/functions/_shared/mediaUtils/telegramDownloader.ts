@@ -1,9 +1,10 @@
 
-import { xdelo_fetchWithRetry, rateLimitTracker } from './fetchUtils';
-import { xdelo_generateStoragePath } from './storagePaths';
-import { corsHeaders } from './corsUtils';
+import { xdelo_fetchWithRetry, rateLimitTracker } from './fetchUtils.ts';
+import { xdelo_generateStoragePath } from './storagePaths.ts';
+import { corsHeaders } from './corsUtils.ts';
+import { xdelo_withNetworkRetry } from '../retryUtils.ts';
 
-// Download media from Telegram with improved error handling
+// Enhanced download media from Telegram with comprehensive retry logic
 export async function xdelo_downloadMediaFromTelegram(
   fileId: string,
   fileUniqueId: string,
@@ -24,53 +25,79 @@ export async function xdelo_downloadMediaFromTelegram(
     
     console.log(`Starting download process for file ${fileId} (${fileUniqueId})`);
     
-    // Get file info from Telegram with improved retry logic
+    // Get file info from Telegram with enhanced retry logic
     console.log(`Fetching file info for ${fileId}`);
     
-    const fileInfoResponse = await xdelo_fetchWithRetry(
-      `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${fileId}`,
-      { 
-        method: 'GET',
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
+    const fileInfo = await xdelo_withNetworkRetry(
+      `https://api.telegram.org/bot${telegramBotToken}/getFile`,
+      async () => {
+        const fileInfoResponse = await xdelo_fetchWithRetry(
+          `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${fileId}`,
+          { 
+            method: 'GET',
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json'
+            }
+          },
+          5,  // maxRetries
+          800  // baseDelay
+        );
+        
+        const fileInfoData = await fileInfoResponse.json();
+        
+        if (!fileInfoData.ok) {
+          throw new Error(`Telegram API error: ${JSON.stringify(fileInfoData)}`);
         }
+        
+        if (!fileInfoData.result?.file_path) {
+          throw new Error(`Invalid file info response from Telegram: ${JSON.stringify(fileInfoData)}`);
+        }
+        
+        return fileInfoData;
       },
-      5,
-      800
+      {
+        maxRetries: 6,
+        initialDelayMs: 800,
+        backoffFactor: 1.8,
+        jitterFactor: 0.3
+      }
     );
-    
-    const fileInfo = await fileInfoResponse.json();
-    
-    if (!fileInfo.ok) {
-      throw new Error(`Telegram API error: ${JSON.stringify(fileInfo)}`);
-    }
-    
-    if (!fileInfo.result?.file_path) {
-      throw new Error(`Invalid file info response from Telegram: ${JSON.stringify(fileInfo)}`);
-    }
     
     console.log(`Successfully retrieved file path: ${fileInfo.result.file_path}`);
     
     // Download file from Telegram with enhanced retry logic
     console.log(`Downloading file from path ${fileInfo.result.file_path}`);
     
-    const fileDataResponse = await xdelo_fetchWithRetry(
+    const fileData = await xdelo_withNetworkRetry(
       `https://api.telegram.org/file/bot${telegramBotToken}/${fileInfo.result.file_path}`,
-      { 
-        method: 'GET',
-        headers: corsHeaders
+      async () => {
+        const fileDataResponse = await xdelo_fetchWithRetry(
+          `https://api.telegram.org/file/bot${telegramBotToken}/${fileInfo.result.file_path}`,
+          { 
+            method: 'GET',
+            headers: corsHeaders
+          },
+          5,  // maxRetries
+          1000  // baseDelay
+        );
+        
+        const fileDataBlob = await fileDataResponse.blob();
+        
+        // Validate the downloaded data
+        if (!fileDataBlob || fileDataBlob.size === 0) {
+          throw new Error('Downloaded empty file from Telegram');
+        }
+        
+        return fileDataBlob;
       },
-      5,
-      1000
+      {
+        maxRetries: 7,  // More retries for actual file download
+        initialDelayMs: 1000,
+        backoffFactor: 1.5,
+        jitterFactor: 0.2
+      }
     );
-    
-    const fileData = await fileDataResponse.blob();
-    
-    // Validate the downloaded data
-    if (!fileData || fileData.size === 0) {
-      throw new Error('Downloaded empty file from Telegram');
-    }
     
     console.log(`Successfully downloaded file: ${fileData.size} bytes`);
     
@@ -123,7 +150,8 @@ export async function xdelo_downloadMediaFromTelegram(
       code: error.code || 'UNKNOWN',
       stack: error.stack,
       file_id: fileId,
-      file_unique_id: fileUniqueId
+      file_unique_id: fileUniqueId,
+      retry_attempts: error.retryAttempts || 0
     };
     
     console.error('Download error details:', JSON.stringify(errorDetails, null, 2));
@@ -131,7 +159,7 @@ export async function xdelo_downloadMediaFromTelegram(
     return {
       success: false,
       error: `Download failed: ${error.message}`,
-      attempts: 5
+      attempts: error.retryAttempts || 0
     };
   }
 }

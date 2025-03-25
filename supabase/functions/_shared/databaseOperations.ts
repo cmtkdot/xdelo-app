@@ -1,5 +1,6 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { xdelo_withDatabaseRetry } from './retryUtils.ts';
 
 // Create Supabase client
 const supabaseClient = createClient(
@@ -14,7 +15,7 @@ const supabaseClient = createClient(
 );
 
 /**
- * Log a processing event to the unified_audit_logs table
+ * Log a processing event to the unified_audit_logs table with retry logic
  */
 export async function xdelo_logProcessingEvent(
   eventType: string,
@@ -32,13 +33,17 @@ export async function xdelo_logProcessingEvent(
       logged_from: 'edge_function'
     };
     
-    await supabaseClient.from('unified_audit_logs').insert({
-      event_type: eventType,
-      entity_id: entityId,
-      metadata: enhancedMetadata,
-      error_message: errorMessage,
-      correlation_id: correlationId,
-      event_timestamp: new Date().toISOString()
+    await xdelo_withDatabaseRetry(`log_processing_event_${eventType}`, async () => {
+      const { error } = await supabaseClient.from('unified_audit_logs').insert({
+        event_type: eventType,
+        entity_id: entityId,
+        metadata: enhancedMetadata,
+        error_message: errorMessage,
+        correlation_id: correlationId,
+        event_timestamp: new Date().toISOString()
+      });
+      
+      if (error) throw error;
     });
   } catch (error) {
     console.error(`Error logging event: ${eventType}`, error);
@@ -46,7 +51,7 @@ export async function xdelo_logProcessingEvent(
 }
 
 /**
- * Update message processing state
+ * Update message processing state with retry logic
  */
 export async function updateMessageState(
   messageId: string,
@@ -69,17 +74,19 @@ export async function updateMessageState(
       updates.last_error_at = new Date().toISOString();
     }
     
-    const { error } = await supabaseClient
-      .from('messages')
-      .update(updates)
-      .eq('id', messageId);
+    return await xdelo_withDatabaseRetry(`update_message_state_${state}`, async () => {
+      const { error } = await supabaseClient
+        .from('messages')
+        .update(updates)
+        .eq('id', messageId);
+        
+      if (error) {
+        console.error(`Error updating message state: ${error.message}`);
+        return false;
+      }
       
-    if (error) {
-      console.error(`Error updating message state: ${error.message}`);
-      return false;
-    }
-    
-    return true;
+      return true;
+    });
   } catch (error) {
     console.error(`Error updating message state: ${error.message}`);
     return false;
@@ -87,24 +94,61 @@ export async function updateMessageState(
 }
 
 /**
- * Get message by ID
+ * Get message by ID with retry logic
  */
 export async function getMessageById(messageId: string) {
   try {
-    const { data, error } = await supabaseClient
-      .from('messages')
-      .select('*')
-      .eq('id', messageId)
-      .single();
+    return await xdelo_withDatabaseRetry(`get_message_by_id_${messageId}`, async () => {
+      const { data, error } = await supabaseClient
+        .from('messages')
+        .select('*')
+        .eq('id', messageId)
+        .single();
+        
+      if (error) {
+        console.error(`Error getting message: ${error.message}`);
+        return null;
+      }
       
-    if (error) {
-      console.error(`Error getting message: ${error.message}`);
-      return null;
-    }
-    
-    return data;
+      return data;
+    });
   } catch (error) {
     console.error(`Error getting message: ${error.message}`);
     return null;
+  }
+}
+
+/**
+ * Generic database operation with retry logic
+ */
+export async function xdelo_executeDbOperation<T>(
+  operationName: string,
+  operation: () => Promise<{ data?: T, error?: any }>,
+  options: { maxRetries?: number; logError?: boolean } = {}
+): Promise<{ success: boolean; data?: T; error?: any }> {
+  const { maxRetries = 3, logError = true } = options;
+  
+  try {
+    const result = await xdelo_withDatabaseRetry(operationName, async () => {
+      const { data, error } = await operation();
+      if (error) throw error;
+      return data;
+    }, { maxRetries });
+    
+    return { success: true, data: result };
+  } catch (error) {
+    if (logError) {
+      console.error(`Database operation "${operationName}" failed after ${maxRetries} retries:`, error);
+    }
+    
+    return { 
+      success: false, 
+      error: {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      }
+    };
   }
 }

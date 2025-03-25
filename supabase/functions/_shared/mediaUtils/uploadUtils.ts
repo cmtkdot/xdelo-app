@@ -1,9 +1,10 @@
 
 import { corsHeaders } from './corsUtils.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { xdelo_withNetworkRetry } from '../retryUtils.ts';
 
 /**
- * Upload media to Supabase Storage with proper content type
+ * Upload media to Supabase Storage with proper content type and retry logic
  */
 export async function xdelo_uploadMediaToStorage(
   storagePath: string,
@@ -14,6 +15,7 @@ export async function xdelo_uploadMediaToStorage(
   success: boolean;
   publicUrl?: string;
   error?: string;
+  retryAttempts?: number;
 }> {
   try {
     if (!storagePath) {
@@ -40,24 +42,36 @@ export async function xdelo_uploadMediaToStorage(
     
     console.log(`Using content disposition: ${contentDisposition} for ${mimeType}`);
     
-    // Upload file to storage
-    const { error: uploadError } = await supabase
-      .storage
-      .from('telegram-media')
-      .upload(storagePath, blob, {
-        contentType: mimeType,
-        cacheControl: '3600',
-        upsert: true,
-        duplex: 'half',
-        headers: {
-          ...corsHeaders,
-          'Content-Disposition': contentDisposition
+    // Upload file to storage with retry logic
+    await xdelo_withNetworkRetry(
+      `supabase-storage-upload:${storagePath}`,
+      async () => {
+        const { error: uploadError } = await supabase
+          .storage
+          .from('telegram-media')
+          .upload(storagePath, blob, {
+            contentType: mimeType,
+            cacheControl: '3600',
+            upsert: true,
+            duplex: 'half',
+            headers: {
+              ...corsHeaders,
+              'Content-Disposition': contentDisposition
+            }
+          });
+        
+        if (uploadError) {
+          throw uploadError;
         }
-      });
-    
-    if (uploadError) {
-      throw uploadError;
-    }
+        
+        return true;
+      },
+      {
+        maxRetries: 5,
+        initialDelayMs: 1000,
+        backoffFactor: 1.7
+      }
+    );
     
     // Get public URL for the file
     const { data: { publicUrl } } = supabase
@@ -69,23 +83,34 @@ export async function xdelo_uploadMediaToStorage(
     
     // If a message ID was provided, update the message with storage metadata
     if (messageId) {
-      await supabase
-        .from('messages')
-        .update({
-          storage_path: storagePath,
-          public_url: publicUrl,
-          mime_type: mimeType,
-          content_disposition: contentDisposition,
-          storage_exists: true,
-          storage_path_standardized: true,
-          storage_metadata: {
-            content_type: mimeType,
-            content_disposition: contentDisposition,
-            uploaded_at: new Date().toISOString()
-          },
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', messageId);
+      await xdelo_withNetworkRetry(
+        `update-message-storage-metadata:${messageId}`,
+        async () => {
+          const { error } = await supabase
+            .from('messages')
+            .update({
+              storage_path: storagePath,
+              public_url: publicUrl,
+              mime_type: mimeType,
+              content_disposition: contentDisposition,
+              storage_exists: true,
+              storage_path_standardized: true,
+              storage_metadata: {
+                content_type: mimeType,
+                content_disposition: contentDisposition,
+                uploaded_at: new Date().toISOString()
+              },
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', messageId);
+            
+          if (error) throw error;
+          return true;
+        },
+        {
+          maxRetries: 4
+        }
+      );
     }
     
     return {
@@ -96,7 +121,8 @@ export async function xdelo_uploadMediaToStorage(
     console.error('Error uploading media to storage:', error);
     return {
       success: false,
-      error: `Upload failed: ${error.message}`
+      error: `Upload failed: ${error.message}`,
+      retryAttempts: error.retryAttempts || 0
     };
   }
 }
