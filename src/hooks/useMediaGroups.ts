@@ -1,7 +1,7 @@
 
-// Legacy wrapper hook that uses the modular implementation under the hood
+// Legacy wrapper hook that uses useEnhancedMessages under the hood
 // This ensures backwards compatibility with existing code
-import { useEnhancedMessages } from './enhancedMessages';
+import { useEnhancedMessages } from './useEnhancedMessages';
 
 export function useMediaGroups() {
   const { 

@@ -1,6 +1,5 @@
-
 import { supabase } from "@/integrations/supabase/client";
-import { ProductMatchingConfig, DEFAULT_CONFIG } from "./types";
+import { DEFAULT_CONFIG, ProductMatchingConfig } from "./types";
 
 /**
  * Fetch the current product matching configuration from Supabase
@@ -43,7 +42,7 @@ export async function updateMatchingConfig(
     // Update configuration in Supabase
     const { data, error } = await supabase
       .rpc('xdelo_update_product_matching_config', {
-        p_config: mergedConfig
+        config_json: mergedConfig
       });
     
     if (error) {
@@ -149,4 +148,4 @@ function mergeWithDefaults(
       useLevenshtein: partialConfig.algorithm?.useLevenshtein ?? DEFAULT_CONFIG.algorithm.useLevenshtein
     }
   };
-}
+} 

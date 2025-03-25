@@ -1,7 +1,5 @@
-
 import React, { useState } from 'react'
 import { Message } from '@/types/entities/Message'
-import { AnalyzedContent } from '@/types/utils/AnalyzedContent'
 import { 
   Dialog, 
   DialogContent, 
@@ -353,10 +351,10 @@ export function MediaViewerDetail({
                   <TabsContent value="analyzed" className="p-0 mt-4">
                     {currentMedia.analyzed_content ? (
                       <div className="space-y-4">
-                        {currentMedia.analyzed_content.product_name && (
+                        {currentMedia.analyzed_content.product && (
                           <div className="bg-muted/30 rounded-md p-4">
                             <h3 className="font-medium mb-2">Product</h3>
-                            <p>{currentMedia.analyzed_content.product_name}</p>
+                            <p>{currentMedia.analyzed_content.product}</p>
                           </div>
                         )}
                         
@@ -384,34 +382,27 @@ export function MediaViewerDetail({
                               </AccordionTrigger>
                               <AccordionContent>
                                 <div className="space-y-3 pt-2">
-                                  {currentMedia.old_analyzed_content.map((analysis, index) => {
-                                    // Type guard for analysis
-                                    const typedAnalysis = analysis as Partial<AnalyzedContent & { 
-                                      parsing_metadata?: { timestamp?: string } 
-                                    }>;
-                                    
-                                    return (
-                                      <div key={index} className="bg-muted/20 p-3 rounded-md">
-                                        <div className="text-xs text-muted-foreground mb-1">
-                                          {typedAnalysis.parsing_metadata?.timestamp && 
-                                            format(new Date(typedAnalysis.parsing_metadata.timestamp), 'PPP p')}
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                                          {typedAnalysis.product_name && (
-                                            <div>Product: <span className="font-medium">{typedAnalysis.product_name}</span></div>
-                                          )}
-                                          {typedAnalysis.quantity && (
-                                            <div>Quantity: <span className="font-medium">{String(typedAnalysis.quantity)}</span></div>
-                                          )}
-                                          {typedAnalysis.notes && (
-                                            <div className="col-span-1 md:col-span-2">
-                                              Notes: <span className="font-medium">{String(typedAnalysis.notes)}</span>
-                                            </div>
-                                          )}
-                                        </div>
+                                  {currentMedia.old_analyzed_content.map((analysis, index) => (
+                                    <div key={index} className="bg-muted/20 p-3 rounded-md">
+                                      <div className="text-xs text-muted-foreground mb-1">
+                                        {analysis.parsing_metadata?.timestamp && 
+                                          format(new Date(analysis.parsing_metadata.timestamp), 'PPP p')}
                                       </div>
-                                    );
-                                  })}
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                        {analysis.product && (
+                                          <div>Product: <span className="font-medium">{analysis.product}</span></div>
+                                        )}
+                                        {analysis.quantity && (
+                                          <div>Quantity: <span className="font-medium">{analysis.quantity}</span></div>
+                                        )}
+                                        {analysis.notes && (
+                                          <div className="col-span-1 md:col-span-2">
+                                            Notes: <span className="font-medium">{analysis.notes}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
                                 </div>
                               </AccordionContent>
                             </AccordionItem>
@@ -538,4 +529,4 @@ export function MediaViewerDetail({
       </AlertDialog>
     </>
   )
-}
+} 

@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Grid3X3, ImageIcon, Film, Grid, Table, CalendarDays, ArrowUpDown, Search } from "lucide-react";
 import { VendorFilter } from "./Filters/VendorFilter";
@@ -32,7 +31,7 @@ export const GalleryFilters = ({
   vendorFilter = [],
   vendors = [],
   onVendorFilterChange,
-  dateField = 'created_at',
+  dateField = 'purchase_date',
   onDateFieldChange,
   sortOrder = 'desc',
   onSortOrderChange,

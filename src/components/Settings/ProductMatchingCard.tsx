@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -8,8 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/useToast";
 import { Loader2, Save, ZapIcon } from "lucide-react";
-import { fetchMatchingConfig, updateMatchingConfig } from "@/lib/product-matching/config";
-import { ProductMatchingConfig, DEFAULT_CONFIG } from "@/lib/product-matching/types";
+import { fetchMatchingConfig, updateMatchingConfig, DEFAULT_CONFIG } from "@/lib/product-matching/config";
+import { ProductMatchingConfig } from "@/lib/product-matching/types";
 import { supabase } from "@/integrations/supabase/client";
 
 const ProductMatchingCard = () => {
@@ -74,7 +73,7 @@ const ProductMatchingCard = () => {
       setConfig(prev => ({
         ...prev,
         [section]: {
-          ...(prev[section as keyof ProductMatchingConfig] as object),
+          ...prev[section as keyof ProductMatchingConfig],
           [subKey]: value,
         },
       }));

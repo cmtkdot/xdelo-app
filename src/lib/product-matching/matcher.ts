@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { calculateStringSimilarity } from "./similarity";
@@ -82,9 +81,9 @@ export async function findMatches(
       };
     }
 
-    // Match products - cast the database result to our MatchableProduct type
+    // Match products
     const { matches, bestMatch } = matchProductsToMessage(
-      products as unknown as MatchableProduct[],
+      products as MatchableProduct[],
       {
         productName: product_name,
         vendorUid: vendor_uid,
@@ -134,7 +133,7 @@ export function matchProductsToMessage(
     let confidence = 0;
     const matchedFields: string[] = [];
     const matchDetails: Record<string, any> = {};
-    const matchResults: Record<string, { value: string; score: number }> = {
+    const matchResults: MatchResult['matches'] = {
       product_name: {
         value: product.new_product_name || '',
         score: 0
@@ -224,19 +223,13 @@ export function matchProductsToMessage(
     // Only add matches that meet the minimum confidence threshold
     if (confidence >= config.minConfidence) {
       matches.push({
-        productId: product.id,
-        confidence,
-        matchCriteria: {
-          nameMatch: matchedFields.includes('product_name'),
-          vendorMatch: matchedFields.includes('vendor_uid'),
-          dateMatch: matchedFields.includes('purchase_date')
-        },
-        // Backward compatibility fields
         isMatch: true,
         score: confidence,
+        confidence,
         product_id: product.id,
         message_id: messageId,
         match_fields: matchedFields,
+        matchedFields: matchedFields, // For backward compatibility
         match_date: new Date().toISOString(),
         matchType: confidence > 0.8 ? 'automatic' : 'partial',
         details: {
@@ -285,7 +278,7 @@ export async function matchProduct(
       const { error: updateError } = await supabaseClient
         .from('messages')
         .update({
-          glide_row_id: bestMatch.productId,
+          glide_row_id: bestMatch.product_id,
           updated_at: new Date().toISOString()
         })
         .eq('id', messageId);
@@ -333,7 +326,7 @@ export async function batchMatchProducts(
           results.push({
             messageId,
             success: false,
-            matched: false,
+            bestMatch: null,
             error: result.error
           });
           continue;
@@ -349,7 +342,7 @@ export async function batchMatchProducts(
             const { error: updateError } = await supabaseClient
               .from('messages')
               .update({
-                glide_row_id: bestMatch.productId,
+                glide_row_id: bestMatch.product_id,
                 updated_at: new Date().toISOString()
               })
               .eq('id', messageId);
@@ -358,44 +351,30 @@ export async function batchMatchProducts(
               console.error('Error updating message with product ID:', updateError);
             }
           }
-          
-          results.push({
-            messageId,
-            success: true,
-            matched: true,
-            confidence: bestMatch.confidence,
-            productId: bestMatch.productId
-          });
         } else {
           unmatched++;
-          results.push({
-            messageId,
-            success: true,
-            matched: false
-          });
         }
+        
+        results.push({
+          messageId,
+          success: true,
+          bestMatch
+        });
       } catch (error) {
         console.error(`Error matching message ${messageId}:`, error);
         failed++;
         results.push({
           messageId,
           success: false,
-          matched: false,
+          bestMatch: null,
           error: error instanceof Error ? error.message : String(error)
         });
       }
     }
     
-    // Return in format matching BatchMatchResult
     return {
-      totalProcessed: messageIds.length,
-      matchedCount: matched,
-      unmatchedCount: unmatched,
-      failedCount: failed,
-      averageConfidence: matched > 0 ? results.reduce((acc, r) => acc + (r.confidence || 0), 0) / matched : 0,
-      results,
-      // For backward compatibility
       success: true,
+      results,
       summary: {
         total: messageIds.length,
         matched,
@@ -406,13 +385,6 @@ export async function batchMatchProducts(
   } catch (error) {
     console.error('Error in batchMatchProducts:', error);
     return {
-      totalProcessed: 0,
-      matchedCount: 0,
-      unmatchedCount: 0,
-      failedCount: messageIds.length,
-      averageConfidence: 0,
-      results: [],
-      // For backward compatibility
       success: false,
       error: error instanceof Error ? error.message : String(error)
     };
@@ -429,15 +401,10 @@ async function logMatchingOperation(
 ): Promise<void> {
   try {
     const metadata: MatchLogMetadata = {
-      matchCount: matches.length,
-      bestMatchConfidence: bestMatch?.confidence || 0,
-      bestMatchProductId: bestMatch?.productId || null,
-      timestamp: new Date().toISOString(),
-      // For backward compatibility
       messageId,
       hasMatch: !!bestMatch,
       confidence: bestMatch?.confidence,
-      matchedProductId: bestMatch?.productId,
+      matchedProductId: bestMatch?.product_id,
       matchedFields: bestMatch?.match_fields
     };
     
@@ -449,4 +416,4 @@ async function logMatchingOperation(
   } catch (error) {
     console.error('Error logging matching operation:', error);
   }
-}
+} 

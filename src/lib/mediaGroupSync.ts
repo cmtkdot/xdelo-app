@@ -16,7 +16,7 @@ export async function syncMediaGroup(
     // If source message ID is not provided, try to find the best message
     // to use as the source of truth for this group
     if (!sourceMessageId) {
-      const { data: findResult } = await supabase.rpc<string>(
+      const { data: findResult } = await supabase.rpc(
         'xdelo_find_caption_message',
         { p_media_group_id: mediaGroupId }
       );
@@ -31,20 +31,19 @@ export async function syncMediaGroup(
     }
     
     // Generate correlation ID
-    const correlationId = crypto.randomUUID().toString();
+    const correlationId = crypto.randomUUID();
     
-    // Call the database function directly instead of the edge function
-    const { data, error } = await supabase.rpc<{
-      updated_count?: number;
-      [key: string]: any;
-    }>(
-      'xdelo_sync_media_group_content',
+    // Trigger the sync operation
+    const { data, error } = await supabase.functions.invoke(
+      'xdelo_sync_media_group',
       {
-        p_media_group_id: mediaGroupId,
-        p_source_message_id: sourceMessageId,
-        p_correlation_id: correlationId,
-        p_force_sync: options.force,
-        p_sync_edit_history: true
+        body: {
+          mediaGroupId,
+          sourceMessageId,
+          correlationId,
+          forceSync: options.force,
+          syncEditHistory: true
+        }
       }
     );
     
@@ -53,16 +52,7 @@ export async function syncMediaGroup(
     }
     
     console.log('Media group sync result:', data);
-    
-    // Properly handle the data response
-    const result = {
-      success: true,
-      mediaGroupId,
-      sourceMessageId,
-      syncedCount: data && typeof data === 'object' ? (data.updated_count || 0) : 0
-    };
-    
-    return result;
+    return data;
     
   } catch (error: any) {
     console.error('Error in manual media group sync:', error);
@@ -75,53 +65,19 @@ export async function syncMediaGroup(
  */
 export async function repairMediaGroups(limit = 10) {
   try {
-    // Find media groups that need repair
-    const { data: mediaGroups, error: findError } = await supabase
-      .from('messages')
-      .select('media_group_id')
-      .not('media_group_id', 'is', null)
-      .filter('group_caption_synced', 'is', null)
-      .limit(limit);
+    const { data, error } = await supabase.rpc(
+      'xdelo_repair_media_group_syncs'
+    );
     
-    if (findError) {
-      throw new Error(`Failed to find media groups: ${findError.message}`);
+    if (error) {
+      throw new Error(`Media group repair failed: ${error.message}`);
     }
     
-    if (!mediaGroups || mediaGroups.length === 0) {
-      return {
-        success: true,
-        repaired: 0,
-        message: "No media groups need repair"
-      };
-    }
-    
-    // Get unique media group IDs
-    const uniqueGroups = [...new Set(mediaGroups.map(m => m.media_group_id))];
-    
-    // Repair each media group
-    const results = [];
-    
-    for (const groupId of uniqueGroups) {
-      try {
-        const result = await syncMediaGroup(groupId);
-        results.push({
-          media_group_id: groupId,
-          success: true,
-          synced_count: result.syncedCount
-        });
-      } catch (error) {
-        results.push({
-          media_group_id: groupId,
-          success: false,
-          error: error.message
-        });
-      }
-    }
-    
+    console.log('Media group repair results:', data);
     return {
       success: true,
-      repaired: results.filter(r => r.success).length,
-      details: results
+      repaired: data?.length || 0,
+      details: data
     };
     
   } catch (error: any) {
