@@ -1,5 +1,4 @@
-
-// Unified logger utility with correlation ID tracking
+// Logger utility for Telegram webhook with correlation ID tracking and emoji support
 export class Logger {
   private correlationId: string;
   private component: string;
@@ -10,62 +9,71 @@ export class Logger {
   }
   
   /**
-   * Log an informational message
+   * Log an informational message with emoji
    */
   info(message: string, data: Record<string, any> = {}) {
-    this._log('INFO', message, data);
+    this._log('INFO', '🔵', message, data);
     return this; // For chaining
   }
   
   /**
-   * Log a warning message
+   * Log a warning message with emoji
    */
   warn(message: string, data: Record<string, any> = {}) {
-    this._log('WARN', message, data);
+    this._log('WARN', '🟠', message, data);
     return this; // For chaining
   }
   
   /**
-   * Log an error message
+   * Log an error message with emoji
    */
-  error(message: string, error: unknown = {}) {
-    // Transform error into a suitable data object
-    const errorData = this._formatError(error);
-    this._log('ERROR', message, errorData);
-    return this; // For chaining
-  }
-  
-  /**
-   * Format an error consistently
-   */
-  private _formatError(error: unknown): Record<string, any> {
-    if (error instanceof Error) {
-      return {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
+  error(message: string, data: Record<string, any> = {}) {
+    // If data is an Error object, extract useful properties
+    if (data instanceof Error) {
+      data = {
+        message: data.message,
+        stack: data.stack,
+        name: data.name
       };
-    } else if (typeof error === 'object' && error !== null) {
-      return { ...(error as Record<string, any>) };
-    } else if (typeof error === 'string') {
-      return { message: error };
-    } else {
-      return { error };
     }
+    
+    this._log('ERROR', '🔴', message, data);
+    return this; // For chaining
   }
   
   /**
-   * Internal logging function with structured format
+   * Log a debug message with emoji
    */
-  private _log(level: string, message: string, data: Record<string, any> = {}) {
+  debug(message: string, data: Record<string, any> = {}) {
+    this._log('DEBUG', '🟣', message, data);
+    return this; // For chaining
+  }
+  
+  /**
+   * Log a success message with emoji
+   */
+  success(message: string, data: Record<string, any> = {}) {
+    this._log('SUCCESS', '🟢', message, data);
+    return this; // For chaining
+  }
+  
+  /**
+   * Internal logging function with enhanced formatting
+   */
+  private _log(level: string, emoji: string, message: string, data: Record<string, any> = {}) {
+    // Create a summary line that's easy to scan
+    const summary = `${emoji} [${level}] [${this.component}] ${message}`;
+    
+    // Format the detailed log with indentation for better readability
     console.log(JSON.stringify({
+      summary,
       level,
       correlation_id: this.correlationId,
       component: this.component,
       message,
       timestamp: new Date().toISOString(),
       ...data
-    }));
+    }, null, 2));
   }
 
   /**
@@ -95,47 +103,6 @@ export function createLogger(component: string, correlationId?: string): Logger 
 }
 
 /**
- * Log a message operation to both console and database
- */
-export async function logMessageOperation(
-  eventType: string,
-  entityId: string,
-  correlationId: string,
-  metadata: Record<string, any> = {}
-): Promise<void> {
-  try {
-    // Ensure correlation ID is a string
-    const corrId = correlationId?.toString() || crypto.randomUUID();
-    
-    // ALWAYS generate a new UUID to avoid type errors with UUID columns
-    const validEntityId = crypto.randomUUID();
-    
-    // Store original entity ID in metadata
-    const enhancedMetadata = {
-      ...metadata,
-      original_entity_id: entityId
-    };
-    
-    // Log to console
-    console.log(`[${eventType}] [${corrId}] ${entityId}`, enhancedMetadata);
-    
-    // Import supabase client
-    const { createSupabaseClient } = await import('../supabase.ts');
-    const supabaseClient = createSupabaseClient();
-    
-    // Insert with guaranteed valid UUID
-    await supabaseClient.rpc('xdelo_logprocessingevent', {
-      p_event_type: eventType,
-      p_entity_id: validEntityId,
-      p_correlation_id: corrId,
-      p_metadata: enhancedMetadata
-    });
-  } catch (e) {
-    console.error(`Failed to log message operation ${eventType}:`, e);
-  }
-} 
-
-/**
  * Convenience method to get a logger or create one
  */
 export function getLogger(componentOrLogger?: string | Logger | null, correlationId?: string): Logger {
@@ -152,5 +119,69 @@ export function getLogger(componentOrLogger?: string | Logger | null, correlatio
   // Default to a generic logger
   return createLogger('generic', correlationId);
 }
-correlationId);
+
+/**
+ * Format a webhook event summary for quick understanding
+ * @param eventType Type of event
+ * @param entityId The entity being processed
+ * @param isSuccess Whether the operation was successful
+ * @param metadata Additional context
+ * @returns Formatted summary string
+ */
+export function formatWebhookSummary(
+  eventType: string,
+  entityId: string | number,
+  isSuccess: boolean = true,
+  metadata: Record<string, any> = {}
+): string {
+  // Select appropriate emoji based on event and success
+  let emoji = '📋';
+  
+  if (eventType.includes('error') || eventType.includes('failed')) {
+    emoji = '❌';
+  } else if (eventType.includes('success') || eventType.includes('completed')) {
+    emoji = '✅';
+  } else if (eventType.includes('warning')) {
+    emoji = '⚠️';
+  } else if (eventType.includes('received')) {
+    emoji = '📥';
+  } else if (eventType.includes('processing')) {
+    emoji = '⚙️';
+  } else if (eventType.includes('media')) {
+    emoji = '🖼️';
+  } else if (eventType.includes('text')) {
+    emoji = '💬';
+  }
+  
+  // Override with success/failure emoji if specified
+  if (!isSuccess) {
+    emoji = '❌';
+  }
+  
+  // Build a concise summary
+  let summary = `${emoji} ${eventType.replace(/_/g, ' ')}`;
+  
+  // Add entity information
+  if (entityId) {
+    // Truncate IDs that are too long
+    const displayId = typeof entityId === 'string' && entityId.length > 8 
+      ? `${entityId.substring(0, 8)}...` 
+      : entityId;
+    summary += ` [ID: ${displayId}]`;
+  }
+  
+  // Add important context if available
+  if (metadata.chat_id) {
+    summary += ` | Chat: ${metadata.chat_id}`;
+  }
+  
+  if (metadata.message_id) {
+    summary += ` | Msg: ${metadata.message_id}`;
+  }
+  
+  if (metadata.duration_ms) {
+    summary += ` | Duration: ${metadata.duration_ms}ms`;
+  }
+  
+  return summary;
 }

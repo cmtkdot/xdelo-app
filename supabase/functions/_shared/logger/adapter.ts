@@ -1,4 +1,3 @@
-
 import { Logger } from './index.ts';
 
 /**
@@ -6,8 +5,10 @@ import { Logger } from './index.ts';
  */
 export interface LoggerInterface {
   error: (message: string, error: unknown) => void;
-  info: (message: string, data?: Record<string, any>) => void;
-  warn: (message: string, data?: Record<string, any>) => void;
+  info?: (message: string, data?: unknown) => void;
+  warn?: (message: string, data?: unknown) => void;
+  debug?: (message: string, data?: unknown) => void;
+  success?: (message: string, data?: unknown) => void;
 }
 
 /**
@@ -18,13 +19,19 @@ export function createLoggerAdapter(logger?: Logger, correlationId?: string): Lo
   if (logger) {
     return {
       error: (message: string, error: unknown): void => {
-        logger.error(message, error);
+        logger.error(message, error as Record<string, any>);
       },
-      info: (message: string, data?: Record<string, any>): void => {
-        logger.info(message, data || {});
+      info: (message: string, data?: unknown): void => {
+        logger.info(message, data as Record<string, any>);
       },
-      warn: (message: string, data?: Record<string, any>): void => {
-        logger.warn(message, data || {});
+      warn: (message: string, data?: unknown): void => {
+        logger.warn(message, data as Record<string, any>);
+      },
+      debug: (message: string, data?: unknown): void => {
+        logger.debug(message, data as Record<string, any>);
+      },
+      success: (message: string, data?: unknown): void => {
+        logger.success(message, data as Record<string, any>);
       }
     };
   }
@@ -32,7 +39,9 @@ export function createLoggerAdapter(logger?: Logger, correlationId?: string): Lo
   // Fallback to console if no logger is provided
   return {
     error: (message: string, error: unknown): void => console.error(message, error),
-    info: (message: string, data?: Record<string, any>): void => console.info(message, data || {}),
-    warn: (message: string, data?: Record<string, any>): void => console.warn(message, data || {})
+    info: (message: string, data?: unknown): void => console.info(message, data),
+    warn: (message: string, data?: unknown): void => console.warn(message, data),
+    debug: (message: string, data?: unknown): void => console.debug(message, data),
+    success: (message: string, data?: unknown): void => console.log(`✅ ${message}`, data)
   };
 }

@@ -1,11 +1,92 @@
 // Shared database operations for edge functions
-import { createSupabaseClient } from "./supabase.ts";
-import { ProcessingState, AnalyzedContent } from "./types.ts";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { ProcessingState, Message, AnalyzedContent } from "./types.ts";
 import { LoggerInterface } from "./logger/adapter.ts";
 import { Logger } from "./logger/index.ts";
 
 // Re-export LoggerInterface
 export { LoggerInterface } from "./logger/adapter.ts";
+
+interface ForwardInfo {
+  origin?: {
+    type?: string;
+    sender_user_id?: number;
+    sender_chat_id?: number;
+    sender_chat_name?: string;
+    chat_id?: number;
+    message_id?: number;
+    sender_name?: string;
+  };
+  from?: {
+    id?: number;
+    is_bot?: boolean;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+  };
+  from_chat?: {
+    id?: number;
+    title?: string;
+    username?: string;
+    type?: string;
+  };
+  date?: number;
+}
+
+interface BaseMessageRecord {
+  id: string;
+  telegram_message_id: number;
+  chat_id: number;
+  chat_type: string;
+  chat_title?: string;
+  correlation_id: string;
+  processing_state: ProcessingState;
+  processing_started_at?: string;
+  processing_completed_at?: string;
+  analyzed_content?: AnalyzedContent;
+  old_analyzed_content?: AnalyzedContent[];
+  error_message?: string;
+  created_at: string;
+  updated_at: string;
+  telegram_data: Record<string, unknown>;
+  edit_history?: Record<string, unknown>[];
+  edit_count?: number;
+  is_edited_channel_post?: boolean;
+  forward_info?: ForwardInfo;
+  edit_date?: string;
+  user_id?: string;
+  retry_count?: number;
+  last_error_at?: string;
+}
+
+interface MediaMessage extends BaseMessageRecord {
+  media_group_id?: string;
+  message_caption_id?: string;
+  is_original_caption?: boolean;
+  group_caption_synced?: boolean;
+  caption?: string;
+  file_id: string;
+  file_unique_id: string;
+  mime_type?: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  group_message_count?: number;
+  group_first_message_time?: string;
+  group_last_message_time?: string;
+}
+
+interface NonMediaMessage extends BaseMessageRecord {
+  message_type: string;
+  message_text?: string;
+  product_name?: string;
+  product_code?: string;
+  vendor_uid?: string;
+  product_quantity?: number;
+  purchase_date?: string;
+  notes?: string;
+}
 
 interface MessageResponse {
   id: string;
@@ -21,6 +102,19 @@ interface UpdateProcessingStateParams {
   error?: string;
   processingStarted?: boolean;
   processingCompleted?: boolean;
+}
+
+// Create Supabase client helper function
+export function createSupabaseClient(): SupabaseClient {
+  return createClient(
+    process.env.SUPABASE_URL || '',
+    process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    {
+      auth: {
+        persistSession: false,
+      },
+    }
+  );
 }
 
 /**
