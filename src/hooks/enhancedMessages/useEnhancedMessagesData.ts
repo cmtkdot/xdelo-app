@@ -1,62 +1,26 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Message, ProcessingState } from '@/types';
 
-export interface UseEnhancedMessagesOptions {
+export interface UseEnhancedMessagesDataOptions {
   limit?: number;
   processingStates?: ProcessingState[];
   searchTerm?: string;
   sortBy?: 'created_at' | 'updated_at' | 'purchase_date';
   sortOrder?: 'asc' | 'desc';
-  grouped?: boolean; // Whether to return messages grouped by media_group_id
-  enableRealtime?: boolean;
+  grouped?: boolean;
 }
 
-export function useEnhancedMessages({
+export function useEnhancedMessagesData({
   limit = 500,
   processingStates = [],
   searchTerm = '',
   sortBy = 'created_at',
   sortOrder = 'desc',
-  grouped = true, // Default to grouped for better compatibility
-  enableRealtime = true
-}: UseEnhancedMessagesOptions = {}) {
-  const queryClient = useQueryClient();
-  const [realtimeEnabled, setRealtimeEnabled] = useState(enableRealtime);
+  grouped = true,
+}: UseEnhancedMessagesDataOptions = {}) {
   
-  // Set up Supabase realtime subscription
-  useEffect(() => {
-    if (!realtimeEnabled) return;
-    
-    const channel = supabase
-      .channel('messages-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messages'
-        },
-        () => {
-          // Invalidate and refetch messages
-          queryClient.invalidateQueries({ queryKey: ['enhanced-messages'] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient, realtimeEnabled]);
-
-  const { 
-    data: messages,
-    isLoading,
-    isRefetching,
-    error,
-    refetch
-  } = useQuery({
+  return useQuery({
     queryKey: ['enhanced-messages', limit, processingStates, sortBy, sortOrder, searchTerm, grouped],
     queryFn: async () => {
       try {
@@ -156,26 +120,10 @@ export function useEnhancedMessages({
         };
         
       } catch (err) {
-        console.error('Error in useEnhancedMessages hook:', err);
+        console.error('Error in useEnhancedMessagesData hook:', err);
         throw err;
       }
     },
     staleTime: 60 * 1000, // 1 minute
   });
-  
-  // Provide a toggle for realtime updates
-  const toggleRealtime = () => {
-    setRealtimeEnabled(prev => !prev);
-  };
-  
-  return {
-    messages: messages?.flatMessages || [],
-    groupedMessages: messages?.groupedMessages || [],
-    isLoading,
-    isRefetching,
-    error,
-    refetch,
-    realtimeEnabled,
-    toggleRealtime
-  };
 }

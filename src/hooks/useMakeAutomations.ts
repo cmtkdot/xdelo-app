@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MakeAutomationRule, MakeEventType, MakeCondition, MakeAction } from '@/types/make';
@@ -257,7 +256,7 @@ export function useMakeAutomations() {
           eventType: rule.event_type
         },
         testData,
-        correlationId: crypto.randomUUID()
+        correlationId: crypto.randomUUID().toString()
       };
       
       // Call the test handler

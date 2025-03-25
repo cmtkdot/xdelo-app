@@ -192,13 +192,22 @@ export function useMediaUtils() {
     try {
       addProcessingMessageId(message.id);
       
-      // Call the edge function to reanalyze caption
-      const { data, error } = await supabase.functions.invoke('xdelo_analyze_caption', {
-        body: { 
-          messageId: message.id,
-          caption: message.caption
+      // Generate a correlation ID
+      const correlationId = crypto.randomUUID().toString();
+      
+      // Call database function directly instead of edge function
+      const { data, error } = await supabase.rpc<{
+        success: boolean;
+        message?: string;
+        [key: string]: any;
+      }>(
+        'xdelo_process_caption_workflow',
+        {
+          p_message_id: message.id,
+          p_correlation_id: correlationId,
+          p_force: true
         }
-      });
+      );
       
       if (error) {
         throw new Error(error.message || 'Failed to analyze caption');
@@ -207,14 +216,17 @@ export function useMediaUtils() {
       // Refresh the data
       queryClient.invalidateQueries({ queryKey: ['messages'] });
       
-      if (data?.success) {
+      if (data && data.success) {
         toast({
           title: "Analysis Complete",
           description: data.message || "The message has been analyzed successfully."
         });
-        return data;
+        return {
+          success: true,
+          message: data.message || "Analysis completed successfully"
+        };
       } else {
-        throw new Error(data?.message || 'Analysis failed');
+        throw new Error((data && data.message) || 'Analysis failed');
       }
     } catch (error) {
       console.error('Error analyzing caption:', error);
@@ -260,14 +272,17 @@ export function useMediaUtils() {
           message: "Message is not part of a media group"
         };
       }
+
+      // Generate a correlation ID as a string
+      const correlationId = crypto.randomUUID().toString();
       
-      // Call the edge function to sync the media group
-      const { data, error } = await supabase.functions.invoke('xdelo_sync_media_group', {
-        body: { 
-          message_id: messageId,
-          media_group_id: mediaGroupId,
-          force: true
-        }
+      // Call the database function to sync the media group
+      const { data, error } = await supabase.rpc('xdelo_sync_media_group_content', { 
+        p_source_message_id: messageId,
+        p_media_group_id: mediaGroupId,
+        p_correlation_id: correlationId,
+        p_force_sync: true,
+        p_sync_edit_history: true
       });
       
       if (error) {

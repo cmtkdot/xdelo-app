@@ -21,6 +21,18 @@ declare module "@supabase/supabase-js" {
       }
     ): { data: T; error: null } | { data: null; error: Error };
 
+    // RPC for the logProcessingEvent function - Updated to accept both string and number entity IDs
+    rpc<T = string>(
+      fn: "xdelo_logprocessingevent", 
+      params: { 
+        p_event_type: string; 
+        p_entity_id: string | number;
+        p_correlation_id: string;
+        p_metadata?: Record<string, any>;
+        p_error_message?: string;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
+
     // Add RPC for ensuring matching config column
     rpc<T = any>(
       fn: "xdelo_ensure_matching_config",
@@ -38,6 +50,67 @@ declare module "@supabase/supabase-js" {
       params: { p_config: Record<string, any> }
     ): { data: T; error: null } | { data: null; error: Error };
 
-    // Add any other custom RPC functions here...
+    // Add RPC for fixing audit log UUIDs
+    rpc<T = { fixed_count: number }>(
+      fn: "xdelo_fix_audit_log_uuids",
+      params?: {}
+    ): { data: T; error: null } | { data: null; error: Error };
+
+    // Add RPC for media group synchronization with proper return type
+    rpc<T = { updated_count?: number; [key: string]: any }>(
+      fn: "xdelo_sync_media_group_content",
+      params: {
+        p_media_group_id: string;
+        p_source_message_id: string;
+        p_correlation_id: string;
+        p_force_sync?: boolean;
+        p_sync_edit_history?: boolean;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
+
+    // Add RPC for finding caption message
+    rpc<T = string>(
+      fn: "xdelo_find_caption_message",
+      params: { p_media_group_id: string }
+    ): { data: T; error: null } | { data: null; error: Error };
+
+    // Add RPC for processing captions
+    rpc<T = { success: boolean; message?: string; [key: string]: any }>(
+      fn: "xdelo_process_caption_workflow",
+      params: {
+        p_message_id: string;
+        p_correlation_id: string;
+        p_force?: boolean;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
+    
+    // Add RPC for direct caption parsing
+    rpc<T = any>(
+      fn: "xdelo_parse_caption",
+      params: {
+        p_caption: string;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
+
+    // Add RPC for handling message edits
+    rpc<T = any>(
+      fn: "xdelo_handle_message_edit",
+      params: {
+        p_message_id: string;
+        p_caption: string;
+        p_is_edit?: boolean;
+        p_correlation_id?: string;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
+    
+    // Add RPC for completing message processing
+    rpc<T = any>(
+      fn: "xdelo_complete_message_processing",
+      params: {
+        p_message_id: string;
+        p_analyzed_content: Record<string, any>;
+        p_correlation_id?: string;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
   }
 }
