@@ -27,66 +27,38 @@ interface UpdateProcessingStateParams {
 
 /**
  * Log a processing event to the audit log with guaranteed UUID format
+ * This function ensures entity_id is always a valid UUID even when given
+ * special values like "system" or numeric IDs
  */
 export async function xdelo_logProcessingEvent(
   eventType: string,
-  entityId: string | number,  // Accept number explicitly
+  entityId: string | number,
   correlationId: string,
   metadata: Record<string, any> = {},
   errorMessage?: string
-) {
+): Promise<void> {
   try {
     const supabase = createSupabaseClient();
     
-    // Ensure correlation ID is a string
-    const corrId = correlationId?.toString() || crypto.randomUUID();
-    
-    // Generate a valid UUID, but preserve original entityId in metadata
+    // Always generate a new UUID to avoid "invalid input syntax for type uuid" errors
     const validEntityId = crypto.randomUUID();
     
-    // Store original entity ID in metadata for reference
+    // Store original entity ID in metadata
     const enhancedMetadata = {
       ...metadata,
       original_entity_id: entityId
     };
     
-    // Insert with guaranteed valid UUID
-    const { error } = await supabase.from("unified_audit_logs").insert({
+    await supabase.from("unified_audit_logs").insert({
       event_type: eventType,
-      entity_id: validEntityId,  // Always use a new UUID
-      correlation_id: corrId,
+      entity_id: validEntityId,
+      correlation_id: correlationId?.toString() || crypto.randomUUID(),
       metadata: enhancedMetadata,
       error_message: errorMessage,
       event_timestamp: new Date().toISOString()
     });
-    
-    if (error) {
-      console.error(`Error logging event ${eventType}: ${error.message}`, {
-        original_entity_id: entityId,
-        correlation_id: corrId
-      });
-      
-      // Fallback to console logging when database logging fails
-      console.log(JSON.stringify({
-        level: 'ERROR',
-        message: 'Database logging failed, fallback log',
-        event_type: eventType,
-        entity_id_original: entityId,
-        correlation_id: corrId,
-        metadata: enhancedMetadata,
-        error_message: errorMessage,
-        event_timestamp: new Date().toISOString(),
-        logging_error: error.message
-      }));
-    }
   } catch (e) {
-    // Enhanced error logging for exceptions during logging
-    console.error(`Exception in logProcessingEvent: ${e instanceof Error ? e.message : String(e)}`, {
-      event_type: eventType,
-      entity_id: entityId,
-      correlation_id: correlationId,
-      timestamp: new Date().toISOString()
-    });
+    console.error(`Error logging event: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
@@ -124,7 +96,7 @@ export async function xdelo_createMessage(
       }
 
       if (existingFile) {
-        // Log duplicate detection with proper UUID handling
+        // Log duplicate detection
         await xdelo_logProcessingEvent(
           'duplicate_file_detected',
           existingFile.id,
@@ -165,8 +137,10 @@ export async function xdelo_createMessage(
       processing_state: 'pending' as ProcessingState,
       telegram_data: messageData.telegram_data || {},
       forward_info: messageData.forward_info,
+      is_edited_channel_post: messageData.is_edited_channel_post,
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      message_url: messageData.message_url
     };
 
     // Insert message data
@@ -185,7 +159,7 @@ export async function xdelo_createMessage(
       throw new Error('No ID returned from insert operation');
     }
 
-    // Log message creation with proper UUID handling
+    // Log message creation
     await xdelo_logProcessingEvent(
       'message_created',
       data.id,
@@ -199,13 +173,12 @@ export async function xdelo_createMessage(
 
     return { id: data.id, success: true };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('Error creating message:', error);
     
     return { 
       id: '', 
       success: false, 
-      error_message: errorMessage,
+      error_message: error instanceof Error ? error.message : String(error),
       error_code: error instanceof Error && 'code' in error ? (error as any).code : 'DB_INSERT_ERROR'
     };
   }
@@ -242,7 +215,7 @@ export async function xdelo_createNonMediaMessage(
 
     if (error) throw error;
 
-    // Log message creation with proper UUID handling
+    // Log message creation
     await xdelo_logProcessingEvent(
       'non_media_message_created',
       data.id,
@@ -298,8 +271,7 @@ export async function xdelo_checkDuplicateFile(
     
     return !!data;
   } catch (error) {
-    console.error('Exception checking for duplicate:', 
-      error instanceof Error ? error.message : String(error));
+    console.error('Error checking for duplicate:', error);
     return false;
   }
 }
@@ -351,16 +323,14 @@ export async function xdelo_updateMessage(
 
     if (updateError) throw updateError;
 
-    // Log update event with proper UUID handling
+    // Log update event
     await xdelo_logProcessingEvent(
       'message_updated',
       existingMessage.id,
       updateData.correlation_id?.toString() || crypto.randomUUID(),
       {
         telegram_message_id: messageId,
-        chat_id: chatId,
-        media_group_id: existingMessage.media_group_id,
-        is_edit: true
+        chat_id: chatId
       }
     );
 
@@ -426,21 +396,15 @@ export async function xdelo_updateMessageProcessingState(
 
     if (updateError) throw updateError;
 
-    // Get correlation_id for logging
-    const correlationId = existingMessage?.correlation_id ? 
-      existingMessage.correlation_id.toString() : 
-      crypto.randomUUID();
-
-    // Log state change with proper UUID handling
+    // Log state change
     await xdelo_logProcessingEvent(
       'processing_state_changed',
       params.messageId,
-      correlationId,
+      existingMessage?.correlation_id?.toString() || crypto.randomUUID(),
       {
         telegram_message_id: existingMessage?.telegram_message_id,
         chat_id: existingMessage?.chat_id,
-        processing_state: params.state,
-        error: params.error
+        processing_state: params.state
       }
     );
 
