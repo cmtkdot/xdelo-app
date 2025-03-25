@@ -92,6 +92,18 @@ declare module "@supabase/supabase-js" {
         p_correlation_id: string;
       }
     ): { data: T; error: null } | { data: null; error: Error };
+    
+    // Add RPC for the new unified processor operations
+    rpc<T = { success: boolean; message?: string; [key: string]: any }>(
+      fn: "xdelo_unified_processor",
+      params: {
+        operation: 'process_caption' | 'sync_media_group' | 'reprocess' | 'delayed_sync';
+        messageId: string;
+        mediaGroupId?: string;
+        force?: boolean;
+        correlationId?: string;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
 
     // Add any other custom RPC functions here...
   }

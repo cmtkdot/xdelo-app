@@ -101,4 +101,5 @@ export interface ForwardInfo {
   original_chat_id?: number;
   original_chat_title?: string;
   original_message_id?: number;
+  forward_chain?: Record<string, any>[]; // Track the chain of forwards
 }
