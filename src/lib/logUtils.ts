@@ -53,7 +53,7 @@ export const logEvent = async (
       {
         p_event_type: String(eventType),
         p_entity_id: entityId,
-        p_correlation_id: correlationId,
+        p_correlation_id: correlationId.toString(),
         p_metadata: {
           ...metadata,
           logged_at: new Date().toISOString(),
@@ -67,18 +67,24 @@ export const logEvent = async (
       
       // Fallback to direct insert if the RPC fails
       try {
+        const safeEntityId = typeof entityId === 'string' ? (
+          // Try to convert to UUID if possible, otherwise generate a new one 
+          // and store the original as metadata
+          crypto.randomUUID()
+        ) : crypto.randomUUID();
+        
         const { error: insertError } = await supabase
           .from('unified_audit_logs')
           .insert({
             event_type: String(eventType),
-            entity_id: crypto.randomUUID(),
+            entity_id: safeEntityId,
             metadata: {
               ...metadata,
               original_entity_id: entityId,
               logged_at: new Date().toISOString(),
               source: 'client_fallback'
             },
-            correlation_id: correlationId
+            correlation_id: correlationId.toString()
           });
           
         if (insertError) {

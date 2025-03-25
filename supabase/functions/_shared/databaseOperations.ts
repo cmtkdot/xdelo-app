@@ -1,3 +1,4 @@
+
 // Shared database operations for edge functions
 import { createSupabaseClient } from "./supabase.ts";
 import { ProcessingState, AnalyzedContent } from "./types.ts";
@@ -42,10 +43,13 @@ export async function xdelo_logProcessingEvent(
     // Ensure correlation ID is a string
     const corrId = correlationId?.toString() || crypto.randomUUID();
     
+    // Convert entityId to string if it's not already
+    const entityIdStr = entityId?.toString() || 'system';
+    
     // Call the PostgreSQL function that handles UUID validation internally
     await supabase.rpc('xdelo_logprocessingevent', {
       p_event_type: eventType,
-      p_entity_id: entityId?.toString() || 'system',
+      p_entity_id: entityIdStr,
       p_correlation_id: corrId,
       p_metadata: metadata,
       p_error_message: errorMessage
@@ -389,7 +393,7 @@ export async function xdelo_updateMessageProcessingState(
 
     if (updateError) throw updateError;
 
-    // Log state change
+    // Log state change using our new safer logging function
     await xdelo_logProcessingEvent(
       'processing_state_changed',
       params.messageId,

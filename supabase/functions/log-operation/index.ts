@@ -25,7 +25,7 @@ const handler = createEdgeHandler(async (req: Request, context: HandlerContext) 
     newState, 
     metadata = {}, 
     errorMessage,
-    correlationId = requestCorrelationId || crypto.randomUUID(),
+    correlationId = requestCorrelationId || crypto.randomUUID().toString(),
     userId
   } = await req.json() as LogRequest;
   

@@ -51,7 +51,7 @@ declare module "@supabase/supabase-js" {
     ): { data: T; error: null } | { data: null; error: Error };
 
     // Add RPC for fixing audit log UUIDs
-    rpc<T = any>(
+    rpc<T = { fixed_count: number }>(
       fn: "xdelo_fix_audit_log_uuids",
       params?: {}
     ): { data: T; error: null } | { data: null; error: Error };
