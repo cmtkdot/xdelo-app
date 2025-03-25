@@ -2,9 +2,11 @@
 import { supabaseClient } from '../../utils/supabase.ts';
 import { corsHeaders } from '../../utils/cors.ts';
 import { 
-  xdelo_detectMimeType,
-  xdelo_processMessageMedia
+  xdelo_detectMimeType
 } from '../../utils/media/mediaUtils.ts';
+import { 
+  xdelo_processMessageMedia
+} from '../../utils/media/mediaStorage.ts';
 import { 
   TelegramMessage, 
   MessageContext, 

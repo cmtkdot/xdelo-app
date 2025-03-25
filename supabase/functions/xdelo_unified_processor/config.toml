@@ -1,6 +1,4 @@
 
 project_id = "xjhhehxcxkiumnwbirel"
-name = "xdelo_unified_processor"
-version = 1
-path = "xdelo_unified_processor"
+# No auth required for processor
 verify_jwt = false

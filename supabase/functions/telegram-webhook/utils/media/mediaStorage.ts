@@ -6,7 +6,7 @@ import {
   xdelo_detectMimeType,
   xdelo_checkFileExistsInStorage
 } from "./mediaUtils.ts";
-import { xdelo_logProcessingEvent } from "../databaseOperations.ts";
+import { xdelo_logProcessingEvent } from "../../../_shared/databaseOperations.ts";
 
 // For Deno compatibility
 declare const Deno: {
