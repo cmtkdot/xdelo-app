@@ -5,12 +5,10 @@ import {
   xdelo_uploadMediaToStorage,
   xdelo_validateAndFixStoragePath,
   xdelo_isViewableMimeType,
-  xdelo_detectMimeType
-} from '../utils/mediaUtils.ts';
-import {
+  xdelo_detectMimeType,
   xdelo_findExistingFile,
   xdelo_processMessageMedia
-} from '../utils/mediaStorage.ts';
+} from '../utils/mediaUtils.ts';
 import { 
   TelegramMessage, 
   MessageContext, 

@@ -7,20 +7,16 @@ import { supabaseClient } from '../utils/supabase.ts';
 export async function handleOtherMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
     const { isChannelPost, correlationId, logger } = context;
-    // Use the utility function to determine if message is forwarded
     const isForwarded = isMessageForwarded(message);
     
-    // Log the start of message processing
     logger?.info(`📝 Processing non-media message ${message.message_id} in chat ${message.chat.id}`, {
       message_text: message.text ? `${message.text.substring(0, 50)}${message.text.length > 50 ? '...' : ''}` : null,
       message_type: isChannelPost ? 'channel_post' : 'message',
       is_forwarded: isForwarded,
     });
     
-    // Generate message URL using our utility function from utils/messageUtils.ts
     const message_url = constructTelegramMessageUrl(message);
     
-    // Store message data in the other_messages table
     const { data, error } = await supabaseClient
       .from('other_messages')
       .insert({
@@ -34,7 +30,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
         processing_state: 'completed',
         is_forward: isForwarded,
         correlation_id: correlationId,
-        message_url: message_url, // Add the constructed URL
+        message_url: message_url,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
@@ -46,10 +42,9 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
       throw error;
     }
     
-    // Log successful processing with string ID to avoid UUID type issues
     await xdelo_logProcessingEvent(
       "message_created",
-      data.id.toString(), // Convert UUID to string to avoid type conflicts
+      data.id.toString(),
       correlationId,
       {
         telegram_message_id: message.message_id,
@@ -82,7 +77,6 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
       message_id: message.message_id
     });
     
-    // Log the error
     await xdelo_logProcessingEvent(
       "message_processing_error",
       "system",
