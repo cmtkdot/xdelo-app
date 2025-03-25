@@ -1,4 +1,4 @@
-import { supabaseClient } from '../../_shared/supabase.ts';
+import { supabaseClient, createFastClient, createLongRunningClient } from '../../_shared/supabase.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { 
   xdelo_downloadMediaFromTelegram,
@@ -110,6 +110,10 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       message_id: message.message_id,
       chat_id: message.chat.id
     });
+    
+    // Use the provided client or create a default one
+    // Different operations will use specialized clients
+    const defaultClient = supabase || supabaseClient;
     
     let response;
     
@@ -441,17 +445,21 @@ async function xdelo_handleNewMediaMessage(
   context: MessageContext
 ): Promise<Response> {
   const { correlationId, logger, supabase } = context;
-  const dbClient = supabase || supabaseClient;
   
-  // First, check if this message is a duplicate webhook
-  const isDuplicate = await checkDuplicateFile(dbClient, message.message_id, message.chat.id);
+  // Create specialized clients for different operations
+  const fastClient = createFastClient(); // For quick lookups
+  const defaultClient = supabase || supabaseClient;
+  const longRunningClient = createLongRunningClient(); // For complex inserts
+  
+  // First, check if this message is a duplicate webhook - use fast client for this quick check
+  const isDuplicate = await checkDuplicateFile(fastClient, message.message_id, message.chat.id);
   
   if (isDuplicate) {
     logger?.info(`Detected duplicate message ${message.message_id} in chat ${message.chat.id}`);
     
     // Instead of immediately returning, try to fetch the existing message
     // This mirrors the edited message flow where we look up and potentially update
-    const { data: existingMessage, error: lookupError } = await dbClient
+    const { data: existingMessage, error: lookupError } = await fastClient
       .from('messages')
       .select('*')
       .eq('telegram_message_id', message.message_id)
@@ -540,8 +548,9 @@ async function xdelo_handleNewMediaMessage(
   let duplicateOfMessageId = null;
   
   try {
+    // Use fast client for this lookup
     const { exists, messageId, analyzedContent } = await findExistingFileByUniqueId(
-      dbClient, 
+      fastClient, 
       telegramFile.file_unique_id,
       logger
     );
@@ -571,8 +580,8 @@ async function xdelo_handleNewMediaMessage(
     });
   }
   
-  // Create the message record in the database
-  const result = await createMessage(supabase, {
+  // Create the message record in the database - use the long-running client for this operation
+  const result = await createMessage(longRunningClient, {
     telegram_message_id: message.message_id,
     chat_id: message.chat.id,
     chat_type: message.chat.type,
@@ -589,12 +598,13 @@ async function xdelo_handleNewMediaMessage(
     caption: message.caption,
     storage_path: mediaResult.fileInfo.storage_path,
     public_url: mediaResult.fileInfo.public_url,
+    // We pass the entire message object to createMessage, but it will extract only essential metadata
     telegram_data: message,
     message_url: constructTelegramMessageUrl(message.chat.id, message.message_id),
     is_forward: context.isForwarded,
     forward_info: context.isForwarded ? extractForwardInfo(message) : undefined,
     correlation_id: context.correlationId,
-    processing_state: initialState, // Use the determined initial state
+    processing_state: initialState,
     storage_exists: true,
     storage_path_standardized: mediaResult.fileInfo.storage_path_standardized,
     is_duplicate_content: hasExistingAnalysis
@@ -625,14 +635,17 @@ async function xdelo_handleNewMediaMessage(
     throw new Error(result.error_message || 'Failed to create message record');
   }
   
-  // If the message has a caption, trigger caption processing
+  // If the message has a caption, trigger caption processing in a separate request
+  // to avoid holding the connection open
   if (message.caption && result.id) {
     try {
+      // Schedule caption processing to run separately 
+      // Use default client here since this is a quick operation to queue the processing
       const processingResult = await triggerCaptionProcessing(
         result.id,
         correlationId,
         false, // Don't force reprocessing for new messages
-        dbClient,
+        defaultClient,
         logger
       );
       

@@ -1,7 +1,7 @@
-import { supabaseClient } from '../_shared/supabase.ts';
-import { TelegramMessage, MessageInput, MessageResult } from './types.ts';
-import { Logger } from './utils/logger.ts';
-import { xdelo_withDatabaseRetry } from '../_shared/retryUtils.ts';
+import { supabaseClient } from '../_shared/supabase';
+import { TelegramMessage, MessageInput, MessageResult } from './types';
+import { Logger } from './utils/logger';
+import { xdelo_withDatabaseRetry } from '../_shared/retryUtils';
 
 /**
  * Check if a message is a duplicate based on telegram_message_id and chat_id
@@ -150,59 +150,18 @@ export async function createMessage(
       }
     }
     
-    // Ensure we have a clean-up function in case of errors
-    const cleanupOnError = async (error: any) => {
-      try {
-        // Check if a partial record was created that might be causing transaction issues
-        if (error?.message?.includes('transaction') || error?.message?.includes('timeout') || error?.message?.includes('statement timeout') || error?.code === '2D000' || error?.code === '57014') {
-          logger?.warn('Attempting to clean up potential transaction issues', { 
-            message_id: message.telegram_message_id, 
-            chat_id: message.chat_id,
-            error_message: error?.message,
-            error_code: error?.code
-          });
-          
-          // Try to fetch any partial records
-          const { data: existingRecords } = await supabase
-            .from('messages')
-            .select('id')
-            .eq('telegram_message_id', message.telegram_message_id)
-            .eq('chat_id', message.chat_id)
-            .limit(5);
-            
-          // If we found records, log them but don't try to delete - safer
-          if (existingRecords?.length) {
-            logger?.info(`Found ${existingRecords.length} existing records for message`, { 
-              existing_ids: existingRecords.map(r => r.id),
-              message_id: message.telegram_message_id
-            });
-          }
-        }
-      } catch (cleanupError) {
-        // Just log the cleanup error but don't fail the whole operation
-        logger?.error('Error during cleanup', { error: cleanupError });
-      }
-    };
-    
-    // OPTIMIZATION: Instead of storing the entire telegram_data object,
-    // just extract the essential metadata needed for processing
-    // This significantly reduces the record size and prevents timeouts
-    const essentialMetadata = {
-      message_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
-      from_user_id: message.telegram_data?.from?.id,
+    // Extract minimal metadata - this complete replaces telegram_data
+    // which was causing timeouts due to its large size
+    const minimalMetadata = {
+      from_id: message.telegram_data?.from?.id,
       from_username: message.telegram_data?.from?.username,
-      from_first_name: message.telegram_data?.from?.first_name,
-      media_group_id: message.telegram_data?.media_group_id,
-      date: message.telegram_data?.date,
+      message_date: message.telegram_data?.date,
       edit_date: message.telegram_data?.edit_date,
     };
     
-    // Replace the entire telegram_data object with our minimal metadata
-    const telegramMetadata = essentialMetadata;
-    
+    // Use a simplified insert approach that avoids the large telegram_data object completely
     return await xdelo_withDatabaseRetry(`create_message_${message.telegram_message_id}`, async () => {
       try {
-        // First insert the basic message data without large fields to prevent timeout
         const { data, error } = await supabase
           .from('messages')
           .insert({
@@ -225,8 +184,9 @@ export async function createMessage(
             storage_path_standardized: message.storage_path_standardized || false,
             public_url: message.public_url,
             processing_state: message.processing_state || 'initialized',
-            // Store only essential metadata instead of full telegram_data
-            telegram_data: telegramMetadata,
+            // Remove the heavy telegram_data object completely and replace with minimal metadata
+            telegram_metadata: minimalMetadata, // Store minimal metadata instead
+            // telegram_data field is removed entirely
             is_forward: message.is_forward,
             forward_info: message.forward_info,
             correlation_id: message.correlation_id,
@@ -236,7 +196,6 @@ export async function createMessage(
             edit_history: message.edit_history || [],
             edit_date: message.edit_date,
             is_edited: !!message.edit_history?.length,
-            // Add new fields for duplicate content handling
             is_duplicate_content: message.is_duplicate_content || false,
             analyzed_content: message.analyzed_content || null,
             duplicate_of_message_id: message.duplicate_of_message_id || null,
@@ -252,44 +211,18 @@ export async function createMessage(
             chatId: message.chat_id
           });
           
-          // Run cleanup function if there was an error
-          await cleanupOnError(error);
-          
           return { success: false, error_message: error.message };
         }
 
         logger?.info(`Message record created successfully: ${data.id}`);
         return { success: true, id: data.id };
       } catch (insertError: any) {
-        // If there's an exception during the insert, clean up
-        await cleanupOnError(insertError);
+        logger?.error(`Exception during insert: ${insertError.message}`, { error: insertError });
         throw insertError; // Re-throw for retry mechanism
       }
     }, {
-      // Add special handling for transaction errors
-      maxRetries: 5, // Increase retries for important operations
-      initialDelayMs: 500, // Start with a shorter delay
-      backoffFactor: 2, // Exponential backoff
-      retryCondition: (error: any) => {
-        // Don't retry on certain errors that won't be fixed by retrying
-        if (error?.code === '23505') { // Unique violation
-          logger?.warn('Not retrying on unique violation', { error: error.message });
-          return false;
-        }
-        // Always retry on transaction errors and timeouts
-        if (error?.message?.includes('transaction') || 
-            error?.message?.includes('timeout') || 
-            error?.message?.includes('statement timeout') ||
-            error?.code === '2D000' ||
-            error?.code === '57014') { // 57014 is the Postgres code for statement_timeout
-          logger?.warn('Retrying on transaction/timeout error', { 
-            error: error.message,
-            code: error?.code 
-          });
-          return true;
-        }
-        return true; // Default retry for other errors
-      }
+      maxRetries: 3, // Reduce retries for simpler operations
+      initialDelayMs: 300
     });
   } catch (error) {
     logger?.error(`Exception creating message record: ${error.message}`, { error });

@@ -155,21 +155,60 @@ export async function xdelo_withDatabaseRetry<T>(
       /timeout/i, // Added explicit timeout regex
       /operation timed out/i, // Added specific timeout message pattern
       /timed out after \d+ms/i, // Match timeout with duration
+      /statement timeout/i, // Added statement timeout pattern
+      /canceling statement due to/i, // PostgreSQL statement cancellation
       'PGRST', // PostgREST errors
-      'JwtError'
+      'JwtError',
+      '57014' // PostgreSQL statement_timeout error code
     ],
     onRetry: (attempt: number, error: Error, nextDelayMs: number) => {
-      // For timeouts, log more details
-      if (error.message.includes('timeout') || error.message.includes('timed out')) {
+      // For timeouts, log more details and apply special handling
+      if (isTimeoutError(error)) {
         console.warn(`Database operation "${operationName}" timed out (attempt ${attempt}): ${error.message}. Retrying in ${nextDelayMs}ms...`);
       } else {
         console.warn(`Database operation "${operationName}" failed (attempt ${attempt}): ${error.message}. Retrying in ${nextDelayMs}ms...`);
       }
     },
+    retryCondition: (error: Error) => {
+      // Implement custom logic for statement timeouts
+      // If we have a statement timeout error, we might want to retry with a different strategy
+      if (isTimeoutError(error)) {
+        // For statement timeouts, we'll check if it's likely to succeed with a retry
+        // Look for keywords that might indicate permanent issues
+        if (error.message.includes('constraint violation') || 
+            error.message.includes('permission denied') ||
+            error.message.includes('does not exist')) {
+          // These won't be fixed by retrying
+          return false;
+        }
+        
+        // For genuine timeouts, we'll retry
+        return true;
+      }
+      
+      // Default behavior for other errors
+      return true;
+    },
     ...options
   };
 
   return xdelo_withRetry(fn, retryOpts);
+}
+
+/**
+ * Helper function to identify timeout errors
+ */
+function isTimeoutError(error: any): boolean {
+  if (!error) return false;
+  
+  const errorMessage = error.message || '';
+  const errorCode = error.code || '';
+  
+  return errorMessage.includes('timeout') || 
+         errorMessage.includes('timed out') || 
+         errorMessage.includes('canceling statement') ||
+         errorCode === '57014' || // PostgreSQL statement_timeout
+         errorCode === '2D000';   // SQL Connection/transaction error
 }
 
 /**
