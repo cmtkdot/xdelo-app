@@ -44,16 +44,24 @@ const handleUserData = async (req: Request, context: { correlationId: string, lo
   }
   
   // Log the successful request
-  await supabaseClient.from('unified_audit_logs').insert({
-    event_type: 'user_data_accessed',
-    entity_id: userId,
-    correlation_id: correlationId,
-    metadata: {
-      user_id: userId,
-      timestamp: new Date().toISOString()
-    },
-    event_timestamp: new Date().toISOString()
-  });
+  try {
+    // Import the logging function
+    const { xdelo_logProcessingEvent } = await import('../_shared/databaseOperations.ts');
+    
+    // Use the proper logging function with UUID handling
+    await xdelo_logProcessingEvent(
+      'user_data_accessed',
+      crypto.randomUUID(),
+      correlationId,
+      {
+        user_id: userId,
+        timestamp: new Date().toISOString()
+      }
+    );
+  } catch (logError) {
+    console.error('Error logging user data access:', logError);
+    // Continue execution - don't fail if logging fails
+  }
   
   return {
     success: true,

@@ -6,9 +6,31 @@ import {
   xdelo_createMessage,
   LoggerInterface
 } from '../../_shared/databaseOperations.ts';
-import { constructTelegramMessageUrl, isMessageForwarded } from '../../_shared/messageUtils.ts';
 import { Logger } from '../../_shared/logger/index.ts';
 import { createSuccessResponse, createErrorResponse } from '../../_shared/edgeHandler.ts';
+
+/**
+ * Check if a message is forwarded from another source
+ */
+function isMessageForwarded(message: any): boolean {
+  if (!message) return false;
+  
+  // Check for standard forward fields
+  if (message.forward_from || 
+      message.forward_from_chat || 
+      message.forward_date || 
+      message.forward_signature || 
+      message.forward_sender_name) {
+    return true;
+  }
+  
+  // Check for forwarded from channel posts which use forward_from_message_id
+  if (message.forward_from_message_id) {
+    return true;
+  }
+  
+  return false;
+}
 
 /**
  * Create a logger adapter that implements the LoggerInterface
@@ -62,7 +84,18 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
     }
     
     // Get message URL for reference
-    const message_url = constructTelegramMessageUrl(message.chat.id, message.message_id);
+    const { data: message_url, error: urlError } = await supabaseClient.rpc(
+      'xdelo_construct_telegram_message_url',
+      {
+        chat_type: message.chat.type || 'unknown',
+        chat_id: message.chat.id,
+        id: message.message_id
+      }
+    );
+    
+    if (urlError) {
+      loggerAdapter.warn('Error generating message URL', urlError);
+    }
     
     if (existingMessage) {
       loggerAdapter.info(`Found existing message ${existingMessage.id} for edit`);

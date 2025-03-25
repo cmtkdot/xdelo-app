@@ -319,3 +319,80 @@ export async function xdelo_checkDuplicateFile(
     return false;
   }
 }
+
+/**
+ * Update an existing message
+ */
+export async function xdelo_updateMessage(
+  chatId: number,
+  messageId: number,
+  updateData: any,
+  logger: LoggerInterface
+): Promise<MessageResponse> {
+  try {
+    const supabase = createSupabaseClient();
+    
+    // Log the update operation
+    logger.info('Updating message', {
+      chat_id: chatId,
+      telegram_message_id: messageId
+    });
+
+    // Get existing message
+    const { data: existingMessage, error: fetchError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('chat_id', chatId)
+      .eq('telegram_message_id', messageId)
+      .single();
+
+    if (fetchError || !existingMessage) {
+      throw new Error(fetchError?.message || 'Message not found');
+    }
+
+    // Handle analyzed_content history
+    let old_analyzed_content = existingMessage.old_analyzed_content || [];
+    if (existingMessage.analyzed_content) {
+      old_analyzed_content = [...old_analyzed_content, existingMessage.analyzed_content];
+    }
+
+    // Prepare update data
+    const updateWithTimestamp = {
+      ...updateData,
+      old_analyzed_content,
+      updated_at: new Date().toISOString()
+    };
+
+    // Update message
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update(updateWithTimestamp)
+      .eq('chat_id', chatId)
+      .eq('telegram_message_id', messageId);
+
+    if (updateError) throw updateError;
+
+    // Log update event
+    await xdelo_logProcessingEvent(
+      'message_updated',
+      existingMessage.id,
+      updateData.correlation_id?.toString() || crypto.randomUUID(),
+      {
+        telegram_message_id: messageId,
+        chat_id: chatId,
+        media_group_id: existingMessage.media_group_id,
+        is_edit: true
+      }
+    );
+
+    return { id: existingMessage.id, success: true };
+  } catch (error) {
+    logger.error('Error updating message:', error);
+    return { 
+      id: '', 
+      success: false, 
+      error_message: error instanceof Error ? error.message : String(error),
+      error_code: error instanceof Error && 'code' in error ? (error as {code?: string}).code : 'MESSAGE_UPDATE_ERROR'
+    };
+  }
+}

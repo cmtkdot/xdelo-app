@@ -26,7 +26,6 @@ import {
   ForwardInfo,
   MessageInput,
 } from '../types.ts';
-import { constructTelegramMessageUrl } from '../../_shared/messageUtils.ts';
 
 // Get Telegram bot token from environment - using environment variable
 const TELEGRAM_BOT_TOKEN = globalThis?.process?.env.TELEGRAM_BOT_TOKEN ||
@@ -374,7 +373,18 @@ async function xdelo_handleNewMediaMessage(
     }
     
     // Process the media message
-    const messageUrl = constructTelegramMessageUrl(message.chat.id, message.message_id);
+    const { data: messageUrl, error: urlError } = await supabaseClient.rpc(
+      'xdelo_construct_telegram_message_url',
+      {
+        chat_type: message.chat.type || 'unknown',
+        chat_id: message.chat.id,
+        id: message.message_id
+      }
+    );
+    
+    if (urlError) {
+      loggerAdapter.warn('Error generating message URL', urlError);
+    }
     
     loggerAdapter.info(`Processing new media message: ${message.message_id}`, {
       chat_id: message.chat.id,
