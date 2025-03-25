@@ -1,9 +1,9 @@
+
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { xdelo_logProcessingEvent, xdelo_createNonMediaMessage, LoggerInterface } from '../../_shared/databaseOperations.ts';
-import { Logger } from '../../_shared/logger/index.ts';
+import { createLoggerAdapter } from '../../_shared/logger/adapter.ts';
 import { createSuccessResponse, createErrorResponse } from '../../_shared/edgeHandler.ts';
-import { corsHeaders } from '../../_shared/cors.ts';
 
 /**
  * Check if a message is forwarded from another source
@@ -29,41 +29,6 @@ function isMessageForwarded(message: any): boolean {
 }
 
 /**
- * Create a logger adapter that implements the LoggerInterface
- * This ensures we always have a valid logger even if the context logger is undefined
- */
-function createLoggerAdapter(logger?: Logger, correlationId: string): LoggerInterface {
-  if (logger) {
-    return {
-      error: (message: string, error: unknown): void => {
-        logger.error(message, error);
-      },
-      info: (message: string, data?: unknown): void => {
-        if (data) {
-          logger.info(message, data as Record<string, any>);
-        } else {
-          logger.info(message);
-        }
-      },
-      warn: (message: string, data?: unknown): void => {
-        if (data) {
-          logger.warn(message, data as Record<string, any>);
-        } else {
-          logger.warn(message);
-        }
-      }
-    };
-  }
-  
-  // Fallback to console if no logger is provided
-  return {
-    error: (message: string, error: unknown): void => console.error(message, error),
-    info: (message: string, data?: unknown): void => console.info(message, data),
-    warn: (message: string, data?: unknown): void => console.warn(message, data)
-  };
-}
-
-/**
  * Handle a non-media message from Telegram
  */
 export async function handleTextMessage(
@@ -84,11 +49,10 @@ export async function handleTextMessage(
       message_id: message.message_id,
       chat_id: message.chat.id,
       username: message.from?.username,
-      message_type: 'text',
-      correlation_id: correlationId
+      message_type: 'text'
     });
     
-    // Log processing start to database
+    // Log processing start to database - do this only once
     try {
       await xdelo_logProcessingEvent(
         "text_processing_started",
@@ -119,12 +83,6 @@ export async function handleTextMessage(
         forward_signature: message.forward_signature,
         forward_sender_name: message.forward_sender_name
       };
-      
-      // Log forwarded message details
-      loggerAdapter.info("Processing forwarded message", {
-        original_source: forwardInfo.from_chat_id || forwardInfo.from_user_id,
-        original_message_id: forwardInfo.from_message_id
-      });
     }
     
     // Generate message URL using database function
@@ -167,7 +125,7 @@ export async function handleTextMessage(
       throw new Error(result.error_message || 'Failed to create text message record');
     }
     
-    // Log success to database
+    // Log success to database - do this only once
     try {
       await xdelo_logProcessingEvent(
         "text_processing_completed",
@@ -201,26 +159,11 @@ export async function handleTextMessage(
           message_id: message?.message_id,
           chat_id: message?.chat?.id,
           error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-          message_data: message ? {
-            message_id: message.message_id,
-            chat_id: message.chat?.id,
-            chat_type: message.chat?.type,
-            has_text: !!message.text,
-            is_forwarded: isMessageForwarded(message)
-          } : undefined
         },
         error instanceof Error ? error.message : String(error)
       );
     } catch (logError) {
       loggerAdapter.error('Failed to log error:', logError);
-      // Fallback to console
-      console.error("Database logging failed during error handling", {
-        message_id: message?.message_id,
-        chat_id: message?.chat?.id,
-        error: error instanceof Error ? error.message : String(error),
-        logging_error: logError instanceof Error ? logError.message : String(logError)
-      });
     }
     
     throw error;
@@ -228,5 +171,4 @@ export async function handleTextMessage(
 }
 
 // Export handleOtherMessage as an alias for handleTextMessage
-// This resolves the import issue in telegram-webhook/index.ts
 export const handleOtherMessage = handleTextMessage;

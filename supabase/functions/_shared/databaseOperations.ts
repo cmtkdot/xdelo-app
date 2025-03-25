@@ -1,15 +1,11 @@
-
 // Shared database operations for edge functions
 import { createSupabaseClient } from "./supabase.ts";
 import { ProcessingState, AnalyzedContent } from "./types.ts";
+import { LoggerInterface } from "./logger/adapter.ts";
 import { Logger } from "./logger/index.ts";
 
-// Logger interface used by database operations
-export interface LoggerInterface {
-  error: (message: string, error: unknown) => void;
-  info?: (message: string, data?: Record<string, any>) => void;
-  warn?: (message: string, data?: Record<string, any>) => void;
-}
+// Re-export LoggerInterface
+export { LoggerInterface } from "./logger/adapter.ts";
 
 interface MessageResponse {
   id: string;
@@ -238,7 +234,7 @@ export async function xdelo_createNonMediaMessage(
 }
 
 /**
- * Check if a message already exists
+ * Check if a message already exists - optimized to reduce database calls
  */
 export async function xdelo_checkDuplicateFile(
   telegramMessageId?: number,
@@ -252,12 +248,13 @@ export async function xdelo_checkDuplicateFile(
       return false;
     }
     
-    let query = supabase.from('messages').select('id');
+    // Build an optimized query to check for duplicates
+    const query = supabase.from('messages').select('id');
     
     if (fileUniqueId) {
-      query = query.eq('file_unique_id', fileUniqueId);
+      query.eq('file_unique_id', fileUniqueId);
     } else if (telegramMessageId && chatId) {
-      query = query.eq('telegram_message_id', telegramMessageId).eq('chat_id', chatId);
+      query.eq('telegram_message_id', telegramMessageId).eq('chat_id', chatId);
     }
     
     const { data, error } = await query.maybeSingle();

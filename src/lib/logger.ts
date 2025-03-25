@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { LogEventType } from "@/types/api/LogEventType";
 
@@ -24,7 +23,7 @@ export class Logger {
   ): Promise<void> {
     try {
       // Add standard metadata
-      const enhancedMetadata = {
+      const enhancedMetadata: Record<string, any> = {
         ...metadata,
         context: this.context,
         timestamp: new Date().toISOString(),

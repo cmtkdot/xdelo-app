@@ -8,6 +8,7 @@ import {
   LoggerInterface
 } from '../../_shared/databaseOperations.ts';
 import { Logger } from '../../_shared/logger/index.ts';
+import { createLoggerAdapter } from '../../_shared/logger/adapter.ts';
 import { createSuccessResponse, createErrorResponse } from '../../_shared/edgeHandler.ts';
 
 /**
@@ -34,32 +35,12 @@ function isMessageForwarded(message: any): boolean {
 }
 
 /**
- * Create a logger adapter that implements the LoggerInterface
- */
-function createLoggerAdapter(logger?: Logger): LoggerInterface {
-  if (logger) {
-    return {
-      error: (message: string, error: unknown) => logger.error(message, error),
-      info: (message: string, data?: unknown) => logger.info(message, data as Record<string, any>),
-      warn: (message: string, data?: unknown) => logger.warn(message, data as Record<string, any>)
-    };
-  }
-  
-  // Fallback to console if no logger is provided
-  return {
-    error: (message: string, error: unknown) => console.error(message, error),
-    info: (message: string, data?: unknown) => console.info(message, data),
-    warn: (message: string, data?: unknown) => console.warn(message, data)
-  };
-}
-
-/**
  * Handler for edited messages (text only - media edits are handled by mediaMessageHandler)
  */
 export async function handleEditedMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
     const { correlationId, logger } = context;
-    const loggerAdapter = createLoggerAdapter(logger);
+    const loggerAdapter = createLoggerAdapter(logger, correlationId);
     
     // Check if it contains media - if so, delegate to media handler
     if (message.photo || message.video || message.document) {
@@ -83,7 +64,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       throw lookupError;
     }
     
-    // Get message URL for reference
+    // Get message URL for reference - only do this once
     const { data: message_url, error: urlError } = await supabaseClient.rpc(
       'xdelo_construct_telegram_message_url',
       {
@@ -97,91 +78,25 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       loggerAdapter.warn('Error generating message URL', urlError);
     }
     
+    // Now handle based on whether message exists
     if (existingMessage) {
-      loggerAdapter.info(`Found existing message ${existingMessage.id} for edit`);
-      
-      // Store previous state in edit_history
-      const editHistory = existingMessage.edit_history || [];
-      editHistory.push({
-        timestamp: new Date().toISOString(),
-        previous_text: existingMessage.text,
-        new_text: message.text,
-        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
-      });
-      
-      // Prepare update data
-      const updateData = {
-        text: message.text,
-        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
-        edit_history: editHistory,
-        edit_count: (existingMessage.edit_count || 0) + 1,
-        // If this is a text message, update these fields
-        is_edited: true,
-        telegram_data: message,
-        correlation_id: correlationId
-      };
-      
-      // Update the message using shared function
-      const result = await xdelo_updateMessage(
-        message.chat.id,
-        message.message_id,
-        updateData,
+      return await handleExistingMessageEdit(
+        message, 
+        existingMessage, 
+        correlationId, 
         loggerAdapter
       );
-        
-      if (!result.success) {
-        loggerAdapter.error(`Error updating edited message: ${result.error_message}`);
-        throw new Error(result.error_message || 'Failed to update message');
-      }
-      
-      return createSuccessResponse({ 
-        success: true, 
-        messageId: existingMessage.id, 
-        correlationId,
-        action: 'updated'
-      });
     } else {
-      loggerAdapter.info(`🆕 Original message not found, creating new record for edited message ${message.message_id}`);
-      
-      // If message not found, create a new record
-      const isForward = isMessageForwarded(message);
-      
-      // Prepare message data
-      const messageData = {
-        telegram_message_id: message.message_id,
-        chat_id: message.chat.id,
-        chat_type: message.chat.type,
-        chat_title: message.chat.title,
-        text: message.text,
-        is_edited: true,
-        edit_count: 1,
-        is_forward: isForward,
-        correlation_id: correlationId,
-        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
-        telegram_data: message,
-        message_url: message_url,
-        processing_state: 'initialized'
-      };
-      
-      // Create a new message using shared function
-      const result = await xdelo_createMessage(messageData, loggerAdapter);
-      
-      if (!result.success) {
-        loggerAdapter.error(`Error creating new record for edited message: ${result.error_message}`);
-        throw new Error(result.error_message || 'Failed to create message from edit');
-      }
-      
-      loggerAdapter.info(`Created new message record ${result.id} for edited message ${message.message_id}`);
-      
-      return createSuccessResponse({ 
-        success: true, 
-        messageId: result.id, 
-        correlationId,
-        action: 'created'  
-      });
+      return await handleNewMessageFromEdit(
+        message, 
+        isMessageForwarded(message), 
+        message_url, 
+        correlationId, 
+        loggerAdapter
+      );
     }
   } catch (error) {
-    const loggerAdapter = createLoggerAdapter(context.logger);
+    const loggerAdapter = createLoggerAdapter(context.logger, context.correlationId);
     loggerAdapter.error(`Error processing edited message: ${error instanceof Error ? error.message : String(error)}`);
     
     // Log error with minimal data
@@ -203,4 +118,104 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       context.correlationId
     );
   }
+}
+
+/**
+ * Handle updates for an existing message
+ */
+async function handleExistingMessageEdit(
+  message: TelegramMessage, 
+  existingMessage: any, 
+  correlationId: string,
+  logger: LoggerInterface
+): Promise<Response> {
+  logger.info(`Found existing message ${existingMessage.id} for edit`);
+  
+  // Store previous state in edit_history
+  const editHistory = existingMessage.edit_history || [];
+  editHistory.push({
+    timestamp: new Date().toISOString(),
+    previous_text: existingMessage.text,
+    new_text: message.text,
+    edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+  });
+  
+  // Prepare update data
+  const updateData = {
+    text: message.text,
+    edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
+    edit_history: editHistory,
+    edit_count: (existingMessage.edit_count || 0) + 1,
+    // If this is a text message, update these fields
+    is_edited: true,
+    telegram_data: message,
+    correlation_id: correlationId
+  };
+  
+  // Update the message using shared function
+  const result = await xdelo_updateMessage(
+    message.chat.id,
+    message.message_id,
+    updateData,
+    logger
+  );
+    
+  if (!result.success) {
+    logger.error(`Error updating edited message: ${result.error_message}`);
+    throw new Error(result.error_message || 'Failed to update message');
+  }
+  
+  return createSuccessResponse({ 
+    success: true, 
+    messageId: existingMessage.id, 
+    correlationId,
+    action: 'updated'
+  });
+}
+
+/**
+ * Create a new message from an edit when original was not found
+ */
+async function handleNewMessageFromEdit(
+  message: TelegramMessage, 
+  isForward: boolean,
+  message_url: string,
+  correlationId: string,
+  logger: LoggerInterface
+): Promise<Response> {
+  logger.info(`🆕 Original message not found, creating new record for edited message ${message.message_id}`);
+  
+  // Prepare message data
+  const messageData = {
+    telegram_message_id: message.message_id,
+    chat_id: message.chat.id,
+    chat_type: message.chat.type,
+    chat_title: message.chat.title,
+    text: message.text,
+    is_edited: true,
+    edit_count: 1,
+    is_forward: isForward,
+    correlation_id: correlationId,
+    edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
+    telegram_data: message,
+    message_url: message_url,
+    processing_state: 'initialized'
+  };
+  
+  // Create a new message using shared function
+  const result = await xdelo_createMessage(messageData, logger);
+  
+  if (!result.success) {
+    logger.error(`Error creating new record for edited message: ${result.error_message}`);
+    throw new Error(result.error_message || 'Failed to create message from edit');
+  }
+  
+  logger.info(`Created new message record ${result.id} for edited message ${message.message_id}`);
+  
+  return createSuccessResponse({ 
+    success: true, 
+    messageId: result.id, 
+    correlationId,
+    action: 'created'  
+  });
 }

@@ -4,21 +4,24 @@ import { handleOtherMessage } from './handlers/textMessageHandler.ts';
 import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
 import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
 import { createEdgeHandler, HandlerContext, createErrorResponse } from '../_shared/edgeHandler.ts';
+import { createLoggerAdapter } from '../_shared/logger/adapter.ts';
 
 // Create a standardized handler with our configurations
 const handler = createEdgeHandler(async (req: Request, context: HandlerContext) => {
   const { logger, correlationId } = context;
   const startTime = new Date().toISOString();
+  const loggerAdapter = createLoggerAdapter(logger, correlationId);
+  
+  // Generate a unique ID for this webhook request once
+  const webhookRequestId = crypto.randomUUID();
   
   try {
     // Log webhook received event - just once at the start
-    logger.info('Webhook received', {
+    loggerAdapter.info('Webhook received', {
       method: req.method,
-      url: req.url
+      url: req.url,
+      webhook_request_id: webhookRequestId
     });
-    
-    // Create a unique identifier for this webhook request
-    const webhookRequestId = crypto.randomUUID();
     
     // Log webhook received event to database - just core info
     await xdelo_logProcessingEvent(
@@ -34,35 +37,35 @@ const handler = createEdgeHandler(async (req: Request, context: HandlerContext) 
     let update;
     try {
       update = await req.json();
-      logger.info('Received Telegram update', { 
+      loggerAdapter.info('Received Telegram update', { 
         update_id: update.update_id,
         update_keys: Object.keys(update)
       });
     } catch (error) {
-      logger.error('Failed to parse request body', error);
+      loggerAdapter.error('Failed to parse request body', error);
       return createErrorResponse('Invalid JSON in request body', 400, correlationId);
     }
 
     // Get the message object, checking for different types of updates
     const message = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
     if (!message) {
-      logger.warn('No processable content in update', { update_keys: Object.keys(update) });
+      loggerAdapter.warn('No processable content in update', { update_keys: Object.keys(update) });
       return createErrorResponse('No processable content', 400, correlationId);
     }
 
-    // Determine message context
+    // Determine message context - creating this only once
     const messageContext = {
       isChannelPost: !!update.channel_post || !!update.edited_channel_post,
       isForwarded: !!message.forward_from || !!message.forward_from_chat || !!message.forward_origin,
       correlationId,
       isEdit: !!update.edited_message || !!update.edited_channel_post,
       previousMessage: update.edited_message || update.edited_channel_post,
-      logger, // Add logger to context so handlers can use it
-      startTime // Track when processing started
+      logger,
+      startTime
     };
 
     // Log message details with sensitive data masked, but keep it brief
-    logger.info('Processing message', {
+    loggerAdapter.info('Processing message', {
       message_id: message.message_id,
       chat_id: message.chat?.id,
       chat_type: message.chat?.type,
@@ -78,37 +81,27 @@ const handler = createEdgeHandler(async (req: Request, context: HandlerContext) 
     let response;
     
     try {
-      // Handle edited messages
+      // Route to appropriate handler based on message type
       if (messageContext.isEdit) {
-        logger.info('Routing to edited message handler', { 
-          message_id: message.message_id
-        });
+        loggerAdapter.info('Routing to edited message handler', { message_id: message.message_id });
         response = await handleEditedMessage(message, messageContext);
-      }
-      // Handle media messages (photos, videos, documents)
-      else if (message.photo || message.video || message.document) {
-        logger.info('Routing to media message handler', { 
-          message_id: message.message_id
-        });
+      } else if (message.photo || message.video || message.document) {
+        loggerAdapter.info('Routing to media message handler', { message_id: message.message_id });
         response = await handleMediaMessage(message, messageContext);
-      }
-      // Handle other types of messages
-      else {
-        logger.info('Routing to text message handler', { 
-          message_id: message.message_id
-        });
+      } else {
+        loggerAdapter.info('Routing to text message handler', { message_id: message.message_id });
         response = await handleOtherMessage(message, messageContext);
       }
       
       // Calculate processing time
       const processingTimeMs = Date.now() - new Date(startTime).getTime();
       
-      logger.info('Successfully processed message', { 
+      loggerAdapter.info('Successfully processed message', { 
         message_id: message.message_id,
         processing_time_ms: processingTimeMs
       });
       
-      // Log webhook completion to database with minimal info
+      // Log webhook completion to database with minimal info - do this only once
       await xdelo_logProcessingEvent(
         "webhook_completed",
         webhookRequestId,
@@ -121,16 +114,16 @@ const handler = createEdgeHandler(async (req: Request, context: HandlerContext) 
         }
       );
       
-      // Return the response directly - the edge handler will handle CORS and wrapping
+      // Return the response directly
       return response;
       
     } catch (handlerError) {
-      logger.error('Error in message handler', { 
+      loggerAdapter.error('Error in message handler', { 
         error: handlerError.message,
         message_id: message.message_id
       });
       
-      // Log the error to the database with minimal info
+      // Log the error to the database with minimal info - only once
       await xdelo_logProcessingEvent(
         "message_processing_failed",
         webhookRequestId,
@@ -146,19 +139,18 @@ const handler = createEdgeHandler(async (req: Request, context: HandlerContext) 
       );
       
       // Return error response but with 200 status to acknowledge to Telegram
-      // (Telegram will retry if we return non-200 status)
       return createErrorResponse(handlerError.message || 'Handler error', 200, correlationId);
     }
   } catch (error) {
-    logger.error('Unhandled error processing webhook', { 
+    loggerAdapter.error('Unhandled error processing webhook', { 
       error: error.message
     });
     
-    // Log unhandled error to database with minimal info
+    // Log unhandled error to database with minimal info - only once
     try {
       await xdelo_logProcessingEvent(
         "webhook_unhandled_error",
-        crypto.randomUUID(),
+        webhookRequestId,
         correlationId,
         {
           error: error.message,
@@ -167,7 +159,7 @@ const handler = createEdgeHandler(async (req: Request, context: HandlerContext) 
         error.message || "Unknown unhandled error"
       );
     } catch (logError) {
-      logger.error('Failed to log unhandled error', {
+      loggerAdapter.error('Failed to log unhandled error', {
         original_error: error.message,
         log_error: logError.message
       });
