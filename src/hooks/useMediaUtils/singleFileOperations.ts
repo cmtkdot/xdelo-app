@@ -1,207 +1,204 @@
 
-import { useState } from 'react';
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/useToast';
-import { LogEventType, logEvent } from "@/lib/logUtils";
+import { Message } from '@/types/entities/Message';
 
-interface UseSingleFileOperationsResult {
-  isUploading: boolean;
-  isDeleting: boolean;
-  uploadFile: (file: File, storagePath?: string) => Promise<string | null>;
-  deleteFile: (filePath: string) => Promise<boolean>;
-  reuploadMediaFromTelegram: (messageId: string) => Promise<boolean>;
-}
-
-/**
- * Hook for handling single file upload and delete operations
- */
-export function useSingleFileOperations(): UseSingleFileOperationsResult {
-  const [isUploading, setIsUploading] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+export function useSingleFileOperations() {
   const { toast } = useToast();
-  
+
   /**
-   * Upload a file to Supabase storage
-   * @param file The file to upload
-   * @param storagePath Optional storage path
-   * @returns The public URL of the uploaded file, or null on failure
+   * Fix content disposition for a single file
    */
-  const uploadFile = async (file: File, storagePath?: string): Promise<string | null> => {
-    setIsUploading(true);
+  const fixContentDisposition = async (message: Message): Promise<{
+    success: boolean;
+    message: string;
+    data?: any;
+  }> => {
     try {
-      // Get current user ID from Supabase auth
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id;
-      
-      if (!userId) {
-        throw new Error("User ID not available");
+      if (!message.id) {
+        return {
+          success: false,
+          message: 'Message ID is required'
+        };
       }
 
-      const filePath = storagePath || `${userId}/${file.name}`;
-      const { data, error } = await supabase.storage
-        .from('message_media')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
+      const { data, error } = await supabase.functions.invoke('xdelo_fix_content_disposition', {
+        body: { messageId: message.id }
+      });
+
+      if (error) {
+        console.error('Error fixing content disposition:', error);
+        toast({
+          title: 'Error',
+          description: `Failed to fix content disposition: ${error.message}`,
+          variant: 'destructive',
         });
-
-      if (error) {
-        throw new Error(`File upload failed: ${error.message}`);
+        return {
+          success: false,
+          message: error.message || 'Failed to fix content disposition'
+        };
       }
 
-      const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/message_media/${data.path}`;
-      
-      const isMobile = window.innerWidth <= 768;
       toast({
-        title: "Upload successful",
-        description: isMobile ? "File uploaded" : `File uploaded to ${data.path}`,
+        title: 'Success',
+        description: 'Content disposition fixed successfully',
       });
 
-      // Log completion of sync operation
-      await logSyncCompletion(data.path, {
-        fileSize: file.size,
-        mimeType: file.type,
-        storagePath: data.path,
-        publicUrl
-      });
-
-      return publicUrl;
+      return {
+        success: true,
+        message: 'Content disposition fixed successfully',
+        data
+      };
     } catch (error: any) {
-      console.error("File upload error:", error.message);
+      console.error('Exception in fixContentDisposition:', error);
       toast({
-        title: "Upload failed",
-        description: error.message,
-        variant: "destructive",
+        title: 'Error',
+        description: `An unexpected error occurred: ${error.message}`,
+        variant: 'destructive',
       });
-      return null;
-    } finally {
-      setIsUploading(false);
+      return {
+        success: false,
+        message: error.message || 'An unexpected error occurred'
+      };
     }
   };
 
   /**
-   * Delete a file from Supabase storage
-   * @param filePath The path of the file to delete
-   * @returns True on success, false on failure
+   * Reupload media from Telegram for a single file
    */
-  const deleteFile = async (filePath: string): Promise<boolean> => {
-    setIsDeleting(true);
+  const reuploadMediaFromTelegram = async (message: Message): Promise<{
+    success: boolean;
+    message: string;
+    data?: any;
+  }> => {
     try {
-      const { error } = await supabase.storage
-        .from('message_media')
-        .remove([filePath]);
-
-      if (error) {
-        throw new Error(`File deletion failed: ${error.message}`);
+      if (!message.id) {
+        return {
+          success: false,
+          message: 'Message ID is required'
+        };
       }
 
-      const isMobile = window.innerWidth <= 768;
-      toast({
-        title: "Deletion successful",
-        description: isMobile ? "File deleted" : `File deleted from ${filePath}`,
-      });
-      return true;
-    } catch (error: any) {
-      console.error("File deletion error:", error.message);
-      toast({
-        title: "Deletion failed",
-        description: error.message,
-        variant: "destructive",
-      });
-      return false;
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  /**
-   * Force reupload of media from Telegram for a specific message
-   * This is useful when file_ids expire or become invalid
-   */
-  const reuploadMediaFromTelegram = async (messageId: string): Promise<boolean> => {
-    setIsUploading(true);
-    try {
-      // Call the dedicated edge function for reuploading from Telegram
       const { data, error } = await supabase.functions.invoke('xdelo_reupload_media', {
         body: { 
-          messageId,
-          forceReupload: true,
-          skipExistingCheck: true
+          messageId: message.id,
+          forceRedownload: true 
         }
       });
-      
+
       if (error) {
-        throw new Error(`Reupload failed: ${error.message}`);
-      }
-      
-      if (!data?.success) {
-        throw new Error(data?.message || 'Reupload operation failed');
-      }
-      
-      toast({
-        title: "Media Reuploaded",
-        description: "Media has been successfully reuploaded from Telegram."
-      });
-      
-      // Log the successful operation
-      await logEvent(
-        LogEventType.MEDIA_DOWNLOADED,
-        messageId,
-        {
-          operation: 'reupload',
-          success: true,
-          result: data
-        }
-      );
-      
-      return true;
-    } catch (error) {
-      console.error("Error reuploading media:", error);
-      
-      toast({
-        title: "Reupload Failed",
-        description: error.message || "Failed to reupload media from Telegram.",
-        variant: "destructive"
-      });
-      
-      // Log the failed operation
-      await logEvent(
-        LogEventType.MEDIA_UPLOAD_ERROR,
-        messageId,
-        {
-          operation: 'reupload',
+        console.error('Error reuploading media from Telegram:', error);
+        toast({
+          title: 'Error',
+          description: `Failed to reupload media: ${error.message}`,
+          variant: 'destructive',
+        });
+        return {
           success: false,
-          error: error.message
-        }
-      );
-      
-      return false;
-    } finally {
-      setIsUploading(false);
+          message: error.message || 'Failed to reupload media from Telegram'
+        };
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Media successfully reuploaded from Telegram',
+      });
+
+      return {
+        success: true,
+        message: 'Media successfully reuploaded from Telegram',
+        data
+      };
+    } catch (error: any) {
+      console.error('Exception in reuploadMediaFromTelegram:', error);
+      toast({
+        title: 'Error',
+        description: `An unexpected error occurred: ${error.message}`,
+        variant: 'destructive',
+      });
+      return {
+        success: false,
+        message: error.message || 'An unexpected error occurred'
+      };
     }
   };
 
-  // Log completion of sync operation
-  const logSyncCompletion = async (entityId: string, details: any) => {
+  /**
+   * Reanalyze caption for a message
+   */
+  const reanalyzeCaption = async (message: Message): Promise<{
+    success: boolean;
+    message: string;
+    data?: any;
+  }> => {
     try {
-      await logEvent(
-        LogEventType.SYNC_COMPLETED,
-        entityId,
+      if (!message.id) {
+        return {
+          success: false,
+          message: 'Message ID is required'
+        };
+      }
+
+      if (!message.caption) {
+        return {
+          success: false,
+          message: 'Message has no caption to analyze'
+        };
+      }
+
+      // Generate a correlation ID
+      const correlationId = crypto.randomUUID().toString();
+
+      // Call database function directly 
+      const { data, error } = await supabase.rpc(
+        'xdelo_process_caption_workflow',
         {
-          ...details,
-          timestamp: new Date().toISOString()
+          p_message_id: message.id,
+          p_correlation_id: correlationId,
+          p_force: true
         }
       );
-    } catch (error) {
-      console.error("Failed to log sync completion:", error);
+
+      if (error) {
+        console.error('Error analyzing caption:', error);
+        toast({
+          title: 'Error',
+          description: `Failed to analyze caption: ${error.message}`,
+          variant: 'destructive',
+        });
+        return {
+          success: false,
+          message: error.message || 'Failed to analyze caption'
+        };
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Caption analyzed successfully',
+      });
+
+      return {
+        success: true,
+        message: 'Caption analyzed successfully',
+        data
+      };
+    } catch (error: any) {
+      console.error('Error in reanalyzeCaption:', error);
+      toast({
+        title: 'Error',
+        description: `An unexpected error occurred: ${error.message}`,
+        variant: 'destructive',
+      });
+      return {
+        success: false,
+        message: error.message || 'An unexpected error occurred'
+      };
     }
   };
 
   return {
-    isUploading,
-    isDeleting,
-    uploadFile,
-    deleteFile,
-    reuploadMediaFromTelegram
+    fixContentDisposition,
+    reuploadMediaFromTelegram,
+    reanalyzeCaption
   };
 }

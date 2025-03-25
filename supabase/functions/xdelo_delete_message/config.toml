@@ -1,0 +1,6 @@
+
+project_id = "xjhhehxcxkiumnwbirel"
+name = "xdelo_delete_message"
+version = 1
+path = "xdelo_delete_message"
+verify_jwt = false

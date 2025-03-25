@@ -125,7 +125,7 @@ export async function fixContentDisposition(messageId: string): Promise<RepairRe
  */
 export async function reuploadMediaFromTelegram(messageId: string): Promise<RepairResult> {
   try {
-    const { data, error } = await supabase.functions.invoke('xdelo_unified_media_repair', {
+    const { data, error } = await supabase.functions.invoke('xdelo_reupload_media', {
       body: { 
         messageId,
         forceRedownload: true 
