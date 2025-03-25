@@ -107,7 +107,7 @@ const handleUnifiedProcessorRequest = async (req: Request, correlationId: string
           logger
         );
         
-        // If message is part of a media group, also sync the media group content
+        // If message is part of a media group, sync the content to other messages
         if (message.media_group_id && captionResult.success) {
           logger.info(`Message is part of media group ${message.media_group_id}, syncing content`);
           
