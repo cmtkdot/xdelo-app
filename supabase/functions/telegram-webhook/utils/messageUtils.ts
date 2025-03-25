@@ -3,8 +3,32 @@ import { TelegramMessage } from '../types.ts';
 
 /**
  * Construct a Telegram message URL from chat ID and message ID
+ * or from a message object
  */
-export function constructTelegramMessageUrl(chatId: number, messageId: number): string {
+export function constructTelegramMessageUrl(chatIdOrMessage: number | TelegramMessage, messageId?: number): string {
+  // If the first parameter is a message object
+  if (typeof chatIdOrMessage !== 'number') {
+    const message = chatIdOrMessage;
+    if (!message || !message.chat || !message.message_id) {
+      return '';
+    }
+    
+    const chatId = message.chat.id;
+    messageId = message.message_id;
+    
+    // For channel posts (chatId starts with -100)
+    if (chatId.toString().startsWith('-100')) {
+      const channelId = chatId.toString().substring(4);
+      return `https://t.me/c/${channelId}/${messageId}`;
+    }
+    
+    // For private chats (we can't construct a URL)
+    return '';
+  }
+  
+  // Handle the case where chatIdOrMessage is a number (original implementation)
+  const chatId = chatIdOrMessage;
+  
   // For channel posts (chatId starts with -100)
   if (chatId.toString().startsWith('-100')) {
     const channelId = chatId.toString().substring(4);
@@ -116,22 +140,4 @@ export function safeJsonParse(jsonString: string, fallback: any = {}): any {
     console.error('Error parsing JSON:', error);
     return fallback;
   }
-}
-
-/**
- * Constructs a Telegram message URL based on message data
- */
-export function constructTelegramMessageUrl(message: TelegramMessage): string {
-  if (!message || !message.chat || !message.message_id) {
-    return '';
-  }
-  
-  // For channel posts (chatId starts with -100)
-  if (message.chat.id.toString().startsWith('-100')) {
-    const channelId = message.chat.id.toString().substring(4);
-    return `https://t.me/c/${channelId}/${message.message_id}`;
-  }
-  
-  // For private chats (we can't construct a URL)
-  return '';
 }
