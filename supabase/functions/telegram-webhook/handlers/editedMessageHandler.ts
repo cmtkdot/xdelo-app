@@ -1,4 +1,5 @@
-import { TelegramMessage, MessageContext } from '../../../_shared/database/types.ts';
+
+import { TelegramMessage, MessageContext } from '../../_shared/database/types.ts';
 import { corsHeaders } from '../utils/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { xdelo_logProcessingEvent } from '../utils/databaseOperations.ts';
