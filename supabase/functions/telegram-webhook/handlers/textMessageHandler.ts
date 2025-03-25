@@ -1,20 +1,9 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-import { corsHeaders } from '../utils/cors.ts';
+
+import { corsHeaders, addCorsHeaders } from '../utils/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { xdelo_logProcessingEvent } from '../dbOperations.ts';
 import { constructTelegramMessageUrl, isMessageForwarded } from '../utils/messageUtils.ts';
-
-// Create Supabase client
-const supabaseClient = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    }
-  }
-);
+import { supabaseClient } from '../utils/supabase.ts';
 
 export async function handleOtherMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
@@ -29,7 +18,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
       is_forwarded: isForwarded,
     });
     
-    // Generate message URL using our utility function from _shared/messageUtils.ts
+    // Generate message URL using our utility function from utils/messageUtils.ts
     const message_url = constructTelegramMessageUrl(message);
     
     // Store message data in the other_messages table
@@ -58,10 +47,10 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
       throw error;
     }
     
-    // Log successful processing
+    // Log successful processing with string ID to avoid UUID type issues
     await xdelo_logProcessingEvent(
       "message_created",
-      data.id,
+      data.id.toString(), // Convert UUID to string to avoid type conflicts
       correlationId,
       {
         telegram_message_id: message.message_id,

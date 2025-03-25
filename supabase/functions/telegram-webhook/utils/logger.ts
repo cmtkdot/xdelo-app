@@ -1,185 +1,110 @@
-// Logger utility for Telegram webhook with correlation ID tracking and emoji support
+
+/**
+ * Enhanced Logger for Edge Functions
+ * 
+ * This logger provides structured logging with correlation IDs,
+ * component labels, and severity levels.
+ */
+
+// Log levels with color codes for console output
+const LOG_LEVELS = {
+  DEBUG: { value: 0, color: '\x1b[34m', emoji: '🔍', prefix: 'DEBUG' },
+  INFO: { value: 1, color: '\x1b[32m', emoji: 'ℹ️', prefix: 'INFO' },
+  SUCCESS: { value: 1, color: '\x1b[32m', emoji: '✅', prefix: 'SUCCESS' },
+  WARN: { value: 2, color: '\x1b[33m', emoji: '⚠️', prefix: 'WARN' },
+  ERROR: { value: 3, color: '\x1b[31m', emoji: '🔴', prefix: 'ERROR' },
+  FATAL: { value: 4, color: '\x1b[41m', emoji: '💀', prefix: 'FATAL' }
+};
+
+// Reset color code for console
+const RESET = '\x1b[0m';
+
+// Minimum log level to display (can be configured)
+const MIN_LOG_LEVEL = LOG_LEVELS.DEBUG.value;
+
 export class Logger {
-  private correlationId: string;
   private component: string;
-  
+  private correlationId: string;
+
   constructor(correlationId: string, component: string) {
     this.correlationId = correlationId;
     this.component = component;
   }
-  
+
   /**
-   * Log an informational message with emoji
+   * Format a log message with metadata
    */
-  info(message: string, data: Record<string, any> = {}) {
-    this._log('INFO', '🔵', message, data);
-  }
-  
-  /**
-   * Log a warning message with emoji
-   */
-  warn(message: string, data: Record<string, any> = {}) {
-    this._log('WARN', '🟠', message, data);
-  }
-  
-  /**
-   * Log an error message with emoji
-   */
-  error(message: string, data: Record<string, any> = {}) {
-    this._log('ERROR', '🔴', message, data);
-  }
-  
-  /**
-   * Log a debug message with emoji
-   */
-  debug(message: string, data: Record<string, any> = {}) {
-    this._log('DEBUG', '🟣', message, data);
-  }
-  
-  /**
-   * Log a success message with emoji
-   */
-  success(message: string, data: Record<string, any> = {}) {
-    this._log('SUCCESS', '🟢', message, data);
-  }
-  
-  /**
-   * Internal logging function with enhanced formatting
-   */
-  private _log(level: string, emoji: string, message: string, data: Record<string, any> = {}) {
-    // Create a summary line that's easy to scan
-    const summary = `${emoji} [${level}] [${this.component}] ${message}`;
-    
-    // Format the detailed log with indentation for better readability
-    console.log(JSON.stringify({
-      summary,
-      level,
+  private formatLogMessage(level: any, message: string, data?: any): string {
+    const timestamp = new Date().toISOString();
+    const logData = {
+      summary: `${level.emoji} [${level.prefix}] [${this.component}] ${message}`,
+      level: level.prefix,
       correlation_id: this.correlationId,
       component: this.component,
       message,
-      timestamp: new Date().toISOString(),
+      timestamp,
       ...data
-    }, null, 2));
+    };
+    
+    return JSON.stringify(logData, null, 2);
   }
-}
 
-/**
- * Create a child logger with a sub-component name
- */
-export function createChildLogger(parentLogger: Logger, subComponent: string): Logger {
-  // For now just return a new logger - in future we could track hierarchy
-  return new Logger(
-    // @ts-ignore - accessing private property
-    parentLogger.correlationId,
-    // @ts-ignore - accessing private property
-    `${parentLogger.component}/${subComponent}`
-  );
-}
-
-/**
- * Format a webhook event summary for quick understanding
- * @param eventType Type of event
- * @param entityId The entity being processed
- * @param isSuccess Whether the operation was successful
- * @param metadata Additional context
- * @returns Formatted summary string
- */
-export function formatWebhookSummary(
-  eventType: string,
-  entityId: string | number,
-  isSuccess: boolean = true,
-  metadata: Record<string, any> = {}
-): string {
-  // Select appropriate emoji based on event and success
-  let emoji = '📋';
-  
-  if (eventType.includes('error') || eventType.includes('failed')) {
-    emoji = '❌';
-  } else if (eventType.includes('success') || eventType.includes('completed')) {
-    emoji = '✅';
-  } else if (eventType.includes('warning')) {
-    emoji = '⚠️';
-  } else if (eventType.includes('received')) {
-    emoji = '📥';
-  } else if (eventType.includes('processing')) {
-    emoji = '⚙️';
-  } else if (eventType.includes('media')) {
-    emoji = '🖼️';
-  } else if (eventType.includes('text')) {
-    emoji = '💬';
-  }
-  
-  // Override with success/failure emoji if specified
-  if (!isSuccess) {
-    emoji = '❌';
-  }
-  
-  // Build a concise summary
-  let summary = `${emoji} ${eventType.replace(/_/g, ' ')}`;
-  
-  // Add entity information
-  if (entityId) {
-    // Truncate IDs that are too long
-    const displayId = typeof entityId === 'string' && entityId.length > 8 
-      ? `${entityId.substring(0, 8)}...` 
-      : entityId;
-    summary += ` [ID: ${displayId}]`;
-  }
-  
-  // Add important context if available
-  if (metadata.chat_id) {
-    summary += ` | Chat: ${metadata.chat_id}`;
-  }
-  
-  if (metadata.message_id) {
-    summary += ` | Msg: ${metadata.message_id}`;
-  }
-  
-  if (metadata.duration_ms) {
-    summary += ` | Duration: ${metadata.duration_ms}ms`;
-  }
-  
-  return summary;
-}
-
-/**
- * Log a message operation to both console and database
- * This is used by various handlers to keep a consistent log format
- */
-export async function logMessageOperation(
-  eventType: string,
-  entityId: string,
-  metadata: Record<string, any> = {},
-  errorMessage?: string
-): Promise<void> {
-  try {
-    // Create a formatted summary for the console
-    const summary = formatWebhookSummary(
-      eventType, 
-      entityId, 
-      !eventType.includes('error') && !eventType.includes('failed'),
-      metadata
-    );
-    
-    // Log to console
-    console.log(summary, metadata);
-    
-    // Import supabase client from _shared to avoid circular dependency
-    const { supabaseClient } = await import('../../_shared/supabase.ts');
-    
-    // Log to database
-    const { error } = await supabaseClient.from('unified_audit_logs').insert({
-      event_type: eventType,
-      entity_id: entityId,
-      correlation_id: metadata.correlation_id || crypto.randomUUID(),
-      metadata,
-      error_message: errorMessage
-    });
-    
-    if (error) {
-      console.error(`Error logging operation ${eventType}:`, error);
+  /**
+   * Generic log method
+   */
+  private log(level: any, message: string, data?: any): void {
+    if (level.value >= MIN_LOG_LEVEL) {
+      const formattedMessage = this.formatLogMessage(level, message, data);
+      console.log(`${level.color}${formattedMessage}${RESET}`);
     }
-  } catch (e) {
-    console.error(`Failed to log message operation ${eventType}:`, e);
   }
+
+  /**
+   * Log a debug message
+   */
+  debug(message: string, data?: any): void {
+    this.log(LOG_LEVELS.DEBUG, message, data);
+  }
+
+  /**
+   * Log an informational message
+   */
+  info(message: string, data?: any): void {
+    this.log(LOG_LEVELS.INFO, message, data);
+  }
+
+  /**
+   * Log a success message
+   */
+  success(message: string, data?: any): void {
+    this.log(LOG_LEVELS.SUCCESS, message, data);
+  }
+
+  /**
+   * Log a warning message
+   */
+  warn(message: string, data?: any): void {
+    this.log(LOG_LEVELS.WARN, message, data);
+  }
+
+  /**
+   * Log an error message
+   */
+  error(message: string, data?: any): void {
+    this.log(LOG_LEVELS.ERROR, message, data);
+  }
+
+  /**
+   * Log a fatal error message
+   */
+  fatal(message: string, data?: any): void {
+    this.log(LOG_LEVELS.FATAL, message, data);
+  }
+}
+
+/**
+ * Create a new logger instance
+ */
+export function createLogger(component: string, correlationId?: string): Logger {
+  return new Logger(correlationId || crypto.randomUUID(), component);
 }
