@@ -230,10 +230,9 @@ export async function xdelo_logMessageOperation(
 ): Promise<void> {
   try {
     // Ensure correlation ID is a string
-    const corrId = correlationId?.toString() || crypto.randomUUID().toString();
+    const corrId = correlationId?.toString() || crypto.randomUUID();
     
-    // Always generate a new UUID for entity_id to avoid type issues
-    // Original ID is preserved in metadata
+    // ALWAYS generate a new UUID to avoid type errors with UUID columns
     const validEntityId = crypto.randomUUID();
     
     // Store original entity ID in metadata
@@ -256,7 +255,7 @@ export async function xdelo_logMessageOperation(
     // Import supabase client
     const { supabaseClient } = await import('../supabase.ts');
     
-    // Log to database with a guaranteed valid UUID
+    // Insert with guaranteed valid UUID
     const { error } = await supabaseClient.from('unified_audit_logs').insert({
       event_type: eventType,
       entity_id: validEntityId,
@@ -266,7 +265,7 @@ export async function xdelo_logMessageOperation(
     });
     
     if (error) {
-      console.error(`Error logging operation ${eventType}:`, error);
+      console.error(`Error logging operation ${eventType}: ${error.message}`);
     }
   } catch (e) {
     console.error(`Failed to log message operation ${eventType}:`, e);

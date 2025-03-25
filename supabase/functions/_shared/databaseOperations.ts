@@ -1,9 +1,8 @@
 // Shared database operations for edge functions
 import { createSupabaseClient } from "./supabase.ts";
-import { SupabaseClient } from "@supabase/supabase-js";
 import { ProcessingState, AnalyzedContent } from "./types.ts";
 
-// Logger interface used by database operations - all methods required (not optional)
+// Logger interface used by database operations
 export interface LoggerInterface {
   error: (message: string, error: unknown) => void;
   info: (message: string, data?: unknown) => void;
@@ -27,7 +26,7 @@ interface UpdateProcessingStateParams {
 }
 
 /**
- * Log a processing event to the audit log
+ * Log a processing event to the audit log with guaranteed UUID format
  */
 export async function xdelo_logProcessingEvent(
   eventType: string,
@@ -40,10 +39,9 @@ export async function xdelo_logProcessingEvent(
     const supabase = createSupabaseClient();
     
     // Ensure correlation ID is a string
-    const corrId = correlationId?.toString() || crypto.randomUUID().toString();
+    const corrId = correlationId?.toString() || crypto.randomUUID();
     
-    // Always generate a new UUID for entity_id to avoid type issues
-    // Original ID is preserved in metadata
+    // ALWAYS generate a new UUID to avoid type errors with UUID columns
     const validEntityId = crypto.randomUUID();
     
     // Store original entity ID in metadata
@@ -52,7 +50,7 @@ export async function xdelo_logProcessingEvent(
       original_entity_id: entityId
     };
     
-    // Insert the log with a guaranteed valid UUID
+    // Insert with guaranteed valid UUID
     const { error } = await supabase.from("unified_audit_logs").insert({
       event_type: eventType,
       entity_id: validEntityId,
@@ -62,11 +60,7 @@ export async function xdelo_logProcessingEvent(
     });
     
     if (error) {
-      console.error(`Error logging event ${eventType}: ${error.message}`, { 
-        eventType, 
-        entityId: validEntityId, 
-        original_id: entityId
-      });
+      console.error(`Error logging event ${eventType}: ${error.message}`);
     }
   } catch (e) {
     console.error(`Exception in logProcessingEvent: ${e instanceof Error ? e.message : String(e)}`);
@@ -74,92 +68,7 @@ export async function xdelo_logProcessingEvent(
 }
 
 /**
- * Process a message caption using direct database calls
- */
-export async function xdelo_processMessageCaption(
-  messageId: string,
-  caption?: string,
-  correlationId?: string,
-  isEdit: boolean = false
-) {
-  try {
-    const supabase = createSupabaseClient();
-    
-    // Create a new correlation ID if one wasn't provided
-    const corrId = correlationId?.toString() || crypto.randomUUID().toString();
-    
-    // Call the database function directly
-    const { data, error } = await supabase.rpc(
-      'xdelo_process_caption_workflow',
-      {
-        p_message_id: messageId,
-        p_correlation_id: corrId,
-        p_force: isEdit
-      }
-    );
-    
-    if (error) {
-      throw new Error(`Error processing caption: ${error.message}`);
-    }
-    
-    return data;
-  } catch (error) {
-    console.error(`Error processing caption for message ${messageId}: ${error.message}`);
-    
-    // Log the error
-    await xdelo_logProcessingEvent(
-      "caption_processing_failed",
-      crypto.randomUUID().toString(),
-      correlationId || crypto.randomUUID().toString(),
-      { 
-        error: error.message,
-        message_id: messageId // Keep the original message ID in metadata
-      },
-      error.message
-    );
-    
-    throw error;
-  }
-}
-
-/**
- * Sync analyzed content across all messages in a media group
- */
-export async function xdelo_syncMediaGroupContent(
-  mediaGroupId: string,
-  sourceMessageId: string,
-  correlationId: string
-) {
-  try {
-    const supabase = createSupabaseClient();
-    
-    // Ensure correlation ID is a string
-    const corrId = correlationId?.toString() || crypto.randomUUID().toString();
-    
-    const { data, error } = await supabase.rpc(
-      "xdelo_sync_media_group_content",
-      {
-        p_media_group_id: mediaGroupId,
-        p_source_message_id: sourceMessageId,
-        p_correlation_id: corrId,
-        p_force_sync: true,
-        p_sync_edit_history: false
-      }
-    );
-    
-    if (error) {
-      throw new Error(`Failed to sync media group: ${error.message}`);
-    }
-    
-    return data;
-  } catch (error) {
-    console.error(`Error syncing media group: ${error.message}`);
-    throw error;
-  }
-}
-
-/**
- * Create a media message with duplicate detection based on file_unique_id
+ * Create a media message with duplicate detection
  */
 export async function xdelo_createMessage(
   messageData: any,
@@ -171,7 +80,7 @@ export async function xdelo_createMessage(
     // Ensure correlation_id is stored as string
     const correlationId = messageData.correlation_id ? 
       messageData.correlation_id.toString() : 
-      crypto.randomUUID().toString();
+      crypto.randomUUID();
     
     // Validate required fields
     if (!messageData.file_unique_id) {
@@ -199,12 +108,11 @@ export async function xdelo_createMessage(
       file_unique_id: messageData.file_unique_id
     });
 
-    // First check if a message with this file_unique_id already exists
-    // This is our primary duplicate detection mechanism
+    // Check for existing file
     if (messageData.file_unique_id) {
       const { data: existingFile, error: queryError } = await supabase
         .from('messages')
-        .select('id, file_unique_id, storage_path, telegram_message_id, chat_id, public_url')
+        .select('id, file_unique_id')
         .eq('file_unique_id', messageData.file_unique_id)
         .maybeSingle();
         
@@ -240,7 +148,7 @@ export async function xdelo_createMessage(
       }
     }
 
-    // Prepare message data with consistent format
+    // Prepare message data
     const safeMessageData = {
       telegram_message_id: messageData.telegram_message_id,
       chat_id: messageData.chat_id,
@@ -266,17 +174,8 @@ export async function xdelo_createMessage(
       updated_at: new Date().toISOString(),
       message_url: messageData.message_url
     };
-    
-    // Log the data being inserted
-    logger.info('Inserting message data', {
-      correlation_id: correlationId,
-      telegram_message_id: safeMessageData.telegram_message_id,
-      chat_id: safeMessageData.chat_id,
-      file_unique_id: safeMessageData.file_unique_id,
-      storage_path: safeMessageData.storage_path
-    });
 
-    // Insert message data directly
+    // Insert message data
     const { data, error } = await supabase
       .from('messages')
       .insert(safeMessageData)
@@ -284,16 +183,7 @@ export async function xdelo_createMessage(
       .single();
 
     if (error) {
-      // Enhanced error logging
       logger.error('Database insert error:', error);
-      
-      // Include more diagnostic information
-      if (typeof error === 'object') {
-        for (const [key, value] of Object.entries(error)) {
-          logger.error(`Error detail - ${key}:`, value);
-        }
-      }
-      
       throw error;
     }
 
@@ -303,7 +193,7 @@ export async function xdelo_createMessage(
 
     const messageId = data.id;
 
-    // Log message creation event
+    // Log message creation
     await xdelo_logProcessingEvent(
       'message_created',
       messageId,
@@ -312,41 +202,20 @@ export async function xdelo_createMessage(
         telegram_message_id: messageData.telegram_message_id,
         chat_id: messageData.chat_id,
         media_group_id: messageData.media_group_id,
-        is_forward: !!messageData.forward_info,
-        new_state: safeMessageData
+        is_forward: !!messageData.forward_info
       }
     );
 
     return { id: messageId, success: true };
   } catch (error) {
-    // Enhanced error logging with better error object handling
-    const errorMessage = error instanceof Error 
-      ? `${error.message}${error.stack ? ` (${error.stack})` : ''}`
-      : (typeof error === 'object' ? JSON.stringify(error) : String(error));
-      
+    const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('Error creating message:', errorMessage);
-    
-    // Include error object structure for better debugging
-    if (typeof error === 'object') {
-      logger.error('Error object structure:', {
-        type: typeof error,
-        constructor: error.constructor?.name,
-        keys: Object.keys(error),
-        code: 'code' in error ? (error as any).code : undefined,
-        message: 'message' in error ? (error as any).message : undefined
-      });
-    }
-    
-    // Extract error code with fallback
-    const errorCode = error instanceof Error && 'code' in error 
-      ? (error as any).code 
-      : (typeof error === 'object' && 'code' in error ? (error as any).code : 'DB_INSERT_ERROR');
     
     return { 
       id: '', 
       success: false, 
       error_message: errorMessage,
-      error_code: errorCode
+      error_code: error instanceof Error && 'code' in error ? (error as any).code : 'DB_INSERT_ERROR'
     };
   }
 }
@@ -364,10 +233,9 @@ export async function xdelo_createNonMediaMessage(
     // Ensure correlation_id is stored as string
     const correlationId = messageData.correlation_id ? 
       messageData.correlation_id.toString() : 
-      crypto.randomUUID().toString();
+      crypto.randomUUID();
     
-    logger.info('Creating non-media message with correlation_id', { 
-      correlation_id: correlationId,
+    logger.info('Creating non-media message', { 
       message_type: messageData.message_type
     });
 
@@ -397,8 +265,7 @@ export async function xdelo_createNonMediaMessage(
       {
         telegram_message_id: messageData.telegram_message_id,
         chat_id: messageData.chat_id,
-        message_type: messageData.message_type,
-        new_state: messageDataWithTimestamps
+        message_type: messageData.message_type
       }
     );
 
@@ -415,194 +282,7 @@ export async function xdelo_createNonMediaMessage(
 }
 
 /**
- * Update an existing message
- */
-export async function xdelo_updateMessage(
-  chatId: number,
-  messageId: number,
-  updateData: any,
-  logger: LoggerInterface
-): Promise<MessageResponse> {
-  try {
-    const supabase = createSupabaseClient();
-    
-    // Remove public_url if it's in the update data
-    if ('public_url' in updateData) {
-      delete updateData.public_url;
-    }
-    
-    // Log the start of update operation
-    logger.info('Updating message', {
-      chat_id: chatId,
-      telegram_message_id: messageId,
-      update_keys: Object.keys(updateData)
-    });
-
-    // Get existing message
-    const { data: existingMessage, error: fetchError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('chat_id', chatId)
-      .eq('telegram_message_id', messageId)
-      .single();
-
-    if (fetchError || !existingMessage) {
-      throw new Error(fetchError?.message || 'Message not found');
-    }
-
-    // Handle analyzed_content history
-    let old_analyzed_content = existingMessage.old_analyzed_content || [];
-    if (existingMessage.analyzed_content) {
-      old_analyzed_content = [...old_analyzed_content, existingMessage.analyzed_content];
-    }
-
-    // Prepare update data
-    const updateWithTimestamp = {
-      ...updateData,
-      old_analyzed_content,
-      updated_at: new Date().toISOString(),
-      edit_count: (existingMessage.edit_count || 0) + 1
-    };
-
-    // Update message
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update(updateWithTimestamp)
-      .eq('chat_id', chatId)
-      .eq('telegram_message_id', messageId);
-
-    if (updateError) throw updateError;
-
-    // Log update event
-    await xdelo_logProcessingEvent(
-      'message_updated',
-      existingMessage.id,
-      updateData.correlation_id?.toString() || crypto.randomUUID().toString(),
-      {
-        telegram_message_id: messageId,
-        chat_id: chatId,
-        media_group_id: existingMessage.media_group_id,
-        is_edit: true,
-        previous_state: existingMessage,
-        new_state: updateData
-      }
-    );
-
-    return { id: existingMessage.id, success: true };
-  } catch (error) {
-    logger.error('Error updating message:', error);
-    return { 
-      id: '', 
-      success: false, 
-      error_message: error instanceof Error ? error.message : String(error),
-      error_code: error instanceof Error && 'code' in error ? (error as {code?: string}).code : 'MESSAGE_UPDATE_ERROR'
-    };
-  }
-}
-
-/**
- * Update the processing state of a message
- */
-export async function xdelo_updateMessageProcessingState(
-  params: UpdateProcessingStateParams,
-  logger: LoggerInterface
-): Promise<MessageResponse> {
-  try {
-    const supabase = createSupabaseClient();
-    
-    // Log state update operation
-    logger.info('Updating message processing state', {
-      message_id: params.messageId,
-      new_state: params.state
-    });
-
-    // Get existing message
-    const { data: existingMessage, error: fetchError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('id', params.messageId)
-      .single();
-
-    if (fetchError || !existingMessage) {
-      throw new Error(fetchError?.message || 'Message not found');
-    }
-
-    // Prepare update data
-    const updateData: Record<string, unknown> = {
-      processing_state: params.state,
-      updated_at: new Date().toISOString()
-    };
-
-    if (params.analyzedContent) {
-      updateData.analyzed_content = params.analyzedContent;
-      updateData.processing_completed_at = new Date().toISOString();
-    }
-
-    if (params.error) {
-      updateData.error_message = params.error;
-      updateData.last_error_at = new Date().toISOString();
-      updateData.retry_count = (existingMessage.retry_count || 0) + 1;
-    }
-
-    if (params.processingStarted) {
-      updateData.processing_started_at = new Date().toISOString();
-    }
-
-    // Update message state
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update(updateData)
-      .eq('id', params.messageId);
-
-    if (updateError) throw updateError;
-
-    // Get correlation_id for logging
-    const correlationId = existingMessage?.correlation_id ? 
-      existingMessage.correlation_id.toString() : 
-      crypto.randomUUID().toString();
-
-    // Log state change
-    await xdelo_logProcessingEvent(
-      'processing_state_changed',
-      params.messageId,
-      correlationId,
-      {
-        telegram_message_id: existingMessage?.telegram_message_id,
-        chat_id: existingMessage?.chat_id,
-        media_group_id: existingMessage?.media_group_id,
-        retry_count: updateData.retry_count,
-        previous_state: { 
-          processing_state: existingMessage?.processing_state,
-          analyzed_content: existingMessage?.analyzed_content 
-        },
-        new_state: { 
-          processing_state: params.state,
-          analyzed_content: params.analyzedContent 
-        },
-        error_message: params.error
-      },
-      params.error
-    );
-
-    return { id: params.messageId, success: true };
-  } catch (error) {
-    if (logger?.error) {
-      logger.error('Error updating message processing state:', error);
-    } else {
-      console.error('Error updating message processing state:', error);
-    }
-    return { 
-      id: params.messageId, 
-      success: false, 
-      error_message: error instanceof Error ? error.message : String(error),
-      error_code: error instanceof Error && 'code' in error ? (error as {code?: string}).code : 'PROCESSING_STATE_UPDATE_ERROR'
-    };
-  }
-}
-
-/**
- * Check if a message with this file_unique_id already exists
- * Updated to also allow checking by telegramMessageId and chatId
+ * Check if a message already exists
  */
 export async function xdelo_checkDuplicateFile(
   telegramMessageId?: number,
@@ -612,13 +292,11 @@ export async function xdelo_checkDuplicateFile(
   try {
     const supabase = createSupabaseClient();
     
-    // Either both telegramMessageId and chatId must be provided, or fileUniqueId must be provided
     if ((!telegramMessageId || !chatId) && !fileUniqueId) {
-      console.warn('Attempted to check for duplicate file without sufficient identifiers');
+      console.warn('Attempted to check for duplicate without sufficient identifiers');
       return false;
     }
     
-    // Build the query based on the provided parameters
     let query = supabase.from('messages').select('id');
     
     if (fileUniqueId) {
@@ -630,14 +308,13 @@ export async function xdelo_checkDuplicateFile(
     const { data, error } = await query.maybeSingle();
       
     if (error) {
-      console.error('Error checking for duplicate file:', error);
-      // Don't throw - we want graceful fallback to creating a new record
+      console.error('Error checking for duplicate:', error);
       return false;
     }
     
     return !!data;
   } catch (error) {
-    console.error('Exception checking for duplicate file:', 
+    console.error('Exception checking for duplicate:', 
       error instanceof Error ? error.message : String(error));
     return false;
   }
