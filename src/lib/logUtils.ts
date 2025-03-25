@@ -1,5 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import { Logger, createLogger } from "./logger";
 
 export enum LogEventType {
   // Message events
@@ -35,48 +36,19 @@ export interface EventLogData {
   [key: string]: any;
 }
 
+// Default logger for backward compatibility
+const defaultLogger = createLogger('client-log');
+
 /**
  * Logs an event to the unified audit logs system
+ * Simplified version that uses the new Logger class
  */
 export const logEvent = async (
   eventType: LogEventType | string,
   entityId: string,
   metadata: EventLogData = {}
 ) => {
-  try {
-    // First try with unified_audit_logs table (preferred)
-    const { error: unifiedError } = await supabase
-      .from('unified_audit_logs')
-      .insert({
-        event_type: String(eventType),
-        entity_id: entityId,
-        metadata
-      });
-    
-    if (unifiedError) {
-      console.warn("Could not log to unified_audit_logs:", unifiedError.message);
-      
-      // Fallback to event_logs if it exists
-      try {
-        const { error: legacyError } = await supabase.rpc(
-          'xdelo_log_event' as any,
-          {
-            p_event_type: String(eventType),
-            p_message_id: entityId,
-            p_metadata: metadata
-          }
-        );
-        
-        if (legacyError) {
-          console.error("Failed to log event using fallback method:", legacyError.message);
-        }
-      } catch (rpcError) {
-        console.error("RPC function not available:", rpcError);
-      }
-    }
-  } catch (error) {
-    console.error("Error in logEvent:", error);
-  }
+  await defaultLogger.logEvent(eventType, entityId, metadata);
 };
 
 export default {

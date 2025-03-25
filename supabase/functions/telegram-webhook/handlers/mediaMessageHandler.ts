@@ -1,24 +1,22 @@
-import { supabaseClient } from '../../_shared/supabase.ts';
-import { corsHeaders } from '../../_shared/cors.ts';
+import { supabaseClient } from '../utils/supabase.ts';
+import { corsHeaders, addCorsHeaders } from '../utils/cors.ts';
 import { 
   xdelo_downloadMediaFromTelegram,
   xdelo_uploadMediaToStorage,
   xdelo_validateAndFixStoragePath,
   xdelo_isViewableMimeType,
-  xdelo_detectMimeType
-} from '../../_shared/mediaUtils.ts';
-import {
+  xdelo_detectMimeType,
   xdelo_findExistingFile,
   xdelo_processMessageMedia
-} from '../../_shared/mediaStorage.ts';
+} from '../utils/mediaUtils.ts';
 import { 
   TelegramMessage, 
   MessageContext, 
   ForwardInfo,
   MessageInput,
 } from '../types.ts';
-import { createMessage, checkDuplicateFile } from '../dbOperations.ts';
-import { constructTelegramMessageUrl } from '../../_shared/messageUtils.ts';
+import { xdelo_createMessage, xdelo_logProcessingEvent } from '../dbOperations.ts';
+import { constructTelegramMessageUrl } from '../utils/messageUtils.ts';
 
 // Get Telegram bot token from environment
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
@@ -75,13 +73,13 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
         logError instanceof Error ? logError.message : String(logError)}`);
     }
     
-    return new Response(
+    return addCorsHeaders(new Response(
       JSON.stringify({ 
         error: errorMessage,
         correlationId: context.correlationId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    );
+    ));
   }
 }
 
@@ -275,10 +273,10 @@ async function xdelo_handleEditedMediaMessage(
       }
     }
 
-    return new Response(
+    return addCorsHeaders(new Response(
       JSON.stringify({ success: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    ));
   }
   
   // If existing message not found, handle as new message
@@ -295,35 +293,7 @@ async function xdelo_handleNewMediaMessage(
 ): Promise<Response> {
   const { correlationId, logger } = context;
   
-  // First check if this is a duplicate message we've already processed
   try {
-    const isDuplicate = await checkDuplicateFile(
-      supabaseClient,
-      message.message_id,
-      message.chat.id
-    );
-    
-    if (isDuplicate) {
-      logger?.info(`Duplicate message detected: ${message.message_id} in chat ${message.chat.id}`);
-      
-      // Log the duplicate detection
-      await xdelo_logProcessingEvent(
-        "duplicate_message_detected",
-        message.message_id.toString(),
-        correlationId,
-        {
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          media_group_id: message.media_group_id
-        }
-      );
-      
-      return new Response(
-        JSON.stringify({ success: true, duplicate: true, correlationId }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
     // Process the media message
     const messageUrl = constructTelegramMessageUrl(message.chat.id, message.message_id);
     
@@ -398,8 +368,31 @@ async function xdelo_handleNewMediaMessage(
       message_url: messageUrl
     };
     
-    // Create the message
-    const result = await createMessage(supabaseClient, messageInput, logger);
+    // Create the message - duplicate detection is built into this function
+    const result = await xdelo_createMessage(supabaseClient, messageInput, logger);
+    
+    // Check if this is a duplicate file that was detected by xdelo_createMessage
+    if (result.success && result.error_message === "File already exists in database") {
+      logger?.info(`Duplicate file detected: ${message.message_id} in chat ${message.chat.id}`);
+      
+      // Log the duplicate detection
+      await xdelo_logProcessingEvent(
+        "duplicate_file_detected",
+        message.message_id.toString(),
+        correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          media_group_id: message.media_group_id,
+          file_unique_id: telegramFile.file_unique_id
+        }
+      );
+      
+      return addCorsHeaders(new Response(
+        JSON.stringify({ success: true, duplicate: true, id: result.id, correlationId }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      ));
+    }
     
     if (!result.success) {
       logger?.error(`Failed to create message: ${result.error_message}`, {
@@ -430,10 +423,10 @@ async function xdelo_handleNewMediaMessage(
       storage_path: mediaResult.fileInfo.storage_path
     });
     
-    return new Response(
+    return addCorsHeaders(new Response(
       JSON.stringify({ success: true, id: result.id, correlationId }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    ));
   } catch (createError) {
     logger?.error(`Error creating new media message: ${
       createError instanceof Error ? createError.message : String(createError)}`, {
@@ -466,32 +459,5 @@ async function xdelo_handleNewMediaMessage(
     
     // Re-throw to be caught by the main handler
     throw createError;
-  }
-}
-
-/**
- * Import from shared/databaseOperations.ts
- */
-async function xdelo_logProcessingEvent(
-  eventType: string,
-  entityId: string,
-  correlationId: string,
-  metadata?: Record<string, any>,
-  errorMessage?: string
-): Promise<void> {
-  try {
-    const { error } = await supabaseClient.from('unified_audit_logs').insert({
-      event_type: eventType,
-      entity_id: entityId,
-      correlation_id: correlationId,
-      metadata,
-      error_message: errorMessage
-    });
-    
-    if (error) {
-      console.error(`Error logging event ${eventType}:`, error);
-    }
-  } catch (e) {
-    console.error(`Exception logging event ${eventType}:`, e);
   }
 }

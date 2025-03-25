@@ -3392,12 +3392,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      refresh_materialized_view_secure: {
-        Args: {
-          view_name: string
-        }
-        Returns: undefined
-      }
       refresh_purchase_order_summary: {
         Args: Record<PropertyKey, never>
         Returns: undefined
