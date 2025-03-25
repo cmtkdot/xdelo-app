@@ -38,6 +38,7 @@ The Telegram webhook system receives, processes, and stores messages from Telegr
 - **Retry Logic**: Robust download with exponential backoff for failures
 - **File Recovery**: Can redownload missing files from Telegram
 - **Simplified Validation**: Permissive file ID validation to accommodate Telegram API changes
+- **Fallback Strategies**: Checks existing storage before failing download operations
 
 ### Message Groups
 - Groups related media with `media_group_id`
@@ -87,3 +88,8 @@ unified_audit_logs ─┬── operations log
 - Telegram file IDs are treated permissively to accommodate API changes
 - Only basic sanitization (trimming) is applied to file IDs
 - Detailed error logs help identify API issues when they occur
+
+### Media Download Issues
+- If direct download from Telegram fails, system checks if file exists in storage
+- File accessibility errors are usually due to expired file IDs (Telegram limits access time)
+- Media can be manually reprocessed using the `reuploadMediaFromTelegram` function

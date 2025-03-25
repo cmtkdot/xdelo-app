@@ -1,3 +1,4 @@
+
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from "./cors.ts";
 
@@ -456,7 +457,7 @@ export async function xdelo_uploadMediaToStorage(
 }
 
 /**
- * Download media from Telegram API with simplified validation
+ * Download media from Telegram API with improved fallback strategies
  */
 export async function xdelo_downloadMediaFromTelegram(
   fileId: string,
@@ -470,6 +471,7 @@ export async function xdelo_downloadMediaFromTelegram(
   mimeType?: string;
   error?: string;
   attempts?: number;
+  usedFallback?: boolean;
 }> {
   try {
     // Validate inputs
@@ -497,43 +499,79 @@ export async function xdelo_downloadMediaFromTelegram(
       mimeType
     );
     
-    // First, get the file path from Telegram
+    // First, try to get the file path from Telegram
     const getFileUrl = `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${sanitizedFileId}`;
     
     console.log(`Getting file info for file_id: ${sanitizedFileId.substring(0, 10)}...`);
     
-    // Use rate limiter to prevent API throttling
-    const getFileResponse = await rateLimitTracker.add(async () => 
-      xdelo_fetchWithRetry(getFileUrl)
-    );
-    
-    const fileInfo = await getFileResponse.json();
-    
-    if (!fileInfo.ok || !fileInfo.result || !fileInfo.result.file_path) {
-      console.error('Failed to get file info from Telegram:', JSON.stringify(fileInfo));
-      throw new Error(`Failed to get file info from Telegram: ${JSON.stringify(fileInfo)}`);
+    try {
+      // Use rate limiter to prevent API throttling
+      const getFileResponse = await rateLimitTracker.add(async () => 
+        xdelo_fetchWithRetry(getFileUrl)
+      );
+      
+      const fileInfo = await getFileResponse.json();
+      
+      if (!fileInfo.ok || !fileInfo.result || !fileInfo.result.file_path) {
+        console.error('Failed to get file info from Telegram:', JSON.stringify(fileInfo));
+        throw new Error(`Failed to get file info from Telegram: ${JSON.stringify(fileInfo)}`);
+      }
+      
+      console.log(`File info received, downloading from path: ${fileInfo.result.file_path}`);
+      
+      // Now download the actual file
+      const downloadUrl = `https://api.telegram.org/file/bot${telegramBotToken}/${fileInfo.result.file_path}`;
+      
+      const downloadResponse = await rateLimitTracker.add(async () => 
+        xdelo_fetchWithRetry(downloadUrl)
+      );
+      
+      // Create a blob from the response
+      const blob = await downloadResponse.blob();
+      console.log(`Download complete, file size: ${blob.size} bytes`);
+      
+      // Return the downloaded file info
+      return {
+        success: true,
+        blob: blob,
+        storagePath: standardStoragePath,
+        mimeType: mimeType,
+        usedFallback: false
+      };
+    } catch (downloadError) {
+      // Log the download failure
+      console.error(`Primary download method failed: ${downloadError.message}`);
+      
+      // Check if there's an existing copy in storage we can use
+      console.log(`Checking if file exists in storage: ${standardStoragePath}`);
+      const supabase = createSupabaseClient();
+      const fileExistsInStorage = await xdelo_verifyFileExists(supabase, standardStoragePath);
+      
+      if (fileExistsInStorage) {
+        console.log(`File exists in storage, skipping download: ${standardStoragePath}`);
+        
+        // Get the file's public URL
+        const { data: urlData } = await supabase
+          .storage
+          .from('telegram-media')
+          .getPublicUrl(standardStoragePath);
+        
+        // Download the blob from storage to be consistent with the regular flow
+        const storageResponse = await fetch(urlData.publicUrl);
+        const blob = await storageResponse.blob();
+        
+        return {
+          success: true,
+          blob: blob,
+          storagePath: standardStoragePath,
+          mimeType: mimeType,
+          usedFallback: true
+        };
+      }
+      
+      // If we couldn't find it in storage either, then we fail
+      throw new Error(`Failed to download file: ${downloadError.message} and file not found in storage`);
     }
-    
-    console.log(`File info received, downloading from path: ${fileInfo.result.file_path}`);
-    
-    // Now download the actual file
-    const downloadUrl = `https://api.telegram.org/file/bot${telegramBotToken}/${fileInfo.result.file_path}`;
-    
-    const downloadResponse = await rateLimitTracker.add(async () => 
-      xdelo_fetchWithRetry(downloadUrl)
-    );
-    
-    // Create a blob from the response
-    const blob = await downloadResponse.blob();
-    console.log(`Download complete, file size: ${blob.size} bytes`);
-    
-    // Return the downloaded file info
-    return {
-      success: true,
-      blob: blob,
-      storagePath: standardStoragePath,
-      mimeType: mimeType
-    };
   } catch (error) {
     console.error(`Failed to download media: ${error.message}`);
     return {
@@ -544,7 +582,7 @@ export async function xdelo_downloadMediaFromTelegram(
 }
 
 /**
- * Process message media from Telegram, handling download and upload
+ * Process message media from Telegram, handling download and upload with improved fallback strategies
  */
 export async function xdelo_processMessageMedia(
   message: any,
@@ -556,7 +594,8 @@ export async function xdelo_processMessageMedia(
   success: boolean; 
   isDuplicate: boolean; 
   fileInfo: any; 
-  error?: string 
+  error?: string;
+  usedFallback?: boolean;
 }> {
   try {
     // First check if this is a duplicate file
@@ -591,7 +630,7 @@ export async function xdelo_processMessageMedia(
     const detectedMimeType = xdelo_detectMimeType(message);
     console.log(`Detected MIME type: ${detectedMimeType}`);
     
-    // Download from Telegram
+    // Download from Telegram with improved fallback strategy
     const downloadResult = await xdelo_downloadMediaFromTelegram(
       sanitizedFileId,
       fileUniqueId,
@@ -604,7 +643,7 @@ export async function xdelo_processMessageMedia(
       throw new Error(`Failed to download media: ${downloadResult.error || 'Unknown error'}`);
     }
     
-    console.log(`Download successful, uploading to storage path: ${downloadResult.storagePath}`);
+    console.log(`Download successful${downloadResult.usedFallback ? ' (using fallback)' : ''}, uploading to storage path: ${downloadResult.storagePath}`);
     
     // Upload to Supabase Storage
     const uploadResult = await xdelo_uploadMediaToStorage(
@@ -624,6 +663,7 @@ export async function xdelo_processMessageMedia(
     return {
       success: true,
       isDuplicate: false,
+      usedFallback: downloadResult.usedFallback,
       fileInfo: {
         storage_path: downloadResult.storagePath,
         mime_type: downloadResult.mimeType || detectedMimeType,
@@ -641,4 +681,3 @@ export async function xdelo_processMessageMedia(
     };
   }
 }
-

@@ -125,10 +125,11 @@ export function useBatchOperations(
       messageIds.forEach(id => addProcessingMessageId(id));
       
       // Call the edge function to repair media batch
-      const { data, error } = await supabase.functions.invoke('media-management', {
+      const { data, error } = await supabase.functions.invoke('xdelo_repair_media_batch', {
         body: { 
-          action: 'repair_media_batch',
-          messageIds 
+          messageIds,
+          forceReupload: true, // Force reupload to handle expired file IDs
+          timeout: 120000 // Longer timeout for batch operations
         }
       });
       

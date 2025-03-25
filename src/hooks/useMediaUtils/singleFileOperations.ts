@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from '@/hooks/useToast';
@@ -9,6 +8,7 @@ interface UseSingleFileOperationsResult {
   isDeleting: boolean;
   uploadFile: (file: File, storagePath?: string) => Promise<string | null>;
   deleteFile: (filePath: string) => Promise<boolean>;
+  reuploadMediaFromTelegram: (messageId: string) => Promise<boolean>;
 }
 
 /**
@@ -113,6 +113,73 @@ export function useSingleFileOperations(): UseSingleFileOperationsResult {
     }
   };
 
+  /**
+   * Force reupload of media from Telegram for a specific message
+   * This is useful when file_ids expire or become invalid
+   */
+  const reuploadMediaFromTelegram = async (messageId: string): Promise<boolean> => {
+    setIsUploading(true);
+    try {
+      // Call the dedicated edge function for reuploading from Telegram
+      const { data, error } = await supabase.functions.invoke('xdelo_reupload_media', {
+        body: { 
+          messageId,
+          forceReupload: true,
+          skipExistingCheck: true
+        }
+      });
+      
+      if (error) {
+        throw new Error(`Reupload failed: ${error.message}`);
+      }
+      
+      if (!data?.success) {
+        throw new Error(data?.message || 'Reupload operation failed');
+      }
+      
+      toast({
+        title: "Media Reuploaded",
+        description: "Media has been successfully reuploaded from Telegram."
+      });
+      
+      // Log the successful operation
+      await logEvent(
+        LogEventType.MEDIA_OPERATION,
+        messageId,
+        {
+          operation: 'reupload',
+          success: true,
+          result: data
+        }
+      );
+      
+      return true;
+    } catch (error) {
+      console.error("Error reuploading media:", error);
+      
+      toast({
+        title: "Reupload Failed",
+        description: error.message || "Failed to reupload media from Telegram.",
+        variant: "destructive"
+      });
+      
+      // Log the failed operation
+      await logEvent(
+        LogEventType.ERROR,
+        messageId,
+        {
+          operation: 'reupload',
+          success: false,
+          error: error.message
+        }
+      );
+      
+      return false;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   // Log completion of sync operation
   const logSyncCompletion = async (entityId: string, details: any) => {
     try {
@@ -134,5 +201,6 @@ export function useSingleFileOperations(): UseSingleFileOperationsResult {
     isDeleting,
     uploadFile,
     deleteFile,
+    reuploadMediaFromTelegram
   };
 }
