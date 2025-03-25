@@ -6,17 +6,20 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from '@/hooks/useToast';
 import { Message } from '@/types';
 import { formatDate } from '@/lib/utils';
+import { MessageDebugActions } from './MessageDebugActions';
 
 interface MessageDetailsPanelProps {
   message: Message;
   onEdit?: (message: Message) => void;
   onDelete?: (message: Message) => void;
+  onRefresh?: () => void;
 }
 
 export function MessageDetailsPanel({
   message,
   onEdit,
-  onDelete
+  onDelete,
+  onRefresh
 }: MessageDetailsPanelProps) {
   const { toast } = useToast();
 
@@ -96,7 +99,7 @@ export function MessageDetailsPanel({
       <CardContent className="space-y-4">
         <div>
           <h3 className="text-lg font-medium">
-            {message.analyzed_content?.product_name || 'Untitled Product'}
+            {message.analyzed_content?.product_name || message.product_name || 'Untitled Product'}
           </h3>
           <p className="text-sm text-muted-foreground">
             {formattedDate}
@@ -169,6 +172,9 @@ export function MessageDetailsPanel({
         </div>
 
         {renderAnalyzedContent()}
+        
+        {/* Add the message debug actions */}
+        <MessageDebugActions message={message} onSuccess={onRefresh} />
 
         <div className="flex space-x-2 pt-4">
           {onEdit && (

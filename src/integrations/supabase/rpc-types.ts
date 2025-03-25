@@ -1,3 +1,4 @@
+
 /**
  * Type definitions for RPC functions
  * This helps TypeScript recognize custom RPC functions in the project
@@ -121,6 +122,20 @@ declare module "@supabase/supabase-js" {
         force?: boolean;
         correlationId?: string;
       }
+    ): { data: T; error: null } | { data: null; error: Error };
+    
+    // Add RPC for reprocessing messages in batch
+    rpc<T = { message_id: string; media_group_id?: string; success: boolean; error?: string }[]>(
+      fn: "xdelo_reprocess_messages",
+      params: {
+        p_limit?: number;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
+
+    // Add RPC for cleaning up duplicate functions
+    rpc<T = { functions_checked: number; duplicates_found: number; details: any[] }>(
+      fn: "xdelo_cleanup_duplicate_functions",
+      params?: {}
     ): { data: T; error: null } | { data: null; error: Error };
 
     // Add any other custom RPC functions here...

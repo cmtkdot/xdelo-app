@@ -1252,6 +1252,7 @@ export type Database = {
           correlation_id: string | null
           created_at: string
           deleted_from_telegram: boolean | null
+          duplicate_of_message_id: string | null
           duplicate_reference_id: string | null
           duration: number | null
           edit_count: number | null
@@ -1279,6 +1280,7 @@ export type Database = {
           id: string
           is_channel_post: string | null
           is_duplicate: boolean | null
+          is_duplicate_content: boolean | null
           is_edited: boolean | null
           is_edited_channel_post: boolean | null
           is_forward: boolean | null
@@ -1343,6 +1345,7 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           deleted_from_telegram?: boolean | null
+          duplicate_of_message_id?: string | null
           duplicate_reference_id?: string | null
           duration?: number | null
           edit_count?: number | null
@@ -1370,6 +1373,7 @@ export type Database = {
           id?: string
           is_channel_post?: string | null
           is_duplicate?: boolean | null
+          is_duplicate_content?: boolean | null
           is_edited?: boolean | null
           is_edited_channel_post?: boolean | null
           is_forward?: boolean | null
@@ -1434,6 +1438,7 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           deleted_from_telegram?: boolean | null
+          duplicate_of_message_id?: string | null
           duplicate_reference_id?: string | null
           duration?: number | null
           edit_count?: number | null
@@ -1461,6 +1466,7 @@ export type Database = {
           id?: string
           is_channel_post?: string | null
           is_duplicate?: boolean | null
+          is_duplicate_content?: boolean | null
           is_edited?: boolean | null
           is_edited_channel_post?: boolean | null
           is_forward?: boolean | null
@@ -1541,6 +1547,34 @@ export type Database = {
           {
             foreignKeyName: "fk_message_caption"
             columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_compatibility"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_duplicate_of_message_id_fkey"
+            columns: ["duplicate_of_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_duplicate_of_message_id_fkey"
+            columns: ["duplicate_of_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_duplicate_of_message_id_fkey"
+            columns: ["duplicate_of_message_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_forwards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_duplicate_of_message_id_fkey"
+            columns: ["duplicate_of_message_id"]
             isOneToOne: false
             referencedRelation: "v_messages_compatibility"
             referencedColumns: ["id"]
@@ -1640,14 +1674,13 @@ export type Database = {
           chat_type: Database["public"]["Enums"]["telegram_chat_type"]
           correlation_id: string | null
           created_at: string
-          edit_count: number | null
           edit_date: string | null
           edit_history: Json | null
           error_message: string | null
           forward_info: Json | null
           id: string
           is_edited: boolean
-          is_forward: boolean | null
+          is_forward: string | null
           last_error_at: string | null
           message_text: string | null
           message_type: string
@@ -1675,14 +1708,13 @@ export type Database = {
           chat_type: Database["public"]["Enums"]["telegram_chat_type"]
           correlation_id?: string | null
           created_at?: string
-          edit_count?: number | null
           edit_date?: string | null
           edit_history?: Json | null
           error_message?: string | null
           forward_info?: Json | null
           id?: string
           is_edited?: boolean
-          is_forward?: boolean | null
+          is_forward?: string | null
           last_error_at?: string | null
           message_text?: string | null
           message_type: string
@@ -1710,14 +1742,13 @@ export type Database = {
           chat_type?: Database["public"]["Enums"]["telegram_chat_type"]
           correlation_id?: string | null
           created_at?: string
-          edit_count?: number | null
           edit_date?: string | null
           edit_history?: Json | null
           error_message?: string | null
           forward_info?: Json | null
           id?: string
           is_edited?: boolean
-          is_forward?: boolean | null
+          is_forward?: string | null
           last_error_at?: string | null
           message_text?: string | null
           message_type?: string
@@ -1972,36 +2003,7 @@ export type Database = {
           telegram_message_id?: number | null
           user_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_unified_audit_logs_messages"
-            columns: ["entity_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_unified_audit_logs_messages"
-            columns: ["entity_id"]
-            isOneToOne: false
-            referencedRelation: "messages_view"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_unified_audit_logs_messages"
-            columns: ["entity_id"]
-            isOneToOne: false
-            referencedRelation: "v_message_forwards"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_unified_audit_logs_messages"
-            columns: ["entity_id"]
-            isOneToOne: false
-            referencedRelation: "v_messages_compatibility"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       vector_documents: {
         Row: {
@@ -2869,36 +2871,7 @@ export type Database = {
           message_id?: string | null
           metadata?: Json | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_unified_audit_logs_messages"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_unified_audit_logs_messages"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages_view"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_unified_audit_logs_messages"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "v_message_forwards"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_unified_audit_logs_messages"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "v_messages_compatibility"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Functions: {
@@ -3557,21 +3530,6 @@ export type Database = {
             }
             Returns: string
           }
-      xdelo_diagnose_media_group_issues: {
-        Args: {
-          p_limit?: number
-        }
-        Returns: {
-          media_group_id: string
-          total_count: number
-          synced_count: number
-          unsynced_count: number
-          error_count: number
-          original_caption_count: number
-          status: string
-          recommendation: string
-        }[]
-      }
       xdelo_fail_message_processing: {
         Args: {
           p_message_id: string
@@ -3601,18 +3559,6 @@ export type Database = {
           p_file_unique_id: string
         }
         Returns: string
-      }
-      xdelo_fix_audit_log_uuids: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      xdelo_fix_edit_count_data_type: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      xdelo_fix_is_forward_data_type: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
       }
       xdelo_fix_public_urls: {
         Args: {
@@ -3791,16 +3737,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_logprocessingevent: {
-        Args: {
-          p_event_type: string
-          p_entity_id: string
-          p_correlation_id: string
-          p_metadata?: Json
-          p_error_message?: string
-        }
-        Returns: string
-      }
       xdelo_mark_for_redownload: {
         Args: {
           p_message_id: string
@@ -3811,14 +3747,6 @@ export type Database = {
       xdelo_parse_caption: {
         Args: {
           p_caption: string
-        }
-        Returns: Json
-      }
-      xdelo_process_caption_atomic: {
-        Args: {
-          p_message_id: string
-          p_correlation_id?: string
-          p_force?: boolean
         }
         Returns: Json
       }
@@ -3834,13 +3762,6 @@ export type Database = {
         Args: {
           p_message_id: string
           p_action: string
-        }
-        Returns: Json
-      }
-      xdelo_repair_media_group: {
-        Args: {
-          p_media_group_id: string
-          p_correlation_id?: string
         }
         Returns: Json
       }
@@ -3892,28 +3813,20 @@ export type Database = {
             Args: {
               p_source_message_id: string
               p_media_group_id: string
-              p_correlation_id: string
-              p_force_sync?: boolean
-              p_sync_edit_history?: boolean
+              p_correlation_id?: string
             }
-            Returns: Json
+            Returns: undefined
           }
         | {
             Args: {
               p_source_message_id: string
               p_media_group_id: string
               p_correlation_id?: string
+              p_force_sync?: boolean
+              p_sync_edit_history?: boolean
             }
-            Returns: undefined
+            Returns: Json
           }
-      xdelo_sync_media_group_enhanced: {
-        Args: {
-          p_media_group_id: string
-          p_source_message_id: string
-          p_correlation_id?: string
-        }
-        Returns: Json
-      }
       xdelo_update_message_processing_state: {
         Args: {
           p_message_id: string
