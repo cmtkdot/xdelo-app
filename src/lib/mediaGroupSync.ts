@@ -1,150 +1,50 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { callUnifiedProcessor } from './unifiedProcessor';
+import { 
+  processMessageCaption, 
+  syncMediaGroup,
+  scheduleDelayedSync 
+} from './unifiedProcessor';
 
 /**
- * Utility function to manually trigger media group synchronization
- * for a specific message or media group
+ * Process a media group's content synchronization after a delay
+ * 
+ * @param mediaGroupId Media group ID to sync
+ * @param messageId A message in the group to use for reference
+ * @returns Result of the operation
  */
-export async function syncMediaGroup(
+export async function processDelayedMediaGroupSync(
   mediaGroupId: string,
-  sourceMessageId?: string,
-  options = { force: true }
+  messageId: string
 ): Promise<{
   success: boolean;
-  mediaGroupId: string;
-  sourceMessageId?: string;
-  syncedCount?: number;
+  data?: any;
   error?: string;
 }> {
-  try {
-    console.log(`Manual media group sync initiated for group ${mediaGroupId}`);
-    
-    // If source message ID is not provided, try to find the best message
-    // to use as the source of truth for this group
-    if (!sourceMessageId) {
-      const { data: findResult, error: findError } = await supabase.rpc<string>(
-        'xdelo_find_caption_message',
-        { p_media_group_id: mediaGroupId }
-      );
-      
-      if (findError) {
-        throw new Error(`Error finding caption message: ${findError.message}`);
-      }
-      
-      sourceMessageId = findResult;
-      
-      if (!sourceMessageId) {
-        throw new Error(`Could not find a suitable caption message in group ${mediaGroupId}`);
-      }
-      
-      console.log(`Found source message ${sourceMessageId} for group ${mediaGroupId}`);
-    }
-    
-    // Use the unified processor for syncing
-    const result = await callUnifiedProcessor('sync_media_group', {
-      messageId: sourceMessageId,
-      mediaGroupId,
-      force: options.force
-    });
-    
-    if (!result.success) {
-      throw new Error(result.error || 'Media group sync failed');
-    }
-    
-    console.log('Media group sync result:', result.data);
-    
-    // Extract the updated count from the result
-    const updatedCount = result.data?.updated_count || 0;
-    
-    return {
-      success: true,
-      mediaGroupId,
-      sourceMessageId,
-      syncedCount: updatedCount
-    };
-    
-  } catch (error: any) {
-    console.error('Error in manual media group sync:', error);
-    return {
-      success: false,
-      mediaGroupId,
-      error: error.message
-    };
-  }
+  return scheduleDelayedSync(messageId, mediaGroupId);
 }
 
 /**
- * Batch repair multiple media groups that might have sync issues
+ * Find the caption source in a media group
+ * 
+ * @param mediaGroupId Media group ID
+ * @returns ID of the message containing the caption, or null if none found
  */
-export async function repairMediaGroups(limit = 10): Promise<{
-  success: boolean;
-  repaired?: number;
-  details?: any[];
-  message?: string;
-  error?: string;
-}> {
+export async function findCaptionMessageInGroup(
+  mediaGroupId: string
+): Promise<string | null> {
   try {
-    // Find media groups that need repair
-    const { data: mediaGroups, error: findError } = await supabase
-      .from('messages')
-      .select('media_group_id')
-      .not('media_group_id', 'is', null)
-      .filter('group_caption_synced', 'is', null)
-      .limit(limit);
+    const { data, error } = await supabase.rpc('xdelo_find_caption_message', {
+      p_media_group_id: mediaGroupId
+    });
     
-    if (findError) {
-      throw new Error(`Failed to find media groups: ${findError.message}`);
+    if (error || !data) {
+      return null;
     }
     
-    if (!mediaGroups || mediaGroups.length === 0) {
-      return {
-        success: true,
-        repaired: 0,
-        message: "No media groups need repair"
-      };
-    }
-    
-    // Get unique media group IDs
-    const uniqueGroups = [...new Set(mediaGroups.map(m => m.media_group_id))];
-    
-    // Repair each media group using the delayed sync operation
-    const results = [];
-    
-    for (const groupId of uniqueGroups) {
-      try {
-        // Use the delayed sync operation which automatically finds the best source message
-        const result = await callUnifiedProcessor('delayed_sync', {
-          messageId: 'auto-detect', // This will be ignored in the function
-          mediaGroupId: groupId
-        });
-        
-        results.push({
-          media_group_id: groupId,
-          success: result.success,
-          synced_count: result.data?.updated_count || 0,
-          error: result.error
-        });
-      } catch (error) {
-        results.push({
-          media_group_id: groupId,
-          success: false,
-          error: error.message
-        });
-      }
-    }
-    
-    return {
-      success: true,
-      repaired: results.filter(r => r.success).length,
-      details: results
-    };
-    
-  } catch (error: any) {
-    console.error('Error repairing media groups:', error);
-    return {
-      success: false,
-      error: error.message
-    };
+    return data;
+  } catch (error) {
+    console.error('Error finding caption message:', error);
+    return null;
   }
 }

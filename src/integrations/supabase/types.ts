@@ -3490,6 +3490,10 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_cleanup_duplicate_functions: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       xdelo_cleanup_orphaned_audit_logs: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3781,6 +3785,17 @@ export type Database = {
           updated_count: number
         }[]
       }
+      xdelo_reprocess_messages: {
+        Args: {
+          p_limit?: number
+        }
+        Returns: {
+          message_id: string
+          media_group_id: string
+          success: boolean
+          error: string
+        }[]
+      }
       xdelo_set_message_processing: {
         Args: {
           p_message_id: string
@@ -3808,25 +3823,16 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_sync_media_group_content:
-        | {
-            Args: {
-              p_source_message_id: string
-              p_media_group_id: string
-              p_correlation_id?: string
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_source_message_id: string
-              p_media_group_id: string
-              p_correlation_id?: string
-              p_force_sync?: boolean
-              p_sync_edit_history?: boolean
-            }
-            Returns: Json
-          }
+      xdelo_sync_media_group_content: {
+        Args: {
+          p_source_message_id: string
+          p_media_group_id: string
+          p_correlation_id?: string
+          p_force_sync?: boolean
+          p_sync_edit_history?: boolean
+        }
+        Returns: Json
+      }
       xdelo_update_message_processing_state: {
         Args: {
           p_message_id: string
@@ -3835,24 +3841,15 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_update_message_with_analyzed_content:
-        | {
-            Args: {
-              p_message_id: string
-              p_analyzed_content: Json
-              p_correlation_id?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_message_id: string
-              p_analyzed_content: Json
-              p_processing_state?: string
-              p_is_edit?: boolean
-            }
-            Returns: Json
-          }
+      xdelo_update_message_with_analyzed_content: {
+        Args: {
+          p_message_id: string
+          p_analyzed_content: Json
+          p_processing_state?: string
+          p_is_edit?: boolean
+        }
+        Returns: Json
+      }
       xdelo_update_product_matching_config: {
         Args: {
           p_config: Json
