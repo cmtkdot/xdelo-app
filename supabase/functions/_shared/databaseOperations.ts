@@ -1,4 +1,3 @@
-
 // Shared database operations for edge functions
 import { createSupabaseClient } from "./supabase.ts";
 import { ProcessingState, AnalyzedContent } from "./types.ts";

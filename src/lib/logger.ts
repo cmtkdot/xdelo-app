@@ -1,9 +1,9 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { LogEventType } from "./logUtils";
+import { LogEventType } from "@/types/api/LogEventType";
 
 /**
- * Simplified logger for both client and server use
+ * Unified logger for client and server use
  */
 export class Logger {
   private context: string;
@@ -11,7 +11,7 @@ export class Logger {
 
   constructor(context: string, correlationId?: string) {
     this.context = context;
-    this.correlationId = correlationId || crypto.randomUUID().toString();
+    this.correlationId = correlationId || crypto.randomUUID();
   }
 
   /**
@@ -23,31 +23,28 @@ export class Logger {
     metadata: Record<string, any> = {}
   ): Promise<void> {
     try {
-      // Ensure we have a valid UUID for database storage
-      const validEntityId = this.ensureValidUuid(entityId);
-      
       // Add standard metadata
       const enhancedMetadata = {
         ...metadata,
         context: this.context,
         timestamp: new Date().toISOString(),
-        original_entity_id: entityId !== validEntityId ? entityId : undefined
       };
-      
-      // Clean up undefined values
-      Object.keys(enhancedMetadata).forEach(key => {
-        if (enhancedMetadata[key] === undefined) {
-          delete enhancedMetadata[key];
-        }
-      });
 
-      // Log to console for debugging
-      console.log(`[${eventType}] [${this.context}] ${entityId}`, enhancedMetadata);
+      // Ensure we have a valid UUID for the entity_id
+      const safeEntityId = this.validateEntityId(entityId);
+      if (safeEntityId !== entityId) {
+        enhancedMetadata.original_entity_id = entityId;
+      }
+
+      // Log to console for debugging in development
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[${eventType}] [${this.context}] ${entityId}`, enhancedMetadata);
+      }
       
-      // Log to database using the RPC function that handles UUID validation
+      // Log to database 
       await supabase.rpc('xdelo_logprocessingevent', {
         p_event_type: String(eventType),
-        p_entity_id: validEntityId,
+        p_entity_id: safeEntityId,
         p_correlation_id: this.correlationId,
         p_metadata: enhancedMetadata
       });
@@ -58,20 +55,21 @@ export class Logger {
   }
 
   /**
-   * Ensure we have a valid UUID, generating one if needed
+   * Validate or generate a UUID
    */
-  private ensureValidUuid(id: string): string {
+  private validateEntityId(id: string): string {
     try {
-      // Try to validate if it's already a UUID
+      // Check for valid UUID format
       const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
       if (uuidPattern.test(id)) {
         return id;
       }
       
       // Generate a new UUID if not valid
-      return crypto.randomUUID().toString();
+      return crypto.randomUUID();
     } catch {
-      return crypto.randomUUID().toString();
+      return crypto.randomUUID();
     }
   }
 
@@ -90,7 +88,7 @@ export class Logger {
   }
 
   /**
-   * Log convenience methods
+   * Convenience methods for common log levels
    */
   async info(message: string, entityId: string, metadata: Record<string, any> = {}): Promise<void> {
     await this.logEvent(`info:${message}`, entityId, metadata);

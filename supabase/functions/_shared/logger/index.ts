@@ -1,4 +1,5 @@
-// Unified logger utility with correlation ID tracking and emoji support
+
+// Unified logger utility with correlation ID tracking
 export class Logger {
   private correlationId: string;
   private component: string;
@@ -9,44 +10,28 @@ export class Logger {
   }
   
   /**
-   * Log an informational message with emoji
+   * Log an informational message
    */
   info(message: string, data: Record<string, any> = {}) {
-    this._log('INFO', '🔵', message, data);
+    this._log('INFO', message, data);
     return this; // For chaining
   }
   
   /**
-   * Log a warning message with emoji
+   * Log a warning message
    */
   warn(message: string, data: Record<string, any> = {}) {
-    this._log('WARN', '🟠', message, data);
+    this._log('WARN', message, data);
     return this; // For chaining
   }
   
   /**
-   * Log an error message with emoji
+   * Log an error message
    */
   error(message: string, error: unknown = {}) {
     // Transform error into a suitable data object
     const errorData = this._formatError(error);
-    this._log('ERROR', '🔴', message, errorData);
-    return this; // For chaining
-  }
-  
-  /**
-   * Log a debug message with emoji
-   */
-  debug(message: string, data: Record<string, any> = {}) {
-    this._log('DEBUG', '🟣', message, data);
-    return this; // For chaining
-  }
-  
-  /**
-   * Log a success message with emoji
-   */
-  success(message: string, data: Record<string, any> = {}) {
-    this._log('SUCCESS', '🟢', message, data);
+    this._log('ERROR', message, errorData);
     return this; // For chaining
   }
   
@@ -58,11 +43,10 @@ export class Logger {
       return {
         message: error.message,
         stack: error.stack,
-        name: error.name,
-        ...this._extractErrorProperties(error)
+        name: error.name
       };
     } else if (typeof error === 'object' && error !== null) {
-      return { ...this._extractErrorProperties(error as Record<string, any>) };
+      return { ...(error as Record<string, any>) };
     } else if (typeof error === 'string') {
       return { message: error };
     } else {
@@ -71,37 +55,17 @@ export class Logger {
   }
   
   /**
-   * Helper to extract properties from an error object
+   * Internal logging function with structured format
    */
-  private _extractErrorProperties(error: Record<string, any>): Record<string, any> {
-    const result: Record<string, any> = {};
-    
-    // Extract common error properties
-    if ('code' in error) result.code = error.code;
-    if ('status' in error) result.status = error.status;
-    if ('statusCode' in error) result.statusCode = error.statusCode;
-    if ('data' in error) result.data = error.data;
-    
-    return result;
-  }
-  
-  /**
-   * Internal logging function with enhanced formatting
-   */
-  private _log(level: string, emoji: string, message: string, data: Record<string, any> = {}) {
-    // Create a summary line that's easy to scan
-    const summary = `${emoji} [${level}] [${this.component}] ${message}`;
-    
-    // Format the detailed log with indentation for better readability
+  private _log(level: string, message: string, data: Record<string, any> = {}) {
     console.log(JSON.stringify({
-      summary,
       level,
       correlation_id: this.correlationId,
       component: this.component,
       message,
       timestamp: new Date().toISOString(),
       ...data
-    }, null, 2));
+    }));
   }
 
   /**
@@ -109,13 +73,6 @@ export class Logger {
    */
   getCorrelationId(): string {
     return this.correlationId;
-  }
-
-  /**
-   * Get the component name for this logger
-   */
-  getComponent(): string {
-    return this.component;
   }
 
   /**
@@ -138,69 +95,48 @@ export function createLogger(component: string, correlationId?: string): Logger 
 }
 
 /**
- * Format a webhook event summary for quick understanding
+ * Log a message operation to both console and database
  */
-export function formatWebhookSummary(
+export async function logMessageOperation(
   eventType: string,
-  entityId: string | number,
-  isSuccess: boolean = true,
+  entityId: string,
+  correlationId: string,
   metadata: Record<string, any> = {}
-): string {
-  // Select appropriate emoji based on event and success
-  let emoji = '📋';
-  
-  if (eventType.includes('error') || eventType.includes('failed')) {
-    emoji = '❌';
-  } else if (eventType.includes('success') || eventType.includes('completed')) {
-    emoji = '✅';
-  } else if (eventType.includes('warning')) {
-    emoji = '⚠️';
-  } else if (eventType.includes('received')) {
-    emoji = '📥';
-  } else if (eventType.includes('processing')) {
-    emoji = '⚙️';
-  } else if (eventType.includes('media')) {
-    emoji = '🖼️';
-  } else if (eventType.includes('text')) {
-    emoji = '💬';
+): Promise<void> {
+  try {
+    // Ensure correlation ID is a string
+    const corrId = correlationId?.toString() || crypto.randomUUID();
+    
+    // ALWAYS generate a new UUID to avoid type errors with UUID columns
+    const validEntityId = crypto.randomUUID();
+    
+    // Store original entity ID in metadata
+    const enhancedMetadata = {
+      ...metadata,
+      original_entity_id: entityId
+    };
+    
+    // Log to console
+    console.log(`[${eventType}] [${corrId}] ${entityId}`, enhancedMetadata);
+    
+    // Import supabase client
+    const { createSupabaseClient } = await import('../supabase.ts');
+    const supabaseClient = createSupabaseClient();
+    
+    // Insert with guaranteed valid UUID
+    await supabaseClient.rpc('xdelo_logprocessingevent', {
+      p_event_type: eventType,
+      p_entity_id: validEntityId,
+      p_correlation_id: corrId,
+      p_metadata: enhancedMetadata
+    });
+  } catch (e) {
+    console.error(`Failed to log message operation ${eventType}:`, e);
   }
-  
-  // Override with success/failure emoji if specified
-  if (!isSuccess) {
-    emoji = '❌';
-  }
-  
-  // Build a concise summary
-  let summary = `${emoji} ${eventType.replace(/_/g, ' ')}`;
-  
-  // Add entity information
-  if (entityId) {
-    // Truncate IDs that are too long
-    const displayId = typeof entityId === 'string' && entityId.length > 8 
-      ? `${entityId.substring(0, 8)}...` 
-      : entityId;
-    summary += ` [ID: ${displayId}]`;
-  }
-  
-  // Add important context if available
-  if (metadata.chat_id) {
-    summary += ` | Chat: ${metadata.chat_id}`;
-  }
-  
-  if (metadata.message_id) {
-    summary += ` | Msg: ${metadata.message_id}`;
-  }
-  
-  if (metadata.duration_ms) {
-    summary += ` | Duration: ${metadata.duration_ms}ms`;
-  }
-  
-  return summary;
-}
+} 
 
 /**
- * Convenience method to get a logger or fallback to console
- * This unified approach simplifies logger creation across functions
+ * Convenience method to get a logger or create one
  */
 export function getLogger(componentOrLogger?: string | Logger | null, correlationId?: string): Logger {
   // If given a Logger, return it directly
@@ -216,58 +152,3 @@ export function getLogger(componentOrLogger?: string | Logger | null, correlatio
   // Default to a generic logger
   return createLogger('generic', correlationId);
 }
-
-/**
- * Log a message operation to both console and database
- * This is used by various handlers to keep a consistent log format
- */
-export async function xdelo_logMessageOperation(
-  eventType: string,
-  entityId: string,
-  correlationId: string,
-  metadata: Record<string, any> = {},
-  errorMessage?: string
-): Promise<void> {
-  try {
-    // Ensure correlation ID is a string
-    const corrId = correlationId?.toString() || crypto.randomUUID();
-    
-    // ALWAYS generate a new UUID to avoid type errors with UUID columns
-    const validEntityId = crypto.randomUUID();
-    
-    // Store original entity ID in metadata
-    const enhancedMetadata = {
-      ...metadata,
-      original_entity_id: entityId
-    };
-    
-    // Create a formatted summary for the console
-    const summary = formatWebhookSummary(
-      eventType, 
-      entityId, // Use original ID for display purposes
-      !eventType.includes('error') && !eventType.includes('failed'),
-      enhancedMetadata
-    );
-    
-    // Log to console
-    console.log(summary, enhancedMetadata);
-    
-    // Import supabase client
-    const { supabaseClient } = await import('../supabase.ts');
-    
-    // Insert with guaranteed valid UUID
-    const { error } = await supabaseClient.from('unified_audit_logs').insert({
-      event_type: eventType,
-      entity_id: validEntityId,
-      correlation_id: corrId,
-      metadata: enhancedMetadata,
-      error_message: errorMessage
-    });
-    
-    if (error) {
-      console.error(`Error logging operation ${eventType}: ${error.message}`);
-    }
-  } catch (e) {
-    console.error(`Failed to log message operation ${eventType}:`, e);
-  }
-} 

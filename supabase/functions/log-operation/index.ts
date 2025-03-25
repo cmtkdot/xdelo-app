@@ -13,7 +13,7 @@ interface LogRequest {
   userId?: string;
 }
 
-// Create the handler using the new edge handler
+// Create the handler using the edge handler
 const handler = createEdgeHandler(async (req: Request, context: HandlerContext) => {
   const { logger, correlationId: requestCorrelationId } = context;
   
