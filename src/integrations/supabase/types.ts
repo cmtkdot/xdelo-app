@@ -3392,12 +3392,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      refresh_materialized_view_secure: {
-        Args: {
-          view_name: string
-        }
-        Returns: undefined
-      }
       refresh_purchase_order_summary: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -3560,13 +3554,6 @@ export type Database = {
             }
             Returns: string
           }
-      xdelo_direct_caption_processing: {
-        Args: {
-          p_message_id: string
-          p_correlation_id?: string
-        }
-        Returns: Json
-      }
       xdelo_fail_message_processing: {
         Args: {
           p_message_id: string
@@ -3596,10 +3583,6 @@ export type Database = {
           p_file_unique_id: string
         }
         Returns: string
-      }
-      xdelo_fix_audit_log_uuids: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
       }
       xdelo_fix_public_urls: {
         Args: {
@@ -3778,16 +3761,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_logprocessingevent: {
-        Args: {
-          p_event_type: string
-          p_entity_id: string
-          p_correlation_id: string
-          p_metadata?: Json
-          p_error_message?: string
-        }
-        Returns: string
-      }
       xdelo_mark_for_redownload: {
         Args: {
           p_message_id: string
@@ -3815,6 +3788,14 @@ export type Database = {
           p_action: string
         }
         Returns: Json
+      }
+      xdelo_repair_media_group_syncs: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          media_group_id: string
+          source_message_id: string
+          updated_count: number
+        }[]
       }
       xdelo_repair_message_relationships: {
         Args: Record<PropertyKey, never>
@@ -3852,16 +3833,6 @@ export type Database = {
         Returns: undefined
       }
       xdelo_sync_media_group_content:
-        | {
-            Args: {
-              p_media_group_id: string
-              p_source_message_id: string
-              p_correlation_id: string
-              p_force_sync?: boolean
-              p_sync_edit_history?: boolean
-            }
-            Returns: Json
-          }
         | {
             Args: {
               p_source_message_id: string
