@@ -1,202 +1,195 @@
 
-import { useState } from 'react';
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from '@/hooks/useToast';
-import { LogEventType, logEvent } from "@/lib/logUtils";
+import { useState, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Message } from '@/types/entities/Message';
 
-interface UseSingleFileOperationsResult {
-  isUploading: boolean;
-  isDeleting: boolean;
-  uploadFile: (file: File, storagePath?: string) => Promise<string | null>;
-  deleteFile: (filePath: string) => Promise<boolean>;
-  reuploadMediaFromTelegram: (messageId: string) => Promise<boolean>;
+export interface FileUploadParams {
+  file: File;
+  messageId?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface FileOperationResult {
+  success: boolean;
+  message: string;
+  error?: string;
+  data?: any;
 }
 
 /**
- * Hook for handling single file upload and delete operations
+ * Hook for handling single file operations
  */
-export function useSingleFileOperations(): UseSingleFileOperationsResult {
+export function useSingleFileOperations() {
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const { toast } = useToast();
   
   /**
-   * Upload a file to Supabase storage
-   * @param file The file to upload
-   * @param storagePath Optional storage path
-   * @returns The public URL of the uploaded file, or null on failure
+   * Upload a file to storage
    */
-  const uploadFile = async (file: File, storagePath?: string): Promise<string | null> => {
-    setIsUploading(true);
+  const uploadFile = useCallback(async (params: FileUploadParams): Promise<FileOperationResult> => {
+    const { file, messageId, metadata = {} } = params;
+    
     try {
-      // Get current user ID from Supabase auth
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id;
+      setIsUploading(true);
       
-      if (!userId) {
-        throw new Error("User ID not available");
-      }
-
-      const filePath = storagePath || `${userId}/${file.name}`;
+      // Generate a unique file path
+      const filePath = `uploads/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      
+      // Upload the file to storage
       const { data, error } = await supabase.storage
-        .from('message_media')
+        .from('media')
         .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
+          contentType: file.type,
+          upsert: false,
+          metadata
         });
-
+        
       if (error) {
-        throw new Error(`File upload failed: ${error.message}`);
+        console.error('Error uploading file:', error);
+        return {
+          success: false,
+          message: 'Failed to upload file',
+          error: error.message
+        };
       }
-
-      const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/message_media/${data.path}`;
       
-      const isMobile = window.innerWidth <= 768;
-      toast({
-        title: "Upload successful",
-        description: isMobile ? "File uploaded" : `File uploaded to ${data.path}`,
-      });
-
-      // Log completion of sync operation
-      await logSyncCompletion(data.path, {
-        fileSize: file.size,
-        mimeType: file.type,
-        storagePath: data.path,
-        publicUrl
-      });
-
-      return publicUrl;
-    } catch (error: any) {
-      console.error("File upload error:", error.message);
-      toast({
-        title: "Upload failed",
-        description: error.message,
-        variant: "destructive",
-      });
-      return null;
+      // Get the public URL
+      const { data: publicUrlData } = supabase.storage
+        .from('media')
+        .getPublicUrl(filePath);
+        
+      // Update message if messageId is provided
+      if (messageId) {
+        await supabase
+          .from('messages')
+          .update({
+            storage_path: filePath,
+            public_url: publicUrlData.publicUrl,
+            mime_type: file.type,
+            file_size: file.size,
+            storage_exists: true,
+            storage_metadata: {
+              uploaded_by: 'user',
+              original_filename: file.name,
+              upload_timestamp: new Date().toISOString(),
+              ...metadata
+            },
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', messageId);
+      }
+      
+      return {
+        success: true,
+        message: 'File uploaded successfully',
+        data: {
+          path: filePath,
+          publicUrl: publicUrlData.publicUrl
+        }
+      };
+      
+    } catch (error) {
+      console.error('Error in uploadFile:', error);
+      return {
+        success: false,
+        message: 'An error occurred during file upload',
+        error: error.message
+      };
     } finally {
       setIsUploading(false);
     }
-  };
-
+  }, []);
+  
   /**
-   * Delete a file from Supabase storage
-   * @param filePath The path of the file to delete
-   * @returns True on success, false on failure
+   * Delete a file from storage
    */
-  const deleteFile = async (filePath: string): Promise<boolean> => {
-    setIsDeleting(true);
+  const deleteFile = useCallback(async (storagePath: string, messageId?: string): Promise<FileOperationResult> => {
     try {
+      setIsDeleting(true);
+      
+      // Delete the file from storage
       const { error } = await supabase.storage
-        .from('message_media')
-        .remove([filePath]);
-
+        .from('media')
+        .remove([storagePath]);
+        
       if (error) {
-        throw new Error(`File deletion failed: ${error.message}`);
+        console.error('Error deleting file:', error);
+        return {
+          success: false,
+          message: 'Failed to delete file from storage',
+          error: error.message
+        };
       }
-
-      const isMobile = window.innerWidth <= 768;
-      toast({
-        title: "Deletion successful",
-        description: isMobile ? "File deleted" : `File deleted from ${filePath}`,
-      });
-      return true;
-    } catch (error: any) {
-      console.error("File deletion error:", error.message);
-      toast({
-        title: "Deletion failed",
-        description: error.message,
-        variant: "destructive",
-      });
-      return false;
+      
+      // Update message if messageId is provided
+      if (messageId) {
+        await supabase
+          .from('messages')
+          .update({
+            storage_exists: false,
+            public_url: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', messageId);
+      }
+      
+      return {
+        success: true,
+        message: 'File deleted successfully'
+      };
+      
+    } catch (error) {
+      console.error('Error in deleteFile:', error);
+      return {
+        success: false,
+        message: 'An error occurred during file deletion',
+        error: error.message
+      };
     } finally {
       setIsDeleting(false);
     }
-  };
-
+  }, []);
+  
   /**
-   * Force reupload of media from Telegram for a specific message
-   * This is useful when file_ids expire or become invalid
+   * Request Telegram to reupload media for a message
    */
-  const reuploadMediaFromTelegram = async (messageId: string): Promise<boolean> => {
-    setIsUploading(true);
+  const reuploadMediaFromTelegram = useCallback(async (message: Message): Promise<FileOperationResult> => {
     try {
-      // Call the dedicated edge function for reuploading from Telegram
+      console.log('Requesting media reupload from Telegram for message:', message.id);
+      
+      // Call the Edge Function to handle reuploading
       const { data, error } = await supabase.functions.invoke('xdelo_reupload_media', {
         body: { 
-          messageId,
-          forceReupload: true,
-          skipExistingCheck: true
+          messageId: message.id,
+          forceRedownload: true 
         }
       });
       
       if (error) {
-        throw new Error(`Reupload failed: ${error.message}`);
-      }
-      
-      if (!data?.success) {
-        throw new Error(data?.message || 'Reupload operation failed');
-      }
-      
-      toast({
-        title: "Media Reuploaded",
-        description: "Media has been successfully reuploaded from Telegram."
-      });
-      
-      // Log the successful operation
-      await logEvent(
-        LogEventType.MEDIA_DOWNLOADED,
-        messageId,
-        {
-          operation: 'reupload',
-          success: true,
-          result: data
-        }
-      );
-      
-      return true;
-    } catch (error) {
-      console.error("Error reuploading media:", error);
-      
-      toast({
-        title: "Reupload Failed",
-        description: error.message || "Failed to reupload media from Telegram.",
-        variant: "destructive"
-      });
-      
-      // Log the failed operation
-      await logEvent(
-        LogEventType.MEDIA_UPLOAD_ERROR,
-        messageId,
-        {
-          operation: 'reupload',
+        console.error('Error in reupload request:', error);
+        return {
           success: false,
+          message: 'Failed to request media reupload',
           error: error.message
-        }
-      );
+        };
+      }
       
-      return false;
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  // Log completion of sync operation
-  const logSyncCompletion = async (entityId: string, details: any) => {
-    try {
-      await logEvent(
-        LogEventType.SYNC_COMPLETED,
-        entityId,
-        {
-          ...details,
-          timestamp: new Date().toISOString()
-        }
-      );
+      return {
+        success: true,
+        message: 'Media reupload has been requested successfully',
+        data
+      };
+      
     } catch (error) {
-      console.error("Failed to log sync completion:", error);
+      console.error('Error in reuploadMediaFromTelegram:', error);
+      return {
+        success: false,
+        message: 'An error occurred while requesting media reupload',
+        error: error.message
+      };
     }
-  };
-
+  }, []);
+  
   return {
     isUploading,
     isDeleting,

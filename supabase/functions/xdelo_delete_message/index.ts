@@ -1,164 +1,141 @@
+import { createEdgeHandler, HandlerContext, createErrorResponse, createSuccessResponse } from '../_shared/edgeHandler.ts';
+import { supabaseClient } from '../_shared/supabase.ts';
+import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.32.0'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+interface DeleteMessageRequest {
+  messageId: string;
+  deleteFromTelegram?: boolean;
 }
 
-// Handle CORS preflight requests
-function handleCors(req) {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { 
-      headers: corsHeaders 
-    })
-  }
-}
-
-export const getSupabaseClient = () => {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-  
-  if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error('Missing environment variables for Supabase client')
-  }
-  
-  return createClient(supabaseUrl, supabaseServiceKey)
-}
-
-// Main function handler
-Deno.serve(async (req) => {
-  // Handle CORS
-  const corsResponse = handleCors(req)
-  if (corsResponse) return corsResponse
-  
+const handleDeleteMessage = createEdgeHandler(async (req: Request, context: HandlerContext) => {
   try {
-    // Get request payload
-    const { messageId, deleteFromTelegram } = await req.json()
+    const { logger, correlationId } = context;
+    
+    const { messageId, deleteFromTelegram = false } = await req.json() as DeleteMessageRequest;
     
     if (!messageId) {
-      return new Response(
-        JSON.stringify({ error: 'Message ID is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return createErrorResponse('Missing messageId parameter', 400, correlationId);
     }
     
-    console.log(`Processing delete request for messageId: ${messageId}, deleteFromTelegram: ${deleteFromTelegram}`)
+    logger.info(`Processing delete request for message ${messageId}`, {
+      delete_from_telegram: deleteFromTelegram,
+    });
     
-    const supabase = getSupabaseClient()
-    
-    // Get message details needed for logging
-    const { data: messageData, error: messageError } = await supabase
+    const { data: message, error: fetchError } = await supabaseClient
       .from('messages')
-      .select('telegram_message_id, chat_id, file_unique_id, media_group_id')
+      .select('*')
       .eq('id', messageId)
-      .single()
-    
-    if (messageError) {
-      console.error('Error fetching message data:', messageError)
-      return new Response(
-        JSON.stringify({ error: 'Error fetching message data', details: messageError }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-    
-    // Step 1: Update the database to mark the message as deleted
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update({ 
-        deleted_from_telegram: true,
-        processing_state: 'completed' 
-      })
-      .eq('id', messageId)
-    
-    if (updateError) {
-      console.error('Error updating message:', updateError)
-      return new Response(
-        JSON.stringify({ error: 'Error updating message', details: updateError }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-    
-    // Step 2: If deleteFromTelegram is true, actually delete from Telegram via API
-    let telegramResult = null
-    if (deleteFromTelegram && messageData.telegram_message_id && messageData.chat_id) {
-      // Get Telegram bot token from environment
-      const telegramBotToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
-      if (!telegramBotToken) {
-        return new Response(
-          JSON.stringify({ error: 'Telegram bot token not configured' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
+      .single();
       
+    if (fetchError) {
+      logger.error(`Error fetching message: ${fetchError.message}`, { messageId });
+      return createErrorResponse(`Error fetching message: ${fetchError.message}`, 404, correlationId);
+    }
+    
+    if (!message) {
+      return createErrorResponse('Message not found', 404, correlationId);
+    }
+    
+    try {
+      await xdelo_logProcessingEvent(
+        'message_deleted',
+        messageId,
+        correlationId,
+        {
+          delete_from_telegram: deleteFromTelegram,
+          file_unique_id: message.file_unique_id,
+          media_group_id: message.media_group_id,
+          operation_type: deleteFromTelegram ? 'permanent_deletion' : 'database_deletion'
+        }
+      );
+    } catch (logError) {
+      logger.error(`Error logging deletion: ${logError}`, { messageId });
+    }
+    
+    if (deleteFromTelegram && message.telegram_message_id && message.chat_id) {
       try {
-        // Call Telegram API to delete the message
+        const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+        
+        if (!botToken) {
+          logger.error('TELEGRAM_BOT_TOKEN not found in environment', {});
+          return createErrorResponse('Missing Telegram bot token', 500, correlationId);
+        }
+        
         const telegramResponse = await fetch(
-          `https://api.telegram.org/bot${telegramBotToken}/deleteMessage`,
+          `https://api.telegram.org/bot${botToken}/deleteMessage`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              chat_id: messageData.chat_id,
-              message_id: messageData.telegram_message_id
+              chat_id: message.chat_id,
+              message_id: message.telegram_message_id
             })
           }
-        )
+        );
         
-        telegramResult = await telegramResponse.json()
-        console.log('Telegram API response:', telegramResult)
+        const telegramResult = await telegramResponse.json();
         
-        // If the message was deleted from Telegram successfully, update the database
-        if (telegramResult.ok) {
-          await supabase
-            .from('messages')
-            .update({ 
-              deleted_via_telegram: true 
-            })
-            .eq('id', messageId)
+        if (!telegramResult.ok) {
+          logger.error(`Telegram API error: ${telegramResult.description}`, { telegramResult });
+          
+          if (telegramResult.description.includes('message to delete not found')) {
+            logger.info('Message already deleted on Telegram, continuing with database deletion', {});
+          } else {
+            return createErrorResponse(`Telegram deletion failed: ${telegramResult.description}`, 400, correlationId);
+          }
         }
+        
+        logger.info('Successfully deleted message from Telegram', {
+          chat_id: message.chat_id,
+          message_id: message.telegram_message_id
+        });
       } catch (telegramError) {
-        console.error('Error calling Telegram API:', telegramError)
-        // We continue processing even if Telegram deletion fails
+        logger.error(`Error calling Telegram API: ${telegramError.message}`, { telegramError });
+        return createErrorResponse(`Error calling Telegram API: ${telegramError.message}`, 500, correlationId);
       }
     }
     
-    // Step 3: Log the deletion operation
-    const { error: logError } = await supabase
-      .from('unified_audit_logs')
-      .insert({
-        event_type: 'message_deleted',
-        entity_id: messageId,
-        operation_type: deleteFromTelegram ? 'telegram_deletion' : 'database_deletion',
-        metadata: {
-          telegram_message_id: messageData.telegram_message_id,
-          chat_id: messageData.chat_id,
-          file_unique_id: messageData.file_unique_id,
-          media_group_id: messageData.media_group_id,
-          telegram_result: telegramResult
-        }
-      })
-    
-    if (logError) {
-      console.error('Error logging deletion:', logError)
-      // Non-critical error, continue
+    if (deleteFromTelegram) {
+      const { error: deleteError } = await supabaseClient
+        .from('messages')
+        .delete()
+        .eq('id', messageId);
+        
+      if (deleteError) {
+        logger.error(`Error deleting message from database: ${deleteError.message}`, { deleteError });
+        return createErrorResponse(`Error deleting message: ${deleteError.message}`, 500, correlationId);
+      }
+    } else {
+      const { error: updateError } = await supabaseClient
+        .from('messages')
+        .update({
+          deleted_from_telegram: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', messageId);
+        
+      if (updateError) {
+        logger.error(`Error marking message as deleted: ${updateError.message}`, { updateError });
+        return createErrorResponse(`Error marking message as deleted: ${updateError.message}`, 500, correlationId);
+      }
     }
     
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: 'Message deleted successfully',
-        telegramResult 
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    logger.success(`Message ${deleteFromTelegram ? 'permanently deleted' : 'marked as deleted'}`, { messageId });
+    
+    return createSuccessResponse({
+      success: true,
+      messageId,
+      operation: deleteFromTelegram ? 'permanent_deletion' : 'database_deletion'
+    }, `Message successfully ${deleteFromTelegram ? 'deleted' : 'marked as deleted'}`);
     
   } catch (error) {
-    console.error('Error processing delete request:', error)
-    
-    return new Response(
-      JSON.stringify({ error: 'Internal server error', details: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    context.logger.error(`Unexpected error handling message deletion:`, { error });
+    return createErrorResponse(
+      `Unexpected error: ${error.message || 'Unknown error'}`,
+      500,
+      context.correlationId
+    );
   }
-})
+});
+
+Deno.serve(handleDeleteMessage);

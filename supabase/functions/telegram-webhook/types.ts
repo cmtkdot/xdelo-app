@@ -1,50 +1,49 @@
 
+import { Logger } from '../_shared/logger/index.ts';
+
+/**
+ * Context provided to message handlers
+ */
+export interface MessageContext {
+  isChannelPost: boolean;
+  isForwarded: boolean;
+  correlationId: string;
+  isEdit: boolean;
+  previousMessage?: any;
+  startTime?: string; // ISO date when processing started
+  logger?: Logger; // Logger instance
+}
+
+/**
+ * Simplified Telegram message type
+ */
 export interface TelegramMessage {
   message_id: number;
-  date: number;
   chat: {
     id: number;
     type: string;
     title?: string;
-    username?: string;
-    first_name?: string;
-    last_name?: string;
   };
-  from?: {
-    id: number;
-    is_bot: boolean;
-    first_name: string;
-    last_name?: string;
-    username?: string;
-    language_code?: string;
-  };
-  forward_origin?: {
-    type: string;
-    chat?: {
-      id: number;
-      type: string;
-      title?: string;
-      username?: string;
-    };
-    message_id?: number;
-    date?: number;
-  };
+  date: number;
   text?: string;
-  photo?: {
+  caption?: string;
+  edit_date?: number;
+  // Media types
+  photo?: Array<{
     file_id: string;
     file_unique_id: string;
-    file_size?: number;
     width: number;
     height: number;
-  }[];
+    file_size?: number;
+  }>;
   video?: {
     file_id: string;
     file_unique_id: string;
     width: number;
     height: number;
     duration: number;
-    file_size?: number;
     mime_type?: string;
+    file_size?: number;
   };
   document?: {
     file_id: string;
@@ -53,75 +52,53 @@ export interface TelegramMessage {
     mime_type?: string;
     file_size?: number;
   };
-  caption?: string;
-  media_group_id?: string;
-  edit_date?: number;
-  entities?: any[];
-  forward_date?: number;
+  // Forwarded message info
+  forward_origin?: {
+    type: string;
+    date: number;
+    chat?: {
+      id: number;
+      title?: string;
+      type: string;
+    };
+    message_id?: number;
+  };
   forward_from?: any;
   forward_from_chat?: any;
+  forward_date?: number;
+  // Media group ID for grouped media
+  media_group_id?: string;
 }
 
-export interface MessageContext {
-  isChannelPost: boolean;
-  isForwarded: boolean;
-  correlationId: string;
-  isEdit: boolean;
-  previousMessage?: any; // Original message before editing
-  previousTextMessage?: any; // For text-to-media conversions
-  conversionType?: 'media_to_text' | 'text_to_media'; // Type of conversion if applicable
-  editHistory?: any[]; // Pre-existing edit history to preserve
-  startTime: string;
-  logger?: any;
+export type MessageOperationType = 'create' | 'update' | 'delete' | 'forward' | 'reprocess';
+
+export enum ForwardOriginType {
+  USER = 'user',
+  HIDDEN_USER = 'hidden_user',
+  CHANNEL = 'channel',
+  CHAT = 'chat'
+}
+
+export enum ProcessingState {
+  INITIALIZED = 'initialized',
+  PENDING = 'pending',
+  PROCESSING = 'processing',
+  COMPLETED = 'completed',
+  ERROR = 'error'
 }
 
 export interface ForwardInfo {
-  is_forwarded: boolean;
-  forward_origin_type: string;
+  is_forwarded?: boolean;
+  from_chat_id?: number;
+  from_message_id?: number;
+  from_chat_title?: string;
+  forward_date?: string;
+  forward_origin_type?: string;
   forward_from_chat_id?: number;
   forward_from_chat_title?: string;
   forward_from_chat_type?: string;
   forward_from_message_id?: number;
-  forward_date?: string;
   original_chat_id?: number;
   original_chat_title?: string;
   original_message_id?: number;
-}
-
-export interface MessageInput {
-  telegram_message_id: number;
-  chat_id: number;
-  chat_type: string;
-  chat_title?: string;
-  caption?: string;
-  media_group_id?: string;
-  file_id?: string;
-  file_unique_id: string;
-  mime_type?: string;
-  mime_type_original?: string;
-  storage_path?: string;
-  public_url?: string;
-  width?: number;
-  height?: number;
-  duration?: number;
-  file_size?: number;
-  correlation_id?: string;
-  processing_state?: string;
-  is_edited_channel_post?: boolean;
-  forward_info?: ForwardInfo;
-  telegram_data?: TelegramMessage;
-  edit_date?: string;
-  is_forward?: boolean;
-  edit_history?: any[];
-  storage_exists?: boolean;
-  storage_path_standardized?: boolean;
-  needs_redownload?: boolean;
-  redownload_reason?: string;
-  redownload_flagged_at?: string;
-  message_url?: string;
-  error_message?: string;
-  converted_from_text?: boolean;
-  original_text_id?: string;
-  converted_from_media?: boolean;
-  original_media_id?: string;
 }

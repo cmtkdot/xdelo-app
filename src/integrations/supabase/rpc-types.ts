@@ -84,6 +84,15 @@ declare module "@supabase/supabase-js" {
       }
     ): { data: T; error: null } | { data: null; error: Error };
 
+    // Add RPC for redownloading media files
+    rpc<T = { success: boolean; message?: string; [key: string]: any }>(
+      fn: "xdelo_redownload_media_file",
+      params: {
+        p_message_id: string;
+        p_correlation_id: string;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
+
     // Add any other custom RPC functions here...
   }
 }

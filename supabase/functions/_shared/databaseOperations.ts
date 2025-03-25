@@ -1,6 +1,17 @@
 
 import { supabaseClient } from './supabase.ts';
 
+// Enum for message operation types
+export enum MessageOperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  FORWARD = 'forward',
+  REPROCESS = 'reprocess',
+  DATABASE_DELETION = 'database_deletion',
+  PERMANENT_DELETION = 'permanent_deletion'
+}
+
 /**
  * Log a processing event to the unified_audit_logs table
  */
