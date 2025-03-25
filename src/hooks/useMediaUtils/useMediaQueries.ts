@@ -40,8 +40,8 @@ export function useMediaQueries() {
       // Execute the query
       const response = await query;
       
-      // Use type assertion without deep instantiation
-      const typedData = response.data as any as Message[] | null;
+      // Use simple type assertion to avoid deep instantiation issues
+      const typedData = response.data as any;
       
       return { 
         data: typedData, 
@@ -67,8 +67,8 @@ export function useMediaQueries() {
         .eq('id', id)
         .single();
       
-      // Use type assertion without deep instantiation
-      const typedData = response.data as any as Message | null;
+      // Use simple type assertion to avoid deep instantiation issues
+      const typedData = response.data as any;
       
       return { 
         data: typedData, 
