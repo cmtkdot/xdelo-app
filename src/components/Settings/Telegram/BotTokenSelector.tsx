@@ -5,13 +5,12 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/useToast";
 
 interface BotTokenSelectorProps {
   availableTokens: string[];
   selectedToken: string;
   setSelectedToken: (token: string) => void;
-  onSaveToken: () => Promise<void>;
+  onSaveToken: () => void;
   isLoading: boolean;
 }
 
@@ -22,13 +21,22 @@ export function BotTokenSelector({
   onSaveToken,
   isLoading
 }: BotTokenSelectorProps) {
-  const { toast } = useToast();
+  const [customToken, setCustomToken] = useState<string>("");
 
   // Mask the bot token to only show the first few and last few characters
-  const maskToken = (token: string | null) => {
+  const maskToken = (token: string) => {
     if (!token) return "Not configured";
     if (token.length <= 10) return token;
     return token.substring(0, 6) + "..." + token.substring(token.length - 4);
+  };
+
+  const handleTokenChange = (value: string) => {
+    if (value === 'custom') {
+      setSelectedToken('custom');
+    } else {
+      setSelectedToken(value);
+      setCustomToken("");
+    }
   };
 
   return (
@@ -36,7 +44,7 @@ export function BotTokenSelector({
       <Label htmlFor="botToken">Bot Token</Label>
       <Select 
         value={selectedToken} 
-        onValueChange={setSelectedToken}
+        onValueChange={handleTokenChange}
         disabled={isLoading}
       >
         <SelectTrigger className="w-full">
@@ -51,19 +59,24 @@ export function BotTokenSelector({
           <SelectItem value="custom">Add new token...</SelectItem>
         </SelectContent>
       </Select>
+
       {selectedToken === 'custom' && (
         <Input
           id="customToken"
           placeholder="Enter new bot token"
-          value={selectedToken === 'custom' ? '' : selectedToken}
-          onChange={(e) => setSelectedToken(e.target.value)}
+          value={customToken}
+          onChange={(e) => {
+            setCustomToken(e.target.value);
+            setSelectedToken(e.target.value);
+          }}
           disabled={isLoading}
           className="mt-2"
         />
       )}
+
       <Button 
         onClick={onSaveToken}
-        disabled={isLoading || !selectedToken || selectedToken === 'custom' && !selectedToken}
+        disabled={isLoading || !selectedToken || (selectedToken === 'custom' && !customToken)}
         className="mt-2"
       >
         {isLoading ? (
