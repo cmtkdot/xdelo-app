@@ -2,8 +2,8 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, ExternalLink } from "lucide-react";
 
 interface WebhookInfo {
@@ -19,7 +19,7 @@ interface WebhookInfo {
 }
 
 interface WebhookStatusProps {
-  webhookInfo: WebhookInfo;
+  webhookInfo: WebhookInfo | null;
   verificationUrls: {
     set_webhook?: string;
     get_webhook_info?: string;
@@ -34,6 +34,10 @@ export function WebhookStatus({ webhookInfo, verificationUrls }: WebhookStatusPr
     return new Date(timestamp * 1000).toLocaleString();
   };
 
+  if (!webhookInfo) {
+    return null;
+  }
+
   return (
     <div className="space-y-2 mt-4">
       <div className="flex items-center gap-2">
@@ -46,7 +50,7 @@ export function WebhookStatus({ webhookInfo, verificationUrls }: WebhookStatusPr
           <Badge variant="destructive">Not configured</Badge>
         )}
       </div>
-        
+          
       <Collapsible
         open={isDetailsOpen}
         onOpenChange={setIsDetailsOpen}
@@ -63,7 +67,7 @@ export function WebhookStatus({ webhookInfo, verificationUrls }: WebhookStatusPr
             </Button>
           </CollapsibleTrigger>
         </div>
-        
+          
         <CollapsibleContent className="space-y-2">
           <div className="rounded-md border p-3 text-sm space-y-2">
             <div className="flex justify-between">
@@ -96,8 +100,8 @@ export function WebhookStatus({ webhookInfo, verificationUrls }: WebhookStatusPr
                 <p className="mt-1 text-xs p-2 bg-muted rounded">{webhookInfo.last_error_message}</p>
               </div>
             )}
-            
-            {verificationUrls && verificationUrls.get_webhook_info && (
+              
+            {verificationUrls.set_webhook && (
               <>
                 <Separator className="my-2" />
                 <div className="pt-1">

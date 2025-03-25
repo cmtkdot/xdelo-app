@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -8,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
-import { useEnhancedMessages } from "@/hooks/enhancedMessages";
+import { useEnhancedMessages } from "@/hooks/useEnhancedMessages";
 
 const Dashboard = () => {
   const queryClient = useQueryClient();
@@ -18,6 +19,7 @@ const Dashboard = () => {
     uniqueVendors: 0
   });
 
+  // Set up realtime subscription using channel
   useEffect(() => {
     const channel = supabase
       .channel('messages-changes')
@@ -29,6 +31,7 @@ const Dashboard = () => {
           table: 'messages'
         },
         () => {
+          // Invalidate and refetch messages
           queryClient.invalidateQueries({ queryKey: ['enhanced-messages'] });
         }
       )
@@ -42,6 +45,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
+        // Get total messages
         const { count: totalMessages, error: messagesError } = await supabase
           .from('messages')
           .select('*', { count: 'exact' });
@@ -51,6 +55,7 @@ const Dashboard = () => {
           return;
         }
 
+        // Get total products (unique product codes)
         const { data: products, error: productsError } = await supabase
           .from('messages')
           .select('analyzed_content')
@@ -67,6 +72,7 @@ const Dashboard = () => {
             .filter(Boolean)
         );
 
+        // Get unique vendors
         const uniqueVendors = new Set(
           products
             ?.map(msg => (msg.analyzed_content as AnalyzedContent)?.vendor_uid)
@@ -86,6 +92,7 @@ const Dashboard = () => {
     fetchStats();
   }, []);
 
+  // Use the hook with filter for messages with analyzed_content and caption
   const { 
     messages, 
     isLoading, 
@@ -97,6 +104,7 @@ const Dashboard = () => {
     grouped: false
   });
 
+  // Filter for messages with analyzed content and non-empty caption
   const filteredMessages = messages.filter(msg => 
     msg.analyzed_content && 
     msg.caption && 

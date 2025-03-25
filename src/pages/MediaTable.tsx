@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { MessagesTable } from "@/components/MessagesTable/MessagesTable";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useEnhancedMessages } from "@/hooks/enhancedMessages";
+import { useEnhancedMessages } from "@/hooks/useEnhancedMessages";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 

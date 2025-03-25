@@ -41,7 +41,7 @@ export const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
           </div>
         </div>
         <Badge className="absolute top-2 right-2 bg-black/70 text-white">
-          {duration || 'Video'}
+          {duration ? `${Math.floor(duration)}s` : 'Video'}
         </Badge>
       </>
     );
