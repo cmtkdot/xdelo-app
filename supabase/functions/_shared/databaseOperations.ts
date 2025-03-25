@@ -43,7 +43,7 @@ export async function xdelo_logProcessingEvent(
     // Ensure correlation ID is a string
     const corrId = correlationId?.toString() || crypto.randomUUID();
     
-    // Generate a valid UUID for entity_id regardless of input type
+    // Always generate a valid UUID regardless of input type
     const validEntityId = crypto.randomUUID();
     
     // Store original entity ID in metadata
@@ -54,7 +54,7 @@ export async function xdelo_logProcessingEvent(
     
     await supabase.from("unified_audit_logs").insert({
       event_type: eventType,
-      entity_id: validEntityId,
+      entity_id: validEntityId, 
       correlation_id: correlationId?.toString() || crypto.randomUUID(),
       metadata: enhancedMetadata,
       error_message: errorMessage,

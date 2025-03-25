@@ -3774,6 +3774,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      xdelo_logprocessingevent: {
+        Args: {
+          p_event_type: string
+          p_entity_id: string
+          p_correlation_id: string
+          p_metadata?: Json
+          p_error_message?: string
+        }
+        Returns: string
+      }
       xdelo_mark_for_redownload: {
         Args: {
           p_message_id: string
