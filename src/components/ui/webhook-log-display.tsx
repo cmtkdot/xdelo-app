@@ -38,7 +38,10 @@ export function WebhookLogDisplay({ log, showDetails = false, onRetry }: Webhook
   
   // Create summary text
   const getSummaryText = () => {
-    const eventName = log.event_type.replace(/_/g, ' ');
+    // Check if event_type exists and is a string before using replace
+    const eventName = log.event_type && typeof log.event_type === 'string' 
+      ? log.event_type.replace(/_/g, ' ')
+      : 'unknown event';
     
     if (log.status === 'success') {
       return `✅ Successfully sent "${eventName}" webhook`;
@@ -67,7 +70,7 @@ export function WebhookLogDisplay({ log, showDetails = false, onRetry }: Webhook
           </Badge>
         </div>
         <CardDescription>
-          {log.event_type} • {formattedTime} • {log.duration_ms ? `${log.duration_ms}ms` : 'No duration'}
+          {log.event_type || 'No event type'} • {formattedTime} • {log.duration_ms ? `${log.duration_ms}ms` : 'No duration'}
         </CardDescription>
       </CardHeader>
       
