@@ -5,8 +5,8 @@ import { ProcessingState, AnalyzedContent } from "./types.ts";
 // Logger interface used by database operations
 export interface LoggerInterface {
   error: (message: string, error: unknown) => void;
-  info: (message: string, data?: unknown) => void;
-  warn: (message: string, data?: unknown) => void;
+  info?: (message: string, data?: Record<string, any>) => void;
+  warn?: (message: string, data?: Record<string, any>) => void;
 }
 
 interface MessageResponse {
@@ -56,7 +56,8 @@ export async function xdelo_logProcessingEvent(
       entity_id: validEntityId,
       correlation_id: corrId,
       metadata: enhancedMetadata,
-      error_message: errorMessage
+      error_message: errorMessage,
+      event_timestamp: new Date().toISOString()
     });
     
     if (error) {
@@ -82,61 +83,34 @@ export async function xdelo_createMessage(
       messageData.correlation_id.toString() : 
       crypto.randomUUID();
     
-    // Validate required fields
-    if (!messageData.file_unique_id) {
-      throw new Error("Missing required field: file_unique_id");
+    // Basic validation
+    if (!messageData.chat_id || !messageData.telegram_message_id) {
+      throw new Error("Missing required fields: chat_id or telegram_message_id");
     }
     
-    if (!messageData.chat_id) {
-      throw new Error("Missing required field: chat_id");
-    }
-    
-    if (!messageData.telegram_message_id) {
-      throw new Error("Missing required field: telegram_message_id");
-    }
-    
-    if (!messageData.storage_path) {
-      throw new Error("Missing required field: storage_path");
-    }
-    
-    if (!messageData.public_url) {
-      throw new Error("Missing required field: public_url");
-    }
-    
-    logger.info('Creating message with correlation_id', { 
-      correlation_id: correlationId,
-      file_unique_id: messageData.file_unique_id
-    });
-
-    // Check for existing file
+    // Check for existing file if file_unique_id exists
     if (messageData.file_unique_id) {
       const { data: existingFile, error: queryError } = await supabase
         .from('messages')
-        .select('id, file_unique_id')
+        .select('id')
         .eq('file_unique_id', messageData.file_unique_id)
         .maybeSingle();
         
       if (queryError) {
         logger.error('Error checking for existing file:', queryError);
-        throw new Error(`Database query error: ${queryError.message}`);
+        throw queryError;
       }
 
       if (existingFile) {
-        logger.info('Found existing file with same file_unique_id', { 
-          existing_id: existingFile.id,
-          file_unique_id: messageData.file_unique_id
-        });
-
-        // Log duplicate detection
+        // Log duplicate detection with proper UUID handling
         await xdelo_logProcessingEvent(
           'duplicate_file_detected',
           existingFile.id,
           correlationId,
           {
             file_unique_id: messageData.file_unique_id,
-            existing_message_id: existingFile.id,
-            new_telegram_message_id: messageData.telegram_message_id,
-            new_chat_id: messageData.chat_id
+            telegram_message_id: messageData.telegram_message_id,
+            chat_id: messageData.chat_id
           }
         );
 
@@ -169,10 +143,8 @@ export async function xdelo_createMessage(
       processing_state: 'pending' as ProcessingState,
       telegram_data: messageData.telegram_data || {},
       forward_info: messageData.forward_info,
-      is_edited_channel_post: messageData.is_edited_channel_post,
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      message_url: messageData.message_url
+      updated_at: new Date().toISOString()
     };
 
     // Insert message data
@@ -191,25 +163,22 @@ export async function xdelo_createMessage(
       throw new Error('No ID returned from insert operation');
     }
 
-    const messageId = data.id;
-
-    // Log message creation
+    // Log message creation with proper UUID handling
     await xdelo_logProcessingEvent(
       'message_created',
-      messageId,
+      data.id,
       correlationId,
       {
         telegram_message_id: messageData.telegram_message_id,
         chat_id: messageData.chat_id,
-        media_group_id: messageData.media_group_id,
-        is_forward: !!messageData.forward_info
+        media_group_id: messageData.media_group_id
       }
     );
 
-    return { id: messageId, success: true };
+    return { id: data.id, success: true };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error('Error creating message:', errorMessage);
+    logger.error('Error creating message:', error);
     
     return { 
       id: '', 
@@ -235,10 +204,6 @@ export async function xdelo_createNonMediaMessage(
       messageData.correlation_id.toString() : 
       crypto.randomUUID();
     
-    logger.info('Creating non-media message', { 
-      message_type: messageData.message_type
-    });
-
     const messageDataWithTimestamps = {
       ...messageData,
       correlation_id: correlationId,
@@ -255,12 +220,10 @@ export async function xdelo_createNonMediaMessage(
 
     if (error) throw error;
 
-    const messageId = data.id;
-
-    // Log message creation
+    // Log message creation with proper UUID handling
     await xdelo_logProcessingEvent(
       'non_media_message_created',
-      messageId,
+      data.id,
       correlationId,
       {
         telegram_message_id: messageData.telegram_message_id,
@@ -269,7 +232,7 @@ export async function xdelo_createNonMediaMessage(
       }
     );
 
-    return { id: messageId, success: true };
+    return { id: data.id, success: true };
   } catch (error) {
     logger.error('Error creating non-media message:', error);
     return { 
@@ -293,7 +256,6 @@ export async function xdelo_checkDuplicateFile(
     const supabase = createSupabaseClient();
     
     if ((!telegramMessageId || !chatId) && !fileUniqueId) {
-      console.warn('Attempted to check for duplicate without sufficient identifiers');
       return false;
     }
     
@@ -332,12 +294,6 @@ export async function xdelo_updateMessage(
   try {
     const supabase = createSupabaseClient();
     
-    // Log the update operation
-    logger.info('Updating message', {
-      chat_id: chatId,
-      telegram_message_id: messageId
-    });
-
     // Get existing message
     const { data: existingMessage, error: fetchError } = await supabase
       .from('messages')
@@ -360,7 +316,8 @@ export async function xdelo_updateMessage(
     const updateWithTimestamp = {
       ...updateData,
       old_analyzed_content,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      edit_count: (existingMessage.edit_count || 0) + 1
     };
 
     // Update message
@@ -372,7 +329,7 @@ export async function xdelo_updateMessage(
 
     if (updateError) throw updateError;
 
-    // Log update event
+    // Log update event with proper UUID handling
     await xdelo_logProcessingEvent(
       'message_updated',
       existingMessage.id,
@@ -394,5 +351,127 @@ export async function xdelo_updateMessage(
       error_message: error instanceof Error ? error.message : String(error),
       error_code: error instanceof Error && 'code' in error ? (error as {code?: string}).code : 'MESSAGE_UPDATE_ERROR'
     };
+  }
+}
+
+/**
+ * Update message processing state
+ */
+export async function xdelo_updateMessageProcessingState(
+  params: UpdateProcessingStateParams,
+  logger: LoggerInterface
+): Promise<MessageResponse> {
+  try {
+    const supabase = createSupabaseClient();
+
+    // Get existing message
+    const { data: existingMessage, error: fetchError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', params.messageId)
+      .single();
+
+    if (fetchError || !existingMessage) {
+      throw new Error(fetchError?.message || 'Message not found');
+    }
+
+    // Prepare update data
+    const updateData: Record<string, unknown> = {
+      processing_state: params.state,
+      updated_at: new Date().toISOString()
+    };
+
+    if (params.analyzedContent) {
+      updateData.analyzed_content = params.analyzedContent;
+      updateData.processing_completed_at = new Date().toISOString();
+    }
+
+    if (params.error) {
+      updateData.error_message = params.error;
+      updateData.last_error_at = new Date().toISOString();
+      updateData.retry_count = (existingMessage.retry_count || 0) + 1;
+    }
+
+    if (params.processingStarted) {
+      updateData.processing_started_at = new Date().toISOString();
+    }
+
+    // Update message state
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update(updateData)
+      .eq('id', params.messageId);
+
+    if (updateError) throw updateError;
+
+    // Get correlation_id for logging
+    const correlationId = existingMessage?.correlation_id ? 
+      existingMessage.correlation_id.toString() : 
+      crypto.randomUUID();
+
+    // Log state change with proper UUID handling
+    await xdelo_logProcessingEvent(
+      'processing_state_changed',
+      params.messageId,
+      correlationId,
+      {
+        telegram_message_id: existingMessage?.telegram_message_id,
+        chat_id: existingMessage?.chat_id,
+        processing_state: params.state,
+        error: params.error
+      }
+    );
+
+    return { id: params.messageId, success: true };
+  } catch (error) {
+    logger.error('Error updating message processing state:', error);
+    return { 
+      id: params.messageId, 
+      success: false, 
+      error_message: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+// Simple logger for Telegram webhook
+export class Logger implements LoggerInterface {
+  private correlationId: string;
+  private component: string;
+  
+  constructor(correlationId: string, component = 'telegram-webhook') {
+    this.correlationId = correlationId;
+    this.component = component;
+  }
+  
+  info(message: string, data: Record<string, any> = {}) {
+    console.log(JSON.stringify({
+      level: 'INFO',
+      correlation_id: this.correlationId,
+      component: this.component,
+      message,
+      ...data
+    }));
+  }
+  
+  warn(message: string, data: Record<string, any> = {}) {
+    console.log(JSON.stringify({
+      level: 'WARN',
+      correlation_id: this.correlationId,
+      component: this.component,
+      message,
+      ...data
+    }));
+  }
+  
+  error(message: string, error: unknown) {
+    console.error(JSON.stringify({
+      level: 'ERROR',
+      correlation_id: this.correlationId,
+      component: this.component,
+      message,
+      error: error instanceof Error ? 
+        error.message : 
+        (typeof error === 'object' ? JSON.stringify(error) : String(error))
+    }));
   }
 }
