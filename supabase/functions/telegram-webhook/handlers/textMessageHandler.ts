@@ -68,9 +68,9 @@ function createLoggerAdapter(logger?: Logger, correlationId: string): LoggerInte
  */
 export async function handleTextMessage(
   message: TelegramMessage,
-  correlationId: string,
   context: MessageContext
 ): Promise<Response> {
+  const { correlationId } = context;
   const loggerAdapter = createLoggerAdapter(context.logger, correlationId);
   
   try {
@@ -168,3 +168,7 @@ export async function handleTextMessage(
     throw error;
   }
 }
+
+// Export handleOtherMessage as an alias for handleTextMessage
+// This resolves the import issue in telegram-webhook/index.ts
+export const handleOtherMessage = handleTextMessage;

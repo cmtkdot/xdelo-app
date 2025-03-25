@@ -41,8 +41,24 @@ export async function xdelo_logProcessingEvent(
     // Ensure correlation ID is a string
     const corrId = correlationId?.toString() || crypto.randomUUID();
     
-    // ALWAYS generate a new UUID to avoid type errors with UUID columns
-    const validEntityId = crypto.randomUUID();
+    // Handle special cases where entityId might not be a valid UUID
+    let validEntityId: string;
+    
+    // Always generate a new UUID for special strings like 'system'
+    if (typeof entityId !== 'string' || 
+        entityId === 'system' || 
+        entityId.length < 32 || 
+        !entityId.includes('-')) {
+      validEntityId = crypto.randomUUID();
+    } else {
+      // Try to use the original ID if it looks like a UUID
+      try {
+        // This will throw an error if entityId is not a valid UUID
+        validEntityId = entityId;
+      } catch (e) {
+        validEntityId = crypto.randomUUID();
+      }
+    }
     
     // Store original entity ID in metadata
     const enhancedMetadata = {
