@@ -1,8 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-import { corsHeaders, addCorsHeaders } from '../utils/cors.ts';
+import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
-import { xdelo_logProcessingEvent } from '../dbOperations.ts';
-import { constructTelegramMessageUrl, isMessageForwarded } from '../utils/messageUtils.ts';
+import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
+import { constructTelegramMessageUrl, isMessageForwarded } from '../../_shared/messageUtils.ts';
 
 // Create Supabase client
 const supabaseClient = createClient(
@@ -165,31 +165,27 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       );
     }
   } catch (error) {
-    logger?.error(`Error processing edited message: ${error.message}`, { 
-      stack: error.stack,
-      message_id: message.message_id
-    });
+    context.logger?.error(`Error processing edited message: ${error.message}`, { stack: error.stack });
     
     await xdelo_logProcessingEvent(
-      "edit_processing_error",
-      message.message_id.toString(),
-      correlationId,
+      "edited_message_processing_error",
+      `${message.chat.id}_${message.message_id}`,
+      context.correlationId,
       {
         message_id: message.message_id,
         chat_id: message.chat.id,
-        error: error.message,
-        stack: error.stack
+        error: error.message
       },
       error.message
     );
     
-    return addCorsHeaders(new Response(
+    return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message,
-        correlationId
+        error: error.message || 'Unknown error processing edited message',
+        correlationId: context.correlationId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    ));
+    );
   }
 }

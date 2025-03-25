@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { DataTable } from "@/components/ui/data-table";
 import { ColumnDef } from "@tanstack/react-table";
@@ -70,8 +71,7 @@ export default function TableDemoPage() {
         <Checkbox
           checked={
             table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate") ||
-            undefined
+            (table.getIsSomePageRowsSelected() && "indeterminate")
           }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
           aria-label="Select all"
@@ -153,7 +153,7 @@ export default function TableDemoPage() {
           }`}>
             {status}
           </div>
-        );
+        )
       },
     },
     {
