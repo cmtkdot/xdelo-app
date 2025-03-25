@@ -34,7 +34,7 @@ export async function xdelo_logProcessingEvent(
   errorMessage?: string
 ): Promise<void> {
   try {
-    const { error } = await supabaseClient.rpc('xdelo_log_processing_event', {
+    const { error } = await supabaseClient.rpc('xdelo_logprocessingevent', {
       p_event_type: eventType,
       p_entity_id: entityId,
       p_correlation_id: correlationId,

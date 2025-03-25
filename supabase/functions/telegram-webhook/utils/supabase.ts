@@ -145,18 +145,15 @@ export async function logProcessingEvent(
   errorMessage?: string
 ): Promise<void> {
   try {
-    await supabaseClient
-      .from('processing_events')
-      .insert({
-        event_type: eventType,
-        resource_id: resourceId,
-        correlation_id: correlationId,
-        metadata,
-        error_message: errorMessage,
-        created_at: new Date().toISOString()
-      });
+    await supabaseClient.rpc('xdelo_logprocessingevent', {
+      p_event_type: eventType,
+      p_entity_id: resourceId,
+      p_correlation_id: correlationId,
+      p_metadata: metadata,
+      p_error_message: errorMessage
+    });
   } catch (error) {
     console.error('Failed to log processing event:', error);
     // Don't throw - we don't want logging failures to break the main flow
   }
-} 
+}

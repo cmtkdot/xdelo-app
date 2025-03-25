@@ -21,7 +21,7 @@ declare module "@supabase/supabase-js" {
       }
     ): { data: T; error: null } | { data: null; error: Error };
 
-    // RPC for the logProcessingEvent function 
+    // RPC for the logProcessingEvent function - Updated name to match the database function
     rpc<T = string>(
       fn: "xdelo_logprocessingevent", 
       params: { 

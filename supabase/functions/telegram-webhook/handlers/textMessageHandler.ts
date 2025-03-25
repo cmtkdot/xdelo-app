@@ -1,3 +1,4 @@
+
 import { corsHeaders, addCorsHeaders } from '../utils/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { xdelo_logProcessingEvent } from '../dbOperations.ts';
