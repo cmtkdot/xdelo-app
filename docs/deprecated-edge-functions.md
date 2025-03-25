@@ -6,7 +6,7 @@ This document lists edge functions that are being deprecated as part of the capt
 
 The following edge functions have been removed as part of the caption processing cleanup:
 
-1. `manual-caption-parser` - Replaced by direct database functions
+1. ~~`manual-caption-parser` - Replaced by direct database functions~~ (Still active but scheduled for replacement)
 2. `xdelo_caption_parser` - Replaced by direct database functions
 3. `analyze-with-ai` - Replaced by direct database functions
 4. `parse-caption-with-ai` - Replaced by direct database functions
@@ -85,4 +85,4 @@ After removing deprecated functions:
 After removing these functions, update the following documentation:
 
 - Update `docs/edge-functions.md` to reflect current state
-- Update README files to remove references to deprecated functions 
+- Update README files to remove references to deprecated functions
