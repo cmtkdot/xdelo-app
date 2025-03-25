@@ -37,7 +37,7 @@ serve(async (req: Request) => {
       }
     );
 
-    // Parse the update from Telegram
+    // Parse the update from Telegram 
     let update;
     try {
       update = await req.json();
