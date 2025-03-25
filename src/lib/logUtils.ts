@@ -44,25 +44,13 @@ export const logEvent = async (
   metadata: EventLogData = {}
 ) => {
   try {
-    // Check if entityId is a valid UUID
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    const isValidUuid = entityId && uuidRegex.test(entityId);
-    
-    // If not a valid UUID, create one and store original in metadata
-    const validEntityId = isValidUuid ? entityId : crypto.randomUUID();
-    const enhancedMetadata = {
-      ...metadata,
-      ...(isValidUuid ? {} : { original_entity_id: entityId }),
-      logged_at: new Date().toISOString()
-    };
-    
     // First try with unified_audit_logs table (preferred)
     const { error: unifiedError } = await supabase
       .from('unified_audit_logs')
       .insert({
         event_type: String(eventType),
-        entity_id: validEntityId,
-        metadata: enhancedMetadata
+        entity_id: entityId,
+        metadata
       });
     
     if (unifiedError) {
@@ -75,7 +63,7 @@ export const logEvent = async (
           {
             p_event_type: String(eventType),
             p_message_id: entityId,
-            p_metadata: enhancedMetadata
+            p_metadata: metadata
           }
         );
         
