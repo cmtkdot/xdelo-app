@@ -20,14 +20,17 @@ export async function xdelo_logProcessingEvent(
       logged_from: 'edge_function'
     };
     
-    const { error } = await supabaseClient.from('unified_audit_logs').insert({
-      event_type: eventType,
-      entity_id: entityId,
-      metadata: enhancedMetadata,
-      error_message: errorMessage,
-      correlation_id: correlationId,
-      event_timestamp: new Date().toISOString()
-    });
+    // Use the RPC function instead of direct table insert to handle non-UUID entity IDs
+    const { error } = await supabaseClient.rpc(
+      'xdelo_logprocessingevent',
+      { 
+        p_event_type: eventType,
+        p_entity_id: entityId,
+        p_correlation_id: correlationId,
+        p_metadata: enhancedMetadata,
+        p_error_message: errorMessage
+      }
+    );
     
     if (error) {
       console.error(`Error logging event: ${eventType}`, error);

@@ -43,12 +43,13 @@ export class Logger {
         console.log(`[${eventType}] [${this.context}] ${entityId}`, enhancedMetadata);
       }
       
-      // Log to database 
+      // Log to database using the RPC function
       await supabase.rpc('xdelo_logprocessingevent', {
         p_event_type: String(eventType),
         p_entity_id: safeEntityId,
         p_correlation_id: this.correlationId,
-        p_metadata: enhancedMetadata
+        p_metadata: enhancedMetadata,
+        p_error_message: null
       });
     } catch (error) {
       // Fallback to console if database logging fails
