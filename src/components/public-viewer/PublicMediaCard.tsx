@@ -1,5 +1,6 @@
+
 import React, { useEffect, useRef, useState } from 'react'
-import { Message } from '@/types/entities/Message'
+import { Message, messageHelpers } from '@/types/entities/Message'
 import { Button } from '@/components/ui/button'
 import { ExternalLink, Video, Play, Eye, Pencil, Trash } from 'lucide-react'
 import { useVideoThumbnail } from '@/hooks/useVideoThumbnail'
@@ -115,9 +116,16 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
     { title: "Delete", icon: Trash }
   ]
   
+  // Get product data safely using our helper functions
+  const productName = messageHelpers.getProductName(message);
+  const productCode = messageHelpers.getProductCode(message);
+  const vendorUid = messageHelpers.getVendorUid(message);
+  const purchaseDate = messageHelpers.getPurchaseDate(message);
+  const productQuantity = messageHelpers.getQuantity(message);
+  
   // Format date in MM/DD/YYYY format for hover state
-  const compactDate = message.purchase_date 
-    ? new Date(message.purchase_date).toLocaleDateString('en-US', { 
+  const compactDate = purchaseDate 
+    ? new Date(purchaseDate).toLocaleDateString('en-US', { 
         month: '2-digit', 
         day: '2-digit', 
         year: 'numeric' 
@@ -125,8 +133,8 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
     : null
     
   // Format date for default state with month name
-  const formattedDate = message.purchase_date 
-    ? new Date(message.purchase_date).toLocaleDateString(undefined, { 
+  const formattedDate = purchaseDate 
+    ? new Date(purchaseDate).toLocaleDateString(undefined, { 
         month: 'short', 
         day: 'numeric', 
         year: 'numeric' 
@@ -134,9 +142,9 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
     : null
 
   // Get color based on vendor UID to create consistent color coding
-  const getVendorColor = (vendorUid: string) => {
+  const getVendorColor = (vendorId: string) => {
     // Simple hash function to generate a consistent color for the same vendor
-    const hash = vendorUid.split('').reduce((acc, char) => {
+    const hash = vendorId.split('').reduce((acc, char) => {
       return char.charCodeAt(0) + ((acc << 5) - acc)
     }, 0)
     
@@ -152,9 +160,9 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
   }
 
   // Get ring color to match the vendor badge
-  const getVendorRingColor = (vendorUid: string) => {
+  const getVendorRingColor = (vendorId: string) => {
     // Similar logic but for the ring color
-    const hash = vendorUid.split('').reduce((acc, char) => {
+    const hash = vendorId.split('').reduce((acc, char) => {
       return char.charCodeAt(0) + ((acc << 5) - acc)
     }, 0)
     
@@ -167,8 +175,8 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
     return colors[Math.abs(hash) % colors.length]
   }
   
-  const vendorBgColor = message.vendor_uid ? getVendorColor(message.vendor_uid) : 'bg-purple-500/70'
-  const vendorRingColor = message.vendor_uid ? getVendorRingColor(message.vendor_uid) : 'ring-purple-500/20'
+  const vendorBgColor = vendorUid ? getVendorColor(vendorUid) : 'bg-purple-500/70'
+  const vendorRingColor = vendorUid ? getVendorRingColor(vendorUid) : 'ring-purple-500/20'
 
   return (
     <div 
@@ -178,7 +186,7 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
       onMouseLeave={() => setIsHovering(false)}
       role="button"
       tabIndex={0}
-      aria-label={`View details for ${message.product_name || 'media item'}`}
+      aria-label={`View details for ${productName || 'media item'}`}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           handleClick(e as unknown as React.MouseEvent)
@@ -186,10 +194,10 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
       }}
     >
       {/* Vendor UID Tag (Top Right) */}
-      {message.vendor_uid && (
+      {vendorUid && (
         <div className="absolute top-2 right-2 z-10">
           <span className={`inline-flex items-center rounded-full ${vendorBgColor} backdrop-blur-sm px-2 py-1 text-xs font-medium text-white shadow-sm ring-1 ring-inset ${vendorRingColor}`}>
-            {message.vendor_uid}
+            {vendorUid}
           </span>
         </div>
       )}
@@ -257,9 +265,9 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
       <div className="absolute inset-x-0 bottom-0 p-2 bg-black/60 backdrop-blur-sm">
         <div className="flex justify-between items-center">
           <div className="flex-1">
-            {message.product_name && (
+            {productName && (
               <div className="text-white text-sm font-medium line-clamp-1">
-                {message.product_name}
+                {productName}
               </div>
             )}
           </div>
@@ -277,9 +285,9 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
         <div className="flex items-center gap-2">
           {/* Product Name */}
           <div className="flex-1">
-            {message.product_name && (
+            {productName && (
               <span className="text-white text-sm font-medium line-clamp-1">
-                {message.product_name}
+                {productName}
               </span>
             )}
           </div>
@@ -291,19 +299,19 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
                 {compactDate}
               </span>
             )}
-            {message.product_quantity && (
+            {productQuantity && (
               <span className="text-white/90 text-xs whitespace-nowrap">
-                Qty: {message.product_quantity}
+                Qty: {productQuantity}
               </span>
             )}
           </div>
         </div>
         
         {/* Product code pill using vendor color scheme */}
-        {message.product_code && (
+        {productCode && (
           <div className="mt-2">
             <span className={`inline-flex items-center rounded-md ${vendorBgColor} px-1.5 py-0.5 text-xs font-medium text-white shadow-sm ring-1 ring-inset ${vendorRingColor}`}>
-              PO#{message.product_code}
+              PO#{productCode}
             </span>
           </div>
         )}
