@@ -295,35 +295,7 @@ async function xdelo_handleNewMediaMessage(
 ): Promise<Response> {
   const { correlationId, logger } = context;
   
-  // First check if this is a duplicate message we've already processed
   try {
-    const isDuplicate = await checkDuplicateFile(
-      supabaseClient,
-      message.message_id,
-      message.chat.id
-    );
-    
-    if (isDuplicate) {
-      logger?.info(`Duplicate message detected: ${message.message_id} in chat ${message.chat.id}`);
-      
-      // Log the duplicate detection
-      await xdelo_logProcessingEvent(
-        "duplicate_message_detected",
-        message.message_id.toString(),
-        correlationId,
-        {
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          media_group_id: message.media_group_id
-        }
-      );
-      
-      return new Response(
-        JSON.stringify({ success: true, duplicate: true, correlationId }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
     // Process the media message
     const messageUrl = constructTelegramMessageUrl(message.chat.id, message.message_id);
     
@@ -398,8 +370,31 @@ async function xdelo_handleNewMediaMessage(
       message_url: messageUrl
     };
     
-    // Create the message
+    // Create the message - duplicate detection is built into this function
     const result = await createMessage(supabaseClient, messageInput, logger);
+    
+    // Check if this is a duplicate file that was detected by createMessage
+    if (result.success && result.error_message === "File already exists in database") {
+      logger?.info(`Duplicate file detected: ${message.message_id} in chat ${message.chat.id}`);
+      
+      // Log the duplicate detection
+      await xdelo_logProcessingEvent(
+        "duplicate_file_detected",
+        message.message_id.toString(),
+        correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          media_group_id: message.media_group_id,
+          file_unique_id: telegramFile.file_unique_id
+        }
+      );
+      
+      return new Response(
+        JSON.stringify({ success: true, duplicate: true, id: result.id, correlationId }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     
     if (!result.success) {
       logger?.error(`Failed to create message: ${result.error_message}`, {
