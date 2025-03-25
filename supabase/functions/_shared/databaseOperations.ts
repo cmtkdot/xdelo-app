@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
 // Create Supabase client
@@ -19,18 +18,16 @@ const supabaseClient = createClient(
  */
 export async function xdelo_logProcessingEvent(
   eventType: string,
-  entityId: string,
+  entityId: string | number,
   correlationId: string,
   metadata: Record<string, unknown>,
   errorMessage?: string
 ): Promise<void> {
   try {
-    // Prevent UUID conversion errors by ensuring entityId is not a simple number
-    const safeEntityId = typeof entityId === 'number' || /^\d+$/.test(entityId) 
-      ? `message_${entityId}` 
-      : entityId;
+    // Always convert entityId to string for consistency
+    const entityIdStr = String(entityId);
     
-    // Ensure metadata has a timestamp
+    // Ensure metadata has a timestamp and is an object
     const enhancedMetadata = {
       ...metadata,
       timestamp: metadata.timestamp || new Date().toISOString(),
@@ -43,7 +40,7 @@ export async function xdelo_logProcessingEvent(
       'xdelo_logprocessingevent',
       {
         p_event_type: eventType,
-        p_entity_id: safeEntityId,
+        p_entity_id: entityIdStr,
         p_correlation_id: correlationId,
         p_metadata: enhancedMetadata,
         p_error_message: errorMessage
@@ -54,13 +51,14 @@ export async function xdelo_logProcessingEvent(
     if (rpcError) {
       console.error(`RPC logging failed: ${rpcError.message}, trying direct insert`);
       
-      // Try to clean up the entity ID to be UUID compatible
-      let validEntityId = safeEntityId;
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(safeEntityId)) {
-        // If not a valid UUID, generate one
-        validEntityId = crypto.randomUUID();
-        // Store the original ID in metadata
-        enhancedMetadata.original_entity_id = safeEntityId;
+      // Generate a UUID for the entity_id field when needed
+      const validEntityId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(entityIdStr) 
+        ? entityIdStr 
+        : crypto.randomUUID();
+      
+      // Store the original ID in metadata if we had to generate a new UUID
+      if (validEntityId !== entityIdStr) {
+        enhancedMetadata.original_entity_id = entityIdStr;
       }
       
       const { error } = await supabaseClient.from('unified_audit_logs').insert({

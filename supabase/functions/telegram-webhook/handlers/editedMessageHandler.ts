@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
@@ -26,52 +25,31 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
     
     // Double-check that this is not a media message
     if (message.photo || message.video || message.document) {
-      // This shouldn't happen due to updated routing logic, but adding as a safeguard
       logger?.warn(`Edited message ${message.message_id} contains media, will be redirected to media handler`);
       throw new Error('Edited message contains media, should be handled by mediaMessageHandler');
     }
     
     logger?.info(`Processing edited text message ${message.message_id}`);
     
-    // Find existing message - FIX: Use maybeSingle to get null instead of error if none exists
-    const { data: existingMessages, error: lookupError } = await supabaseClient
+    // Find existing message - using maybeSingle to avoid errors when no record is found
+    const { data: existingMessage, error: lookupError } = await supabaseClient
       .from('messages')
       .select('*')
       .eq('telegram_message_id', message.message_id)
-      .eq('chat_id', message.chat.id);
+      .eq('chat_id', message.chat.id)
+      .maybeSingle();
       
     if (lookupError) {
       logger?.error(`Error looking up message for edit: ${lookupError.message}`);
       throw lookupError;
     }
     
-    // Check if we found any messages and handle duplicates
-    if (!existingMessages || existingMessages.length === 0) {
+    // Check if we found the message
+    if (!existingMessage) {
       logger?.info(`No existing message found for edit ${message.message_id}, creating new record`);
-      
-      // If message not found, create a new record
       return await createNewMessageFromEdit(message, correlationId, logger);
     }
     
-    // If we have multiple messages, log it but use the first one
-    if (existingMessages.length > 1) {
-      logger?.warn(`Found ${existingMessages.length} messages for telegram_message_id ${message.message_id} in chat_id ${message.chat.id}, using the first one`);
-      
-      // Log this duplicate issue for investigation
-      await xdelo_logProcessingEvent(
-        "duplicate_messages_found",
-        `message_group_${message.message_id}`,
-        correlationId,
-        {
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          count: existingMessages.length,
-          message_ids: existingMessages.map(m => m.id)
-        }
-      );
-    }
-    
-    const existingMessage = existingMessages[0];
     logger?.info(`Found existing message ${existingMessage.id} for edit`);
     
     // Store previous state in edit_history
@@ -133,9 +111,12 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
   } catch (error) {
     context.logger?.error(`Error processing edited message: ${error.message}`, { stack: error.stack });
     
+    // Create a safe entity ID for logging
+    const safeEntityId = `chat_${message.chat.id}_msg_${message.message_id}`;
+    
     await xdelo_logProcessingEvent(
       "edited_message_processing_error",
-      `chat_${message.chat.id}_msg_${message.message_id}`, // Use a format that won't cause UUID issues
+      safeEntityId,
       context.correlationId,
       {
         message_id: message.message_id,
