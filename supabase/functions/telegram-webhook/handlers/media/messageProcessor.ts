@@ -6,10 +6,12 @@ import {
   MessageContext
 } from '../../types.ts';
 import { 
-  xdelo_logProcessingEvent,
+  xdelo_logProcessingEvent
+} from '../../utils/databaseOperations.ts';
+import {
   xdelo_processCaptionFromWebhook, 
   xdelo_syncMediaGroupFromWebhook 
-} from '../../../_shared/databaseOperations.ts';
+} from '../../utils/databaseOperations.ts';
 
 /**
  * Main handler for media messages from Telegram

@@ -3887,14 +3887,25 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_sync_media_group_content: {
-        Args: {
-          p_source_message_id: string
-          p_media_group_id: string
-          p_correlation_id?: string
-        }
-        Returns: undefined
-      }
+      xdelo_sync_media_group_content:
+        | {
+            Args: {
+              p_source_message_id: string
+              p_media_group_id: string
+              p_correlation_id: string
+              p_force_sync?: boolean
+              p_sync_edit_history?: boolean
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_source_message_id: string
+              p_media_group_id: string
+              p_correlation_id?: string
+            }
+            Returns: undefined
+          }
       xdelo_sync_media_group_enhanced: {
         Args: {
           p_media_group_id: string

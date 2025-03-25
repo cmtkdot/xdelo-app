@@ -1,6 +1,8 @@
+
 // Add exports for the required database operation functions
 import { corsHeaders } from "./cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { v4 as uuidv4 } from "https://esm.sh/uuid@9.0.0";
 
 /**
  * Process caption from webhook for a specific message
@@ -28,7 +30,7 @@ export async function xdelo_processCaptionFromWebhook(
       'xdelo_process_caption_workflow',
       {
         p_message_id: messageId,
-        p_correlation_id: correlationId || crypto.randomUUID().toString(),
+        p_correlation_id: correlationId || uuidv4(),
         p_force: force
       }
     );
@@ -97,7 +99,7 @@ export async function xdelo_syncMediaGroupFromWebhook(
       {
         p_media_group_id: mediaGroupId,
         p_source_message_id: sourceMessageId,
-        p_correlation_id: correlationId || crypto.randomUUID().toString(),
+        p_correlation_id: correlationId || uuidv4(),
         p_force_sync: forceSync,
         p_sync_edit_history: syncEditHistory
       }
@@ -134,16 +136,26 @@ export async function xdelo_syncMediaGroupFromWebhook(
 }
 
 /**
- * Log processing events
+ * Log processing events using the RPC function
  */
 export async function xdelo_logProcessingEvent(
   eventType: string,
   entityId: string,
   correlationId: string,
-  details?: any,
+  metadata?: any,
   errorMessage?: string
 ): Promise<void> {
   try {
+    // Ensure correlationId is never undefined
+    const safeCorrelationId = correlationId || uuidv4();
+    
+    // Ensure metadata has a timestamp and source
+    const enhancedMetadata = {
+      ...(metadata || {}),
+      timestamp: new Date().toISOString(),
+      logged_from: 'edge_function'
+    };
+    
     // Get Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -156,24 +168,41 @@ export async function xdelo_logProcessingEvent(
       }
     );
     
-    const timestamp = new Date().toISOString();
-    
-    // Insert the event
-    const { error } = await supabase
-      .from('processing_events')
-      .insert({
-        event_type: eventType,
-        entity_id: entityId,
-        correlation_id: correlationId,
-        details: details || {},
-        error_message: errorMessage,
-        created_at: timestamp
-      });
+    // Use the RPC function to avoid direct insert
+    const { error } = await supabase.rpc(
+      'xdelo_logprocessingevent',
+      { 
+        p_event_type: eventType,
+        p_entity_id: entityId,
+        p_correlation_id: safeCorrelationId,
+        p_metadata: enhancedMetadata,
+        p_error_message: errorMessage
+      }
+    );
     
     if (error) {
       console.error(`Error logging processing event: ${error.message}`);
+      
+      // Fallback logging to console if database logging fails
+      console.log(JSON.stringify({
+        event_type: eventType,
+        entity_id: entityId,
+        correlation_id: safeCorrelationId,
+        metadata: enhancedMetadata,
+        error_message: errorMessage,
+        timestamp: new Date().toISOString()
+      }, null, 2));
     }
   } catch (error) {
     console.error(`Failed to log processing event: ${error.message}`);
+    
+    // Log to console as fallback
+    console.error(JSON.stringify({
+      event_type: "log_failure",
+      original_event_type: eventType,
+      entity_id: entityId,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString()
+    }, null, 2));
   }
 }

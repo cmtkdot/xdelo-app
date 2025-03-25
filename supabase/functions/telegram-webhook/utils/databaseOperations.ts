@@ -34,9 +34,29 @@ export async function xdelo_logProcessingEvent(
     
     if (error) {
       console.error('Error logging processing event:', error);
+      
+      // Fallback logging to console if database logging fails
+      console.error(JSON.stringify({
+        event_type: eventType,
+        entity_id: entityId,
+        correlation_id: correlationId || uuidv4(),
+        metadata: enhancedMetadata,
+        error_message: errorMessage,
+        timestamp: new Date().toISOString(),
+        log_error: error.message
+      }, null, 2));
     }
   } catch (err) {
     console.error('Exception logging processing event:', err);
+    
+    // Log to console as fallback
+    console.error(JSON.stringify({
+      event_type: "log_failure",
+      original_event_type: eventType,
+      entity_id: entityId,
+      error: err instanceof Error ? err.message : String(err),
+      timestamp: new Date().toISOString()
+    }, null, 2));
   }
 }
 
@@ -54,11 +74,14 @@ export async function xdelo_processDelayedMediaGroupSync(
       return { success: false, error: 'No media group ID provided' };
     }
     
+    // Ensure we have a valid correlation ID
+    const safeCorrelationId = correlationId || uuidv4();
+    
     // Log the start of the delayed sync
     await xdelo_logProcessingEvent(
       'delayed_media_group_sync_start',
       mediaGroupId,
-      correlationId,
+      safeCorrelationId,
       { mediaGroupId, timestamp: new Date().toISOString() }
     );
     
@@ -73,7 +96,7 @@ export async function xdelo_processDelayedMediaGroupSync(
       await xdelo_logProcessingEvent(
         'delayed_media_group_sync_error',
         mediaGroupId,
-        correlationId,
+        safeCorrelationId,
         { error: findError.message },
         findError.message
       );
@@ -85,7 +108,7 @@ export async function xdelo_processDelayedMediaGroupSync(
       await xdelo_logProcessingEvent(
         'delayed_media_group_sync_warning',
         mediaGroupId,
-        correlationId,
+        safeCorrelationId,
         { warning: 'No suitable caption message found' }
       );
       return { success: false, error: 'No suitable caption message found' };
@@ -97,8 +120,9 @@ export async function xdelo_processDelayedMediaGroupSync(
       {
         p_media_group_id: mediaGroupId,
         p_source_message_id: captionMessageId,
-        p_correlation_id: correlationId,
-        p_force_sync: true
+        p_correlation_id: safeCorrelationId,
+        p_force_sync: true,
+        p_sync_edit_history: false
       }
     );
     
@@ -107,7 +131,7 @@ export async function xdelo_processDelayedMediaGroupSync(
       await xdelo_logProcessingEvent(
         'delayed_media_group_sync_error',
         mediaGroupId,
-        correlationId,
+        safeCorrelationId,
         { error: syncError.message },
         syncError.message
       );
@@ -118,7 +142,7 @@ export async function xdelo_processDelayedMediaGroupSync(
     await xdelo_logProcessingEvent(
       'delayed_media_group_sync_complete',
       mediaGroupId,
-      correlationId,
+      safeCorrelationId,
       { 
         captionMessageId,
         result: syncResult,
@@ -134,10 +158,12 @@ export async function xdelo_processDelayedMediaGroupSync(
   } catch (error) {
     console.error('Exception in delayed media group sync:', error);
     
+    const safeCorrelationId = correlationId || uuidv4();
+    
     await xdelo_logProcessingEvent(
       'delayed_media_group_sync_exception',
       mediaGroupId,
-      correlationId,
+      safeCorrelationId,
       { error: error.message },
       error.message
     );
