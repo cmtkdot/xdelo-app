@@ -107,13 +107,15 @@ export async function reprocessMessage(
 }
 
 /**
- * Process delayed media group synchronization
+ * Schedule delayed media group synchronization
  */
-export async function processDelayedMediaGroupSync(
+export async function scheduleDelayedSync(
+  messageId: string,
   mediaGroupId: string,
   correlationId?: string
 ): Promise<any> {
   return callUnifiedProcessor('delayed_sync', { 
+    messageId,
     mediaGroupId, 
     correlationId 
   });

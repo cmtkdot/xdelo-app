@@ -2,13 +2,12 @@ import { useState } from 'react';
 import { useToast } from '@/hooks/useToast';
 import { useMediaQueries } from './useMediaQueries';
 import { useMediaStorage } from './useMediaStorage';
-import { MediaUtilsProvider, UseMediaUtilsType } from './types';
+import { UseMediaUtilsType } from './types';
 import { 
   processMessageCaption, 
   syncMediaGroup, 
-  reprocessMessage
+  scheduleDelayedSync 
 } from '@/lib/unifiedProcessor';
-import { processDelayedMediaGroupSync } from '@/lib/mediaGroupSync';
 
 export const useMediaUtils = (): UseMediaUtilsType => {
   const [isLoading, setIsLoading] = useState(false);
@@ -16,8 +15,8 @@ export const useMediaUtils = (): UseMediaUtilsType => {
   const { toast } = useToast();
   
   // Import sub-hooks for different operations
-  const { getMessages, getMessageById, updateMessage } = useMediaQueries();
-  const { uploadMedia, downloadMedia, deleteMedia } = useMediaStorage();
+  const mediaQueries = useMediaQueries();
+  const mediaStorage = useMediaStorage();
   
   // Process a message caption
   const processCaptionHandler = async (messageId: string, force: boolean = false) => {
@@ -93,7 +92,7 @@ export const useMediaUtils = (): UseMediaUtilsType => {
     setError(null);
     
     try {
-      const result = await processDelayedMediaGroupSync(mediaGroupId, messageId);
+      const result = await scheduleDelayedSync(messageId, mediaGroupId);
       
       if (!result.success) {
         throw new Error(result.error || 'Failed to schedule delayed sync');
@@ -134,7 +133,7 @@ export const useMediaUtils = (): UseMediaUtilsType => {
     scheduleDelayedSync: scheduleDelayedSyncHandler,
     
     // Other operations from sub-hooks
-    ...useMediaQueries(),
-    ...useMediaStorage()
+    ...mediaQueries,
+    ...mediaStorage
   };
 };
