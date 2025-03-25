@@ -4,7 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { hasMedia } from "../index.ts";
 import { handleMediaMessage } from "./mediaMessageHandler.ts";
 import { extractCaption, hasCaption, prepareEditHistoryEntry } from "../utils/messageUtils.ts";
-import { xdelo_processCaptionFromWebhook, xdelo_syncMediaGroupFromWebhook } from "../utils/databaseOperations.ts";
+import { xdelo_logProcessingEvent } from "../utils/databaseOperations.ts";
 import { supabaseClient } from "../utils/supabase.ts";
 
 /**
@@ -195,33 +195,60 @@ export async function handleEditedMessage(message: any, context: any) {
     
     // Step 4: Directly process the caption and sync media group if needed using the unified processor
     if (hasCaption(message)) {
-      // Process the caption directly using the unified processor
-      const captionResult = await xdelo_processCaptionFromWebhook(
-        existingMessage.id,
-        correlationId,
-        true // Force reprocessing since it's an edit
-      );
-      
-      logger.info("Caption processing result", {
-        success: captionResult.success,
-        error: captionResult.error,
-        data: captionResult.data
-      });
-      
-      // If this message is part of a media group, sync the group using the unified processor
-      if (existingMessage.media_group_id) {
-        const syncResult = await xdelo_syncMediaGroupFromWebhook(
-          existingMessage.media_group_id,
-          existingMessage.id,
-          correlationId,
-          true, // Force sync
-          true  // Sync edit history
+      // Instead of calling xdelo_processCaptionFromWebhook directly, we'll call the unified processor
+      // Function via an edge function invoke
+      try {
+        // Call the unified processor edge function
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+          {
+            auth: {
+              persistSession: false,
+              autoRefreshToken: false
+            }
+          }
         );
         
-        logger.info("Media group sync result", {
-          success: syncResult.success,
-          error: syncResult.error,
-          data: syncResult.data
+        // Process caption
+        const captionResult = await supabase.functions.invoke('xdelo_unified_processor', {
+          body: {
+            action: 'process_caption',
+            messageId: existingMessage.id,
+            correlationId: correlationId,
+            force: true // Force reprocessing since it's an edit
+          }
+        });
+        
+        logger.info("Caption processing result", {
+          success: captionResult.data?.success,
+          error: captionResult.error,
+          data: captionResult.data
+        });
+        
+        // If this message is part of a media group, sync the group
+        if (existingMessage.media_group_id) {
+          const syncResult = await supabase.functions.invoke('xdelo_unified_processor', {
+            body: {
+              action: 'sync_media_group',
+              mediaGroupId: existingMessage.media_group_id,
+              sourceMessageId: existingMessage.id,
+              correlationId: correlationId,
+              forceSync: true,
+              syncEditHistory: true
+            }
+          });
+          
+          logger.info("Media group sync result", {
+            success: syncResult.data?.success,
+            error: syncResult.error,
+            data: syncResult.data
+          });
+        }
+      } catch (error) {
+        logger.error("Error invoking unified processor", {
+          messageId: existingMessage.id,
+          error: error.message
         });
       }
     }
