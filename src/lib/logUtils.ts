@@ -44,46 +44,48 @@ export const logEvent = async (
   metadata: EventLogData = {}
 ) => {
   try {
-    // Check if entityId is a valid UUID
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    const isValidUuid = entityId && uuidRegex.test(entityId);
+    // Generate a correlation ID if none exists
+    const correlationId = crypto.randomUUID();
     
-    // If not a valid UUID, create one and store original in metadata
-    const validEntityId = isValidUuid ? entityId : crypto.randomUUID();
-    const enhancedMetadata = {
-      ...metadata,
-      ...(isValidUuid ? {} : { original_entity_id: entityId }),
-      logged_at: new Date().toISOString()
-    };
-    
-    // First try with unified_audit_logs table (preferred)
-    const { error: unifiedError } = await supabase
-      .from('unified_audit_logs')
-      .insert({
-        event_type: String(eventType),
-        entity_id: validEntityId,
-        metadata: enhancedMetadata
-      });
-    
-    if (unifiedError) {
-      console.warn("Could not log to unified_audit_logs:", unifiedError.message);
-      
-      // Fallback to event_logs if it exists
-      try {
-        const { error: legacyError } = await supabase.rpc(
-          'xdelo_log_event' as any,
-          {
-            p_event_type: String(eventType),
-            p_message_id: entityId,
-            p_metadata: enhancedMetadata
-          }
-        );
-        
-        if (legacyError) {
-          console.error("Failed to log event using fallback method:", legacyError.message);
+    // Call the standard database function that handles UUID validation
+    const { error } = await supabase.rpc(
+      'xdelo_logprocessingevent',
+      {
+        p_event_type: String(eventType),
+        p_entity_id: entityId,
+        p_correlation_id: correlationId,
+        p_metadata: {
+          ...metadata,
+          logged_at: new Date().toISOString(),
+          source: 'client'
         }
-      } catch (rpcError) {
-        console.error("RPC function not available:", rpcError);
+      }
+    );
+    
+    if (error) {
+      console.warn("Failed to log event:", error.message);
+      
+      // Fallback to direct insert if the RPC fails
+      try {
+        const { error: insertError } = await supabase
+          .from('unified_audit_logs')
+          .insert({
+            event_type: String(eventType),
+            entity_id: crypto.randomUUID(),
+            metadata: {
+              ...metadata,
+              original_entity_id: entityId,
+              logged_at: new Date().toISOString(),
+              source: 'client_fallback'
+            },
+            correlation_id: correlationId
+          });
+          
+        if (insertError) {
+          console.error("Failed to log event using fallback method:", insertError.message);
+        }
+      } catch (insertError) {
+        console.error("Error in fallback logging:", insertError);
       }
     }
   } catch (error) {

@@ -44,65 +44,34 @@ const handler = createEdgeHandler(async (req: Request, context: HandlerContext) 
     );
   }
   
-  // Ensure entityId is a valid UUID, if not, generate one and include the original ID in metadata
-  let validEntityId: string;
-  let enhancedMetadata = { ...metadata };
-
-  try {
-    // Try to parse as UUID to validate
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (entityId && uuidRegex.test(entityId)) {
-      validEntityId = entityId;
-    } else {
-      // Not a valid UUID, generate one and store original in metadata
-      validEntityId = crypto.randomUUID();
-      // Add the original ID to metadata
-      enhancedMetadata.original_entity_id = entityId;
-    }
-  } catch (e) {
-    // Any error, use a new UUID
-    validEntityId = crypto.randomUUID();
-    enhancedMetadata.original_entity_id = entityId;
-  }
-  
-  // Add correlation ID and timestamp to metadata
-  enhancedMetadata = {
-    ...enhancedMetadata,
-    logged_at: new Date().toISOString(),
-    correlation_id: correlationId,
-    logged_from: 'edge_function'
-  };
-  
-  // Add error message to metadata if provided
-  if (errorMessage) {
-    enhancedMetadata.error_message = errorMessage;
-  }
-  
   // Create Supabase client
   const supabase = createSupabaseClient();
   
   logger.info('Logging operation', {
     eventType, 
-    entityId: validEntityId,
+    entityId,
     correlationId
   });
   
   try {
-    // Insert log entry
-    const { data, error } = await supabase
-      .from('unified_audit_logs')
-      .insert({
-        event_type: eventType,
-        entity_id: validEntityId,
-        previous_state: previousState,
-        new_state: newState,
-        metadata: enhancedMetadata,
-        error_message: errorMessage,
-        correlation_id: correlationId,
-        user_id: userId
-      })
-      .select('id')
-      .single();
+    // Use the standard database function to handle UUID conversion
+    const { data, error } = await supabase.rpc(
+      'xdelo_logprocessingevent',
+      {
+        p_event_type: eventType,
+        p_entity_id: entityId,
+        p_correlation_id: correlationId,
+        p_metadata: {
+          ...metadata,
+          previous_state: previousState,
+          new_state: newState,
+          logged_at: new Date().toISOString(),
+          logged_from: 'edge_function',
+          user_id: userId
+        },
+        p_error_message: errorMessage
+      }
+    );
     
     if (error) {
       logger.error('Error logging operation', error);
@@ -120,9 +89,9 @@ const handler = createEdgeHandler(async (req: Request, context: HandlerContext) 
     return new Response(
       JSON.stringify({
         success: true,
-        logId: data.id,
+        logId: data,
         correlationId,
-        timestamp: enhancedMetadata.logged_at
+        timestamp: new Date().toISOString()
       }),
       { headers: { 'Content-Type': 'application/json' } }
     );

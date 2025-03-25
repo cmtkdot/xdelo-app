@@ -26,9 +26,8 @@ interface UpdateProcessingStateParams {
 }
 
 /**
- * Log a processing event to the audit log with guaranteed UUID format
- * This function ensures entity_id is always a valid UUID even when given
- * special values like "system" or numeric IDs
+ * Log a processing event to the audit log using the database function
+ * This function ensures proper UUID handling by using the database function
  */
 export async function xdelo_logProcessingEvent(
   eventType: string,
@@ -43,22 +42,13 @@ export async function xdelo_logProcessingEvent(
     // Ensure correlation ID is a string
     const corrId = correlationId?.toString() || crypto.randomUUID();
     
-    // Always generate a valid UUID regardless of input type
-    const validEntityId = crypto.randomUUID();
-    
-    // Store original entity ID in metadata
-    const enhancedMetadata = {
-      ...metadata,
-      original_entity_id: entityId
-    };
-    
-    await supabase.from("unified_audit_logs").insert({
-      event_type: eventType,
-      entity_id: validEntityId, 
-      correlation_id: correlationId?.toString() || crypto.randomUUID(),
-      metadata: enhancedMetadata,
-      error_message: errorMessage,
-      event_timestamp: new Date().toISOString()
+    // Call the PostgreSQL function that handles UUID validation internally
+    await supabase.rpc('xdelo_logprocessingevent', {
+      p_event_type: eventType,
+      p_entity_id: entityId?.toString() || 'system',
+      p_correlation_id: corrId,
+      p_metadata: metadata,
+      p_error_message: errorMessage
     });
   } catch (e) {
     console.error(`Error logging event: ${e instanceof Error ? e.message : String(e)}`);
