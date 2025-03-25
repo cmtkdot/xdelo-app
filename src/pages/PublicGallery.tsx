@@ -1,36 +1,86 @@
 
-import { Message } from "@/types/MessagesTypes";
-import { useState, useEffect } from 'react';
+import { Message } from "@/types";
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { MediaViewer } from '@/components/MediaViewer/MediaViewer';
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import { GalleryCard } from "@/components/PublicGallery/GalleryCard";
 import { GalleryFilters } from "@/components/PublicGallery/GalleryFilters";
 import { EmptyState } from "@/components/PublicGallery/EmptyState";
 import { LoadMoreButton } from "@/components/PublicGallery/LoadMoreButton";
-import { SearchToolbar } from "@/components/PublicGallery/SearchToolbar";
-import { usePublicGallerySearch } from "@/hooks/publicGallery/usePublicGallerySearch";
+import { GalleryTableView } from "@/components/PublicGallery/GalleryTableView";
+import { PublicMediaViewer, PublicMediaCard, usePublicViewer } from "@/components/public-viewer";
 
 const PublicGallery = () => {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [filteredMessages, setFilteredMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const [selectedMedia, setSelectedMedia] = useState<Message[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMoreItems, setHasMoreItems] = useState(true);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [vendorFilter, setVendorFilter] = useState<string[]>([]);
+  const [dateField, setDateField] = useState<'purchase_date' | 'created_at'>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [vendors, setVendors] = useState<string[]>([]);
   const itemsPerPage = 16;
-  
-  // Use our custom hook to handle search
-  const { 
-    searchTerm, 
-    filteredMessages, 
-    isSearching, 
-    handleSearch, 
-    clearSearch 
-  } = usePublicGallerySearch({ messages });
+
+  // Prepare media groups for the viewer
+  const mediaGroups = useMemo(() => {
+    const groups: Record<string, Message[]> = {};
+    
+    // Group messages by media_group_id or individually
+    filteredMessages.forEach(message => {
+      if (message.media_group_id) {
+        groups[message.media_group_id] = groups[message.media_group_id] || [];
+        groups[message.media_group_id].push(message);
+      } else {
+        // For messages without a group, use the message ID as a key
+        groups[message.id] = [message];
+      }
+    });
+    
+    // Convert record to array of arrays
+    return Object.values(groups);
+  }, [filteredMessages]);
+
+  // Use the public viewer hook
+  const {
+    isOpen,
+    currentGroup,
+    hasNext,
+    hasPrevious,
+    openViewer,
+    closeViewer,
+    goToNextGroup,
+    goToPreviousGroup,
+  } = usePublicViewer(mediaGroups);
+
+  // Fetch available vendors for filter
+  const fetchVendors = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('vendor_uid')
+        .is('deleted_from_telegram', false)
+        .not('vendor_uid', 'is', null)
+        .order('vendor_uid');
+
+      if (error) {
+        console.error("Error fetching vendors:", error);
+        return;
+      }
+
+      if (data) {
+        // Extract unique vendor values
+        const uniqueVendors = [...new Set(data.map(item => item.vendor_uid).filter(Boolean))];
+        setVendors(uniqueVendors);
+      }
+    } catch (err) {
+      console.error("Error in fetchVendors:", err);
+    }
+  };
 
   const fetchMessages = async (page = 1, append = false) => {
     if (page === 1) {
@@ -40,12 +90,24 @@ const PublicGallery = () => {
     }
 
     try {
-      const { data, error } = await supabase
+      // Build the base query
+      let query = supabase
         .from('messages')
         .select('*')
-        .is('deleted_from_telegram', false)
-        .order('created_at', { ascending: false })
-        .range((page - 1) * itemsPerPage, page * itemsPerPage - 1);
+        .is('deleted_from_telegram', false);
+
+      // Apply vendor filter if any
+      if (vendorFilter.length > 0) {
+        query = query.in('vendor_uid', vendorFilter);
+      }
+
+      // Apply sort order
+      query = query.order(dateField, { ascending: sortOrder === 'asc' });
+
+      // Apply pagination
+      query = query.range((page - 1) * itemsPerPage, page * itemsPerPage - 1);
+
+      const { data, error } = await query;
 
       if (error) {
         console.error("Error fetching messages:", error);
@@ -83,48 +145,94 @@ const PublicGallery = () => {
 
   useEffect(() => {
     fetchMessages();
-  }, []);
+    fetchVendors();
+  }, [vendorFilter, dateField, sortOrder]);
 
-  // Apply content-type filter to the already search-filtered messages
-  const applyMediaTypeFilter = (messages: Message[]) => {
-    if (filter === "all") {
-      return messages;
-    } else if (filter === "images") {
-      return messages.filter(m => m.mime_type?.startsWith('image/'));
-    } else if (filter === "videos") {
-      return messages.filter(m => m.mime_type?.startsWith('video/'));
+  // Reset page when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, vendorFilter, dateField, sortOrder]);
+
+  // Apply filters whenever messages or filter change
+  useEffect(() => {
+    let result = [...messages];
+    
+    // Apply search filter if search term exists
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(msg => 
+        (msg.caption && msg.caption.toLowerCase().includes(term))
+      );
     }
-    return messages;
+    
+    // Apply media type filter
+    if (filter === "images") {
+      result = result.filter(m => m.mime_type?.startsWith('image/'));
+    } else if (filter === "videos") {
+      result = result.filter(m => m.mime_type?.startsWith('video/'));
+    }
+    
+    setFilteredMessages(result);
+  }, [messages, filter, searchTerm]);
+
+  // Function to find and open the correct group based on clicked item
+  const handleMediaClick = (message: Message) => {
+    // Find which group this message belongs to
+    const groupIndex = mediaGroups.findIndex(group => 
+      group.some(item => item.id === message.id)
+    );
+    
+    if (groupIndex !== -1) {
+      const group = mediaGroups[groupIndex];
+      // Find index of this message within its group
+      const messageIndex = group.findIndex(item => item.id === message.id);
+      
+      // Open viewer with this group and position it at the clicked message
+      openViewer(group, messageIndex);
+    }
   };
 
-  // Get the final filtered messages by applying both search and media type filters
-  const finalFilteredMessages = applyMediaTypeFilter(filteredMessages);
+  // CRUD operations for messages
+  const handleDeleteMessage = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({ deleted_from_telegram: true })
+        .eq('id', id);
 
-  const handleMediaClick = (message: Message) => {
-    if (message.media_group_id) {
-      const groupMedia = messages.filter(m => m.media_group_id === message.media_group_id);
-      setSelectedMedia(groupMedia);
-    } else {
-      setSelectedMedia([message]);
+      if (error) {
+        toast.error("Failed to delete item");
+        console.error("Error deleting message:", error);
+        return;
+      }
+
+      // Update local state by removing the deleted message
+      setMessages(prev => prev.filter(message => message.id !== id));
+      toast.success("Item deleted successfully");
+    } catch (error) {
+      console.error("Error in delete operation:", error);
+      toast.error("An error occurred");
     }
-    setIsViewerOpen(true);
   };
 
   return (
     <div className="container mx-auto px-4 py-6 md:py-8 max-w-7xl">
       <div className="mb-6 animate-fade-in">
-        <h1 className="text-3xl font-bold mb-4 text-center md:text-left">Public Gallery</h1>
-        
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-          <GalleryFilters filter={filter} setFilter={setFilter} />
-          <SearchToolbar
-            searchTerm={searchTerm}
-            onSearch={handleSearch}
-            onClear={clearSearch}
-            placeholder="Search products, vendors, codes..."
-            isSearching={isSearching}
-          />
-        </div>
+        <GalleryFilters 
+          filter={filter} 
+          setFilter={setFilter} 
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          vendorFilter={vendorFilter}
+          vendors={vendors}
+          onVendorFilterChange={setVendorFilter}
+          dateField={dateField}
+          onDateFieldChange={setDateField}
+          sortOrder={sortOrder}
+          onSortOrderChange={setSortOrder}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+        />
       </div>
       
       {isLoading ? (
@@ -133,33 +241,43 @@ const PublicGallery = () => {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
-            {finalFilteredMessages.map(message => (
-              <GalleryCard 
-                key={message.id} 
-                message={message} 
-                onClick={handleMediaClick} 
+          {viewMode === 'grid' ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
+                {filteredMessages.map(message => (
+                  <PublicMediaCard 
+                    key={message.id} 
+                    message={message} 
+                    onClick={() => handleMediaClick(message)} 
+                  />
+                ))}
+              </div>
+
+              {filteredMessages.length === 0 && <EmptyState />}
+
+              <LoadMoreButton 
+                onClick={loadMore} 
+                isLoading={isLoadingMore}
+                hasMoreItems={hasMoreItems} 
               />
-            ))}
-          </div>
-
-          {finalFilteredMessages.length === 0 && (
-            <EmptyState message={searchTerm ? "No results found for your search" : undefined} />
-          )}
-
-          {/* Only show load more button when not searching */}
-          {!searchTerm && (
-            <LoadMoreButton 
-              onClick={loadMore} 
-              isLoading={isLoadingMore}
-              hasMoreItems={hasMoreItems} 
+            </>
+          ) : (
+            <GalleryTableView 
+              messages={filteredMessages} 
+              onMediaClick={handleMediaClick}
+              onDeleteMessage={handleDeleteMessage}
             />
           )}
 
-          <MediaViewer 
-            isOpen={isViewerOpen} 
-            onClose={() => setIsViewerOpen(false)} 
-            currentGroup={selectedMedia} 
+          {/* Public Media Viewer */}
+          <PublicMediaViewer
+            isOpen={isOpen}
+            onClose={closeViewer}
+            currentGroup={currentGroup}
+            onPrevious={goToPreviousGroup}
+            onNext={goToNextGroup}
+            hasPrevious={hasPrevious}
+            hasNext={hasNext}
           />
         </>
       )}

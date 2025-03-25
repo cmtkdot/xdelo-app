@@ -508,34 +508,43 @@ export async function updateMessageProcessingState(
 
 /**
  * Check if a message with this file_unique_id already exists
+ * Updated to also allow checking by telegramMessageId and chatId
  */
 export async function checkDuplicateFile(
   supabase: SupabaseClient,
-  fileUniqueId: string
-): Promise<Message | null> {
+  telegramMessageId?: number,
+  chatId?: number,
+  fileUniqueId?: string
+): Promise<boolean> {
   try {
-    if (!fileUniqueId) {
-      console.warn('Attempted to check for duplicate file with empty fileUniqueId');
-      return null;
+    // Either both telegramMessageId and chatId must be provided, or fileUniqueId must be provided
+    if ((!telegramMessageId || !chatId) && !fileUniqueId) {
+      console.warn('Attempted to check for duplicate file without sufficient identifiers');
+      return false;
     }
     
-    const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('file_unique_id', fileUniqueId)
-      .maybeSingle();
+    // Build the query based on the provided parameters
+    let query = supabase.from('messages').select('id');
+    
+    if (fileUniqueId) {
+      query = query.eq('file_unique_id', fileUniqueId);
+    } else if (telegramMessageId && chatId) {
+      query = query.eq('telegram_message_id', telegramMessageId).eq('chat_id', chatId);
+    }
+    
+    const { data, error } = await query.maybeSingle();
       
     if (error) {
       console.error('Error checking for duplicate file:', error);
       // Don't throw - we want graceful fallback to creating a new record
-      return null;
+      return false;
     }
     
-    return data;
+    return !!data;
   } catch (error) {
     console.error('Exception checking for duplicate file:', 
       error instanceof Error ? error.message : String(error));
-    return null;
+    return false;
   }
 }
 

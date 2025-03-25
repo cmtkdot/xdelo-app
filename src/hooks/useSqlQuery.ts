@@ -23,12 +23,11 @@ export function useSqlQuery() {
     try {
       setIsExecuting(true);
       
-      const { data, error } = await supabase.functions.invoke('xdelo_execute_sql', {
-        body: { 
-          query,
-          params
-        }
-      });
+      // Execute the SQL directly using RPC
+      const { data, error } = await supabase.rpc(
+        "xdelo_execute_sql_migration", 
+        { sql_command: query }
+      );
 
       if (error) {
         throw error;
@@ -36,15 +35,19 @@ export function useSqlQuery() {
 
       const result: SqlExecutionResult = {
         success: true,
-        data: data.data,
-        metadata: data.metadata
+        data: data,
+        metadata: {
+          execution_time_ms: 0,
+          row_count: 0,
+          query_hash: ''
+        }
       };
 
       setResults(result);
       
       toast({
         title: 'Query executed successfully',
-        description: `Retrieved ${data.metadata?.row_count || 0} rows in ${data.metadata?.execution_time_ms || 0}ms`
+        description: `The SQL command completed successfully`
       });
       
       return result;

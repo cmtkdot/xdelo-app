@@ -1,9 +1,22 @@
-
-import { ParsedContent as BaseContent } from '../_shared/captionParser.ts';
-
-// Extend the base parsed content with any additional fields needed specifically for this function
-export interface ParsedContent extends BaseContent {
-  // Additional fields could be added here if needed in the future
+// Define ParsedContent directly since the import was removed
+export interface ParsedContent {
+  product_name?: string;
+  product_code?: string;
+  vendor_uid?: string; 
+  purchase_date?: string;
+  quantity?: number;
+  unit_price?: number;
+  total_price?: number;
+  raw_lines?: string[];
+  raw_text?: string;
+  currency?: string;
+  metadata?: Record<string, any>;
+  caption?: string;
+  parsing_metadata: Record<string, any>;
+  sync_metadata?: {
+    media_group_id?: string;
+    [key: string]: any;
+  };
 }
 
 export interface RequestPayload {

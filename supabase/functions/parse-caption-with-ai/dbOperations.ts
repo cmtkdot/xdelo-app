@@ -1,6 +1,5 @@
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { ParsedContent } from '../_shared/captionParser.ts';
+import { ParsedContent } from './types.ts';
 
 // Create Supabase client
 const supabaseClient = createClient(

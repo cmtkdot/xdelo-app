@@ -1,6 +1,5 @@
-
-import { MediaViewer as BaseMediaViewer } from '@/components/MediaViewer';
-import type { MediaViewerProps } from '@/components/MediaViewer';
+import { MediaViewer as BaseMediaViewer } from '@/components/media-viewer/MediaViewer';
+import type { MediaViewerProps } from '@/components/media-viewer/MediaViewer';
 
 export type { MediaViewerProps };
 

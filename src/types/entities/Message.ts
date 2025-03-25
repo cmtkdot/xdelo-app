@@ -1,4 +1,3 @@
-
 import type { ProcessingState } from '../api/ProcessingState';
 import type { AnalyzedContent } from '../utils/AnalyzedContent';
 
@@ -73,6 +72,18 @@ export interface Message {
   edit_history?: Record<string, unknown>[];
   edit_date?: string;
   is_edited?: boolean;
+  // Product-related fields from the messages_view
+  product_name?: string;
+  product_quantity?: string | number;
+  purchase_date?: string;
+  vendor_uid?: string;
+  product_code?: string;
+  product_sku?: string;
+  notes?: string;
+  is_channel_post?: boolean;
+  is_forwarded?: boolean;
+  forward_date?: string;
+  is_edited_channel_post?: boolean;
 }
 
 export interface MessageApiResponse {

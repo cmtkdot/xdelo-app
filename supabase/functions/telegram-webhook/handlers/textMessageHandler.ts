@@ -19,12 +19,16 @@ const supabaseClient = createClient(
 
 export async function handleOtherMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
-    const { isChannelPost, correlationId } = context;
+    const { isChannelPost, correlationId, logger } = context;
     // Use the utility function to determine if message is forwarded
     const isForwarded = isMessageForwarded(message);
     
     // Log the start of message processing
-    console.log(`[${correlationId}] Processing non-media message ${message.message_id} in chat ${message.chat.id}`);
+    logger?.info(`📝 Processing non-media message ${message.message_id} in chat ${message.chat.id}`, {
+      message_text: message.text ? `${message.text.substring(0, 50)}${message.text.length > 50 ? '...' : ''}` : null,
+      message_type: isChannelPost ? 'channel_post' : 'message',
+      is_forwarded: isForwarded,
+    });
     
     // Generate message URL using our utility function from _shared/messageUtils.ts
     const message_url = constructTelegramMessageUrl(message);
@@ -51,6 +55,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
       .single();
       
     if (error) {
+      logger?.error(`❌ Failed to store text message in database`, { error });
       throw error;
     }
     
@@ -68,7 +73,11 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
       }
     );
     
-    console.log(`[${correlationId}] Successfully processed text message ${message.message_id}`);
+    logger?.success(`✅ Successfully processed text message ${message.message_id}`, {
+      message_id: message.message_id,
+      db_id: data.id,
+      message_url: message_url
+    });
     
     return new Response(
       JSON.stringify({ 
@@ -80,7 +89,11 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error(`Error processing non-media message:`, error);
+    context.logger?.error(`❌ Error processing non-media message:`, { 
+      error: error.message,
+      stack: error.stack,
+      message_id: message.message_id
+    });
     
     // Log the error
     await xdelo_logProcessingEvent(

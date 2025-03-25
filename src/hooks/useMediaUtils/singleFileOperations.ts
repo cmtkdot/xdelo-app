@@ -1,306 +1,138 @@
 
-import { useCallback } from 'react';
-import { Message } from '@/types/entities/Message';
+import { useState } from 'react';
+import { supabase } from "@/integrations/supabase/client";
 import { useToast } from '@/hooks/useToast';
-import { supabase } from '@/integrations/supabase/client';
-import { useQueryClient } from '@tanstack/react-query';
-import { logEvent, LogEventType } from '@/lib/logUtils';
-import { RepairResult } from './types';
+import { LogEventType, logEvent } from "@/lib/logUtils";
+
+interface UseSingleFileOperationsResult {
+  isUploading: boolean;
+  isDeleting: boolean;
+  uploadFile: (file: File, storagePath?: string) => Promise<string | null>;
+  deleteFile: (filePath: string) => Promise<boolean>;
+}
 
 /**
- * Hook for single file media operations
+ * Hook for handling single file upload and delete operations
  */
-export function useSingleFileOperations(
-  addProcessingMessageId: (id: string) => void,
-  removeProcessingMessageId: (id: string) => void
-) {
+export function useSingleFileOperations(): UseSingleFileOperationsResult {
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-
+  
   /**
-   * Process a message to extract and analyze its content
+   * Upload a file to Supabase storage
+   * @param file The file to upload
+   * @param storagePath Optional storage path
+   * @returns The public URL of the uploaded file, or null on failure
    */
-  const processMessage = useCallback(async (messageId: string): Promise<RepairResult> => {
+  const uploadFile = async (file: File, storagePath?: string): Promise<string | null> => {
+    setIsUploading(true);
     try {
-      addProcessingMessageId(messageId);
+      // Get current user ID from Supabase auth
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id;
       
-      // Call the edge function to process the message
-      const { data, error } = await supabase.functions.invoke('process-message', {
-        body: { messageId }
-      });
-      
-      if (error) {
-        throw new Error(error.message || 'Failed to process message');
+      if (!userId) {
+        throw new Error("User ID not available");
       }
-      
-      if (data?.success) {
-        toast({
-          title: "Message Processed",
-          description: data.message || "Message has been processed successfully."
+
+      const filePath = storagePath || `${userId}/${file.name}`;
+      const { data, error } = await supabase.storage
+        .from('message_media')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
         });
-        
-        // Refresh data
-        queryClient.invalidateQueries({ queryKey: ['messages'] });
-        
-        return {
-          success: true,
-          message: data.message,
-          data
-        };
-      } else {
-        throw new Error(data?.message || 'Processing failed');
+
+      if (error) {
+        throw new Error(`File upload failed: ${error.message}`);
       }
-    } catch (error) {
-      console.error('Error processing message:', error);
+
+      const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/message_media/${data.path}`;
       
+      const isMobile = window.innerWidth <= 768;
       toast({
-        title: "Processing Failed",
-        description: error.message || "Failed to process message",
-        variant: "destructive"
+        title: "Upload successful",
+        description: isMobile ? "File uploaded" : `File uploaded to ${data.path}`,
       });
-      
-      return {
-        success: false,
-        message: error.message || 'Unknown error'
-      };
+
+      // Log completion of sync operation
+      await logSyncCompletion(data.path, {
+        fileSize: file.size,
+        mimeType: file.type,
+        storagePath: data.path,
+        publicUrl
+      });
+
+      return publicUrl;
+    } catch (error: any) {
+      console.error("File upload error:", error.message);
+      toast({
+        title: "Upload failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      return null;
     } finally {
-      removeProcessingMessageId(messageId);
+      setIsUploading(false);
     }
-  }, [addProcessingMessageId, removeProcessingMessageId, queryClient, toast]);
+  };
 
   /**
-   * Reupload media from Telegram for a specific message
+   * Delete a file from Supabase storage
+   * @param filePath The path of the file to delete
+   * @returns True on success, false on failure
    */
-  const reuploadMediaFromTelegram = useCallback(async (messageId: string): Promise<RepairResult> => {
+  const deleteFile = async (filePath: string): Promise<boolean> => {
+    setIsDeleting(true);
     try {
-      addProcessingMessageId(messageId);
-      
-      // Call the edge function to reupload media
-      const { data, error } = await supabase.functions.invoke('redownload-missing-files', {
-        body: { messageId }
-      });
-      
-      if (error) {
-        throw new Error(error.message || 'Failed to reupload media');
-      }
-      
-      // Refresh the data
-      queryClient.invalidateQueries({ queryKey: ['messages'] });
-      
-      if (data?.success) {
-        toast({
-          title: 'Media Reuploaded',
-          description: 'File has been successfully reuploaded from Telegram.',
-        });
-        return data;
-      } else {
-        throw new Error(data?.message || 'Reupload failed');
-      }
-    } catch (error) {
-      console.error('Error reuploading media:', error);
-      
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to reupload media. Please try again.',
-        variant: 'destructive',
-      });
-      
-      return { 
-        success: false, 
-        message: error.message || 'Unknown error occurred'
-      };
-    } finally {
-      removeProcessingMessageId(messageId);
-    }
-  }, [addProcessingMessageId, removeProcessingMessageId, queryClient, toast]);
+      const { error } = await supabase.storage
+        .from('message_media')
+        .remove([filePath]);
 
-  /**
-   * Fix content disposition for a single message
-   */
-  const fixContentDispositionForMessage = useCallback(async (messageId: string): Promise<RepairResult> => {
-    try {
-      addProcessingMessageId(messageId);
-      
-      // Call the edge function to fix content disposition
-      const { data, error } = await supabase.functions.invoke('media-management', {
-        body: { 
-          action: 'fix_content_disposition', 
-          messageId
-        }
-      });
-      
       if (error) {
-        throw new Error(error.message || 'Failed to fix content disposition');
+        throw new Error(`File deletion failed: ${error.message}`);
       }
-      
-      // Refresh the data
-      queryClient.invalidateQueries({ queryKey: ['messages'] });
-      
-      if (data?.success) {
-        toast({
-          title: 'Content Disposition Fixed',
-          description: 'File metadata has been updated successfully.',
-        });
-        return data;
-      } else {
-        throw new Error(data?.message || 'Failed to fix content disposition');
-      }
-    } catch (error) {
-      console.error('Error fixing content disposition:', error);
-      
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to fix content disposition. Please try again.',
-        variant: 'destructive',
-      });
-      
-      return {
-        success: false,
-        message: error.message || 'Unknown error occurred'
-      };
-    } finally {
-      removeProcessingMessageId(messageId);
-    }
-  }, [addProcessingMessageId, removeProcessingMessageId, queryClient, toast]);
 
-  /**
-   * Reanalyze a message caption
-   */
-  const reanalyzeMessageCaption = useCallback(async (message: Message): Promise<RepairResult> => {
-    try {
-      addProcessingMessageId(message.id);
-      
-      // Call the edge function to reanalyze caption
-      const { data, error } = await supabase.functions.invoke('parse-caption-with-ai', {
-        body: { 
-          messageId: message.id,
-          caption: message.caption
-        }
-      });
-      
-      if (error) {
-        throw new Error(error.message || 'Failed to analyze caption');
-      }
-      
-      // Refresh the data
-      queryClient.invalidateQueries({ queryKey: ['messages'] });
-      
-      if (data?.success) {
-        toast({
-          title: "Analysis Complete",
-          description: data.message || "The message has been analyzed successfully."
-        });
-        return data;
-      } else {
-        throw new Error(data?.message || 'Analysis failed');
-      }
-    } catch (error) {
-      console.error('Error analyzing caption:', error);
-      
+      const isMobile = window.innerWidth <= 768;
       toast({
-        title: "Analysis Failed",
-        description: error.message || "Failed to analyze message",
-        variant: "destructive"
+        title: "Deletion successful",
+        description: isMobile ? "File deleted" : `File deleted from ${filePath}`,
       });
-      
-      return {
-        success: false,
-        message: error.message || 'Unknown error occurred'
-      };
+      return true;
+    } catch (error: any) {
+      console.error("File deletion error:", error.message);
+      toast({
+        title: "Deletion failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      return false;
     } finally {
-      removeProcessingMessageId(message.id);
+      setIsDeleting(false);
     }
-  }, [addProcessingMessageId, removeProcessingMessageId, queryClient, toast]);
+  };
 
-  /**
-   * Sync caption across all messages in a media group
-   */
-  const syncMessageCaption = useCallback(async ({ messageId }: { messageId: string }): Promise<RepairResult> => {
+  // Log completion of sync operation
+  const logSyncCompletion = async (entityId: string, details: any) => {
     try {
-      addProcessingMessageId(messageId);
-      
-      // Get the message first
-      const { data: message, error: messageError } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('id', messageId)
-        .single();
-      
-      if (messageError || !message) {
-        throw new Error(`Could not find message: ${messageError?.message || 'Not found'}`);
-      }
-      
-      const mediaGroupId = message.media_group_id;
-      
-      if (!mediaGroupId) {
-        return {
-          success: false,
-          message: "Message is not part of a media group"
-        };
-      }
-      
-      // Call the edge function to sync the media group
-      const { data, error } = await supabase.functions.invoke('media-management', {
-        body: { 
-          action: 'sync_media_group',
-          sourceMessageId: messageId,
-          mediaGroupId,
-          force: true
-        }
-      });
-      
-      if (error) {
-        throw new Error(`Failed to sync media group: ${error.message}`);
-      }
-      
-      // Log the operation and refresh data
       await logEvent(
         LogEventType.SYNC_COMPLETED,
-        messageId,
+        entityId,
         {
-          operation: 'caption_sync',
-          media_group_id: mediaGroupId,
-          result: data
+          ...details,
+          timestamp: new Date().toISOString()
         }
       );
-      
-      queryClient.invalidateQueries({ queryKey: ['messages'] });
-      queryClient.invalidateQueries({ queryKey: ['media-groups'] });
-      
-      toast({
-        title: "Caption Synced",
-        description: "Caption has been synced to all messages in the media group"
-      });
-      
-      return {
-        success: true,
-        message: "Caption synced successfully",
-        data
-      };
-      
     } catch (error) {
-      console.error("Error syncing caption:", error);
-      
-      toast({
-        title: "Sync Failed",
-        description: error.message || "Failed to sync caption to media group",
-        variant: "destructive"
-      });
-      
-      return {
-        success: false,
-        message: error.message || "Unknown error during caption sync"
-      };
-    } finally {
-      removeProcessingMessageId(messageId);
+      console.error("Failed to log sync completion:", error);
     }
-  }, [addProcessingMessageId, removeProcessingMessageId, queryClient, toast]);
+  };
 
   return {
-    processMessage,
-    reuploadMediaFromTelegram,
-    fixContentDispositionForMessage,
-    reanalyzeMessageCaption,
-    syncMessageCaption,
+    isUploading,
+    isDeleting,
+    uploadFile,
+    deleteFile,
   };
 }

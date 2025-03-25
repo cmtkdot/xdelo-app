@@ -1,101 +1,117 @@
 
-import { SupabaseClient } from '@supabase/supabase-js';
-import { Database } from '../integrations/supabase/types';
-import { logEvent, LogEventType } from './logUtils';
+import { supabase } from "@/integrations/supabase/client";
+import { logEvent, LogEventType } from "@/lib/logUtils";
+
+// Use the internal version of GlProduct that has the required fields
+interface InternalGlProduct {
+  id: string;
+  glide_id?: string | null;
+  sync_status?: string;
+  [key: string]: any;
+}
 
 /**
- * @deprecated Use logEvent from logUtils.ts instead
- * This function is maintained for backward compatibility
+ * Checks if a product has been synced to Glide
  */
-export async function xdelo_logSyncOperation(
-  _supabase: any, // Changed to any to avoid TS errors with old references
-  operation: string,
-  details: Record<string, any>,
-  success: boolean,
-  error?: string
-) {
+export const isProductSynced = (product: InternalGlProduct) => {
+  return product.glide_id && product.sync_status === 'synced';
+};
+
+/**
+ * Checks if a product is pending sync
+ */
+export const isProductPendingSync = (product: InternalGlProduct) => {
+  return product.sync_status === 'pending';
+};
+
+/**
+ * Logs a system warning about sync operations
+ */
+export const logSyncWarning = async (
+  entityId: string,
+  warningMessage: string,
+  details?: Record<string, any>
+) => {
   try {
-    // Map string operation to LogEventType when possible
-    let eventType: string;
-    
-    // Try to convert string operation to LogEventType
-    if (operation.toUpperCase() in LogEventType) {
-      // Get the corresponding lowercase value from the enum
-      const enumKey = operation.toUpperCase() as keyof typeof LogEventType;
-      eventType = LogEventType[enumKey];
-    } else {
-      // Fallback to system warning if conversion fails
-      eventType = LogEventType.SYSTEM_WARNING;
-    }
-    
-    // Use the new consolidated logging system
     await logEvent(
-      eventType,
-      details.id || 'system',
+      LogEventType.SYSTEM_WARNING,
+      entityId,
       {
-        operation,
-        details,
-        table_name: details.table_name || 'system',
-        glide_id: details.glide_id || null
-      },
-      {
-        error_message: error
+        message: warningMessage,
+        type: 'sync_warning',
+        ...details
       }
     );
-  } catch (err) {
-    console.error('Failed to log sync operation:', err);
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error logging sync warning:', error);
+    return { success: false, error };
   }
-}
+};
 
 /**
- * @deprecated Use logEvent from logUtils.ts instead
- * This function is maintained for backward compatibility
+ * Gets pending sync items from the database
  */
-export async function xdelo_logSyncOperationBatch(
-  _supabase: any, // Changed to any to avoid TS errors with old references
-  operations: Array<{
-    operation: string;
-    details: Record<string, any>;
-    success: boolean;
-    error?: string;
-  }>
-) {
+export const getPendingSyncItems = async (tableName: string, limit = 10) => {
   try {
-    // Process each operation individually using the new system
-    for (const op of operations) {
-      await xdelo_logSyncOperation(_supabase, op.operation, op.details, op.success, op.error);
+    // For type safety, we'll check if the table name is one of our known tables
+    if (!tableName || typeof tableName !== 'string') {
+      throw new Error('Invalid table name');
     }
-  } catch (err) {
-    console.error('Failed to log sync operations batch:', err);
+    
+    // Use a generic approach that works with any table using the rpc call
+    try {
+      const { data, error } = await supabase.rpc(
+        'get_pending_sync_items' as any,
+        { 
+          p_table_name: tableName,
+          p_limit: limit
+        }
+      );
+        
+      if (error) {
+        console.error(`Error in getPendingSyncItems RPC: ${error.message}`);
+        // Fallback to direct query if RPC fails
+        const { data: directData, error: directError } = await supabase
+          .from(tableName as any)
+          .select('*')
+          .eq('sync_status', 'pending')
+          .order('updated_at', { ascending: true })
+          .limit(limit);
+          
+        if (directError) {
+          throw directError;
+        }
+        
+        return { success: true, data: directData };
+      }
+      
+      return { success: true, data };
+    } catch (queryError) {
+      throw queryError;
+    }
+  } catch (error) {
+    console.error(`Error getting pending sync items from ${tableName}:`, error);
+    
+    // Log the error
+    await logEvent(
+      LogEventType.SYSTEM_WARNING,
+      'system',
+      {
+        message: `Failed to get pending sync items from ${tableName}`,
+        error: error.message,
+        table: tableName
+      }
+    );
+    
+    return { success: false, error };
   }
-}
+};
 
-/**
- * @deprecated Use logEvent from logUtils.ts instead
- * This function is maintained for backward compatibility
- */
-export async function xdelo_logSyncWarning(
-  _supabase: any, // Changed to any to avoid TS errors with old references
-  message: string,
-  details: Record<string, any>
-) {
-  await logEvent(
-    LogEventType.SYSTEM_WARNING,
-    details.id || 'system',
-    {
-      message,
-      ...details
-    },
-    {
-      error_message: message
-    }
-  );
-}
-
-// Export the old function names for backward compatibility
-export const logSyncOperation = xdelo_logSyncOperation;
-export const logSyncOperationBatch = xdelo_logSyncOperationBatch;
-export const logSyncWarning = xdelo_logSyncWarning;
-
-// Re-export the new LogEventType for convenience
-export { LogEventType };
+export default {
+  isProductSynced,
+  isProductPendingSync,
+  logSyncWarning,
+  getPendingSyncItems
+};
