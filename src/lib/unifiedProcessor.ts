@@ -57,7 +57,7 @@ export async function callUnifiedProcessor(
       data: data?.data,
       correlationId
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error(`Exception in unified processor ${operation}:`, error);
     return {
       success: false,
@@ -107,15 +107,13 @@ export async function reprocessMessage(
 }
 
 /**
- * Schedule delayed media group synchronization
+ * Process delayed media group synchronization
  */
-export async function scheduleDelayedSync(
-  messageId: string,
+export async function processDelayedMediaGroupSync(
   mediaGroupId: string,
   correlationId?: string
 ): Promise<any> {
   return callUnifiedProcessor('delayed_sync', { 
-    messageId,
     mediaGroupId, 
     correlationId 
   });

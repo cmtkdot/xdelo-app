@@ -31,64 +31,23 @@ function createDirectSupabaseClient(): SupabaseClient {
 }
 
 /**
- * Helper function to process message caption immediately and then schedule delayed media group sync
+ * Helper function to process message caption
  */
-async function processCaptionAsync(messageId: string, correlationId: string, mediaGroupId: string | undefined, logger: Logger): Promise<void> {
+async function processCaptionAsync(messageId: string, correlationId: string, logger: Logger): Promise<void> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    // First, process the caption immediately using the manual-caption-parser
-    logger.info(`Processing caption immediately for message: ${messageId}`, {
-      media_group_id: mediaGroupId
-    });
-    
-    fetch(`${supabaseUrl}/functions/v1/manual-caption-parser`, {
+    // Don't wait for the result, just fire the request
+    fetch(`${supabaseUrl}/functions/v1/caption-processor`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${serviceKey}`
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
       },
       body: JSON.stringify({
         messageId,
-        correlationId,
-        trigger_source: 'telegram_webhook_direct'
+        correlationId
       })
-    }).then(async response => {
-      if (response.ok) {
-        const result = await response.json();
-        logger.info(`Caption processed successfully: ${JSON.stringify(result)}`);
-        
-        // If it's part of a media group, schedule a delayed sync for additional robustness
-        if (mediaGroupId) {
-          logger.info(`Scheduling delayed sync for media group: ${mediaGroupId}`);
-          
-          // Call the unified processor to schedule a delayed sync as a backup
-          fetch(`${supabaseUrl}/functions/v1/xdelo_unified_processor`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${serviceKey}`
-            },
-            body: JSON.stringify({
-              operation: 'delayed_sync',
-              messageId,
-              mediaGroupId,
-              correlationId
-            })
-          }).catch(syncError => {
-            logger.error(`Error scheduling delayed sync: ${syncError.message}`, { 
-              message_id: messageId,
-              media_group_id: mediaGroupId 
-            });
-          });
-        }
-      } else {
-        logger.error(`Error processing caption: ${response.statusText}`, { 
-          status: response.status,
-          message_id: messageId 
-        });
-      }
     }).catch(error => {
       logger.error(`Error calling caption processor: ${error.message}`, { messageId });
     });
@@ -217,12 +176,11 @@ serve(async (req: Request) => {
           if (message.caption && responseData.success && responseData.id) {
             logger.info('Caption detected, initiating immediate processing', {
               message_id: responseData.id,
-              caption_length: message.caption.length,
-              media_group_id: message.media_group_id
+              caption_length: message.caption.length
             });
             
-            // Initiate immediate caption processing followed by delayed media group sync
-            processCaptionAsync(responseData.id, correlationId, message.media_group_id, logger);
+            // Initiate caption processing asynchronously (don't await)
+            processCaptionAsync(responseData.id, correlationId, logger);
           }
           
           // Reconstruct the response since we consumed it

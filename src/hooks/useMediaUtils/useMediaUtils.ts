@@ -1,140 +1,100 @@
 
-import { useState } from 'react';
-import { useToast } from '@/hooks/useToast';
-import { useMediaQueries } from './useMediaQueries';
-import { useMediaStorage } from './useMediaStorage';
-import { UseMediaUtilsType } from './types';
+import { createMediaProcessingState } from './utils';
+import { useSingleFileOperations } from './singleFileOperations';
+import { useBatchOperations } from './batchOperations';
 import { 
   processMessageCaption, 
-  syncMediaGroup, 
-  scheduleDelayedSync 
+  syncMediaGroup,
+  processDelayedMediaGroupSync, 
+  reprocessMessage 
 } from '@/lib/unifiedProcessor';
 
-export const useMediaUtils = (): UseMediaUtilsType => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast();
+/**
+ * A consolidated hook for media operations with improved organization
+ */
+export function useMediaUtils() {
+  // Create state management
+  const [
+    { isProcessing, processingMessageIds },
+    { setIsProcessing, addProcessingMessageId, removeProcessingMessageId }
+  ] = createMediaProcessingState();
+
+  // Initialize single file operations
+  const {
+    reuploadMediaFromTelegram,
+    fixContentDisposition,
+    reanalyzeCaption
+  } = useSingleFileOperations();
+
+  // Initialize batch operations
+  const {
+    standardizeStoragePaths,
+    fixMediaUrls,
+    repairMediaBatch,
+    processAllPendingMessages
+  } = useBatchOperations(setIsProcessing, addProcessingMessageId, removeProcessingMessageId);
   
-  // Import sub-hooks for different operations
-  const mediaQueries = useMediaQueries();
-  const mediaStorage = useMediaStorage();
-  
-  // Process a message caption
-  const processCaptionHandler = async (messageId: string, force: boolean = false) => {
-    setIsLoading(true);
-    setError(null);
-    
+  // Add unified processor operations
+  const processCaption = async (messageId: string, force: boolean = false) => {
+    addProcessingMessageId(messageId);
     try {
       const result = await processMessageCaption(messageId, force);
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to process caption');
-      }
-      
-      toast({
-        title: 'Caption processed',
-        description: 'Message caption was successfully analyzed'
-      });
-      
-      return result.data;
-    } catch (err: any) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMessage);
-      
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive'
-      });
-      
-      return null;
+      return result;
     } finally {
-      setIsLoading(false);
+      removeProcessingMessageId(messageId);
     }
   };
   
-  // Sync media group content
-  const syncMediaGroupHandler = async (sourceMessageId: string, mediaGroupId: string, force: boolean = false) => {
-    setIsLoading(true);
-    setError(null);
-    
+  const syncGroup = async (sourceMessageId: string, mediaGroupId: string, force: boolean = false) => {
+    addProcessingMessageId(sourceMessageId);
     try {
       const result = await syncMediaGroup(sourceMessageId, mediaGroupId, force);
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to sync media group');
-      }
-      
-      toast({
-        title: 'Media group synced',
-        description: `Content synchronized across ${result.data?.updated_count || 0} messages`
-      });
-      
-      return result.data;
-    } catch (err: any) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMessage);
-      
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive'
-      });
-      
-      return null;
+      return result;
     } finally {
-      setIsLoading(false);
+      removeProcessingMessageId(sourceMessageId);
     }
   };
   
-  // Schedule delayed media group sync 
-  const scheduleDelayedSyncHandler = async (messageId: string, mediaGroupId: string) => {
-    setIsLoading(true);
-    setError(null);
-    
+  const processDelayedSync = async (mediaGroupId: string) => {
+    setIsProcessing(true);
     try {
-      const result = await scheduleDelayedSync(messageId, mediaGroupId);
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to schedule delayed sync');
-      }
-      
-      toast({
-        title: 'Sync scheduled',
-        description: 'Media group sync has been scheduled'
-      });
-      
-      return result.data;
-    } catch (err: any) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMessage);
-      
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive'
-      });
-      
-      return null;
+      const result = await processDelayedMediaGroupSync(mediaGroupId);
+      return result;
     } finally {
-      setIsLoading(false);
+      setIsProcessing(false);
     }
   };
   
-  return {
-    // Loading/error states
-    isLoading,
-    error,
-    
-    // Caption processing
-    processCaption: processCaptionHandler,
-    
-    // Media group operations
-    syncMediaGroup: syncMediaGroupHandler,
-    scheduleDelayedSync: scheduleDelayedSyncHandler,
-    
-    // Other operations from sub-hooks
-    ...mediaQueries,
-    ...mediaStorage
+  const reprocess = async (messageId: string, force: boolean = true) => {
+    addProcessingMessageId(messageId);
+    try {
+      const result = await reprocessMessage(messageId, force);
+      return result;
+    } finally {
+      removeProcessingMessageId(messageId);
+    }
   };
-};
+
+  return {
+    // State
+    isProcessing,
+    processingMessageIds,
+    
+    // Single file operations
+    reuploadMediaFromTelegram,
+    fixContentDisposition,
+    reanalyzeCaption,
+    
+    // Batch operations
+    standardizeStoragePaths,
+    fixMediaUrls,
+    repairMediaBatch,
+    processAllPendingMessages,
+    
+    // Unified processor operations
+    processCaption,
+    syncGroup,
+    processDelayedSync,
+    reprocess
+  };
+}

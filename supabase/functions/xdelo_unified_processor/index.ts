@@ -65,40 +65,7 @@ const handleUnifiedProcessorRequest = async (req: Request, correlationId: string
           return createErrorResponse("Missing required parameter: messageId", 400, reqCorrelationId);
         }
         
-        // Get the message first to check if it has a caption
-        logger.info(`Getting message ${requestData.messageId} to check for caption`);
-        const { data: message, error: messageError } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('id', requestData.messageId)
-          .single();
-        
-        if (messageError || !message) {
-          logger.error(`Error retrieving message: ${messageError?.message || "Message not found"}`);
-          return createErrorResponse(
-            `Error retrieving message: ${messageError?.message || "Message not found"}`,
-            404,
-            reqCorrelationId
-          );
-        }
-        
-        // If message has no caption and is not part of a media group, return error
-        if (!message.caption && !message.media_group_id) {
-          logger.warn(`Message ${requestData.messageId} has no caption and is not part of a media group`);
-          return createErrorResponse(
-            "Message has no caption and is not part of a media group",
-            400,
-            reqCorrelationId
-          );
-        }
-        
         // Process the caption
-        logger.info(`Processing caption for message ${requestData.messageId}`, {
-          has_caption: !!message.caption,
-          caption_length: message.caption?.length,
-          media_group_id: message.media_group_id
-        });
-        
         const captionResult = await xdelo_processMessageCaption(
           supabase,
           requestData.messageId,
@@ -106,38 +73,6 @@ const handleUnifiedProcessorRequest = async (req: Request, correlationId: string
           !!requestData.force,
           logger
         );
-        
-        // If message is part of a media group, also sync the media group content
-        if (message.media_group_id && captionResult.success) {
-          logger.info(`Message is part of media group ${message.media_group_id}, syncing content`);
-          
-          try {
-            const syncResult = await xdelo_syncMediaGroupContent(
-              supabase,
-              requestData.messageId,
-              message.media_group_id,
-              reqCorrelationId,
-              !!requestData.force,
-              false, // Don't sync edit history by default
-              logger
-            );
-            
-            if (syncResult.success) {
-              logger.info(`Successfully synced media group ${message.media_group_id}`);
-              
-              // Include sync results in the response
-              return createSuccessResponse({
-                caption_processing: captionResult.data,
-                media_group_sync: syncResult.data
-              }, reqCorrelationId);
-            } else {
-              logger.warn(`Failed to sync media group: ${syncResult.error}`);
-            }
-          } catch (syncError) {
-            logger.error(`Error syncing media group: ${syncError.message}`);
-            // Continue and return the caption processing result
-          }
-        }
         
         return createSuccessResponse(captionResult.data, reqCorrelationId);
         
