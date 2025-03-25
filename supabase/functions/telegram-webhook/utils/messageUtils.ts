@@ -16,12 +16,24 @@ export function constructTelegramMessageUrl(chatId: number, messageId: number): 
 }
 
 /**
+ * Check if a message is forwarded
+ */
+export function isMessageForwarded(message: TelegramMessage): boolean {
+  return !!(
+    message.forward_date || 
+    message.forward_from || 
+    message.forward_from_chat || 
+    message.forward_origin
+  );
+}
+
+/**
  * Prepare an edit history entry based on what changed in the message
  */
 export function prepareEditHistoryEntry(
   existingMessage: any, 
   newMessage: TelegramMessage, 
-  changeType: 'caption' | 'media' | 'text_to_media' | 'media_to_text'
+  changeType: 'caption' | 'media' | 'text_to_media' | 'media_to_text' | 'text'
 ): Record<string, any> {
   const timestamp = new Date().toISOString();
   const editDate = newMessage.edit_date ? 
@@ -71,6 +83,10 @@ export function prepareEditHistoryEntry(
       historyEntry.previous_file_unique_id = existingMessage.file_unique_id;
       historyEntry.conversion_type = 'media_to_text';
       break;
+    case 'text':
+      historyEntry.previous_text = existingMessage.message_text;
+      historyEntry.new_text = newMessage.text;
+      break;
   }
   
   return historyEntry;
@@ -100,4 +116,22 @@ export function safeJsonParse(jsonString: string, fallback: any = {}): any {
     console.error('Error parsing JSON:', error);
     return fallback;
   }
+}
+
+/**
+ * Constructs a Telegram message URL based on message data
+ */
+export function constructTelegramMessageUrl(message: TelegramMessage): string {
+  if (!message || !message.chat || !message.message_id) {
+    return '';
+  }
+  
+  // For channel posts (chatId starts with -100)
+  if (message.chat.id.toString().startsWith('-100')) {
+    const channelId = message.chat.id.toString().substring(4);
+    return `https://t.me/c/${channelId}/${message.message_id}`;
+  }
+  
+  // For private chats (we can't construct a URL)
+  return '';
 }
