@@ -42,44 +42,34 @@ export async function xdelo_logProcessingEvent(
     // Ensure correlation ID is a string
     const corrId = correlationId?.toString() || crypto.randomUUID().toString();
     
-    // Ensure entityId is a valid UUID, if not, generate one and include the original ID in metadata
-    let validEntityId: string;
-    try {
-      // Try to parse as UUID to validate
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      if (entityId && uuidRegex.test(entityId)) {
-        validEntityId = entityId;
-      } else {
-        // Not a valid UUID, generate one and store original in metadata
-        validEntityId = crypto.randomUUID();
-        // Add the original ID to metadata
-        metadata = {
-          ...metadata,
-          original_entity_id: entityId
-        };
-      }
-    } catch (e) {
-      // Any error, use a new UUID
-      validEntityId = crypto.randomUUID();
-      metadata = {
-        ...metadata,
-        original_entity_id: entityId
-      };
-    }
+    // Always generate a new UUID for entity_id to avoid type issues
+    // Original ID is preserved in metadata
+    const validEntityId = crypto.randomUUID();
     
+    // Store original entity ID in metadata
+    const enhancedMetadata = {
+      ...metadata,
+      original_entity_id: entityId
+    };
+    
+    // Insert the log with a guaranteed valid UUID
     const { error } = await supabase.from("unified_audit_logs").insert({
       event_type: eventType,
       entity_id: validEntityId,
       correlation_id: corrId,
-      metadata: metadata,
+      metadata: enhancedMetadata,
       error_message: errorMessage
     });
     
     if (error) {
-      console.error(`Error logging event ${eventType}: ${error.message}`, { eventType, entityId: validEntityId });
+      console.error(`Error logging event ${eventType}: ${error.message}`, { 
+        eventType, 
+        entityId: validEntityId, 
+        original_id: entityId
+      });
     }
   } catch (e) {
-    console.error(`Exception in logProcessingEvent: ${e.message}`);
+    console.error(`Exception in logProcessingEvent: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 

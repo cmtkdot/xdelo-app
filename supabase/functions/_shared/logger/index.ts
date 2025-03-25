@@ -232,26 +232,15 @@ export async function xdelo_logMessageOperation(
     // Ensure correlation ID is a string
     const corrId = correlationId?.toString() || crypto.randomUUID().toString();
     
-    // Ensure entityId is a valid UUID, if not, generate one and include the original ID in metadata
-    let validEntityId: string;
-    let enhancedMetadata = { ...metadata };
+    // Always generate a new UUID for entity_id to avoid type issues
+    // Original ID is preserved in metadata
+    const validEntityId = crypto.randomUUID();
     
-    try {
-      // Try to parse as UUID to validate
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      if (entityId && uuidRegex.test(entityId)) {
-        validEntityId = entityId;
-      } else {
-        // Not a valid UUID, generate one and store original in metadata
-        validEntityId = crypto.randomUUID();
-        // Add the original ID to metadata
-        enhancedMetadata.original_entity_id = entityId;
-      }
-    } catch (e) {
-      // Any error, use a new UUID
-      validEntityId = crypto.randomUUID();
-      enhancedMetadata.original_entity_id = entityId;
-    }
+    // Store original entity ID in metadata
+    const enhancedMetadata = {
+      ...metadata,
+      original_entity_id: entityId
+    };
     
     // Create a formatted summary for the console
     const summary = formatWebhookSummary(
@@ -267,7 +256,7 @@ export async function xdelo_logMessageOperation(
     // Import supabase client
     const { supabaseClient } = await import('../supabase.ts');
     
-    // Log to database
+    // Log to database with a guaranteed valid UUID
     const { error } = await supabaseClient.from('unified_audit_logs').insert({
       event_type: eventType,
       entity_id: validEntityId,
