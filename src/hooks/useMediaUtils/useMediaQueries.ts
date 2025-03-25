@@ -3,7 +3,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { Message } from '@/types/entities/Message';
 import { AnalyzedContent } from '@/types/utils/AnalyzedContent';
-import { PostgrestSingleResponse } from '@supabase/supabase-js';
 
 /**
  * Hook for message querying operations
@@ -39,11 +38,11 @@ export function useMediaQueries() {
         }
       });
       
-      // Execute the query
+      // Execute the query without type annotations that lead to excessive depth
       const response = await query;
       
-      // Cast the response data to Message type
-      const typedData = response.data as unknown as Message[] | null;
+      // Use type assertion after the fact
+      const typedData = response.data as Message[] | null;
       
       return { 
         data: typedData, 
@@ -69,8 +68,8 @@ export function useMediaQueries() {
         .eq('id', id)
         .single();
       
-      // Cast the response data to Message type
-      const typedData = response.data as unknown as Message | null;
+      // Use type assertion after the fact
+      const typedData = response.data as Message | null;
       
       return { 
         data: typedData, 
