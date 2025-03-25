@@ -21,7 +21,28 @@ import { createMessage, checkDuplicateFile, findExistingFileByUniqueId, updateWi
 import { constructTelegramMessageUrl } from '../../_shared/messageUtils.ts';
 import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
 
+/**
+ * Helper function to extract forward info from message
+ */
+function extractForwardInfo(message: TelegramMessage): ForwardInfo | undefined {
+  if (!message.forward_origin) return undefined;
+  
+  return {
+    is_forwarded: true,
+    forward_origin_type: message.forward_origin.type,
+    forward_from_chat_id: message.forward_origin.chat?.id,
+    forward_from_chat_title: message.forward_origin.chat?.title,
+    forward_from_chat_type: message.forward_origin.chat?.type,
+    forward_from_message_id: message.forward_origin.message_id,
+    forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
+    original_chat_id: message.forward_origin.chat?.id,
+    original_chat_title: message.forward_origin.chat?.title,
+    original_message_id: message.forward_origin.message_id
+  };
+}
+
 // Get Telegram bot token from environment
+// @ts-ignore - Deno global is available in Deno environment
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
 if (!TELEGRAM_BOT_TOKEN) {
   console.error('Missing TELEGRAM_BOT_TOKEN environment variable');
@@ -99,8 +120,8 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
             },
             errorMessage
           );
-        } catch (logError) {
-          console.error('Failed to log using log function:', logError);
+        } catch (logError: any) {
+          console.error('Failed to log using log function:', logError.message);
         }
       }
     } catch (outerError) {
@@ -163,9 +184,16 @@ async function xdelo_handleEditedMediaMessage(
         logger?.info(`Media has changed in edit for message ${message.message_id}`);
         
         // Determine the current file details
-        const telegramFile = message.photo ? 
-          message.photo[message.photo.length - 1] : 
-          message.video || message.document;
+        let telegramFile;
+        if (message.photo && message.photo.length > 0) {
+          telegramFile = message.photo[message.photo.length - 1];
+        } else if (message.video) {
+          telegramFile = message.video;
+        } else if (message.document) {
+          telegramFile = message.document;
+        } else {
+          throw new Error("No media found in message");
+        }
           
         // Get mime type
         const detectedMimeType = xdelo_detectMimeType(message);
@@ -191,8 +219,8 @@ async function xdelo_handleEditedMediaMessage(
             file_id: telegramFile.file_id,
             file_unique_id: telegramFile.file_unique_id,
             mime_type: detectedMimeType,
-            width: telegramFile.width,
-            height: telegramFile.height,
+            width: 'width' in telegramFile ? telegramFile.width : undefined,
+            height: 'height' in telegramFile ? telegramFile.height : undefined,
             duration: message.video?.duration,
             file_size: telegramFile.file_size,
             edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
@@ -223,10 +251,10 @@ async function xdelo_handleEditedMediaMessage(
               storage_path: mediaProcessResult.fileInfo.storage_path
             }
           );
-        } catch (logError) {
+        } catch (logError: any) {
           logger?.error(`Failed to log media edit operation: ${logError.message}`);
         }
-      } catch (mediaError) {
+      } catch (mediaError: any) {
         logger?.error(`Error processing edited media: ${mediaError.message}`);
         throw mediaError;
       }
@@ -270,7 +298,7 @@ async function xdelo_handleEditedMediaMessage(
             new_caption: message.caption
           }
         );
-      } catch (logError) {
+      } catch (logError: any) {
         logger?.error(`Failed to log caption edit operation: ${logError.message}`);
       }
     } else {
@@ -379,20 +407,6 @@ async function xdelo_handleNewMediaMessage(
     throw new Error(`Failed to process media: ${mediaResult.error}`);
   }
   
-  // Prepare forward info if message is forwarded
-  const forwardInfo: ForwardInfo | undefined = message.forward_origin ? {
-    is_forwarded: true,
-    forward_origin_type: message.forward_origin.type,
-    forward_from_chat_id: message.forward_origin.chat?.id,
-    forward_from_chat_title: message.forward_origin.chat?.title,
-    forward_from_chat_type: message.forward_origin.chat?.type,
-    forward_from_message_id: message.forward_origin.message_id,
-    forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
-    original_chat_id: message.forward_origin.chat?.id,
-    original_chat_title: message.forward_origin.chat?.title,
-    original_message_id: message.forward_origin.message_id
-  } : undefined;
-  
   // Check if we have an existing file with the same file_unique_id
   // This will allow us to reuse analysis from previously processed identical files
   let hasExistingAnalysis = false;
@@ -415,52 +429,50 @@ async function xdelo_handleNewMediaMessage(
         source_message_id: messageId
       });
     }
-  } catch (error) {
+  } catch (error: any) {
     // Just log the error but continue processing
     logger?.warn(`Error checking for existing file: ${error.message}`, { error });
   }
   
-  // Create message input
-  const messageInput: MessageInput = {
+  // Initialize message state based on caption and media group
+  let initialState = 'completed'; // Default for messages without caption
+  
+  // If the message has a caption, set to pending for immediate caption processing
+  if (message.caption) {
+    initialState = 'pending'; // Set to pending for caption processing
+    logger?.info('Message has caption, setting initial state to pending for caption processing', {
+      caption_length: message.caption.length
+    });
+  }
+  
+  // Create the message record in the database
+  const result = await createMessage(supabase, {
     telegram_message_id: message.message_id,
     chat_id: message.chat.id,
     chat_type: message.chat.type,
     chat_title: message.chat.title,
-    caption: message.caption,
     media_group_id: message.media_group_id,
     file_id: telegramFile.file_id,
     file_unique_id: telegramFile.file_unique_id,
     mime_type: mediaResult.fileInfo.mime_type,
     mime_type_original: message.document?.mime_type || message.video?.mime_type,
+    width: 'width' in telegramFile ? telegramFile.width : undefined,
+    height: 'height' in telegramFile ? telegramFile.height : undefined,
+    duration: message.video?.duration,
+    file_size: telegramFile.file_size,
+    caption: message.caption,
     storage_path: mediaResult.fileInfo.storage_path,
     public_url: mediaResult.fileInfo.public_url,
-    width: "width" in telegramFile ? telegramFile.width : undefined,
-    height: "height" in telegramFile ? telegramFile.height : undefined,
-    duration: message.video?.duration,
-    file_size: telegramFile.file_size || mediaResult.fileInfo.file_size,
-    correlation_id: correlationId,
-    processing_state: hasExistingAnalysis ? 'completed' : (message.caption ? 'pending' : 'initialized'),
-    is_edited_channel_post: context.isChannelPost,
-    forward_info: forwardInfo,
     telegram_data: message,
-    edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : undefined,
+    message_url: constructTelegramMessageUrl(message.chat.id, message.message_id),
     is_forward: context.isForwarded,
-    edit_history: context.isEdit ? [{
-      timestamp: new Date().toISOString(),
-      is_initial_edit: true,
-      edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
-    }] : [],
+    forward_info: context.isForwarded ? extractForwardInfo(message) : undefined,
+    correlation_id: context.correlationId,
+    processing_state: initialState, // Use the determined initial state
     storage_exists: true,
-    storage_path_standardized: true,
-    message_url: messageUrl,
-    // Add fields for duplicate content handling
-    is_duplicate_content: hasExistingAnalysis,
-    analyzed_content: existingAnalysis,
-    duplicate_of_message_id: duplicateOfMessageId
-  };
-  
-  // Create the message
-  const result = await createMessage(dbClient, messageInput, logger);
+    storage_path_standardized: mediaResult.fileInfo.storage_path_standardized,
+    is_duplicate_content: hasExistingAnalysis
+  });
   
   if (!result.success) {
     logger?.error(`Failed to create message: ${result.error_message}`, {
@@ -480,7 +492,7 @@ async function xdelo_handleNewMediaMessage(
           error: result.error_message
         }
       );
-    } catch (logError) {
+    } catch (logError: any) {
       logger?.error(`Failed to log message creation failure: ${logError.message}`);
     }
     

@@ -30,6 +30,34 @@ function createDirectSupabaseClient(): SupabaseClient {
   });
 }
 
+/**
+ * Helper function to process message caption
+ */
+async function processCaptionAsync(messageId: string, correlationId: string, logger: Logger): Promise<void> {
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    
+    // Don't wait for the result, just fire the request
+    fetch(`${supabaseUrl}/functions/v1/caption-processor`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+      },
+      body: JSON.stringify({
+        messageId,
+        correlationId
+      })
+    }).catch(error => {
+      logger.error(`Error calling caption processor: ${error.message}`, { messageId });
+    });
+    
+    logger.debug(`Caption processing initiated for message: ${messageId}`);
+  } catch (error) {
+    logger.error(`Failed to initiate caption processing: ${error.message}`, { messageId });
+  }
+}
+
 serve(async (req: Request) => {
   // Generate a correlation ID for tracing
   const correlationId = crypto.randomUUID();
@@ -139,6 +167,33 @@ serve(async (req: Request) => {
           is_edit: context.isEdit
         });
         response = await handleMediaMessage(message, context);
+        
+        // Check if a message ID was returned in the response
+        try {
+          const responseData = await response.json();
+          
+          // If message has caption, immediately initiate caption processing
+          if (message.caption && responseData.success && responseData.id) {
+            logger.info('Caption detected, initiating immediate processing', {
+              message_id: responseData.id,
+              caption_length: message.caption.length
+            });
+            
+            // Initiate caption processing asynchronously (don't await)
+            processCaptionAsync(responseData.id, correlationId, logger);
+          }
+          
+          // Reconstruct the response since we consumed it
+          response = new Response(JSON.stringify(responseData), {
+            headers: response.headers,
+            status: response.status
+          });
+        } catch (parseError) {
+          logger.warn('Could not parse media handler response to check for caption', {
+            error: parseError.message
+          });
+          // Continue with original response
+        }
       }
       // Handle edited text messages
       else if (context.isEdit) {
