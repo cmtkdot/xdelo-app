@@ -149,11 +149,12 @@ async function syncMediaGroup(
 ): Promise<any> {
   try {
     // Call the database function to sync the media group
+    // Make sure to use the correct parameter order matching the database function definition
     const { data, error } = await supabaseClient.rpc(
       'xdelo_sync_media_group_content',
       {
-        p_media_group_id: mediaGroupId,
         p_source_message_id: sourceMessageId,
+        p_media_group_id: mediaGroupId,
         p_correlation_id: correlationId,
         p_force_sync: force,
         p_sync_edit_history: true

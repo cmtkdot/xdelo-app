@@ -21,11 +21,9 @@ export function useMediaUtils() {
 
   // Initialize single file operations
   const {
-    isUploading,
-    isDeleting,
-    uploadFile,
-    deleteFile,
-    reuploadMediaFromTelegram
+    reuploadMediaFromTelegram,
+    fixContentDisposition,
+    reanalyzeCaption
   } = useSingleFileOperations();
 
   // Initialize batch operations
@@ -81,13 +79,11 @@ export function useMediaUtils() {
     // State
     isProcessing,
     processingMessageIds,
-    isUploading,
-    isDeleting,
     
     // Single file operations
-    uploadFile,
-    deleteFile,
     reuploadMediaFromTelegram,
+    fixContentDisposition,
+    reanalyzeCaption,
     
     // Batch operations
     standardizeStoragePaths,
