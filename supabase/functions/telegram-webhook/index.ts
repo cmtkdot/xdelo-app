@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage } from './handlers/textMessageHandler.ts';
@@ -78,7 +79,8 @@ serve(async (req: Request) => {
       correlationId,
       isEdit: !!update.edited_message || !!update.edited_channel_post,
       previousMessage: update.edited_message || update.edited_channel_post,
-      logger // Add logger to context so handlers can use it
+      logger, // Add logger to context so handlers can use it
+      startTime: new Date().toISOString()
     };
 
     // Log message details with sensitive data masked
@@ -96,19 +98,25 @@ serve(async (req: Request) => {
       media_type: message.photo ? 'photo' : message.video ? 'video' : message.document ? 'document' : 'none'
     });
 
-    // Handle different message types
+    // Handle different message types based on priority:
+    // 1. First check for media content (highest priority)
+    // 2. Then check if it's an edited message without media
+    // 3. Finally, handle as a regular text message
     let response;
     
     try {
-      // Handle edited messages
-      if (context.isEdit) {
+      // Prioritize media handling, regardless of whether it's an edit or not
+      if (message.photo || message.video || message.document) {
+        logger.info('Routing to media message handler', { 
+          message_id: message.message_id,
+          is_edit: context.isEdit
+        });
+        response = await handleMediaMessage(message, context);
+      }
+      // Handle edited messages without media
+      else if (context.isEdit) {
         logger.info('Routing to edited message handler', { message_id: message.message_id });
         response = await handleEditedMessage(message, context);
-      }
-      // Handle media messages (photos, videos, documents)
-      else if (message.photo || message.video || message.document) {
-        logger.info('Routing to media message handler', { message_id: message.message_id });
-        response = await handleMediaMessage(message, context);
       }
       // Handle other types of messages
       else {
@@ -140,8 +148,8 @@ serve(async (req: Request) => {
           chat_id: message.chat?.id,
           is_edit: context.isEdit,
           has_media: !!(message.photo || message.video || message.document),
-          handler_type: context.isEdit ? 'edited_message' : 
-                       (message.photo || message.video || message.document) ? 'media_message' : 'other_message',
+          handler_type: (message.photo || message.video || message.document) ? 'media_message' : 
+                       (context.isEdit) ? 'edited_message' : 'other_message',
           error: handlerError.message,
           error_stack: handlerError.stack
         },

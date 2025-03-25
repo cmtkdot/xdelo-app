@@ -8,6 +8,7 @@ import {
   xdelo_checkFileExistsInStorage
 } from "../telegram-webhook/utils/media/mediaUtils.ts";
 import { corsHeaders } from "../telegram-webhook/utils/cors.ts";
+import { Logger } from "../telegram-webhook/utils/logger.ts";
 
 // For Deno compatibility
 declare const Deno: {
@@ -26,6 +27,7 @@ function validateRequest(req: any): string | null {
 serve(async (req: Request) => {
   // Generate a correlation ID for tracing
   const correlationId = crypto.randomUUID();
+  const logger = new Logger(correlationId, 'xdelo_reupload_media');
   
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -44,10 +46,15 @@ serve(async (req: Request) => {
     
     // Parse the request
     const requestData = await req.json();
+    logger.info('Reupload request received', { 
+      headers: Object.fromEntries(req.headers.entries()),
+      message_id: requestData?.messageId
+    });
     
     // Validate the request
     const validationError = validateRequest(requestData);
     if (validationError) {
+      logger.error('Invalid request', { error: validationError });
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -69,6 +76,11 @@ serve(async (req: Request) => {
       auth: {
         persistSession: false,
         autoRefreshToken: false
+      },
+      global: {
+        headers: {
+          'X-Client-Info': 'xdelo_reupload_media'
+        }
       }
     });
     
@@ -80,6 +92,10 @@ serve(async (req: Request) => {
       .single();
     
     if (fetchError || !message) {
+      logger.error('Message not found', { 
+        error: fetchError?.message || 'Message does not exist',
+        message_id: messageId
+      });
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -93,11 +109,25 @@ serve(async (req: Request) => {
       );
     }
     
+    // Log message details
+    logger.info('Retrieved message for reupload', {
+      message_id: messageId,
+      file_unique_id: message.file_unique_id,
+      has_file_id: !!message.file_id,
+      storage_path: message.storage_path
+    });
+    
     // Check if file exists in storage and we don't need to force reupload
     if (!forceReupload && !skipExistingCheck && message.storage_path) {
+      logger.info('Checking if file exists in storage', { storage_path: message.storage_path });
       const fileExists = await xdelo_checkFileExistsInStorage(message.storage_path);
       
       if (fileExists) {
+        logger.success('File already exists in storage', { 
+          storage_path: message.storage_path,
+          public_url: message.public_url
+        });
+        
         // Update the message to confirm storage exists
         await supabase
           .from('messages')
@@ -122,10 +152,18 @@ serve(async (req: Request) => {
           }
         );
       }
+      
+      logger.info('File does not exist in storage, proceeding with reupload', { 
+        storage_path: message.storage_path 
+      });
     }
     
     // If we need to use the original file_id
     if (!message.file_id || !message.file_unique_id) {
+      logger.error('Invalid message data', { 
+        has_file_id: !!message.file_id,
+        has_file_unique_id: !!message.file_unique_id
+      });
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -144,6 +182,12 @@ serve(async (req: Request) => {
                      message.mime_type_original || 
                      (message.telegram_data ? xdelo_detectMimeType(message.telegram_data) : 'application/octet-stream');
     
+    logger.info('Downloading media from Telegram', {
+      file_id: message.file_id,
+      file_unique_id: message.file_unique_id,
+      mime_type: mimeType
+    });
+    
     // Download from Telegram
     const downloadResult = await xdelo_downloadMediaFromTelegram(
       message.file_id,
@@ -154,7 +198,10 @@ serve(async (req: Request) => {
     
     // Handle file_id expiration
     if (!downloadResult.success && downloadResult.file_id_expired) {
-      console.warn(`File ID has expired for message ${messageId}`);
+      logger.warn('File ID has expired', { 
+        message_id: messageId,
+        file_id: message.file_id
+      });
       
       // Update the message
       await supabase
@@ -181,6 +228,10 @@ serve(async (req: Request) => {
     }
     
     if (!downloadResult.success || !downloadResult.blob) {
+      logger.error('Failed to download media', { 
+        error: downloadResult.error,
+        file_id: message.file_id
+      });
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -196,6 +247,11 @@ serve(async (req: Request) => {
     
     // Upload to Supabase Storage
     const storagePath = downloadResult.storagePath || message.storage_path || `${message.file_unique_id}.bin`;
+    logger.info('Uploading media to Supabase Storage', { 
+      storage_path: storagePath,
+      mime_type: downloadResult.mimeType || mimeType
+    });
+    
     const uploadResult = await xdelo_uploadMediaToStorage(
       storagePath,
       downloadResult.blob,
@@ -204,6 +260,10 @@ serve(async (req: Request) => {
     );
     
     if (!uploadResult.success) {
+      logger.error('Failed to upload media', { 
+        error: uploadResult.error,
+        storage_path: storagePath
+      });
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -216,6 +276,11 @@ serve(async (req: Request) => {
         }
       );
     }
+    
+    logger.success('Media upload successful', {
+      storage_path: storagePath,
+      public_url: uploadResult.publicUrl
+    });
     
     // Update the message
     await supabase
@@ -247,7 +312,10 @@ serve(async (req: Request) => {
       }
     );
   } catch (error) {
-    console.error('Error processing reupload request:', error);
+    logger.error('Error processing reupload request', {
+      error: error.message,
+      stack: error.stack
+    });
     
     return new Response(
       JSON.stringify({ 

@@ -101,6 +101,18 @@ export class Logger {
       default: return '📝';
     }
   }
+  
+  /**
+   * Helper to log message routing decisions
+   */
+  logRouting(messageId: number, routeType: string, hasMedia: boolean, isEdit: boolean): void {
+    this.info(`Routing message to ${routeType} handler`, {
+      message_id: messageId,
+      has_media: hasMedia,
+      is_edit: isEdit,
+      routing_decision: routeType
+    });
+  }
 }
 
 /**

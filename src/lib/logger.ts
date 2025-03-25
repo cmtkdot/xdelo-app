@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { LogEventType } from "@/types/api/LogEventType";
 
@@ -27,6 +28,7 @@ export class Logger {
         ...metadata,
         context: this.context,
         timestamp: new Date().toISOString(),
+        client_version: process.env.APP_VERSION || 'unknown'
       };
 
       // Ensure we have a valid UUID for the entity_id
@@ -109,6 +111,19 @@ export class Logger {
 
   async success(message: string, entityId: string, metadata: Record<string, any> = {}): Promise<void> {
     await this.logEvent(`success:${message}`, entityId, metadata);
+  }
+  
+  /**
+   * Log media processing operations
+   */
+  async logMediaOperation(
+    operation: string,
+    messageId: string,
+    success: boolean,
+    metadata: Record<string, any> = {}
+  ): Promise<void> {
+    const eventType = success ? `media_${operation}_success` : `media_${operation}_failed`;
+    await this.logEvent(eventType, messageId, metadata);
   }
 }
 

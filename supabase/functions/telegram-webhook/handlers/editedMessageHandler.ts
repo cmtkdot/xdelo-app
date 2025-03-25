@@ -1,179 +1,202 @@
-import { supabaseClient } from '../utils/supabase.ts';
+import { TelegramMessage, MessageContext } from '../../../_shared/database/types.ts';
 import { corsHeaders } from '../utils/cors.ts';
-import { TelegramMessage, MessageContext } from '../types.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { xdelo_logProcessingEvent } from '../utils/databaseOperations.ts';
-import { constructTelegramMessageUrl, isMessageForwarded } from '../utils/messageUtils.ts';
+import { handleMediaMessage } from './mediaMessageHandler.ts';
+import { handleOtherMessage } from './textMessageHandler.ts';
+
+// For Deno compatibility
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
 
 /**
- * Handler for edited messages (text only - media edits are handled by mediaMessageHandler)
+ * Handle edited messages from Telegram
+ * This handler is specifically for non-media edited messages
+ * Media edits are handled by the mediaMessageHandler
  */
-export async function handleEditedMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
+export async function handleEditedMessage(message: TelegramMessage, context: MessageContext) {
+  // First, validate that this is not a media message
+  if (message.photo || message.video || message.document) {
+    throw new Error('Edited message contains media, should be handled by mediaMessageHandler');
+  }
+  
+  const { logger } = context;
+  logger?.info('Processing edited message', {
+    message_id: message.message_id,
+    chat_id: message.chat?.id,
+    chat_type: message.chat?.type,
+    edit_date: message.edit_date
+  });
+
+  // Create Supabase client
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
   try {
-    const { correlationId, logger } = context;
-    
-    // Check if it contains media - if so, delegate to media handler
-    if (message.photo || message.video || message.document) {
-      logger?.info(`Edited message ${message.message_id} contains media, will be handled by media handler`);
-      throw new Error('Edited message contains media, should be handled by mediaMessageHandler');
-    }
-    
-    logger?.info(`Processing edited text message ${message.message_id}`);
-    
-    // Find existing message
-    const { data: existingMessage, error: lookupError } = await supabaseClient
-      .from('messages')
+    // Check if this message exists in the other_messages table
+    const { data: existingMessage, error: fetchError } = await supabase
+      .from('other_messages')
       .select('*')
       .eq('telegram_message_id', message.message_id)
       .eq('chat_id', message.chat.id)
       .single();
-      
-    if (lookupError && lookupError.code !== 'PGRST116') {
-      // Error other than "not found"
-      logger?.error(`Error looking up message for edit: ${lookupError.message}`);
-      throw lookupError;
-    }
-    
-    // Get message URL for reference
-    const message_url = constructTelegramMessageUrl(message.chat.id, message.message_id);
-    
-    if (existingMessage) {
-      logger?.info(`Found existing message ${existingMessage.id} for edit`);
-      
-      // Store previous state in edit_history
-      const editHistory = existingMessage.edit_history || [];
-      editHistory.push({
-        timestamp: new Date().toISOString(),
-        previous_text: existingMessage.text,
-        new_text: message.text,
-        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      // Real error, not just "no rows returned"
+      logger?.error('Error fetching existing message', {
+        error: fetchError.message,
+        message_id: message.message_id
       });
       
-      // Prepare update data
-      const messageData = {
-        text: message.text,
-        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
-        edit_history: editHistory,
-        edit_count: (existingMessage.edit_count || 0) + 1,
-        // If this is a text message, update these fields
-        is_edited: true,
-        telegram_data: message,
-        updated_at: new Date().toISOString()
+      throw new Error(`Failed to check for existing message: ${fetchError.message}`);
+    }
+
+    // If message exists, update it
+    if (existingMessage) {
+      logger?.info('Updating existing text message', {
+        message_id: message.message_id,
+        existing_id: existingMessage.id
+      });
+
+      // Prepare edit history
+      const editHistory = existingMessage.edit_history || [];
+      const previousContent = {
+        message_text: existingMessage.message_text,
+        edit_date: new Date().toISOString(),
+        edit_source: 'telegram_edit'
       };
-      
+      editHistory.push(previousContent);
+
       // Update the message
-      const { error: updateError } = await supabaseClient
-        .from('messages')
-        .update(messageData)
-        .eq('id', existingMessage.id);
-        
+      const { data: updatedMessage, error: updateError } = await supabase
+        .from('other_messages')
+        .update({
+          message_text: message.text,
+          telegram_data: message,
+          edit_history: editHistory,
+          edit_count: (existingMessage.edit_count || 0) + 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingMessage.id)
+        .select()
+        .single();
+
       if (updateError) {
-        logger?.error(`Error updating edited message: ${updateError.message}`);
-        throw updateError;
+        logger?.error('Error updating message', {
+          error: updateError.message,
+          message_id: message.message_id
+        });
+        
+        throw new Error(`Failed to update message: ${updateError.message}`);
       }
-      
-      // Log the edit operation
-      try {
-        await xdelo_logProcessingEvent(
-          "message_text_edited",
-          existingMessage.id,
-          correlationId,
-          {
-            message_id: message.message_id,
-            chat_id: message.chat.id
-          }
-        );
-      } catch (logError) {
-        logger?.error(`Error logging edit operation: ${logError.message}`);
-      }
-      
+
+      // Log the edit
+      await xdelo_logProcessingEvent(
+        'message_edited',
+        existingMessage.id,
+        context.correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          edit_count: (existingMessage.edit_count || 0) + 1,
+          previous_text: previousContent.message_text,
+          new_text: message.text
+        }
+      );
+
+      logger?.success('Successfully updated edited message', {
+        message_id: message.message_id,
+        entity_id: existingMessage.id
+      });
+
       return new Response(
-        JSON.stringify({ 
-          success: true, 
-          messageId: existingMessage.id, 
-          correlationId,
-          action: 'updated'
+        JSON.stringify({
+          success: true,
+          message: 'Message updated successfully',
+          id: existingMessage.id,
+          correlationId: context.correlationId
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
       );
     } else {
-      logger?.info(`🆕 Original message not found, creating new record for edited message ${message.message_id}`);
-      
-      // If message not found, create a new record
-      const isForward = isMessageForwarded(message);
-      
-      const { data, error: insertError } = await supabaseClient
+      // Message doesn't exist in other_messages, check if it exists in messages table
+      const { data: existingMediaMessage, error: mediaFetchError } = await supabase
         .from('messages')
-        .insert({
-          telegram_message_id: message.message_id,
-          chat_id: message.chat.id,
-          chat_type: message.chat.type,
-          chat_title: message.chat.title,
-          text: message.text,
-          is_edited: true,
-          edit_count: 1,
-          is_forward: isForward,
-          correlation_id: correlationId,
-          edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
-          telegram_data: message,
-          message_url: message_url
-        })
-        .select('id')
+        .select('*')
+        .eq('telegram_message_id', message.message_id)
+        .eq('chat_id', message.chat.id)
         .single();
+
+      if (!mediaFetchError && existingMediaMessage) {
+        // This was previously a media message that had its media removed
+        // We should handle it as a special case
+        logger?.info('Message was previously a media message, handling special case', {
+          message_id: message.message_id,
+          existing_id: existingMediaMessage.id
+        });
         
-      if (insertError) {
-        logger?.error(`Error creating new record for edited message: ${insertError.message}`);
-        throw insertError;
-      }
-      
-      logger?.success(`Created new message record ${data.id} for edited message ${message.message_id}`);
-      
-      // Log the operation
-      try {
+        // Log this special case
         await xdelo_logProcessingEvent(
-          "message_created_from_edit",
-          data.id,
-          correlationId,
+          'media_message_converted_to_text',
+          existingMediaMessage.id,
+          context.correlationId,
           {
             message_id: message.message_id,
-            chat_id: message.chat.id
+            chat_id: message.chat.id,
+            previous_type: 'media',
+            new_type: 'text'
           }
         );
-      } catch (logError) {
-        logger?.error(`Error logging message creation: ${logError.message}`);
+        
+        // Handle as a new text message
+        return await handleOtherMessage(message, context);
       }
+
+      // Message doesn't exist in either table, treat as a new message
+      logger?.info('Edited message not found in database, handling as new message', {
+        message_id: message.message_id
+      });
       
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          messageId: data.id, 
-          correlationId,
-          action: 'created'  
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      // Handle as a new text message
+      return await handleOtherMessage(message, context);
     }
   } catch (error) {
-    context.logger?.error(`Error processing edited message: ${error.message}`, { stack: error.stack });
-    
+    logger?.error('Error processing edited message', {
+      error: error.message,
+      stack: error.stack,
+      message_id: message.message_id
+    });
+
+    // Log the error
     await xdelo_logProcessingEvent(
-      "edited_message_processing_error",
-      `${message.chat.id}_${message.message_id}`,
+      'edited_message_processing_error',
+      message.message_id.toString(),
       context.correlationId,
       {
         message_id: message.message_id,
         chat_id: message.chat.id,
-        error: error.message
+        error: error.message,
+        stack: error.stack
       },
       error.message
     );
-    
+
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message || 'Unknown error processing edited message',
+      JSON.stringify({
+        success: false,
+        error: `Error processing edited message: ${error.message}`,
         correlationId: context.correlationId
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200 // Still return 200 to prevent Telegram from retrying
+      }
     );
   }
 }

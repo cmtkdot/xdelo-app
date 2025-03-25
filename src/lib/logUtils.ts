@@ -23,6 +23,11 @@ export enum LogEventType {
   // Product matching
   PRODUCT_MATCHING = "PRODUCT_MATCHING",
   
+  // Media operations
+  MEDIA_REUPLOAD_REQUESTED = "MEDIA_REUPLOAD_REQUESTED",
+  MEDIA_REUPLOAD_SUCCESS = "MEDIA_REUPLOAD_SUCCESS",
+  MEDIA_REUPLOAD_FAILED = "MEDIA_REUPLOAD_FAILED",
+  
   // System events
   SYSTEM_EVENT = "SYSTEM_EVENT",
   SYSTEM_WARNING = "SYSTEM_WARNING",
@@ -51,7 +56,20 @@ export const logEvent = async (
   await defaultLogger.logEvent(eventType, entityId, metadata);
 };
 
+/**
+ * Log a media operation
+ */
+export const logMediaOperation = async (
+  operation: string,
+  messageId: string,
+  success: boolean,
+  metadata: EventLogData = {}
+) => {
+  await defaultLogger.logMediaOperation(operation, messageId, success, metadata);
+};
+
 export default {
   logEvent,
+  logMediaOperation,
   LogEventType
 };
