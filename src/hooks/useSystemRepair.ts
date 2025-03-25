@@ -17,13 +17,12 @@ export function useSystemRepair() {
   const [results, setResults] = useState<any>(null);
   const { toast } = useToast();
 
-  // Add the repairSystem function to fix the missing function error
   const repairSystem = async (options: RepairOptions = {}) => {
     setIsRepairing(true);
     setResults(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke('repair-media', {
+      const { data, error } = await supabase.functions.invoke('xdelo_repair_media', {
         body: {
           options: {
             ...options,

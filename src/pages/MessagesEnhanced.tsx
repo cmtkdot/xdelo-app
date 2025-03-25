@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/useToast';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useIsMobile } from '@/hooks/useMobile';
 import { useMessageViewHandlers } from '@/hooks/useMessageViewHandlers';
-import { useEnhancedMessages } from '@/hooks/useEnhancedMessages';
+import { useEnhancedMessages } from '@/hooks/enhancedMessages';
 import { MediaViewer } from '@/components/ui/media-viewer';
 import { MessageFilterBar } from '@/components/EnhancedMessages/MessageFilterBar';
 import { MessageFilterPanel } from '@/components/EnhancedMessages/MessageFilterPanel';
