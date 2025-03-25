@@ -154,11 +154,12 @@ export async function createMessage(
     const cleanupOnError = async (error: any) => {
       try {
         // Check if a partial record was created that might be causing transaction issues
-        if (error?.message?.includes('transaction') || error?.message?.includes('timeout') || error?.code === '2D000') {
+        if (error?.message?.includes('transaction') || error?.message?.includes('timeout') || error?.message?.includes('statement timeout') || error?.code === '2D000' || error?.code === '57014') {
           logger?.warn('Attempting to clean up potential transaction issues', { 
             message_id: message.telegram_message_id, 
             chat_id: message.chat_id,
-            error_message: error?.message
+            error_message: error?.message,
+            error_code: error?.code
           });
           
           // Try to fetch any partial records
@@ -183,26 +184,25 @@ export async function createMessage(
       }
     };
     
-    // Optimize the payload for storage by removing potentially large data that's not needed
-    // This helps reduce the size of the DB record and prevent timeouts
-    if (message.telegram_data) {
-      // Remove unnecessary fields that might bloat the record
-      // Keep only essential fields and safely remove large ones
-      const essentialData = { ...message.telegram_data };
-      
-      // Remove potentially large fields that aren't needed for analysis
-      // but preserve important metadata
-      delete essentialData.photo; // Keep only file_id instead of full photo array
-      delete essentialData.audio;
-      delete essentialData.document?.thumbnail;
-      delete essentialData.video?.thumbnail;
-      
-      // Replace the original object with our streamlined version
-      message.telegram_data = essentialData;
-    }
+    // OPTIMIZATION: Instead of storing the entire telegram_data object,
+    // just extract the essential metadata needed for processing
+    // This significantly reduces the record size and prevents timeouts
+    const essentialMetadata = {
+      message_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
+      from_user_id: message.telegram_data?.from?.id,
+      from_username: message.telegram_data?.from?.username,
+      from_first_name: message.telegram_data?.from?.first_name,
+      media_group_id: message.telegram_data?.media_group_id,
+      date: message.telegram_data?.date,
+      edit_date: message.telegram_data?.edit_date,
+    };
+    
+    // Replace the entire telegram_data object with our minimal metadata
+    const telegramMetadata = essentialMetadata;
     
     return await xdelo_withDatabaseRetry(`create_message_${message.telegram_message_id}`, async () => {
       try {
+        // First insert the basic message data without large fields to prevent timeout
         const { data, error } = await supabase
           .from('messages')
           .insert({
@@ -225,7 +225,8 @@ export async function createMessage(
             storage_path_standardized: message.storage_path_standardized || false,
             public_url: message.public_url,
             processing_state: message.processing_state || 'initialized',
-            telegram_data: message.telegram_data,
+            // Store only essential metadata instead of full telegram_data
+            telegram_data: telegramMetadata,
             is_forward: message.is_forward,
             forward_info: message.forward_info,
             correlation_id: message.correlation_id,
@@ -259,7 +260,7 @@ export async function createMessage(
 
         logger?.info(`Message record created successfully: ${data.id}`);
         return { success: true, id: data.id };
-      } catch (insertError) {
+      } catch (insertError: any) {
         // If there's an exception during the insert, clean up
         await cleanupOnError(insertError);
         throw insertError; // Re-throw for retry mechanism
@@ -269,7 +270,7 @@ export async function createMessage(
       maxRetries: 5, // Increase retries for important operations
       initialDelayMs: 500, // Start with a shorter delay
       backoffFactor: 2, // Exponential backoff
-      retryCondition: (error) => {
+      retryCondition: (error: any) => {
         // Don't retry on certain errors that won't be fixed by retrying
         if (error?.code === '23505') { // Unique violation
           logger?.warn('Not retrying on unique violation', { error: error.message });
@@ -278,8 +279,13 @@ export async function createMessage(
         // Always retry on transaction errors and timeouts
         if (error?.message?.includes('transaction') || 
             error?.message?.includes('timeout') || 
-            error?.code === '2D000') {
-          logger?.warn('Retrying on transaction/timeout error', { error: error.message });
+            error?.message?.includes('statement timeout') ||
+            error?.code === '2D000' ||
+            error?.code === '57014') { // 57014 is the Postgres code for statement_timeout
+          logger?.warn('Retrying on transaction/timeout error', { 
+            error: error.message,
+            code: error?.code 
+          });
           return true;
         }
         return true; // Default retry for other errors

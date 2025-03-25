@@ -17,9 +17,22 @@ const defaultOptions = {
   db: {
     schema: 'public',
     // Increase timeouts to prevent operation failures
-    queryTimeout: 30000, // Increase from default 5000ms to 15000ms (15 seconds)
-    connectionTimeout: 30000 // 10 seconds for connection timeout
+    queryTimeout: 60000,     // 60 seconds - significantly higher timeout for complex queries
+    connectionTimeout: 40000, // 40 seconds for connection timeout
+    poolSize: 5,             // Limit the number of concurrent connections
+    maxRetries: 3,           // Number of times to retry a failed query
+    idleTimeoutMillis: 15000, // How long a connection can remain idle before being closed
   },
+  realtime: {
+    // Disable realtime subscriptions as they're not needed in edge functions
+    // and can consume resources
+    autoconnect: false,
+  },
+  // Adding custom headers for telemetry and troubleshooting
+  headers: {
+    "X-Function-Request-Type": "edge-function",
+    "X-Request-Timeout-Set": "60000",
+  }
 };
 
 /**
@@ -46,6 +59,31 @@ export function createSupabaseClient(options = {}): SupabaseClient {
 
 // Singleton instance of the Supabase client
 export const supabaseClient = createSupabaseClient();
+
+/**
+ * Create a Supabase client with increased timeout
+ * Use this for operations that are likely to be long-running
+ */
+export function createLongRunningClient(): SupabaseClient {
+  return createSupabaseClient({
+    db: {
+      queryTimeout: 120000, // 2 minutes
+    }
+  });
+}
+
+/**
+ * Create a Supabase client with very short timeout
+ * Use this for simple, fast operations like checking if a record exists
+ */
+export function createFastClient(): SupabaseClient {
+  return createSupabaseClient({
+    db: {
+      queryTimeout: 5000, // 5 seconds
+      poolSize: 10, // More connections for simple queries
+    }
+  });
+}
 
 /**
  * Helper to handle Supabase query errors consistently
