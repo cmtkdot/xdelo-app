@@ -2976,6 +2976,12 @@ export type Database = {
           count: number
         }[]
       }
+      get_media_group_sync_status: {
+        Args: {
+          p_media_group_id: string
+        }
+        Returns: Json
+      }
       get_table_columns: {
         Args: {
           table_name: string
@@ -3232,6 +3238,15 @@ export type Database = {
           "": unknown
         }
         Returns: unknown
+      }
+      increment_field: {
+        Args: {
+          table_name: string
+          column_name: string
+          row_id: string
+          increment_by?: number
+        }
+        Returns: number
       }
       is_customer: {
         Args: {
@@ -3851,6 +3866,14 @@ export type Database = {
             }
             Returns: Json
           }
+      xdelo_sync_media_group_content_with_lock: {
+        Args: {
+          p_media_group_id: string
+          p_source_message_id: string
+          p_correlation_id: string
+        }
+        Returns: Json
+      }
       xdelo_update_message_processing_state: {
         Args: {
           p_message_id: string
