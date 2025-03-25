@@ -185,11 +185,12 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
     
     await xdelo_logProcessingEvent(
       "edited_message_processing_error",
-      `${message.chat.id}_${message.message_id}`,
+      crypto.randomUUID().toString(),
       context.correlationId,
       {
         message_id: message.message_id,
         chat_id: message.chat.id,
+        original_entity_id: `${message.chat.id}_${message.message_id}`,
         error: error instanceof Error ? error.message : String(error)
       },
       error instanceof Error ? error.message : String(error)

@@ -105,7 +105,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     try {
       await xdelo_logProcessingEvent(
         "media_processing_error",
-        message.message_id.toString(),
+        crypto.randomUUID().toString(),
         context.correlationId,
         {
           message_id: message.message_id,
@@ -512,7 +512,7 @@ async function xdelo_handleNewMediaMessage(
     try {
       await xdelo_logProcessingEvent(
         "media_processing_error",
-        message.message_id.toString(),
+        crypto.randomUUID().toString(),
         correlationId,
         {
           message_id: message.message_id,

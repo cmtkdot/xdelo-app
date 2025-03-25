@@ -26,8 +26,6 @@ verify_jwt = false
 # Other utility functions
 [functions.product-matching]
 verify_jwt = false
-[functions.unified-logging]
-verify_jwt = false
 
 # Note: The following files and functions have been removed or consolidated:
 # Functions:
@@ -39,6 +37,7 @@ verify_jwt = false
 # - update-telegram-caption (removed)
 # - process-audio-upload (removed)
 # - validate-storage-files (removed)
+# - unified-logging (consolidated into log-operation)
 # 
 # Shared Files:
 # - _shared/captionParser.ts (functionality moved to database)

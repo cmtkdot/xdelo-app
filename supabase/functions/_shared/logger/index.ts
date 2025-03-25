@@ -229,16 +229,40 @@ export async function xdelo_logMessageOperation(
   errorMessage?: string
 ): Promise<void> {
   try {
+    // Ensure correlation ID is a string
+    const corrId = correlationId?.toString() || crypto.randomUUID().toString();
+    
+    // Ensure entityId is a valid UUID, if not, generate one and include the original ID in metadata
+    let validEntityId: string;
+    let enhancedMetadata = { ...metadata };
+    
+    try {
+      // Try to parse as UUID to validate
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (entityId && uuidRegex.test(entityId)) {
+        validEntityId = entityId;
+      } else {
+        // Not a valid UUID, generate one and store original in metadata
+        validEntityId = crypto.randomUUID();
+        // Add the original ID to metadata
+        enhancedMetadata.original_entity_id = entityId;
+      }
+    } catch (e) {
+      // Any error, use a new UUID
+      validEntityId = crypto.randomUUID();
+      enhancedMetadata.original_entity_id = entityId;
+    }
+    
     // Create a formatted summary for the console
     const summary = formatWebhookSummary(
       eventType, 
-      entityId, 
+      entityId, // Use original ID for display purposes
       !eventType.includes('error') && !eventType.includes('failed'),
-      metadata
+      enhancedMetadata
     );
     
     // Log to console
-    console.log(summary, metadata);
+    console.log(summary, enhancedMetadata);
     
     // Import supabase client
     const { supabaseClient } = await import('../supabase.ts');
@@ -246,9 +270,9 @@ export async function xdelo_logMessageOperation(
     // Log to database
     const { error } = await supabaseClient.from('unified_audit_logs').insert({
       event_type: eventType,
-      entity_id: entityId,
-      correlation_id: correlationId || crypto.randomUUID(),
-      metadata,
+      entity_id: validEntityId,
+      correlation_id: corrId,
+      metadata: enhancedMetadata,
       error_message: errorMessage
     });
     

@@ -111,7 +111,7 @@ const handler = createEdgeHandler(async (req: Request, context: HandlerContext) 
       // Log the error to the database
       await xdelo_logProcessingEvent(
         "message_processing_failed",
-        message.message_id.toString(),
+        crypto.randomUUID().toString(),
         correlationId,
         {
           message_id: message.message_id,
