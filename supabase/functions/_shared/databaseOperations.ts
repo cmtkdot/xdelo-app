@@ -119,9 +119,12 @@ export async function xdelo_processMessageCaption(
     // Log the error
     await xdelo_logProcessingEvent(
       "caption_processing_failed",
-      messageId,
+      crypto.randomUUID().toString(),
       correlationId || crypto.randomUUID().toString(),
-      { error: error.message },
+      { 
+        error: error.message,
+        message_id: messageId // Keep the original message ID in metadata
+      },
       error.message
     );
     

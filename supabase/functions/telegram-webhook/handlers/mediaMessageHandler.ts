@@ -361,7 +361,7 @@ async function xdelo_handleNewMediaMessage(
       // Log the duplicate detection
       await xdelo_logProcessingEvent(
         "duplicate_message_detected",
-        message.message_id.toString(),
+        crypto.randomUUID().toString(),
         correlationId,
         {
           message_id: message.message_id,
@@ -484,7 +484,7 @@ async function xdelo_handleNewMediaMessage(
       // Also try to log to the database
       await xdelo_logProcessingEvent(
         "message_creation_failed",
-        message.message_id.toString(),
+        crypto.randomUUID().toString(),
         correlationId,
         {
           message_id: message.message_id,
