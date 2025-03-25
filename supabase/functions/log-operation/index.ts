@@ -1,5 +1,5 @@
 
-import { createHandler } from '../_shared/baseHandler.ts';
+import { createEdgeHandler, HandlerContext } from '../_shared/edgeHandler.ts';
 import { createSupabaseClient } from '../_shared/supabase.ts';
 
 interface LogRequest {
@@ -10,9 +10,13 @@ interface LogRequest {
   metadata?: Record<string, unknown>;
   errorMessage?: string;
   correlationId?: string;
+  userId?: string;
 }
 
-export default createHandler(async (req: Request) => {
+// Create the handler using the edge handler
+const handler = createEdgeHandler(async (req: Request, context: HandlerContext) => {
+  const { logger, correlationId: requestCorrelationId } = context;
+  
   // Parse request body
   const { 
     eventType, 
@@ -21,7 +25,8 @@ export default createHandler(async (req: Request) => {
     newState, 
     metadata = {}, 
     errorMessage,
-    correlationId = crypto.randomUUID()
+    correlationId = requestCorrelationId || crypto.randomUUID().toString(),
+    userId
   } = await req.json() as LogRequest;
   
   // Validate request
@@ -39,40 +44,37 @@ export default createHandler(async (req: Request) => {
     );
   }
   
-  // Add correlation ID and timestamp to metadata
-  const enhancedMetadata = {
-    ...metadata,
-    logged_at: new Date().toISOString(),
-    correlation_id: correlationId,
-    logged_from: 'edge_function'
-  };
-  
-  // Add error message to metadata if provided
-  if (errorMessage) {
-    enhancedMetadata.error_message = errorMessage;
-  }
-  
   // Create Supabase client
   const supabase = createSupabaseClient();
   
+  logger.info('Logging operation', {
+    eventType, 
+    entityId,
+    correlationId
+  });
+  
   try {
-    // Insert log entry
-    const { data, error } = await supabase
-      .from('unified_audit_logs')
-      .insert({
-        event_type: eventType,
-        entity_id: entityId,
-        previous_state: previousState,
-        new_state: newState,
-        metadata: enhancedMetadata,
-        error_message: errorMessage,
-        correlation_id: correlationId
-      })
-      .select('id')
-      .single();
+    // Use the standard database function to handle UUID conversion
+    const { data, error } = await supabase.rpc(
+      'xdelo_logprocessingevent',
+      {
+        p_event_type: eventType,
+        p_entity_id: entityId,
+        p_correlation_id: correlationId,
+        p_metadata: {
+          ...metadata,
+          previous_state: previousState,
+          new_state: newState,
+          logged_at: new Date().toISOString(),
+          logged_from: 'edge_function',
+          user_id: userId
+        },
+        p_error_message: errorMessage
+      }
+    );
     
     if (error) {
-      console.error('Error logging operation:', error);
+      logger.error('Error logging operation', error);
       
       return new Response(
         JSON.stringify({ 
@@ -87,22 +89,24 @@ export default createHandler(async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: true,
-        logId: data.id,
+        logId: data,
         correlationId,
-        timestamp: enhancedMetadata.logged_at
+        timestamp: new Date().toISOString()
       }),
       { headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Exception logging operation:', error);
+    logger.error('Exception logging operation', error);
     
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
         correlationId
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 });
+
+export default handler;
