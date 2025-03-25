@@ -41,6 +41,56 @@ function extractForwardInfo(message: TelegramMessage): ForwardInfo | undefined {
   };
 }
 
+/**
+ * Trigger caption processing via the database function
+ * 
+ * This calls the xdelo_process_caption_workflow PostgreSQL function to
+ * process the caption and update the analyzed_content
+ */
+async function triggerCaptionProcessing(
+  messageId: string, 
+  correlationId: string, 
+  force = false,
+  client = supabaseClient,
+  logger?: any
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    logger?.info(`Triggering caption processing for message ${messageId}`, {
+      correlation_id: correlationId,
+      force
+    });
+    
+    // Call the database function to process the caption
+    const { data, error } = await client.rpc('xdelo_process_caption_workflow', {
+      p_message_id: messageId,
+      p_correlation_id: correlationId,
+      p_force: force
+    });
+    
+    if (error) {
+      logger?.error(`Error triggering caption processing: ${error.message}`, {
+        messageId,
+        correlationId,
+        error
+      });
+      return { success: false, error: error.message };
+    }
+    
+    logger?.info(`Caption processing triggered successfully for message ${messageId}`, {
+      result: data
+    });
+    
+    return { success: true };
+  } catch (error: any) {
+    logger?.error(`Exception in triggerCaptionProcessing: ${error.message}`, {
+      messageId,
+      correlationId,
+      error
+    });
+    return { success: false, error: error.message };
+  }
+}
+
 // Get Telegram bot token from environment
 // @ts-ignore - Deno global is available in Deno environment
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
@@ -254,6 +304,26 @@ async function xdelo_handleEditedMediaMessage(
         } catch (logError: any) {
           logger?.error(`Failed to log media edit operation: ${logError.message}`);
         }
+        
+        // If message has a caption, trigger caption processing
+        if (message.caption) {
+          try {
+            const processingResult = await triggerCaptionProcessing(
+              existingMessage.id,
+              correlationId,
+              true, // Force reprocessing since this is an edit
+              dbClient,
+              logger
+            );
+            
+            if (!processingResult.success) {
+              logger?.warn(`Caption processing trigger failed: ${processingResult.error}`);
+            }
+          } catch (captionError: any) {
+            logger?.error(`Error triggering caption processing: ${captionError.message}`);
+            // Don't fail the whole operation if caption processing fails
+          }
+        }
       } catch (mediaError: any) {
         logger?.error(`Error processing edited media: ${mediaError.message}`);
         throw mediaError;
@@ -282,7 +352,22 @@ async function xdelo_handleEditedMediaMessage(
       
       // Process the new caption
       if (message.caption) {
-        // Process caption changes - this could trigger analysis, etc.
+        try {
+          const processingResult = await triggerCaptionProcessing(
+            existingMessage.id,
+            correlationId,
+            true, // Force reprocessing since this is an edit
+            dbClient,
+            logger
+          );
+          
+          if (!processingResult.success) {
+            logger?.warn(`Caption processing trigger failed: ${processingResult.error}`);
+          }
+        } catch (captionError: any) {
+          logger?.error(`Error triggering caption processing: ${captionError.message}`);
+          // Don't fail the whole operation if caption processing fails
+        }
       }
       
       // Log the caption edit
@@ -497,6 +582,28 @@ async function xdelo_handleNewMediaMessage(
     }
     
     throw new Error(result.error_message || 'Failed to create message record');
+  }
+  
+  // If the message has a caption, trigger caption processing
+  if (message.caption && result.id) {
+    try {
+      const processingResult = await triggerCaptionProcessing(
+        result.id,
+        correlationId,
+        false, // Don't force reprocessing for new messages
+        dbClient,
+        logger
+      );
+      
+      if (!processingResult.success) {
+        logger?.warn(`Caption processing trigger failed: ${processingResult.error}`);
+      } else {
+        logger?.info(`Successfully triggered caption processing for message ${result.id}`);
+      }
+    } catch (captionError: any) {
+      logger?.error(`Error triggering caption processing: ${captionError.message}`);
+      // Don't fail the whole operation if caption processing fails
+    }
   }
   
   // Log the success
