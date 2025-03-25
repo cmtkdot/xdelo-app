@@ -7,7 +7,8 @@ import {
   xdelo_isViewableMimeType,
   xdelo_detectMimeType,
   xdelo_findExistingFile,
-  xdelo_processMessageMedia
+  xdelo_processMessageMedia,
+  xdelo_validateFileId
 } from '../utils/mediaUtils.ts';
 import { 
   TelegramMessage, 
@@ -131,15 +132,26 @@ async function xdelo_handleEditedMediaMessage(
           message.photo[message.photo.length - 1] : 
           message.video || message.document;
           
+        // Validate file ID before proceeding
+        const { isValid, sanitizedFileId, error: validationError } = xdelo_validateFileId(telegramFile.file_id);
+        if (!isValid) {
+          logger?.error(`Invalid file ID: ${validationError}`, {
+            file_id: telegramFile.file_id,
+            message_id: message.message_id,
+            chat_id: message.chat.id
+          });
+          throw new Error(`Invalid file ID: ${validationError}`);
+        }
+        
         // Get mime type
         const detectedMimeType = xdelo_detectMimeType(message);
         
         // Process the new media file
         const mediaProcessResult = await xdelo_processMessageMedia(
           message,
-          telegramFile.file_id,
+          sanitizedFileId, // Use sanitized file ID
           telegramFile.file_unique_id,
-          TELEGRAM_BOT_TOKEN,
+          Deno.env.get('TELEGRAM_BOT_TOKEN') || '',
           existingMessage.id // Use existing message ID
         );
         
@@ -285,55 +297,87 @@ async function xdelo_handleEditedMediaMessage(
 }
 
 /**
+ * Helper function to extract forward information from a message
+ */
+function extractForwardInfo(message: TelegramMessage): ForwardInfo | undefined {
+  if (!message.forward_origin) {
+    return undefined;
+  }
+  
+  return {
+    is_forwarded: true,
+    forward_origin_type: message.forward_origin.type,
+    forward_from_chat_id: message.forward_origin.chat?.id,
+    forward_from_chat_title: message.forward_origin.chat?.title,
+    forward_from_chat_type: message.forward_origin.chat?.type,
+    forward_from_message_id: message.forward_origin.message_id,
+    forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
+    original_chat_id: message.forward_origin.chat?.id,
+    original_chat_title: message.forward_origin.chat?.title,
+    original_message_id: message.forward_origin.message_id
+  };
+}
+
+/**
  * Helper function to handle new media messages
  */
 async function xdelo_handleNewMediaMessage(
   message: TelegramMessage, 
   context: MessageContext
 ): Promise<Response> {
-  const { correlationId, logger } = context;
+  const { correlationId, isChannelPost, isForwarded, logger } = context;
   
   try {
-    // Process the media message
-    const messageUrl = constructTelegramMessageUrl(message.chat.id, message.message_id);
+    // Process forward information if present
+    const forwardInfo = isForwarded ? extractForwardInfo(message) : undefined;
     
-    logger?.info(`Processing new media message: ${message.message_id}`, {
-      chat_id: message.chat.id,
-      message_url: messageUrl
-    });
+    // Get the file details based on the media type
+    let telegramFile;
+    let mediaType = 'unknown';
     
-    // Prepare the message data
-    const telegramFile = message.photo ? 
-      message.photo[message.photo.length - 1] : 
-      message.video || message.document;
-    
-    // Process media
-    const mediaResult = await xdelo_processMessageMedia(
-      message,
-      telegramFile.file_id,
-      telegramFile.file_unique_id,
-      TELEGRAM_BOT_TOKEN
-    );
-    
-    if (!mediaResult.success) {
-      throw new Error(`Failed to process media: ${mediaResult.error}`);
+    if (message.photo && message.photo.length > 0) {
+      // For photos, get the largest size (last in the array)
+      telegramFile = message.photo[message.photo.length - 1];
+      mediaType = 'photo';
+    } else if (message.video) {
+      telegramFile = message.video;
+      mediaType = 'video';
+    } else if (message.document) {
+      telegramFile = message.document;
+      mediaType = 'document';
+    } else {
+      throw new Error('Message does not contain valid media');
     }
     
-    // Prepare forward info if message is forwarded
-    const forwardInfo: ForwardInfo | undefined = message.forward_origin ? {
-      is_forwarded: true,
-      forward_origin_type: message.forward_origin.type,
-      forward_from_chat_id: message.forward_origin.chat?.id,
-      forward_from_chat_title: message.forward_origin.chat?.title,
-      forward_from_chat_type: message.forward_origin.chat?.type,
-      forward_from_message_id: message.forward_origin.message_id,
-      forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
-      original_chat_id: message.forward_origin.chat?.id,
-      original_chat_title: message.forward_origin.chat?.title,
-      original_message_id: message.forward_origin.message_id
-    } : undefined;
+    // Ensure we have a telegramFile before proceeding
+    if (!telegramFile) {
+      throw new Error('Failed to extract media file information from message');
+    }
     
-    // Create message input
+    // Validate the file ID
+    const { isValid, sanitizedFileId, error: validationError } = xdelo_validateFileId(telegramFile.file_id);
+    if (!isValid) {
+      logger?.error(`Invalid file ID: ${validationError}`, {
+        file_id: telegramFile.file_id,
+        message_id: message.message_id,
+        chat_id: message.chat.id
+      });
+      throw new Error(`Invalid file ID: ${validationError}`);
+    }
+    
+    // Process the media content
+    const mediaProcessResult = await xdelo_processMessageMedia(
+      message,
+      sanitizedFileId, // Use sanitized file ID
+      telegramFile.file_unique_id,
+      Deno.env.get('TELEGRAM_BOT_TOKEN') || ''
+    );
+    
+    if (!mediaProcessResult.success) {
+      throw new Error(`Failed to process media: ${mediaProcessResult.error}`);
+    }
+    
+    // Prepare message input with type-safety for different media types
     const messageInput: MessageInput = {
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
@@ -343,29 +387,30 @@ async function xdelo_handleNewMediaMessage(
       media_group_id: message.media_group_id,
       file_id: telegramFile.file_id,
       file_unique_id: telegramFile.file_unique_id,
-      mime_type: mediaResult.fileInfo.mime_type,
+      mime_type: mediaProcessResult.fileInfo.mime_type,
       mime_type_original: message.document?.mime_type || message.video?.mime_type,
-      storage_path: mediaResult.fileInfo.storage_path,
-      public_url: mediaResult.fileInfo.public_url,
-      width: telegramFile.width,
-      height: telegramFile.height,
+      storage_path: mediaProcessResult.fileInfo.storage_path,
+      public_url: mediaProcessResult.fileInfo.public_url,
+      width: 'width' in telegramFile ? telegramFile.width : undefined,
+      height: 'height' in telegramFile ? telegramFile.height : undefined,
       duration: message.video?.duration,
-      file_size: telegramFile.file_size || mediaResult.fileInfo.file_size,
+      file_size: telegramFile.file_size || mediaProcessResult.fileInfo.file_size,
       correlation_id: correlationId,
       processing_state: message.caption ? 'pending' : 'initialized',
-      is_edited_channel_post: context.isChannelPost,
+      is_edited_channel_post: isChannelPost,
       forward_info: forwardInfo,
       telegram_data: message,
       edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : undefined,
-      is_forward: context.isForwarded,
-      edit_history: context.isEdit ? [{
+      is_forward: isForwarded,
+      edit_history: isForwarded ? [{
         timestamp: new Date().toISOString(),
         is_initial_edit: true,
-        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
-      }] : [],
+        edit_source: 'forward',
+        edit_date: forwardInfo?.forward_date
+      }] : undefined,
       storage_exists: true,
       storage_path_standardized: true,
-      message_url: messageUrl
+      message_url: constructTelegramMessageUrl(message.chat.id, message.message_id)
     };
     
     // Create the message - duplicate detection is built into this function
@@ -419,8 +464,8 @@ async function xdelo_handleNewMediaMessage(
     logger?.success(`Successfully created new media message: ${result.id}`, {
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
-      media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
-      storage_path: mediaResult.fileInfo.storage_path
+      media_type: mediaType,
+      storage_path: mediaProcessResult.fileInfo.storage_path
     });
     
     return addCorsHeaders(new Response(

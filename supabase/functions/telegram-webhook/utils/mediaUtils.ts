@@ -1,6 +1,124 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from "./cors.ts";
 
+// Create Supabase client for storage operations
+const createSupabaseClient = () => {
+  return createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false
+      }
+    }
+  );
+};
+
+// Rate limiter to prevent API throttling
+class RateLimiter {
+  private queue: Array<() => Promise<void>> = [];
+  private processing = false;
+  private maxConcurrent: number;
+  private delay: number;
+  private activeRequests = 0;
+
+  constructor(maxConcurrent = 5, delayMs = 300) {
+    this.maxConcurrent = maxConcurrent;
+    this.delay = delayMs;
+  }
+
+  async add<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await fn();
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        } finally {
+          this.activeRequests--;
+          this.processNext();
+        }
+      });
+      
+      this.processNext();
+    });
+  }
+
+  private async processNext() {
+    if (this.processing) return;
+    this.processing = true;
+    
+    while (this.queue.length > 0 && this.activeRequests < this.maxConcurrent) {
+      const task = this.queue.shift();
+      if (task) {
+        this.activeRequests++;
+        task();
+        
+        // Add delay between API calls
+        if (this.queue.length > 0) {
+          await new Promise(resolve => setTimeout(resolve, this.delay));
+        }
+      }
+    }
+    
+    this.processing = false;
+  }
+
+  reset() {
+    this.queue = [];
+    this.activeRequests = 0;
+    this.processing = false;
+  }
+}
+
+// Create a global rate limiter for API calls
+export const rateLimitTracker = new RateLimiter(3, 500);
+
+/**
+ * Validates a Telegram file ID to ensure it meets expected format
+ * @param fileId The Telegram file ID to validate
+ * @returns Object with validation result, sanitized ID and optional error
+ */
+export function xdelo_validateFileId(fileId: string): { 
+  isValid: boolean; 
+  sanitizedFileId: string;
+  error?: string;
+} {
+  if (!fileId) {
+    return { 
+      isValid: false, 
+      sanitizedFileId: '', 
+      error: 'File ID is empty or undefined' 
+    };
+  }
+  
+  // Telegram file IDs should not contain spaces, newlines or special characters
+  // They're typically alphanumeric with some hyphens and underscores
+  const sanitizedFileId = fileId.trim();
+  
+  // Basic validation - file IDs are typically at least 20 chars
+  if (sanitizedFileId.length < 20) {
+    return { 
+      isValid: false, 
+      sanitizedFileId, 
+      error: `File ID seems too short (${sanitizedFileId.length} chars)` 
+    };
+  }
+  
+  // Check for invalid characters
+  if (!/^[A-Za-z0-9_-]+$/g.test(sanitizedFileId)) {
+    return { 
+      isValid: false, 
+      sanitizedFileId, 
+      error: 'File ID contains invalid characters' 
+    };
+  }
+  
+  return { isValid: true, sanitizedFileId };
+}
+
 // Determine if a file should be viewable in browser based on its MIME type
 export function xdelo_isViewableMimeType(mimeType: string): boolean {
   if (!mimeType) return false;
@@ -91,15 +209,6 @@ export function xdelo_getExtensionFromMimeType(mimeType: string): string {
 export function xdelo_detectMimeType(telegramData: any): string {
   if (!telegramData) return 'application/octet-stream';
   
-  // Log the telegram data for debugging
-  console.log('Detecting MIME type from telegram data:', JSON.stringify({
-    has_photo: !!telegramData.photo,
-    has_document: !!telegramData.document,
-    has_video: !!telegramData.video,
-    document_mime_type: telegramData.document?.mime_type,
-    video_mime_type: telegramData.video?.mime_type
-  }));
-  
   // Handle photo (always JPEG from Telegram)
   if (telegramData.photo && telegramData.photo.length > 0) {
     return 'image/jpeg';
@@ -107,15 +216,11 @@ export function xdelo_detectMimeType(telegramData: any): string {
   
   // Use mime_type from document if available
   if (telegramData.document?.mime_type) {
-    // Log the document MIME type being used
-    console.log(`Using document mime_type: ${telegramData.document.mime_type}`);
     return telegramData.document.mime_type;
   }
   
   // Use mime_type from video if available
   if (telegramData.video?.mime_type) {
-    // Log the video MIME type being used
-    console.log(`Using video mime_type: ${telegramData.video.mime_type}`);
     return telegramData.video.mime_type;
   }
   
@@ -126,9 +231,6 @@ export function xdelo_detectMimeType(telegramData: any): string {
   if (telegramData.animation) return 'video/mp4';
   if (telegramData.sticker?.is_animated) return 'application/x-tgsticker';
   if (telegramData.sticker) return 'image/webp';
-  
-  // If we made it here without finding a MIME type, log a warning
-  console.warn('Could not detect MIME type from telegram data, falling back to octet-stream');
   
   // Default fallback
   return 'application/octet-stream';
@@ -167,11 +269,6 @@ export function xdelo_getUploadOptions(mimeType: string): Record<string, any> {
 
 /**
  * Enhanced fetch function with exponential backoff retry logic and improved error handling
- * @param url The URL to fetch
- * @param options Fetch options
- * @param maxRetries Maximum number of retry attempts
- * @param retryDelay Initial delay between retries in ms
- * @returns The fetch response
  */
 async function xdelo_fetchWithRetry(
   url: string,
@@ -181,7 +278,6 @@ async function xdelo_fetchWithRetry(
 ): Promise<Response> {
   let retryCount = 0;
   let retryDelay = initialRetryDelay;
-  let lastError: Error | null = null;
   
   while (retryCount < maxRetries) {
     try {
@@ -194,9 +290,6 @@ async function xdelo_fetchWithRetry(
         signal: controller.signal
       };
       
-      // Add detailed logging for debugging
-      console.log(`Attempt ${retryCount + 1}/${maxRetries} to fetch ${url.substring(0, 100)}...`);
-      
       const response = await fetch(url, enhancedOptions);
       clearTimeout(timeoutId);
       
@@ -206,10 +299,8 @@ async function xdelo_fetchWithRetry(
         throw new Error(`HTTP error! Status: ${response.status} - ${response.statusText}. Response: ${responseText.substring(0, 200)}`);
       }
       
-      console.log(`Successfully fetched ${url.substring(0, 100)} on attempt ${retryCount + 1}`);
       return response;
     } catch (error) {
-      lastError = error;
       retryCount++;
       
       // Classify errors for better handling
@@ -224,15 +315,8 @@ async function xdelo_fetchWithRetry(
       const isServerError = error.message.includes('5') && 
                            error.message.includes('HTTP error');
       
-      // Enhanced logging with error classification
-      console.warn(`Fetch attempt ${retryCount}/${maxRetries} failed for ${url.substring(0, 100)}: 
-        Error: ${error.message}
-        Type: ${isNetworkError ? 'Network Error' : isTimeoutError ? 'Timeout' : isServerError ? 'Server Error' : 'Other'}
-        Will ${retryCount < maxRetries ? `retry in ${retryDelay}ms` : 'not retry'}`);
-      
       // If we've reached max retries, throw the last error
       if (retryCount >= maxRetries) {
-        console.error(`All ${maxRetries} retry attempts failed for ${url.substring(0, 100)}`);
         throw new Error(`Failed after ${maxRetries} attempts: ${error.message}`);
       }
       
@@ -249,11 +333,69 @@ async function xdelo_fetchWithRetry(
     }
   }
   
-  // This should never execute but TypeScript needs it
-  throw lastError || new Error('Unknown error during fetch');
+  throw new Error(`Failed after ${maxRetries} attempts with no response`);
 }
 
-// Upload file to storage with improved error handling
+/**
+ * Find an existing file in the database by file_unique_id
+ */
+export async function xdelo_findExistingFile(
+  supabase: SupabaseClient,
+  fileUniqueId: string
+): Promise<{ exists: boolean; message?: any }> {
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('file_unique_id', fileUniqueId)
+      .limit(1);
+
+    if (error) {
+      console.error('Error checking for existing file:', error);
+      return { exists: false };
+    }
+
+    if (data && data.length > 0) {
+      return { exists: true, message: data[0] };
+    }
+
+    return { exists: false };
+  } catch (error) {
+    console.error('Unexpected error checking for existing file:', error);
+    return { exists: false };
+  }
+}
+
+/**
+ * Check if a file exists in storage
+ */
+export async function xdelo_verifyFileExists(
+  supabase: SupabaseClient,
+  storagePath: string,
+  bucket: string = 'telegram-media'
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .storage
+      .from(bucket)
+      .getPublicUrl(storagePath);
+      
+    if (error || !data) {
+      return false;
+    }
+    
+    // Try to fetch the head of the file to verify it exists
+    const response = await fetch(data.publicUrl, { method: 'HEAD' });
+    return response.ok;
+  } catch (error) {
+    console.error(`Error verifying file existence: ${error.message}`);
+    return false;
+  }
+}
+
+/**
+ * Upload media to Supabase Storage
+ */
 export async function xdelo_uploadMediaToStorage(
   storagePath: string,
   fileData: Blob,
@@ -262,90 +404,68 @@ export async function xdelo_uploadMediaToStorage(
   bucket: string = 'telegram-media'
 ): Promise<{ success: boolean; error?: string; publicUrl?: string }> {
   try {
-    console.log(`Uploading file to storage: ${storagePath} with MIME type: ${mimeType}`);
+    // Validate inputs
+    if (!storagePath) {
+      throw new Error('Storage path is required');
+    }
     
-    // Get correct upload options based on mime type
+    if (!fileData || fileData.size === 0) {
+      throw new Error('File data is empty or invalid');
+    }
+    
+    const supabase = createSupabaseClient();
+    
+    // Get appropriate upload options based on MIME type
     const uploadOptions = xdelo_getUploadOptions(mimeType);
     
-    // Get Supabase client instance
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing Supabase credentials');
-    }
-    
-    // Import dynamically to avoid issues in edge function context
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.38.4');
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    // Upload the file with retry for network stability
-    let uploadError = null;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        const { error } = await supabase.storage
-          .from(bucket)
-          .upload(storagePath, fileData, uploadOptions);
-          
-        if (!error) {
-          uploadError = null;
-          break;
+    // Use rate limiter to prevent API throttling
+    return await rateLimitTracker.add(async () => {
+      const { data, error } = await supabase
+        .storage
+        .from(bucket)
+        .upload(storagePath, fileData, uploadOptions);
+        
+      if (error) {
+        if (error.message.includes('The resource already exists') || 
+            error.message.includes('duplicate')) {
+          // File already exists, which is fine - get its URL
+          const { data: urlData } = await supabase
+            .storage
+            .from(bucket)
+            .getPublicUrl(storagePath);
+            
+          return {
+            success: true,
+            publicUrl: urlData.publicUrl
+          };
         }
         
-        uploadError = error;
-        console.warn(`Upload attempt ${attempt}/3 failed for ${storagePath}: ${error.message}`);
-        
-        // Wait with exponential backoff before retrying
-        if (attempt < 3) {
-          await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt - 1)));
-        }
-      } catch (err) {
-        uploadError = err;
-        console.warn(`Upload attempt ${attempt}/3 failed for ${storagePath}: ${err.message}`);
-        
-        // Wait with exponential backoff before retrying
-        if (attempt < 3) {
-          await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt - 1)));
-        }
+        throw new Error(`Upload error: ${error.message}`);
       }
-    }
-    
-    if (uploadError) {
-      throw new Error(`Storage upload failed after 3 attempts: ${uploadError.message}`);
-    }
-
-    // Construct public URL
-    const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}`;
-    console.log(`File uploaded successfully, public URL: ${publicUrl}`);
-    
-    // If messageId provided, update the message with the public URL
-    if (messageId) {
-      await supabase
-        .from('messages')
-        .update({
-          storage_path: storagePath,
-          public_url: publicUrl,
-          storage_exists: true,
-          storage_path_standardized: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', messageId);
-    }
-    
-    return { 
-      success: true, 
-      publicUrl
-    };
+      
+      // Get public URL
+      const { data: urlData } = await supabase
+        .storage
+        .from(bucket)
+        .getPublicUrl(storagePath);
+        
+      return {
+        success: true,
+        publicUrl: urlData.publicUrl
+      };
+    });
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error(`Failed to upload media: ${error.message}`);
     return {
       success: false,
-      error: error.message
+      error: `Upload failed: ${error.message}`
     };
   }
 }
 
-// Download media from Telegram with improved error handling
+/**
+ * Download media from Telegram API
+ */
 export async function xdelo_downloadMediaFromTelegram(
   fileId: string,
   fileUniqueId: string,
@@ -360,223 +480,76 @@ export async function xdelo_downloadMediaFromTelegram(
   attempts?: number;
 }> {
   try {
+    // Validate inputs
+    if (!fileId) {
+      throw new Error('File ID is required');
+    }
+    
+    if (!fileUniqueId) {
+      throw new Error('File unique ID is required');
+    }
+    
     if (!telegramBotToken) {
       throw new Error('Telegram bot token is required');
     }
     
-    console.log(`Starting download process for file ${fileId} (${fileUniqueId})`);
-    
-    // Get file info from Telegram with improved retry logic
-    console.log(`Fetching file info for ${fileId}`);
-    
-    const fileInfoResponse = await xdelo_fetchWithRetry(
-      `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${fileId}`,
-      { 
-        method: 'GET',
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
-      },
-      5,
-      800
-    );
-    
-    const fileInfo = await fileInfoResponse.json();
-    
-    if (!fileInfo.ok) {
-      throw new Error(`Telegram API error: ${JSON.stringify(fileInfo)}`);
-    }
-    
-    if (!fileInfo.result?.file_path) {
-      throw new Error(`Invalid file info response from Telegram: ${JSON.stringify(fileInfo)}`);
-    }
-    
-    console.log(`Successfully retrieved file path: ${fileInfo.result.file_path}`);
-    
-    // Download file from Telegram with enhanced retry logic
-    console.log(`Downloading file from path ${fileInfo.result.file_path}`);
-    
-    const fileDataResponse = await xdelo_fetchWithRetry(
-      `https://api.telegram.org/file/bot${telegramBotToken}/${fileInfo.result.file_path}`,
-      { 
-        method: 'GET',
-        headers: corsHeaders
-      },
-      5,
-      1000
-    );
-    
-    const fileData = await fileDataResponse.blob();
-    
-    // Validate the downloaded data
-    if (!fileData || fileData.size === 0) {
-      throw new Error('Downloaded empty file from Telegram');
-    }
-    
-    console.log(`Successfully downloaded file: ${fileData.size} bytes`);
-    
-    // Try to detect MIME type from file extension if not provided
-    let detectedMimeType = mimeType;
-    if (!detectedMimeType || detectedMimeType === 'application/octet-stream') {
-      // Extract extension from file_path
-      const extension = fileInfo.result.file_path.split('.').pop()?.toLowerCase();
-      if (extension) {
-        // Map common extensions back to MIME types
-        const extensionMimeMap: Record<string, string> = {
-          'jpg': 'image/jpeg',
-          'jpeg': 'image/jpeg',
-          'png': 'image/png',
-          'gif': 'image/gif',
-          'webp': 'image/webp',
-          'mp4': 'video/mp4',
-          'mov': 'video/quicktime',
-          'pdf': 'application/pdf',
-          'doc': 'application/msword',
-          'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'xls': 'application/vnd.ms-excel',
-          'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        };
-        
-        if (extensionMimeMap[extension]) {
-          detectedMimeType = extensionMimeMap[extension];
-          console.log(`Detected MIME type from file extension: ${detectedMimeType}`);
-        }
-      }
+    // Validate the file ID
+    const { isValid, sanitizedFileId, error: validationError } = xdelo_validateFileId(fileId);
+    if (!isValid) {
+      throw new Error(`Invalid file ID: ${validationError}`);
     }
     
     // Generate storage path
-    const storagePath = xdelo_generateStoragePath(fileUniqueId, detectedMimeType);
-    console.log(`Generated storage path: ${storagePath} with MIME type: ${detectedMimeType}`);
+    const standardStoragePath = xdelo_validateAndFixStoragePath(
+      fileUniqueId,
+      mimeType
+    );
     
+    // First, get the file path from Telegram
+    const getFileUrl = `https://api.telegram.org/bot${telegramBotToken}/getFile?file_id=${sanitizedFileId}`;
+    
+    // Use rate limiter to prevent API throttling
+    const getFileResponse = await rateLimitTracker.add(async () => 
+      xdelo_fetchWithRetry(getFileUrl)
+    );
+    
+    const fileInfo = await getFileResponse.json();
+    
+    if (!fileInfo.ok || !fileInfo.result || !fileInfo.result.file_path) {
+      throw new Error(`Failed to get file info from Telegram: ${JSON.stringify(fileInfo)}`);
+    }
+    
+    // Now download the actual file
+    const downloadUrl = `https://api.telegram.org/file/bot${telegramBotToken}/${fileInfo.result.file_path}`;
+    
+    const downloadResponse = await rateLimitTracker.add(async () => 
+      xdelo_fetchWithRetry(downloadUrl)
+    );
+    
+    // Create a blob from the response
+    const blob = await downloadResponse.blob();
+    
+    // Return the downloaded file info
     return {
       success: true,
-      blob: fileData,
-      storagePath,
-      mimeType: detectedMimeType,
-      attempts: 1
+      blob: blob,
+      storagePath: standardStoragePath,
+      mimeType: mimeType
     };
   } catch (error) {
-    console.error('Error downloading media from Telegram:', error);
-    
-    // Add more detailed error information for debugging
-    const errorDetails = {
-      message: error.message,
-      code: error.code || 'UNKNOWN',
-      stack: error.stack,
-      file_id: fileId,
-      file_unique_id: fileUniqueId
-    };
-    
-    console.error('Download error details:', JSON.stringify(errorDetails, null, 2));
-    
+    console.error(`Failed to download media: ${error.message}`);
     return {
       success: false,
-      error: `Download failed: ${error.message}`,
-      attempts: 5
+      error: `Download failed: ${error.message}`
     };
   }
 }
 
-// Track rate limits for Telegram API to avoid hitting limits
-const rateLimitTracker = {
-  lastRequestTime: 0,
-  requestCount: 0,
-  reset() {
-    this.lastRequestTime = Date.now();
-    this.requestCount = 0;
-  },
-  async throttle() {
-    const now = Date.now();
-    const elapsed = now - this.lastRequestTime;
-    
-    // If it's been more than a minute, reset the counter
-    if (elapsed > 60000) {
-      this.reset();
-      return;
-    }
-    
-    // Telegram's rate limit is roughly 30 requests per second
-    // We'll be conservative and limit to 20 per second
-    this.requestCount++;
-    
-    if (this.requestCount > 20) {
-      // Wait until the next second before proceeding
-      const waitTime = Math.max(1000 - elapsed, 100);
-      console.log(`Rate limit approaching, waiting ${waitTime}ms before next request`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-      this.reset();
-    }
-  }
-};
-
-// Find an existing file in the database by file_unique_id
-export async function xdelo_findExistingFile(
-  supabase: SupabaseClient,
-  fileUniqueId: string
-): Promise<{ exists: boolean; message?: any }> {
-  try {
-    if (!fileUniqueId) {
-      return { exists: false };
-    }
-    
-    // Find message with this file_unique_id
-    const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('file_unique_id', fileUniqueId)
-      .eq('deleted_from_telegram', false)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (error) {
-      console.error('Error checking for existing file:', error);
-      return { exists: false };
-    }
-
-    if (data && data.length > 0) {
-      // Verify the file actually exists in storage
-      const existingMessage = data[0];
-      if (existingMessage.storage_path) {
-        const storageExists = await xdelo_verifyFileExists(
-          supabase, 
-          existingMessage.storage_path
-        );
-        
-        if (storageExists) {
-          return { exists: true, message: existingMessage };
-        }
-      }
-    }
-
-    return { exists: false };
-  } catch (error) {
-    console.error('Unexpected error checking for existing file:', error);
-    return { exists: false };
-  }
-}
-
-// Check if file exists in storage
-export async function xdelo_verifyFileExists(
-  supabase: SupabaseClient,
-  storagePath: string,
-  bucket: string = 'telegram-media'
-): Promise<boolean> {
-  try {
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .createSignedUrl(storagePath, 60);
-    
-    return !error && !!data;
-  } catch (error) {
-    console.error('Error verifying file existence:', error);
-    return false;
-  }
-}
-
-// Process message media from Telegram, handling download and upload
+/**
+ * Process message media from Telegram, handling download and upload
+ */
 export async function xdelo_processMessageMedia(
-  telegramData: any,
+  message: any,
   fileId: string,
   fileUniqueId: string,
   telegramBotToken: string,
@@ -589,126 +562,70 @@ export async function xdelo_processMessageMedia(
 }> {
   try {
     // First check if this is a duplicate file
-    // Get Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing Supabase credentials');
-    }
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    // Step 1: Check if this file already exists in our system
     const { exists, message: existingMessage } = await xdelo_findExistingFile(
-      supabase,
+      createSupabaseClient(),
       fileUniqueId
     );
 
-    // If file exists and is properly stored, reuse it
     if (exists && existingMessage) {
-      console.log(`Duplicate file detected: ${fileUniqueId}, reusing existing file`);
+      console.log(`Found existing file: ${fileUniqueId}`);
       
-      // If messageId provided, update the message to reference existing file
-      if (messageId) {
-        await supabase
-          .from('messages')
-          .update({
-            is_duplicate: true,
-            duplicate_reference_id: existingMessage.id,
-            storage_path: existingMessage.storage_path,
-            public_url: existingMessage.public_url,
-            mime_type: existingMessage.mime_type,
-            storage_exists: true,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', messageId);
-      }
-      
+      // Return existing file info
       return {
         success: true,
         isDuplicate: true,
         fileInfo: {
           storage_path: existingMessage.storage_path,
-          public_url: existingMessage.public_url,
           mime_type: existingMessage.mime_type,
-          file_id: fileId,
-          file_unique_id: fileUniqueId,
-          width: existingMessage.width,
-          height: existingMessage.height,
-          duration: existingMessage.duration,
-          file_size: existingMessage.file_size
+          file_size: existingMessage.file_size,
+          public_url: existingMessage.public_url
         }
       };
     }
 
-    // Step 2: Not a duplicate, need to download and process the file
-    console.log(`New file detected: ${fileUniqueId}, downloading from Telegram`);
+    // Validate the file ID
+    const { isValid, sanitizedFileId, error: validationError } = xdelo_validateFileId(fileId);
+    if (!isValid) {
+      throw new Error(`Invalid file ID: ${validationError}`);
+    }
+
+    // Detect MIME type
+    const detectedMimeType = xdelo_detectMimeType(message);
     
-    // Step 3: Determine MIME type
-    const mimeType = xdelo_detectMimeType(telegramData);
-    console.log(`Detected MIME type: ${mimeType} for file ${fileUniqueId}`);
-    
-    // Step 4: Download file from Telegram
+    // Download from Telegram
     const downloadResult = await xdelo_downloadMediaFromTelegram(
-      fileId,
+      sanitizedFileId,
       fileUniqueId,
-      mimeType,
+      detectedMimeType,
       telegramBotToken
     );
     
     if (!downloadResult.success || !downloadResult.blob) {
-      throw new Error(downloadResult.error || 'Failed to download media from Telegram');
+      throw new Error(`Failed to download media: ${downloadResult.error || 'Unknown error'}`);
     }
     
-    // Step 5: Upload to storage with proper content disposition
+    // Upload to Supabase Storage
     const uploadResult = await xdelo_uploadMediaToStorage(
-      downloadResult.storagePath!,
+      downloadResult.storagePath || `${fileUniqueId}.bin`,
       downloadResult.blob,
-      downloadResult.mimeType || mimeType,
+      downloadResult.mimeType || detectedMimeType,
       messageId
     );
     
     if (!uploadResult.success) {
-      throw new Error(uploadResult.error || 'Failed to upload media to storage');
+      throw new Error(`Failed to upload media: ${uploadResult.error || 'Unknown error'}`);
     }
     
-    // Step 6: Get media dimensions
-    const media = telegramData.photo ? 
-      telegramData.photo[telegramData.photo.length - 1] : 
-      telegramData.video || telegramData.document;
-    
-    const fileInfo = {
-      storage_path: downloadResult.storagePath,
-      public_url: uploadResult.publicUrl,
-      mime_type: downloadResult.mimeType || mimeType,
-      mime_type_original: telegramData.video?.mime_type || telegramData.document?.mime_type,
-      file_id: fileId,
-      file_unique_id: fileUniqueId,
-      width: media?.width,
-      height: media?.height,
-      duration: telegramData.video?.duration,
-      file_size: media?.file_size || downloadResult.blob.size
-    };
-    
-    // Step 7: If messageId provided but not yet updated
-    if (messageId && !uploadResult.publicUrl) {
-      await supabase
-        .from('messages')
-        .update({
-          ...fileInfo,
-          is_duplicate: false,
-          storage_exists: true,
-          storage_path_standardized: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', messageId);
-    }
-    
+    // Return the file info
     return {
       success: true,
       isDuplicate: false,
-      fileInfo
+      fileInfo: {
+        storage_path: downloadResult.storagePath,
+        mime_type: downloadResult.mimeType || detectedMimeType,
+        file_size: downloadResult.blob.size,
+        public_url: uploadResult.publicUrl
+      }
     };
   } catch (error) {
     console.error('Error processing message media:', error);
@@ -716,9 +633,7 @@ export async function xdelo_processMessageMedia(
       success: false,
       isDuplicate: false,
       fileInfo: null,
-      error: error instanceof Error ? error.message : String(error)
+      error: error.message || 'Unknown error processing media'
     };
   }
 }
-
-export { rateLimitTracker };
