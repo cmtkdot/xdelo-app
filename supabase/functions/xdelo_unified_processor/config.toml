@@ -1,4 +1,0 @@
-
-project_id = "xjhhehxcxkiumnwbirel"
-# No auth required for processor
-verify_jwt = false

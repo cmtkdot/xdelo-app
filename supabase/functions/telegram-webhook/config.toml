@@ -1,4 +1,6 @@
 
 project_id = "xjhhehxcxkiumnwbirel"
-# No auth required for webhook
+name = "telegram-webhook"
+version = 1
+path = "telegram-webhook"
 verify_jwt = false
