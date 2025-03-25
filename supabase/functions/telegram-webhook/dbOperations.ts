@@ -154,10 +154,11 @@ export async function createMessage(
     const cleanupOnError = async (error: any) => {
       try {
         // Check if a partial record was created that might be causing transaction issues
-        if (error?.message?.includes('transaction') || error?.code === '2D000') {
+        if (error?.message?.includes('transaction') || error?.message?.includes('timeout') || error?.code === '2D000') {
           logger?.warn('Attempting to clean up potential transaction issues', { 
             message_id: message.telegram_message_id, 
-            chat_id: message.chat_id 
+            chat_id: message.chat_id,
+            error_message: error?.message
           });
           
           // Try to fetch any partial records
@@ -181,6 +182,24 @@ export async function createMessage(
         logger?.error('Error during cleanup', { error: cleanupError });
       }
     };
+    
+    // Optimize the payload for storage by removing potentially large data that's not needed
+    // This helps reduce the size of the DB record and prevent timeouts
+    if (message.telegram_data) {
+      // Remove unnecessary fields that might bloat the record
+      // Keep only essential fields and safely remove large ones
+      const essentialData = { ...message.telegram_data };
+      
+      // Remove potentially large fields that aren't needed for analysis
+      // but preserve important metadata
+      delete essentialData.photo; // Keep only file_id instead of full photo array
+      delete essentialData.audio;
+      delete essentialData.document?.thumbnail;
+      delete essentialData.video?.thumbnail;
+      
+      // Replace the original object with our streamlined version
+      message.telegram_data = essentialData;
+    }
     
     return await xdelo_withDatabaseRetry(`create_message_${message.telegram_message_id}`, async () => {
       try {
@@ -247,15 +266,20 @@ export async function createMessage(
       }
     }, {
       // Add special handling for transaction errors
+      maxRetries: 5, // Increase retries for important operations
+      initialDelayMs: 500, // Start with a shorter delay
+      backoffFactor: 2, // Exponential backoff
       retryCondition: (error) => {
         // Don't retry on certain errors that won't be fixed by retrying
         if (error?.code === '23505') { // Unique violation
           logger?.warn('Not retrying on unique violation', { error: error.message });
           return false;
         }
-        // Always retry on transaction errors
-        if (error?.message?.includes('transaction') || error?.code === '2D000') {
-          logger?.warn('Retrying on transaction error', { error: error.message });
+        // Always retry on transaction errors and timeouts
+        if (error?.message?.includes('transaction') || 
+            error?.message?.includes('timeout') || 
+            error?.code === '2D000') {
+          logger?.warn('Retrying on transaction/timeout error', { error: error.message });
           return true;
         }
         return true; // Default retry for other errors

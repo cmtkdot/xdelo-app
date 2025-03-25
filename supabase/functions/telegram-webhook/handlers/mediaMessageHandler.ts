@@ -447,12 +447,53 @@ async function xdelo_handleNewMediaMessage(
   const isDuplicate = await checkDuplicateFile(dbClient, message.message_id, message.chat.id);
   
   if (isDuplicate) {
-    logger?.info(`Skipping duplicate message ${message.message_id} in chat ${message.chat.id}`);
+    logger?.info(`Detected duplicate message ${message.message_id} in chat ${message.chat.id}`);
     
+    // Instead of immediately returning, try to fetch the existing message
+    // This mirrors the edited message flow where we look up and potentially update
+    const { data: existingMessage, error: lookupError } = await dbClient
+      .from('messages')
+      .select('*')
+      .eq('telegram_message_id', message.message_id)
+      .eq('chat_id', message.chat.id)
+      .single();
+    
+    if (lookupError) {
+      logger?.warn(`Failed to lookup existing message for duplicate: ${lookupError.message}`);
+      // If we can't fetch the message, just acknowledge the webhook anyway
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: "Duplicate acknowledged but not updated",
+        correlationId
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      });
+    }
+    
+    // If we found the message, log the duplicate but don't try to update
+    // Just log the event for tracking
+    try {
+      await xdelo_logProcessingEvent(
+        "duplicate_message_received",
+        existingMessage.id,
+        correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          duplicate_detected: true
+        }
+      );
+    } catch (logError) {
+      console.error('Error logging duplicate operation:', logError);
+    }
+    
+    // Return success as we've acknowledged and logged the duplicate
     return new Response(JSON.stringify({ 
       success: true, 
-      message: "Duplicate message skipped",
-      correlationId
+      message: "Duplicate message tracked",
+      correlationId,
+      message_id: existingMessage.id
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200

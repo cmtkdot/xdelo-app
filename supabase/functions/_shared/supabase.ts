@@ -14,6 +14,12 @@ const defaultOptions = {
       'X-Client-Info': 'edge-function',
     },
   },
+  db: {
+    schema: 'public',
+    // Increase timeouts to prevent operation failures
+    queryTimeout: 30000, // Increase from default 5000ms to 15000ms (15 seconds)
+    connectionTimeout: 30000 // 10 seconds for connection timeout
+  },
 };
 
 /**

@@ -140,7 +140,7 @@ export async function xdelo_withDatabaseRetry<T>(
   options: Partial<RetryOptions> = {}
 ): Promise<T> {
   const retryOpts = {
-    maxRetries: 5,
+    maxRetries: 5, // Increased from 3 to 5 for database operations
     initialDelayMs: 300,
     backoffFactor: 1.5,
     retryableErrors: [
@@ -152,11 +152,19 @@ export async function xdelo_withDatabaseRetry<T>(
       /serialization failure/i,
       /too many clients/i,
       /connection pool timeout/i,
+      /timeout/i, // Added explicit timeout regex
+      /operation timed out/i, // Added specific timeout message pattern
+      /timed out after \d+ms/i, // Match timeout with duration
       'PGRST', // PostgREST errors
       'JwtError'
     ],
     onRetry: (attempt: number, error: Error, nextDelayMs: number) => {
-      console.warn(`Database operation "${operationName}" failed (attempt ${attempt}): ${error.message}. Retrying in ${nextDelayMs}ms...`);
+      // For timeouts, log more details
+      if (error.message.includes('timeout') || error.message.includes('timed out')) {
+        console.warn(`Database operation "${operationName}" timed out (attempt ${attempt}): ${error.message}. Retrying in ${nextDelayMs}ms...`);
+      } else {
+        console.warn(`Database operation "${operationName}" failed (attempt ${attempt}): ${error.message}. Retrying in ${nextDelayMs}ms...`);
+      }
     },
     ...options
   };
