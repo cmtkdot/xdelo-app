@@ -1,30 +1,20 @@
-import { supabaseClient } from '../../_shared/supabase.ts';
-import { corsHeaders } from '../../_shared/cors.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { corsHeaders } from '../utils/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
-import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
+import { xdelo_logProcessingEvent } from '../dbOperations.ts';
+import { constructTelegramMessageUrl, isMessageForwarded } from '../utils/messageUtils.ts';
 
-/**
- * Check if a message is forwarded from another source
- */
-function isMessageForwarded(message: any): boolean {
-  if (!message) return false;
-  
-  // Check for standard forward fields
-  if (message.forward_from || 
-      message.forward_from_chat || 
-      message.forward_date || 
-      message.forward_signature || 
-      message.forward_sender_name) {
-    return true;
+// Create Supabase client
+const supabaseClient = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
   }
-  
-  // Check for forwarded from channel posts which use forward_from_message_id
-  if (message.forward_from_message_id) {
-    return true;
-  }
-  
-  return false;
-}
+);
 
 /**
  * Handler for edited messages (text only - media edits are handled by mediaMessageHandler)
@@ -56,12 +46,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
     }
     
     // Get message URL for reference
-    let message_url = undefined;
-    // Safe access to chat properties that might not exist in the interface
-    const chatObj = message.chat as any;
-    if (chatObj.username && message.message_id) {
-      message_url = `https://t.me/${chatObj.username}/${message.message_id}`;
-    }
+    const message_url = constructTelegramMessageUrl(message.chat.id, message.message_id);
     
     if (existingMessage) {
       logger?.info(`Found existing message ${existingMessage.id} for edit`);
@@ -81,6 +66,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
         edit_history: editHistory,
         edit_count: (existingMessage.edit_count || 0) + 1,
+        // If this is a text message, update these fields
         is_edited: true,
         telegram_data: message,
         updated_at: new Date().toISOString()
@@ -122,13 +108,10 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else {
-      logger?.info(`Original message not found, creating new record for edited message ${message.message_id}`);
+      logger?.info(`🆕 Original message not found, creating new record for edited message ${message.message_id}`);
       
       // If message not found, create a new record
       const isForward = isMessageForwarded(message);
-      
-      // Get chat title, username, or first_name safely
-      const chatTitle = chatObj.title || chatObj.username || chatObj.first_name || 'Unknown';
       
       const { data, error: insertError } = await supabaseClient
         .from('messages')
@@ -136,7 +119,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
           telegram_message_id: message.message_id,
           chat_id: message.chat.id,
           chat_type: message.chat.type,
-          chat_title: chatTitle,
+          chat_title: message.chat.title,
           text: message.text,
           is_edited: true,
           edit_count: 1,
@@ -154,7 +137,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         throw insertError;
       }
       
-      logger?.info(`Created new message record ${data.id} for edited message ${message.message_id}`);
+      logger?.success(`Created new message record ${data.id} for edited message ${message.message_id}`);
       
       // Log the operation
       try {
@@ -186,7 +169,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
     
     await xdelo_logProcessingEvent(
       "edited_message_processing_error",
-      message.message_id.toString(),
+      `${message.chat.id}_${message.message_id}`,
       context.correlationId,
       {
         message_id: message.message_id,

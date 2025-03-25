@@ -1,12 +1,10 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
-import { 
-  handleMediaMessage,
-  handleOtherMessage,
-  handleEditedMessage
-} from './handlers/index.ts';
-import { corsHeaders } from '../_shared/cors.ts';
-import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
-import { Logger } from '../_shared/logger/index.ts';
+import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
+import { handleOtherMessage } from './handlers/textMessageHandler.ts';
+import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
+import { corsHeaders } from './utils/cors.ts';
+import { xdelo_logProcessingEvent } from './dbOperations.ts';
+import { Logger } from './utils/logger.ts';
 
 serve(async (req: Request) => {
   // Generate a correlation ID for tracing
@@ -48,7 +46,7 @@ serve(async (req: Request) => {
         update_id: update.update_id
       });
     } catch (error) {
-      logger.error('Failed to parse request body', error);
+      logger.error('Failed to parse request body', { error: error.message });
       return new Response(JSON.stringify({ 
         success: false, 
         error: 'Invalid JSON in request body',
@@ -80,8 +78,7 @@ serve(async (req: Request) => {
       correlationId,
       isEdit: !!update.edited_message || !!update.edited_channel_post,
       previousMessage: update.edited_message || update.edited_channel_post,
-      logger, // Add logger to context so handlers can use it
-      startTime: new Date().toISOString()
+      logger // Add logger to context so handlers can use it
     };
 
     // Log message details with sensitive data masked
@@ -119,26 +116,11 @@ serve(async (req: Request) => {
         response = await handleOtherMessage(message, context);
       }
       
-      // Calculate processing time
-      const processingTimeMs = Date.now() - new Date(context.startTime).getTime();
-      
       logger.info('Successfully processed message', { 
         message_id: message.message_id,
         chat_id: message.chat?.id,
-        processing_time_ms: processingTimeMs
+        processing_time: Date.now() - new Date(context.startTime || Date.now()).getTime()
       });
-      
-      // Log webhook completion
-      await xdelo_logProcessingEvent(
-        "webhook_completed",
-        message.message_id.toString(),
-        correlationId,
-        {
-          message_id: message.message_id,
-          chat_id: message.chat?.id,
-          processing_time_ms: processingTimeMs
-        }
-      );
       
       return response;
     } catch (handlerError) {
