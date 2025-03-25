@@ -61,7 +61,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     try {
       await xdelo_logProcessingEvent(
         "media_processing_error",
-        message.message_id.toString(),
+        `message_${message.message_id.toString()}`, // Add prefix to avoid UUID conversion issues
         context.correlationId,
         {
           message_id: message.message_id,
@@ -95,195 +95,215 @@ async function xdelo_handleEditedMediaMessage(
 ): Promise<Response> {
   const { correlationId, logger } = context;
 
-  // First, look up the existing message
-  const { data: existingMessage, error: lookupError } = await supabaseClient
+  // First, look up the existing message - FIX: use maybeSingle() instead of single() to handle multiple or no results
+  const { data: existingMessages, error: lookupError } = await supabaseClient
     .from('messages')
     .select('*')
     .eq('telegram_message_id', message.message_id)
-    .eq('chat_id', message.chat.id)
-    .single();
+    .eq('chat_id', message.chat.id);
 
   if (lookupError) {
-    logger?.error(`Failed to lookup existing message for edit: ${lookupError.message}`);
+    logger?.error(`Failed to lookup existing messages for edit: ${lookupError.message}`);
     throw new Error(`Database lookup failed: ${lookupError.message}`);
   }
 
-  if (existingMessage) {
-    // Store previous state in edit_history
-    let editHistory = existingMessage.edit_history || [];
-    editHistory.push({
-      timestamp: new Date().toISOString(),
-      previous_caption: existingMessage.caption,
-      previous_processing_state: existingMessage.processing_state,
-      edit_source: 'telegram_edit',
-      edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
-    });
+  // Check if we found any messages
+  if (!existingMessages || existingMessages.length === 0) {
+    logger?.info(`No existing message found for edit, creating new message for message_id ${message.message_id}`);
+    return await xdelo_handleNewMediaMessage(message, context);
+  }
 
-    // Determine what has changed
-    const captionChanged = existingMessage.caption !== message.caption;
-    const hasNewMedia = message.photo || message.video || message.document;
+  // If we have multiple messages, log it but use the first one
+  if (existingMessages.length > 1) {
+    logger?.warn(`Found ${existingMessages.length} messages for telegram_message_id ${message.message_id} in chat_id ${message.chat.id}, using the first one`);
     
-    // If media has been updated, handle the new media
-    if (hasNewMedia) {
-      try {
-        logger?.info(`Media has changed in edit for message ${message.message_id}`);
-        
-        // Determine the current file details
-        const telegramFile = message.photo ? 
-          message.photo[message.photo.length - 1] : 
-          message.video || message.document;
-          
-        // Get mime type
-        const detectedMimeType = xdelo_detectMimeType(message);
-        
-        // Process the new media file
-        const mediaProcessResult = await xdelo_processMessageMedia(
-          message,
-          telegramFile.file_id,
-          telegramFile.file_unique_id,
-          TELEGRAM_BOT_TOKEN,
-          existingMessage.id // Use existing message ID
-        );
-        
-        if (!mediaProcessResult.success) {
-          throw new Error(`Failed to process edited media: ${mediaProcessResult.error}`);
-        }
-        
-        // If successful, update the message with new media info
-        const { data: updateResult, error: updateError } = await supabaseClient
-          .from('messages')
-          .update({
-            caption: message.caption,
-            file_id: telegramFile.file_id,
-            file_unique_id: telegramFile.file_unique_id,
-            mime_type: detectedMimeType,
-            width: telegramFile.width,
-            height: telegramFile.height,
-            duration: message.video?.duration,
-            file_size: telegramFile.file_size,
-            edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
-            edit_count: (existingMessage.edit_count || 0) + 1,
-            edit_history: editHistory,
-            processing_state: message.caption ? 'pending' : existingMessage.processing_state,
-            storage_path: mediaProcessResult.fileInfo.storage_path,
-            public_url: mediaProcessResult.fileInfo.public_url,
-            last_edited_at: new Date().toISOString()
-          })
-          .eq('id', existingMessage.id);
-          
-        if (updateError) {
-          throw new Error(`Failed to update message with new media: ${updateError.message}`);
-        }
-        
-        // Log the edit operation
-        try {
-          await xdelo_logProcessingEvent(
-            "message_media_edited",
-            existingMessage.id,
-            correlationId,
-            {
-              message_id: message.message_id,
-              chat_id: message.chat.id,
-              file_id: telegramFile.file_id,
-              file_unique_id: telegramFile.file_unique_id,
-              storage_path: mediaProcessResult.fileInfo.storage_path
-            }
-          );
-        } catch (logError) {
-          logger?.error(`Failed to log media edit operation: ${logError.message}`);
-        }
-      } catch (mediaError) {
-        logger?.error(`Error processing edited media: ${mediaError.message}`);
-        throw mediaError;
+    // Log this duplicate issue for investigation
+    await xdelo_logProcessingEvent(
+      "duplicate_messages_found",
+      `message_group_${message.message_id}`,
+      correlationId,
+      {
+        message_id: message.message_id,
+        chat_id: message.chat.id,
+        count: existingMessages.length,
+        message_ids: existingMessages.map(m => m.id)
       }
-    } 
-    // If only caption has changed, just update the caption
-    else if (captionChanged) {
-      logger?.info(`Caption has changed in edit for message ${message.message_id}`);
+    );
+  }
+  
+  // Use the first message from the results
+  const existingMessage = existingMessages[0];
+
+  // Store previous state in edit_history
+  let editHistory = existingMessage.edit_history || [];
+  editHistory.push({
+    timestamp: new Date().toISOString(),
+    previous_caption: existingMessage.caption,
+    previous_processing_state: existingMessage.processing_state,
+    edit_source: 'telegram_edit',
+    edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+  });
+
+  // Determine what has changed
+  const captionChanged = existingMessage.caption !== message.caption;
+  const hasNewMedia = message.photo || message.video || message.document;
+  
+  // If media has been updated, handle the new media
+  if (hasNewMedia) {
+    try {
+      logger?.info(`Media has changed in edit for message ${message.message_id}`);
       
-      // Update just the caption
-      const { error: updateError } = await supabaseClient
+      // Determine the current file details
+      const telegramFile = message.photo ? 
+        message.photo[message.photo.length - 1] : 
+        message.video || message.document;
+        
+      // Get mime type
+      const detectedMimeType = xdelo_detectMimeType(message);
+      
+      // Process the new media file
+      const mediaProcessResult = await xdelo_processMessageMedia(
+        message,
+        telegramFile.file_id,
+        telegramFile.file_unique_id,
+        TELEGRAM_BOT_TOKEN,
+        existingMessage.id // Use existing message ID
+      );
+      
+      if (!mediaProcessResult.success) {
+        throw new Error(`Failed to process edited media: ${mediaProcessResult.error}`);
+      }
+      
+      // If successful, update the message with new media info
+      const { data: updateResult, error: updateError } = await supabaseClient
         .from('messages')
         .update({
           caption: message.caption,
+          file_id: telegramFile.file_id,
+          file_unique_id: telegramFile.file_unique_id,
+          mime_type: detectedMimeType,
+          width: telegramFile.width,
+          height: telegramFile.height,
+          duration: message.video?.duration,
+          file_size: telegramFile.file_size,
           edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
           edit_count: (existingMessage.edit_count || 0) + 1,
           edit_history: editHistory,
           processing_state: message.caption ? 'pending' : existingMessage.processing_state,
+          storage_path: mediaProcessResult.fileInfo.storage_path,
+          public_url: mediaProcessResult.fileInfo.public_url,
           last_edited_at: new Date().toISOString()
         })
         .eq('id', existingMessage.id);
         
       if (updateError) {
-        throw new Error(`Failed to update message caption: ${updateError.message}`);
+        throw new Error(`Failed to update message with new media: ${updateError.message}`);
       }
       
-      // Process the new caption
-      if (message.caption) {
-        // Process caption changes - this could trigger analysis, etc.
-      }
-      
-      // Log the caption edit
+      // Log the edit operation
       try {
         await xdelo_logProcessingEvent(
-          "message_caption_edited",
+          "message_media_edited",
           existingMessage.id,
           correlationId,
           {
             message_id: message.message_id,
             chat_id: message.chat.id,
-            previous_caption: existingMessage.caption,
-            new_caption: message.caption
+            file_id: telegramFile.file_id,
+            file_unique_id: telegramFile.file_unique_id,
+            storage_path: mediaProcessResult.fileInfo.storage_path
           }
         );
       } catch (logError) {
-        logger?.error(`Failed to log caption edit operation: ${logError.message}`);
+        logger?.error(`Failed to log media edit operation: ${logError.message}`);
       }
-    } else {
-      // No significant changes detected
-      logger?.info(`No significant changes detected in edit for message ${message.message_id}`);
-      
-      // Still update the edit metadata
-      const { error: updateError } = await supabaseClient
-        .from('messages')
-        .update({
-          edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
-          edit_count: (existingMessage.edit_count || 0) + 1,
-          edit_history: editHistory,
-          last_edited_at: new Date().toISOString()
-        })
-        .eq('id', existingMessage.id);
-        
-      if (updateError) {
-        logger?.warn(`Failed to update edit metadata: ${updateError.message}`);
-      }
-      
-      // Log the edit operation anyway
-      try {
-        await xdelo_logProcessingEvent(
-          "message_edit_received",
-          existingMessage.id,
-          correlationId,
-          {
-            message_id: message.message_id,
-            chat_id: message.chat.id,
-            no_changes: true
-          }
-        );
-      } catch (logError) {
-        console.error('Error logging edit operation:', logError);
-      }
+    } catch (mediaError) {
+      logger?.error(`Error processing edited media: ${mediaError.message}`);
+      throw mediaError;
     }
-
-    return new Response(
-      JSON.stringify({ success: true }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+  } 
+  // If only caption has changed, just update the caption
+  else if (captionChanged) {
+    logger?.info(`Caption has changed in edit for message ${message.message_id}`);
+    
+    // Update just the caption
+    const { error: updateError } = await supabaseClient
+      .from('messages')
+      .update({
+        caption: message.caption,
+        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
+        edit_count: (existingMessage.edit_count || 0) + 1,
+        edit_history: editHistory,
+        processing_state: message.caption ? 'pending' : existingMessage.processing_state,
+        last_edited_at: new Date().toISOString()
+      })
+      .eq('id', existingMessage.id);
+      
+    if (updateError) {
+      throw new Error(`Failed to update message caption: ${updateError.message}`);
+    }
+    
+    // Process the new caption
+    if (message.caption) {
+      // Process caption changes - this could trigger analysis, etc.
+    }
+    
+    // Log the caption edit
+    try {
+      await xdelo_logProcessingEvent(
+        "message_caption_edited",
+        existingMessage.id,
+        correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          previous_caption: existingMessage.caption,
+          new_caption: message.caption
+        }
+      );
+    } catch (logError) {
+      logger?.error(`Failed to log caption edit operation: ${logError.message}`);
+    }
+  } else {
+    // No significant changes detected
+    logger?.info(`No significant changes detected in edit for message ${message.message_id}`);
+    
+    // Still update the edit metadata
+    const { error: updateError } = await supabaseClient
+      .from('messages')
+      .update({
+        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
+        edit_count: (existingMessage.edit_count || 0) + 1,
+        edit_history: editHistory,
+        last_edited_at: new Date().toISOString()
+      })
+      .eq('id', existingMessage.id);
+      
+    if (updateError) {
+      logger?.warn(`Failed to update edit metadata: ${updateError.message}`);
+    }
+    
+    // Log the edit operation anyway
+    try {
+      await xdelo_logProcessingEvent(
+        "message_edit_received",
+        existingMessage.id,
+        correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          no_changes: true
+        }
+      );
+    } catch (logError) {
+      console.error('Error logging edit operation:', logError);
+    }
   }
-  
-  // If existing message not found, handle as new message
-  logger?.info(`Original message not found, creating new message for edit ${message.message_id}`);
-  return await xdelo_handleNewMediaMessage(message, context);
+
+  return new Response(
+    JSON.stringify({ success: true }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
 }
 
 /**
@@ -309,7 +329,7 @@ async function xdelo_handleNewMediaMessage(
       // Log the duplicate detection
       await xdelo_logProcessingEvent(
         "duplicate_message_detected",
-        message.message_id.toString(),
+        `message_${message.message_id.toString()}`, // Add prefix to avoid UUID conversion issues
         correlationId,
         {
           message_id: message.message_id,
@@ -410,7 +430,7 @@ async function xdelo_handleNewMediaMessage(
       // Also try to log to the database
       await xdelo_logProcessingEvent(
         "message_creation_failed",
-        message.message_id.toString(),
+        `message_${message.message_id.toString()}`, // Add prefix to avoid UUID conversion issues
         correlationId,
         {
           message_id: message.message_id,
@@ -448,7 +468,7 @@ async function xdelo_handleNewMediaMessage(
     try {
       await xdelo_logProcessingEvent(
         "media_processing_error",
-        message.message_id.toString(),
+        `message_${message.message_id.toString()}`, // Add prefix to avoid UUID conversion issues
         correlationId,
         {
           message_id: message.message_id,
@@ -480,16 +500,47 @@ async function xdelo_logProcessingEvent(
   errorMessage?: string
 ): Promise<void> {
   try {
+    // Ensure entityId is not a simple number (which would cause UUID conversion errors)
+    const safeEntityId = typeof entityId === 'number' || /^\d+$/.test(entityId) 
+      ? `message_${entityId}` 
+      : entityId;
+      
+    // Improve metadata by adding timestamps
+    const enhancedMetadata = {
+      ...(metadata || {}),
+      timestamp: new Date().toISOString(),
+      event_logged_at: new Date().toISOString()
+    };
+    
     const { error } = await supabaseClient.from('unified_audit_logs').insert({
       event_type: eventType,
-      entity_id: entityId,
+      entity_id: safeEntityId,
       correlation_id: correlationId,
-      metadata,
-      error_message: errorMessage
+      metadata: enhancedMetadata,
+      error_message: errorMessage,
+      event_timestamp: new Date().toISOString()
     });
     
     if (error) {
       console.error(`Error logging event ${eventType}:`, error);
+      
+      // If the issue was with UUID format, try with our database function that handles non-UUID values
+      if (error.code === '22P02' && error.message.includes('invalid input syntax for type uuid')) {
+        const { error: rpcError } = await supabaseClient.rpc(
+          'xdelo_logprocessingevent',
+          {
+            p_event_type: eventType,
+            p_entity_id: safeEntityId,
+            p_correlation_id: correlationId,
+            p_metadata: enhancedMetadata,
+            p_error_message: errorMessage
+          }
+        );
+        
+        if (rpcError) {
+          console.error(`Also failed with RPC function: ${rpcError.message}`);
+        }
+      }
     }
   } catch (e) {
     console.error(`Exception logging event ${eventType}:`, e);

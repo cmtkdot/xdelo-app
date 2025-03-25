@@ -15,6 +15,7 @@ const supabaseClient = createClient(
 
 /**
  * Log a processing event to the unified_audit_logs table
+ * Handles non-UUID entity IDs safely
  */
 export async function xdelo_logProcessingEvent(
   eventType: string,
@@ -22,8 +23,13 @@ export async function xdelo_logProcessingEvent(
   correlationId: string,
   metadata: Record<string, unknown>,
   errorMessage?: string
-) {
+): Promise<void> {
   try {
+    // Prevent UUID conversion errors by ensuring entityId is not a simple number
+    const safeEntityId = typeof entityId === 'number' || /^\d+$/.test(entityId) 
+      ? `message_${entityId}` 
+      : entityId;
+    
     // Ensure metadata has a timestamp
     const enhancedMetadata = {
       ...metadata,
@@ -32,14 +38,44 @@ export async function xdelo_logProcessingEvent(
       logged_from: 'edge_function'
     };
     
-    await supabaseClient.from('unified_audit_logs').insert({
-      event_type: eventType,
-      entity_id: entityId,
-      metadata: enhancedMetadata,
-      error_message: errorMessage,
-      correlation_id: correlationId,
-      event_timestamp: new Date().toISOString()
-    });
+    // Try using the RPC function that safely handles non-UUID values
+    const { error: rpcError } = await supabaseClient.rpc(
+      'xdelo_logprocessingevent',
+      {
+        p_event_type: eventType,
+        p_entity_id: safeEntityId,
+        p_correlation_id: correlationId,
+        p_metadata: enhancedMetadata,
+        p_error_message: errorMessage
+      }
+    );
+    
+    // Fall back to direct insert if RPC fails
+    if (rpcError) {
+      console.error(`RPC logging failed: ${rpcError.message}, trying direct insert`);
+      
+      // Try to clean up the entity ID to be UUID compatible
+      let validEntityId = safeEntityId;
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(safeEntityId)) {
+        // If not a valid UUID, generate one
+        validEntityId = crypto.randomUUID();
+        // Store the original ID in metadata
+        enhancedMetadata.original_entity_id = safeEntityId;
+      }
+      
+      const { error } = await supabaseClient.from('unified_audit_logs').insert({
+        event_type: eventType,
+        entity_id: validEntityId,
+        metadata: enhancedMetadata,
+        error_message: errorMessage,
+        correlation_id: correlationId,
+        event_timestamp: new Date().toISOString()
+      });
+      
+      if (error) {
+        console.error(`Direct logging also failed: ${error.message}`);
+      }
+    }
   } catch (error) {
     console.error(`Error logging event: ${eventType}`, error);
   }
