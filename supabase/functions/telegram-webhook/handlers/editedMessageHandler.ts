@@ -1,3 +1,4 @@
+
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { corsHeaders } from '../utils/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
@@ -18,15 +19,17 @@ declare const Deno: {
  * Media edits are handled by the mediaMessageHandler
  */
 export async function handleEditedMessage(message: TelegramMessage, context: MessageContext) {
+  const { logger } = context;
+  
   // First, validate that this is not a media message - if it is, redirect to media handler
   if (message.photo || message.video || message.document) {
-    context.logger?.warn('Edited message contains media, redirecting to mediaMessageHandler', {
+    logger?.warn('Edited message contains media, redirecting to mediaMessageHandler', {
       message_id: message.message_id,
       chat_id: message.chat?.id,
       chat_type: message.chat?.type
     });
     
-    // Log this routing error for monitoring
+    // Log this routing correction for monitoring
     try {
       await xdelo_logProcessingEvent(
         'routing_correction',
@@ -48,7 +51,6 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
     return await handleMediaMessage(message, context);
   }
   
-  const { logger } = context;
   logger?.info('Processing edited message', {
     message_id: message.message_id,
     chat_id: message.chat?.id,
@@ -179,8 +181,79 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
           }
         );
         
-        // Handle as a new text message
-        return await handleOtherMessage(message, context);
+        // Prepare edit history for the converted message
+        const editHistory = existingMediaMessage.edit_history || [];
+        editHistory.push({
+          timestamp: new Date().toISOString(),
+          edit_source: 'telegram_edit',
+          change_type: 'media_removed',
+          previous_file_id: existingMediaMessage.file_id,
+          previous_file_unique_id: existingMediaMessage.file_unique_id,
+          edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+        });
+        
+        // Create a new text message but preserve the editing history
+        const { data: newTextMessage, error: createError } = await supabase
+          .from('other_messages')
+          .insert({
+            telegram_message_id: message.message_id,
+            chat_id: message.chat.id,
+            chat_type: message.chat.type,
+            chat_title: message.chat.title,
+            message_type: 'edited_message',
+            message_text: message.text || '',
+            telegram_data: message,
+            processing_state: 'completed',
+            is_forward: context.isForwarded,
+            correlation_id: context.correlationId,
+            edit_history: editHistory,
+            edit_count: (existingMediaMessage.edit_count || 0) + 1,
+            converted_from_media: true,
+            original_media_id: existingMediaMessage.id,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+        
+        if (createError) {
+          logger?.error('Error creating converted text message', {
+            error: createError.message,
+            message_id: message.message_id
+          });
+          
+          throw new Error(`Failed to create converted message: ${createError.message}`);
+        }
+        
+        // Update the original media message to mark it as converted
+        await supabase
+          .from('messages')
+          .update({
+            converted_to_text: true,
+            converted_text_message_id: newTextMessage.id,
+            edit_history: editHistory,
+            edit_count: (existingMediaMessage.edit_count || 0) + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingMediaMessage.id);
+        
+        logger?.success('Successfully converted media message to text', {
+          message_id: message.message_id,
+          original_media_id: existingMediaMessage.id,
+          new_text_id: newTextMessage.id
+        });
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: 'Media message converted to text successfully',
+            id: newTextMessage.id,
+            correlationId: context.correlationId
+          }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
       }
 
       // Message doesn't exist in either table, treat as a new message

@@ -1,3 +1,4 @@
+
 export interface TelegramMessage {
   message_id: number;
   date: number;
@@ -66,7 +67,10 @@ export interface MessageContext {
   isForwarded: boolean;
   correlationId: string;
   isEdit: boolean;
-  previousMessage?: any; // Add this to store the original message before editing
+  previousMessage?: any; // Original message before editing
+  previousTextMessage?: any; // For text-to-media conversions
+  conversionType?: 'media_to_text' | 'text_to_media'; // Type of conversion if applicable
+  editHistory?: any[]; // Pre-existing edit history to preserve
   startTime: string;
   logger?: any;
 }
@@ -116,4 +120,8 @@ export interface MessageInput {
   redownload_flagged_at?: string;
   message_url?: string;
   error_message?: string;
+  converted_from_text?: boolean;
+  original_text_id?: string;
+  converted_from_media?: boolean;
+  original_media_id?: string;
 }

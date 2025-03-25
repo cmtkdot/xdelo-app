@@ -1,92 +1,125 @@
+
 /**
- * Construct a shareable message URL for a Telegram message
- * @param messageOrChatId Either a full message object, or a chat ID
- * @param messageId Optional message ID if first param is a chat ID
+ * Utility functions for working with Telegram messages
  */
-export function constructTelegramMessageUrl(
-  messageOrChatId: any,
-  messageId?: number
-): string | undefined {
-  try {
-    let chatId: number;
-    let msgId: number;
-    let username: string | undefined;
-    
-    // Handle both function signatures
-    if (typeof messageOrChatId === 'object' && messageOrChatId !== null) {
-      // Called with a message object
-      if (!messageOrChatId.chat || !messageOrChatId.message_id) {
-        console.warn('Cannot construct Telegram URL: missing message data');
-        return undefined;
-      }
-      chatId = messageOrChatId.chat.id;
-      msgId = messageOrChatId.message_id;
-      username = messageOrChatId.chat.username;
-    } else if (typeof messageOrChatId === 'number' && typeof messageId === 'number') {
-      // Called with separate chat ID and message ID
-      chatId = messageOrChatId;
-      msgId = messageId;
-    } else {
-      console.warn('Cannot construct Telegram URL: invalid parameters');
-      return undefined;
-    }
 
-    // Private chats don't have shareable URLs
-    if (typeof chatId === 'number' && chatId > 0) {
-      // This is a private chat (positive ID)
-      return undefined;
-    }
+import { TelegramMessage } from '../types.ts';
 
-    // For public channels with usernames
-    if (username) {
-      return `https://t.me/${username}/${msgId}`;
-    }
+/**
+ * Construct a URL to the message in Telegram
+ */
+export function constructTelegramMessageUrl(chatId: number, messageId: number): string {
+  // Convert private channel format (-100...) to public format
+  const chatIdStr = chatId.toString();
+  const formattedChatId = chatIdStr.startsWith('-100') ? chatIdStr.substring(4) : chatIdStr;
+  
+  return `https://t.me/c/${formattedChatId}/${messageId}`;
+}
+
+/**
+ * Overloaded version that takes a message object directly
+ */
+export function constructTelegramMessageUrl(message: TelegramMessage): string;
+export function constructTelegramMessageUrl(chatIdOrMessage: number | TelegramMessage, messageId?: number): string {
+  if (typeof chatIdOrMessage === 'object') {
+    // First argument is a message object
+    return constructTelegramMessageUrl(
+      chatIdOrMessage.chat.id,
+      chatIdOrMessage.message_id
+    );
+  } else {
+    // First argument is chatId, second is messageId
+    const chatId = chatIdOrMessage;
+    // Convert private channel format (-100...) to public format
+    const chatIdStr = chatId.toString();
+    const formattedChatId = chatIdStr.startsWith('-100') ? chatIdStr.substring(4) : chatIdStr;
     
-    // For public channels and supergroups (negative IDs)
-    // Supergroups and channels have a specific format for their URLs
-    if (typeof chatId === 'number' && chatId < 0) {
-      const chatIdStr = chatId.toString();
-      
-      // Determine if this is a supergroup/channel
-      // Supergroups start with -100, channels start with -1
-      if (chatIdStr.startsWith('-100')) {
-        // This is a supergroup or channel, remove the -100 prefix
-        const publicId = chatIdStr.substring(4);
-        return `https://t.me/c/${publicId}/${msgId}`;
-      } else if (chatIdStr.startsWith('-')) {
-        // Regular group, not publicly accessible
-        return undefined;
-      }
-    }
-    
-    return undefined;
-  } catch (error) {
-    console.error('Error constructing Telegram URL:', error);
-    return undefined;
+    return `https://t.me/c/${formattedChatId}/${messageId}`;
   }
 }
 
 /**
- * Check if a message is forwarded from another source
+ * Check if a message is a forwarded message
  */
-export function isMessageForwarded(message: any): boolean {
-  if (!message) {
-    return false;
+export function isMessageForwarded(message: TelegramMessage): boolean {
+  return !!(
+    message.forward_date || 
+    message.forward_from || 
+    message.forward_from_chat || 
+    message.forward_origin
+  );
+}
+
+/**
+ * Check if a message contains media
+ */
+export function hasMedia(message: TelegramMessage): boolean {
+  return !!(message.photo || message.video || message.document);
+}
+
+/**
+ * Get the largest photo from a message
+ */
+export function getLargestPhoto(message: TelegramMessage): any {
+  if (!message.photo || !message.photo.length) {
+    return null;
   }
   
-  // Check for standard forward fields
-  if (message.forward_from || 
-      message.forward_from_chat || 
-      message.forward_date || 
-      message.forward_signature || 
-      message.forward_sender_name) {
-    return true;
-  }
+  // Photos are ordered by size, with the largest last
+  return message.photo[message.photo.length - 1];
+}
+
+/**
+ * Prepare edit history entry for media or text messages
+ */
+export function prepareEditHistoryEntry(
+  existingMessage: any, 
+  message: TelegramMessage, 
+  changeType: 'caption' | 'media' | 'text' | 'media_to_text' | 'text_to_media'
+): any {
+  const base = {
+    timestamp: new Date().toISOString(),
+    edit_source: 'telegram_edit',
+    edit_date: message.edit_date 
+      ? new Date(message.edit_date * 1000).toISOString() 
+      : new Date().toISOString()
+  };
   
-  // Check for forwarded from channel posts which use forward_from_message_id
-  if (message.forward_from_message_id) {
-    return true;
+  switch (changeType) {
+    case 'caption':
+      return {
+        ...base,
+        change_type: 'caption_changed',
+        previous_caption: existingMessage.caption,
+        new_caption: message.caption
+      };
+    case 'media':
+      return {
+        ...base,
+        change_type: 'media_changed',
+        previous_file_id: existingMessage.file_id,
+        previous_file_unique_id: existingMessage.file_unique_id
+      };
+    case 'text':
+      return {
+        ...base,
+        change_type: 'text_changed',
+        previous_text: existingMessage.message_text
+      };
+    case 'media_to_text':
+      return {
+        ...base,
+        change_type: 'media_removed',
+        previous_file_id: existingMessage.file_id,
+        previous_file_unique_id: existingMessage.file_unique_id
+      };
+    case 'text_to_media':
+      return {
+        ...base,
+        change_type: 'media_added',
+        previous_text: existingMessage.message_text
+      };
+    default:
+      return base;
   }
-  
-  return false;
-} 
+}

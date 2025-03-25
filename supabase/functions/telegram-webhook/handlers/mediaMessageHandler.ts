@@ -1,4 +1,3 @@
-
 import { supabaseClient } from '../utils/supabase.ts';
 import { corsHeaders } from '../utils/cors.ts';
 import { 
@@ -23,6 +22,7 @@ import {
 import { createMessage, checkDuplicateFile } from '../dbOperations.ts';
 import { constructTelegramMessageUrl } from '../utils/messageUtils.ts';
 import { xdelo_logProcessingEvent } from '../utils/databaseOperations.ts';
+import { prepareEditHistoryEntry } from '../utils/messageUtils.ts';
 
 // For Deno compatibility
 declare const Deno: {
@@ -120,22 +120,24 @@ async function xdelo_handleEditedMediaMessage(
   }
 
   if (existingMessage) {
-    // Store previous state in edit_history
-    let editHistory = existingMessage.edit_history || [];
-    editHistory.push({
-      timestamp: new Date().toISOString(),
-      previous_caption: existingMessage.caption,
-      previous_processing_state: existingMessage.processing_state,
-      edit_source: 'telegram_edit',
-      edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
-    });
-
+    // Store previous state in edit_history using our utility function
+    const editHistory = existingMessage.edit_history || [];
+    
     // Determine what has changed
     const captionChanged = existingMessage.caption !== message.caption;
     const hasNewMedia = message.photo || message.video || message.document;
     
+    // Track caption changes
+    if (captionChanged) {
+      editHistory.push(prepareEditHistoryEntry(existingMessage, message, 'caption'));
+    }
+    
     // If media has been updated, handle the new media
     if (hasNewMedia) {
+      editHistory.push(prepareEditHistoryEntry(existingMessage, message, 'media'));
+      
+      logger?.info(`Media has changed in edit for message ${message.message_id}`);
+      
       try {
         logger?.info(`Media has changed in edit for message ${message.message_id}`);
         
@@ -353,7 +355,46 @@ async function xdelo_handleEditedMediaMessage(
     );
   }
   
-  // If existing message not found, handle as new message
+  // If existing message not found, check in other_messages
+  const { data: existingTextMessage, error: textLookupError } = await supabaseClient
+    .from('other_messages')
+    .select('*')
+    .eq('telegram_message_id', message.message_id)
+    .eq('chat_id', message.chat.id)
+    .single();
+    
+  if (!textLookupError && existingTextMessage) {
+    // This was previously a text message that now has media added
+    logger?.info(`Message was previously a text message, now has media. Converting.`, {
+      message_id: message.message_id,
+      existing_id: existingTextMessage.id
+    });
+    
+    // Prepare edit history for the converted message
+    const editHistory = existingTextMessage.edit_history || [];
+    editHistory.push(prepareEditHistoryEntry(existingTextMessage, message, 'text_to_media'));
+    
+    // Process as new media message but preserve history
+    context.previousTextMessage = existingTextMessage;
+    context.conversionType = 'text_to_media';
+    context.editHistory = editHistory;
+    
+    // Update the original text message to mark it as converted
+    await supabaseClient
+      .from('other_messages')
+      .update({
+        converted_to_media: true,
+        edit_count: (existingTextMessage.edit_count || 0) + 1,
+        edit_history: editHistory,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existingTextMessage.id);
+      
+    // Process as new media with history context
+    return await xdelo_handleNewMediaMessage(message, context);
+  }
+  
+  // If existing message not found in either table, handle as new message
   logger?.info(`Original message not found, creating new message for edit ${message.message_id}`);
   return await xdelo_handleNewMediaMessage(message, context);
 }
@@ -454,7 +495,22 @@ async function xdelo_handleNewMediaMessage(
       original_message_id: message.forward_origin.message_id
     } : undefined;
     
-    // Create message input
+    // When creating a new media message, check if this is a conversion from text
+    // and preserve the edit history
+    const finalEditHistory = context.editHistory || 
+      (context.isEdit ? [{
+        timestamp: new Date().toISOString(),
+        is_initial_edit: true,
+        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+      }] : []);
+    
+    // If this is a conversion from text, add a reference to the original text message
+    const additionalFields = context.conversionType === 'text_to_media' && context.previousTextMessage ? {
+      converted_from_text: true,
+      original_text_id: context.previousTextMessage.id,
+    } : {};
+    
+    // Create message input with preserved history
     const messageInput: MessageInput = {
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
@@ -479,14 +535,13 @@ async function xdelo_handleNewMediaMessage(
       telegram_data: message,
       edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : undefined,
       is_forward: context.isForwarded,
-      edit_history: context.isEdit ? [{
-        timestamp: new Date().toISOString(),
-        is_initial_edit: true,
-        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
-      }] : [],
+      edit_history: finalEditHistory,
       storage_exists: true,
       storage_path_standardized: true,
-      message_url: messageUrl
+      message_url: messageUrl,
+      
+      // Add any additional conversion fields
+      ...additionalFields,
     };
     
     // Create the message
