@@ -1,21 +1,9 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
 import { constructTelegramMessageUrl, isMessageForwarded } from '../../_shared/messageUtils.ts';
-
-// Create Supabase client
-const supabaseClient = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    }
-  }
-);
+import { supabaseClient } from '../../_shared/supabase.ts';
 
 /**
  * Handler for edited text messages (media edits are handled by mediaMessageHandler)
