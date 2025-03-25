@@ -38,36 +38,16 @@ export function useMediaQueries() {
         }
       });
       
-      // Execute the query
+      // Execute the query without type annotations that lead to excessive depth
       const response = await query;
       
-      if (response.error) {
-        return { data: null, error: response.error };
-      }
-
-      // Process data to ensure it conforms to the Message type
-      const messagesData = response.data as any[];
+      // Use type assertion after the fact
+      const typedData = response.data as Message[] | null;
       
-      // Transform data to match Message interface
-      const typedMessages = messagesData.map((item) => {
-        // Ensure is_bot is boolean
-        if (typeof item.is_bot === 'string') {
-          item.is_bot = item.is_bot === 'true';
-        }
-        
-        // Extract common fields from analyzed_content if available
-        if (item.analyzed_content) {
-          item.product_name = item.analyzed_content.product_name || item.product_name;
-          item.product_code = item.analyzed_content.product_code || item.product_code;
-          item.vendor_uid = item.analyzed_content.vendor_uid || item.vendor_uid;
-          item.purchase_date = item.analyzed_content.purchase_date || item.purchase_date;
-          item.product_quantity = item.analyzed_content.quantity || item.product_quantity;
-        }
-        
-        return item as Message;
-      });
-      
-      return { data: typedMessages, error: null };
+      return { 
+        data: typedData, 
+        error: response.error 
+      };
     } catch (error) {
       console.error('Error fetching messages:', error);
       return { data: null, error };
@@ -88,28 +68,13 @@ export function useMediaQueries() {
         .eq('id', id)
         .single();
       
-      if (response.error) {
-        return { data: null, error: response.error };
-      }
+      // Use type assertion after the fact
+      const typedData = response.data as Message | null;
       
-      // Process data to ensure it conforms to the Message type
-      const messageData = response.data as any;
-      
-      // Ensure is_bot is boolean
-      if (typeof messageData.is_bot === 'string') {
-        messageData.is_bot = messageData.is_bot === 'true';
-      }
-      
-      // Extract common fields from analyzed_content if available
-      if (messageData.analyzed_content) {
-        messageData.product_name = messageData.analyzed_content.product_name || messageData.product_name;
-        messageData.product_code = messageData.analyzed_content.product_code || messageData.product_code;
-        messageData.vendor_uid = messageData.analyzed_content.vendor_uid || messageData.vendor_uid;
-        messageData.purchase_date = messageData.analyzed_content.purchase_date || messageData.purchase_date;
-        messageData.product_quantity = messageData.analyzed_content.quantity || messageData.product_quantity;
-      }
-      
-      return { data: messageData as Message, error: null };
+      return { 
+        data: typedData, 
+        error: response.error 
+      };
     } catch (error) {
       console.error('Error fetching message by ID:', error);
       return { data: null, error };

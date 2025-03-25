@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react'
-import { Message, messageHelpers } from '@/types/entities/Message'
+import { Message } from '@/types/entities/Message'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { 
@@ -178,12 +178,6 @@ export function PublicMediaDetail({
   }, [isOpen, handleNext, handlePrevious, onClose])
   
   if (!currentMessage) return null
-
-  // Get product data safely using our helper functions
-  const productName = messageHelpers.getProductName(currentMessage);
-  const productCode = messageHelpers.getProductCode(currentMessage);
-  const vendorUid = messageHelpers.getVendorUid(currentMessage);
-  const purchaseDate = messageHelpers.getPurchaseDate(currentMessage);
   
   const canNavigatePrev = currentIndex > 0 || !!hasPrevious
   const canNavigateNext = currentIndex < currentGroup.length - 1 || !!hasNext
@@ -199,9 +193,9 @@ export function PublicMediaDetail({
               <div className="p-4 border-b flex justify-between items-center">
                 <div className="flex gap-2 items-center">
                   <h2 className="text-lg font-medium">Media Details</h2>
-                  {productName && (
+                  {currentMessage.product_name && (
                     <span className="text-sm text-muted-foreground">
-                      ({productName})
+                      ({currentMessage.product_name})
                     </span>
                   )}
                 </div>
@@ -242,25 +236,25 @@ export function PublicMediaDetail({
                     </Badge>
                   )}
                   
-                  {productName && (
+                  {currentMessage.product_name && (
                     <div className="grid grid-cols-3 gap-2">
                       <div className="text-xs font-medium text-muted-foreground">Product:</div>
-                      <div className="text-xs col-span-2">{productName}</div>
+                      <div className="text-xs col-span-2">{currentMessage.product_name}</div>
                     </div>
                   )}
                   
-                  {vendorUid && (
+                  {currentMessage.vendor_uid && (
                     <div className="grid grid-cols-3 gap-2">
                       <div className="text-xs font-medium text-muted-foreground">Vendor:</div>
-                      <div className="text-xs col-span-2">{vendorUid}</div>
+                      <div className="text-xs col-span-2">{currentMessage.vendor_uid}</div>
                     </div>
                   )}
                   
-                  {purchaseDate && (
+                  {currentMessage.purchase_date && (
                     <div className="grid grid-cols-3 gap-2">
                       <div className="text-xs font-medium text-muted-foreground">Purchase Date:</div>
                       <div className="text-xs col-span-2">
-                        {format(new Date(purchaseDate), 'MMM dd, yyyy')}
+                        {format(new Date(currentMessage.purchase_date), 'MMM dd, yyyy')}
                       </div>
                     </div>
                   )}

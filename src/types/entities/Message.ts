@@ -1,4 +1,3 @@
-
 import type { ProcessingState } from '../api/ProcessingState';
 import type { AnalyzedContent } from '../utils/AnalyzedContent';
 
@@ -73,64 +72,21 @@ export interface Message {
   edit_history?: Record<string, unknown>[];
   edit_date?: string;
   is_edited?: boolean;
+  // Product-related fields from the messages_view
+  product_name?: string;
+  product_quantity?: string | number;
+  purchase_date?: string;
+  vendor_uid?: string;
+  product_code?: string;
+  product_sku?: string;
+  notes?: string;
   is_channel_post?: boolean;
   is_forwarded?: boolean;
   forward_date?: string;
   is_edited_channel_post?: boolean;
-  // Virtual/computed properties from analyzed_content
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  product_quantity?: number;
-  notes?: string;
 }
 
 export interface MessageApiResponse {
   data: Message[] | null;
   error: Error | null;
 }
-
-// Helper functions to safely access analyzed content fields
-export const getMessageProperty = (message: Message, property: string): any => {
-  if (message?.analyzed_content && property in message.analyzed_content) {
-    return message.analyzed_content[property as keyof typeof message.analyzed_content];
-  }
-  if (property in message) {
-    return message[property as keyof Message];
-  }
-  return undefined;
-};
-
-// Extension methods for Message type
-export const messageHelpers = {
-  getProductName: (message: Message): string | undefined => {
-    return message.product_name || 
-      (message.analyzed_content?.product_name) || 
-      undefined;
-  },
-  
-  getProductCode: (message: Message): string | undefined => {
-    return message.product_code || 
-      (message.analyzed_content?.product_code) || 
-      undefined;
-  },
-  
-  getVendorUid: (message: Message): string | undefined => {
-    return message.vendor_uid || 
-      (message.analyzed_content?.vendor_uid) || 
-      undefined;
-  },
-  
-  getPurchaseDate: (message: Message): string | undefined => {
-    return message.purchase_date || 
-      (message.analyzed_content?.purchase_date) || 
-      undefined;
-  },
-  
-  getQuantity: (message: Message): number | undefined => {
-    return message.product_quantity || 
-      (message.analyzed_content?.quantity) || 
-      undefined;
-  }
-};

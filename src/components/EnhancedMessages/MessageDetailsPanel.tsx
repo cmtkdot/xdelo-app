@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from '@/hooks/useToast';
-import { Message, messageHelpers } from '@/types/entities/Message';
+import { Message } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { MessageDebugActions } from './MessageDebugActions';
 
@@ -78,9 +78,6 @@ export function MessageDetailsPanel({
     console.error('Error formatting date:', e);
   }
 
-  // Get product name from analyzed content or directly from message
-  const productName = messageHelpers.getProductName(message) || 'Untitled Product';
-
   return (
     <Card className="h-full overflow-y-auto">
       <CardHeader>
@@ -102,7 +99,7 @@ export function MessageDetailsPanel({
       <CardContent className="space-y-4">
         <div>
           <h3 className="text-lg font-medium">
-            {productName}
+            {message.analyzed_content?.product_name || message.product_name || 'Untitled Product'}
           </h3>
           <p className="text-sm text-muted-foreground">
             {formattedDate}

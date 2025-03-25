@@ -1271,7 +1271,6 @@ export type Database = {
           forward_from: Json | null
           forward_from_chat: Json | null
           forward_info: Json | null
-          from_id: string | null
           glide_row_id: string | null
           group_caption_synced: boolean | null
           group_first_message_time: string | null
@@ -1279,7 +1278,6 @@ export type Database = {
           group_message_count: string | null
           height: number | null
           id: string
-          is_bot: string | null
           is_channel_post: string | null
           is_duplicate: boolean | null
           is_duplicate_content: boolean | null
@@ -1366,7 +1364,6 @@ export type Database = {
           forward_from?: Json | null
           forward_from_chat?: Json | null
           forward_info?: Json | null
-          from_id?: string | null
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
@@ -1374,7 +1371,6 @@ export type Database = {
           group_message_count?: string | null
           height?: number | null
           id?: string
-          is_bot?: string | null
           is_channel_post?: string | null
           is_duplicate?: boolean | null
           is_duplicate_content?: boolean | null
@@ -1461,7 +1457,6 @@ export type Database = {
           forward_from?: Json | null
           forward_from_chat?: Json | null
           forward_info?: Json | null
-          from_id?: string | null
           glide_row_id?: string | null
           group_caption_synced?: boolean | null
           group_first_message_time?: string | null
@@ -1469,7 +1464,6 @@ export type Database = {
           group_message_count?: string | null
           height?: number | null
           id?: string
-          is_bot?: string | null
           is_channel_post?: string | null
           is_duplicate?: boolean | null
           is_duplicate_content?: boolean | null
