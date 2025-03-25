@@ -145,7 +145,7 @@ export function useSingleFileOperations(): UseSingleFileOperationsResult {
       
       // Log the successful operation
       await logEvent(
-        LogEventType.MEDIA_OPERATION,
+        LogEventType.MEDIA_DOWNLOADED,
         messageId,
         {
           operation: 'reupload',
@@ -166,7 +166,7 @@ export function useSingleFileOperations(): UseSingleFileOperationsResult {
       
       // Log the failed operation
       await logEvent(
-        LogEventType.ERROR,
+        LogEventType.MEDIA_UPLOAD_ERROR,
         messageId,
         {
           operation: 'reupload',
