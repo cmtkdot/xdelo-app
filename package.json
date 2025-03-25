@@ -56,6 +56,7 @@
     "embla-carousel-react": "^8.5.2",
     "fork-ts-checker-webpack-plugin": "^8.0.0",
     "framer-motion": "^12.5.0",
+    "gensync": "^1.0.0-beta.2",
     "html-webpack-plugin": "^5.5.3",
     "input-otp": "^1.2.4",
     "lodash": "^4.17.21",
