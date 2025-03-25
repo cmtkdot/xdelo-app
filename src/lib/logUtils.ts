@@ -1,5 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import { Logger, createLogger } from "./logger";
 
 export enum LogEventType {
   // Message events
@@ -35,68 +36,19 @@ export interface EventLogData {
   [key: string]: any;
 }
 
+// Default logger for backward compatibility
+const defaultLogger = createLogger('client-log');
+
 /**
  * Logs an event to the unified audit logs system
+ * Simplified version that uses the new Logger class
  */
 export const logEvent = async (
   eventType: LogEventType | string,
   entityId: string,
   metadata: EventLogData = {}
 ) => {
-  try {
-    // Generate a correlation ID if none exists
-    const correlationId = crypto.randomUUID();
-    
-    // Call the standard database function that handles UUID validation
-    const { error } = await supabase.rpc(
-      'xdelo_logprocessingevent',
-      {
-        p_event_type: String(eventType),
-        p_entity_id: entityId,
-        p_correlation_id: correlationId.toString(),
-        p_metadata: {
-          ...metadata,
-          logged_at: new Date().toISOString(),
-          source: 'client'
-        }
-      }
-    );
-    
-    if (error) {
-      console.warn("Failed to log event:", error.message);
-      
-      // Fallback to direct insert if the RPC fails
-      try {
-        const safeEntityId = typeof entityId === 'string' ? (
-          // Try to convert to UUID if possible, otherwise generate a new one 
-          // and store the original as metadata
-          crypto.randomUUID()
-        ) : crypto.randomUUID();
-        
-        const { error: insertError } = await supabase
-          .from('unified_audit_logs')
-          .insert({
-            event_type: String(eventType),
-            entity_id: safeEntityId,
-            metadata: {
-              ...metadata,
-              original_entity_id: entityId,
-              logged_at: new Date().toISOString(),
-              source: 'client_fallback'
-            },
-            correlation_id: correlationId.toString()
-          });
-          
-        if (insertError) {
-          console.error("Failed to log event using fallback method:", insertError.message);
-        }
-      } catch (insertError) {
-        console.error("Error in fallback logging:", insertError);
-      }
-    }
-  } catch (error) {
-    console.error("Error in logEvent:", error);
-  }
+  await defaultLogger.logEvent(eventType, entityId, metadata);
 };
 
 export default {

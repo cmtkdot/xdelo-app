@@ -3597,6 +3597,10 @@ export type Database = {
         }
         Returns: string
       }
+      xdelo_fix_audit_log_uuids: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       xdelo_fix_public_urls: {
         Args: {
           p_limit?: number
