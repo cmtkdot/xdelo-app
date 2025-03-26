@@ -22,7 +22,7 @@ verify_jwt = false
 verify_jwt = false
 [functions.openai-request]
 verify_jwt = false
-[functions.parse-caption-with-ai]
+[functions.parse-caption]
 verify_jwt = false
 [functions.process-audio-upload]
 verify_jwt = false
