@@ -4,8 +4,6 @@ import {
   MessageSquare,
   Package,
   Settings,
-  Database,
-  Zap,
   Music,
   GalleryHorizontal,
   GitCompare,
@@ -87,28 +85,10 @@ export const NavItems: React.FC<NavItemsProps> = ({
       isActive: currentPath === "/product-matching",
     },
     {
-      title: "SQL Console",
-      href: "/sql-console",
-      icon: <Database size={20} />,
-      isActive: currentPath === "/sql-console",
-    },
-    {
       title: "AI Chat",
       href: "/ai-chat",
       icon: <FileText size={20} />,
       isActive: currentPath === "/ai-chat",
-    },
-    {
-      title: "Audio Upload",
-      href: "/audio-upload",
-      icon: <Music size={20} />,
-      isActive: currentPath === "/audio-upload",
-    },
-    {
-      title: "Make Automations",
-      href: "/make-automations",
-      icon: <Zap size={20} />,
-      isActive: currentPath === "/make-automations",
     },
     {
       title: "Settings",

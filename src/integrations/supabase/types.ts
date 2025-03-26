@@ -921,306 +921,6 @@ export type Database = {
         }
         Relationships: []
       }
-      make_automation_rules: {
-        Row: {
-          actions: Json
-          conditions: Json
-          created_at: string | null
-          description: string | null
-          event_type: Database["public"]["Enums"]["make_event_type"]
-          id: string
-          is_active: boolean | null
-          name: string
-          priority: number | null
-          updated_at: string | null
-        }
-        Insert: {
-          actions?: Json
-          conditions?: Json
-          created_at?: string | null
-          description?: string | null
-          event_type: Database["public"]["Enums"]["make_event_type"]
-          id?: string
-          is_active?: boolean | null
-          name: string
-          priority?: number | null
-          updated_at?: string | null
-        }
-        Update: {
-          actions?: Json
-          conditions?: Json
-          created_at?: string | null
-          description?: string | null
-          event_type?: Database["public"]["Enums"]["make_event_type"]
-          id?: string
-          is_active?: boolean | null
-          name?: string
-          priority?: number | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      make_debug_events: {
-        Row: {
-          data: Json | null
-          event_type: string
-          id: string
-          level: string | null
-          session_id: string | null
-          timestamp: string | null
-        }
-        Insert: {
-          data?: Json | null
-          event_type: string
-          id?: string
-          level?: string | null
-          session_id?: string | null
-          timestamp?: string | null
-        }
-        Update: {
-          data?: Json | null
-          event_type?: string
-          id?: string
-          level?: string | null
-          session_id?: string | null
-          timestamp?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "make_debug_events_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "make_debug_sessions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      make_debug_sessions: {
-        Row: {
-          config: Json | null
-          end_time: string | null
-          id: string
-          name: string
-          notes: string | null
-          start_time: string | null
-          status: string | null
-          webhook_id: string | null
-        }
-        Insert: {
-          config?: Json | null
-          end_time?: string | null
-          id?: string
-          name: string
-          notes?: string | null
-          start_time?: string | null
-          status?: string | null
-          webhook_id?: string | null
-        }
-        Update: {
-          config?: Json | null
-          end_time?: string | null
-          id?: string
-          name?: string
-          notes?: string | null
-          start_time?: string | null
-          status?: string | null
-          webhook_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "make_debug_sessions_webhook_id_fkey"
-            columns: ["webhook_id"]
-            isOneToOne: false
-            referencedRelation: "make_webhook_configs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      make_event_logs: {
-        Row: {
-          completed_at: string | null
-          context: Json | null
-          created_at: string | null
-          duration_ms: number | null
-          error_message: string | null
-          event_type: string
-          id: string
-          message_id: string | null
-          next_retry_at: string | null
-          payload: Json | null
-          request_headers: Json | null
-          response_body: string | null
-          response_code: number | null
-          response_headers: Json | null
-          retry_count: number | null
-          severity: string | null
-          status: Database["public"]["Enums"]["make_log_status"]
-          tags: string[] | null
-          webhook_id: string | null
-        }
-        Insert: {
-          completed_at?: string | null
-          context?: Json | null
-          created_at?: string | null
-          duration_ms?: number | null
-          error_message?: string | null
-          event_type: string
-          id?: string
-          message_id?: string | null
-          next_retry_at?: string | null
-          payload?: Json | null
-          request_headers?: Json | null
-          response_body?: string | null
-          response_code?: number | null
-          response_headers?: Json | null
-          retry_count?: number | null
-          severity?: string | null
-          status?: Database["public"]["Enums"]["make_log_status"]
-          tags?: string[] | null
-          webhook_id?: string | null
-        }
-        Update: {
-          completed_at?: string | null
-          context?: Json | null
-          created_at?: string | null
-          duration_ms?: number | null
-          error_message?: string | null
-          event_type?: string
-          id?: string
-          message_id?: string | null
-          next_retry_at?: string | null
-          payload?: Json | null
-          request_headers?: Json | null
-          response_body?: string | null
-          response_code?: number | null
-          response_headers?: Json | null
-          retry_count?: number | null
-          severity?: string | null
-          status?: Database["public"]["Enums"]["make_log_status"]
-          tags?: string[] | null
-          webhook_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "make_event_logs_webhook_id_fkey"
-            columns: ["webhook_id"]
-            isOneToOne: false
-            referencedRelation: "make_webhook_configs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      make_telegram_events: {
-        Row: {
-          context: Json | null
-          created_at: string | null
-          event_type: string
-          id: string
-          message_id: string
-          payload: Json
-          webhook_results: Json | null
-        }
-        Insert: {
-          context?: Json | null
-          created_at?: string | null
-          event_type: string
-          id?: string
-          message_id: string
-          payload: Json
-          webhook_results?: Json | null
-        }
-        Update: {
-          context?: Json | null
-          created_at?: string | null
-          event_type?: string
-          id?: string
-          message_id?: string
-          payload?: Json
-          webhook_results?: Json | null
-        }
-        Relationships: []
-      }
-      make_test_payloads: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          event_type: string
-          id: string
-          is_template: boolean | null
-          name: string
-          payload: Json
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          description?: string | null
-          event_type: string
-          id?: string
-          is_template?: boolean | null
-          name: string
-          payload: Json
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          description?: string | null
-          event_type?: string
-          id?: string
-          is_template?: boolean | null
-          name?: string
-          payload?: Json
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      make_webhook_configs: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          event_types: string[]
-          field_selection: Json | null
-          headers: Json | null
-          id: string
-          is_active: boolean | null
-          name: string
-          payload_template: Json | null
-          retry_config: Json | null
-          transformation_code: string | null
-          updated_at: string | null
-          url: string
-        }
-        Insert: {
-          created_at?: string | null
-          description?: string | null
-          event_types: string[]
-          field_selection?: Json | null
-          headers?: Json | null
-          id?: string
-          is_active?: boolean | null
-          name: string
-          payload_template?: Json | null
-          retry_config?: Json | null
-          transformation_code?: string | null
-          updated_at?: string | null
-          url: string
-        }
-        Update: {
-          created_at?: string | null
-          description?: string | null
-          event_types?: string[]
-          field_selection?: Json | null
-          headers?: Json | null
-          id?: string
-          is_active?: boolean | null
-          name?: string
-          payload_template?: Json | null
-          retry_config?: Json | null
-          transformation_code?: string | null
-          updated_at?: string | null
-          url?: string
-        }
-        Relationships: []
-      }
       materialized_view_refresh_log: {
         Row: {
           last_refresh: string | null
@@ -1328,6 +1028,7 @@ export type Database = {
           sync_attempt: number | null
           telegram_data: Json | null
           telegram_message_id: number | null
+          telegram_metadata: Json | null
           update_id: string | null
           updated_at: string
           user_id: string | null
@@ -1419,6 +1120,7 @@ export type Database = {
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
+          telegram_metadata?: Json | null
           update_id?: string | null
           updated_at?: string
           user_id?: string | null
@@ -1510,6 +1212,7 @@ export type Database = {
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
+          telegram_metadata?: Json | null
           update_id?: string | null
           updated_at?: string
           user_id?: string | null
@@ -2969,13 +2672,6 @@ export type Database = {
         }
         Returns: string
       }
-      get_make_event_status_summary: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          status: string
-          count: number
-        }[]
-      }
       get_table_columns: {
         Args: {
           table_name: string
@@ -3295,14 +2991,6 @@ export type Database = {
             }
             Returns: unknown
           }
-      make_clean_event_logs: {
-        Args: {
-          older_than: string
-          webhook_id?: string
-          status?: string
-        }
-        Returns: number
-      }
       make_log_webhook_test: {
         Args: {
           webhook_id: string
@@ -3392,20 +3080,8 @@ export type Database = {
         }
         Returns: undefined
       }
-      refresh_materialized_view_secure: {
-        Args: {
-          view_name: string
-        }
-        Returns: undefined
-      }
       refresh_purchase_order_summary: {
         Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      reorder_make_automation_rules: {
-        Args: {
-          rule_ids: string[]
-        }
         Returns: undefined
       }
       schedule_relationship_maintenance: {
@@ -3508,18 +3184,6 @@ export type Database = {
         }
         Returns: number
       }
-      xdelo_add_missing_columns_to_other_messages: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      xdelo_check_media_group_content: {
-        Args: {
-          p_media_group_id: string
-          p_message_id: string
-          p_correlation_id?: string
-        }
-        Returns: Json
-      }
       xdelo_cleanup_orphaned_audit_logs: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3537,40 +3201,9 @@ export type Database = {
         }
         Returns: Json
       }
-      xdelo_construct_message_url_from_data: {
+      xdelo_extract_telegram_metadata: {
         Args: {
-          telegram_data: Json
-        }
-        Returns: string
-      }
-      xdelo_construct_telegram_message_url:
-        | {
-            Args: {
-              chat_type: Database["public"]["Enums"]["telegram_chat_type"]
-              chat_id: number
-              id: number
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              chat_type: Database["public"]["Enums"]["telegram_chat_type"]
-              chat_id: number
-              id: string
-            }
-            Returns: string
-          }
-      xdelo_direct_caption_processing: {
-        Args: {
-          p_message_id: string
-          p_correlation_id?: string
-        }
-        Returns: Json
-      }
-      xdelo_fail_message_processing: {
-        Args: {
-          p_message_id: string
-          p_error_message: string
+          p_telegram_data: Json
         }
         Returns: Json
       }
@@ -3597,6 +3230,12 @@ export type Database = {
         }
         Returns: string
       }
+      xdelo_fix_audit_log_uuids: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          fixed_count: number
+        }[]
+      }
       xdelo_fix_public_urls: {
         Args: {
           p_limit?: number
@@ -3606,13 +3245,6 @@ export type Database = {
           old_url: string
           new_url: string
         }[]
-      }
-      xdelo_flag_file_for_redownload: {
-        Args: {
-          p_message_id: string
-          p_reason?: string
-        }
-        Returns: boolean
       }
       xdelo_get_incomplete_media_groups: {
         Args: {
@@ -3666,11 +3298,11 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
-      xdelo_handle_duplicate_detection: {
+      xdelo_handle_message_edit: {
         Args: {
-          p_file_unique_id: string
-          p_telegram_message_id: number
-          p_chat_id: number
+          p_message_id: string
+          p_caption: string
+          p_is_edit?: boolean
           p_correlation_id?: string
         }
         Returns: Json
@@ -3690,21 +3322,44 @@ export type Database = {
         }
         Returns: boolean
       }
-      xdelo_log_event: {
+      xdelo_kill_long_queries: {
         Args: {
-          p_event_type: Database["public"]["Enums"]["audit_event_type"]
-          p_entity_id: string
-          p_telegram_message_id?: number
-          p_chat_id?: number
-          p_previous_state?: Json
-          p_new_state?: Json
-          p_metadata?: Json
-          p_correlation_id?: string
-          p_user_id?: string
-          p_error_message?: string
+          older_than_seconds?: number
         }
-        Returns: undefined
+        Returns: {
+          pid: number
+          usename: string
+          query_start: string
+          state: string
+          query: string
+          killed: boolean
+        }[]
       }
+      xdelo_log_event:
+        | {
+            Args: {
+              p_event_type: Database["public"]["Enums"]["audit_event_type"]
+              p_entity_id: string
+              p_telegram_message_id?: number
+              p_chat_id?: number
+              p_previous_state?: Json
+              p_new_state?: Json
+              p_metadata?: Json
+              p_correlation_id?: string
+              p_user_id?: string
+              p_error_message?: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_event_type: string
+              p_entity_id: string
+              p_message_id?: string
+              p_metadata?: Json
+            }
+            Returns: undefined
+          }
       xdelo_log_event_flexible: {
         Args: {
           p_event_type: string
@@ -3731,15 +3386,6 @@ export type Database = {
           }
         | {
             Args: {
-              p_operation: string
-              p_message_id: string
-              p_metadata?: Json
-              p_error_message?: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
               p_operation_type: Database["public"]["Enums"]["message_operation_type"]
               p_source_message_id: string
               p_target_message_id?: string
@@ -3763,16 +3409,15 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_log_webhook_event: {
+      xdelo_logprocessingevent: {
         Args: {
           p_event_type: string
-          p_chat_id: number
-          p_message_id: string
-          p_media_type?: string
+          p_entity_id: string
+          p_correlation_id: string
+          p_metadata?: Json
           p_error_message?: string
-          p_raw_data?: Json
         }
-        Returns: undefined
+        Returns: string
       }
       xdelo_mark_for_redownload: {
         Args: {
@@ -3784,6 +3429,12 @@ export type Database = {
       xdelo_parse_caption: {
         Args: {
           p_caption: string
+        }
+        Returns: Json
+      }
+      xdelo_prepare_message_for_webhook: {
+        Args: {
+          message_id: string
         }
         Returns: Json
       }
@@ -3802,11 +3453,11 @@ export type Database = {
         }
         Returns: Json
       }
-      xdelo_repair_message_relationships: {
+      xdelo_repair_media_group_syncs: {
         Args: Record<PropertyKey, never>
         Returns: {
           media_group_id: string
-          caption_message_id: string
+          source_message_id: string
           updated_count: number
         }[]
       }
@@ -3830,68 +3481,16 @@ export type Database = {
         }
         Returns: string
       }
-      xdelo_sync_forward_media: {
+      xdelo_sync_media_group_content: {
         Args: {
-          p_original_message_id: string
-          p_forward_message_id: string
+          p_source_message_id: string
+          p_media_group_id: string
+          p_correlation_id?: string
+          p_force_sync?: boolean
+          p_sync_edit_history?: boolean
         }
-        Returns: undefined
+        Returns: Json
       }
-      xdelo_sync_media_group_content:
-        | {
-            Args: {
-              p_media_group_id: string
-              p_source_message_id: string
-              p_correlation_id: string
-              p_force_sync?: boolean
-              p_sync_edit_history?: boolean
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_source_message_id: string
-              p_media_group_id: string
-              p_correlation_id?: string
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_source_message_id: string
-              p_media_group_id: string
-              p_correlation_id?: string
-              p_force_sync?: boolean
-              p_sync_edit_history?: boolean
-            }
-            Returns: Json
-          }
-      xdelo_update_message_processing_state: {
-        Args: {
-          p_message_id: string
-          p_state: string
-          p_error?: string
-        }
-        Returns: undefined
-      }
-      xdelo_update_message_with_analyzed_content:
-        | {
-            Args: {
-              p_message_id: string
-              p_analyzed_content: Json
-              p_correlation_id?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_message_id: string
-              p_analyzed_content: Json
-              p_processing_state?: string
-              p_is_edit?: boolean
-            }
-            Returns: Json
-          }
       xdelo_update_product_matching_config: {
         Args: {
           p_config: Json

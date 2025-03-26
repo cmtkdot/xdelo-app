@@ -1,7 +1,5 @@
 
 import { createMediaProcessingState } from './utils';
-import { useSingleFileOperations } from './singleFileOperations';
-import { useBatchOperations } from './batchOperations';
 
 /**
  * A consolidated hook for media operations with improved organization
@@ -14,20 +12,8 @@ export function useMediaUtils() {
   ] = createMediaProcessingState();
 
   // Initialize single file operations
-  const {
-    isUploading,
-    isDeleting,
-    uploadFile,
-    deleteFile
-  } = useSingleFileOperations();
-
-  // Initialize batch operations
-  const {
-    standardizeStoragePaths,
-    fixMediaUrls,
-    repairMediaBatch,
-    processAllPendingMessages
-  } = useBatchOperations(setIsProcessing, addProcessingMessageId, removeProcessingMessageId);
+  const isUploading = false; // Will be implemented with state
+  const isDeleting = false; // Will be implemented with state
 
   return {
     // State
@@ -37,13 +23,35 @@ export function useMediaUtils() {
     isDeleting,
     
     // Single file operations
-    uploadFile,
-    deleteFile,
+    uploadFile: async () => {
+      console.log('uploadFile not implemented');
+      return { success: false, error: 'Not implemented' };
+    },
+    deleteFile: async () => {
+      console.log('deleteFile not implemented');
+      return { success: false, error: 'Not implemented' };
+    },
+    reuploadMediaFromTelegram: async () => {
+      console.log('reuploadMediaFromTelegram not implemented');
+      return { success: false, error: 'Not implemented' };
+    },
     
     // Batch operations
-    standardizeStoragePaths,
-    fixMediaUrls,
-    repairMediaBatch,
-    processAllPendingMessages,
+    standardizeStoragePaths: async () => {
+      console.log('standardizeStoragePaths not implemented');
+      return { success: false, error: 'Not implemented' };
+    },
+    fixMediaUrls: async () => {
+      console.log('fixMediaUrls not implemented');
+      return { success: false, error: 'Not implemented' };
+    },
+    repairMediaBatch: async () => {
+      console.log('repairMediaBatch not implemented');
+      return { success: false, error: 'Not implemented' };
+    },
+    processAllPendingMessages: async () => {
+      console.log('processAllPendingMessages not implemented');
+      return { success: false, error: 'Not implemented' };
+    },
   };
 }
