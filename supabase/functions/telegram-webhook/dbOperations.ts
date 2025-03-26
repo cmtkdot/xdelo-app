@@ -58,6 +58,7 @@ export async function createNonMediaMessage(
     message_type: string;
     message_text?: string;
     telegram_data: any;
+    telegram_metadata?: any;  // Add support for telegram_metadata
     processing_state?: string;
     is_forward?: boolean;
     correlation_id: string;
@@ -65,8 +66,8 @@ export async function createNonMediaMessage(
   }
 ): Promise<{ id?: string; success: boolean; error?: string }> {
   try {
-    // Extract essential metadata only
-    const telegramMetadata = extractTelegramMetadata(input.telegram_data);
+    // If telegram_metadata is not provided, extract it from telegram_data
+    const telegramMetadata = input.telegram_metadata || extractTelegramMetadata(input.telegram_data);
     
     // Create the message record using a transaction for atomicity
     const { data, error } = await supabaseClient
@@ -78,7 +79,8 @@ export async function createNonMediaMessage(
         chat_title: input.chat_title,
         message_type: input.message_type,
         text: input.message_text || '',
-        telegram_metadata: telegramMetadata, // Store the minimal metadata
+        telegram_data: input.telegram_data,
+        telegram_metadata: telegramMetadata, // Store the extracted metadata
         processing_state: input.processing_state || 'initialized',
         is_forward: input.is_forward || false,
         correlation_id: input.correlation_id,

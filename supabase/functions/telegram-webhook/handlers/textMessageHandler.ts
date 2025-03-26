@@ -2,7 +2,7 @@
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { xdelo_logProcessingEvent, createNonMediaMessage } from '../dbOperations.ts';
-import { constructTelegramMessageUrl, isMessageForwarded } from '../../_shared/consolidatedMessageUtils.ts';
+import { constructTelegramMessageUrl, isMessageForwarded, extractTelegramMetadata } from '../../_shared/consolidatedMessageUtils.ts';
 
 export async function handleOtherMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
@@ -20,6 +20,9 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
     // Generate message URL using consolidated utility function
     const message_url = constructTelegramMessageUrl(message.chat.id, message.message_id);
     
+    // Extract essential telegram metadata instead of storing the entire telegram object
+    const telegramMetadata = extractTelegramMetadata(message);
+    
     // Create message record with optimized operation
     const { id: messageId, success, error } = await createNonMediaMessage({
       telegram_message_id: message.message_id,
@@ -28,7 +31,8 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
       chat_title: message.chat.title,
       message_type: isChannelPost ? 'channel_post' : 'message',
       message_text: message.text || message.caption || '',
-      telegram_data: message,
+      telegram_data: message,           // Still keep this for backward compatibility
+      telegram_metadata: telegramMetadata, // Add the extracted metadata
       processing_state: 'completed',
       is_forward: isForwarded,
       correlation_id: correlationId,

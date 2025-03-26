@@ -3610,6 +3610,15 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      xdelo_handle_message_edit: {
+        Args: {
+          p_message_id: string
+          p_caption: string
+          p_is_edit?: boolean
+          p_correlation_id?: string
+        }
+        Returns: Json
+      }
       xdelo_handle_message_update: {
         Args: {
           p_message_id: string
@@ -3638,21 +3647,31 @@ export type Database = {
           killed: boolean
         }[]
       }
-      xdelo_log_event: {
-        Args: {
-          p_event_type: Database["public"]["Enums"]["audit_event_type"]
-          p_entity_id: string
-          p_telegram_message_id?: number
-          p_chat_id?: number
-          p_previous_state?: Json
-          p_new_state?: Json
-          p_metadata?: Json
-          p_correlation_id?: string
-          p_user_id?: string
-          p_error_message?: string
-        }
-        Returns: undefined
-      }
+      xdelo_log_event:
+        | {
+            Args: {
+              p_event_type: Database["public"]["Enums"]["audit_event_type"]
+              p_entity_id: string
+              p_telegram_message_id?: number
+              p_chat_id?: number
+              p_previous_state?: Json
+              p_new_state?: Json
+              p_metadata?: Json
+              p_correlation_id?: string
+              p_user_id?: string
+              p_error_message?: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_event_type: string
+              p_entity_id: string
+              p_message_id?: string
+              p_metadata?: Json
+            }
+            Returns: undefined
+          }
       xdelo_log_event_flexible: {
         Args: {
           p_event_type: string
@@ -3699,17 +3718,6 @@ export type Database = {
           p_previous_state?: Json
           p_new_state?: Json
           p_error_message?: string
-        }
-        Returns: undefined
-      }
-      xdelo_log_webhook_event: {
-        Args: {
-          p_event_type: string
-          p_chat_id: number
-          p_message_id: string
-          p_media_type?: string
-          p_error_message?: string
-          p_raw_data?: Json
         }
         Returns: undefined
       }
@@ -3779,25 +3787,16 @@ export type Database = {
         }
         Returns: string
       }
-      xdelo_sync_media_group_content:
-        | {
-            Args: {
-              p_source_message_id: string
-              p_media_group_id: string
-              p_correlation_id?: string
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_source_message_id: string
-              p_media_group_id: string
-              p_correlation_id?: string
-              p_force_sync?: boolean
-              p_sync_edit_history?: boolean
-            }
-            Returns: Json
-          }
+      xdelo_sync_media_group_content: {
+        Args: {
+          p_source_message_id: string
+          p_media_group_id: string
+          p_correlation_id?: string
+          p_force_sync?: boolean
+          p_sync_edit_history?: boolean
+        }
+        Returns: Json
+      }
       xdelo_update_product_matching_config: {
         Args: {
           p_config: Json

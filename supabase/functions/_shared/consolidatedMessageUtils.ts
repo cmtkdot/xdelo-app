@@ -136,16 +136,17 @@ export function isMessageForwarded(message: any): boolean {
 }
 
 /**
- * Extract essential metadata from a telegram_data object
- * This matches the SQL function xdelo_extract_telegram_metadata
+ * Extract essential metadata from Telegram message object
+ * This reduces storage needs and improves performance
  */
 export function extractTelegramMetadata(telegramData: any): Record<string, any> {
-  if (!telegramData) return {};
+  if (!telegramData) {
+    return {};
+  }
   
-  let result: Record<string, any> = {};
-  
+  // Handle different message types
   if (telegramData.message) {
-    result = {
+    return {
       message_type: 'message',
       message_id: telegramData.message.message_id,
       date: telegramData.message.date,
@@ -155,8 +156,9 @@ export function extractTelegramMetadata(telegramData: any): Record<string, any> 
       text: telegramData.message.text,
       caption: telegramData.message.caption
     };
-  } else if (telegramData.channel_post) {
-    result = {
+  } 
+  else if (telegramData.channel_post) {
+    return {
       message_type: 'channel_post',
       message_id: telegramData.channel_post.message_id,
       date: telegramData.channel_post.date,
@@ -165,8 +167,9 @@ export function extractTelegramMetadata(telegramData: any): Record<string, any> 
       text: telegramData.channel_post.text,
       caption: telegramData.channel_post.caption
     };
-  } else if (telegramData.edited_message) {
-    result = {
+  }
+  else if (telegramData.edited_message) {
+    return {
       message_type: 'edited_message',
       message_id: telegramData.edited_message.message_id,
       date: telegramData.edited_message.date,
@@ -177,8 +180,9 @@ export function extractTelegramMetadata(telegramData: any): Record<string, any> 
       caption: telegramData.edited_message.caption,
       edit_date: telegramData.edited_message.edit_date
     };
-  } else if (telegramData.edited_channel_post) {
-    result = {
+  }
+  else if (telegramData.edited_channel_post) {
+    return {
       message_type: 'edited_channel_post',
       message_id: telegramData.edited_channel_post.message_id,
       date: telegramData.edited_channel_post.date,
@@ -188,12 +192,25 @@ export function extractTelegramMetadata(telegramData: any): Record<string, any> 
       caption: telegramData.edited_channel_post.caption,
       edit_date: telegramData.edited_channel_post.edit_date
     };
-  } else {
-    // For unknown data, just return the original
-    result = telegramData;
   }
   
-  return result;
+  // If the provided object is already a message object (not a wrapper)
+  if (telegramData.message_id) {
+    return {
+      message_type: telegramData.chat?.type === 'channel' ? 'channel_post' : 'message',
+      message_id: telegramData.message_id,
+      date: telegramData.date,
+      chat: telegramData.chat,
+      from: telegramData.from,
+      media_group_id: telegramData.media_group_id,
+      text: telegramData.text,
+      caption: telegramData.caption,
+      edit_date: telegramData.edit_date
+    };
+  }
+  
+  // Return the original object if we can't determine its structure
+  return telegramData;
 }
 
 /**
