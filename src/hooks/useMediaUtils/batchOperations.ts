@@ -1,257 +1,243 @@
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 
-interface BatchOperationOptions {
-  onProgress?: (progress: number) => void;
-  onComplete?: () => void;
-  onError?: (error: string) => void;
-  batchSize?: number;
-}
-
-interface RepairResult {
-  success: boolean;
-  successCount: number;
-  failureCount: number;
-  errors: Record<string, string>;
-  messages: string[];
-}
+import { useCallback } from 'react';
+import { useToast } from '@/hooks/useToast';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { RepairResult } from './types';
 
 /**
- * Repair storage paths for messages
+ * Hook for batch media operations
  */
-export async function repairMessageStoragePaths(
-  messageIds: string[],
-  options: BatchOperationOptions = {}
-): Promise<RepairResult> {
-  const { onProgress, onComplete, onError, batchSize = 10 } = options;
-  let successCount = 0;
-  let failureCount = 0;
-  const errors: Record<string, string> = {};
-  const successMessages: string[] = [];
+export function useBatchOperations(
+  setIsProcessing: (value: boolean) => void,
+  addProcessingMessageId: (id: string) => void,
+  removeProcessingMessageId: (id: string) => void
+) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const totalMessages = messageIds.length;
-  let processedCount = 0;
-
-  for (let i = 0; i < messageIds.length; i += batchSize) {
-    const batch = messageIds.slice(i, i + batchSize);
-
+  /**
+   * Standardize storage paths for media files
+   */
+  const standardizeStoragePaths = useCallback(async (limit: number = 100): Promise<RepairResult> => {
     try {
-      const { data, error } = await supabase.functions.invoke("repair-storage-path", {
-        body: { messageIds: batch },
+      setIsProcessing(true);
+      
+      // Call the edge function to standardize storage paths
+      const { data, error } = await supabase.functions.invoke('media-management', {
+        body: { 
+          action: 'standardize_storage_paths',
+          limit 
+        }
       });
-
+      
       if (error) {
-        batch.forEach((id) => {
-          errors[id] = error.message;
-          failureCount++;
-        });
-        onError?.(error.message);
-      } else {
-        if (data && data.repaired) {
-          data.repaired.forEach((messageId: string) => {
-            successCount++;
-            successMessages.push(`Repaired storage path for message ${messageId}`);
-          });
-        }
-        if (data && data.errors) {
-          Object.entries(data.errors).forEach(([messageId, errorMessage]) => {
-            errors[messageId] = errorMessage as string;
-            failureCount++;
-          });
-        }
+        throw new Error(error.message || 'Failed to standardize storage paths');
       }
-    } catch (e: any) {
-      batch.forEach((id) => {
-        errors[id] = e.message;
-        failureCount++;
+      
+      // Refresh the data
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+      
+      if (data?.success) {
+        toast({
+          title: 'Storage Paths Standardized',
+          description: `Successfully standardized paths for ${data.successful || 0} files.`,
+        });
+        return data;
+      } else {
+        throw new Error(data?.message || 'Failed to standardize storage paths');
+      }
+    } catch (error) {
+      console.error('Error standardizing storage paths:', error);
+      
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to standardize storage paths. Please try again.',
+        variant: 'destructive',
       });
-      onError?.(e.message);
+      
+      return {
+        success: false,
+        message: error.message || 'Unknown error occurred'
+      };
+    } finally {
+      setIsProcessing(false);
     }
+  }, [queryClient, setIsProcessing, toast]);
+  
+  /**
+   * Fix media URLs for storage files
+   */
+  const fixMediaUrls = useCallback(async (limit: number = 100): Promise<RepairResult> => {
+    try {
+      setIsProcessing(true);
+      
+      // Call the edge function to fix media URLs
+      const { data, error } = await supabase.functions.invoke('media-management', {
+        body: { 
+          action: 'fix_media_urls',
+          limit 
+        }
+      });
+      
+      if (error) {
+        throw new Error(error.message || 'Failed to fix media URLs');
+      }
+      
+      // Refresh the data
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+      
+      if (data?.success) {
+        toast({
+          title: 'Media URLs Fixed',
+          description: `Successfully fixed ${data.successful || 0} media URLs.`,
+        });
+        return data;
+      } else {
+        throw new Error(data?.message || 'Failed to fix media URLs');
+      }
+    } catch (error) {
+      console.error('Error fixing media URLs:', error);
+      
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to fix media URLs. Please try again.',
+        variant: 'destructive',
+      });
+      
+      return {
+        success: false,
+        message: error.message || 'Unknown error occurred'
+      };
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [queryClient, setIsProcessing, toast]);
+  
+  /**
+   * Repair a batch of media files
+   */
+  const repairMediaBatch = useCallback(async (messageIds: string[]): Promise<RepairResult> => {
+    try {
+      setIsProcessing(true);
+      
+      // Mark all messages as processing
+      messageIds.forEach(id => addProcessingMessageId(id));
+      
+      // Call the edge function to repair media batch
+      const { data, error } = await supabase.functions.invoke('xdelo_repair_media_batch', {
+        body: { 
+          messageIds,
+          forceReupload: true, // Force reupload to handle expired file IDs
+          timeout: 120000 // Longer timeout for batch operations
+        }
+      });
+      
+      if (error) {
+        throw new Error(error.message || 'Failed to repair media batch');
+      }
+      
+      // Refresh the data
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+      
+      if (data?.success) {
+        toast({
+          title: 'Media Repair Completed',
+          description: `Successfully repaired ${data.successful} of ${messageIds.length} files.`,
+        });
+        return data;
+      } else {
+        throw new Error(data?.message || 'Failed to repair media batch');
+      }
+    } catch (error) {
+      console.error('Error repairing media batch:', error);
+      
+      toast({
+        title: 'Media Repair Failed',
+        description: error.message || 'Could not repair any files. Please try again.',
+        variant: 'destructive',
+      });
+      
+      return {
+        success: false,
+        message: error.message || 'Unknown error occurred'
+      };
+    } finally {
+      // Clear processing state
+      messageIds.forEach(id => removeProcessingMessageId(id));
+      setIsProcessing(false);
+    }
+  }, [addProcessingMessageId, removeProcessingMessageId, queryClient, setIsProcessing, toast]);
 
-    processedCount += batch.length;
-    const progress = (processedCount / totalMessages) * 100;
-    onProgress?.(progress);
-  }
-
-  onComplete?.();
+  /**
+   * Process all pending messages
+   */
+  const processAllPendingMessages = useCallback(async (): Promise<RepairResult> => {
+    try {
+      setIsProcessing(true);
+      
+      // Call the edge function to process all pending messages
+      const { data, error } = await supabase.functions.invoke('media-management', {
+        body: { 
+          action: 'process_pending_messages',
+          limit: 100 
+        }
+      });
+      
+      if (error) {
+        throw new Error(error.message || 'Failed to process pending messages');
+      }
+      
+      // Refresh the data
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+      
+      if (data?.success) {
+        toast({
+          title: "Processing Complete",
+          description: `Processed ${data.successful || 0} of ${data.total || 0} messages successfully.`
+        });
+        
+        return {
+          success: true,
+          message: `Processed ${data.successful || 0} of ${data.total || 0} messages`,
+          successful: data.successful,
+          failed: data.failed
+        };
+      } else if (data?.message === "No pending messages found") {
+        toast({
+          title: "No Pending Messages",
+          description: "There are no pending messages to process."
+        });
+        
+        return {
+          success: true,
+          message: "No pending messages found"
+        };
+      } else {
+        throw new Error(data?.message || 'Processing failed');
+      }
+    } catch (error) {
+      console.error("Error processing pending messages:", error);
+      
+      toast({
+        title: "Processing Failed",
+        description: error.message || "Failed to process pending messages",
+        variant: "destructive"
+      });
+      
+      return {
+        success: false,
+        message: error.message || "Unknown error during batch processing"
+      };
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [queryClient, setIsProcessing, toast]);
 
   return {
-    success: successCount > 0,
-    successCount,
-    failureCount,
-    errors,
-    messages: successMessages
+    standardizeStoragePaths,
+    fixMediaUrls,
+    repairMediaBatch,
+    processAllPendingMessages
   };
-}
-
-/**
- * Redownload media for messages
- */
-export async function redownloadMessageMedia(
-  messageIds: string[],
-  options: BatchOperationOptions = {}
-): Promise<RepairResult> {
-  const { onProgress, onComplete, onError, batchSize = 10 } = options;
-  let successCount = 0;
-  let failureCount = 0;
-  const errors: Record<string, string> = {};
-  const successMessages: string[] = [];
-
-  const totalMessages = messageIds.length;
-  let processedCount = 0;
-
-  for (let i = 0; i < messageIds.length; i += batchSize) {
-    const batch = messageIds.slice(i, i + batchSize);
-
-    try {
-      const { data, error } = await supabase.functions.invoke("redownload-media", {
-        body: { messageIds: batch },
-      });
-
-      if (error) {
-        batch.forEach((id) => {
-          errors[id] = error.message;
-          failureCount++;
-        });
-        onError?.(error.message);
-      } else {
-        if (data && data.redownloaded) {
-          data.redownloaded.forEach((messageId: string) => {
-            successCount++;
-            successMessages.push(`Redownloaded media for message ${messageId}`);
-          });
-        }
-        if (data && data.errors) {
-          Object.entries(data.errors).forEach(([messageId, errorMessage]) => {
-            errors[messageId] = errorMessage as string;
-            failureCount++;
-          });
-        }
-      }
-    } catch (e: any) {
-      batch.forEach((id) => {
-        errors[id] = e.message;
-        failureCount++;
-      });
-      onError?.(e.message);
-    }
-
-    processedCount += batch.length;
-    const progress = (processedCount / totalMessages) * 100;
-    onProgress?.(progress);
-  }
-
-  onComplete?.();
-
-  return {
-    success: successCount > 0,
-    successCount,
-    failureCount,
-    errors,
-    messages: successMessages
-  };
-}
-
-/**
- * Standardize storage paths for messages
- */
-export async function standardizeStoragePaths(
-  messageIds: string[],
-  options: BatchOperationOptions = {}
-): Promise<RepairResult> {
-  const { onProgress, onComplete, onError, batchSize = 10 } = options;
-  let successCount = 0;
-  let failureCount = 0;
-  const errors: Record<string, string> = {};
-  const successMessages: string[] = [];
-
-  const totalMessages = messageIds.length;
-  let processedCount = 0;
-
-  for (let i = 0; i < messageIds.length; i += batchSize) {
-    const batch = messageIds.slice(i, i + batchSize);
-
-    try {
-      const { data, error } = await supabase.functions.invoke("standardize-storage-path", {
-        body: { messageIds: batch },
-      });
-
-      if (error) {
-        batch.forEach((id) => {
-          errors[id] = error.message;
-          failureCount++;
-        });
-        onError?.(error.message);
-      } else {
-        if (data && data.standardized) {
-          data.standardized.forEach((messageId: string) => {
-            successCount++;
-            successMessages.push(`Standardized storage path for message ${messageId}`);
-          });
-        }
-        if (data && data.errors) {
-          Object.entries(data.errors).forEach(([messageId, errorMessage]) => {
-            errors[messageId] = errorMessage as string;
-            failureCount++;
-          });
-        }
-      }
-    } catch (e: any) {
-      batch.forEach((id) => {
-        errors[id] = e.message;
-        failureCount++;
-      });
-      onError?.(e.message);
-    }
-
-    processedCount += batch.length;
-    const progress = (processedCount / totalMessages) * 100;
-    onProgress?.(progress);
-  }
-
-  onComplete?.();
-
-  return {
-    success: successCount > 0,
-    successCount,
-    failureCount,
-    errors,
-    messages: successMessages
-  };
-}
-
-/**
- * Fix audit log UUIDs
- */
-export async function fixAuditLogUuids() {
-  try {
-    const { data, error } = await supabase.rpc("xdelo_fix_audit_log_uuids");
-
-    if (error) {
-      toast.error(`Error fixing audit log UUIDs: ${error.message}`);
-      return;
-    }
-
-    toast.success(`Successfully fixed ${data?.fixed_count || 0} audit log UUIDs`);
-  } catch (e: any) {
-    toast.error(`Error fixing audit log UUIDs: ${e.message}`);
-  }
-}
-
-/**
- * Migrate telegram data to metadata
- */
-export async function migrateTelegramDataToMetadata() {
-  try {
-    const { data, error } = await supabase.rpc("xdelo_migrate_telegram_data_to_metadata");
-
-    if (error) {
-      toast.error(`Error migrating telegram data to metadata: ${error.message}`);
-      return;
-    }
-
-    toast.success(`Successfully migrated ${data?.migrated_count || 0} telegram records`);
-  } catch (e: any) {
-    toast.error(`Error migrating telegram data to metadata: ${e.message}`);
-  }
 }

@@ -1,94 +1,120 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import { LogEventType } from "@/types/api/LogEventType";
 
-export type LogLevel = 'info' | 'warning' | 'error' | 'success' | 'debug';
-
-export interface LogOptions {
-  writeToDatabase?: boolean;
-  useTimestamp?: boolean;
-}
-
+/**
+ * Unified logger for client and server use
+ */
 export class Logger {
-  private name: string;
-  private defaultOptions: LogOptions;
+  private context: string;
+  private correlationId: string;
 
-  constructor(name: string, options: LogOptions = {}) {
-    this.name = name;
-    this.defaultOptions = {
-      writeToDatabase: true,
-      useTimestamp: true,
-      ...options
-    };
+  constructor(context: string, correlationId?: string) {
+    this.context = context;
+    this.correlationId = correlationId || crypto.randomUUID();
   }
 
   /**
-   * Log an informational message
-   */
-  info(message: string, data?: any, options?: LogOptions): void {
-    this.log('info', message, data, options);
-  }
-
-  /**
-   * Log a success message
-   */
-  success(message: string, data?: any, options?: LogOptions): void {
-    this.log('success', message, data, options);
-  }
-
-  /**
-   * Log a warning message
-   */
-  warn(message: string, data?: any, options?: LogOptions): void {
-    this.log('warning', message, data, options);
-  }
-
-  /**
-   * Log an error message
-   */
-  error(message: string, data?: any, options?: LogOptions): void {
-    this.log('error', message, data, options);
-  }
-
-  /**
-   * Log a debug message (only shown in development)
-   */
-  debug(message: string, data?: any, options?: LogOptions): void {
-    if (process.env.NODE_ENV !== 'production') {
-      this.log('debug', message, data, options);
-    }
-  }
-
-  /**
-   * Log an event to the unified audit logs system
+   * Log an event with standardized format
    */
   async logEvent(
-    eventType: string,
+    eventType: LogEventType | string,
     entityId: string,
-    metadata: Record<string, any> = {},
-    errorMessage?: string
+    metadata: Record<string, any> = {}
   ): Promise<void> {
     try {
-      const enhancedMetadata = {
+      // Add standard metadata
+      const enhancedMetadata: Record<string, any> = {
         ...metadata,
-        timestamp: metadata.timestamp || new Date().toISOString(),
-        logger: this.name,
-        logged_from: 'client'
+        context: this.context,
+        timestamp: new Date().toISOString(),
+        client_version: process.env.APP_VERSION || 'unknown'
       };
 
-      await supabase.from('unified_audit_logs').insert({
-        event_type: eventType,
-        entity_id: entityId,
-        metadata: enhancedMetadata,
-        error_message: errorMessage,
-        event_timestamp: new Date().toISOString()
+      // Ensure we have a valid UUID for the entity_id
+      const safeEntityId = this.validateEntityId(entityId);
+      if (safeEntityId !== entityId) {
+        // Add the original entity ID to the metadata
+        enhancedMetadata.original_entity_id = entityId;
+      }
+
+      // Log to console for debugging in development
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[${eventType}] [${this.context}] ${entityId}`, enhancedMetadata);
+      }
+      
+      // Log to database 
+      await supabase.rpc('xdelo_logprocessingevent', {
+        p_event_type: String(eventType),
+        p_entity_id: safeEntityId,
+        p_correlation_id: this.correlationId,
+        p_metadata: enhancedMetadata
       });
     } catch (error) {
-      console.error(`Error logging event: ${eventType}`, error);
+      // Fallback to console if database logging fails
+      console.error(`Error logging event: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   /**
-   * Log a media operation
+   * Validate or generate a UUID
+   */
+  private validateEntityId(id: string): string {
+    try {
+      // Check for valid UUID format
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
+      if (uuidPattern.test(id)) {
+        return id;
+      }
+      
+      // Generate a new UUID if not valid
+      return crypto.randomUUID().toString();
+    } catch {
+      return crypto.randomUUID().toString();
+    }
+  }
+
+  /**
+   * Get the current correlation ID
+   */
+  getCorrelationId(): string {
+    return this.correlationId;
+  }
+
+  /**
+   * Create a child logger with the same correlation ID
+   */
+  createChildLogger(childContext: string): Logger {
+    return new Logger(`${this.context}:${childContext}`, this.correlationId);
+  }
+
+  /**
+   * Convenience methods for common log levels
+   */
+  async info(message: string, entityId: string, metadata: Record<string, any> = {}): Promise<void> {
+    await this.logEvent(`info:${message}`, entityId, metadata);
+  }
+
+  async error(message: string, entityId: string, error: unknown, metadata: Record<string, any> = {}): Promise<void> {
+    const errorData = {
+      ...metadata,
+      error_message: error instanceof Error ? error.message : String(error),
+      error_stack: error instanceof Error ? error.stack : undefined
+    };
+    await this.logEvent(`error:${message}`, entityId, errorData);
+  }
+
+  async warn(message: string, entityId: string, metadata: Record<string, any> = {}): Promise<void> {
+    await this.logEvent(`warning:${message}`, entityId, metadata);
+  }
+
+  async success(message: string, entityId: string, metadata: Record<string, any> = {}): Promise<void> {
+    await this.logEvent(`success:${message}`, entityId, metadata);
+  }
+  
+  /**
+   * Log media processing operations
    */
   async logMediaOperation(
     operation: string,
@@ -96,77 +122,21 @@ export class Logger {
     success: boolean,
     metadata: Record<string, any> = {}
   ): Promise<void> {
-    const eventType = success ? 'media_operation_success' : 'media_operation_failed';
-    
-    await this.logEvent(eventType, messageId, {
-      operation,
-      ...metadata
-    });
-  }
-
-  /**
-   * Internal logging method
-   */
-  private log(level: LogLevel, message: string, data?: any, options?: LogOptions): void {
-    const mergedOptions = { ...this.defaultOptions, ...options };
-    const timestamp = mergedOptions.useTimestamp ? new Date().toISOString() : null;
-    const prefix = `[${this.name}]${timestamp ? ` [${timestamp}]` : ''}`;
-    
-    // Format the message for console
-    const formattedMessage = `${prefix} ${message}`;
-    
-    // Log to console with appropriate level
-    switch (level) {
-      case 'info':
-        console.info(formattedMessage, data || '');
-        break;
-      case 'warning':
-        console.warn(formattedMessage, data || '');
-        break;
-      case 'error':
-        console.error(formattedMessage, data || '');
-        break;
-      case 'success':
-        console.log(`%c${formattedMessage}`, 'color: green', data || '');
-        break;
-      case 'debug':
-        console.debug(formattedMessage, data || '');
-        break;
-    }
-
-    // Optionally write to database
-    if (mergedOptions.writeToDatabase) {
-      this.logToDatabase(level, message, data);
-    }
-  }
-
-  /**
-   * Write a log entry to the database
-   */
-  private async logToDatabase(level: LogLevel, message: string, data?: any): Promise<void> {
-    try {
-      await supabase.from('unified_audit_logs').insert({
-        event_type: `client_${level}`,
-        entity_id: 'system',
-        metadata: {
-          message,
-          data,
-          logger: this.name,
-          timestamp: new Date().toISOString(),
-          logged_from: 'client'
-        },
-        event_timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      // Don't log this error to avoid infinite loops
-      console.error(`Error writing log to database: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    const eventType = success ? `media_${operation}_success` : `media_${operation}_failed`;
+    await this.logEvent(eventType, messageId, metadata);
   }
 }
 
 /**
- * Create a new logger instance
+ * Create a logger instance
  */
-export function createLogger(name: string, options?: LogOptions): Logger {
-  return new Logger(name, options);
+export function createLogger(context: string, correlationId?: string): Logger {
+  return new Logger(context, correlationId);
+}
+
+/**
+ * Get a singleton logger for the current context
+ */
+export function getLogger(context: string, correlationId?: string): Logger {
+  return createLogger(context, correlationId);
 }

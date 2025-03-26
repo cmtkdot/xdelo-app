@@ -1,15 +1,31 @@
 
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { 
   logProcessingEvent, 
   extractTelegramMetadata,
-  createSupabaseClient,
-  supabaseClient as sharedSupabaseClient 
+  createSupabaseClient 
 } from '../_shared/consolidatedMessageUtils.ts';
 
 /**
  * Enhanced Supabase client with improved timeout and retry capabilities
  */
-export const supabaseClient = sharedSupabaseClient;
+export const supabaseClient = createSupabaseClient({ 
+  timeoutSeconds: 15, 
+  retryAttempts: 3 
+});
+
+/**
+ * Legacy wrapper function for backwards compatibility
+ */
+export async function xdelo_logProcessingEvent(
+  eventType: string,
+  entityId: string,
+  correlationId: string,
+  metadata: Record<string, unknown> = {},
+  errorMessage?: string
+): Promise<void> {
+  await logProcessingEvent(eventType, entityId, correlationId, metadata, errorMessage);
+}
 
 /**
  * Check if a message with the same Telegram message ID already exists in the database
@@ -42,7 +58,6 @@ export async function createNonMediaMessage(
     message_type: string;
     message_text?: string;
     telegram_data: any;
-    telegram_metadata?: any;  // Add support for telegram_metadata
     processing_state?: string;
     is_forward?: boolean;
     correlation_id: string;
@@ -50,8 +65,8 @@ export async function createNonMediaMessage(
   }
 ): Promise<{ id?: string; success: boolean; error?: string }> {
   try {
-    // If telegram_metadata is not provided, extract it from telegram_data
-    const telegramMetadata = input.telegram_metadata || extractTelegramMetadata(input.telegram_data);
+    // Extract essential metadata only
+    const telegramMetadata = extractTelegramMetadata(input.telegram_data);
     
     // Create the message record using a transaction for atomicity
     const { data, error } = await supabaseClient
@@ -63,8 +78,7 @@ export async function createNonMediaMessage(
         chat_title: input.chat_title,
         message_type: input.message_type,
         text: input.message_text || '',
-        telegram_data: input.telegram_data,
-        telegram_metadata: telegramMetadata, // Store the extracted metadata
+        telegram_metadata: telegramMetadata, // Store the minimal metadata
         processing_state: input.processing_state || 'initialized',
         is_forward: input.is_forward || false,
         correlation_id: input.correlation_id,
@@ -112,12 +126,11 @@ export async function createMediaMessage(
     is_forward?: boolean;
     correlation_id: string;
     message_url?: string;
-    telegram_metadata?: any;
   }
 ): Promise<{ id?: string; success: boolean; error?: string }> {
   try {
     // Extract essential metadata only
-    const telegramMetadata = input.telegram_metadata || extractTelegramMetadata(input.telegram_data);
+    const telegramMetadata = extractTelegramMetadata(input.telegram_data);
     
     // Create the message record
     const { data, error } = await supabaseClient
@@ -158,73 +171,6 @@ export async function createMediaMessage(
   } catch (error) {
     console.error('Exception in createMediaMessage:', error);
     return { success: false, error: error instanceof Error ? error.message : String(error) };
-  }
-}
-
-/**
- * Creates a new message record in the database
- * This is a unified function that handles both media and non-media messages
- */
-export async function createMessage(
-  input: any, 
-  logger?: any
-): Promise<{ id?: string; success: boolean; error_message?: string }> {
-  try {
-    // Extract essential metadata
-    const telegramMetadata = input.telegram_metadata || 
-      (input.telegram_data ? extractTelegramMetadata(input.telegram_data) : {});
-    
-    // Create the message record
-    const { data, error } = await supabaseClient
-      .from('messages')
-      .insert({
-        telegram_message_id: input.telegram_message_id,
-        chat_id: input.chat_id,
-        chat_type: input.chat_type,
-        chat_title: input.chat_title,
-        caption: input.caption || '',
-        text: input.text || input.message_text || '',
-        file_id: input.file_id,
-        file_unique_id: input.file_unique_id,
-        media_group_id: input.media_group_id,
-        mime_type: input.mime_type,
-        mime_type_original: input.mime_type_original,
-        file_size: input.file_size,
-        width: input.width,
-        height: input.height,
-        duration: input.duration,
-        storage_path: input.storage_path,
-        public_url: input.public_url,
-        telegram_data: input.telegram_data,
-        telegram_metadata: telegramMetadata,
-        processing_state: input.processing_state || 'initialized',
-        is_forward: input.is_forward || false,
-        is_edited_channel_post: input.is_edited_channel_post || false,
-        forward_info: input.forward_info,
-        edit_date: input.edit_date,
-        edit_history: input.edit_history || [],
-        storage_exists: input.storage_exists,
-        storage_path_standardized: input.storage_path_standardized,
-        correlation_id: input.correlation_id,
-        message_url: input.message_url,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .select('id')
-      .single();
-      
-    if (error) {
-      if (logger) logger.error('Failed to create message record:', error);
-      return { success: false, error_message: error.message };
-    }
-    
-    return { id: data.id, success: true };
-  } catch (error) {
-    if (logger) logger.error('Exception in createMessage:', error);
-    return { 
-      success: false, 
-      error_message: error instanceof Error ? error.message : String(error) 
-    };
   }
 }
 
@@ -305,7 +251,6 @@ export async function getMessageById(messageId: string) {
 
 /**
  * Sync media group content from one message to others
- * Use the consolidated function from the database
  */
 export async function syncMediaGroupContent(
   sourceMessageId: string,

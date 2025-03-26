@@ -168,3 +168,58 @@ export async function xdelo_findMessageWithContent(
     return null;
   }
 }
+
+/**
+ * Sync analyzed content across media group messages
+ */
+export async function xdelo_syncMediaGroupContent(
+  sourceMessageId: string,
+  targetMessageId: string,
+  correlationId?: string
+): Promise<boolean> {
+  try {
+    // Get source message content
+    const { data: sourceMessage, error: sourceError } = await supabaseClient
+      .from('messages')
+      .select('analyzed_content, caption')
+      .eq('id', sourceMessageId)
+      .single();
+      
+    if (sourceError || !sourceMessage || !sourceMessage.analyzed_content) {
+      console.error(`[${correlationId}] Error getting source message content:`, sourceError);
+      return false;
+    }
+    
+    // Update target message with content from source
+    const { error: updateError } = await supabaseClient
+      .from('messages')
+      .update({
+        analyzed_content: sourceMessage.analyzed_content,
+        group_caption_synced: true,
+        is_original_caption: false,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', targetMessageId);
+      
+    if (updateError) {
+      console.error(`[${correlationId}] Error syncing media group content:`, updateError);
+      return false;
+    }
+    
+    // Log the sync event
+    await supabaseClient.from('unified_audit_logs').insert({
+      event_type: 'media_group_content_synced',
+      entity_id: targetMessageId,
+      metadata: {
+        source_message_id: sourceMessageId,
+        correlation_id: correlationId,
+        timestamp: new Date().toISOString()
+      }
+    });
+    
+    return true;
+  } catch (error) {
+    console.error(`[${correlationId}] Exception syncing media group content:`, error);
+    return false;
+  }
+}

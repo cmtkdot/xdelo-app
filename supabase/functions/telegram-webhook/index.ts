@@ -4,7 +4,7 @@ import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage } from './handlers/textMessageHandler.ts';
 import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { logProcessingEvent } from '../_shared/consolidatedMessageUtils.ts';
+import { xdelo_logProcessingEvent } from './dbOperations.ts';
 import { Logger } from './utils/logger.ts';
 import { isMessageForwarded } from '../_shared/consolidatedMessageUtils.ts';
 
@@ -28,7 +28,7 @@ serve(async (req: Request) => {
       url: req.url,
     });
     
-    await logProcessingEvent(
+    await xdelo_logProcessingEvent(
       "webhook_received",
       "system",
       correlationId,
@@ -136,7 +136,7 @@ serve(async (req: Request) => {
       });
       
       // Log the error to the database
-      await logProcessingEvent(
+      await xdelo_logProcessingEvent(
         "message_processing_failed",
         message.message_id.toString(),
         correlationId,

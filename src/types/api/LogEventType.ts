@@ -1,50 +1,48 @@
 
 /**
- * Standardized event types for logging across the application
+ * Event types for unified logging
  */
 export enum LogEventType {
   // System events
-  SYSTEM_STARTUP = 'system_startup',
-  SYSTEM_SHUTDOWN = 'system_shutdown',
-  
-  // User actions
-  USER_LOGIN = 'user_login',
-  USER_LOGOUT = 'user_logout',
-  USER_ACTION = 'user_action',
+  SYSTEM_STARTUP = 'system:startup',
+  SYSTEM_SHUTDOWN = 'system:shutdown',
+  SYSTEM_ERROR = 'system:error',
+  SYSTEM_WARNING = 'system:warning',
+  SYSTEM_REPAIR = 'system:repair',
   
   // Message events
-  MESSAGE_CREATED = 'message_created',
-  MESSAGE_UPDATED = 'message_updated',
-  MESSAGE_DELETED = 'message_deleted',
-  MESSAGE_REPROCESSED = 'message_reprocessed',
-  MESSAGE_ERROR = 'message_error',
-  
-  // Processing events
-  PROCESSING_STARTED = 'processing_started',
-  PROCESSING_COMPLETED = 'processing_completed',
-  PROCESSING_FAILED = 'processing_failed',
+  MESSAGE_CREATED = 'message:created',
+  MESSAGE_UPDATED = 'message:updated',
+  MESSAGE_DELETED = 'message:deleted',
+  MESSAGE_PROCESSED = 'message:processed',
+  MESSAGE_PROCESSING_FAILED = 'message:processing_failed',
+  MESSAGE_REPROCESSED = 'message:reprocessed',
   
   // Media events
-  MEDIA_UPLOADED = 'media_uploaded',
-  MEDIA_DOWNLOADED = 'media_downloaded',
-  MEDIA_DELETED = 'media_deleted',
-  MEDIA_REPAIRED = 'media_repaired',
+  MEDIA_UPLOADED = 'media:uploaded',
+  MEDIA_DOWNLOADED = 'media:downloaded',
+  MEDIA_PROCESSED = 'media:processed',
+  MEDIA_REDOWNLOADED = 'media:redownloaded',
+  MEDIA_REPAIR_STARTED = 'media:repair_started',
+  MEDIA_REPAIR_COMPLETED = 'media:repair_completed',
+  MEDIA_REPAIR_FAILED = 'media:repair_failed',
   
-  // Telegram events
-  TELEGRAM_WEBHOOK = 'telegram_webhook',
-  TELEGRAM_API_CALL = 'telegram_api_call',
+  // User events
+  USER_LOGIN = 'user:login',
+  USER_LOGOUT = 'user:logout',
+  USER_ACTION = 'user:action',
   
-  // Edge function events
-  EDGE_FUNCTION_EXECUTED = 'edge_function_executed',
-  EDGE_FUNCTION_ERROR = 'edge_function_error',
+  // API events
+  API_REQUEST = 'api:request',
+  API_RESPONSE = 'api:response',
+  API_ERROR = 'api:error',
   
-  // Audit events
-  AUDIT_EVENT = 'audit_event',
-  CONFIG_CHANGED = 'config_changed',
+  // Sync events
+  SYNC_STARTED = 'sync:started',
+  SYNC_COMPLETED = 'sync:completed',
+  SYNC_FAILED = 'sync:failed',
+  SYNC_PRODUCTS = 'sync:products',
   
-  // Generic events
-  INFO = 'info',
-  WARNING = 'warning',
-  ERROR = 'error',
-  DEBUG = 'debug'
+  // Batch operations
+  BATCH_OPERATION = 'batch:operation'
 }

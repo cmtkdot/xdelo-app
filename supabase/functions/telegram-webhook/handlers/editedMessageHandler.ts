@@ -1,12 +1,8 @@
 
 import { corsHeaders } from '../../_shared/cors.ts';
+import { xdelo_logProcessingEvent } from '../dbOperations.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
-import { 
-  constructTelegramMessageUrl, 
-  isMessageForwarded,
-  logProcessingEvent,
-  supabaseClient
-} from '../../_shared/consolidatedMessageUtils.ts';
+import { constructTelegramMessageUrl, isMessageForwarded, supabaseClient } from '../../_shared/consolidatedMessageUtils.ts';
 
 /**
  * Handler for edited messages (text only - media edits are handled by mediaMessageHandler)
@@ -76,7 +72,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       
       // Log the edit operation
       try {
-        await logProcessingEvent(
+        await xdelo_logProcessingEvent(
           "message_text_edited",
           existingMessage.id,
           correlationId,
@@ -132,7 +128,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       
       // Log the operation
       try {
-        await logProcessingEvent(
+        await xdelo_logProcessingEvent(
           "message_created_from_edit",
           data.id,
           correlationId,
@@ -158,7 +154,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
   } catch (error) {
     context.logger?.error(`Error processing edited message: ${error.message}`, { stack: error.stack });
     
-    await logProcessingEvent(
+    await xdelo_logProcessingEvent(
       "edited_message_processing_error",
       `${message.chat.id}_${message.message_id}`,
       context.correlationId,

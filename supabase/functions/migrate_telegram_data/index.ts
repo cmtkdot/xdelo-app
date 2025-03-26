@@ -13,7 +13,7 @@ Deno.serve(async (req) => {
     const supabase = createSupabaseClient();
     
     // Call the migration function
-    const { data, error } = await supabase.rpc('xdelo_migrate_telegram_data_to_metadata');
+    const { data, error } = await supabase.rpc('migrate_telegram_data_to_metadata');
 
     if (error) {
       throw error;

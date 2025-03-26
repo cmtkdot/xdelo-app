@@ -11,7 +11,6 @@ This document provides an overview of all active edge functions in the project, 
 - `_shared/cors.ts`
 - `telegram-webhook/handlers/` (various handlers)
 - `_shared/mediaUtils.ts`
-- `_shared/captionParser.ts`
 
 ### xdelo_set-telegram-webhook
 **Purpose**: Sets the webhook URL for the Telegram bot
@@ -26,16 +25,6 @@ This document provides an overview of all active edge functions in the project, 
 - `_shared/cors.ts`
 - Telegram Bot API
 - Database tables: `make_webhook_logs`
-
-## Message Processing Functions
-
-### direct-caption-processor
-**Purpose**: Unified caption processing for all message types
-**Dependencies**:
-- `_shared/captionParser.ts`
-- `_shared/errorHandler.ts`
-- `xdelo_sync_media_group` (for propagating changes to media groups)
-- Database tables: `messages`, `unified_audit_logs`
 
 ### parse-caption-with-ai
 **Purpose**: Analyzes message captions with AI to extract product information
@@ -53,7 +42,7 @@ This document provides an overview of all active edge functions in the project, 
 ### xdelo_reprocess_message
 **Purpose**: Reprocesses messages that failed initial processing
 **Dependencies**:
-- `direct-caption-processor` or `parse-caption-with-ai` (based on configuration)
+- `manual-caption-parser` or `parse-caption-with-ai` (based on configuration)
 - `_shared/databaseOperations.ts`
 
 ### xdelo_sync_media_group
@@ -61,30 +50,6 @@ This document provides an overview of all active edge functions in the project, 
 **Dependencies**:
 - `_shared/supabase.ts`
 - Database tables: `messages`
-
-### create-analyze-message-caption
-**Purpose**: Creates analysis tasks for message captions
-**Dependencies**:
-- `parse-caption-with-ai`
-- Database function: `xdelo_analyze_message_caption`
-
-### analyze-with-ai
-**Purpose**: General-purpose AI analysis for various content
-**Dependencies**:
-- OpenAI API
-- `_shared/cors.ts`
-
-### xdelo_process_captions
-**Purpose**: Triggered by database to process new captions
-**Dependencies**:
-- Database function: `xdelo_process_caption_workflow`
-- Database triggers: on message insert/update
-
-### product-matching
-**Purpose**: Matches message products with GL product database
-**Dependencies**:
-- `product-matching/matching-utils.ts`
-- Database tables: `gl_products`, `messages`
 
 ## Media Management Functions
 
@@ -129,6 +94,39 @@ This document provides an overview of all active edge functions in the project, 
 - Storage bucket: `telegram-media`
 - Database tables: `messages`
 
+## Message Processing Functions
+
+### create-analyze-message-caption
+**Purpose**: Creates analysis tasks for message captions
+**Dependencies**:
+- `parse-caption-with-ai`
+- Database function: `xdelo_analyze_message_caption`
+
+### analyze-with-ai
+**Purpose**: General-purpose AI analysis for various content
+**Dependencies**:
+- OpenAI API
+- `_shared/cors.ts`
+
+### xdelo_process_captions
+**Purpose**: Triggered by database to process new captions
+**Dependencies**:
+- Database function: `xdelo_process_caption_workflow`
+- Database triggers: on message insert/update
+
+### product-matching
+**Purpose**: Matches message products with GL product database
+**Dependencies**:
+- `product-matching/matching-utils.ts`
+- Database tables: `gl_products`, `messages`
+
+### process-audio-upload
+**Purpose**: Handles audio file uploads and transcription
+**Dependencies**:
+- `_shared/cors.ts`
+- Storage bucket: `audio-uploads`
+- OpenAI API (for transcription)
+
 ## Telegram Management Functions
 
 ### delete-telegram-message
@@ -152,6 +150,12 @@ This document provides an overview of all active edge functions in the project, 
 **Dependencies**:
 - `_shared/supabase.ts`
 - Database function: `xdelo_clear_all_messages`
+
+### log-operation
+**Purpose**: Logs frontend operations to audit system
+**Dependencies**:
+- `_shared/cors.ts`
+- Database tables: `unified_audit_logs`
 
 ### user-data
 **Purpose**: Retrieves user-specific data
@@ -180,16 +184,6 @@ This document provides an overview of all active edge functions in the project, 
 
 ## Shared Libraries
 
-### _shared/captionParser.ts
-**Purpose**: Centralized utilities for parsing message captions
-**Used by**: All caption processing functions
-**Key Features**:
-- Consistent pattern matching logic
-- Product code extraction
-- Date parsing
-- Quantity detection
-- Vendor identification
-
 ### _shared/mediaUtils.ts
 **Purpose**: Centralized utilities for media file operations
 **Used by**: All media handling functions, `telegram-webhook`
@@ -208,14 +202,9 @@ This document provides an overview of all active edge functions in the project, 
 **Purpose**: Cross-Origin Resource Sharing headers
 **Used by**: All publicly accessible edge functions
 
-### _shared/errorHandler.ts
-**Purpose**: Standardized error handling and logging
-**Used by**: All edge functions
-**Key Features**:
-- Correlation ID tracking
-- Error logging to database
-- Consistent error response format
-- Security level enforcement
+### _shared/captionParser.ts
+**Purpose**: Shared logic for parsing message captions
+**Used by**: `manual-caption-parser`, `parse-caption-with-ai`
 
 ## Migration Strategy
 
