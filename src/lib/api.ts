@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -91,10 +92,37 @@ export async function logOperation(
   entityId: string,
   metadata: Record<string, any> = {}
 ) {
-  return invokeFunctionWrapper('log-operation', {
-    eventType,
-    entityId,
-    metadata
+  // Use direct RPC call instead of edge function
+  try {
+    const { data, error } = await supabase.rpc('xdelo_logprocessingevent', {
+      p_event_type: eventType,
+      p_entity_id: entityId,
+      p_correlation_id: crypto.randomUUID().toString(),
+      p_metadata: metadata
+    });
+
+    if (error) {
+      console.error('Error logging operation:', error);
+      return { success: false, error: error.message };
+    }
+    
+    return { success: true, data };
+  } catch (error: any) {
+    console.error('Exception in logOperation:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Process a message caption
+ */
+export async function processCaption(messageId: string, caption?: string, isEdit = false) {
+  return invokeFunctionWrapper('direct-caption-processor', {
+    messageId,
+    caption,
+    isEdit,
+    correlationId: crypto.randomUUID().toString(),
+    triggerSource: 'frontend'
   });
 }
 
@@ -102,78 +130,12 @@ export async function logOperation(
  * Process a message caption with AI
  */
 export async function analyzeWithAI(messageId: string, caption: string) {
-  try {
-    // Generate a correlation ID
-    const correlationId = crypto.randomUUID().toString();
-    
-    // Call the database function directly
-    const { data, error } = await supabase.rpc('xdelo_process_caption_workflow', {
-      p_message_id: messageId,
-      p_correlation_id: correlationId,
-      p_force: true
-    });
-    
-    if (error) {
-      console.error('Error invoking xdelo_process_caption_workflow:', error);
-      return { 
-        success: false, 
-        error: error.message || 'Error processing caption',
-        correlationId
-      };
-    }
-    
-    return { 
-      success: true, 
-      data,
-      correlationId
-    };
-  } catch (error: any) {
-    console.error('Exception in analyzeWithAI:', error);
-    return { 
-      success: false, 
-      error: error.message || "An unexpected error occurred",
-      correlationId: crypto.randomUUID().toString()
-    };
-  }
-}
-
-/**
- * Manually parse a caption
- */
-export async function parseCaption(messageId: string, caption?: string, isEdit = false) {
-  try {
-    // Generate a correlation ID
-    const correlationId = crypto.randomUUID().toString();
-    
-    // Call the database function directly instead of the edge function
-    const { data, error } = await supabase.rpc('xdelo_process_caption_workflow', {
-      p_message_id: messageId,
-      p_correlation_id: correlationId,
-      p_force: true
-    });
-    
-    if (error) {
-      console.error('Error invoking xdelo_process_caption_workflow:', error);
-      return { 
-        success: false, 
-        error: error.message || 'Error processing caption',
-        correlationId
-      };
-    }
-    
-    return { 
-      success: true, 
-      data,
-      correlationId
-    };
-  } catch (error: any) {
-    console.error('Exception in parseCaption:', error);
-    return { 
-      success: false, 
-      error: error.message || "An unexpected error occurred",
-      correlationId: crypto.randomUUID().toString()
-    };
-  }
+  return invokeFunctionWrapper('parse-caption-with-ai', {
+    messageId,
+    caption,
+    correlationId: crypto.randomUUID().toString(),
+    triggerSource: 'frontend'
+  });
 }
 
 /**
