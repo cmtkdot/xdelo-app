@@ -1,310 +1,257 @@
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
-import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { LogEventType } from '@/types/api/LogEventType';
-import logUtils from '@/lib/logUtils';
-import { RepairResult } from './types';
+interface BatchOperationOptions {
+  onProgress?: (progress: number) => void;
+  onComplete?: () => void;
+  onError?: (error: string) => void;
+  batchSize?: number;
+}
 
-export function useBatchOperations(
-  setIsProcessing: (value: boolean) => void,
-  addProcessingMessageId: (id: string) => void,
-  removeProcessingMessageId: (id: string) => void
-) {
-  const [isRepairing, setIsRepairing] = useState(false);
+interface RepairResult {
+  success: boolean;
+  successCount: number;
+  failureCount: number;
+  errors: Record<string, string>;
+  messages: string[];
+}
 
-  /**
-   * Standardize storage paths for multiple messages
-   */
-  const standardizeStoragePaths = async (
-    messageIds: string[]
-  ): Promise<{ success: boolean; standardizedCount: number; error?: string }> => {
-    if (!messageIds.length) return { success: true, standardizedCount: 0 };
-    
+/**
+ * Repair storage paths for messages
+ */
+export async function repairMessageStoragePaths(
+  messageIds: string[],
+  options: BatchOperationOptions = {}
+): Promise<RepairResult> {
+  const { onProgress, onComplete, onError, batchSize = 10 } = options;
+  let successCount = 0;
+  let failureCount = 0;
+  const errors: Record<string, string> = {};
+  const successMessages: string[] = [];
+
+  const totalMessages = messageIds.length;
+  let processedCount = 0;
+
+  for (let i = 0; i < messageIds.length; i += batchSize) {
+    const batch = messageIds.slice(i, i + batchSize);
+
     try {
-      setIsProcessing(true);
-      
-      // Call the repair media edge function
-      const { data, error } = await supabase.functions.invoke('repair-media', {
-        body: {
-          action: 'standardize_paths',
-          messageIds
-        }
+      const { data, error } = await supabase.functions.invoke("repair-storage-path", {
+        body: { messageIds: batch },
       });
-      
-      if (error) {
-        throw new Error(`Failed to standardize paths: ${error.message}`);
-      }
-      
-      // Log the repair operation
-      await logUtils.logEvent(
-        LogEventType.MEDIA_REPAIR_COMPLETED,
-        'batch',
-        {
-          operation: 'standardize_storage_paths',
-          messageCount: messageIds.length,
-          standardizedCount: data.standardizedCount
-        }
-      );
-      
-      return {
-        success: true,
-        standardizedCount: data.standardizedCount
-      };
-    } catch (error) {
-      console.error('Error standardizing storage paths:', error);
-      
-      // Log the error
-      await logUtils.logEvent(
-        LogEventType.MEDIA_REPAIR_FAILED,
-        'batch',
-        {
-          operation: 'standardize_storage_paths',
-          messageCount: messageIds.length,
-          error: error.message
-        }
-      );
-      
-      return {
-        success: false,
-        standardizedCount: 0,
-        error: error.message
-      };
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
-  /**
-   * Fix public URLs for media files
-   */
-  const fixMediaUrls = async (
-    messageIds: string[]
-  ): Promise<{ success: boolean; fixedCount: number; error?: string }> => {
-    if (!messageIds.length) return { success: true, fixedCount: 0 };
-    
-    try {
-      setIsProcessing(true);
-      
-      // Mark all messages as processing
-      messageIds.forEach(id => addProcessingMessageId(id));
-      
-      // Call the repair media edge function
-      const { data, error } = await supabase.functions.invoke('repair-media', {
-        body: {
-          action: 'fix_public_urls',
-          messageIds
-        }
-      });
-      
       if (error) {
-        throw new Error(`Failed to fix media URLs: ${error.message}`);
+        batch.forEach((id) => {
+          errors[id] = error.message;
+          failureCount++;
+        });
+        onError?.(error.message);
+      } else {
+        if (data && data.repaired) {
+          data.repaired.forEach((messageId: string) => {
+            successCount++;
+            successMessages.push(`Repaired storage path for message ${messageId}`);
+          });
+        }
+        if (data && data.errors) {
+          Object.entries(data.errors).forEach(([messageId, errorMessage]) => {
+            errors[messageId] = errorMessage as string;
+            failureCount++;
+          });
+        }
       }
-      
-      // Log the repair operation
-      await logUtils.logEvent(
-        LogEventType.MEDIA_REPAIR_COMPLETED,
-        'batch',
-        {
-          operation: 'fix_media_urls',
-          messageCount: messageIds.length,
-          fixedCount: data.fixedCount
-        }
-      );
-      
-      return {
-        success: true,
-        fixedCount: data.fixedCount
-      };
-    } catch (error) {
-      console.error('Error fixing media URLs:', error);
-      
-      // Log the error
-      await logUtils.logEvent(
-        LogEventType.MEDIA_REPAIR_FAILED,
-        'batch',
-        {
-          operation: 'fix_media_urls',
-          messageCount: messageIds.length,
-          error: error.message
-        }
-      );
-      
-      return {
-        success: false,
-        fixedCount: 0,
-        error: error.message
-      };
-    } finally {
-      // Remove all messages from processing state
-      messageIds.forEach(id => removeProcessingMessageId(id));
-      setIsProcessing(false);
+    } catch (e: any) {
+      batch.forEach((id) => {
+        errors[id] = e.message;
+        failureCount++;
+      });
+      onError?.(e.message);
     }
-  };
 
-  /**
-   * Fully repair a batch of messages 
-   */
-  const repairMediaBatch = async (
-    messageIds: string[],
-    options: {
-      redownload?: boolean;
-      force?: boolean;
-    } = {}
-  ): Promise<RepairResult> => {
-    if (!messageIds.length) {
-      return { 
-        success: true, 
-        processedCount: 0,
-        successCount: 0,
-        failedCount: 0,
-        skippedCount: 0
-      };
-    }
-    
-    try {
-      setIsRepairing(true);
-      setIsProcessing(true);
-      
-      // Mark all messages as processing
-      messageIds.forEach(id => addProcessingMessageId(id));
-      
-      // Call the repair media edge function
-      const { data, error } = await supabase.functions.invoke('repair-media', {
-        body: {
-          action: 'repair_batch',
-          messageIds,
-          redownload: options.redownload || false,
-          force: options.force || false
-        }
-      });
-      
-      if (error) {
-        throw new Error(`Failed to repair media batch: ${error.message}`);
-      }
-      
-      // Log the repair operation
-      await logUtils.logEvent(
-        LogEventType.MEDIA_REPAIR_COMPLETED,
-        'batch',
-        {
-          operation: 'repair_media_batch',
-          messageCount: messageIds.length,
-          successCount: data.successCount,
-          failedCount: data.failedCount,
-          skippedCount: data.skippedCount,
-          redownload: options.redownload,
-          force: options.force
-        }
-      );
-      
-      return {
-        success: true,
-        processedCount: data.processedCount,
-        successCount: data.successCount,
-        failedCount: data.failedCount,
-        skippedCount: data.skippedCount,
-        results: data.results
-      };
-    } catch (error) {
-      console.error('Error repairing media batch:', error);
-      
-      // Log the error
-      await logUtils.logEvent(
-        LogEventType.MEDIA_REPAIR_FAILED,
-        'batch',
-        {
-          operation: 'repair_media_batch',
-          messageCount: messageIds.length,
-          error: error.message,
-          redownload: options.redownload,
-          force: options.force
-        }
-      );
-      
-      return {
-        success: false,
-        processedCount: 0,
-        successCount: 0,
-        failedCount: messageIds.length,
-        skippedCount: 0,
-        error: error.message
-      };
-    } finally {
-      // Remove all messages from processing state
-      messageIds.forEach(id => removeProcessingMessageId(id));
-      setIsRepairing(false);
-      setIsProcessing(false);
-    }
-  };
+    processedCount += batch.length;
+    const progress = (processedCount / totalMessages) * 100;
+    onProgress?.(progress);
+  }
 
-  /**
-   * Process all pending messages, including media sync
-   */
-  const processAllPendingMessages = async (): Promise<{
-    success: boolean;
-    processedCount: number;
-    error?: string;
-  }> => {
-    try {
-      setIsProcessing(true);
-      
-      // Call the process-pending edge function
-      const { data, error } = await supabase.functions.invoke('process-pending', {
-        body: {
-          action: 'process_all',
-          syncMediaGroups: true,
-          batchSize: 50
-        }
-      });
-      
-      if (error) {
-        throw new Error(`Failed to process pending messages: ${error.message}`);
-      }
-      
-      // Log the batch processing
-      await logUtils.logEvent(
-        LogEventType.BATCH_OPERATION,
-        'system',
-        {
-          operation: 'process_all_pending',
-          processedCount: data.processedCount,
-          successCount: data.successCount,
-          failedCount: data.failedCount
-        }
-      );
-      
-      return {
-        success: true,
-        processedCount: data.processedCount
-      };
-    } catch (error) {
-      console.error('Error processing pending messages:', error);
-      
-      // Log the error
-      await logUtils.logEvent(
-        LogEventType.SYSTEM_ERROR,
-        'system',
-        {
-          operation: 'process_all_pending',
-          error: error.message
-        }
-      );
-      
-      return {
-        success: false,
-        processedCount: 0,
-        error: error.message
-      };
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+  onComplete?.();
 
   return {
-    standardizeStoragePaths,
-    fixMediaUrls,
-    repairMediaBatch,
-    processAllPendingMessages,
-    isRepairing
+    success: successCount > 0,
+    successCount,
+    failureCount,
+    errors,
+    messages: successMessages
   };
+}
+
+/**
+ * Redownload media for messages
+ */
+export async function redownloadMessageMedia(
+  messageIds: string[],
+  options: BatchOperationOptions = {}
+): Promise<RepairResult> {
+  const { onProgress, onComplete, onError, batchSize = 10 } = options;
+  let successCount = 0;
+  let failureCount = 0;
+  const errors: Record<string, string> = {};
+  const successMessages: string[] = [];
+
+  const totalMessages = messageIds.length;
+  let processedCount = 0;
+
+  for (let i = 0; i < messageIds.length; i += batchSize) {
+    const batch = messageIds.slice(i, i + batchSize);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("redownload-media", {
+        body: { messageIds: batch },
+      });
+
+      if (error) {
+        batch.forEach((id) => {
+          errors[id] = error.message;
+          failureCount++;
+        });
+        onError?.(error.message);
+      } else {
+        if (data && data.redownloaded) {
+          data.redownloaded.forEach((messageId: string) => {
+            successCount++;
+            successMessages.push(`Redownloaded media for message ${messageId}`);
+          });
+        }
+        if (data && data.errors) {
+          Object.entries(data.errors).forEach(([messageId, errorMessage]) => {
+            errors[messageId] = errorMessage as string;
+            failureCount++;
+          });
+        }
+      }
+    } catch (e: any) {
+      batch.forEach((id) => {
+        errors[id] = e.message;
+        failureCount++;
+      });
+      onError?.(e.message);
+    }
+
+    processedCount += batch.length;
+    const progress = (processedCount / totalMessages) * 100;
+    onProgress?.(progress);
+  }
+
+  onComplete?.();
+
+  return {
+    success: successCount > 0,
+    successCount,
+    failureCount,
+    errors,
+    messages: successMessages
+  };
+}
+
+/**
+ * Standardize storage paths for messages
+ */
+export async function standardizeStoragePaths(
+  messageIds: string[],
+  options: BatchOperationOptions = {}
+): Promise<RepairResult> {
+  const { onProgress, onComplete, onError, batchSize = 10 } = options;
+  let successCount = 0;
+  let failureCount = 0;
+  const errors: Record<string, string> = {};
+  const successMessages: string[] = [];
+
+  const totalMessages = messageIds.length;
+  let processedCount = 0;
+
+  for (let i = 0; i < messageIds.length; i += batchSize) {
+    const batch = messageIds.slice(i, i + batchSize);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("standardize-storage-path", {
+        body: { messageIds: batch },
+      });
+
+      if (error) {
+        batch.forEach((id) => {
+          errors[id] = error.message;
+          failureCount++;
+        });
+        onError?.(error.message);
+      } else {
+        if (data && data.standardized) {
+          data.standardized.forEach((messageId: string) => {
+            successCount++;
+            successMessages.push(`Standardized storage path for message ${messageId}`);
+          });
+        }
+        if (data && data.errors) {
+          Object.entries(data.errors).forEach(([messageId, errorMessage]) => {
+            errors[messageId] = errorMessage as string;
+            failureCount++;
+          });
+        }
+      }
+    } catch (e: any) {
+      batch.forEach((id) => {
+        errors[id] = e.message;
+        failureCount++;
+      });
+      onError?.(e.message);
+    }
+
+    processedCount += batch.length;
+    const progress = (processedCount / totalMessages) * 100;
+    onProgress?.(progress);
+  }
+
+  onComplete?.();
+
+  return {
+    success: successCount > 0,
+    successCount,
+    failureCount,
+    errors,
+    messages: successMessages
+  };
+}
+
+/**
+ * Fix audit log UUIDs
+ */
+export async function fixAuditLogUuids() {
+  try {
+    const { data, error } = await supabase.rpc("xdelo_fix_audit_log_uuids");
+
+    if (error) {
+      toast.error(`Error fixing audit log UUIDs: ${error.message}`);
+      return;
+    }
+
+    toast.success(`Successfully fixed ${data?.fixed_count || 0} audit log UUIDs`);
+  } catch (e: any) {
+    toast.error(`Error fixing audit log UUIDs: ${e.message}`);
+  }
+}
+
+/**
+ * Migrate telegram data to metadata
+ */
+export async function migrateTelegramDataToMetadata() {
+  try {
+    const { data, error } = await supabase.rpc("xdelo_migrate_telegram_data_to_metadata");
+
+    if (error) {
+      toast.error(`Error migrating telegram data to metadata: ${error.message}`);
+      return;
+    }
+
+    toast.success(`Successfully migrated ${data?.migrated_count || 0} telegram records`);
+  } catch (e: any) {
+    toast.error(`Error migrating telegram data to metadata: ${e.message}`);
+  }
 }

@@ -1,7 +1,12 @@
 
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
-import { constructTelegramMessageUrl, isMessageForwarded, supabaseClient, logProcessingEvent } from '../../_shared/consolidatedMessageUtils.ts';
+import { 
+  constructTelegramMessageUrl, 
+  isMessageForwarded,
+  logProcessingEvent,
+  supabaseClient
+} from '../../_shared/consolidatedMessageUtils.ts';
 
 /**
  * Handler for edited messages (text only - media edits are handled by mediaMessageHandler)

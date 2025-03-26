@@ -1,21 +1,18 @@
-
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { 
   logProcessingEvent, 
   extractTelegramMetadata,
-  createSupabaseClient 
+  createSupabaseClient,
+  supabaseClient as sharedSupabaseClient 
 } from '../_shared/consolidatedMessageUtils.ts';
 
 /**
  * Enhanced Supabase client with improved timeout and retry capabilities
  */
-export const supabaseClient = createSupabaseClient({ 
-  timeoutSeconds: 15, 
-  retryAttempts: 3 
-});
+export const supabaseClient = sharedSupabaseClient;
 
 /**
  * Legacy wrapper function for backwards compatibility
+ * Replace with consolidated function from shared utils
  */
 export async function xdelo_logProcessingEvent(
   eventType: string,
@@ -320,6 +317,7 @@ export async function getMessageById(messageId: string) {
 
 /**
  * Sync media group content from one message to others
+ * Use the consolidated function from the database
  */
 export async function syncMediaGroupContent(
   sourceMessageId: string,
