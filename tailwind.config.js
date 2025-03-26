@@ -1,5 +1,5 @@
-
 /** @type {import('tailwindcss').Config} */
+// Updated timestamp: 2023-07-23T18:45:12.000Z - forced cache refresh after removing SqlConsole
 module.exports = {
   darkMode: ["class"],
   content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],

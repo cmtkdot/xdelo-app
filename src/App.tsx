@@ -23,9 +23,6 @@ const Settings = lazy(() => import("./pages/Settings"));
 const AudioUpload = lazy(() => import("./pages/AudioUpload"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicGallery = lazy(() => import("./pages/PublicGallery"));
-const SqlConsole = lazy(() => import('./pages/SqlConsole'));
-const MakeAutomations = lazy(() => import('./pages/MakeAutomations'));
-const TableDemo = lazy(() => import('./pages/table-demo'));
 const ProductMatching = lazy(() => import('./pages/ProductMatching'));
 
 import { AppSidebar } from "@/components/Layout/Sidebar";
@@ -178,21 +175,6 @@ function App() {
                     <Route path="/audio-upload" element={
                       <Suspense fallback={<PageLoader />}>
                         <AudioUpload />
-                      </Suspense>
-                    } />
-                    <Route path="/sql-console" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <SqlConsole />
-                      </Suspense>
-                    } />
-                    <Route path="/make-automations" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <MakeAutomations />
-                      </Suspense>
-                    } />
-                    <Route path="/table-demo" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <TableDemo />
                       </Suspense>
                     } />
                     <Route path="/product-matching" element={
