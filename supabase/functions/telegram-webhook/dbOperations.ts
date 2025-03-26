@@ -587,7 +587,7 @@ async function logMessageEvent(
       metadata: metadata,
       error_message: data.error_message,
       event_timestamp: new Date().toISOString(),
-      correlation_id: metadata.correlation_id
+      correlation_id: metadata?.correlation_id || null
     });
     
     if (error) {
@@ -609,7 +609,7 @@ async function logMessageEvent(
           },
           error_message: data.error_message,
           event_timestamp: new Date().toISOString(),
-          correlation_id: metadata.correlation_id
+          correlation_id: metadata?.correlation_id || null
         });
         
         if (retryError) {
