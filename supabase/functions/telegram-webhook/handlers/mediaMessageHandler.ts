@@ -17,7 +17,7 @@ import {
   ForwardInfo,
   MessageInput,
 } from '../types.ts';
-import { createMessage, checkDuplicateFile } from '../dbOperations.ts';
+import { createMessage, checkDuplicateFile,  } from '../dbOperations.ts';
 import { constructTelegramMessageUrl } from '../../_shared/messageUtils.ts';
 
 // Get Telegram bot token from environment
@@ -469,29 +469,3 @@ async function xdelo_handleNewMediaMessage(
   }
 }
 
-/**
- * Import from shared/databaseOperations.ts
- */
-async function xdelo_logProcessingEvent(
-  eventType: string,
-  entityId: string,
-  correlationId: string,
-  metadata?: Record<string, any>,
-  errorMessage?: string
-): Promise<void> {
-  try {
-    const { error } = await supabaseClient.from('unified_audit_logs').insert({
-      event_type: eventType,
-      entity_id: entityId,
-      correlation_id: correlationId,
-      metadata,
-      error_message: errorMessage
-    });
-    
-    if (error) {
-      console.error(`Error logging event ${eventType}:`, error);
-    }
-  } catch (e) {
-    console.error(`Exception logging event ${eventType}:`, e);
-  }
-}

@@ -622,3 +622,50 @@ async function logMessageEvent(
       error instanceof Error ? error.message : String(error));
   }
 }
+
+/**
+ * Simplified version of logMessageEvent that matches the shared component signature
+ * Used to replace xdelo_logProcessingEvent from _shared/databaseOperations.ts
+ */
+export async function xdelo_logProcessingEvent(
+  eventType: string,
+  entityId: string, 
+  correlationId: string | null | undefined,
+  metadata: Record<string, unknown> = {},
+  errorMessage?: string
+): Promise<void> {
+  try {
+    // Ensure we have a valid correlation ID
+    const safeCorrelationId = correlationId || crypto.randomUUID();
+    
+    // Use the globally available Supabase client instead of creating a new one
+    // This avoids the need to access environment variables directly
+    // Get Supabase URL and key from current environment 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('Missing Supabase credentials in environment');
+      return;
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+    
+    // Call the main logMessageEvent function with the correct format
+    await logMessageEvent(supabase, eventType, {
+      entity_id: entityId,
+      metadata: {
+        ...metadata,
+        correlation_id: safeCorrelationId,
+        logged_from: 'telegram_webhook',
+        timestamp: new Date().toISOString()
+      },
+      error_message: errorMessage
+    });
+  } catch (error) {
+    console.error(`Error in xdelo_logProcessingEvent (${eventType}):`, 
+      error instanceof Error ? error.message : String(error));
+  }
+}

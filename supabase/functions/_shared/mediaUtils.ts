@@ -686,38 +686,3 @@ export async function xdelo_processMessageMedia(
     };
   }
 }
-
-// Track rate limits for Telegram API to avoid hitting limits
-const rateLimitTracker = {
-  lastRequestTime: 0,
-  requestCount: 0,
-  reset() {
-    this.lastRequestTime = Date.now();
-    this.requestCount = 0;
-  },
-  async throttle() {
-    const now = Date.now();
-    const elapsed = now - this.lastRequestTime;
-    
-    // If it's been more than a minute, reset the counter
-    if (elapsed > 60000) {
-      this.reset();
-      return;
-    }
-    
-    // Telegram's rate limit is roughly 30 requests per second
-    // We'll be conservative and limit to 20 per second
-    this.requestCount++;
-    
-    if (this.requestCount > 20) {
-      // Wait until the next second before proceeding
-      const waitTime = Math.max(1000 - elapsed, 100);
-      console.log(`Rate limit approaching, waiting ${waitTime}ms before next request`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-      this.reset();
-    }
-  }
-};
-
-// Export rate limit tracker for other modules to use
-export { rateLimitTracker };

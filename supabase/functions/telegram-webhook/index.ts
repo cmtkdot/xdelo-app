@@ -3,7 +3,7 @@ import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage } from './handlers/textMessageHandler.ts';
 import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { xdelo_logProcessingEvent } from '../_shared/databaseOperations.ts';
+import { xdelo_logProcessingEvent } from './dbOperations.ts';
 import { Logger } from './utils/logger.ts';
 
 serve(async (req: Request) => {
@@ -78,7 +78,8 @@ serve(async (req: Request) => {
       correlationId,
       isEdit: !!update.edited_message || !!update.edited_channel_post,
       previousMessage: update.edited_message || update.edited_channel_post,
-      logger // Add logger to context so handlers can use it
+      logger, // Add logger to context so handlers can use it
+      startTime: new Date().toISOString() // Add startTime as ISO string to track processing duration
     };
 
     // Log message details with sensitive data masked
@@ -119,7 +120,7 @@ serve(async (req: Request) => {
       logger.info('Successfully processed message', { 
         message_id: message.message_id,
         chat_id: message.chat?.id,
-        processing_time: Date.now() - new Date(context.startTime || Date.now()).getTime()
+        processing_time: new Date().getTime() - new Date(context.startTime).getTime()
       });
       
       return response;

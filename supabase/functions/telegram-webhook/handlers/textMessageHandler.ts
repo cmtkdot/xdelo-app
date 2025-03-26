@@ -1,9 +1,9 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
-import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
+import { xdelo_logProcessingEvent } from '../dbOperations.ts';
 import { constructTelegramMessageUrl, isMessageForwarded } from '../../_shared/messageUtils.ts';
+import { createNonMediaMessage } from '../dbOperations.ts';
 
 // Create Supabase client
 const supabaseClient = createClient(
