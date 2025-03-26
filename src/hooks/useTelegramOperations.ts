@@ -3,22 +3,23 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types/MessagesTypes';
 import { useToast } from '@/hooks/useToast';
-import { createLogger } from '@/lib/logger';
-import { LogEventType } from '@/types/api/LogEventType';
-
-// Create a logger specific to telegram operations
-const logger = createLogger('telegram-operations');
+import { logEvent, LogEventType } from '@/lib/logUtils';
 
 export function useTelegramOperations() {
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
 
+  // Helper function to log message operations
+  const logMessageOperation = async (eventType: LogEventType, messageId: string, metadata: any = {}) => {
+    await logEvent(eventType, messageId, metadata);
+  };
+
   const handleDelete = useCallback(async (message: Message, deleteTelegram: boolean = false): Promise<void> => {
     try {
       setIsProcessing(true);
       
-      // Log the operation with consolidated logging
-      await logger.logEvent(LogEventType.MESSAGE_DELETED, message.id, {
+      // Log the operation
+      await logMessageOperation(LogEventType.MESSAGE_DELETED, message.id, {
         delete_from_telegram: deleteTelegram,
         file_unique_id: message.file_unique_id,
         media_group_id: message.media_group_id
@@ -44,13 +45,6 @@ export function useTelegramOperations() {
     } catch (error) {
       console.error('Error deleting message:', error);
       
-      // Log the error with consolidated logging
-      await logger.logEvent(LogEventType.MESSAGE_ERROR, message.id, {
-        action: 'delete',
-        delete_from_telegram: deleteTelegram,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      
       toast({
         title: 'Error',
         description: 'Failed to delete message. Please try again.',
@@ -66,8 +60,8 @@ export function useTelegramOperations() {
     try {
       setIsProcessing(true);
       
-      // Log the operation with consolidated logging
-      await logger.logEvent(LogEventType.USER_ACTION, message.id, {
+      // Log the operation
+      await logMessageOperation(LogEventType.USER_ACTION, message.id, {
         action: 'forward',
         target_chat_id: chatId,
         file_unique_id: message.file_unique_id
@@ -91,13 +85,6 @@ export function useTelegramOperations() {
     } catch (error) {
       console.error('Error forwarding message:', error);
       
-      // Log the error with consolidated logging
-      await logger.logEvent(LogEventType.MESSAGE_ERROR, message.id, {
-        action: 'forward',
-        target_chat_id: chatId,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      
       toast({
         title: 'Error',
         description: 'Failed to forward message. Please try again.',
@@ -113,8 +100,8 @@ export function useTelegramOperations() {
     try {
       setIsProcessing(true);
       
-      // Log the operation with consolidated logging
-      await logger.logEvent(LogEventType.MESSAGE_REPROCESSED, messageId, {
+      // Log the operation
+      await logMessageOperation(LogEventType.USER_ACTION, messageId, {
         action: 'manual_reprocess'
       });
       
@@ -135,12 +122,6 @@ export function useTelegramOperations() {
       
     } catch (error) {
       console.error('Error reprocessing message:', error);
-      
-      // Log the error with consolidated logging
-      await logger.logEvent(LogEventType.MESSAGE_ERROR, messageId, {
-        action: 'reprocess',
-        error: error instanceof Error ? error.message : String(error)
-      });
       
       toast({
         title: 'Error',

@@ -33,7 +33,7 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
   const [isFetchingInfo, setIsFetchingInfo] = useState(false);
   const [webhookStatus, setWebhookStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [availableTokens, setAvailableTokens] = useState<string[]>([]);
-  const [selectedToken, setSelectedToken] = useState<string>('');
+  const [selectedToken, setSelectedToken] = useState<string>(botToken || '');
   const [webhookLog, setWebhookLog] = useState<any>(null);
   const [webhookInfo, setWebhookInfo] = useState<WebhookInfo | null>(null);
   const [verificationUrls, setVerificationUrls] = useState<{
@@ -61,21 +61,14 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
         console.error("Error fetching Telegram secrets:", error);
         // Fallback to static token option if can't fetch secrets
         if (botToken) {
-          setAvailableTokens(botToken ? [botToken] : []);
-          setSelectedToken(botToken || '');
+          setAvailableTokens([botToken]);
+          setSelectedToken(botToken);
         }
       }
     };
 
     fetchSecrets();
   }, [botToken, supabase.functions]);
-
-  // Initialize selected token if botToken is provided
-  useEffect(() => {
-    if (botToken && !selectedToken) {
-      setSelectedToken(botToken);
-    }
-  }, [botToken, selectedToken]);
 
   // Fetch webhook info when token changes or on refresh
   useEffect(() => {
@@ -99,7 +92,7 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
       
       if (error) throw error;
       
-      if (data && data.webhook_info) {
+      if (data.webhook_info) {
         setWebhookInfo(data.webhook_info);
         setVerificationUrls(data.verification_urls || {});
       }
@@ -236,7 +229,7 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
           isSettingWebhook={isSettingWebhook}
           webhookStatus={webhookStatus}
           webhookLog={webhookLog}
-          disabled={!selectedToken || (selectedToken === 'custom' && !selectedToken)}
+          disabled={!selectedToken || selectedToken === 'custom' && !selectedToken}
         />
       </CardContent>
     </Card>

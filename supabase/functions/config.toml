@@ -1,0 +1,44 @@
+project_id = "xjhhehxcxkiumnwbirel"
+base_url = "https://xjhhehxcxkiumnwbirel.supabase.co"
+
+[global.env]
+TELEGRAM_BOT_TOKEN = "env(TELEGRAM_BOT_TOKEN)"
+OPENAI_API_KEY = "env(OPENAI_API_KEY)"
+SUPABASE_URL = "env(SUPABASE_URL)"
+SUPABASE_SERVICE_ROLE_KEY = "env(SUPABASE_SERVICE_ROLE_KEY)"
+NODE_ENV = "env(NODE_ENV)"
+APP_ENV = "env(APP_ENV)"
+
+# Public-facing webhook functions - no JWT verification
+[functions.telegram-webhook]
+verify_jwt = false
+[functions.log-operation]
+verify_jwt = false
+[functions.xdelo_delete_message]
+verify_jwt = false
+
+# User-authenticated functions
+[functions.user-data]
+verify_jwt = false
+[functions.create-ayd-session]
+verify_jwt = false
+
+# Other utility functions
+[functions.product-matching]
+verify_jwt = false
+
+# Note: The following files and functions have been removed or consolidated:
+# Functions:
+# - manual-caption-parser (replaced by direct database functions)
+# - xdelo_caption_parser (replaced by direct database functions)
+# - analyze-with-ai (replaced by direct database functions)
+# - parse-caption-with-ai (replaced by direct database functions)
+# - direct-caption-processor (consolidated into database functions)
+# - update-telegram-caption (removed)
+# - process-audio-upload (removed)
+# - validate-storage-files (removed)
+# - unified-logging (consolidated into log-operation)
+# 
+# Shared Files:
+# - _shared/captionParser.ts (functionality moved to database)
+# - _shared/mediaStorage.ts (duplicate of modular implementation in _shared/mediaUtils/)

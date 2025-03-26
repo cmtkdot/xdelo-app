@@ -1,5 +1,86 @@
+# Direct Caption Processing
 
-# Direct Caption Processing Flow
+**Update: The edge functions mentioned in this document have been removed and replaced with direct database functions.**
+
+This document outlines the simplified message caption processing flow that eliminates external dependencies and HTTP calls.
+
+## Overview
+
+The new message processing architecture uses PostgreSQL functions to directly analyze captions, improving reliability and performance by:
+
+1. Eliminating external dependencies (Make.com, n8n)
+2. Removing unnecessary edge function calls
+3. Ensuring consistent handling of correlation IDs
+4. Simplifying the media group synchronization process
+
+## Processing Flow
+
+### 1. Message Creation/Update
+
+When a message is created or updated with a caption:
+
+```
+Telegram → telegram-webhook → messages table → xdelo_process_caption_workflow
+```
+
+The `trg_process_caption` trigger fires on any message with a caption that has `processing_state = 'pending'` or `processing_state = 'initialized'`.
+
+### 2. Caption Analysis
+
+Messages are processed by the `xdelo_process_caption_workflow` function, which:
+
+1. Validates the message exists and has a caption
+2. Calls `xdelo_direct_caption_processing` to parse the caption
+3. Updates the message with analyzed content
+4. Handles media group synchronization if needed
+
+### 3. Media Group Synchronization
+
+For messages that are part of a media group:
+
+1. Analyzed content is automatically synchronized to all messages in the group
+2. A single message acts as the "source of truth" for the entire group
+3. The `xdelo_sync_media_group_content` function handles synchronization
+
+## Database Functions
+
+Key database functions:
+
+- `xdelo_process_caption_workflow`: Entry point for caption processing
+- `xdelo_direct_caption_processing`: Processes captions with rule-based parsing
+- `xdelo_parse_caption`: Rule-based parser that extracts structured data
+- `xdelo_sync_media_group_content`: Syncs analyzed content across media groups
+
+## Frontend Integration
+
+Frontend components use direct database RPC calls instead of edge functions:
+
+```typescript
+// Example: Reanalyzing a message caption
+const { data, error } = await supabase.rpc(
+  'xdelo_process_caption_workflow',
+  {
+    p_message_id: message.id,
+    p_correlation_id: correlationId,
+    p_force: true
+  }
+);
+```
+
+## Benefits
+
+1. **Reliability**: No dependency on external services
+2. **Performance**: Lower latency by eliminating HTTP calls
+3. **Simplicity**: Fewer moving parts and clear responsibility boundaries
+4. **Maintainability**: Consolidated implementation in database functions
+5. **Data Consistency**: Improved handling of correlation IDs
+
+## Migration Details
+
+- Removed edge functions: `analyze-with-ai`, `parse-caption-with-ai`
+- Removed triggers: `trg_make_webhook`, `trg_n8n_webhook`
+- Removed functions: `process_caption_with_ai`, `trigger_external_processing`
+- Ensured all correlation IDs are properly stored as strings
 
 ## Sequence Diagram
 ```mermaid
@@ -7,13 +88,13 @@ sequenceDiagram
     participant T as Telegram
     participant W as Webhook
     participant D as Database
-    participant P as Direct Processor
+    participant P as Parser
     participant A as Audit Logger
 
     T->>W: Media Message
     W->>D: Store Metadata
     D->>W: Return Message ID
-    W->>P: Process Caption
+    W->>P: Analyze Caption
     P->>D: Update Analyzed Content
     D->>A: Log Processing
     A->>D: Store Audit Log
@@ -23,28 +104,27 @@ sequenceDiagram
 ## Caption Analysis Process
 
 ### Pattern Matching Logic
-The `direct-caption-processor` function uses the shared `xdelo_parseCaption` function from `_shared/captionParser.ts` which implements consistent pattern matching:
-
 ```typescript
-// From _shared/captionParser.ts
-export function xdelo_parseCaption(caption: string): ParsedContent {
-  // Extract product name (text before '#')
-  const productNameMatch = caption.match(/^(.*?)(?=#|\n|$)/);
-  
-  // Extract product code (text following '#')
-  const productCodeMatch = caption.match(/#([A-Za-z0-9-]+)/);
-  
-  // Extract vendor UID (first 1-4 letters of product code)
-  const vendorMatch = productCode.match(/^([A-Za-z]{1,4})/);
-  
-  // Extract purchase date (digits after vendor letters)
-  const dateMatch = productCode.match(/^[A-Za-z]{1,4}(\d{5,6})/);
-  
-  // Extract quantity (number following 'x')
-  const quantityMatch = caption.match(/x\s*(\d+)/i);
-  
-  // Extract notes (text in parentheses)
-  const notesMatch = caption.match(/\(([^)]+)\)/);
+// From analysisHandler.ts
+interface AnalysisResult {
+  productName?: string;
+  productCode?: string;
+  vendorUID?: string;
+  purchaseDate?: Date;
+  quantity?: number;
+  notes?: string;
+}
+
+function parseCaption(caption: string): AnalysisResult {
+  // Extraction logic implementation
+  return {
+    productName: matchBeforeSeparator(caption),
+    productCode: matchAfterHash(caption),
+    vendorUID: extractVendorUID(caption),
+    purchaseDate: parsePurchaseDate(caption),
+    quantity: extractQuantity(caption),
+    notes: extractNotes(caption)
+  };
 }
 ```
 
@@ -73,7 +153,7 @@ gantt
 
 ## Database Operations
 ```sql
--- Update message with parsed content
+-- From dbOperations.ts
 UPDATE messages
 SET analyzed_content = $1,
     processing_state = 'completed',
@@ -84,18 +164,15 @@ RETURNING *;
 
 ## Audit Logging
 ```typescript
-// Log the processing event
-await supabaseClient.from("unified_audit_logs").insert({
+// From logMessageEvent in dbOperations.ts
+await supabase.from('unified_audit_logs').insert({
   event_type: 'caption_processed',
   entity_id: messageId,
-  correlation_id: correlationId,
+  new_state: analyzedContent,
   metadata: {
-    processing_time_ms: Date.now() - startTime,
+    processing_time: Date.now() - startTime,
     caption_length: caption.length,
-    has_media_group: !!mediaGroupId,
-    method: 'manual',
-    is_edit: isEdit,
-    force_reprocess: forceReprocess
+    media_group: !!mediaGroupId
   }
 });
 ```
@@ -110,29 +187,10 @@ AND processing_started_at < NOW() - INTERVAL '1 hour';
 
 2. **Manual Reprocessing**
 ```typescript
-// Reset processing state and trigger reprocessing
+// From analysisHandler.ts
 async function handleReprocess(messageId: string) {
   await supabase.rpc('xdelo_reset_processing_state', {
     message_id: messageId
   });
-  
-  // Call the direct processor function
-  return supabase.functions.invoke('direct-caption-processor', {
-    body: { 
-      messageId: messageId,
-      forceReprocess: true
-    }
-  });
+  return triggerAnalysis(messageId);
 }
-```
-
-## Integration Points
-
-The `direct-caption-processor` function acts as a central integration point:
-
-1. **Database Triggers**: Automatically invoked on message inserts/updates
-2. **Frontend API**: Called directly from UI for manual reprocessing
-3. **Edge Functions**: Used by other edge functions for caption processing
-4. **Workflow Functions**: Integrated with database workflow functions
-
-By centralizing caption processing logic in the shared `captionParser.ts` file and using the `direct-caption-processor` function as the primary processor, we ensure consistent parsing and processing across all integration points.

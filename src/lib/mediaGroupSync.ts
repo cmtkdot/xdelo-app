@@ -3,33 +3,23 @@ import { supabase } from '@/integrations/supabase/client';
 
 /**
  * Utility function to manually trigger media group synchronization
- * for a specific message or media group.
- * Refactored to use consolidated DB functions.
+ * for a specific message or media group
  */
 export async function syncMediaGroup(
   mediaGroupId: string,
   sourceMessageId?: string,
   options = { force: true }
-): Promise<{
-  success: boolean;
-  mediaGroupId: string;
-  sourceMessageId?: string;
-  syncedCount?: number;
-  error?: string;
-}> {
+) {
   try {
     console.log(`Manual media group sync initiated for group ${mediaGroupId}`);
     
     // If source message ID is not provided, try to find the best message
+    // to use as the source of truth for this group
     if (!sourceMessageId) {
-      const { data: findResult, error: findError } = await supabase.rpc<string>(
+      const { data: findResult } = await supabase.rpc(
         'xdelo_find_caption_message',
         { p_media_group_id: mediaGroupId }
       );
-      
-      if (findError) {
-        throw new Error(`Could not find caption message: ${findError.message}`);
-      }
       
       sourceMessageId = findResult;
       
@@ -43,12 +33,8 @@ export async function syncMediaGroup(
     // Generate correlation ID
     const correlationId = crypto.randomUUID().toString();
     
-    // Call the consolidated RPC function
-    const { data, error } = await supabase.rpc<{
-      success: boolean;
-      updated_count?: number;
-      [key: string]: any;
-    }>(
+    // Call the database function directly instead of the edge function
+    const { data, error } = await supabase.rpc(
       'xdelo_sync_media_group_content',
       {
         p_media_group_id: mediaGroupId,
@@ -65,35 +51,26 @@ export async function syncMediaGroup(
     
     console.log('Media group sync result:', data);
     
-    return {
+    // Fixed: Properly handle the data response
+    const result = {
       success: true,
       mediaGroupId,
       sourceMessageId,
-      syncedCount: data?.updated_count || 0
+      syncedCount: data && typeof data === 'object' ? (data.updated_count || 0) : 0
     };
+    
+    return result;
     
   } catch (error: any) {
     console.error('Error in manual media group sync:', error);
-    return {
-      success: false,
-      mediaGroupId,
-      sourceMessageId,
-      error: error.message
-    };
+    throw error;
   }
 }
 
 /**
- * Batch repair multiple media groups that might have sync issues.
- * Refactored for better error handling and reporting.
+ * Batch repair multiple media groups that might have sync issues
  */
-export async function repairMediaGroups(limit = 10): Promise<{
-  success: boolean;
-  repaired: number;
-  details?: any[];
-  message?: string;
-  error?: string;
-}> {
+export async function repairMediaGroups(limit = 10) {
   try {
     // Find media groups that need repair
     const { data: mediaGroups, error: findError } = await supabase
@@ -120,17 +97,15 @@ export async function repairMediaGroups(limit = 10): Promise<{
     
     // Repair each media group
     const results = [];
-    let repairedCount = 0;
     
     for (const groupId of uniqueGroups) {
       try {
         const result = await syncMediaGroup(groupId);
-        
-        if (result.success) {
-          repairedCount++;
-        }
-        
-        results.push(result);
+        results.push({
+          media_group_id: groupId,
+          success: true,
+          synced_count: result.syncedCount
+        });
       } catch (error) {
         results.push({
           media_group_id: groupId,
@@ -142,7 +117,7 @@ export async function repairMediaGroups(limit = 10): Promise<{
     
     return {
       success: true,
-      repaired: repairedCount,
+      repaired: results.filter(r => r.success).length,
       details: results
     };
     
@@ -150,7 +125,6 @@ export async function repairMediaGroups(limit = 10): Promise<{
     console.error('Error repairing media groups:', error);
     return {
       success: false,
-      repaired: 0,
       error: error.message
     };
   }

@@ -14,18 +14,9 @@ export interface RepairResult {
 }
 
 /**
- * Media processing state
+ * State types for media operations
  */
-export interface MediaProcessingState {
+export interface MediaUtilsState {
   isProcessing: boolean;
   processingMessageIds: Record<string, boolean>;
-}
-
-/**
- * Media processing state actions
- */
-export interface MediaProcessingStateActions {
-  setIsProcessing: (value: boolean) => void;
-  addProcessingMessageId: (id: string) => void;
-  removeProcessingMessageId: (id: string) => void;
 }
