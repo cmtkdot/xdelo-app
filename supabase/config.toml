@@ -1,14 +1,4 @@
-
 project_id = "xjhhehxcxkiumnwbirel"
-base_url = "https://xjhhehxcxkiumnwbirel.supabase.co"
-
-[global.env]
-TELEGRAM_BOT_TOKEN = "env(TELEGRAM_BOT_TOKEN)"
-OPENAI_API_KEY = "env(OPENAI_API_KEY)"
-SUPABASE_URL = "env(SUPABASE_URL)"
-SUPABASE_SERVICE_ROLE_KEY = "env(SUPABASE_SERVICE_ROLE_KEY)"
-NODE_ENV = "env(NODE_ENV)"
-APP_ENV = "env(APP_ENV)"
 
 [functions.analyze-with-ai]
 verify_jwt = false

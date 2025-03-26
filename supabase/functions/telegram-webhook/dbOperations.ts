@@ -572,7 +572,7 @@ async function logMessageEvent(
     }
     
     // Ensure metadata always has a timestamp
-    const metadata = {
+    const metadata: Record<string, any> = {
       ...(data.metadata || {}),
       event_timestamp: new Date().toISOString()
     };
