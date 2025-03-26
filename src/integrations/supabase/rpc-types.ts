@@ -1,4 +1,3 @@
-
 /**
  * Type definitions for RPC functions
  * This helps TypeScript recognize custom RPC functions in the project
@@ -121,7 +120,7 @@ declare module "@supabase/supabase-js" {
 
     // Add RPC for migrating telegram data to metadata
     rpc<T = { migrated_count: number }>(
-      fn: "migrate_telegram_data_to_metadata",
+      fn: "xdelo_migrate_telegram_data_to_metadata",
       params?: {}
     ): { data: T; error: null } | { data: null; error: Error };
   }

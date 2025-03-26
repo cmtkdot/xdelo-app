@@ -136,128 +136,64 @@ export function isMessageForwarded(message: any): boolean {
 }
 
 /**
- * Extract the essential metadata from Telegram data
- * to prevent storing the entire large JSON object
+ * Extract essential metadata from a telegram_data object
+ * This matches the SQL function xdelo_extract_telegram_metadata
  */
-export function extractTelegramMetadata(telegramData: any): any {
-  if (!telegramData) return null;
+export function extractTelegramMetadata(telegramData: any): Record<string, any> {
+  if (!telegramData) return {};
   
-  // Start with the base fields we want to keep
-  const metadata: any = {
-    update_id: telegramData.update_id,
-  };
-  
-  // Determine message type
-  let messageObj;
-  let messageType;
+  let result: Record<string, any> = {};
   
   if (telegramData.message) {
-    messageObj = telegramData.message;
-    messageType = 'message';
-  } else if (telegramData.edited_message) {
-    messageObj = telegramData.edited_message;
-    messageType = 'edited_message';
+    result = {
+      message_type: 'message',
+      message_id: telegramData.message.message_id,
+      date: telegramData.message.date,
+      chat: telegramData.message.chat,
+      from: telegramData.message.from,
+      media_group_id: telegramData.message.media_group_id,
+      text: telegramData.message.text,
+      caption: telegramData.message.caption
+    };
   } else if (telegramData.channel_post) {
-    messageObj = telegramData.channel_post;
-    messageType = 'channel_post';
+    result = {
+      message_type: 'channel_post',
+      message_id: telegramData.channel_post.message_id,
+      date: telegramData.channel_post.date,
+      chat: telegramData.channel_post.chat,
+      media_group_id: telegramData.channel_post.media_group_id,
+      text: telegramData.channel_post.text,
+      caption: telegramData.channel_post.caption
+    };
+  } else if (telegramData.edited_message) {
+    result = {
+      message_type: 'edited_message',
+      message_id: telegramData.edited_message.message_id,
+      date: telegramData.edited_message.date,
+      chat: telegramData.edited_message.chat,
+      from: telegramData.edited_message.from,
+      media_group_id: telegramData.edited_message.media_group_id,
+      text: telegramData.edited_message.text,
+      caption: telegramData.edited_message.caption,
+      edit_date: telegramData.edited_message.edit_date
+    };
   } else if (telegramData.edited_channel_post) {
-    messageObj = telegramData.edited_channel_post;
-    messageType = 'edited_channel_post';
+    result = {
+      message_type: 'edited_channel_post',
+      message_id: telegramData.edited_channel_post.message_id,
+      date: telegramData.edited_channel_post.date,
+      chat: telegramData.edited_channel_post.chat,
+      media_group_id: telegramData.edited_channel_post.media_group_id,
+      text: telegramData.edited_channel_post.text,
+      caption: telegramData.edited_channel_post.caption,
+      edit_date: telegramData.edited_channel_post.edit_date
+    };
   } else {
-    // Unknown message type, return minimal data
-    return metadata;
+    // For unknown data, just return the original
+    result = telegramData;
   }
   
-  metadata.message_type = messageType;
-  
-  // Extract essential message data
-  if (messageObj) {
-    metadata.message_id = messageObj.message_id;
-    metadata.date = messageObj.date;
-    metadata.message_thread_id = messageObj.message_thread_id;
-    
-    // Extract chat info
-    if (messageObj.chat) {
-      metadata.chat = {
-        id: messageObj.chat.id,
-        type: messageObj.chat.type,
-        title: messageObj.chat.title,
-        username: messageObj.chat.username
-      };
-    }
-    
-    // Extract sender info if available
-    if (messageObj.from) {
-      metadata.from = {
-        id: messageObj.from.id,
-        first_name: messageObj.from.first_name,
-        last_name: messageObj.from.last_name,
-        username: messageObj.from.username,
-        is_bot: messageObj.from.is_bot
-      };
-    }
-    
-    // Extract forwarded message info
-    if (isMessageForwarded(messageObj)) {
-      metadata.forward_info = {
-        date: messageObj.forward_date,
-        from: messageObj.forward_from,
-        from_chat: messageObj.forward_from_chat ? {
-          id: messageObj.forward_from_chat.id,
-          type: messageObj.forward_from_chat.type,
-          title: messageObj.forward_from_chat.title
-        } : null,
-        from_message_id: messageObj.forward_from_message_id,
-        signature: messageObj.forward_signature,
-        sender_name: messageObj.forward_sender_name,
-        origin: messageObj.forward_origin
-      };
-    }
-    
-    // Extract basic media info without large binary data
-    if (messageObj.photo) {
-      // For photo, just keep the largest version's metadata
-      const largestPhoto = messageObj.photo[messageObj.photo.length - 1];
-      metadata.media = {
-        type: 'photo',
-        file_id: largestPhoto.file_id,
-        file_unique_id: largestPhoto.file_unique_id,
-        width: largestPhoto.width,
-        height: largestPhoto.height,
-        file_size: largestPhoto.file_size
-      };
-    } else if (messageObj.video) {
-      metadata.media = {
-        type: 'video',
-        file_id: messageObj.video.file_id,
-        file_unique_id: messageObj.video.file_unique_id,
-        width: messageObj.video.width,
-        height: messageObj.video.height,
-        duration: messageObj.video.duration,
-        file_size: messageObj.video.file_size,
-        mime_type: messageObj.video.mime_type
-      };
-    } else if (messageObj.document) {
-      metadata.media = {
-        type: 'document',
-        file_id: messageObj.document.file_id,
-        file_unique_id: messageObj.document.file_unique_id,
-        file_name: messageObj.document.file_name,
-        file_size: messageObj.document.file_size,
-        mime_type: messageObj.document.mime_type
-      };
-    }
-    
-    // Extract text and caption
-    metadata.text = messageObj.text;
-    metadata.caption = messageObj.caption;
-    metadata.caption_entities = messageObj.caption_entities;
-    
-    // Extract media group ID
-    metadata.media_group_id = messageObj.media_group_id;
-  }
-  
-  return metadata;
+  return result;
 }
 
 /**

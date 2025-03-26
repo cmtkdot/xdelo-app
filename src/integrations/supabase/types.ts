@@ -3502,14 +3502,6 @@ export type Database = {
         }
         Returns: number
       }
-      xdelo_check_media_group_content: {
-        Args: {
-          p_media_group_id: string
-          p_message_id: string
-          p_correlation_id?: string
-        }
-        Returns: Json
-      }
       xdelo_cleanup_orphaned_audit_logs: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3524,36 +3516,6 @@ export type Database = {
         Args: {
           p_message_id: string
           p_analyzed_content: Json
-        }
-        Returns: Json
-      }
-      xdelo_construct_message_url_from_data: {
-        Args: {
-          telegram_data: Json
-        }
-        Returns: string
-      }
-      xdelo_construct_telegram_message_url:
-        | {
-            Args: {
-              chat_type: Database["public"]["Enums"]["telegram_chat_type"]
-              chat_id: number
-              id: number
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              chat_type: Database["public"]["Enums"]["telegram_chat_type"]
-              chat_id: number
-              id: string
-            }
-            Returns: string
-          }
-      xdelo_fail_message_processing: {
-        Args: {
-          p_message_id: string
-          p_error_message: string
         }
         Returns: Json
       }
@@ -3580,6 +3542,12 @@ export type Database = {
         }
         Returns: string
       }
+      xdelo_fix_audit_log_uuids: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          fixed_count: number
+        }[]
+      }
       xdelo_fix_public_urls: {
         Args: {
           p_limit?: number
@@ -3589,13 +3557,6 @@ export type Database = {
           old_url: string
           new_url: string
         }[]
-      }
-      xdelo_flag_file_for_redownload: {
-        Args: {
-          p_message_id: string
-          p_reason?: string
-        }
-        Returns: boolean
       }
       xdelo_get_incomplete_media_groups: {
         Args: {
@@ -3649,15 +3610,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
-      xdelo_handle_duplicate_detection: {
-        Args: {
-          p_file_unique_id: string
-          p_telegram_message_id: number
-          p_chat_id: number
-          p_correlation_id?: string
-        }
-        Returns: Json
-      }
       xdelo_handle_message_update: {
         Args: {
           p_message_id: string
@@ -3672,6 +3624,19 @@ export type Database = {
           p_caption: string
         }
         Returns: boolean
+      }
+      xdelo_kill_long_queries: {
+        Args: {
+          older_than_seconds?: number
+        }
+        Returns: {
+          pid: number
+          usename: string
+          query_start: string
+          state: string
+          query: string
+          killed: boolean
+        }[]
       }
       xdelo_log_event: {
         Args: {
@@ -3714,24 +3679,6 @@ export type Database = {
           }
         | {
             Args: {
-              p_operation: string
-              p_message_id: string
-              p_metadata: Json
-              p_error_message: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_operation: string
-              p_message_id: string
-              p_metadata?: Json
-              p_error_message?: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
               p_operation_type: Database["public"]["Enums"]["message_operation_type"]
               p_source_message_id: string
               p_target_message_id?: string
@@ -3765,6 +3712,16 @@ export type Database = {
           p_raw_data?: Json
         }
         Returns: undefined
+      }
+      xdelo_logprocessingevent: {
+        Args: {
+          p_event_type: string
+          p_entity_id: string
+          p_correlation_id: string
+          p_metadata?: Json
+          p_error_message?: string
+        }
+        Returns: string
       }
       xdelo_mark_for_redownload: {
         Args: {
@@ -3802,14 +3759,6 @@ export type Database = {
           updated_count: number
         }[]
       }
-      xdelo_repair_message_relationships: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          media_group_id: string
-          caption_message_id: string
-          updated_count: number
-        }[]
-      }
       xdelo_set_message_processing: {
         Args: {
           p_message_id: string
@@ -3830,13 +3779,6 @@ export type Database = {
         }
         Returns: string
       }
-      xdelo_sync_forward_media: {
-        Args: {
-          p_original_message_id: string
-          p_forward_message_id: string
-        }
-        Returns: undefined
-      }
       xdelo_sync_media_group_content:
         | {
             Args: {
@@ -3853,32 +3795,6 @@ export type Database = {
               p_correlation_id?: string
               p_force_sync?: boolean
               p_sync_edit_history?: boolean
-            }
-            Returns: Json
-          }
-      xdelo_update_message_processing_state: {
-        Args: {
-          p_message_id: string
-          p_state: string
-          p_error?: string
-        }
-        Returns: undefined
-      }
-      xdelo_update_message_with_analyzed_content:
-        | {
-            Args: {
-              p_message_id: string
-              p_analyzed_content: Json
-              p_correlation_id?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_message_id: string
-              p_analyzed_content: Json
-              p_processing_state?: string
-              p_is_edit?: boolean
             }
             Returns: Json
           }
