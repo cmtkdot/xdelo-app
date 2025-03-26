@@ -1,10 +1,10 @@
-
 import { 
   logProcessingEvent, 
   extractTelegramMetadata,
   createSupabaseClient,
   supabaseClient as sharedSupabaseClient 
 } from '../_shared/consolidatedMessageUtils.ts';
+import { xdelo_createMessageWithRetry } from '../_shared/dbRetryUtils.ts';
 
 /**
  * Enhanced Supabase client with improved timeout and retry capabilities
@@ -164,6 +164,7 @@ export async function createMediaMessage(
 /**
  * Creates a new message record in the database
  * This is a unified function that handles both media and non-media messages
+ * Now with enhanced retry and timeout handling
  */
 export async function createMessage(
   input: any, 
@@ -174,51 +175,44 @@ export async function createMessage(
     const telegramMetadata = input.telegram_metadata || 
       (input.telegram_data ? extractTelegramMetadata(input.telegram_data) : {});
     
-    // Create the message record
-    const { data, error } = await supabaseClient
-      .from('messages')
-      .insert({
-        telegram_message_id: input.telegram_message_id,
-        chat_id: input.chat_id,
-        chat_type: input.chat_type,
-        chat_title: input.chat_title,
-        caption: input.caption || '',
-        text: input.text || input.message_text || '',
-        file_id: input.file_id,
-        file_unique_id: input.file_unique_id,
-        media_group_id: input.media_group_id,
-        mime_type: input.mime_type,
-        mime_type_original: input.mime_type_original,
-        file_size: input.file_size,
-        width: input.width,
-        height: input.height,
-        duration: input.duration,
-        storage_path: input.storage_path,
-        public_url: input.public_url,
-        telegram_data: input.telegram_data,
-        telegram_metadata: telegramMetadata,
-        processing_state: input.processing_state || 'initialized',
-        is_forward: input.is_forward || false,
-        is_edited_channel_post: input.is_edited_channel_post || false,
-        forward_info: input.forward_info,
-        edit_date: input.edit_date,
-        edit_history: input.edit_history || [],
-        storage_exists: input.storage_exists,
-        storage_path_standardized: input.storage_path_standardized,
-        correlation_id: input.correlation_id,
-        message_url: input.message_url,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .select('id')
-      .single();
-      
-    if (error) {
-      if (logger) logger.error('Failed to create message record:', error);
-      return { success: false, error_message: error.message };
-    }
+    // Prepare message data
+    const messageData = {
+      telegram_message_id: input.telegram_message_id,
+      chat_id: input.chat_id,
+      chat_type: input.chat_type,
+      chat_title: input.chat_title,
+      caption: input.caption || '',
+      text: input.text || input.message_text || '',
+      file_id: input.file_id,
+      file_unique_id: input.file_unique_id,
+      media_group_id: input.media_group_id,
+      mime_type: input.mime_type,
+      mime_type_original: input.mime_type_original,
+      file_size: input.file_size,
+      width: input.width,
+      height: input.height,
+      duration: input.duration,
+      storage_path: input.storage_path,
+      public_url: input.public_url,
+      telegram_data: input.telegram_data,
+      telegram_metadata: telegramMetadata,
+      processing_state: input.processing_state || 'initialized',
+      is_forward: input.is_forward || false,
+      is_edited_channel_post: input.is_edited_channel_post || false,
+      forward_info: input.forward_info,
+      edit_date: input.edit_date,
+      edit_history: input.edit_history || [],
+      storage_exists: input.storage_exists,
+      storage_path_standardized: input.storage_path_standardized,
+      correlation_id: input.correlation_id,
+      message_url: input.message_url,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
     
-    return { id: data.id, success: true };
+    // Use the new retry function
+    return await xdelo_createMessageWithRetry(messageData, input.correlation_id, logger);
+    
   } catch (error) {
     if (logger) logger.error('Exception in createMessage:', error);
     return { 

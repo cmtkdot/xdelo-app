@@ -1029,6 +1029,7 @@ export type Database = {
           telegram_data: Json | null
           telegram_message_id: number | null
           telegram_metadata: Json | null
+          text: string | null
           update_id: string | null
           updated_at: string
           user_id: string | null
@@ -1121,6 +1122,7 @@ export type Database = {
           telegram_data?: Json | null
           telegram_message_id?: number | null
           telegram_metadata?: Json | null
+          text?: string | null
           update_id?: string | null
           updated_at?: string
           user_id?: string | null
@@ -1213,6 +1215,7 @@ export type Database = {
           telegram_data?: Json | null
           telegram_message_id?: number | null
           telegram_metadata?: Json | null
+          text?: string | null
           update_id?: string | null
           updated_at?: string
           user_id?: string | null
@@ -3194,13 +3197,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
-      xdelo_complete_message_processing: {
-        Args: {
-          p_message_id: string
-          p_analyzed_content: Json
-        }
-        Returns: Json
-      }
       xdelo_extract_telegram_metadata: {
         Args: {
           p_telegram_data: Json
@@ -3335,31 +3331,21 @@ export type Database = {
           killed: boolean
         }[]
       }
-      xdelo_log_event:
-        | {
-            Args: {
-              p_event_type: Database["public"]["Enums"]["audit_event_type"]
-              p_entity_id: string
-              p_telegram_message_id?: number
-              p_chat_id?: number
-              p_previous_state?: Json
-              p_new_state?: Json
-              p_metadata?: Json
-              p_correlation_id?: string
-              p_user_id?: string
-              p_error_message?: string
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_event_type: string
-              p_entity_id: string
-              p_message_id?: string
-              p_metadata?: Json
-            }
-            Returns: undefined
-          }
+      xdelo_log_event: {
+        Args: {
+          p_event_type: Database["public"]["Enums"]["audit_event_type"]
+          p_entity_id: string
+          p_telegram_message_id?: number
+          p_chat_id?: number
+          p_previous_state?: Json
+          p_new_state?: Json
+          p_metadata?: Json
+          p_correlation_id?: string
+          p_user_id?: string
+          p_error_message?: string
+        }
+        Returns: undefined
+      }
       xdelo_log_event_flexible: {
         Args: {
           p_event_type: string
@@ -3375,29 +3361,20 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_log_message_operation:
-        | {
-            Args: {
-              p_operation: string
-              p_message_id: string
-              p_details: Json
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_operation_type: Database["public"]["Enums"]["message_operation_type"]
-              p_source_message_id: string
-              p_target_message_id?: string
-              p_correlation_id?: string
-              p_telegram_message_id?: number
-              p_chat_id?: number
-              p_metadata?: Json
-              p_user_id?: string
-              p_error_message?: string
-            }
-            Returns: string
-          }
+      xdelo_log_message_operation: {
+        Args: {
+          p_operation_type: Database["public"]["Enums"]["message_operation_type"]
+          p_source_message_id: string
+          p_target_message_id?: string
+          p_correlation_id?: string
+          p_telegram_message_id?: number
+          p_chat_id?: number
+          p_metadata?: Json
+          p_user_id?: string
+          p_error_message?: string
+        }
+        Returns: string
+      }
       xdelo_log_operation: {
         Args: {
           p_event_type: string
@@ -3426,12 +3403,22 @@ export type Database = {
         }
         Returns: boolean
       }
-      xdelo_parse_caption: {
-        Args: {
-          p_caption: string
-        }
-        Returns: Json
-      }
+      xdelo_parse_caption:
+        | {
+            Args: {
+              p_caption: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_message_id: string
+              p_caption: string
+              p_correlation_id?: string
+              p_media_group_id?: string
+            }
+            Returns: Json
+          }
       xdelo_prepare_message_for_webhook: {
         Args: {
           message_id: string
@@ -3480,16 +3467,6 @@ export type Database = {
           p_mime_type?: string
         }
         Returns: string
-      }
-      xdelo_sync_media_group_content: {
-        Args: {
-          p_source_message_id: string
-          p_media_group_id: string
-          p_correlation_id?: string
-          p_force_sync?: boolean
-          p_sync_edit_history?: boolean
-        }
-        Returns: Json
       }
       xdelo_update_product_matching_config: {
         Args: {

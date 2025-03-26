@@ -38,6 +38,11 @@ export enum LogEventType {
   EDGE_FUNCTION_EXECUTED = 'edge_function_executed',
   EDGE_FUNCTION_ERROR = 'edge_function_error',
   
+  // Database events
+  DATABASE_TIMEOUT = 'database_timeout',
+  DATABASE_RETRY = 'database_retry',
+  DATABASE_ERROR = 'database_error',
+  
   // Audit events
   AUDIT_EVENT = 'audit_event',
   CONFIG_CHANGED = 'config_changed',

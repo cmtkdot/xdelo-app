@@ -1,7 +1,7 @@
 
 project_id = "xjhhehxcxkiumnwbirel"
 template = "typescript"
-memory = 1024
+memory = 1536
 verify_jwt = false
 entrypoint = "/index.ts"
 
@@ -9,3 +9,7 @@ entrypoint = "/index.ts"
 [triggers]
 database_messages_insert = "INSERT ON messages WHERE caption IS NOT NULL AND caption != ''"
 database_messages_update = "UPDATE OF caption ON messages WHERE caption IS NOT NULL AND caption != '' AND processing_state != 'completed'"
+
+# Add timeout configuration
+[env]
+DB_STATEMENT_TIMEOUT = "30000"
