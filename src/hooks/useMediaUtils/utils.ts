@@ -1,33 +1,24 @@
 
 import { useState, useCallback } from 'react';
-
-interface MediaProcessingState {
-  isProcessing: boolean;
-  processingMessageIds: string[];
-}
-
-interface MediaProcessingActions {
-  setIsProcessing: (isProcessing: boolean) => void;
-  addProcessingMessageId: (id: string) => void;
-  removeProcessingMessageId: (id: string) => void;
-}
+import { MediaProcessingState, MediaProcessingStateActions } from './types';
 
 /**
- * Create state management for media processing
+ * Creates media processing state and actions
  */
-export function createMediaProcessingState(): [MediaProcessingState, MediaProcessingActions] {
+export function createMediaProcessingState(): [MediaProcessingState, MediaProcessingStateActions] {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingMessageIds, setProcessingMessageIds] = useState<string[]>([]);
+  const [processingMessageIds, setProcessingMessageIds] = useState<Record<string, boolean>>({});
 
   const addProcessingMessageId = useCallback((id: string) => {
-    setProcessingMessageIds(prev => {
-      if (prev.includes(id)) return prev;
-      return [...prev, id];
-    });
+    setProcessingMessageIds(prev => ({ ...prev, [id]: true }));
   }, []);
 
   const removeProcessingMessageId = useCallback((id: string) => {
-    setProcessingMessageIds(prev => prev.filter(messageId => messageId !== id));
+    setProcessingMessageIds(prev => {
+      const updated = { ...prev };
+      delete updated[id];
+      return updated;
+    });
   }, []);
 
   return [

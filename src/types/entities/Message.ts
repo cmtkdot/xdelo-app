@@ -1,4 +1,3 @@
-
 import type { ProcessingState } from '../api/ProcessingState';
 import type { AnalyzedContent } from '../utils/AnalyzedContent';
 
@@ -33,7 +32,6 @@ export interface Message {
   processing_completed_at?: string;
   analyzed_content?: AnalyzedContent;
   telegram_data?: Record<string, unknown>;
-  telegram_metadata?: Record<string, unknown>; // Added for optimized Telegram data storage
   error_message?: string;
   error_code?: string;
   storage_exists?: boolean | string; 
@@ -64,9 +62,7 @@ export interface Message {
   message_type?: string;
   from_id?: number;
   is_duplicate?: boolean;
-  is_duplicate_content?: boolean; // Added to track duplicate content
   duplicate_reference_id?: string;
-  duplicate_of_message_id?: string; // Added to reference original message for duplicates
   redownload_attempts?: number;
   correlation_id?: string;
   retry_count?: number;

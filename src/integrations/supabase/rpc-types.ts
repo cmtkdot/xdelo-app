@@ -21,34 +21,15 @@ declare module "@supabase/supabase-js" {
       }
     ): { data: T; error: null } | { data: null; error: Error };
 
-    // RPC for the logProcessingEvent function - Updated name to match the database function
+    // RPC for the logProcessingEvent function - Updated to accept both string and number entity IDs
     rpc<T = string>(
       fn: "xdelo_logprocessingevent", 
       params: { 
         p_event_type: string; 
-        p_entity_id: string;
+        p_entity_id: string | number;
         p_correlation_id: string;
         p_metadata?: Record<string, any>;
         p_error_message?: string;
-      }
-    ): { data: T; error: null } | { data: null; error: Error };
-
-    // Add RPC for duplicate file handling
-    rpc<T = { success: boolean; message?: string; [key: string]: any }>(
-      fn: "xdelo_find_duplicate_file",
-      params: {
-        p_file_unique_id: string;
-        p_correlation_id?: string;
-      }
-    ): { data: T; error: null } | { data: null; error: Error };
-    
-    // Add RPC for updating a message with existing analysis
-    rpc<T = { success: boolean; message?: string; [key: string]: any }>(
-      fn: "xdelo_apply_duplicate_content_analysis",
-      params: {
-        p_target_message_id: string;
-        p_source_message_id: string;
-        p_correlation_id?: string;
       }
     ): { data: T; error: null } | { data: null; error: Error };
 
@@ -102,42 +83,34 @@ declare module "@supabase/supabase-js" {
         p_force?: boolean;
       }
     ): { data: T; error: null } | { data: null; error: Error };
+    
+    // Add RPC for direct caption parsing
+    rpc<T = any>(
+      fn: "xdelo_parse_caption",
+      params: {
+        p_caption: string;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
 
-    // Add RPC for redownloading media files
-    rpc<T = { success: boolean; message?: string; [key: string]: any }>(
-      fn: "xdelo_redownload_media_file",
+    // Add RPC for handling message edits
+    rpc<T = any>(
+      fn: "xdelo_handle_message_edit",
       params: {
         p_message_id: string;
-        p_correlation_id: string;
+        p_caption: string;
+        p_is_edit?: boolean;
+        p_correlation_id?: string;
       }
     ): { data: T; error: null } | { data: null; error: Error };
     
-    // Add RPC for the new unified processor operations
-    rpc<T = { success: boolean; message?: string; [key: string]: any }>(
-      fn: "xdelo_unified_processor",
+    // Add RPC for completing message processing
+    rpc<T = any>(
+      fn: "xdelo_complete_message_processing",
       params: {
-        operation: 'process_caption' | 'sync_media_group' | 'reprocess' | 'delayed_sync';
-        messageId: string;
-        mediaGroupId?: string;
-        force?: boolean;
-        correlationId?: string;
+        p_message_id: string;
+        p_analyzed_content: Record<string, any>;
+        p_correlation_id?: string;
       }
     ): { data: T; error: null } | { data: null; error: Error };
-    
-    // Add RPC for reprocessing messages in batch
-    rpc<T = { message_id: string; media_group_id?: string; success: boolean; error?: string }[]>(
-      fn: "xdelo_reprocess_messages",
-      params: {
-        p_limit?: number;
-      }
-    ): { data: T; error: null } | { data: null; error: Error };
-
-    // Add RPC for cleaning up duplicate functions
-    rpc<T = { functions_checked: number; duplicates_found: number; details: any[] }>(
-      fn: "xdelo_cleanup_duplicate_functions",
-      params?: {}
-    ): { data: T; error: null } | { data: null; error: Error };
-
-    // Add any other custom RPC functions here...
   }
 }

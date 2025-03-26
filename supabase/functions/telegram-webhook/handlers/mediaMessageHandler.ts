@@ -1,4 +1,4 @@
-import { supabaseClient, createFastClient, createLongRunningClient } from '../../_shared/supabase.ts';
+import { supabaseClient } from '../../_shared/supabase.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { 
   xdelo_downloadMediaFromTelegram,
@@ -17,82 +17,10 @@ import {
   ForwardInfo,
   MessageInput,
 } from '../types.ts';
-import { createMessage, checkDuplicateFile, findExistingFileByUniqueId, updateWithExistingAnalysis } from '../dbOperations.ts';
+import { createMessage, checkDuplicateFile } from '../dbOperations.ts';
 import { constructTelegramMessageUrl } from '../../_shared/messageUtils.ts';
-import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
-
-/**
- * Helper function to extract forward info from message
- */
-function extractForwardInfo(message: TelegramMessage): ForwardInfo | undefined {
-  if (!message.forward_origin) return undefined;
-  
-  return {
-    is_forwarded: true,
-    forward_origin_type: message.forward_origin.type,
-    forward_from_chat_id: message.forward_origin.chat?.id,
-    forward_from_chat_title: message.forward_origin.chat?.title,
-    forward_from_chat_type: message.forward_origin.chat?.type,
-    forward_from_message_id: message.forward_origin.message_id,
-    forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
-    original_chat_id: message.forward_origin.chat?.id,
-    original_chat_title: message.forward_origin.chat?.title,
-    original_message_id: message.forward_origin.message_id
-  };
-}
-
-/**
- * Trigger caption processing via the database function
- * 
- * This calls the xdelo_process_caption_workflow PostgreSQL function to
- * process the caption and update the analyzed_content
- */
-async function triggerCaptionProcessing(
-  messageId: string, 
-  correlationId: string, 
-  force = false,
-  client = supabaseClient,
-  logger?: any
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    logger?.info(`Triggering caption processing for message ${messageId}`, {
-      correlation_id: correlationId,
-      force
-    });
-    
-    // Call the database function to process the caption
-    const { data, error } = await client.rpc('xdelo_process_caption_workflow', {
-      p_message_id: messageId,
-      p_correlation_id: correlationId,
-      p_force: force
-    });
-    
-    if (error) {
-      logger?.error(`Error triggering caption processing: ${error.message}`, {
-        messageId,
-        correlationId,
-        error
-      });
-      return { success: false, error: error.message };
-    }
-    
-    logger?.info(`Caption processing triggered successfully for message ${messageId}`, {
-      result: data
-    });
-    
-    return { success: true };
-  } catch (error: any) {
-    logger?.error(`Exception in triggerCaptionProcessing: ${error.message}`, {
-      messageId,
-      correlationId,
-      error
-    });
-    return { success: false, error: error.message };
-  }
-}
 
 // Get Telegram bot token from environment
-// @ts-ignore - Deno global is available in Deno environment
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
 if (!TELEGRAM_BOT_TOKEN) {
   console.error('Missing TELEGRAM_BOT_TOKEN environment variable');
@@ -103,17 +31,13 @@ if (!TELEGRAM_BOT_TOKEN) {
  */
 export async function handleMediaMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
-    const { correlationId, isEdit, previousMessage, logger, supabase } = context;
+    const { correlationId, isEdit, previousMessage, logger } = context;
     
     // Log the start of processing
     logger?.info(`Processing ${isEdit ? 'edited' : 'new'} media message`, {
       message_id: message.message_id,
       chat_id: message.chat.id
     });
-    
-    // Use the provided client or create a default one
-    // Different operations will use specialized clients
-    const defaultClient = supabase || supabaseClient;
     
     let response;
     
@@ -127,68 +51,36 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     return response;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    context.logger?.error(`Error processing media message: ${errorMessage}`, {
+      error: error instanceof Error ? error : { message: errorMessage },
+      message_id: message.message_id,
+      chat_id: message.chat?.id
+    });
     
+    // Also log to database for tracking
     try {
-      context.logger?.error(`Error processing media message: ${errorMessage}`, {
-        error: error instanceof Error ? error : { message: errorMessage },
-        message_id: message.message_id,
-        chat_id: message.chat?.id
-      });
-    } catch (loggerError) {
-      console.error('Failed to log error via logger:', loggerError);
+      await xdelo_logProcessingEvent(
+        "media_processing_error",
+        message.message_id.toString(),
+        context.correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat?.id,
+          error: errorMessage
+        },
+        errorMessage
+      );
+    } catch (logError) {
+      context.logger?.error(`Failed to log error to database: ${
+        logError instanceof Error ? logError.message : String(logError)}`);
     }
     
-    // Safely log to database - never throw from here
-    try {
-      // Use direct client if available
-      if (context.supabase) {
-        try {
-          await context.supabase.from('unified_audit_logs').insert({
-            event_type: "media_processing_error",
-            entity_id: String(message.message_id),
-            metadata: {
-              message_id: message.message_id,
-              chat_id: message.chat?.id,
-              error: errorMessage,
-              correlation_id: context.correlationId,
-              logged_from: 'edge_function_direct',
-              timestamp: new Date().toISOString()
-            },
-            error_message: errorMessage,
-            correlation_id: context.correlationId,
-            event_timestamp: new Date().toISOString()
-          });
-        } catch (dbError) {
-          console.error('Failed to log using direct client:', dbError);
-        }
-      } else {
-        try {
-          await xdelo_logProcessingEvent(
-            "media_processing_error",
-            message.message_id,
-            context.correlationId,
-            {
-              message_id: message.message_id,
-              chat_id: message.chat?.id,
-              error: errorMessage
-            },
-            errorMessage
-          );
-        } catch (logError: any) {
-          console.error('Failed to log using log function:', logError.message);
-        }
-      }
-    } catch (outerError) {
-      console.error('Error in error handling:', outerError);
-    }
-    
-    // Always return a response to Telegram, even if everything else fails
     return new Response(
       JSON.stringify({ 
         error: errorMessage,
         correlationId: context.correlationId
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 }
@@ -201,11 +93,10 @@ async function xdelo_handleEditedMediaMessage(
   context: MessageContext,
   previousMessage: TelegramMessage
 ): Promise<Response> {
-  const { correlationId, logger, supabase } = context;
-  const dbClient = supabase || supabaseClient;
+  const { correlationId, logger } = context;
 
   // First, look up the existing message
-  const { data: existingMessage, error: lookupError } = await dbClient
+  const { data: existingMessage, error: lookupError } = await supabaseClient
     .from('messages')
     .select('*')
     .eq('telegram_message_id', message.message_id)
@@ -238,16 +129,9 @@ async function xdelo_handleEditedMediaMessage(
         logger?.info(`Media has changed in edit for message ${message.message_id}`);
         
         // Determine the current file details
-        let telegramFile;
-        if (message.photo && message.photo.length > 0) {
-          telegramFile = message.photo[message.photo.length - 1];
-        } else if (message.video) {
-          telegramFile = message.video;
-        } else if (message.document) {
-          telegramFile = message.document;
-        } else {
-          throw new Error("No media found in message");
-        }
+        const telegramFile = message.photo ? 
+          message.photo[message.photo.length - 1] : 
+          message.video || message.document;
           
         // Get mime type
         const detectedMimeType = xdelo_detectMimeType(message);
@@ -266,15 +150,15 @@ async function xdelo_handleEditedMediaMessage(
         }
         
         // If successful, update the message with new media info
-        const { data: updateResult, error: updateError } = await dbClient
+        const { data: updateResult, error: updateError } = await supabaseClient
           .from('messages')
           .update({
             caption: message.caption,
             file_id: telegramFile.file_id,
             file_unique_id: telegramFile.file_unique_id,
             mime_type: detectedMimeType,
-            width: 'width' in telegramFile ? telegramFile.width : undefined,
-            height: 'height' in telegramFile ? telegramFile.height : undefined,
+            width: telegramFile.width,
+            height: telegramFile.height,
             duration: message.video?.duration,
             file_size: telegramFile.file_size,
             edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
@@ -305,30 +189,10 @@ async function xdelo_handleEditedMediaMessage(
               storage_path: mediaProcessResult.fileInfo.storage_path
             }
           );
-        } catch (logError: any) {
+        } catch (logError) {
           logger?.error(`Failed to log media edit operation: ${logError.message}`);
         }
-        
-        // If message has a caption, trigger caption processing
-        if (message.caption) {
-          try {
-            const processingResult = await triggerCaptionProcessing(
-              existingMessage.id,
-              correlationId,
-              true, // Force reprocessing since this is an edit
-              dbClient,
-              logger
-            );
-            
-            if (!processingResult.success) {
-              logger?.warn(`Caption processing trigger failed: ${processingResult.error}`);
-            }
-          } catch (captionError: any) {
-            logger?.error(`Error triggering caption processing: ${captionError.message}`);
-            // Don't fail the whole operation if caption processing fails
-          }
-        }
-      } catch (mediaError: any) {
+      } catch (mediaError) {
         logger?.error(`Error processing edited media: ${mediaError.message}`);
         throw mediaError;
       }
@@ -338,7 +202,7 @@ async function xdelo_handleEditedMediaMessage(
       logger?.info(`Caption has changed in edit for message ${message.message_id}`);
       
       // Update just the caption
-      const { error: updateError } = await dbClient
+      const { error: updateError } = await supabaseClient
         .from('messages')
         .update({
           caption: message.caption,
@@ -356,22 +220,7 @@ async function xdelo_handleEditedMediaMessage(
       
       // Process the new caption
       if (message.caption) {
-        try {
-          const processingResult = await triggerCaptionProcessing(
-            existingMessage.id,
-            correlationId,
-            true, // Force reprocessing since this is an edit
-            dbClient,
-            logger
-          );
-          
-          if (!processingResult.success) {
-            logger?.warn(`Caption processing trigger failed: ${processingResult.error}`);
-          }
-        } catch (captionError: any) {
-          logger?.error(`Error triggering caption processing: ${captionError.message}`);
-          // Don't fail the whole operation if caption processing fails
-        }
+        // Process caption changes - this could trigger analysis, etc.
       }
       
       // Log the caption edit
@@ -387,7 +236,7 @@ async function xdelo_handleEditedMediaMessage(
             new_caption: message.caption
           }
         );
-      } catch (logError: any) {
+      } catch (logError) {
         logger?.error(`Failed to log caption edit operation: ${logError.message}`);
       }
     } else {
@@ -395,7 +244,7 @@ async function xdelo_handleEditedMediaMessage(
       logger?.info(`No significant changes detected in edit for message ${message.message_id}`);
       
       // Still update the edit metadata
-      const { error: updateError } = await dbClient
+      const { error: updateError } = await supabaseClient
         .from('messages')
         .update({
           edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
@@ -438,189 +287,130 @@ async function xdelo_handleEditedMediaMessage(
 }
 
 /**
- * Handle a new (non-edited) media message
+ * Helper function to handle new media messages
  */
 async function xdelo_handleNewMediaMessage(
   message: TelegramMessage, 
   context: MessageContext
 ): Promise<Response> {
-  const { correlationId, logger, supabase } = context;
+  const { correlationId, logger } = context;
   
-  // Create specialized clients for different operations
-  const fastClient = createFastClient(); // For quick lookups
-  const defaultClient = supabase || supabaseClient;
-  const longRunningClient = createLongRunningClient(); // For complex inserts
-  
-  // First, check if this message is a duplicate webhook - use fast client for this quick check
-  const isDuplicate = await checkDuplicateFile(fastClient, message.message_id, message.chat.id);
-  
-  if (isDuplicate) {
-    logger?.info(`Detected duplicate message ${message.message_id} in chat ${message.chat.id}`);
+  // First check if this is a duplicate message we've already processed
+  try {
+    const isDuplicate = await checkDuplicateFile(
+      supabaseClient,
+      message.message_id,
+      message.chat.id
+    );
     
-    // Instead of immediately returning, try to fetch the existing message
-    // This mirrors the edited message flow where we look up and potentially update
-    const { data: existingMessage, error: lookupError } = await fastClient
-      .from('messages')
-      .select('*')
-      .eq('telegram_message_id', message.message_id)
-      .eq('chat_id', message.chat.id)
-      .single();
-    
-    if (lookupError) {
-      logger?.warn(`Failed to lookup existing message for duplicate: ${lookupError.message}`);
-      // If we can't fetch the message, just acknowledge the webhook anyway
-      return new Response(JSON.stringify({ 
-        success: true, 
-        message: "Duplicate acknowledged but not updated",
-        correlationId
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
-      });
-    }
-    
-    // If we found the message, log the duplicate but don't try to update
-    // Just log the event for tracking
-    try {
+    if (isDuplicate) {
+      logger?.info(`Duplicate message detected: ${message.message_id} in chat ${message.chat.id}`);
+      
+      // Log the duplicate detection
       await xdelo_logProcessingEvent(
-        "duplicate_message_received",
-        existingMessage.id,
+        "duplicate_message_detected",
+        message.message_id.toString(),
         correlationId,
         {
           message_id: message.message_id,
           chat_id: message.chat.id,
-          duplicate_detected: true
+          media_group_id: message.media_group_id
         }
       );
-    } catch (logError) {
-      console.error('Error logging duplicate operation:', logError);
+      
+      return new Response(
+        JSON.stringify({ success: true, duplicate: true, correlationId }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
     
-    // Return success as we've acknowledged and logged the duplicate
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: "Duplicate message tracked",
-      correlationId,
-      message_id: existingMessage.id
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200
+    // Process the media message
+    const messageUrl = constructTelegramMessageUrl(message.chat.id, message.message_id);
+    
+    logger?.info(`Processing new media message: ${message.message_id}`, {
+      chat_id: message.chat.id,
+      message_url: messageUrl
     });
-  }
-
-  // Process the media message
-  const messageUrl = constructTelegramMessageUrl(message.chat.id, message.message_id);
-  
-  logger?.info(`Processing new media message: ${message.message_id}`, {
-    chat_id: message.chat.id,
-    message_url: messageUrl
-  });
-  
-  // Prepare the message data - safely extract the file information
-  // using null checks to avoid "possibly undefined" errors
-  let telegramFile;
-  if (message.photo && message.photo.length > 0) {
-    telegramFile = message.photo[message.photo.length - 1];
-  } else if (message.video) {
-    telegramFile = message.video;
-  } else if (message.document) {
-    telegramFile = message.document;
-  } else {
-    throw new Error("No media found in message");
-  }
-  
-  // Process media
-  const mediaResult = await xdelo_processMessageMedia(
-    message,
-    telegramFile.file_id,
-    telegramFile.file_unique_id,
-    TELEGRAM_BOT_TOKEN
-  );
-  
-  if (!mediaResult.success) {
-    throw new Error(`Failed to process media: ${mediaResult.error}`);
-  }
-  
-  // Check if we have an existing file with the same file_unique_id
-  // This will allow us to reuse analysis from previously processed identical files
-  let hasExistingAnalysis = false;
-  let existingAnalysis = null;
-  let duplicateOfMessageId = null;
-  
-  try {
-    // Use fast client for this lookup
-    const { exists, messageId, analyzedContent } = await findExistingFileByUniqueId(
-      fastClient, 
+    
+    // Prepare the message data
+    const telegramFile = message.photo ? 
+      message.photo[message.photo.length - 1] : 
+      message.video || message.document;
+    
+    // Process media
+    const mediaResult = await xdelo_processMessageMedia(
+      message,
+      telegramFile.file_id,
       telegramFile.file_unique_id,
-      logger
+      TELEGRAM_BOT_TOKEN
     );
     
-    if (exists && analyzedContent) {
-      hasExistingAnalysis = true;
-      existingAnalysis = analyzedContent;
-      duplicateOfMessageId = messageId;
-      
-      logger?.info(`Found existing analysis for file_unique_id: ${telegramFile.file_unique_id}`, {
-        source_message_id: messageId
-      });
+    if (!mediaResult.success) {
+      throw new Error(`Failed to process media: ${mediaResult.error}`);
     }
-  } catch (error: any) {
-    // Just log the error but continue processing
-    logger?.warn(`Error checking for existing file: ${error.message}`, { error });
-  }
-  
-  // Initialize message state based on caption and media group
-  let initialState = 'completed'; // Default for messages without caption
-  
-  // If the message has a caption, set to pending for immediate caption processing
-  if (message.caption) {
-    initialState = 'pending'; // Set to pending for caption processing
-    logger?.info('Message has caption, setting initial state to pending for caption processing', {
-      caption_length: message.caption.length
-    });
-  }
-  
-  // Create the message record in the database - use the long-running client for this operation
-  const result = await createMessage(longRunningClient, {
-    telegram_message_id: message.message_id,
-    chat_id: message.chat.id,
-    chat_type: message.chat.type,
-    chat_title: message.chat.title,
-    media_group_id: message.media_group_id,
-    file_id: telegramFile.file_id,
-    file_unique_id: telegramFile.file_unique_id,
-    mime_type: mediaResult.fileInfo.mime_type,
-    mime_type_original: message.document?.mime_type || message.video?.mime_type,
-    width: 'width' in telegramFile ? telegramFile.width : undefined,
-    height: 'height' in telegramFile ? telegramFile.height : undefined,
-    duration: message.video?.duration,
-    file_size: telegramFile.file_size,
-    caption: message.caption,
-    storage_path: mediaResult.fileInfo.storage_path,
-    public_url: mediaResult.fileInfo.public_url,
-    // We pass the entire message object to createMessage, but it will extract only essential metadata
-    telegram_data: message,
-    message_url: constructTelegramMessageUrl(message.chat.id, message.message_id),
-    is_forward: context.isForwarded,
-    forward_info: context.isForwarded ? extractForwardInfo(message) : undefined,
-    correlation_id: context.correlationId,
-    processing_state: initialState,
-    storage_exists: true,
-    storage_path_standardized: mediaResult.fileInfo.storage_path_standardized,
-    is_duplicate_content: hasExistingAnalysis
-  });
-  
-  if (!result.success) {
-    logger?.error(`Failed to create message: ${result.error_message}`, {
-      message_id: message.message_id,
-      chat_id: message.chat.id
-    });
     
-    // Also try to log to the database
-    try {
+    // Prepare forward info if message is forwarded
+    const forwardInfo: ForwardInfo | undefined = message.forward_origin ? {
+      is_forwarded: true,
+      forward_origin_type: message.forward_origin.type,
+      forward_from_chat_id: message.forward_origin.chat?.id,
+      forward_from_chat_title: message.forward_origin.chat?.title,
+      forward_from_chat_type: message.forward_origin.chat?.type,
+      forward_from_message_id: message.forward_origin.message_id,
+      forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
+      original_chat_id: message.forward_origin.chat?.id,
+      original_chat_title: message.forward_origin.chat?.title,
+      original_message_id: message.forward_origin.message_id
+    } : undefined;
+    
+    // Create message input
+    const messageInput: MessageInput = {
+      telegram_message_id: message.message_id,
+      chat_id: message.chat.id,
+      chat_type: message.chat.type,
+      chat_title: message.chat.title,
+      caption: message.caption,
+      media_group_id: message.media_group_id,
+      file_id: telegramFile.file_id,
+      file_unique_id: telegramFile.file_unique_id,
+      mime_type: mediaResult.fileInfo.mime_type,
+      mime_type_original: message.document?.mime_type || message.video?.mime_type,
+      storage_path: mediaResult.fileInfo.storage_path,
+      public_url: mediaResult.fileInfo.public_url,
+      width: telegramFile.width,
+      height: telegramFile.height,
+      duration: message.video?.duration,
+      file_size: telegramFile.file_size || mediaResult.fileInfo.file_size,
+      correlation_id: correlationId,
+      processing_state: message.caption ? 'pending' : 'initialized',
+      is_edited_channel_post: context.isChannelPost,
+      forward_info: forwardInfo,
+      telegram_data: message,
+      edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : undefined,
+      is_forward: context.isForwarded,
+      edit_history: context.isEdit ? [{
+        timestamp: new Date().toISOString(),
+        is_initial_edit: true,
+        edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString()
+      }] : [],
+      storage_exists: true,
+      storage_path_standardized: true,
+      message_url: messageUrl
+    };
+    
+    // Create the message
+    const result = await createMessage(supabaseClient, messageInput, logger);
+    
+    if (!result.success) {
+      logger?.error(`Failed to create message: ${result.error_message}`, {
+        message_id: message.message_id,
+        chat_id: message.chat.id
+      });
+      
+      // Also try to log to the database
       await xdelo_logProcessingEvent(
         "message_creation_failed",
-        String(message.message_id),
+        message.message_id.toString(),
         correlationId,
         {
           message_id: message.message_id,
@@ -628,59 +418,80 @@ async function xdelo_handleNewMediaMessage(
           error: result.error_message
         }
       );
-    } catch (logError: any) {
-      logger?.error(`Failed to log message creation failure: ${logError.message}`);
+      
+      throw new Error(result.error_message || 'Failed to create message record');
     }
     
-    throw new Error(result.error_message || 'Failed to create message record');
-  }
-  
-  // If the message has a caption, trigger caption processing in a separate request
-  // to avoid holding the connection open
-  if (message.caption && result.id) {
+    // Log the success
+    logger?.success(`Successfully created new media message: ${result.id}`, {
+      telegram_message_id: message.message_id,
+      chat_id: message.chat.id,
+      media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
+      storage_path: mediaResult.fileInfo.storage_path
+    });
+    
+    return new Response(
+      JSON.stringify({ success: true, id: result.id, correlationId }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (createError) {
+    logger?.error(`Error creating new media message: ${
+      createError instanceof Error ? createError.message : String(createError)}`, {
+      message_id: message.message_id,
+      chat_id: message.chat.id,
+      media_group_id: message.media_group_id,
+      error_type: typeof createError,
+      error_keys: typeof createError === 'object' ? Object.keys(createError) : 'N/A'
+    });
+    
+    // Log detailed error to database
     try {
-      // Schedule caption processing to run separately 
-      // Use default client here since this is a quick operation to queue the processing
-      const processingResult = await triggerCaptionProcessing(
-        result.id,
+      await xdelo_logProcessingEvent(
+        "media_processing_error",
+        message.message_id.toString(),
         correlationId,
-        false, // Don't force reprocessing for new messages
-        defaultClient,
-        logger
+        {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          error: createError instanceof Error ? createError.message : String(createError),
+          stack: createError instanceof Error ? createError.stack : undefined,
+          media_group_id: message.media_group_id
+        },
+        createError instanceof Error ? createError.message : String(createError)
       );
-      
-      if (!processingResult.success) {
-        logger?.warn(`Caption processing trigger failed: ${processingResult.error}`);
-      } else {
-        logger?.info(`Successfully triggered caption processing for message ${result.id}`);
-      }
-    } catch (captionError: any) {
-      logger?.error(`Error triggering caption processing: ${captionError.message}`);
-      // Don't fail the whole operation if caption processing fails
+    } catch (logError) {
+      console.error(`Error logging failure: ${
+        logError instanceof Error ? logError.message : String(logError)}`);
     }
+    
+    // Re-throw to be caught by the main handler
+    throw createError;
   }
-  
-  // Log the success
-  let responseMessage = "Successfully created new media message";
-  if (hasExistingAnalysis) {
-    responseMessage = "Created new message with existing analysis from duplicate file";
+}
+
+/**
+ * Import from shared/databaseOperations.ts
+ */
+async function xdelo_logProcessingEvent(
+  eventType: string,
+  entityId: string,
+  correlationId: string,
+  metadata?: Record<string, any>,
+  errorMessage?: string
+): Promise<void> {
+  try {
+    const { error } = await supabaseClient.from('unified_audit_logs').insert({
+      event_type: eventType,
+      entity_id: entityId,
+      correlation_id: correlationId,
+      metadata,
+      error_message: errorMessage
+    });
+    
+    if (error) {
+      console.error(`Error logging event ${eventType}:`, error);
+    }
+  } catch (e) {
+    console.error(`Exception logging event ${eventType}:`, e);
   }
-  
-  logger?.success(`${responseMessage}: ${result.id}`, {
-    telegram_message_id: message.message_id,
-    chat_id: message.chat.id,
-    media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
-    storage_path: mediaResult.fileInfo.storage_path,
-    is_duplicate_content: hasExistingAnalysis
-  });
-  
-  return new Response(
-    JSON.stringify({ 
-      success: true, 
-      id: result.id, 
-      is_duplicate_content: hasExistingAnalysis,
-      correlationId 
-    }),
-    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
 }

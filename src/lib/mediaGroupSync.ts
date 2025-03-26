@@ -1,6 +1,5 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { callUnifiedProcessor } from './unifiedProcessor';
 
 /**
  * Utility function to manually trigger media group synchronization
@@ -10,27 +9,17 @@ export async function syncMediaGroup(
   mediaGroupId: string,
   sourceMessageId?: string,
   options = { force: true }
-): Promise<{
-  success: boolean;
-  mediaGroupId: string;
-  sourceMessageId?: string;
-  syncedCount?: number;
-  error?: string;
-}> {
+) {
   try {
     console.log(`Manual media group sync initiated for group ${mediaGroupId}`);
     
     // If source message ID is not provided, try to find the best message
     // to use as the source of truth for this group
     if (!sourceMessageId) {
-      const { data: findResult, error: findError } = await supabase.rpc<string>(
+      const { data: findResult } = await supabase.rpc<string>(
         'xdelo_find_caption_message',
         { p_media_group_id: mediaGroupId }
       );
-      
-      if (findError) {
-        throw new Error(`Error finding caption message: ${findError.message}`);
-      }
       
       sourceMessageId = findResult;
       
@@ -41,49 +30,50 @@ export async function syncMediaGroup(
       console.log(`Found source message ${sourceMessageId} for group ${mediaGroupId}`);
     }
     
-    // Use the unified processor for syncing
-    const result = await callUnifiedProcessor('sync_media_group', {
-      messageId: sourceMessageId,
-      mediaGroupId,
-      force: options.force
-    });
+    // Generate correlation ID
+    const correlationId = crypto.randomUUID().toString();
     
-    if (!result.success) {
-      throw new Error(result.error || 'Media group sync failed');
+    // Call the database function directly instead of the edge function
+    const { data, error } = await supabase.rpc<{
+      updated_count?: number;
+      [key: string]: any;
+    }>(
+      'xdelo_sync_media_group_content',
+      {
+        p_media_group_id: mediaGroupId,
+        p_source_message_id: sourceMessageId,
+        p_correlation_id: correlationId,
+        p_force_sync: options.force,
+        p_sync_edit_history: true
+      }
+    );
+    
+    if (error) {
+      throw new Error(`Media group sync failed: ${error.message}`);
     }
     
-    console.log('Media group sync result:', result.data);
+    console.log('Media group sync result:', data);
     
-    // Extract the updated count from the result
-    const updatedCount = result.data?.updated_count || 0;
-    
-    return {
+    // Properly handle the data response
+    const result = {
       success: true,
       mediaGroupId,
       sourceMessageId,
-      syncedCount: updatedCount
+      syncedCount: data && typeof data === 'object' ? (data.updated_count || 0) : 0
     };
+    
+    return result;
     
   } catch (error: any) {
     console.error('Error in manual media group sync:', error);
-    return {
-      success: false,
-      mediaGroupId,
-      error: error.message
-    };
+    throw error;
   }
 }
 
 /**
  * Batch repair multiple media groups that might have sync issues
  */
-export async function repairMediaGroups(limit = 10): Promise<{
-  success: boolean;
-  repaired?: number;
-  details?: any[];
-  message?: string;
-  error?: string;
-}> {
+export async function repairMediaGroups(limit = 10) {
   try {
     // Find media groups that need repair
     const { data: mediaGroups, error: findError } = await supabase
@@ -108,22 +98,16 @@ export async function repairMediaGroups(limit = 10): Promise<{
     // Get unique media group IDs
     const uniqueGroups = [...new Set(mediaGroups.map(m => m.media_group_id))];
     
-    // Repair each media group using the delayed sync operation
+    // Repair each media group
     const results = [];
     
     for (const groupId of uniqueGroups) {
       try {
-        // Use the delayed sync operation which automatically finds the best source message
-        const result = await callUnifiedProcessor('delayed_sync', {
-          messageId: 'auto-detect', // This will be ignored in the function
-          mediaGroupId: groupId
-        });
-        
+        const result = await syncMediaGroup(groupId);
         results.push({
           media_group_id: groupId,
-          success: result.success,
-          synced_count: result.data?.updated_count || 0,
-          error: result.error
+          success: true,
+          synced_count: result.syncedCount
         });
       } catch (error) {
         results.push({

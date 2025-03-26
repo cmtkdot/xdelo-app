@@ -4,7 +4,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types/MessagesTypes';
 import { useToast } from '@/hooks/useToast';
 import { createLogger } from '@/lib/logger';
-import { reprocessMessage } from '@/lib/unifiedProcessor';
 
 // Create a logger specific to telegram operations
 const logger = createLogger('telegram-operations');
@@ -104,12 +103,15 @@ export function useTelegramOperations() {
         action: 'manual_reprocess'
       });
       
-      // Use our new unified processor instead of the separate edge function
-      const result = await reprocessMessage(messageId, true);
+      // Call the Edge Function to handle reprocessing
+      const { data, error } = await supabase.functions.invoke('xdelo_reprocess_message', {
+        body: { 
+          messageId,
+          force: true
+        }
+      });
       
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to reprocess message');
-      }
+      if (error) throw new Error(error.message);
       
       toast({
         title: 'Message Reprocessed',

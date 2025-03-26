@@ -1,6 +1,4 @@
 // Logger utility for Telegram webhook with correlation ID tracking and emoji support
-import { supabaseClient } from '../../_shared/supabase.ts';
-
 export class Logger {
   private correlationId: string;
   private component: string;
@@ -166,7 +164,9 @@ export async function logMessageOperation(
     // Log to console
     console.log(summary, metadata);
     
-    // Use the imported supabaseClient directly instead of dynamic import
+    // Import supabase client from _shared to avoid circular dependency
+    const { supabaseClient } = await import('../../_shared/supabase.ts');
+    
     // Log to database
     const { error } = await supabaseClient.from('unified_audit_logs').insert({
       event_type: eventType,
