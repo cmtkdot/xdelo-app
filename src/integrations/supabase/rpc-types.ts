@@ -112,5 +112,17 @@ declare module "@supabase/supabase-js" {
         p_correlation_id?: string;
       }
     ): { data: T; error: null } | { data: null; error: Error };
+
+    // Add RPC for killing long queries
+    rpc<T = any[]>(
+      fn: "xdelo_kill_long_queries",
+      params?: { older_than_seconds?: number }
+    ): { data: T; error: null } | { data: null; error: Error };
+
+    // Add RPC for migrating telegram data to metadata
+    rpc<T = { migrated_count: number }>(
+      fn: "migrate_telegram_data_to_metadata",
+      params?: {}
+    ): { data: T; error: null } | { data: null; error: Error };
   }
 }

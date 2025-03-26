@@ -73,7 +73,7 @@ export const DatabaseFixCard = () => {
       setIsOptimizingStorage(true);
       
       // Call the storage optimization function
-      const { data, error } = await supabase.rpc("migrate_telegram_data_to_metadata");
+      const { data, error } = await supabase.functions.invoke("migrate_telegram_data");
       
       if (error) throw error;
       
