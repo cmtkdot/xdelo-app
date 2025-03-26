@@ -4,17 +4,16 @@ import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage } from './handlers/textMessageHandler.ts';
 import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { xdelo_logProcessingEvent } from './dbOperations.ts';
 import { Logger } from './utils/logger.ts';
 import { isMessageForwarded } from '../_shared/consolidatedMessageUtils.ts';
 
 serve(async (req: Request) => {
   // Generate a correlation ID for tracing
   const correlationId = crypto.randomUUID();
-  
+
   // Create a main logger for this request
   const logger = new Logger(correlationId, 'telegram-webhook');
-  
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     logger.debug('Received OPTIONS request, returning CORS headers');
@@ -27,7 +26,7 @@ serve(async (req: Request) => {
       method: req.method,
       url: req.url,
     });
-    
+
     await xdelo_logProcessingEvent(
       "webhook_received",
       "system",
@@ -45,15 +44,15 @@ serve(async (req: Request) => {
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       update = await req.json();
       clearTimeout(timeoutId);
-      
-      logger.info('Received Telegram update', { 
+
+      logger.info('Received Telegram update', {
         update_id: update.update_id,
         update_type: Object.keys(update).filter(k => k !== 'update_id').join(', ')
       });
     } catch (error) {
       logger.error('Failed to parse request body', { error: error.message });
-      return new Response(JSON.stringify({ 
-        success: false, 
+      return new Response(JSON.stringify({
+        success: false,
         error: error.name === 'AbortError' ? 'Request timeout parsing JSON' : 'Invalid JSON in request body',
         correlationId
       }), {
@@ -66,8 +65,8 @@ serve(async (req: Request) => {
     const message = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
     if (!message) {
       logger.warn('No processable content in update', { update_keys: Object.keys(update) });
-      return new Response(JSON.stringify({ 
-        success: false, 
+      return new Response(JSON.stringify({
+        success: false,
         message: "No processable content",
         correlationId
       }), {
@@ -103,7 +102,7 @@ serve(async (req: Request) => {
 
     // Handle different message types
     let response;
-    
+
     try {
       // Handle edited messages
       if (context.isEdit) {
@@ -120,21 +119,21 @@ serve(async (req: Request) => {
         logger.info('Routing to text message handler', { message_id: message.message_id });
         response = await handleOtherMessage(message, context);
       }
-      
-      logger.info('Successfully processed message', { 
+
+      logger.info('Successfully processed message', {
         message_id: message.message_id,
         chat_id: message.chat?.id,
         processing_time: new Date().getTime() - new Date(context.startTime).getTime()
       });
-      
+
       return response;
     } catch (handlerError) {
-      logger.error('Error in message handler', { 
+      logger.error('Error in message handler', {
         error: handlerError.message,
         stack: handlerError.stack,
         message_id: message.message_id
       });
-      
+
       // Log the error to the database
       await xdelo_logProcessingEvent(
         "message_processing_failed",
@@ -145,17 +144,17 @@ serve(async (req: Request) => {
           chat_id: message.chat?.id,
           is_edit: context.isEdit,
           has_media: !!(message.photo || message.video || message.document),
-          handler_type: context.isEdit ? 'edited_message' : 
+          handler_type: context.isEdit ? 'edited_message' :
                        (message.photo || message.video || message.document) ? 'media_message' : 'other_message',
           error: handlerError.message
         },
         handlerError.message || "Unknown handler error"
       );
-      
+
       // Return error response but with 200 status to acknowledge to Telegram
       // (Telegram will retry if we return non-200 status)
-      return new Response(JSON.stringify({ 
-        success: false, 
+      return new Response(JSON.stringify({
+        success: false,
         error: handlerError.message,
         correlationId
       }), {
@@ -164,13 +163,13 @@ serve(async (req: Request) => {
       });
     }
   } catch (error) {
-    logger.error('Unhandled error processing webhook', { 
+    logger.error('Unhandled error processing webhook', {
       error: error.message,
       stack: error.stack
     });
-    
-    return new Response(JSON.stringify({ 
-      success: false, 
+
+    return new Response(JSON.stringify({
+      success: false,
       error: error.message || 'Unknown error',
       correlationId
     }), {
