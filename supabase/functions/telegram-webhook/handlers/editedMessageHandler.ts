@@ -1,20 +1,8 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+
 import { corsHeaders } from '../../_shared/cors.ts';
 import { xdelo_logProcessingEvent } from '../dbOperations.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
-import { constructTelegramMessageUrl, isMessageForwarded } from '../../_shared/messageUtils.ts';
-
-// Create Supabase client
-const supabaseClient = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    }
-  }
-);
+import { constructTelegramMessageUrl, isMessageForwarded, supabaseClient } from '../../_shared/consolidatedMessageUtils.ts';
 
 /**
  * Handler for edited messages (text only - media edits are handled by mediaMessageHandler)
@@ -66,9 +54,8 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
         edit_history: editHistory,
         edit_count: (existingMessage.edit_count || 0) + 1,
-        // If this is a text message, update these fields
         is_edited: true,
-        telegram_data: message,
+        telegram_metadata: message, // Update metadata to the newer version
         updated_at: new Date().toISOString()
       };
       
@@ -126,7 +113,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
           is_forward: isForward,
           correlation_id: correlationId,
           edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
-          telegram_data: message,
+          telegram_metadata: message,
           message_url: message_url
         })
         .select('id')

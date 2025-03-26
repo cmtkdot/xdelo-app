@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage } from './handlers/textMessageHandler.ts';
@@ -5,6 +6,7 @@ import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { xdelo_logProcessingEvent } from './dbOperations.ts';
 import { Logger } from './utils/logger.ts';
+import { isMessageForwarded } from '../_shared/consolidatedMessageUtils.ts';
 
 serve(async (req: Request) => {
   // Generate a correlation ID for tracing
@@ -20,11 +22,10 @@ serve(async (req: Request) => {
   }
 
   try {
-    // Log webhook received event
+    // Log webhook received event with basic info only
     logger.info('Webhook received', {
       method: req.method,
       url: req.url,
-      headers: Object.fromEntries(req.headers.entries()),
     });
     
     await xdelo_logProcessingEvent(
@@ -37,19 +38,23 @@ serve(async (req: Request) => {
       }
     );
 
-    // Parse the update from Telegram 
+    // Parse the update from Telegram with timeout
     let update;
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       update = await req.json();
+      clearTimeout(timeoutId);
+      
       logger.info('Received Telegram update', { 
-        update_keys: Object.keys(update),
-        update_id: update.update_id
+        update_id: update.update_id,
+        update_type: Object.keys(update).filter(k => k !== 'update_id').join(', ')
       });
     } catch (error) {
       logger.error('Failed to parse request body', { error: error.message });
       return new Response(JSON.stringify({ 
         success: false, 
-        error: 'Invalid JSON in request body',
+        error: error.name === 'AbortError' ? 'Request timeout parsing JSON' : 'Invalid JSON in request body',
         correlationId
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -74,7 +79,7 @@ serve(async (req: Request) => {
     // Determine message context
     const context = {
       isChannelPost: !!update.channel_post || !!update.edited_channel_post,
-      isForwarded: !!message.forward_from || !!message.forward_from_chat || !!message.forward_origin,
+      isForwarded: isMessageForwarded(message),
       correlationId,
       isEdit: !!update.edited_message || !!update.edited_channel_post,
       previousMessage: update.edited_message || update.edited_channel_post,
@@ -92,7 +97,6 @@ serve(async (req: Request) => {
       has_media: !!(message.photo || message.video || message.document),
       has_caption: !!message.caption,
       caption_length: message.caption?.length,
-      caption_preview: message.caption ? `${message.caption.substring(0, 50)}${message.caption.length > 50 ? '...' : ''}` : null,
       media_group_id: message.media_group_id,
       media_type: message.photo ? 'photo' : message.video ? 'video' : message.document ? 'document' : 'none'
     });
@@ -143,8 +147,7 @@ serve(async (req: Request) => {
           has_media: !!(message.photo || message.video || message.document),
           handler_type: context.isEdit ? 'edited_message' : 
                        (message.photo || message.video || message.document) ? 'media_message' : 'other_message',
-          error: handlerError.message,
-          error_stack: handlerError.stack
+          error: handlerError.message
         },
         handlerError.message || "Unknown handler error"
       );

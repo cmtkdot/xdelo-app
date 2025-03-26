@@ -1,21 +1,8 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
-import { xdelo_logProcessingEvent } from '../dbOperations.ts';
-import { constructTelegramMessageUrl, isMessageForwarded } from '../../_shared/messageUtils.ts';
-import { createNonMediaMessage } from '../dbOperations.ts';
-
-// Create Supabase client
-const supabaseClient = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    }
-  }
-);
+import { xdelo_logProcessingEvent, createNonMediaMessage } from '../dbOperations.ts';
+import { constructTelegramMessageUrl, isMessageForwarded } from '../../_shared/consolidatedMessageUtils.ts';
 
 export async function handleOtherMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
@@ -30,39 +17,33 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
       is_forwarded: isForwarded,
     });
     
-    // Generate message URL using our utility function from _shared/messageUtils.ts
-    const message_url = constructTelegramMessageUrl(message);
+    // Generate message URL using consolidated utility function
+    const message_url = constructTelegramMessageUrl(message.chat.id, message.message_id);
     
-    // Store message data in the other_messages table
-    const { data, error } = await supabaseClient
-      .from('other_messages')
-      .insert({
-        telegram_message_id: message.message_id,
-        chat_id: message.chat.id,
-        chat_type: message.chat.type,
-        chat_title: message.chat.title,
-        message_type: isChannelPost ? 'channel_post' : 'message',
-        message_text: message.text || message.caption || '',
-        telegram_data: message,
-        processing_state: 'completed',
-        is_forward: isForwarded,
-        correlation_id: correlationId,
-        message_url: message_url, // Add the constructed URL
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .select('id')
-      .single();
+    // Create message record with optimized operation
+    const { id: messageId, success, error } = await createNonMediaMessage({
+      telegram_message_id: message.message_id,
+      chat_id: message.chat.id,
+      chat_type: message.chat.type,
+      chat_title: message.chat.title,
+      message_type: isChannelPost ? 'channel_post' : 'message',
+      message_text: message.text || message.caption || '',
+      telegram_data: message,
+      processing_state: 'completed',
+      is_forward: isForwarded,
+      correlation_id: correlationId,
+      message_url: message_url
+    });
       
-    if (error) {
+    if (!success || !messageId) {
       logger?.error(`❌ Failed to store text message in database`, { error });
-      throw error;
+      throw new Error(error || 'Failed to create message record');
     }
     
     // Log successful processing
     await xdelo_logProcessingEvent(
       "message_created",
-      data.id,
+      messageId,
       correlationId,
       {
         telegram_message_id: message.message_id,
@@ -75,14 +56,14 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
     
     logger?.success(`✅ Successfully processed text message ${message.message_id}`, {
       message_id: message.message_id,
-      db_id: data.id,
+      db_id: messageId,
       message_url: message_url
     });
     
     return new Response(
       JSON.stringify({ 
         success: true, 
-        messageId: data.id, 
+        messageId, 
         correlationId,
         message_url: message_url 
       }),
