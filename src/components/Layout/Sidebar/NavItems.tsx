@@ -91,12 +91,6 @@ export const NavItems: React.FC<NavItemsProps> = ({
       isActive: currentPath === "/ai-chat",
     },
     {
-      title: "Audio Upload",
-      href: "/audio-upload",
-      icon: <Music size={20} />,
-      isActive: currentPath === "/audio-upload",
-    },
-    {
       title: "Settings",
       href: "/settings",
       icon: <Settings size={20} />,

@@ -1,4 +1,3 @@
-
 # Supabase Edge Functions Documentation
 
 This document provides an overview of all active edge functions in the project, their purposes, dependencies, and relationships.
@@ -119,13 +118,6 @@ This document provides an overview of all active edge functions in the project, 
 **Dependencies**:
 - `product-matching/matching-utils.ts`
 - Database tables: `gl_products`, `messages`
-
-### process-audio-upload
-**Purpose**: Handles audio file uploads and transcription
-**Dependencies**:
-- `_shared/cors.ts`
-- Storage bucket: `audio-uploads`
-- OpenAI API (for transcription)
 
 ## Telegram Management Functions
 

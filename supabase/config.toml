@@ -1,4 +1,3 @@
-
 project_id = "xjhhehxcxkiumnwbirel"
 
 [functions.analyze-with-ai]
@@ -22,8 +21,6 @@ verify_jwt = false
 [functions.openai-request]
 verify_jwt = false
 [functions.parse-caption-with-ai]
-verify_jwt = false
-[functions.process-audio-upload]
 verify_jwt = false
 [functions.product-matching]
 verify_jwt = false

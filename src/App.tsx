@@ -20,7 +20,6 @@ const MessagesEnhanced = lazy(() => import("./pages/MessagesEnhanced"));
 const MediaTable = lazy(() => import("./pages/MediaTable"));
 const AIChat = lazy(() => import("./pages/AIChat"));
 const Settings = lazy(() => import("./pages/Settings"));
-const AudioUpload = lazy(() => import("./pages/AudioUpload"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicGallery = lazy(() => import("./pages/PublicGallery"));
 const ProductMatching = lazy(() => import('./pages/ProductMatching'));
@@ -170,11 +169,6 @@ function App() {
                     <Route path="/settings" element={
                       <Suspense fallback={<PageLoader />}>
                         <Settings />
-                      </Suspense>
-                    } />
-                    <Route path="/audio-upload" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <AudioUpload />
                       </Suspense>
                     } />
                     <Route path="/product-matching" element={
