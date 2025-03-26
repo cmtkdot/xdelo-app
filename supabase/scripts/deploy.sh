@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 # Script to deploy database optimizations and function updates

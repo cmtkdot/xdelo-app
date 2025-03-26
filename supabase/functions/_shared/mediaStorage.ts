@@ -130,7 +130,8 @@ export async function xdelo_processMessageMedia(
         storage_path: downloadResult.storagePath,
         mime_type: downloadResult.mimeType || detectedMimeType,
         file_size: downloadResult.blob.size,
-        public_url: uploadResult.publicUrl
+        public_url: uploadResult.publicUrl,
+        storage_path_standardized: downloadResult.storagePath_standardized || true
       },
       retryAttempts: Math.max(downloadAttempts, uploadAttempts)
     };
