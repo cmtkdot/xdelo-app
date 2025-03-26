@@ -17,7 +17,7 @@ import {
   ForwardInfo,
   MessageInput,
 } from '../types.ts';
-import { createMessage, checkDuplicateFile,  } from '../dbOperations.ts';
+import { createMessage, checkDuplicateMessage,  } from '../dbOperations.ts';
 import { constructTelegramMessageUrl } from '../../_shared/messageUtils.ts';
 
 // Get Telegram bot token from environment
