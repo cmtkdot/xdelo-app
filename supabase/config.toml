@@ -1,3 +1,4 @@
+
 project_id = "xjhhehxcxkiumnwbirel"
 
 [functions.analyze-with-ai]
@@ -13,8 +14,6 @@ verify_jwt = false
 [functions.direct-caption-processor]
 verify_jwt = false
 [functions.generic-webhook]
-verify_jwt = false
-[functions.log-operation]
 verify_jwt = false
 [functions.manual-caption-parser]
 verify_jwt = false

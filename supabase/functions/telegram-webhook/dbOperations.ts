@@ -1,3 +1,4 @@
+
 import { 
   logProcessingEvent, 
   extractTelegramMetadata,
@@ -9,20 +10,6 @@ import {
  * Enhanced Supabase client with improved timeout and retry capabilities
  */
 export const supabaseClient = sharedSupabaseClient;
-
-/**
- * Legacy wrapper function for backwards compatibility
- * Replace with consolidated function from shared utils
- */
-export async function xdelo_logProcessingEvent(
-  eventType: string,
-  entityId: string,
-  correlationId: string,
-  metadata: Record<string, unknown> = {},
-  errorMessage?: string
-): Promise<void> {
-  await logProcessingEvent(eventType, entityId, correlationId, metadata, errorMessage);
-}
 
 /**
  * Check if a message with the same Telegram message ID already exists in the database
@@ -125,11 +112,12 @@ export async function createMediaMessage(
     is_forward?: boolean;
     correlation_id: string;
     message_url?: string;
+    telegram_metadata?: any;
   }
 ): Promise<{ id?: string; success: boolean; error?: string }> {
   try {
     // Extract essential metadata only
-    const telegramMetadata = extractTelegramMetadata(input.telegram_data);
+    const telegramMetadata = input.telegram_metadata || extractTelegramMetadata(input.telegram_data);
     
     // Create the message record
     const { data, error } = await supabaseClient
@@ -226,13 +214,13 @@ export async function createMessage(
       .single();
       
     if (error) {
-      logger?.error('Failed to create message record:', error);
+      if (logger) logger.error('Failed to create message record:', error);
       return { success: false, error_message: error.message };
     }
     
     return { id: data.id, success: true };
   } catch (error) {
-    logger?.error('Exception in createMessage:', error);
+    if (logger) logger.error('Exception in createMessage:', error);
     return { 
       success: false, 
       error_message: error instanceof Error ? error.message : String(error) 

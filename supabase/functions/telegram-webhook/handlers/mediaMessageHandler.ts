@@ -16,15 +16,17 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     // Determine if message is forwarded
     const isForwarded = isMessageForwarded(message);
     
-    // Log the start of processing
-    logger?.info(`🖼️ Processing media message ${message.message_id} in chat ${message.chat.id}`, {
-      has_photo: !!message.photo,
-      has_video: !!message.video,
-      has_document: !!message.document,
-      media_group_id: message.media_group_id,
-      message_type: isChannelPost ? 'channel_post' : 'message',
-      is_forwarded: isForwarded,
-    });
+    // Log the start of processing using object notation for better readability
+    if (logger) {
+      logger.info(`Processing media message ${message.message_id} in chat ${message.chat.id}`, {
+        has_photo: !!message.photo,
+        has_video: !!message.video,
+        has_document: !!message.document,
+        media_group_id: message.media_group_id,
+        message_type: isChannelPost ? 'channel_post' : 'message',
+        is_forwarded: isForwarded,
+      });
+    }
     
     // Generate message URL using consolidated function
     const message_url = constructTelegramMessageUrl(message.chat.id, message.message_id);
@@ -85,11 +87,13 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     });
       
     if (!success || !messageId) {
-      logger?.error(`❌ Failed to store media message in database`, { error });
+      if (logger) {
+        logger.error(`Failed to store media message in database`, { error });
+      }
       throw new Error(error || 'Failed to create message record');
     }
     
-    // Log successful processing
+    // Log successful processing using consolidated logging
     await logProcessingEvent(
       "media_message_created",
       messageId,
@@ -104,16 +108,20 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       }
     );
     
-    logger?.success(`✅ Successfully processed media message ${message.message_id}`, {
-      message_id: message.message_id,
-      db_id: messageId,
-      media_group_id: message.media_group_id,
-      message_url: message_url
-    });
+    if (logger) {
+      logger.success(`Successfully processed media message ${message.message_id}`, {
+        message_id: message.message_id,
+        db_id: messageId,
+        media_group_id: message.media_group_id,
+        message_url: message_url
+      });
+    }
     
     // If part of a media group, check if we have other messages that have analyzed content
     if (message.media_group_id) {
-      logger?.info(`Media message ${message.message_id} belongs to group ${message.media_group_id}`);
+      if (logger) {
+        logger.info(`Media message ${message.message_id} belongs to group ${message.media_group_id}`);
+      }
       
       // Try to sync content from existing messages in the group
       try {
@@ -125,12 +133,18 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
         );
         
         if (syncSuccess && updatedCount && updatedCount > 0) {
-          logger?.info(`Synced content to ${updatedCount} messages in media group ${message.media_group_id}`);
+          if (logger) {
+            logger.info(`Synced content to ${updatedCount} messages in media group ${message.media_group_id}`);
+          }
         } else if (syncError) {
-          logger?.warn(`Media group sync warning: ${syncError}`);
+          if (logger) {
+            logger.warn(`Media group sync warning: ${syncError}`);
+          }
         }
       } catch (syncError) {
-        logger?.warn(`Failed to sync media group: ${syncError.message}`);
+        if (logger) {
+          logger.warn(`Failed to sync media group: ${syncError.message}`);
+        }
       }
     }
     
@@ -144,13 +158,15 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    context.logger?.error(`❌ Error processing media message: ${error.message}`, { 
-      error: error.stack,
-      message_id: message.message_id,
-      chat_id: message.chat.id
-    });
+    if (context.logger) {
+      context.logger.error(`Error processing media message: ${error.message}`, { 
+        error: error.stack,
+        message_id: message.message_id,
+        chat_id: message.chat.id
+      });
+    }
     
-    // Log the error
+    // Log the error using consolidated logging
     await logProcessingEvent(
       "media_message_processing_error",
       "system",

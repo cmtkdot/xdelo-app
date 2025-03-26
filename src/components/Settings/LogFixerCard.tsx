@@ -5,6 +5,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/useToast";
 import { AlertTriangle, CheckCircle } from "lucide-react";
+import { createLogger } from "@/lib/logger";
+
+// Create a logger for the LogFixerCard
+const logger = createLogger('log-fixer');
 
 export function LogFixerCard() {
   const [isFixing, setIsFixing] = useState(false);
@@ -15,6 +19,12 @@ export function LogFixerCard() {
     try {
       setIsFixing(true);
       
+      // Log the operation with our consolidated logger
+      await logger.logEvent("SYSTEM_REPAIR", "system", {
+        repair_type: "audit_log_uuids",
+        initiated_at: new Date().toISOString()
+      });
+      
       // Call the RPC function to fix invalid UUIDs
       const { data, error } = await supabase.rpc('xdelo_fix_audit_log_uuids');
       
@@ -22,12 +32,26 @@ export function LogFixerCard() {
       
       setResults(data);
       
+      // Log successful repair
+      await logger.logEvent("SYSTEM_REPAIR", "system", {
+        repair_type: "audit_log_uuids",
+        fixed_count: data.fixed_count,
+        status: "completed"
+      });
+      
       toast({
         title: "Log Fix Completed",
         description: `Successfully fixed ${data.fixed_count} audit log entries.`,
       });
     } catch (error) {
       console.error('Error fixing logs:', error);
+      
+      // Log repair failure
+      await logger.logEvent("SYSTEM_ERROR", "system", {
+        repair_type: "audit_log_uuids",
+        error: error instanceof Error ? error.message : String(error),
+        status: "failed"
+      });
       
       toast({
         title: 'Error',
