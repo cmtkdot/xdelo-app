@@ -1,3 +1,4 @@
+
 import { supabaseClient } from '../../_shared/supabase.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
 import { 
@@ -17,8 +18,9 @@ import {
   ForwardInfo,
   MessageInput,
 } from '../types.ts';
-import { createMessage, checkDuplicateFile } from '../dbOperations.ts';
-import { constructTelegramMessageUrl } from '../../_shared/messageUtils.ts';
+import { createMessage, checkDuplicateMessage } from '../dbOperations.ts';
+import { constructTelegramMessageUrl } from '../../_shared/consolidatedMessageUtils.ts';
+import { logProcessingEvent } from '../../_shared/consolidatedMessageUtils.ts';
 
 // Get Telegram bot token from environment
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
@@ -59,7 +61,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     
     // Also log to database for tracking
     try {
-      await xdelo_logProcessingEvent(
+      await logProcessingEvent(
         "media_processing_error",
         message.message_id.toString(),
         context.correlationId,
@@ -177,7 +179,7 @@ async function xdelo_handleEditedMediaMessage(
         
         // Log the edit operation
         try {
-          await xdelo_logProcessingEvent(
+          await logProcessingEvent(
             "message_media_edited",
             existingMessage.id,
             correlationId,
@@ -225,7 +227,7 @@ async function xdelo_handleEditedMediaMessage(
       
       // Log the caption edit
       try {
-        await xdelo_logProcessingEvent(
+        await logProcessingEvent(
           "message_caption_edited",
           existingMessage.id,
           correlationId,
@@ -260,7 +262,7 @@ async function xdelo_handleEditedMediaMessage(
       
       // Log the edit operation anyway
       try {
-        await xdelo_logProcessingEvent(
+        await logProcessingEvent(
           "message_edit_received",
           existingMessage.id,
           correlationId,
@@ -297,17 +299,16 @@ async function xdelo_handleNewMediaMessage(
   
   // First check if this is a duplicate message we've already processed
   try {
-    const isDuplicate = await checkDuplicateFile(
-      supabaseClient,
-      message.message_id,
-      message.chat.id
+    const isDuplicate = await checkDuplicateMessage(
+      message.chat.id,
+      message.message_id
     );
     
     if (isDuplicate) {
       logger?.info(`Duplicate message detected: ${message.message_id} in chat ${message.chat.id}`);
       
       // Log the duplicate detection
-      await xdelo_logProcessingEvent(
+      await logProcessingEvent(
         "duplicate_message_detected",
         message.message_id.toString(),
         correlationId,
@@ -399,7 +400,7 @@ async function xdelo_handleNewMediaMessage(
     };
     
     // Create the message
-    const result = await createMessage(supabaseClient, messageInput, logger);
+    const result = await createMessage(messageInput, logger);
     
     if (!result.success) {
       logger?.error(`Failed to create message: ${result.error_message}`, {
@@ -408,7 +409,7 @@ async function xdelo_handleNewMediaMessage(
       });
       
       // Also try to log to the database
-      await xdelo_logProcessingEvent(
+      await logProcessingEvent(
         "message_creation_failed",
         message.message_id.toString(),
         correlationId,
@@ -446,7 +447,7 @@ async function xdelo_handleNewMediaMessage(
     
     // Log detailed error to database
     try {
-      await xdelo_logProcessingEvent(
+      await logProcessingEvent(
         "media_processing_error",
         message.message_id.toString(),
         correlationId,
@@ -468,4 +469,3 @@ async function xdelo_handleNewMediaMessage(
     throw createError;
   }
 }
-

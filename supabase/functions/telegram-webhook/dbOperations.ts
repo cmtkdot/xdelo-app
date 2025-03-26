@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { 
   logProcessingEvent, 
@@ -39,33 +40,6 @@ export async function checkDuplicateMessage(chatId: number, telegramMessageId: n
     
   if (error) {
     console.error('Error checking for duplicate message:', error);
-    return false;
-  }
-  
-  return data && data.length > 0;
-}
-
-/**
- * Check if a file with the same Telegram message ID already exists in the database
- * @param client Supabase client instance
- * @param telegramMessageId Telegram message ID
- * @param chatId Chat ID
- * @returns Boolean indicating if the file is a duplicate
- */
-export async function checkDuplicateFile(
-  client: any,
-  telegramMessageId: number,
-  chatId: number
-): Promise<boolean> {
-  const { data, error } = await client
-    .from('messages')
-    .select('id')
-    .eq('chat_id', chatId)
-    .eq('telegram_message_id', telegramMessageId)
-    .limit(1);
-    
-  if (error) {
-    console.error('Error checking for duplicate file:', error);
     return false;
   }
   
@@ -207,7 +181,6 @@ export async function createMediaMessage(
  * This is a unified function that handles both media and non-media messages
  */
 export async function createMessage(
-  client: any, 
   input: any, 
   logger?: any
 ): Promise<{ id?: string; success: boolean; error_message?: string }> {
@@ -217,7 +190,7 @@ export async function createMessage(
       (input.telegram_data ? extractTelegramMetadata(input.telegram_data) : {});
     
     // Create the message record
-    const { data, error } = await client
+    const { data, error } = await supabaseClient
       .from('messages')
       .insert({
         telegram_message_id: input.telegram_message_id,

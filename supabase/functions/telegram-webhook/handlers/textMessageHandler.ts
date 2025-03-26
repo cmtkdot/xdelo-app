@@ -1,8 +1,13 @@
 
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
-import { xdelo_logProcessingEvent, createNonMediaMessage } from '../dbOperations.ts';
-import { constructTelegramMessageUrl, isMessageForwarded, extractTelegramMetadata } from '../../_shared/consolidatedMessageUtils.ts';
+import { createNonMediaMessage } from '../dbOperations.ts';
+import { 
+  constructTelegramMessageUrl, 
+  isMessageForwarded, 
+  extractTelegramMetadata,
+  logProcessingEvent 
+} from '../../_shared/consolidatedMessageUtils.ts';
 
 export async function handleOtherMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
@@ -45,7 +50,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
     }
     
     // Log successful processing
-    await xdelo_logProcessingEvent(
+    await logProcessingEvent(
       "message_created",
       messageId,
       correlationId,
@@ -81,7 +86,7 @@ export async function handleOtherMessage(message: TelegramMessage, context: Mess
     });
     
     // Log the error
-    await xdelo_logProcessingEvent(
+    await logProcessingEvent(
       "message_processing_error",
       "system",
       context.correlationId,

@@ -1328,6 +1328,7 @@ export type Database = {
           sync_attempt: number | null
           telegram_data: Json | null
           telegram_message_id: number | null
+          telegram_metadata: Json | null
           update_id: string | null
           updated_at: string
           user_id: string | null
@@ -1419,6 +1420,7 @@ export type Database = {
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
+          telegram_metadata?: Json | null
           update_id?: string | null
           updated_at?: string
           user_id?: string | null
@@ -1510,6 +1512,7 @@ export type Database = {
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
+          telegram_metadata?: Json | null
           update_id?: string | null
           updated_at?: string
           user_id?: string | null
@@ -3519,6 +3522,12 @@ export type Database = {
         }
         Returns: Json
       }
+      xdelo_extract_telegram_metadata: {
+        Args: {
+          p_telegram_data: Json
+        }
+        Returns: Json
+      }
       xdelo_find_broken_media_groups: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3741,6 +3750,12 @@ export type Database = {
       xdelo_parse_caption: {
         Args: {
           p_caption: string
+        }
+        Returns: Json
+      }
+      xdelo_prepare_message_for_webhook: {
+        Args: {
+          message_id: string
         }
         Returns: Json
       }

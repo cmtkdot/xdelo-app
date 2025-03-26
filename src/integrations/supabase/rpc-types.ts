@@ -1,3 +1,4 @@
+
 /**
  * Type definitions for RPC functions
  * This helps TypeScript recognize custom RPC functions in the project
