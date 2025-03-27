@@ -15,40 +15,43 @@ Media Message Handling (mediaMessageHandler.ts):
 
 Duplicate Detection:
 
-Checks for existing messages with same file_unique_id used for the name directly in the telegram-storage bucket 
+Checks for existing messages with same file_unique_id used for the name directly in the telegram-storage bucket
 Updates existing record if found instead of creating new one
 Media Group Handling:
 
 Recognizes messages part of a media group
 Maintains relationships between grouped messages
-Syncs the analyzed content across group members
+Syncs the analyzed content across group members (triggered by Edge Function)
 Caption Processing:
 
-Messages with captions go to manual-caption-parser
-Falls back to database function if parser fails
-Handles caption edits and removals
+DB Trigger (`trg_process_caption`) sets state to 'pending' for messages with captions.
+Edge Function (`direct-caption-processor`) polls for 'pending' messages.
+Edge Function uses shared parser (`_shared/captionParser.ts`).
+Handles caption edits via the trigger re-setting state to 'pending'.
 Processing States:
 
-'initialized': Initial state for new messages
-'pending': Ready for caption analysis
-'completed': Successfully processed
-'error': Processing failed
+'initialized': Initial state for new messages.
+'pending': Caption exists, ready for processing by `direct-caption-processor`. Set by DB trigger.
+'processing': Actively being processed by `direct-caption-processor`.
+'completed': Successfully processed, `analyzed_content` populated. Set by `direct-caption-processor` or sync function.
+'error': Processing failed. Set by `direct-caption-processor`.
 Media Group Synchronization:
 
-Immediate sync after processing captions
-Delayed re-checks for initially empty groups
-Direct database fallback for reliability
-Maintains edit history and caption relationships
+Sync triggered by `direct-caption-processor` after successful caption processing via RPC call to `xdelo_sync_media_group_content`.
+DB function `xdelo_sync_media_group_content` uses advisory locks.
+Safety net cron job (`xdelo_recheck_media_groups`) ensures eventual consistency.
+Maintains edit history and caption relationships.
 
-detailed: 
+detailed:
 Caption Processing and Media Group Synchronization
 1. Caption Processing Flow --> If No caption then will check for other media groups that are the same and see if they have analyzed content parsed from caption already completed and not null. It will sync if it  has captions then: 
 A. Entry Points
-Webhook receives Telegram message
-Message stored with initial state 'initialized'
-Caption processor triggered immediately after caption is not null
+Webhook (`telegram-webhook`) receives Telegram message.
+Message stored in DB (`messages` table) with initial state 'initialized'.
+DB Trigger (`trg_process_caption`) fires `BEFORE` save if caption exists, setting state to 'pending'.
+Edge Function (`direct-caption-processor`) polls periodically for messages in 'pending' state.
 
-B. Caption Analysis Algorithm
+B. Caption Analysis Algorithm (`_shared/captionParser.ts` called by `direct-caption-processor`)
 The system uses a sophisticated multi-pattern matching approach:
 
 Simple Patterns
@@ -89,36 +92,35 @@ Metadata Tracking
 }
 
 2. Media Group Synchronization
-A. Immediate Synchronization
+A. Synchronization (Triggered by Edge Function)
 Trigger Points
-New message in group received
-Caption edited
-Force reprocessing requested
-Any edits to the caption from our app to telegram
-Synchronization Process
+`direct-caption-processor` successfully processes a message with a `media_group_id`.
+Synchronization Process (Edge Function calls DB Function)
 
 
 sequenceDiagram
-    participant M as Message
+    participant EF as direct-caption-processor
     participant DB as Database
-    participant S as Sync Function
-    participant G as Media Group
+    participant SYNC as xdelo_sync_media_group_content (DB Fn)
+    participant G as Media Group Members
     
-    M->>DB: Update analyzed content
-    DB->>S: Trigger sync
-    S->>DB: Acquire advisory lock
-    S->>G: Propagate content
-    S->>DB: Update group metadata
-    S->>DB: Release lock
-B. Multi-Layer Fallback System
+    EF->>DB: UPDATE analyzed_content, state='completed' (Source Msg)
+    alt Source Message Processed Successfully & Has Media Group ID
+      EF->>SYNC: Call RPC(source_msg_id, analyzed_content)
+      SYNC->>DB: Acquire advisory lock (media_group_id)
+      SYNC->>G: UPDATE analyzed_content, state='completed'
+      SYNC->>DB: Release lock
+      SYNC-->>EF: Return status
+    end
+B. Multi-Layer Fallback System (Safety Nets)
 Primary Path
 
-Edge function synchronization
-Uses database transaction
-Advisory locks prevent conflicts
+`direct-caption-processor` calls `xdelo_sync_media_group_content` (DB Function with advisory locks).
 Fallback Mechanisms
 
-Edge Function → Direct DB Function → Manual Repair
+Cron Job (`pg_cron`) -> `xdelo_recheck_media_groups` (DB Function) -> `xdelo_sync_incomplete_media_group` (DB Function) for eventual consistency.
+Cron Job (`pg_cron`) -> `xdelo_reset_stalled_messages` (DB Function) for reprocessing stuck messages.
+Manual Repair Tools (UI).
 Error Recovery
 
 Transaction rollback on failure
@@ -243,25 +245,43 @@ flowchart LR
    - Real-time message updates via Supabase subscriptions
    - Batch processing controls for large media groups
 
-### End-to-End Workflow
+### End-to-End Workflow (Hybrid Plan)
 ```mermaid
 sequenceDiagram
     participant User as Telegram User
     participant TG as Telegram API
-    participant BE as Backend
-    participant DB as Database
+    participant W as telegram-webhook (Edge Fn)
+    participant DB as Database (Messages Table)
+    participant TRG as trg_process_caption (DB Trigger)
+    participant EF as direct-caption-processor (Edge Fn)
+    participant P as _shared/captionParser.ts
+    participant SYNC as xdelo_sync_media_group_content (DB Fn)
     participant FE as Frontend
     
-    User->>TG: Send Media Message
-    TG->>BE: Webhook Notification
-    BE->>DB: Store Raw Message
-    BE->>BE: Process Media
-    BE->>DB: Update Analyzed Content
-    DB->>FE: Real-time Update
-    FE->>User: Display Processed Message
-    FE->>BE: Initiate Repair (if needed)
-    BE->>TG: Redownload Media
-    BE->>DB: Update Fixed Record
+    User->>TG: Send Media Message (with Caption)
+    TG->>W: Webhook Notification
+    W->>DB: Store Raw Message (state='initialized')
+    Note over DB, TRG: BEFORE Trigger fires
+    TRG->>DB: Set state='pending'
+    DB-->>W: Save Complete
+    W-->>TG: Acknowledge Receipt (HTTP 200)
+    
+    Note right of EF: Polls periodically...
+    EF->>DB: Query for state='pending'
+    DB-->>EF: Message Record
+    EF->>DB: UPDATE state='processing' (Lock)
+    EF->>P: xdelo_parseCaption(caption)
+    P-->>EF: analyzedContent
+    EF->>DB: UPDATE analyzed_content, state='completed'
+    DB-->>FE: Real-time Update (Subscription)
+    FE-->>User: Display Processed Message
+    
+    alt Has Media Group ID
+      EF->>SYNC: Call RPC(...)
+      SYNC->>DB: Update Group Members
+      DB-->>FE: Real-time Update (Group Members)
+      FE-->>User: Display Updated Group
+    end
 ```
 
 ### Key System Flows
@@ -270,20 +290,50 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    A[Cloudflare] --> B[Edge Functions1. **Media Processing**:
-   - Automatic MIME type detection/correction
-   - Multi-phase storage validation
-   - EXIF data stripping for security
+    A[Telegram] --> B(telegram-webhook Edge Fn);
+    B --> C{Save Message};
+    C --> D[messages Table];
+    D -- caption exists --> E(trg_process_caption);
+    E --> F[Set state='pending'];
+    G(direct-caption-processor Edge Fn) -- Polls --> F;
+    G --> H(Parse Caption);
+    H --> I{Update DB};
+    I -- state='completed' --> D;
+    I -- state='error' --> D;
+    I -- Has media_group_id --> J(xdelo_sync_media_group_content DB Fn);
+    J --> D;
+    K(pg_cron) --> L(xdelo_reset_stalled_messages);
+    L --> D;
+    K --> M(xdelo_recheck_media_groups);
+    M --> D;
 
-2. **Caption Analysis**:
-   - Pattern-based parsing with fallback to AI
-   - Vendor code normalization
-   - Historical version tracking
+    subgraph "Caption Analysis & Sync"
+        G; H; I; J;
+    end
+    subgraph "Webhook Ingestion"
+        B; C; D; E; F;
+    end
+    subgraph "Safety Nets"
+        K; L; M;
+    end
 
-3. **Error Recovery**:
-   - Automatic hash verification
-   - Cross-service correlation ID tracing
-   - Progressive backoff algorithm
+    style F fill:#f9f,stroke:#333,stroke-width:2px;
+    style G fill:#ccf,stroke:#333,stroke-width:2px;
+```
+
+### Key Features (Updated Context)
+
+1.  **Media Processing**: (Handled by `telegram-webhook` & `media-management`)
+    *   Automatic MIME type detection/correction
+    *   Media download/upload to Supabase Storage.
+2.  **Caption Analysis**: (Handled by `direct-caption-processor` & `_shared/captionParser.ts`)
+    *   Pattern-based parsing via shared function.
+    *   Vendor code normalization.
+    *   Historical version tracking (`old_analyzed_content`).
+3.  **Error Recovery**:
+    *   Stalled message reset via `xdelo_reset_stalled_messages` (cron).
+    *   Media group consistency check via `xdelo_recheck_media_groups` (cron).
+    *   Cross-service correlation ID tracing (manual).
 
 ### Deployment Architecture]
     B --> C[Supabase PostgreSQL]
@@ -384,72 +434,49 @@ This system processes Telegram messages with media and captions, extracting stru
 
 ```mermaid
 flowchart TD
-    A[Telegram Message] --> B{Message Type}
-    B -->|Media| C[Download & Store Media]
-    B -->|Text| D[Process Text Content]
-    B -->|Edited| E[Handle Edits]
-    
-    C --> F{Has Caption?}
-    F -->|Yes| G[Parse Caption]
-    F -->|No| H[Check Media Group]
-    
-    G --> I[Extract Product Data]
-    I --> J[Store Analyzed Content]
-    J --> K[Sync Across Media Group]
-    
-    H --> L{Group Has Analysis?}
-    L -->|Yes| M[Sync From Group]
-    L -->|No| N[Flag for Later]
-    
-    E --> O{Caption Changed?}
-    O -->|Yes| P[Reset Analysis]
-    O -->|No| Q[Preserve History]
+    A[Telegram Message] --> B{Message Type};
+    B -->|Media/Text/Edit| C[telegram-webhook];
+    C --> D[Store/Update Message in DB];
+    D -- Has Caption? --> E[Trigger sets state='pending'];
+    E --> F(direct-caption-processor polls);
+    F --> G[Parse Caption];
+    G --> H[Update analyzed_content];
+    H -- state='completed' --> I{Media Group?};
+    I -- Yes --> J[Call xdelo_sync_media_group_content];
+    J --> K[Update Group Members];
+    I -- No --> L[Processing Complete];
+    K --> L;
+    H -- state='error' --> M[Log Error];
+    M --> L;
+
+    subgraph "Safety Nets (Cron)"
+        SN1(xdelo_reset_stalled_messages) --> D;
+        SN2(xdelo_recheck_media_groups) --> J;
+    end
+
 ```
 
-## Key Components
+## Key Components (Hybrid Plan)
 
 ### 1. Telegram Webhook Handler (`telegram-webhook`)
-- Entry point for all Telegram updates
-- Handles media downloads and storage
-- Routes messages to appropriate processors
-- Generates correlation IDs for tracing
+- Entry point for all Telegram updates.
+- Stores message data via `createMessage`.
+- **Does not** trigger analysis directly.
 
-### 2. Media Processing Pipeline
-```typescript
-// From mediaUtils.ts
-export const processMediaMessage = async (message: TelegramMessage) => {
-  const mediaInfo = await getMediaInfo(message);
-  const dbRecord = await createMediaRecord(mediaInfo);
-  
-  if (mediaInfo.caption) {
-    await triggerCaptionAnalysis(dbRecord.id, mediaInfo.correlationId);
-  }
-  
-  return mediaInfo;
-};
-```
+### 2. Database Trigger (`trg_process_caption`)
+- Runs `BEFORE INSERT/UPDATE` on `messages` table.
+- Executes `xdelo_set_caption_pending_trigger` **only if** `caption` is present.
+- Sets `processing_state` to `'pending'`.
 
-### 3. Caption Analysis System
-- Pattern-based extraction of:
-  - Product Name
-  - Product Code
-  - Vendor UID
-  - Purchase Date
-  - Quantity
+### 3. Caption Analysis Engine (`direct-caption-processor` Edge Fn + `_shared/captionParser.ts`)
+- Edge function polls for `'pending'` messages.
+- Locks message by setting state to `'processing'`.
+- Calls shared `xdelo_parseCaption` function.
+- Updates `analyzed_content` and sets state to `'completed'` or `'error'`.
 
-### 4. Media Group Synchronization
-```mermaid
-sequenceDiagram
-    participant M as Media Message
-    participant D as Database
-    participant S as Sync Service
-    
-    M->>D: Store initial message
-    D->>S: Trigger media group check
-    S->>D: Find group members
-    S->>D: Sync analyzed content
-    D->>D: Update all group members
-```
+### 4. Media Group Synchronization (`direct-caption-processor` + `xdelo_sync_media_group_content` DB Fn)
+- After successful processing, `direct-caption-processor` calls `xdelo_sync_media_group_content` RPC if message is in a group.
+- DB function uses advisory locks and updates group members.
 
 ### 5. Unified Audit Logging
 ```sql
@@ -470,9 +497,12 @@ CREATE TABLE unified_audit_logs (
 
 | State | Description | Next Actions |
 |-------|-------------|--------------|
-| `pending` | Initial state after message receipt | Automatic processing |
-| `processing` | Analysis in progress | Completion or error |
-| `completed` | Successful processing | - |
+| State | Description | Set By | Next Actions |
+|-------|-------------|--------|--------------|
+| `initialized` | Initial state after message receipt | `telegram-webhook` | Wait for trigger or ignore |
+| `pending` | Caption exists, ready for processing | `trg_process_caption` | Polled by `direct-caption-processor` |
+| `processing` | Analysis in progress | `direct-caption-processor` | Completion or error |
+| `completed` | Successful processing | `direct-caption-processor` / `xdelo_sync_media_group_content` | - |
 | `error` | Failed processing | Automatic retries |
 
 ## Error Handling
@@ -498,10 +528,10 @@ async function handleAnalysisError(messageId: string, error: Error) {
 }
 ```
 
-### Recovery Tools
-1. `xdelo_redownload_missing_media` - Recover failed media
-2. `xdelo_reset_stalled_messages` - Reset stuck messages
-3. `xdelo_repair_media_group_syncs` - Fix group inconsistencies
+### Recovery Tools (Safety Nets)
+1. `xdelo_redownload_missing_media` - Recover failed media (Assumed separate process).
+2. `xdelo_reset_stalled_messages` (DB Fn / Cron) - Resets messages stuck in 'processing'.
+3. `xdelo_recheck_media_groups` (DB Fn / Cron) - Fixes group inconsistencies (replaces `xdelo_repair_media_group_syncs`).
 
 ## Deployment
 
@@ -550,10 +580,12 @@ ORDER BY event_timestamp DESC;
 
 ## Maintenance
 
-Scheduled jobs:
-```cron
-# Daily maintenance
-0 3 * * * xdelo_daily_maintenance
-
-# 5-minute retries
-*/5 * * * * xdelo_process_pending_messages
+Scheduled jobs (`pg_cron`):
+```sql
+-- Example Cron Job Setup (Illustrative - Actual scheduling via DB commands)
+-- SELECT cron.schedule('reset-stalled', '*/15 * * * *', 'SELECT xdelo_reset_stalled_messages(15)');
+-- SELECT cron.schedule('recheck-groups', '*/1 * * * *', 'SELECT xdelo_recheck_media_groups()');
+```
+- **Stalled Message Reset:** Runs `xdelo_reset_stalled_messages` periodically (e.g., every 15 mins).
+- **Group Consistency Check:** Runs `xdelo_recheck_media_groups` periodically (e.g., every 1 min).
+- Other maintenance jobs (e.g., `xdelo_daily_maintenance`) assumed separate.

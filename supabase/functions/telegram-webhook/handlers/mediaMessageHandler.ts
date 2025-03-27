@@ -7,7 +7,7 @@ import { retryDbOperation } from '../../_shared/dbRetryUtils.ts';
 import {
   checkDuplicateFile,
   createMessage,
-  triggerCaptionAnalysis,
+  // triggerCaptionAnalysis, // Removed - No longer used
   xdelo_logProcessingEvent,
 } from "../dbOperations.ts";
 import {
@@ -149,6 +149,12 @@ async function xdelo_handleEditedMediaMessage(
           ? message.photo[message.photo.length - 1]
           : message.video || message.document;
 
+        // Check immediately if media file details are present in the edited message
+        if (!telegramFile || !telegramFile.file_id || !telegramFile.file_unique_id) {
+            logger?.error("Essential media file details missing from edited message", { message_id: message.message_id });
+            throw new Error("Essential media file details missing from edited message");
+        }
+
         // Get mime type
         const detectedMimeType = xdelo_detectMimeType(message);
 
@@ -175,8 +181,9 @@ async function xdelo_handleEditedMediaMessage(
             file_id: telegramFile.file_id,
             file_unique_id: telegramFile.file_unique_id,
             mime_type: detectedMimeType,
-            width: telegramFile.width,
-            height: telegramFile.height,
+            // Safely access width/height, defaulting to undefined if not applicable (e.g., for documents)
+            width: 'width' in telegramFile ? telegramFile.width : undefined,
+            height: 'height' in telegramFile ? telegramFile.height : undefined,
             duration: message.video?.duration,
             file_size: telegramFile.file_size,
             edit_date: message.edit_date
@@ -230,6 +237,7 @@ async function xdelo_handleEditedMediaMessage(
       );
 
       // Update just the caption
+      // The DB trigger 'trg_process_caption' will handle setting state to 'pending'
       const { error: updateError } = await supabaseClient
         .from("messages")
         .update({
@@ -239,9 +247,10 @@ async function xdelo_handleEditedMediaMessage(
             : new Date().toISOString(),
           edit_count: (existingMessage.edit_count || 0) + 1,
           edit_history: editHistory,
-          processing_state: message.caption
-            ? "pending"
-            : existingMessage.processing_state,
+          // processing_state is handled by the trigger now
+          // processing_state: message.caption
+          //   ? "pending"
+          //   : existingMessage.processing_state,
           last_edited_at: new Date().toISOString(),
         })
         .eq("id", existingMessage.id);
@@ -250,11 +259,6 @@ async function xdelo_handleEditedMediaMessage(
         throw new Error(
           `Failed to update message caption: ${updateError.message}`
         );
-      }
-
-      // Process the new caption
-      if (message.caption) {
-        // Process caption changes - this could trigger analysis, etc.
       }
 
       // Log the caption edit
@@ -353,8 +357,10 @@ async function xdelo_handleNewMediaMessage(
       ? message.photo[message.photo.length - 1]
       : message.video || message.document;
 
-    if (!telegramFile) {
-      throw new Error("No media file found in message");
+    // Check immediately if media file details are present
+    if (!telegramFile || !telegramFile.file_id || !telegramFile.file_unique_id) {
+      logger?.error("Essential media file details (file_id, file_unique_id) missing from message", { message_id: message.message_id });
+      throw new Error("Essential media file details missing");
     }
 
     // First check if we've already processed THIS EXACT message (telegram_message_id + chat_id)
@@ -457,8 +463,8 @@ async function xdelo_handleNewMediaMessage(
       : undefined;
 
     // For duplicate files, we might want to preserve the analyzed content history
-    let oldAnalyzedContent = [];
-    let duplicateReferenceId = null;
+    let oldAnalyzedContent: any[] = []; // Explicitly type array
+    let duplicateReferenceId: string | undefined = undefined; // Use undefined instead of null
 
     if (existingFileMessage && existingFileMessage.analyzed_content) {
       logger?.info(`Preserving analyzed content history from existing file`);
@@ -473,7 +479,11 @@ async function xdelo_handleNewMediaMessage(
       }
 
       // Add the current analyzed_content to history
-      oldAnalyzedContent.push(existingFileMessage.analyzed_content);
+      // Ensure analyzed_content is not null/undefined before pushing
+      if (existingFileMessage.analyzed_content) {
+          oldAnalyzedContent.push(existingFileMessage.analyzed_content);
+      }
+
 
       // Record the original message ID for reference
       duplicateReferenceId = existingFileMessage.id;
@@ -494,11 +504,13 @@ async function xdelo_handleNewMediaMessage(
         message.document?.mime_type || message.video?.mime_type,
       storage_path: mediaResult.fileInfo.storage_path,
       public_url: mediaResult.fileInfo.public_url,
-      width: telegramFile.width,
-      height: telegramFile.height,
+      // Safely access width/height, defaulting to undefined if not applicable
+      width: telegramFile && 'width' in telegramFile ? telegramFile.width : undefined,
+      height: telegramFile && 'height' in telegramFile ? telegramFile.height : undefined,
       duration: message.video?.duration,
-      file_size: telegramFile.file_size || mediaResult.fileInfo.file_size,
+      file_size: (telegramFile ? telegramFile.file_size : undefined) || mediaResult.fileInfo.file_size,
       correlation_id: correlationId,
+      // Initial state is 'pending' if caption exists, otherwise 'initialized'
       processing_state: message.caption ? "pending" : "initialized",
       is_edited_channel_post: context.isChannelPost,
       forward_info: forwardInfo,
@@ -579,34 +591,11 @@ async function xdelo_handleNewMediaMessage(
       storage_path: mediaResult.fileInfo.storage_path,
     });
 
-    // If message has caption, trigger caption analysis
+    // If message has caption, the database trigger 'trg_process_caption'
+    // will set its state to 'pending' automatically.
+    // No need to explicitly trigger analysis here anymore.
     if (message.caption && result.id) {
-      try {
-        logger?.info(`Triggering caption analysis for message ${result.id}`);
-
-        // Use our helper function to trigger caption analysis
-        const parseResult = await triggerCaptionAnalysis(
-          result.id,
-          correlationId,
-          false,
-          logger
-        );
-
-        if (!parseResult.success) {
-          logger?.warn(
-            `Caption analysis error (non-fatal): ${parseResult.error}`
-          );
-        } else {
-          logger?.info(
-            `Caption analysis complete: ${JSON.stringify(parseResult.result)}`
-          );
-        }
-      } catch (parseError) {
-        logger?.warn(
-          `Error triggering caption analysis: ${parseError.message}`
-        );
-        // This is non-fatal, we continue
-      }
+        logger?.info(`Message ${result.id} has caption, DB trigger will set state to 'pending'.`);
     }
 
     return new Response(

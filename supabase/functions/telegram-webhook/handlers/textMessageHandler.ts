@@ -8,7 +8,7 @@ import {
   createMessage,
   supabaseClient,
   xdelo_logProcessingEvent,
-  triggerCaptionAnalysis,
+  // triggerCaptionAnalysis, // Removed - No longer used
 } from "../dbOperations.ts";
 import { MessageContext, TelegramMessage } from "../types.ts";
 
@@ -70,27 +70,10 @@ export async function handleOtherMessage(
       throw new Error(error_message || "Failed to create message record");
     }
 
-    // Process text as caption - this is a key improvement to ensure text messages get analyzed too
-    if (message.text) {
-      try {
-        const captionResult = await triggerCaptionAnalysis(
-          messageId,
-          correlationId,
-          false,
-          logger
-        );
-        
-        if (!captionResult.success) {
-          logger?.warn(`⚠️ Text analysis started but encountered issues: ${captionResult.error}`);
-        }
-      } catch (analysisError) {
-        logger?.warn(`⚠️ Error starting text analysis: ${analysisError.message}`, {
-          message_id: messageId,
-          error: analysisError
-        });
-        // Continue processing - we don't want to fail the whole request just because analysis had issues
-      }
-    }
+    // Text message saved. Caption processing is handled separately by the
+    // database trigger 'trg_process_caption' if the 'caption' field is set
+    // (which it isn't for these messages handled here).
+    // If text analysis is needed, a different mechanism should be implemented.
 
     // Log successful processing
     await xdelo_logProcessingEvent(

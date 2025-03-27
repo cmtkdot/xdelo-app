@@ -37,3 +37,5 @@ supabase/.temp/project-ref
 supabase/.temp/rest-version
 supabase/functions/deno.json
 supabase/functions/import_map.json
+eslint.config.js
+supabase/functions/deno.jsonc

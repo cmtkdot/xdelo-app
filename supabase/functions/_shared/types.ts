@@ -14,7 +14,7 @@ export interface AnalyzedContent {
   total_price?: number;
   notes?: string;
   caption?: string;
-  parsing_metadata?: {
+  parsing_metadata: { // Made required by removing '?'
     method: 'manual' | 'ai';
     timestamp: string;
     partial_success?: boolean;

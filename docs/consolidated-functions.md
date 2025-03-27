@@ -11,6 +11,23 @@ After the cleanup and simplification process, we've removed several deprecated d
   - Removed complex locking mechanisms
   - Simplified error handling
   - Removed tracking of sync attempts
+  - Called by `direct-caption-processor` Edge Function.
+
+### xdelo_set_caption_pending_trigger
+- **Purpose**: Trigger function called by `trg_process_caption`. Sets `processing_state` to 'pending' for messages with captions.
+- **Usage**: Initiates the caption processing flow for the edge function poller.
+
+### xdelo_recheck_media_groups
+- **Purpose**: Safety Net: Periodically finds and fixes inconsistent media groups by calling `xdelo_sync_incomplete_media_group`.
+- **Usage**: Called by `pg_cron`. Ensures eventual consistency.
+
+### xdelo_sync_incomplete_media_group
+- **Purpose**: Helper function to sync content within a specific inconsistent media group.
+- **Usage**: Called by `xdelo_recheck_media_groups`.
+
+### xdelo_reset_stalled_messages
+- **Purpose**: Safety Net: Periodically resets messages stuck in 'processing' state back to 'pending'.
+- **Usage**: Called by `pg_cron`. Allows edge function to retry processing.
 
 ### xdelo_fix_mime_types
 - **Purpose**: Fixes incorrect MIME types in media files.
@@ -20,31 +37,26 @@ After the cleanup and simplification process, we've removed several deprecated d
 - **Purpose**: Standardizes storage paths for media files.
 - **Usage**: Maintains consistent storage organization
 
-### xdelo_process_caption
-- **Purpose**: Processes captions for messages and manages media group synchronization.
-- **Simplifications**:
-  - Simplified transaction handling
-  - Removed complex sync attempts tracking
-  - One clear processing path instead of multiple approaches
-
 ## Removed Functions
 
-The following complex functions have been permanently removed:
+The following functions have been removed or replaced by the Hybrid Plan's Edge Function logic:
 
 1. ~~xdelo_begin_transaction~~ - Removed unnecessary transaction management complexity
 2. ~~xdelo_commit_transaction_with_sync~~ - Removed in favor of direct operations
-3. ~~xdelo_handle_failed_caption_analysis~~ - Removed complex error handling
-4. ~~xdelo_repair_media_group_syncs~~ - Simplified into core sync function
-5. ~~xdelo_reset_stalled_messages~~ - Removed stalled message handling complexity
-6. ~~xdelo_process_pending_messages~~ - Replaced with simpler direct processing
-7. ~~xdelo_check_processing_queue~~ - Removed queue management complexity
+3. ~~xdelo_handle_failed_caption_analysis~~ - Logic handled by edge function.
+4. ~~xdelo_repair_media_group_syncs~~ - Replaced by `xdelo_recheck_media_groups`.
+5. ~~xdelo_process_pending_messages~~ - Replaced by edge function polling.
+6. ~~xdelo_check_processing_queue~~ - Removed queue management complexity.
 8. ~~xdelo_reset_processing_state~~ - Removed manual state reset mechanism
-9. ~~xdelo_fallback_caption_parser~~ - Consolidated into main caption processing
-10. ~~xdelo_construct_telegram_message_url~~ - Replaced with JavaScript utility function
-11. ~~xdelo_check_media_group_content~~ - Replaced with direct JavaScript queries
-12. ~~xdelo_sync_media_group_from_message~~ - Replaced with JavaScript implementation
-13. ~~xdelo_media_group_content_details~~ - Consolidated into JavaScript utility
-14. ~~xdelo_find_media_group_source~~ - Replaced with JavaScript query logic
+9. ~~xdelo_fallback_caption_parser~~ - Consolidated into `_shared/captionParser.ts`.
+10. ~~xdelo_construct_telegram_message_url~~ - Replaced with JavaScript utility function.
+11. ~~xdelo_check_media_group_content~~ - Replaced by edge function logic and safety nets. **(Removed in migration)**
+12. ~~xdelo_sync_media_group_from_message~~ - Replaced by `xdelo_sync_media_group_content`.
+13. ~~xdelo_media_group_content_details~~ - Likely replaced by JS logic.
+14. ~~xdelo_find_media_group_source~~ - Likely replaced by JS logic.
+15. ~~xdelo_process_caption_workflow~~ - Replaced by `direct-caption-processor` edge function. **(Removed in migration)**
+16. ~~xdelo_process_caption_trigger~~ - Replaced by `xdelo_set_caption_pending_trigger`. **(Removed in migration)**
+17. ~~check_media_group_on_message_change~~ - Replaced by edge function logic and safety nets. **(Removed in migration)**
 
 ## Media Utils Consolidation
 
@@ -66,11 +78,10 @@ Message URL construction has been moved entirely to JavaScript:
    - More maintainable than SQL-based URL construction
    - Handles all chat ID formats correctly
 
-## Media Group Synchronization
+## Media Group Synchronization (Hybrid Plan)
 
-Media group handling is now implemented directly in JavaScript:
+Media group synchronization is primarily handled by a database function called from the edge function:
 
-1. Logic in `mediaMessageHandler.ts` directly queries for related messages
-2. Synchronizes content between messages in the same media group
-3. Provides better logging and error handling than the previous RPC approach
-4. Implements delayed recheck for race conditions when messages arrive out of order
+1. The `direct-caption-processor` edge function, after successfully parsing a caption for a message in a group, calls the `xdelo_sync_media_group_content` database function via RPC.
+2. `xdelo_sync_media_group_content` uses advisory locks to prevent race conditions and updates all other messages in the group.
+3. The `xdelo_recheck_media_groups` cron job acts as a safety net to ensure eventual consistency for any syncs missed due to errors or timing issues.

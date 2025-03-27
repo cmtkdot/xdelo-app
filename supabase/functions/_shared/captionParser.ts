@@ -7,7 +7,7 @@ import { AnalyzedContent } from "./types.ts";
 export function xdelo_parseCaption(caption: string): AnalyzedContent {
   const trimmedCaption = caption.trim();
   const currentTimestamp = new Date().toISOString();
-  
+
   // Initialize with default values
   const analyzedContent: AnalyzedContent = {
     product_name: '',
@@ -21,35 +21,37 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
       timestamp: currentTimestamp,
     }
   };
-  
+
   // Handle empty captions
   if (!trimmedCaption) {
+    // Explicitly set required fields for the return type
     return {
       ...analyzedContent,
       parsing_metadata: {
-        ...analyzedContent.parsing_metadata,
+        method: 'manual', // Explicitly set required method
+        timestamp: analyzedContent.parsing_metadata.timestamp, // Carry over timestamp
         partial_success: true,
         missing_fields: ['product_name', 'product_code', 'vendor_uid', 'purchase_date', 'quantity']
       }
     };
   }
-  
+
   // Track missing fields for partial success
   const missingFields: string[] = [];
-  
+
   try {
     // Multi-line vs single-line parsing
     if (trimmedCaption.includes('\n')) {
       // Multi-line caption
       const lines = trimmedCaption.split('\n');
-      
+
       // Extract product name from first line
       if (lines.length > 0 && lines[0].trim()) {
         analyzedContent.product_name = lines[0].trim().replace(/^['"]|['"]$/g, '');
       } else {
         missingFields.push('product_name');
       }
-      
+
       // Find line with product code
       let codeLineIdx = -1;
       for (let i = 0; i < lines.length; i++) {
@@ -58,13 +60,13 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
           break;
         }
       }
-      
+
       // Extract product code if found
       if (codeLineIdx >= 0) {
         const codeMatch = lines[codeLineIdx].match(/#([A-Za-z0-9-]+)/);
         if (codeMatch) {
           analyzedContent.product_code = codeMatch[1];
-          
+
           // Extract vendor UID from product code
           const vendorMatch = codeMatch[1].match(/^([A-Za-z]{1,4})/);
           if (vendorMatch) {
@@ -72,7 +74,7 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
           } else {
             missingFields.push('vendor_uid');
           }
-          
+
           // Extract purchase date from product code
           const dateMatch = codeMatch[1].match(/^[A-Za-z]{1,4}(\d{5,6})/);
           if (dateMatch) {
@@ -95,7 +97,7 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
         missingFields.push('vendor_uid');
         missingFields.push('purchase_date');
       }
-      
+
       // Gather remaining lines as notes
       if (lines.length > 1) {
         const noteLines: string[] = [];
@@ -106,7 +108,7 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
         }
         analyzedContent.notes = noteLines.join('\n').trim();
       }
-      
+
       // Look for quantity in notes
       if (analyzedContent.notes) {
         const qtyMatch = analyzedContent.notes.match(/(?:^|\s)x\s*(\d+)(?:\s|$)/i);
@@ -131,7 +133,7 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
       }
     } else {
       // Single line caption
-      
+
       // Simple case: Just quantity "14x"
       const simpleQtyMatch = trimmedCaption.match(/^(\d+)x$/);
       if (simpleQtyMatch) {
@@ -147,7 +149,7 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
         if (productCodeMatch) {
           // Extract product code
           analyzedContent.product_code = productCodeMatch[1];
-          
+
           // Extract product name (text before code)
           const beforeCodeText = trimmedCaption.substring(0, trimmedCaption.indexOf('#')).trim();
           if (beforeCodeText) {
@@ -155,7 +157,7 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
           } else {
             missingFields.push('product_name');
           }
-          
+
           // Extract vendor UID
           const vendorMatch = productCodeMatch[1].match(/^([A-Za-z]{1,4})/);
           if (vendorMatch) {
@@ -163,7 +165,7 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
           } else {
             missingFields.push('vendor_uid');
           }
-          
+
           // Extract purchase date
           const dateMatch = productCodeMatch[1].match(/^[A-Za-z]{1,4}(\d{5,6})/);
           if (dateMatch) {
@@ -176,7 +178,7 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
           } else {
             missingFields.push('purchase_date');
           }
-          
+
           // Extract quantity
           const qtyMatch = trimmedCaption.match(/x\s*(\d+)/i);
           if (qtyMatch) {
@@ -191,7 +193,7 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
               missingFields.push('quantity');
             }
           }
-          
+
           // Extract notes (content in parentheses)
           const notesMatch = trimmedCaption.match(/\(([^)]+)\)/);
           if (notesMatch) {
@@ -201,7 +203,7 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
             const afterCodeText = trimmedCaption.substring(
               trimmedCaption.indexOf('#') + productCodeMatch[0].length
             ).trim();
-            
+
             if (afterCodeText) {
               // Remove quantity pattern if present
               let notes = afterCodeText;
@@ -223,7 +225,7 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
         }
       }
     }
-    
+
     // Mark partial success if we have a product name but are missing other fields
     if (analyzedContent.product_name) {
       if (missingFields.length > 0) {
@@ -238,17 +240,19 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
       }
       analyzedContent.parsing_metadata.missing_fields = missingFields;
     }
-    
+
     return analyzedContent;
   } catch (error) {
     console.error("Error parsing caption:", error);
     return {
       ...analyzedContent,
       parsing_metadata: {
-        ...analyzedContent.parsing_metadata,
+        // Ensure required fields are present, remove non-existent 'error' field
+        method: analyzedContent.parsing_metadata.method || 'manual',
+        timestamp: analyzedContent.parsing_metadata.timestamp || new Date().toISOString(),
         partial_success: true,
-        error: error.message,
-        missing_fields: ['product_name', 'product_code', 'vendor_uid', 'purchase_date', 'quantity']
+        // error: error.message, // Removed: 'error' is not a valid property
+        missing_fields: ['parsing_error', 'product_name', 'product_code', 'vendor_uid', 'purchase_date', 'quantity'] // Add 'parsing_error'
       }
     };
   }
@@ -257,24 +261,24 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
 function formatPurchaseDate(dateDigits: string): string {
   // Add leading zero for 5-digit dates
   const normalizedDigits = dateDigits.length === 5 ? `0${dateDigits}` : dateDigits;
-  
+
   if (normalizedDigits.length !== 6) {
     throw new Error(`Invalid date format: ${dateDigits}`);
   }
-  
+
   // Format is mmDDyy
   const month = normalizedDigits.substring(0, 2);
   const day = normalizedDigits.substring(2, 4);
   const year = normalizedDigits.substring(4, 6);
-  
+
   // Convert to YYYY-MM-DD
   const fullYear = `20${year}`; // Assuming 20xx year
-  
+
   // Validate date
   const dateObj = new Date(`${fullYear}-${month}-${day}`);
   if (isNaN(dateObj.getTime())) {
     throw new Error(`Invalid date: ${month}/${day}/${fullYear}`);
   }
-  
+
   return `${fullYear}-${month}-${day}`;
 }
