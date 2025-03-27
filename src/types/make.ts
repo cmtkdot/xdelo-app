@@ -2,18 +2,18 @@
 // Types for Make.com integrations
 
 export enum MakeEventType {
-  MESSAGE_RECEIVED = 'message_received',
-  CHANNEL_JOINED = 'channel_joined',
-  PRODUCT_CREATED = 'product_created',
-  ORDER_UPDATED = 'order_updated',
-  INVOICE_PAID = 'invoice_paid',
-  MEDIA_RECEIVED = 'media_received',
-  MESSAGE_EDITED = 'message_edited',
-  MESSAGE_DELETED = 'message_deleted',
-  MEDIA_GROUP_RECEIVED = 'media_group_received',
-  MESSAGE_FORWARDED = 'message_forwarded',
-  CAPTION_UPDATED = 'caption_updated',
-  PROCESSING_COMPLETED = 'processing_completed'
+  MESSAGE_RECEIVED = 'MESSAGE_RECEIVED',
+  CHANNEL_JOINED = 'CHANNEL_JOINED',
+  PRODUCT_CREATED = 'PRODUCT_CREATED',
+  ORDER_UPDATED = 'ORDER_UPDATED',
+  INVOICE_PAID = 'INVOICE_PAID',
+  MEDIA_RECEIVED = 'MEDIA_RECEIVED',
+  MESSAGE_EDITED = 'MESSAGE_EDITED',
+  MESSAGE_DELETED = 'MESSAGE_DELETED',
+  MEDIA_GROUP_RECEIVED = 'MEDIA_GROUP_RECEIVED',
+  MESSAGE_FORWARDED = 'MESSAGE_FORWARDED',
+  CAPTION_UPDATED = 'CAPTION_UPDATED',
+  PROCESSING_COMPLETED = 'PROCESSING_COMPLETED'
 }
 
 export interface MakeWebhookConfig {
@@ -22,6 +22,7 @@ export interface MakeWebhookConfig {
   description: string | null;
   url: string;
   event_type: string;
+  event_types?: string[]; // Added for backward compatibility
   is_active: boolean;
   headers: Record<string, string> | null;
   retry_config: {

@@ -1,441 +1,449 @@
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/useToast';
-import { MediaProcessingState, MediaSyncOptions, RepairResult, ContentValidationRules, ValidationResult } from './types';
-import { createMediaProcessingState, withRetry, validateContent as validateContentUtil } from './utils';
+import { MediaProcessingState, RepairResult, MediaSyncOptions, CaptionFlowData } from './types';
 
-// Export standardContentValidationRules and validateContent function
-export const standardContentValidationRules: ContentValidationRules = {
-  required: ['product_name', 'product_code'],
-  format: {
-    product_code: /^[A-Za-z]{1,4}\d{5,6}(?:-[A-Za-z0-9-]+)?$/,
-    purchase_date: /^\d{4}-\d{2}-\d{2}$/,
-  },
-  custom: {
-    quantity: (value) => typeof value === 'number' && value > 0,
-  }
-};
-
-export const validateContent = validateContentUtil;
-
+/**
+ * Hook for media-related utility functions
+ */
 export function useMediaUtils() {
-  const [isLoading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [processingState, setProcessingState] = useState<MediaProcessingState>({
+    isProcessing: false,
+    processingMessageIds: {}
+  });
   const { toast } = useToast();
-  
-  // Create the media processing state (manages which messages are currently processing)
-  const [mediaProcessingState, mediaProcessingActions] = createMediaProcessingState();
-  const { isProcessing, processingMessageIds } = mediaProcessingState;
-  const { setIsProcessing, addProcessingMessageId, removeProcessingMessageId } = mediaProcessingActions;
-  
+
   /**
-   * Process a single message caption
-   */
-  const syncMessageCaption = async (params: { messageId: string, newCaption?: string }): Promise<{success: boolean, message?: string}> => {
-    try {
-      setLoading(true);
-      addProcessingMessageId(params.messageId);
-      
-      // Call edge function to process caption
-      const response = await supabase.functions.invoke('direct-caption-processor', {
-        body: { 
-          messageId: params.messageId,
-          caption: params.newCaption,
-          correlationId: crypto.randomUUID()
-        }
-      });
-      
-      const { data, error } = response;
-      
-      if (error) {
-        console.error('Error processing caption:', error);
-        toast({
-          title: 'Processing Failed',
-          description: error.message,
-          variant: 'destructive',
-        });
-        return { success: false, message: error.message };
-      }
-      
-      if (!data.success) {
-        toast({
-          title: 'Processing Failed',
-          description: data.error || 'Unknown error',
-          variant: 'destructive',
-        });
-        return { success: false, message: data.error || 'Unknown error' };
-      }
-      
-      toast({
-        title: 'Caption Processed',
-        description: `Successfully processed message caption${data.media_group_synced ? ' and synced media group' : ''}`,
-      });
-      
-      return { success: true };
-    } catch (err) {
-      console.error('Error in syncMessageCaption:', err);
-      toast({
-        title: 'Processing Error',
-        description: err instanceof Error ? err.message : 'Unknown error',
-        variant: 'destructive',
-      });
-      return { success: false, message: err instanceof Error ? err.message : 'Unknown error' };
-    } finally {
-      setLoading(false);
-      removeProcessingMessageId(params.messageId);
-    }
-  };
-  
-  /**
-   * Synchronize content across media group messages
+   * Synchronize captions across a media group
    */
   const syncMediaGroup = async (
-    sourceMessageId: string, 
-    mediaGroupId: string, 
+    sourceMessageId: string,
+    mediaGroupId: string,
     options: MediaSyncOptions = {}
   ): Promise<boolean> => {
     try {
-      setLoading(true);
-      addProcessingMessageId(sourceMessageId);
+      setIsLoading(true);
       
-      const correlationId = crypto.randomUUID();
+      const { forceSync = false, syncEditHistory = false } = options;
       
-      // Get the source message first
-      const { data: message } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('id', sourceMessageId)
-        .single();
-      
-      if (!message || !message.analyzed_content) {
-        toast({
-          title: 'Error',
-          description: 'Source message has no analyzed content to sync',
-          variant: 'destructive',
-        });
-        return false;
-      }
-      
-      // Call the database function with retry logic
-      const result = await withRetry(
-        async () => {
-          const response = await supabase.rpc(
-            'xdelo_sync_media_group_content',
-            {
-              p_message_id: sourceMessageId,
-              p_analyzed_content: message.analyzed_content,
-              p_force_sync: options.forceSync !== false,
-              p_sync_edit_history: !!options.syncEditHistory
-            }
-          );
-          return response;
-        },
+      // Call the database function to sync media group content
+      const { data, error } = await supabase.rpc(
+        'xdelo_sync_media_group_content',
         {
-          maxAttempts: 3,
-          delay: 1000,
-          retryableErrors: ['timeout', 'connection', 'network']
+          p_message_id: sourceMessageId,
+          p_analyzed_content: null, // Use the message's existing analyzed_content
+          p_force_sync: forceSync,
+          p_sync_edit_history: syncEditHistory
         }
       );
-      
-      const { data, error } = result;
       
       if (error) {
         console.error('Error syncing media group:', error);
         toast({
           title: 'Sync Failed',
-          description: error.message,
-          variant: 'destructive',
+          description: `Failed to sync media group: ${error.message}`,
+          variant: 'destructive'
         });
         return false;
       }
       
       toast({
-        title: 'Group Synced',
-        description: `Synchronized content to ${data.updated_count || 0} messages`,
+        title: 'Media Group Synced',
+        description: `Successfully synced ${data?.updated_count || 0} messages in the group`
       });
       
       return true;
-    } catch (err) {
-      console.error('Error in syncMediaGroup:', err);
+    } catch (error) {
+      console.error('Error in syncMediaGroup:', error);
       toast({
-        title: 'Sync Error',
-        description: err instanceof Error ? err.message : 'Unknown error',
-        variant: 'destructive',
+        title: 'Sync Failed',
+        description: 'An unexpected error occurred during sync',
+        variant: 'destructive'
       });
       return false;
     } finally {
-      setLoading(false);
-      removeProcessingMessageId(sourceMessageId);
+      setIsLoading(false);
     }
   };
 
   /**
-   * Fix content disposition for a message
+   * Update a message caption and trigger analysis
+   */
+  const syncMessageCaption = async (
+    messageId: string,
+    caption: string
+  ): Promise<CaptionFlowData> => {
+    try {
+      setIsLoading(true);
+      updateProcessingState(messageId, true);
+      
+      // Call the edge function to update the caption
+      const { data, error } = await supabase.functions.invoke('direct-caption-processor', {
+        body: {
+          messageId,
+          caption,
+          correlationId: crypto.randomUUID()
+        }
+      });
+      
+      if (error) {
+        console.error('Error updating caption:', error);
+        toast({
+          title: 'Caption Update Failed',
+          description: `Failed to update caption: ${error.message}`,
+          variant: 'destructive'
+        });
+        return {
+          success: false,
+          message: error.message,
+          message_id: messageId
+        };
+      }
+      
+      toast({
+        title: 'Caption Updated',
+        description: 'Successfully updated and processed the caption'
+      });
+      
+      return {
+        success: true,
+        message: 'Caption updated and processed successfully',
+        message_id: messageId,
+        caption_updated: data.caption_updated,
+        media_group_synced: data.media_group_synced
+      };
+    } catch (error) {
+      console.error('Error in syncMessageCaption:', error);
+      toast({
+        title: 'Caption Update Failed',
+        description: 'An unexpected error occurred during update',
+        variant: 'destructive'
+      });
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        message_id: messageId
+      };
+    } finally {
+      updateProcessingState(messageId, false);
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Fix media file content disposition
    */
   const fixContentDispositionForMessage = async (messageId: string): Promise<boolean> => {
     try {
-      setLoading(true);
-      addProcessingMessageId(messageId);
+      updateProcessingState(messageId, true);
       
-      // Call RPC to fix content disposition
-      const { error } = await supabase.rpc(
-        'xdelo_repair_file',
-        {
-          p_message_id: messageId,
-          p_action: 'fix_mime_type'
+      // Call the edge function to fix content disposition
+      const { data, error } = await supabase.functions.invoke('media-management', {
+        body: {
+          action: 'fix_content_disposition',
+          messageId
         }
-      );
+      });
       
       if (error) {
         console.error('Error fixing content disposition:', error);
         toast({
           title: 'Fix Failed',
-          description: error.message,
-          variant: 'destructive',
+          description: `Failed to fix content disposition: ${error.message}`,
+          variant: 'destructive'
         });
         return false;
       }
       
       toast({
-        title: 'Fixed Content Disposition',
-        description: 'Successfully updated content disposition',
+        title: 'Content Disposition Fixed',
+        description: 'Successfully fixed the file content disposition'
       });
       
       return true;
-    } catch (err) {
-      console.error('Error in fixContentDisposition:', err);
+    } catch (error) {
+      console.error('Error in fixContentDispositionForMessage:', error);
       toast({
-        title: 'Fix Error',
-        description: err instanceof Error ? err.message : 'Unknown error',
-        variant: 'destructive',
+        title: 'Fix Failed',
+        description: 'An unexpected error occurred',
+        variant: 'destructive'
       });
       return false;
     } finally {
-      setLoading(false);
-      removeProcessingMessageId(messageId);
+      updateProcessingState(messageId, false);
     }
   };
 
   /**
-   * Re-upload media from Telegram
+   * Reupload media from Telegram
    */
   const reuploadMediaFromTelegram = async (messageId: string): Promise<boolean> => {
     try {
-      setLoading(true);
-      addProcessingMessageId(messageId);
+      updateProcessingState(messageId, true);
       
-      // Call edge function to handle reupload
+      // Call the edge function to reupload media
       const { data, error } = await supabase.functions.invoke('media-management', {
-        body: { 
-          action: 'reupload',
-          messageId 
+        body: {
+          action: 'reupload_from_telegram',
+          messageId
         }
       });
       
       if (error) {
-        console.error('Error reuploading from Telegram:', error);
+        console.error('Error reuploading media:', error);
         toast({
           title: 'Reupload Failed',
-          description: error.message,
-          variant: 'destructive',
+          description: `Failed to reupload media: ${error.message}`,
+          variant: 'destructive'
         });
         return false;
       }
       
       toast({
         title: 'Media Reuploaded',
-        description: data.message || 'Successfully reuploaded media from Telegram',
+        description: 'Successfully reuploaded media from Telegram'
       });
       
       return true;
-    } catch (err) {
-      console.error('Error in reuploadMediaFromTelegram:', err);
+    } catch (error) {
+      console.error('Error in reuploadMediaFromTelegram:', error);
       toast({
-        title: 'Reupload Error',
-        description: err instanceof Error ? err.message : 'Unknown error',
-        variant: 'destructive',
+        title: 'Reupload Failed',
+        description: 'An unexpected error occurred',
+        variant: 'destructive'
       });
       return false;
     } finally {
-      setLoading(false);
-      removeProcessingMessageId(messageId);
+      updateProcessingState(messageId, false);
     }
   };
 
   /**
-   * Repair media in batch
+   * Repair a batch of media files
    */
-  const repairMediaBatch = async (messageIds: string[]): Promise<RepairResult> => {
+  const repairMediaBatch = async (messageIds?: string[]): Promise<RepairResult> => {
     try {
-      setIsProcessing(true);
-      messageIds.forEach(id => addProcessingMessageId(id));
+      setProcessingState(state => ({ ...state, isProcessing: true }));
       
-      // Use the general rpc call to avoid typechecking issues
-      const response = await supabase.rpc(
-        'xdelo_repair_media_batch',
-        {
-          p_message_ids: messageIds
+      // Call the edge function to repair media batch
+      const { data, error } = await supabase.functions.invoke('xdelo_unified_media_repair', {
+        body: {
+          messageIds,
+          batch_size: messageIds ? messageIds.length : 50,
+          auto_repair: true
         }
-      );
-      
-      const { data, error } = response;
-      
-      if (error) {
-        return {
-          success: false,
-          repaired: 0,
-          error: error.message,
-          successful: 0,
-          failed: messageIds.length
-        };
-      }
-      
-      toast({
-        title: 'Repair Complete',
-        description: `Repaired ${data.repaired_count || 0} messages`,
       });
       
-      return {
-        success: true,
-        repaired: data.repaired_count || 0,
-        details: data.details || [],
-        successful: data.repaired_count || 0,
-        failed: messageIds.length - (data.repaired_count || 0)
-      };
-    } catch (err) {
-      console.error('Error in repairMediaBatch:', err);
-      return {
-        success: false,
-        repaired: 0,
-        error: err instanceof Error ? err.message : 'Unknown error',
-        successful: 0,
-        failed: messageIds.length
-      };
-    } finally {
-      setIsProcessing(false);
-      messageIds.forEach(id => removeProcessingMessageId(id));
-    }
-  };
-
-  /**
-   * Standardize storage paths for messages
-   */
-  const standardizeStoragePaths = async (limit: number = 100): Promise<RepairResult> => {
-    try {
-      setIsProcessing(true);
-      
-      // Use the general rpc call to avoid typechecking issues
-      const response = await supabase.rpc(
-        'xdelo_standardize_storage_paths_batch',
-        {
-          p_limit: limit
-        }
-      );
-      
-      const { data, error } = response;
-      
       if (error) {
+        console.error('Error repairing media batch:', error);
+        toast({
+          title: 'Repair Failed',
+          description: `Failed to repair media: ${error.message}`,
+          variant: 'destructive'
+        });
         return {
           success: false,
-          repaired: 0,
           error: error.message,
+          repaired: 0,
           successful: 0,
           failed: 0
         };
       }
       
       toast({
-        title: 'Standardization Complete',
-        description: `Standardized ${data.updated_count || 0} paths`,
+        title: 'Media Repaired',
+        description: `Successfully repaired ${data?.repaired || 0} media files`
       });
       
       return {
         success: true,
-        repaired: data.updated_count || 0,
-        details: data.details || [],
-        successful: data.updated_count || 0,
-        failed: 0
+        repaired: data?.repaired || 0,
+        message: `Successfully repaired ${data?.repaired || 0} media files`,
+        successful: data?.successful || 0,
+        failed: data?.failed || 0
       };
-    } catch (err) {
-      console.error('Error in standardizeStoragePaths:', err);
+    } catch (error) {
+      console.error('Error in repairMediaBatch:', error);
+      toast({
+        title: 'Repair Failed',
+        description: 'An unexpected error occurred',
+        variant: 'destructive'
+      });
       return {
         success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
         repaired: 0,
-        error: err instanceof Error ? err.message : 'Unknown error',
         successful: 0,
         failed: 0
       };
     } finally {
-      setIsProcessing(false);
+      setProcessingState(state => ({ ...state, isProcessing: false }));
     }
   };
 
   /**
-   * Fix broken media URLs
+   * Standardize storage paths for a batch of messages
    */
-  const fixMediaUrls = async (limit: number = 100): Promise<RepairResult> => {
+  const standardizeStoragePaths = async (messageIds?: string[]): Promise<RepairResult> => {
     try {
-      setIsProcessing(true);
+      setProcessingState(state => ({ ...state, isProcessing: true }));
       
-      const { data, error } = await supabase.functions.invoke('fix-media-urls', {
-        body: { 
-          limit,
-          fixMissingPublicUrls: true,
-          regenerateUrls: false
+      // Call the edge function to standardize storage paths
+      const { data, error } = await supabase.functions.invoke('xdelo_unified_media_repair', {
+        body: {
+          action: 'standardize_paths',
+          messageIds,
+          batch_size: messageIds ? messageIds.length : 50
         }
       });
       
       if (error) {
+        console.error('Error standardizing storage paths:', error);
+        toast({
+          title: 'Standardization Failed',
+          description: `Failed to standardize paths: ${error.message}`,
+          variant: 'destructive'
+        });
         return {
           success: false,
-          repaired: 0,
           error: error.message,
+          repaired: 0,
           successful: 0,
           failed: 0
         };
       }
       
       toast({
-        title: 'URL Fix Complete',
-        description: `Fixed ${data?.processed || 0} URLs`,
+        title: 'Paths Standardized',
+        description: `Successfully standardized ${data?.standardized || 0} storage paths`
       });
       
       return {
         success: true,
-        repaired: data?.processed || 0,
-        details: data?.details || [],
-        successful: data?.processed || 0,
-        failed: 0
+        repaired: data?.standardized || 0,
+        message: `Successfully standardized ${data?.standardized || 0} storage paths`,
+        successful: data?.successful || 0,
+        failed: data?.failed || 0
       };
-    } catch (err) {
-      console.error('Error in fixMediaUrls:', err);
+    } catch (error) {
+      console.error('Error in standardizeStoragePaths:', error);
+      toast({
+        title: 'Standardization Failed',
+        description: 'An unexpected error occurred',
+        variant: 'destructive'
+      });
       return {
         success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
         repaired: 0,
-        error: err instanceof Error ? err.message : 'Unknown error',
         successful: 0,
         failed: 0
       };
     } finally {
-      setIsProcessing(false);
+      setProcessingState(state => ({ ...state, isProcessing: false }));
     }
   };
-  
+
+  /**
+   * Fix URLs for media files
+   */
+  const fixMediaUrls = async (messageIds?: string[]): Promise<RepairResult> => {
+    try {
+      setProcessingState(state => ({ ...state, isProcessing: true }));
+      
+      // Call the edge function to fix media URLs
+      const { data, error } = await supabase.functions.invoke('xdelo_unified_media_repair', {
+        body: {
+          action: 'fix_urls',
+          messageIds,
+          batch_size: messageIds ? messageIds.length : 50
+        }
+      });
+      
+      if (error) {
+        console.error('Error fixing media URLs:', error);
+        toast({
+          title: 'URL Fix Failed',
+          description: `Failed to fix media URLs: ${error.message}`,
+          variant: 'destructive'
+        });
+        return {
+          success: false,
+          error: error.message,
+          repaired: 0,
+          successful: 0,
+          failed: 0
+        };
+      }
+      
+      toast({
+        title: 'URLs Fixed',
+        description: `Successfully fixed ${data?.fixed || 0} media URLs`
+      });
+      
+      return {
+        success: true,
+        repaired: data?.fixed || 0,
+        message: `Successfully fixed ${data?.fixed || 0} media URLs`,
+        successful: data?.successful || 0,
+        failed: data?.failed || 0
+      };
+    } catch (error) {
+      console.error('Error in fixMediaUrls:', error);
+      toast({
+        title: 'URL Fix Failed',
+        description: 'An unexpected error occurred',
+        variant: 'destructive'
+      });
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        repaired: 0,
+        successful: 0,
+        failed: 0
+      };
+    } finally {
+      setProcessingState(state => ({ ...state, isProcessing: false }));
+    }
+  };
+
+  /**
+   * Helper function to update the processing state for a message
+   */
+  const updateProcessingState = (messageId: string, isProcessing: boolean) => {
+    setProcessingState(state => {
+      const updatedProcessingMessageIds = { ...state.processingMessageIds };
+      
+      if (isProcessing) {
+        updatedProcessingMessageIds[messageId] = true;
+      } else {
+        delete updatedProcessingMessageIds[messageId];
+      }
+      
+      return {
+        isProcessing: Object.keys(updatedProcessingMessageIds).length > 0,
+        processingMessageIds: updatedProcessingMessageIds
+      };
+    });
+  };
+
   return {
-    // Media group operations
+    // Original function
     syncMediaGroup,
-    syncMessageCaption,
     
-    // Media repair operations
+    // Added functions
+    syncMessageCaption,
     fixContentDispositionForMessage,
     reuploadMediaFromTelegram,
     repairMediaBatch,
     standardizeStoragePaths,
     fixMediaUrls,
     
-    // Loading states
+    // State
     isLoading,
-    isProcessing,
-    processingMessageIds
+    isProcessing: processingState.isProcessing,
+    processingMessageIds: processingState.processingMessageIds
   };
 }

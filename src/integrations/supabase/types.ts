@@ -3005,14 +3005,6 @@ export type Database = {
         }
         Returns: string
       }
-      make_process_telegram_message_event: {
-        Args: {
-          message_id: string
-          event_type: string
-          context?: Json
-        }
-        Returns: Json
-      }
       make_test_webhook_field_mapping: {
         Args: {
           webhook_id: string
@@ -3416,6 +3408,16 @@ export type Database = {
           p_error_message?: string
         }
         Returns: undefined
+      }
+      xdelo_log_processing_event: {
+        Args: {
+          p_entity_id: string
+          p_event_type: string
+          p_correlation_id: string
+          p_metadata?: Json
+          p_error_message?: string
+        }
+        Returns: string
       }
       xdelo_logprocessingevent: {
         Args: {

@@ -1,89 +1,96 @@
 
-import React, { useState } from 'react';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { RotateCw, Database, AlertTriangle, Wrench } from 'lucide-react';
-import { useSystemRepair } from '@/hooks/useSystemRepair';
-import { useMediaUtils } from '@/hooks/useMediaUtils';
+import React from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { AlertCircle, FileCheck, RefreshCw } from 'lucide-react';
+import { useMediaUtils } from '@/hooks/useMediaUtils/useMediaUtils';
+import ResetStuckMessages from './ResetStuckMessages';
 
 export function SystemRepairPanel() {
-  const { repairSystem, isRepairing: isSystemRepairing } = useSystemRepair();
-  const { repairMediaBatch, isProcessing: isMediaRepairing } = useMediaUtils();
-  const [repairResults, setRepairResults] = useState<any>(null);
-
-  const handleRepairSystem = async () => {
-    const results = await repairSystem();
-    setRepairResults(results);
-  };
-
-  const handleRepairFiles = async () => {
-    const results = await repairMediaBatch([]);
-    setRepairResults(results);
-  };
+  const { repairMediaBatch, isProcessing, standardizeStoragePaths } = useMediaUtils();
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Wrench className="h-5 w-5" />
-          System Repair Tools
-        </CardTitle>
-        <CardDescription>
-          Tools to repair and maintain system functionality
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div>
-          <h3 className="text-sm font-medium mb-2">Database Maintenance</h3>
-          <div className="flex flex-wrap gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleRepairSystem}
-              disabled={isSystemRepairing}
-            >
-              <Database className="mr-2 h-4 w-4" />
-              Repair Processing Flow
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              disabled={isMediaRepairing}
-              onClick={handleRepairFiles}
-            >
-              <RotateCw className="mr-2 h-4 w-4" />
-              Repair File References
-            </Button>
-          </div>
-        </div>
-        
-        <Separator />
-        
-        <div>
-          <h3 className="text-sm font-medium mb-2">Advanced Repairs</h3>
-          <div className="flex flex-wrap gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => alert("This feature is not implemented yet")}
-            >
-              <AlertTriangle className="mr-2 h-4 w-4" />
-              Clean Orphaned Records
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-      {repairResults && (
-        <CardFooter className="border-t p-4 bg-muted/20">
-          <div className="text-sm">
-            <p className="font-medium">Repair Results:</p>
-            <pre className="mt-2 text-xs overflow-auto max-h-40 p-2 bg-muted rounded">
-              {JSON.stringify(repairResults, null, 2)}
-            </pre>
-          </div>
-        </CardFooter>
-      )}
-    </Card>
+    <Tabs defaultValue="messages">
+      <TabsList className="grid w-full grid-cols-2">
+        <TabsTrigger value="messages">Message Processing</TabsTrigger>
+        <TabsTrigger value="media">Media Repair</TabsTrigger>
+      </TabsList>
+      
+      <TabsContent value="messages" className="mt-4">
+        <ResetStuckMessages />
+      </TabsContent>
+      
+      <TabsContent value="media" className="mt-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Media Repair Tools</CardTitle>
+            <CardDescription>
+              Repair media files and storage paths
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Card className="border border-muted">
+                <CardHeader className="p-4 pb-2">
+                  <CardTitle className="text-base">Repair Media Files</CardTitle>
+                  <CardDescription>
+                    Find and repair missing or corrupted media files
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-4 pt-2">
+                  <Button
+                    onClick={() => repairMediaBatch()}
+                    disabled={isProcessing}
+                    className="w-full"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Repairing...
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="mr-2 h-4 w-4" />
+                        Repair Media
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+              
+              <Card className="border border-muted">
+                <CardHeader className="p-4 pb-2">
+                  <CardTitle className="text-base">Standardize Storage Paths</CardTitle>
+                  <CardDescription>
+                    Fix incorrect or non-standard storage paths
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-4 pt-2">
+                  <Button
+                    onClick={() => standardizeStoragePaths()}
+                    disabled={isProcessing}
+                    className="w-full"
+                    variant="secondary"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Standardizing...
+                      </>
+                    ) : (
+                      <>
+                        <FileCheck className="mr-2 h-4 w-4" />
+                        Fix Paths
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
   );
 }
