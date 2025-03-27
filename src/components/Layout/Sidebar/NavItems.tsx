@@ -1,26 +1,17 @@
-import React from "react";
 import {
-  LayoutDashboard,
-  MessageSquare,
-  Package,
-  Settings,
-  Database,
-  Zap,
-  Music,
+  FileText,
   GalleryHorizontal,
   GitCompare,
-  Users,
-  GitPullRequest,
-  PanelLeft,
-  PanelTopOpen,
-  FileText,
-  Home,
   ImageIcon,
-  Table,
+  LayoutDashboard,
   LucideIcon,
+  MessageSquare,
+  Music,
+  PanelLeft,
+  Settings,
+  Table,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import React from "react";
 
 interface NavItem {
   name: string;
@@ -87,12 +78,6 @@ export const NavItems: React.FC<NavItemsProps> = ({
       isActive: currentPath === "/product-matching",
     },
     {
-      title: "SQL Console",
-      href: "/sql-console",
-      icon: <Database size={20} />,
-      isActive: currentPath === "/sql-console",
-    },
-    {
       title: "AI Chat",
       href: "/ai-chat",
       icon: <FileText size={20} />,
@@ -103,12 +88,6 @@ export const NavItems: React.FC<NavItemsProps> = ({
       href: "/audio-upload",
       icon: <Music size={20} />,
       isActive: currentPath === "/audio-upload",
-    },
-    {
-      title: "Make Automations",
-      href: "/make-automations",
-      icon: <Zap size={20} />,
-      isActive: currentPath === "/make-automations",
     },
     {
       title: "Settings",
