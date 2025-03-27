@@ -11,7 +11,6 @@ import { ResetStuckMessages } from './ResetStuckMessages';
 export function SystemRepairPanel() {
   const [isRepairing, setIsRepairing] = useState(false);
   const [isRecheckingGroups, setIsRecheckingGroups] = useState(false);
-  const [isSyncingContent, setIsSyncingContent] = useState(false);
   const { toast } = useToast();
 
   const handleRepairMetadataFunctions = async () => {
@@ -45,7 +44,12 @@ export function SystemRepairPanel() {
   const handleRecheckMediaGroups = async () => {
     setIsRecheckingGroups(true);
     try {
-      const { data, error } = await supabase.rpc('xdelo_recheck_media_groups');
+      // Call the edge function instead of the RPC directly
+      const { data, error } = await supabase.functions.invoke('utility-functions', {
+        body: {
+          action: 'recheck_media_groups'
+        }
+      });
 
       if (error) throw error;
 
@@ -62,29 +66,6 @@ export function SystemRepairPanel() {
       });
     } finally {
       setIsRecheckingGroups(false);
-    }
-  };
-
-  const handleResetStuckMessages = async () => {
-    setIsSyncingContent(true);
-    try {
-      const { data, error } = await supabase.rpc('xdelo_reset_stalled_messages');
-
-      if (error) throw error;
-
-      toast({
-        title: 'Stuck messages reset',
-        description: 'All stuck messages have been reset to pending state.',
-      });
-    } catch (error) {
-      console.error('Error resetting stuck messages:', error);
-      toast({
-        title: 'Reset failed',
-        description: error.message || 'An unknown error occurred',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSyncingContent(false);
     }
   };
 

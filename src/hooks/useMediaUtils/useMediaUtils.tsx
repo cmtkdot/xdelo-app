@@ -157,10 +157,9 @@ export function useMediaUtils() {
       
       // Call RPC to fix content disposition
       const { error } = await supabase.rpc(
-        'xdelo_repair_file',
+        'xdelo_fix_mime_types',
         {
-          p_message_id: messageId,
-          p_action: 'fix_mime_type'
+          p_message_id: messageId
         }
       );
       
@@ -250,7 +249,7 @@ export function useMediaUtils() {
       
       // Call RPC to repair media
       const { data, error } = await supabase.rpc(
-        'xdelo_repair_media_batch',
+        'xdelo_fix_mime_types',
         {
           p_message_ids: messageIds
         }
@@ -266,13 +265,13 @@ export function useMediaUtils() {
       
       toast({
         title: 'Repair Complete',
-        description: `Repaired ${data.repaired_count || 0} messages`,
+        description: `Repaired ${data?.length || 0} messages`,
       });
       
       return {
         success: true,
-        repaired: data.repaired_count || 0,
-        details: data.details || []
+        repaired: data?.length || 0,
+        details: data || []
       };
     } catch (err) {
       console.error('Error in repairMediaBatch:', err);
@@ -297,7 +296,7 @@ export function useMediaUtils() {
       
       // Call RPC to standardize paths
       const { data, error } = await supabase.rpc(
-        'xdelo_standardize_storage_paths_batch',
+        'xdelo_fix_storage_paths',
         {
           p_message_ids: messageIds
         }
@@ -313,13 +312,13 @@ export function useMediaUtils() {
       
       toast({
         title: 'Standardization Complete',
-        description: `Standardized ${data.updated_count || 0} paths`,
+        description: `Standardized ${data?.length || 0} paths`,
       });
       
       return {
         success: true,
-        repaired: data.updated_count || 0,
-        details: data.details || []
+        repaired: data?.length || 0,
+        details: data || []
       };
     } catch (err) {
       console.error('Error in standardizeStoragePaths:', err);
@@ -343,12 +342,12 @@ export function useMediaUtils() {
       messageIds.forEach(id => addProcessingMessageId(id));
       
       // Call RPC to fix URLs
-      const { data, error } = await supabase.rpc(
-        'xdelo_fix_public_urls',
-        {
-          p_limit: messageIds.length || 100
+      const { data, error } = await supabase.functions.invoke('media-management', {
+        body: { 
+          action: 'fix_urls',
+          messageIds
         }
-      );
+      });
       
       if (error) {
         return {
@@ -360,12 +359,12 @@ export function useMediaUtils() {
       
       toast({
         title: 'URL Fix Complete',
-        description: `Fixed ${data?.length || 0} URLs`,
+        description: `Fixed ${data?.fixed || 0} URLs`,
       });
       
       return {
         success: true,
-        repaired: data?.length || 0,
+        repaired: data?.fixed || 0,
         details: data || []
       };
     } catch (err) {

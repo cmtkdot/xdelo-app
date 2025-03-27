@@ -1,0 +1,6 @@
+
+project_id = "xjhhehxcxkiumnwbirel"
+template = "typescript"
+memory = 512
+verify_jwt = false
+entrypoint = "/index.ts"

@@ -3187,6 +3187,28 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      xdelo_extract_telegram_metadata: {
+        Args: {
+          telegram_data: Json
+        }
+        Returns: Json
+      }
+      xdelo_recheck_media_groups: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      xdelo_reset_stalled_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      xdelo_sync_incomplete_media_group: {
+        Args: {
+          p_media_group_id: string
+          p_source_message_id: string
+          p_analyzed_content: Json
+        }
+        Returns: undefined
+      }
       xdelo_sync_media_group_content: {
         Args: {
           p_message_id: string

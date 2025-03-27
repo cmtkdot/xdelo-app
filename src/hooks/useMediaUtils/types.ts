@@ -1,43 +1,37 @@
 
-// Types for media utility functions
-
-export interface RepairResult {
-  success: boolean;
-  repaired?: number;
-  error?: string;
-  message?: string;
-  details?: any[];
-  successful?: number;
-  failed?: number;
-}
-
-export interface MediaSyncOptions {
-  forceSync?: boolean;
-  syncEditHistory?: boolean;
-}
-
+/**
+ * Interface for managing message processing state
+ */
 export interface MediaProcessingState {
   isProcessing: boolean;
   processingMessageIds: Record<string, boolean>;
 }
 
-export interface ContentValidationRules {
-  required?: string[];
-  format?: Record<string, RegExp | string>;
-  custom?: Record<string, (value: any) => boolean>;
+/**
+ * Options for media group synchronization
+ */
+export interface MediaSyncOptions {
+  forceSync?: boolean;
+  syncEditHistory?: boolean;
 }
 
-export interface ValidationResult {
-  valid: boolean;
-  missing_fields?: string[];
-  invalid_formats?: string[];
-  custom_errors?: Record<string, string>;
+/**
+ * Result of a batch repair operation
+ */
+export interface RepairResult {
+  success: boolean;
+  repaired: number;
+  error?: string;
+  details?: any[];
 }
 
+/**
+ * Data returned from caption flow operations
+ */
 export interface CaptionFlowData {
   success: boolean;
-  message?: string;
-  message_id?: string;
-  media_group_synced?: boolean;
+  message: string;
+  message_id: string;
   caption_updated?: boolean;
+  media_group_synced?: boolean;
 }

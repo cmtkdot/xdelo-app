@@ -13,7 +13,12 @@ export function ResetStuckMessages() {
   const handleResetStuckMessages = async () => {
     setIsResetting(true);
     try {
-      const { data, error } = await supabase.rpc('xdelo_reset_stalled_messages');
+      // Call the edge function instead of the RPC directly
+      const { data, error } = await supabase.functions.invoke('utility-functions', {
+        body: {
+          action: 'reset_stalled_messages'
+        }
+      });
 
       if (error) throw error;
 
