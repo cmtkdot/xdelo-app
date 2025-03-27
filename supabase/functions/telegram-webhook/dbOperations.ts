@@ -220,12 +220,13 @@ export async function createMediaMessage(input: {
 /**
  * Creates a new message record in the database
  * This is a unified function that handles both media and non-media messages
+ * with improved duplicate handling and recovery
  */
 export async function createMessage(
   client: any,
   input: any,
   logger?: any
-): Promise<{ id?: string; success: boolean; error_message?: string }> {
+): Promise<{ id?: string; success: boolean; error_message?: string; duplicate?: boolean }> {
   try {
     // Set a longer timeout for complex operations
     const options = { timeoutMs: 30000 };
@@ -259,30 +260,54 @@ export async function createMessage(
       is_edited_channel_post: input.is_edited_channel_post || false,
       correlation_id: input.correlation_id,
       message_url: input.message_url,
-      is_duplicate: input.is_duplicate || false, // Keep track if it was a duplicate based on file_unique_id check earlier
+      is_duplicate: input.is_duplicate || false,
       duplicate_reference_id: input.duplicate_reference_id,
       old_analyzed_content: input.old_analyzed_content,
-      telegram_data: input.telegram_data, // Include large fields
-      telegram_metadata: telegramMetadata, // Include large fields
-      forward_info: input.forward_info, // Include large fields
-      edit_date: input.edit_date, // Include large fields
-      edit_history: input.edit_history || [], // Include large fields
-      storage_exists: input.storage_exists, // Include large fields
-      storage_path_standardized: input.storage_path_standardized, // Include large fields
-      updated_at: new Date().toISOString(), // Always update timestamp
+      telegram_data: input.telegram_data,
+      telegram_metadata: telegramMetadata,
+      forward_info: input.forward_info,
+      edit_date: input.edit_date,
+      edit_history: input.edit_history || [],
+      storage_exists: input.storage_exists,
+      storage_path_standardized: input.storage_path_standardized,
+      updated_at: new Date().toISOString(),
     };
 
-    // Check if a message with this telegram_message_id and chat_id already exists
-    const { data: existingMessage, error: lookupError } = await client
+    // First, check if this exact message already exists
+    let { data: existingMessage, error: lookupError } = await client
       .from("messages")
       .select("id")
       .eq("telegram_message_id", input.telegram_message_id)
       .eq("chat_id", input.chat_id)
-      .maybeSingle(); // Use maybeSingle to handle null case gracefully
+      .maybeSingle();
 
     if (lookupError) {
       logger?.error("Error looking up existing message:", lookupError);
       return { success: false, error_message: lookupError.message };
+    }
+
+    // If we have a file_unique_id, also check for duplicate files
+    let duplicateFileReference = null;
+    if (input.file_unique_id && !existingMessage) {
+      const { data: duplicateFile, error: fileCheckError } = await client
+        .from("messages")
+        .select("id, telegram_message_id, chat_id, processing_state, created_at")
+        .eq("file_unique_id", input.file_unique_id)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (fileCheckError) {
+        logger?.error("Error checking for duplicate file:", fileCheckError);
+      } else if (duplicateFile && duplicateFile.length > 0) {
+        duplicateFileReference = duplicateFile[0];
+        logger?.info(`Found existing file with same file_unique_id: ${duplicateFileReference.id}`);
+        
+        // If this is a resend of the same file in the same chat, treat it as an existing message
+        if (duplicateFileReference.chat_id === input.chat_id) {
+          existingMessage = { id: duplicateFileReference.id };
+          logger?.info(`Treating as existing message since it's in the same chat: ${existingMessage.id}`);
+        }
+      }
     }
 
     let messageId: string | undefined;
@@ -294,7 +319,7 @@ export async function createMessage(
       );
       const { error: updateError } = await client
         .from("messages")
-        .update(fullRecordData) // Update with the full record
+        .update(fullRecordData)
         .eq("id", existingMessage.id);
 
       if (updateError) {
@@ -303,30 +328,101 @@ export async function createMessage(
       }
       messageId = existingMessage.id;
       logger?.success(`Successfully updated message ${messageId}`);
+      
+      // Return with success but flag as duplicate
+      return { id: messageId, success: true, duplicate: true };
     } else {
-      // Insert new message
-      logger?.info(`No existing message found, inserting new record.`);
+      // If we found a duplicate file in a different chat, handle it specially
+      if (duplicateFileReference) {
+        // Add reference to the duplicate and mark as duplicate
+        fullRecordData.is_duplicate = true;
+        fullRecordData.duplicate_reference_id = duplicateFileReference.id;
+        
+        // Modify file_unique_id to avoid constraint violation
+        // Append chat_id to make it unique
+        fullRecordData.file_unique_id = `${input.file_unique_id}_${input.chat_id}`;
+        
+        logger?.info(`Modified file_unique_id to avoid constraint violation: ${fullRecordData.file_unique_id}`);
+      }
+      
       // Add created_at only for new records
       fullRecordData.created_at = new Date().toISOString();
 
-      const { data: insertData, error: insertError } = await client
-        .from("messages")
-        .insert(fullRecordData) // Insert the full record
-        .select("id")
-        .single();
+      try {
+        // Insert new message
+        logger?.info(`Inserting new record with file_unique_id: ${fullRecordData.file_unique_id}`);
+        
+        const { data: insertData, error: insertError } = await client
+          .from("messages")
+          .insert(fullRecordData)
+          .select("id")
+          .single();
 
-      if (insertError) {
-        logger?.error("Failed to insert new message:", insertError);
-        return { success: false, error_message: insertError.message };
+        if (insertError) {
+          // If we hit a unique constraint error despite our checks
+          if (insertError.code === "23505" && insertError.message.includes("messages_file_unique_id_key")) {
+            logger?.warn("Hit unique constraint despite checks, attempting recovery...");
+            
+            // Generate a truly unique file_unique_id as a last resort
+            const timestamp = Date.now();
+            fullRecordData.file_unique_id = `${input.file_unique_id}_${timestamp}`;
+            fullRecordData.is_duplicate = true;
+            
+            // Try again with the modified unique ID
+            const { data: retryData, error: retryError } = await client
+              .from("messages")
+              .insert(fullRecordData)
+              .select("id")
+              .single();
+              
+            if (retryError) {
+              logger?.error("Failed final retry to insert message:", retryError);
+              return { success: false, error_message: retryError.message };
+            }
+            
+            messageId = retryData.id;
+            logger?.success(`Successfully inserted message with generated unique ID: ${messageId}`);
+          } else {
+            logger?.error("Failed to insert new message:", insertError);
+            return { success: false, error_message: insertError.message };
+          }
+        } else {
+          messageId = insertData.id;
+          logger?.success(`Successfully inserted new message ${messageId}`);
+        }
+      } catch (insertError) {
+        logger?.error("Exception during message insert:", insertError);
+        return { 
+          success: false, 
+          error_message: insertError instanceof Error ? insertError.message : String(insertError)
+        };
       }
-      messageId = insertData.id;
-      logger?.success(`Successfully inserted new message ${messageId}`);
     }
 
     if (!messageId) {
       const errorMsg = "Failed to obtain message ID after insert/update.";
       logger?.error(errorMsg);
       return { success: false, error_message: errorMsg };
+    }
+
+    // If we have a duplicate file, log the correlation
+    if (duplicateFileReference) {
+      try {
+        await client.from("unified_audit_logs").insert({
+          event_type: "duplicate_file_detected",
+          entity_id: messageId,
+          correlation_id: input.correlation_id,
+          metadata: {
+            original_file_id: duplicateFileReference.id,
+            telegram_message_id: input.telegram_message_id,
+            chat_id: input.chat_id,
+            file_unique_id: input.file_unique_id,
+            timestamp: new Date().toISOString()
+          }
+        });
+      } catch (logError) {
+        logger?.error("Failed to log duplicate file detection:", logError);
+      }
     }
 
     return { id: messageId, success: true };
@@ -463,5 +559,84 @@ export async function syncMediaGroupContent(
       success: false,
       error: error instanceof Error ? error.message : String(error),
     };
+  }
+}
+
+/**
+ * Recovers messages stuck in error state due to duplicate file_unique_id issues
+ */
+export async function recoverDuplicateFileMessages(correlationId: string = ""): Promise<{ recovered: number; errors: number }> {
+  try {
+    const result = { recovered: 0, errors: 0 };
+    
+    // Find messages in error state with duplicate file_unique_id errors
+    const { data: errorMessages, error: findError } = await supabaseClient
+      .from("messages")
+      .select("id, telegram_message_id, chat_id, file_unique_id, error_message")
+      .eq("processing_state", "error")
+      .ilike("error_message", "%file_unique_id%")
+      .order("created_at", { ascending: false })
+      .limit(50);
+      
+    if (findError) {
+      console.error("Error finding stuck messages:", findError);
+      return result;
+    }
+    
+    if (!errorMessages || errorMessages.length === 0) {
+      return result;
+    }
+    
+    console.log(`Found ${errorMessages.length} messages to recover from duplicate file_unique_id errors`);
+    
+    // Process each message
+    for (const message of errorMessages) {
+      try {
+        // Generate a truly unique ID using timestamp
+        const timestamp = Date.now();
+        const newUniqueId = `${message.file_unique_id}_${timestamp}`;
+        
+        // Update the message
+        const { error: updateError } = await supabaseClient
+          .from("messages")
+          .update({
+            file_unique_id: newUniqueId,
+            is_duplicate: true,
+            processing_state: "pending", // Reset to pending for reprocessing
+            error_message: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", message.id);
+          
+        if (updateError) {
+          console.error(`Failed to recover message ${message.id}:`, updateError);
+          result.errors++;
+        } else {
+          result.recovered++;
+          
+          // Log the recovery
+          await xdelo_logProcessingEvent(
+            "message_recovered",
+            message.id,
+            correlationId || crypto.randomUUID(),
+            {
+              telegram_message_id: message.telegram_message_id,
+              chat_id: message.chat_id,
+              original_file_unique_id: message.file_unique_id,
+              new_file_unique_id: newUniqueId,
+              recovery_type: "duplicate_file_id"
+            }
+          );
+        }
+      } catch (messageError) {
+        console.error(`Error recovering message ${message.id}:`, messageError);
+        result.errors++;
+      }
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("Error in recoverDuplicateFileMessages:", error);
+    return { recovered: 0, errors: 1 };
   }
 }

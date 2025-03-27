@@ -3044,6 +3044,22 @@ export type Database = {
         }
         Returns: undefined
       }
+      process_message_caption: {
+        Args: {
+          p_message_id: string
+          p_caption: string
+          p_correlation_id: string
+        }
+        Returns: Json
+      }
+      process_telegram_message: {
+        Args: {
+          p_message_id: string
+          p_correlation_id?: string
+          p_force?: boolean
+        }
+        Returns: Json
+      }
       process_webhook_event: {
         Args: {
           p_event_id: string
@@ -3055,6 +3071,10 @@ export type Database = {
         Returns: undefined
       }
       recalculate_all_totals: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      recheck_media_groups: {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
@@ -3082,6 +3102,12 @@ export type Database = {
       refresh_purchase_order_summary: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      reset_stalled_messages: {
+        Args: {
+          p_timeout_minutes?: number
+        }
+        Returns: Json
       }
       schedule_relationship_maintenance: {
         Args: Record<PropertyKey, never>
@@ -3121,6 +3147,13 @@ export type Database = {
           "": unknown[]
         }
         Returns: number
+      }
+      sync_media_group: {
+        Args: {
+          p_message_id: string
+          p_correlation_id: string
+        }
+        Returns: Json
       }
       update_estimate_totals: {
         Args: {
