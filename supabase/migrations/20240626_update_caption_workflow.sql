@@ -1,3 +1,4 @@
+
 -- Migration to update the caption processing workflow to use edge functions
 CREATE OR REPLACE FUNCTION public.xdelo_process_caption_workflow(p_message_id uuid, p_correlation_id text DEFAULT NULL::text, p_force boolean DEFAULT false)
  RETURNS jsonb
@@ -167,3 +168,29 @@ EXCEPTION
 
     RETURN jsonb_build_object(
       'success', FALSE,
+      'message_id', p_message_id,
+      'error', SQLERRM
+    );
+END;
+$function$;
+
+-- Create a trigger function to invoke the direct-caption-processor function
+CREATE OR REPLACE FUNCTION public.xdelo_process_caption_trigger()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+BEGIN
+  -- Call the workflow function with the NEW record's id and correlation_id as text
+  PERFORM public.xdelo_process_caption_workflow(NEW.id, NEW.correlation_id::text);
+  RETURN NEW;
+END;
+$function$;
+
+-- Add a trigger on messages to process caption updates
+DROP TRIGGER IF EXISTS trg_process_caption ON public.messages;
+CREATE TRIGGER trg_process_caption
+AFTER INSERT OR UPDATE OF caption ON public.messages
+FOR EACH ROW
+WHEN (NEW.caption IS NOT NULL AND NEW.caption != '')
+EXECUTE FUNCTION xdelo_process_caption_trigger();
