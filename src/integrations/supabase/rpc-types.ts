@@ -56,15 +56,24 @@ declare module "@supabase/supabase-js" {
       params?: {}
     ): { data: T; error: null } | { data: null; error: Error };
 
-    // Add RPC for media group synchronization with proper return type
+    // Updated: Add RPC for media group synchronization with new parameter signature
     rpc<T = { updated_count?: number; [key: string]: any }>(
       fn: "xdelo_sync_media_group_content",
       params: {
-        p_media_group_id: string;
-        p_source_message_id: string;
-        p_correlation_id: string;
+        p_message_id: string;
+        p_analyzed_content: any;
         p_force_sync?: boolean;
         p_sync_edit_history?: boolean;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
+
+    // Backwards compatibility signature
+    rpc<T = { updated_count?: number; [key: string]: any }>(
+      fn: "xdelo_sync_media_group_content",
+      params: {
+        p_source_message_id: string;
+        p_media_group_id: string;
+        p_correlation_id: string;
       }
     ): { data: T; error: null } | { data: null; error: Error };
 
@@ -110,6 +119,21 @@ declare module "@supabase/supabase-js" {
         p_message_id: string;
         p_analyzed_content: Record<string, any>;
         p_correlation_id?: string;
+      }
+    ): { data: T; error: null } | { data: null; error: Error };
+
+    // Add RPC for setting statement timeout
+    rpc<T = void>(
+      fn: "xdelo_set_statement_timeout",
+      params?: { p_timeout_ms?: number }
+    ): { data: T; error: null } | { data: null; error: Error };
+
+    // Add RPC for retry operation with exponential backoff
+    rpc<T = any>(
+      fn: "xdelo_retry_operation",
+      params?: { 
+        p_max_attempts?: number;
+        p_initial_delay_ms?: number;
       }
     ): { data: T; error: null } | { data: null; error: Error };
 

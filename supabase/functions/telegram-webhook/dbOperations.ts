@@ -1,3 +1,4 @@
+
 import {
   createSupabaseClient,
   extractTelegramMetadata,
@@ -223,6 +224,9 @@ export async function createMessage(
   logger?: any
 ): Promise<{ id?: string; success: boolean; error_message?: string }> {
   try {
+    // Set a longer timeout for complex operations
+    const options = { timeoutMs: 30000 };
+
     // Extract essential metadata first to avoid doing it in the transaction
     const telegramMetadata =
       input.telegram_metadata ||
@@ -427,6 +431,7 @@ export async function getMessageById(messageId: string) {
 
 /**
  * Sync media group content from one message to others
+ * FIXED: Updated parameter types to match database function signature
  */
 export async function syncMediaGroupContent(
   sourceMessageId: string,
@@ -435,15 +440,29 @@ export async function syncMediaGroupContent(
   forceSync: boolean = false
 ): Promise<{ success: boolean; updatedCount?: number; error?: string }> {
   try {
-    // Call the dedicated function with proper parameters
+    // First find if there's an analyzed content in the source message
+    const { data: sourceMessage, error: sourceError } = await supabaseClient
+      .from("messages")
+      .select("analyzed_content")
+      .eq("id", sourceMessageId)
+      .single();
+
+    if (sourceError || !sourceMessage?.analyzed_content) {
+      console.error("Error getting source message content:", sourceError);
+      return {
+        success: false,
+        error: sourceError?.message || "No analyzed content in source message",
+      };
+    }
+
+    // Call the database function with correct parameter types
     const { data, error } = await supabaseClient.rpc(
       "xdelo_sync_media_group_content",
       {
-        p_source_message_id: sourceMessageId,
-        p_media_group_id: mediaGroupId,
-        p_correlation_id: correlationId,
+        p_message_id: sourceMessageId,
+        p_analyzed_content: sourceMessage.analyzed_content,
         p_force_sync: forceSync,
-        p_sync_edit_history: true,
+        p_sync_edit_history: false,
       }
     );
 

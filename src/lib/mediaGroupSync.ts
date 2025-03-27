@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 /**
  * Utility function to manually trigger media group synchronization
  * for a specific message or media group.
- * Refactored to use consolidated DB functions.
+ * Updated to use the correct function signature.
  */
 export async function syncMediaGroup(
   mediaGroupId: string,
@@ -40,10 +40,21 @@ export async function syncMediaGroup(
       console.log(`Found source message ${sourceMessageId} for group ${mediaGroupId}`);
     }
     
+    // Get the analyzed content from the source message
+    const { data: sourceMessage, error: sourceError } = await supabase
+      .from('messages')
+      .select('analyzed_content')
+      .eq('id', sourceMessageId)
+      .single();
+      
+    if (sourceError || !sourceMessage?.analyzed_content) {
+      throw new Error(`Could not get analyzed content from source message: ${sourceError?.message || 'No analyzed content'}`);
+    }
+    
     // Generate correlation ID
     const correlationId = crypto.randomUUID().toString();
     
-    // Call the consolidated RPC function
+    // Call the RPC function with the correct parameters
     const { data, error } = await supabase.rpc<{
       success: boolean;
       updated_count?: number;
@@ -51,9 +62,8 @@ export async function syncMediaGroup(
     }>(
       'xdelo_sync_media_group_content',
       {
-        p_media_group_id: mediaGroupId,
-        p_source_message_id: sourceMessageId,
-        p_correlation_id: correlationId,
+        p_message_id: sourceMessageId,
+        p_analyzed_content: sourceMessage.analyzed_content,
         p_force_sync: options.force,
         p_sync_edit_history: true
       }

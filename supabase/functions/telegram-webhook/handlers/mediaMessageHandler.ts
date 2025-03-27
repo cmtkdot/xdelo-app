@@ -3,6 +3,7 @@ import { xdelo_processMessageMedia } from "../../_shared/mediaStorage.ts";
 import { xdelo_detectMimeType } from "../../_shared/mediaUtils.ts";
 import { constructTelegramMessageUrl } from "../../_shared/messageUtils.ts";
 import { supabaseClient } from "../../_shared/supabase.ts";
+import { retryDbOperation } from '../../_shared/dbRetryUtils.ts';
 import {
   checkDuplicateFile,
   createMessage,
@@ -526,8 +527,22 @@ async function xdelo_handleNewMediaMessage(
         oldAnalyzedContent.length > 0 ? oldAnalyzedContent : undefined,
     };
 
-    // Create the message
-    const result = await createMessage(supabaseClient, messageInput, logger);
+    // Create the message with retry logic to handle timeouts
+    const result = await retryDbOperation(
+      async () => await createMessage(supabaseClient, messageInput, logger),
+      {
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+        timeoutMs: 60000,
+        onRetry: (attempt, error, delay) => {
+          logger?.warn(`Retrying createMessage (attempt ${attempt} after ${delay}ms delay)`, {
+            error: error.message,
+            telegram_message_id: message.message_id,
+            chat_id: message.chat.id,
+          });
+        }
+      }
+    );
 
     if (!result.success) {
       logger?.error(`Failed to create message: ${result.error_message}`, {
