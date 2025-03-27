@@ -155,7 +155,7 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
           `Starting media group content sync for group ${media_group_id}, message ${messageId}, isEdit: ${isEdit}, force_reprocess: ${force_reprocess}`
         );
         
-        // Use our shared utility for media group sync
+        // Use our shared utility for media group sync with the correct parameters
         syncResult = await syncMediaGroupContent(
           Deno.env.get("SUPABASE_URL") ?? "",
           Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
@@ -166,6 +166,8 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
             syncEditHistory: isEdit 
           }
         );
+        
+        console.log(`Media group sync completed with result: ${JSON.stringify(syncResult)}`);
       } catch (syncError) {
         console.error(
           `Media group sync error (non-fatal): ${syncError.message}`
@@ -211,6 +213,7 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     );
   } catch (error) {
     console.error(`Error processing caption: ${error.message}`);
+    console.error(`Stack: ${error.stack}`);
 
     await updateMessageWithError(supabaseClient, messageId, error.message);
 

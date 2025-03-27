@@ -1,14 +1,14 @@
 
-
 import {
   constructTelegramMessageUrl,
   isMessageForwarded,
 } from "../../_shared/consolidatedMessageUtils.ts";
 import { corsHeaders } from "../../_shared/cors.ts";
 import {
-  createNonMediaMessage,
+  createMessage,
   supabaseClient,
   xdelo_logProcessingEvent,
+  triggerCaptionAnalysis,
 } from "../dbOperations.ts";
 import { MessageContext, TelegramMessage } from "../types.ts";
 
@@ -41,12 +41,13 @@ export async function handleOtherMessage(
       message.message_id
     );
 
-    // Create message record with optimized operation
+    // Create message record with optimized operation - using the unified createMessage function
+    // to avoid the issue with telegram_metadata column
     const {
       id: messageId,
       success,
-      error,
-    } = await createNonMediaMessage(
+      error_message,
+    } = await createMessage(
       supabaseClient,
       {
         telegram_message_id: message.message_id,
@@ -54,9 +55,9 @@ export async function handleOtherMessage(
         chat_type: message.chat.type,
         chat_title: message.chat.title,
         message_type: isChannelPost ? "channel_post" : "message",
-        message_text: message.text || message.caption || "",
+        text: message.text || "",
         telegram_data: message,
-        processing_state: "completed",
+        processing_state: "pending",
         is_forward: isForwarded,
         correlation_id: correlationId,
         message_url: message_url,
@@ -65,8 +66,30 @@ export async function handleOtherMessage(
     );
 
     if (!success || !messageId) {
-      logger?.error(`❌ Failed to store text message in database`, { error });
-      throw new Error(error || "Failed to create message record");
+      logger?.error(`❌ Failed to store text message in database`, { error: error_message });
+      throw new Error(error_message || "Failed to create message record");
+    }
+
+    // Process text as caption - this is a key improvement to ensure text messages get analyzed too
+    if (message.text) {
+      try {
+        const captionResult = await triggerCaptionAnalysis(
+          messageId,
+          correlationId,
+          false,
+          logger
+        );
+        
+        if (!captionResult.success) {
+          logger?.warn(`⚠️ Text analysis started but encountered issues: ${captionResult.error}`);
+        }
+      } catch (analysisError) {
+        logger?.warn(`⚠️ Error starting text analysis: ${analysisError.message}`, {
+          message_id: messageId,
+          error: analysisError
+        });
+        // Continue processing - we don't want to fail the whole request just because analysis had issues
+      }
     }
 
     // Log successful processing

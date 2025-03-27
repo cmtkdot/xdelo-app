@@ -1,202 +1,146 @@
 
 import { useState } from 'react';
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/useToast';
-import { LogEventType, logEvent } from "@/lib/logUtils";
-
-interface UseSingleFileOperationsResult {
-  isUploading: boolean;
-  isDeleting: boolean;
-  uploadFile: (file: File, storagePath?: string) => Promise<string | null>;
-  deleteFile: (filePath: string) => Promise<boolean>;
-  reuploadMediaFromTelegram: (messageId: string) => Promise<boolean>;
-}
+import { withRetry } from './utils';
 
 /**
- * Hook for handling single file upload and delete operations
+ * Hook for single file media operations
  */
-export function useSingleFileOperations(): UseSingleFileOperationsResult {
+export function useSingleFileOperations() {
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
   
   /**
-   * Upload a file to Supabase storage
-   * @param file The file to upload
-   * @param storagePath Optional storage path
-   * @returns The public URL of the uploaded file, or null on failure
+   * Upload a file to storage
    */
-  const uploadFile = async (file: File, storagePath?: string): Promise<string | null> => {
-    setIsUploading(true);
+  const uploadFile = async (file: File, path: string): Promise<{ path: string; url: string } | null> => {
     try {
-      // Get current user ID from Supabase auth
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id;
+      setIsUploading(true);
       
-      if (!userId) {
-        throw new Error("User ID not available");
-      }
-
-      const filePath = storagePath || `${userId}/${file.name}`;
-      const { data, error } = await supabase.storage
-        .from('message_media')
-        .upload(filePath, file, {
+      const { data, error } = await withRetry(
+        () => supabase.storage.from('media').upload(path, file, {
           cacheControl: '3600',
-          upsert: false
-        });
-
-      if (error) {
-        throw new Error(`File upload failed: ${error.message}`);
-      }
-
-      const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/message_media/${data.path}`;
+          upsert: true
+        }),
+        { 
+          maxAttempts: 3,
+          retryableErrors: ['timeout', 'connection', 'network']
+        }
+      );
       
-      const isMobile = window.innerWidth <= 768;
+      if (error) {
+        console.error('Error uploading file:', error);
+        toast({
+          title: 'Upload Failed',
+          description: error.message,
+          variant: 'destructive',
+        });
+        return null;
+      }
+      
+      const { data: urlData } = supabase.storage.from('media').getPublicUrl(data.path);
+      
+      return {
+        path: data.path,
+        url: urlData.publicUrl
+      };
+    } catch (err) {
+      console.error('Error in uploadFile:', err);
       toast({
-        title: "Upload successful",
-        description: isMobile ? "File uploaded" : `File uploaded to ${data.path}`,
-      });
-
-      // Log completion of sync operation
-      await logSyncCompletion(data.path, {
-        fileSize: file.size,
-        mimeType: file.type,
-        storagePath: data.path,
-        publicUrl
-      });
-
-      return publicUrl;
-    } catch (error: any) {
-      console.error("File upload error:", error.message);
-      toast({
-        title: "Upload failed",
-        description: error.message,
-        variant: "destructive",
+        title: 'Upload Error',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
       });
       return null;
     } finally {
       setIsUploading(false);
     }
   };
-
+  
   /**
-   * Delete a file from Supabase storage
-   * @param filePath The path of the file to delete
-   * @returns True on success, false on failure
+   * Delete a file from storage
    */
-  const deleteFile = async (filePath: string): Promise<boolean> => {
-    setIsDeleting(true);
+  const deleteFile = async (path: string): Promise<boolean> => {
     try {
-      const { error } = await supabase.storage
-        .from('message_media')
-        .remove([filePath]);
-
+      setIsDeleting(true);
+      
+      const { error } = await supabase.storage.from('media').remove([path]);
+      
       if (error) {
-        throw new Error(`File deletion failed: ${error.message}`);
+        console.error('Error deleting file:', error);
+        toast({
+          title: 'Delete Failed',
+          description: error.message,
+          variant: 'destructive',
+        });
+        return false;
       }
-
-      const isMobile = window.innerWidth <= 768;
+      
       toast({
-        title: "Deletion successful",
-        description: isMobile ? "File deleted" : `File deleted from ${filePath}`,
+        title: 'File Deleted',
+        description: 'Media file was successfully deleted',
       });
+      
       return true;
-    } catch (error: any) {
-      console.error("File deletion error:", error.message);
+    } catch (err) {
+      console.error('Error in deleteFile:', err);
       toast({
-        title: "Deletion failed",
-        description: error.message,
-        variant: "destructive",
+        title: 'Delete Error',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
       });
       return false;
     } finally {
       setIsDeleting(false);
     }
   };
-
+  
   /**
-   * Force reupload of media from Telegram for a specific message
-   * This is useful when file_ids expire or become invalid
+   * Reupload media from Telegram
    */
   const reuploadMediaFromTelegram = async (messageId: string): Promise<boolean> => {
-    setIsUploading(true);
     try {
-      // Call the dedicated edge function for reuploading from Telegram
-      const { data, error } = await supabase.functions.invoke('xdelo_reupload_media', {
+      setIsUploading(true);
+      
+      // Call edge function to handle reupload process
+      const { data, error } = await supabase.functions.invoke('media-management', {
         body: { 
-          messageId,
-          forceReupload: true,
-          skipExistingCheck: true
+          action: 'reupload',
+          messageId 
         }
       });
       
       if (error) {
-        throw new Error(`Reupload failed: ${error.message}`);
-      }
-      
-      if (!data?.success) {
-        throw new Error(data?.message || 'Reupload operation failed');
+        console.error('Error reuploading from Telegram:', error);
+        toast({
+          title: 'Reupload Failed',
+          description: error.message,
+          variant: 'destructive',
+        });
+        return false;
       }
       
       toast({
-        title: "Media Reuploaded",
-        description: "Media has been successfully reuploaded from Telegram."
+        title: 'Media Reuploaded',
+        description: data.message || 'Successfully reuploaded media from Telegram',
       });
-      
-      // Log the successful operation
-      await logEvent(
-        LogEventType.MEDIA_DOWNLOADED,
-        messageId,
-        {
-          operation: 'reupload',
-          success: true,
-          result: data
-        }
-      );
       
       return true;
-    } catch (error) {
-      console.error("Error reuploading media:", error);
-      
+    } catch (err) {
+      console.error('Error in reuploadMediaFromTelegram:', err);
       toast({
-        title: "Reupload Failed",
-        description: error.message || "Failed to reupload media from Telegram.",
-        variant: "destructive"
+        title: 'Reupload Error',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
       });
-      
-      // Log the failed operation
-      await logEvent(
-        LogEventType.MEDIA_UPLOAD_ERROR,
-        messageId,
-        {
-          operation: 'reupload',
-          success: false,
-          error: error.message
-        }
-      );
-      
       return false;
     } finally {
       setIsUploading(false);
     }
   };
-
-  // Log completion of sync operation
-  const logSyncCompletion = async (entityId: string, details: any) => {
-    try {
-      await logEvent(
-        LogEventType.SYNC_COMPLETED,
-        entityId,
-        {
-          ...details,
-          timestamp: new Date().toISOString()
-        }
-      );
-    } catch (error) {
-      console.error("Failed to log sync completion:", error);
-    }
-  };
-
+  
   return {
     isUploading,
     isDeleting,

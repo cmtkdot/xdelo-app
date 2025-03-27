@@ -1,3 +1,4 @@
+
 /**
  * Shared utilities for media group synchronization
  */
@@ -31,6 +32,15 @@ export async function syncMediaGroupContent(
     
     if (error) {
       console.error("Media group sync error:", error);
+      
+      // Log detailed error information
+      console.error("Error details:", {
+        code: error.code,
+        message: error.message,
+        hint: error.hint,
+        details: error.details
+      });
+      
       throw new Error(`Media group sync failed: ${error.message}`);
     }
     
@@ -42,6 +52,16 @@ export async function syncMediaGroupContent(
     };
   } catch (e) {
     console.error("Exception in syncMediaGroupContent:", e);
+    
+    // Add more detailed logging
+    if (e instanceof Error) {
+      console.error("Error details:", {
+        name: e.name,
+        message: e.message,
+        stack: e.stack
+      });
+    }
+    
     return {
       success: false,
       sourceMessageId,
@@ -114,4 +134,53 @@ export async function findMediaGroupSourceMessage(
       error: e instanceof Error ? e.message : String(e)
     };
   }
+}
+
+/**
+ * Helper to execute a function with retry logic
+ */
+export async function withRetry<T>(
+  operation: () => Promise<T>,
+  options: {
+    maxAttempts?: number;
+    delay?: number;
+    backoffFactor?: number;
+    retryableErrors?: string[];
+  } = {}
+): Promise<T> {
+  const {
+    maxAttempts = 3,
+    delay = 1000,
+    backoffFactor = 2,
+    retryableErrors = []
+  } = options;
+  
+  let attempt = 0;
+  let lastError: Error;
+  
+  while (attempt < maxAttempts) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      attempt++;
+      
+      // Check if we should retry
+      const isRetryable = 
+        retryableErrors.length === 0 || 
+        retryableErrors.some(errMsg => lastError.message.includes(errMsg));
+      
+      // If we've used all attempts or error is not retryable, throw
+      if (attempt >= maxAttempts || !isRetryable) {
+        throw lastError;
+      }
+      
+      // Wait with exponential backoff
+      const waitTime = delay * Math.pow(backoffFactor, attempt - 1);
+      console.log(`Retry attempt ${attempt}/${maxAttempts} in ${waitTime}ms: ${lastError.message}`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+  }
+  
+  throw lastError!;
 }

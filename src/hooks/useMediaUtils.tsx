@@ -29,8 +29,7 @@ export function useMediaUtils() {
         return false;
       }
       
-      // Call the database function directly with RPC
-      // Fix: Use the updated parameter signature
+      // Call the database function directly with RPC using the correct parameter signature
       const { data, error } = await supabase.rpc(
         'xdelo_sync_media_group_content',
         {
