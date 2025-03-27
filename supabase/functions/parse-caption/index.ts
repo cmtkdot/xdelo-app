@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { ParsedContent, xdelo_parseCaption } from "../_shared/captionParser.ts";
@@ -10,6 +11,7 @@ import {
   logAnalysisEvent,
   updateMessageWithAnalysis,
 } from "./dbOperations.ts";
+import { syncMediaGroupContent } from "../_shared/mediaGroupSync.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -152,7 +154,18 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
         console.log(
           `Starting media group content sync for group ${media_group_id}, message ${messageId}, isEdit: ${isEdit}, force_reprocess: ${force_reprocess}`
         );
-        syncResult = await syncMediaGroup(message, media_group_id);
+        
+        // Use our shared utility for media group sync
+        syncResult = await syncMediaGroupContent(
+          Deno.env.get("SUPABASE_URL") ?? "",
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+          messageId,
+          parsedContent,
+          { 
+            forceSync: true,
+            syncEditHistory: isEdit 
+          }
+        );
       } catch (syncError) {
         console.error(
           `Media group sync error (non-fatal): ${syncError.message}`

@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/useToast';
 import {
   Form,
@@ -8,523 +10,207 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from 'react-hook-form';
+import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod"
-import { supabase } from '@/integrations/supabase/client';
-import { WebhookLogDisplay } from '@/components/ui/webhook-log-display';
-import { useSettings } from '@/hooks/useSettings';
-import { useMakeWebhooks } from '@/hooks/useMakeWebhooks';
-import { useMakeTestPayloads } from '@/hooks/useMakeTestPayloads';
-import { useTelegramBotInfo } from '@/hooks/useTelegramBotInfo';
-import { useTelegramOperations } from '@/hooks/useTelegramOperations';
-import { useMediaUtils } from '@/hooks/useMediaUtils';
-import { useEdgeFunctions } from '@/hooks/useEdgeFunctions';
-import { useDatabaseIntegrations } from '@/hooks/useDatabaseIntegrations';
-import { useStorageIntegrations } from '@/hooks/useStorageIntegrations';
-import { useAIIntegrations } from '@/hooks/useAIIntegrations';
-import { useAnalytics } from '@/hooks/useAnalytics';
-import { useUserManagement } from '@/hooks/useUserManagement';
-import { useNotifications } from '@/hooks/useNotifications';
-import { useTheme } from '@/hooks/useTheme';
-import { useUI } from '@/hooks/useUI';
-import { useAuthentication } from '@/hooks/useAuthentication';
-import { useAuthorization } from '@/hooks/useAuthorization';
-import { useTelemetry } from '@/hooks/useTelemetry';
-import { useThirdPartyServices } from '@/hooks/useThirdPartyServices';
-import { useUtilities } from '@/hooks/useUtilities';
-import { useIntegrations } from '@/hooks/useIntegrations';
-import { useAPI } from '@/hooks/useAPI';
-import { useDataManagement } from '@/hooks/useDataManagement';
-import { useDevTools } from '@/hooks/useDevTools';
-import { usePerformanceMonitoring } from '@/hooks/usePerformanceMonitoring';
-import { useSecurity } from '@/hooks/useSecurity';
-import { useCompliance } from '@/hooks/useCompliance';
-import { useAccessibility } from '@/hooks/useAccessibility';
-import { useInternationalization } from '@/hooks/useInternationalization';
-import { useSearch } from '@/hooks/useSearch';
-import { useRealtime } from '@/hooks/useRealtime';
-import { useWebhooks } from '@/hooks/useWebhooks';
-import { useWorkflows } from '@/hooks/useWorkflows';
-import { useAutomation } from '@/hooks/useAutomation';
-import { useCollaboration } from '@/hooks/useCollaboration';
-import { useContentManagement } from '@/hooks/useContentManagement';
-import { useDigitalAssetManagement } from '@/hooks/useDigitalAssetManagement';
-import { useECommerce } from '@/hooks/useECommerce';
-import { useSocialMedia } from '@/hooks/useSocialMedia';
-import { useCustomerSupport } from '@/hooks/useCustomerSupport';
-import { useMarketing } from '@/hooks/useMarketing';
-import { useSales } from '@/hooks/useSales';
-import { useFinance } from '@/hooks/useFinance';
-import { useHumanResources } from '@/hooks/useHumanResources';
-import { useLegal } from '@/hooks/useLegal';
-import { useOperations } from '@/hooks/useOperations';
-import { useResearchAndDevelopment } from '@/hooks/useResearchAndDevelopment';
-import { useEducation } from '@/hooks/useEducation';
-import { useGovernment } from '@/hooks/useGovernment';
-import { useHealthcare } from '@/hooks/useHealthcare';
-import { useManufacturing } from '@/hooks/useManufacturing';
-import { useRetail } from '@/hooks/useRetail';
-import { useTravelAndHospitality } from '@/hooks/useTravelAndHospitality';
-import { useEnergy } from '@/hooks/useEnergy';
-import { useAgriculture } from '@/hooks/useAgriculture';
-import { useConstruction } from '@/hooks/useConstruction';
-import { useRealEstate } from '@/hooks/useRealEstate';
-import { useTransportationAndLogistics } from '@/hooks/useTransportationAndLogistics';
-import { useMediaAndEntertainment } from '@/hooks/useMediaAndEntertainment';
-import { useNonprofit } from '@/hooks/useNonprofit';
-import { useTelecommunications } from '@/hooks/useTelecommunications';
-import { useConsulting } from '@/hooks/useConsulting';
-import { useOutsourcing } from '@/hooks/useOutsourcing';
-import { useFranchising } from '@/hooks/useFranchising';
-import { useLicensing } from '@/hooks/useLicensing';
-import { useMergersAndAcquisitions } from '@/hooks/useMergersAndAcquisitions';
-import { useVentureCapital } from '@/hooks/useVentureCapital';
-import { usePrivateEquity } from '@/hooks/usePrivateEquity';
-import { useInvestmentBanking } from '@/hooks/useInvestmentBanking';
-import { useWealthManagement } from '@/hooks/useWealthManagement';
-import { useInsurance } from '@/hooks/useInsurance';
-import { useAccounting } from '@/hooks/useAccounting';
-import { useAuditing } from '@/hooks/useAuditing';
-import { useTaxation } from '@/hooks/useTaxation';
-import { useFinancialPlanning } from '@/hooks/useFinancialPlanning';
-import { useRiskManagement } from '@/hooks/useRiskManagement';
-import { useActuarialScience } from '@/hooks/useActuarialScience';
-import { useEconomics } from '@/hooks/useEconomics';
-import { useStatistics } from '@/hooks/useStatistics';
-import { useMathematics } from '@/hooks/useMathematics';
-import { usePhysics } from '@/hooks/usePhysics';
-import { useChemistry } from '@/hooks/useChemistry';
-import { useBiology } from '@/hooks/useBiology';
-import { useEngineering } from '@/hooks/useEngineering';
-import { useComputerScience } from '@/hooks/useComputerScience';
-import { useInformationTechnology } from '@/hooks/useInformationTechnology';
-import { useDataScience } from '@/hooks/useDataScience';
-import { useArtificialIntelligence } from '@/hooks/useArtificialIntelligence';
-import { useMachineLearning } from '@/hooks/useMachineLearning';
-import { useDeepLearning } from '@/hooks/useDeepLearning';
-import { useRobotics } from '@/hooks/useRobotics';
-import { useAutomationEngineering } from '@/hooks/useAutomationEngineering';
-import { useControlSystems } from '@/hooks/useControlSystems';
-import { useMechatronics } from '@/hooks/useMechatronics';
-import { useNanotechnology } from '@/hooks/useNanotechnology';
-import { useBiotechnology } from '@/hooks/useBiotechnology';
-import { useGeneticEngineering } from '@/hooks/useGeneticEngineering';
-import { useBioinformatics } from '@/hooks/useBioinformatics';
-import { useNeuroscience } from '@/hooks/useNeuroscience';
-import { useCognitiveScience } from '@/hooks/useCognitiveScience';
-import { usePsychology } from '@/hooks/usePsychology';
-import { useSociology } from '@/hooks/useSociology';
-import { useAnthropology } from '@/hooks/useAnthropology';
-import { usePoliticalScience } from '@/hooks/usePoliticalScience';
-import { useHistory } from '@/hooks/useHistory';
-import { useGeography } from '@/hooks/useGeography';
-import { usePhilosophy } from '@/hooks/usePhilosophy';
-import { useReligiousStudies } from '@/hooks/useReligiousStudies';
-import { useLinguistics } from '@/hooks/useLinguistics';
-import { useLiterature } from '@/hooks/useLiterature';
-import { useArtHistory } from '@/hooks/useArtHistory';
-import { useMusicology } from '@/hooks/useMusicology';
-import { useTheaterStudies } from '@/hooks/useTheaterStudies';
-import { useFilmStudies } from '@/hooks/useFilmStudies';
-import { useDanceStudies } from '@/hooks/useDanceStudies';
-import { useArchaeology } from '@/hooks/useArchaeology';
-import { usePaleontology } from '@/hooks/usePaleontology';
-import { useOceanography } from '@/hooks/useOceanography';
-import { useMeteorology } from '@/hooks/useMeteorology';
-import { useClimatology } from '@/hooks/useClimatology';
-import { useEnvironmentalScience } from '@/hooks/useEnvironmentalScience';
-import { useSustainabilityStudies } from '@/hooks/useSustainabilityStudies';
-import { useUrbanPlanning } from '@/hooks/useUrbanPlanning';
-import { useArchitecture } from '@/hooks/useArchitecture';
-import { useInteriorDesign } from '@/hooks/useInteriorDesign';
-import { useLandscapeArchitecture } from '@/hooks/useLandscapeArchitecture';
-import { useGraphicDesign } from '@/hooks/useGraphicDesign';
-import { useWebDesign } from '@/hooks/useWebDesign';
-import { useMobileAppDesign } from '@/hooks/useMobileAppDesign';
-import { useUserInterfaceDesign } from '@/hooks/useUserInterfaceDesign';
-import { useUserExperienceDesign } from '@/hooks/useUserExperienceDesign';
-import { useProductDesign } from '@/hooks/useProductDesign';
-import { useFashionDesign } from '@/hooks/useFashionDesign';
-import { useTextileDesign } from '@/hooks/useTextileDesign';
-import { useJewelryDesign } from '@/hooks/useJewelryDesign';
-import { useIndustrialDesign } from '@/hooks/useIndustrialDesign';
-import { useAutomotiveDesign } from '@/hooks/useAutomotiveDesign';
-import { useAeronauticalDesign } from '@/hooks/useAeronauticalDesign';
-import { useNavalArchitecture } from '@/hooks/useNavalArchitecture';
-import { useSpaceArchitecture } from '@/hooks/useSpaceArchitecture';
-import { useRoboticsDesign } from '@/hooks/useRoboticsDesign';
-import { useGameDesign } from '@/hooks/useGameDesign';
-import { useVirtualRealityDesign } from '@/hooks/useVirtualRealityDesign';
-import { useAugmentedRealityDesign } from '@/hooks/useAugmentedRealityDesign';
-import { useMixedRealityDesign } from '@/hooks/useMixedRealityDesign';
-import { useSimulationDesign } from '@/hooks/useSimulationDesign';
-import { useTrainingDesign } from '@/hooks/useTrainingDesign';
-import { useEducationalDesign } from '@/hooks/useEducationalDesign';
-import { useInstructionalDesign } from '@/hooks/useInstructionalDesign';
-import { useCurriculumDesign } from '@/hooks/useCurriculumDesign';
-import { useAssessmentDesign } from '@/hooks/useAssessmentDesign';
-import { useLearningAnalytics } from '@/hooks/useLearningAnalytics';
-import { useEducationalTechnology } from '@/hooks/useEducationalTechnology';
-import { useOnlineLearning } from '@/hooks/useOnlineLearning';
-import { useDistanceLearning } from '@/hooks/useDistanceLearning';
-import { useBlendedLearning } from '@/hooks/useBlendedLearning';
-import { usePersonalizedLearning } from '@/hooks/usePersonalizedLearning';
-import { useAdaptiveLearning } from '@/hooks/useAdaptiveLearning';
-import { useCompetencyBasedLearning } from '@/hooks/useCompetencyBasedLearning';
-import { useProjectBasedLearning } from '@/hooks/useProjectBasedLearning';
-import { useInquiryBasedLearning } from '@/hooks/useInquiryBasedLearning';
-import { useProblemBasedLearning } from '@/hooks/useProblemBasedLearning';
-import { useExperientialLearning } from '@/hooks/useExperientialLearning';
-import { useServiceLearning } from '@/hooks/useServiceLearning';
-import { useInternship } from '@/hooks/useInternship';
-import { useApprenticeship } from '@/hooks/useApprenticeship';
-import { useMentorship } from '@/hooks/useMentorship';
-import { useCoaching } from '@/hooks/useCoaching';
-import { useCounseling } from '@/hooks/useCounseling';
-import { useTherapy } from '@/hooks/useTherapy';
-import { useConsultation } from '@/hooks/useConsultation';
-import { useAdvising } from '@/hooks/useAdvising';
-import { useTutoring } from '@/hooks/useTutoring';
-import { useFacilitation } from '@/hooks/useFacilitation';
-import { useMediation } from '@/hooks/useMediation';
-import { useNegotiation } from '@/hooks/useNegotiation';
-import { useArbitration } from '@/hooks/useArbitration';
-import { useCollaborationEngineering } from '@/hooks/useCollaborationEngineering';
-import { useTeamBuilding } from '@/hooks/useTeamBuilding';
-import { useConflictResolution } from '@/hooks/useConflictResolution';
-import { useGroupDynamics } from '@/hooks/useGroupDynamics';
-import { useOrganizationalBehavior } from '@/hooks/useOrganizationalBehavior';
-import { useLeadershipDevelopment } from '@/hooks/useLeadershipDevelopment';
-import { useChangeManagement } from '@/hooks/useChangeManagement';
-import { useInnovationManagement } from '@/hooks/useInnovationManagement';
-import { useKnowledgeManagement } from '@/hooks/useKnowledgeManagement';
-import { useProjectManagement } from '@/hooks/useProjectManagement';
-import { useRiskManagementEngineering } from '@/hooks/useRiskManagementEngineering';
-import { useQualityManagement } from '@/hooks/useQualityManagement';
-import { useProcessImprovement } from '@/hooks/useProcessImprovement';
-import { useLeanManufacturing } from '@/hooks/useLeanManufacturing';
-import { useSixSigma } from '@/hooks/useSixSigma';
-import { useSupplyChainManagement } from '@/hooks/useSupplyChainManagement';
-import { useLogisticsManagement } from '@/hooks/useLogisticsManagement';
-import { useOperationsResearch } from '@/hooks/useOperationsResearch';
-import { useSystemsEngineering } from '@/hooks/useSystemsEngineering';
-import { useHumanFactorsEngineering } from '@/hooks/useHumanFactorsEngineering';
-import { useErgonomics } from '@/hooks/useErgonomics';
-import { useSafetyEngineering } from '@/hooks/useSafetyEngineering';
-import { useReliabilityEngineering } from '@/hooks/useReliabilityEngineering';
-import { useMaintainabilityEngineering } from '@/hooks/useMaintainabilityEngineering';
-import { useTestEngineering } from '@/hooks/useTestEngineering';
-import { useValidationEngineering } from '@/hooks/useValidationEngineering';
-import { useVerificationEngineering } from '@/hooks/useVerificationEngineering';
-import { useConfigurationManagement } from '@/hooks/useConfigurationManagement';
-import { useRequirementsEngineering } from '@/hooks/useRequirementsEngineering';
-import { useSoftwareEngineering } from '@/hooks/useSoftwareEngineering';
-import { useHardwareEngineering } from '@/hooks/useHardwareEngineering';
-import { useElectricalEngineering } from '@/hooks/useElectricalEngineering';
-import { useMechanicalEngineering } from '@/hooks/useMechanicalEngineering';
-import { useCivilEngineering } from '@/hooks/useCivilEngineering';
-import { useChemicalEngineering } from '@/hooks/useChemicalEngineering';
-import { useAerospaceEngineering } from '@/hooks/useAerospaceEngineering';
-import { useBiomedicalEngineering } from '@/hooks/useBiomedicalEngineering';
-import { useEnvironmentalEngineering } from '@/hooks/useEnvironmentalEngineering';
-import { useNuclearEngineering } from '@/hooks/useNuclearEngineering';
-import { usePetroleumEngineering } from '@/hooks/usePetroleumEngineering';
-import { useMiningEngineering } from '@/hooks/useMiningEngineering';
-import { useMaterialsEngineering } from '@/hooks/useMaterialsEngineering';
-import { useManufacturingEngineering } from '@/hooks/useManufacturingEngineering';
-import { useIndustrialEngineering } from '@/hooks/useIndustrialEngineering';
-import { useAgriculturalEngineering } from '@/hooks/useAgriculturalEngineering';
-import { useConstructionEngineering } from '@/hooks/useConstructionEngineering';
-import { useTransportationEngineering } from '@/hooks/useTransportationEngineering';
-import { useTelecommunicationsEngineering } from '@/hooks/useTelecommunicationsEngineering';
-import { useComputerEngineering } from '@/hooks/useComputerEngineering';
-import { useDataEngineering } from '@/hooks/useDataEngineering';
-import { useArtificialIntelligenceEngineering } from '@/hooks/useArtificialIntelligenceEngineering';
-import { useMachineLearningEngineering } from '@/hooks/useMachineLearningEngineering';
-import { useDeepLearningEngineering } from '@/hooks/useDeepLearningEngineering';
-import { useRoboticsEngineering } from '@/hooks/useRoboticsEngineering';
-import { useAutomationSystems } from '@/hooks/useAutomationSystems';
-import { useControlTheory } from '@/hooks/useControlTheory';
-import { useSignalProcessing } from '@/hooks/useSignalProcessing';
-import { useImageProcessing } from '@/hooks/useImageProcessing';
-import { useNaturalLanguageProcessing } from '@/hooks/useNaturalLanguageProcessing';
-import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
-import { useComputerVision } from '@/hooks/useComputerVision';
-import { usePatternRecognition } from '@/hooks/usePatternRecognition';
-import { useDataMining } from '@/hooks/useDataMining';
-import { useBigDataAnalytics } from '@/hooks/useBigDataAnalytics';
-import { useCloudComputing } from '@/hooks/useCloudComputing';
-import { useEdgeComputing } from '@/hooks/useEdgeComputing';
-import { useFogComputing } from '@/hooks/useFogComputing';
-import { useQuantumComputing } from '@/hooks/useQuantumComputing';
-import { useNeuromorphicComputing } from '@/hooks/useNeuromorphicComputing';
-import { useBioComputing } from '@/hooks/useBioComputing';
-import { useGreenComputing } from '@/hooks/useGreenComputing';
-import { useSustainableComputing } from '@/hooks/useSustainableComputing';
-import { useEthicalComputing } from '@/hooks/useEthicalComputing';
-import { useResponsibleComputing } from '@/hooks/useResponsibleComputing';
-import { useSociallyConsciousComputing } from '@/hooks/useSociallyConsciousComputing';
-import { useInclusiveComputing } from '@/hooks/useInclusiveComputing';
-import { useAccessibleComputing } from '@/hooks/useAccessibleComputing';
-import { useHumanCenteredComputing } from '@/hooks/useHumanCenteredComputing';
-import { useUserAwareComputing } from '@/hooks/useUserAwareComputing';
-import { useContextAwareComputing } from '@/hooks/useContextAwareComputing';
-import { useAmbientIntelligence } from '@/hooks/useAmbientIntelligence';
-import { usePervasiveComputing } from '@/hooks/usePervasiveComputing';
-import { useUbiquitousComputing } from '@/hooks/useUbiquitousComputing';
-import { useMobileComputing } from '@/hooks/useMobileComputing';
-import { useWearableComputing } from '@/hooks/useWearableComputing';
-import { useInternetOfThings } from '@/hooks/useInternetOfThings';
-import { useCyberPhysicalSystems } from '@/hooks/useCyberPhysicalSystems';
-import { useSmartCities } from '@/hooks/useSmartCities';
-import { useSmartHomes } from '@/hooks/useSmartHomes';
-import { useSmartGrids } from '@/hooks/useSmartGrids';
-import { useSmartTransportation } from '@/hooks/useSmartTransportation';
-import { useSmartHealthcare } from '@/hooks/useSmartHealthcare';
-import { useSmartManufacturing } from '@/hooks/useSmartManufacturing';
-import { useSmartAgriculture } from '@/hooks/useSmartAgriculture';
-import { useSmartRetail } from '@/hooks/useSmartRetail';
-import { useSmartEducation } from '@/hooks/useSmartEducation';
-import { useSmartGovernment } from '@/hooks/useSmartGovernment';
-import { useSmartEnergy } from '@/hooks/useSmartEnergy';
-import { useSmartEnvironment } from '@/hooks/useSmartEnvironment';
-import { useSmartSecurity } from '@/hooks/useSmartSecurity';
-import { useSmartPrivacy } from '@/hooks/useSmartPrivacy';
-import { useSmartEthics } from '@/hooks/useSmartEthics';
-import { useSmartResponsibility } from '@/hooks/useSmartResponsibility';
-import { useSmartInclusion } from '@/hooks/useSmartInclusion';
-import { useSmartAccessibility } from '@/hooks/useSmartAccessibility';
-import { useSmartHumanity } from '@/hooks/useSmartHumanity';
-import { useSmartFuture } from '@/hooks/useSmartFuture';
-import { useSmartWorld } from '@/hooks/useSmartWorld';
-import { useSmartUniverse } from '@/hooks/useSmartUniverse';
-import { useSmartEverything } from '@/hooks/useSmartEverything';
-import { useSmartNothing } from '@/hooks/useSmartNothing';
-import { useSmartSomething } from '@/hooks/useSmartSomething';
-import { useSmartAnything } from '@/hooks/useSmartAnything';
-import { useSmartAll } from '@/hooks/useSmartAll';
-import { useSmartNone } from '@/hooks/useSmartNone';
-import { useSmartOne } from '@/hooks/useSmartOne';
-import { useSmartTwo } from '@/hooks/useSmartTwo';
-import { useSmartThree } from '@/hooks/useSmartThree';
-import { useSmartFour } from '@/hooks/useSmartFour';
-import { useSmartFive } from '@/hooks/useSmartFive';
-import { useSmartSix } from '@/hooks/useSmartSix';
-import { useSmartSeven } from '@/hooks/useSmartSeven';
-import { useSmartEight } from '@/hooks/useSmartEight';
-import { useSmartNine } from '@/hooks/useSmartNine';
-import { useSmartTen } from '@/hooks/useSmartTen';
-import { useSmartEleven } from '@/hooks/useSmartEleven';
-import { useSmartTwelve } from '@/hooks/useSmartTwelve';
-import { useSmartThirteen } from '@/hooks/useSmartThirteen';
-import { useSmartFourteen } from '@/hooks/useSmartFourteen';
-import { useSmartFifteen } from '@/hooks/useSmartFifteen';
-import { useSmartSixteen } from '@/hooks/useSmartSixteen';
-import { useSmartSeventeen } from '@/hooks/useSmartSeventeen';
-import { useSmartEighteen } from '@/hooks/useSmartEighteen';
-import { useSmartNineteen } from '@/hooks/useSmartNineteen';
-import { useSmartTwenty } from '@/hooks/useSmartTwenty';
-import { useSmartTwentyOne } from '@/hooks/useSmartTwentyOne';
-import { useSmartTwentyTwo } from '@/hooks/useSmartTwentyTwo';
-import { useSmartTwentyThree } from '@/hooks/useSmartTwentyThree';
-import { useSmartTwentyFour } from '@/hooks/useSmartTwentyFour';
-import { useSmartTwentyFive } from '@/hooks/useSmartTwentyFive';
-import { useSmartTwentySix } from '@/hooks/useSmartTwentySix';
-import { useSmartTwentySeven } from '@/hooks/useSmartTwentySeven';
-import { useSmartTwentyEight } from '@/hooks/useSmartTwentyEight';
-import { useSmartTwentyNine } from '@/hooks/useSmartTwentyNine';
-import { useSmartThirty } from '@/hooks/useSmartThirty';
-import { useSmartThirtyOne } from '@/hooks/useSmartThirtyOne';
-import { useSmartThirtyTwo } from '@/hooks/useSmartThirtyTwo';
-import { useSmartThirtyThree } from '@/hooks/useSmartThirtyThree';
-import { useSmartThirtyFour } from '@/hooks/useSmartThirtyFour';
-import { useSmartThirtyFive } from '@/hooks/useSmartThirtyFive';
-import { useSmartThirtySix } from '@/hooks/useSmartThirtySix';
-import { useSmartThirtySeven } from '@/hooks/useSmartThirtySeven';
-import { useSmartThirtyEight } from '@/hooks/useSmartThirtyEight';
-import { useSmartThirtyNine } from '@/hooks/useSmartThirtyNine';
-import { useSmartForty } from '@/hooks/useSmartForty';
-import { useSmartFortyOne } from '@/hooks/useSmartFortyOne';
-import { useSmartFortyTwo } from '@/hooks/useSmartFortyTwo';
-import { useSmartFortyThree } from '@/hooks/useSmartFortyThree';
-import { useSmartFortyFour } from '@/hooks/useSmartFortyFour';
-import { useSmartFortyFive } from '@/hooks/useSmartFortyFive';
-import { useSmartFortySix } from '@/hooks/useSmartFortySix';
-import { useSmartFortySeven } from '@/hooks/useSmartFortySeven';
-import { useSmartFortyEight } from '@/hooks/useSmartFortyEight';
-import { useSmartFortyNine } from '@/hooks/useSmartFortyNine';
-import { useSmartFifty } from '@/hooks/useSmartFifty';
-import { useSmartFiftyOne } from '@/hooks/useSmartFiftyOne';
-import { useSmartFiftyTwo } from '@/hooks/useSmartFiftyTwo';
-import { useSmartFiftyThree } from '@/hooks/useSmartFiftyThree';
-import { useSmartFiftyFour } from '@/hooks/useSmartFiftyFour';
-import { useSmartFiftyFive } from '@/hooks/useSmartFiftyFive';
-import { useSmartFiftySix } from '@/hooks/useSmartFiftySix';
-import { useSmartFiftySeven } from '@/hooks/useSmartFiftySeven';
-import { useSmartFiftyEight } from '@/hooks/useSmartFiftyEight';
-import { useSmartFiftyNine } from '@/hooks/useSmartFiftyNine';
-import { useSmartSixty } from '@/hooks/useSmartSixty';
-import { useSmartSixtyOne } from '@/hooks/useSmartSixtyOne';
-import { useSmartSixtyTwo } from '@/hooks/useSmartSixtyTwo';
-import { useSmartSixtyThree } from '@/hooks/useSmartSixtyThree';
-import { useSmartSixtyFour } from '@/hooks/useSmartSixtyFour';
-import { useSmartSixtyFive } from '@/hooks/useSmartSixtyFive';
-import { useSmartSixtySix } from '@/hooks/useSmartSixtySix';
-import { useSmartSixtySeven } from '@/hooks/useSmartSixtySeven';
-import { useSmartSixtyEight } from '@/hooks/useSmartSixtyEight';
-import { useSmartSixtyNine } from '@/hooks/useSmartSixtyNine';
-import { useSmartSeventy } from '@/hooks/useSmartSeventy';
-import { useSmartSeventyOne } from '@/hooks/useSmartSeventyOne';
-import { useSmartSeventyTwo } from '@/hooks/useSmartSeventyTwo';
-import { useSmartSeventyThree } from '@/hooks/useSmartSeventyThree';
-import { useSmartSeventyFour } from '@/hooks/useSmartSeventyFour';
-import { useSmartSeventyFive } from '@/hooks/useSmartSeventyFive';
-import { useSmartSeventySix } from '@/hooks/useSmartSeventySix';
-import { useSmartSeventySeven } from '@/hooks/useSmartSeventySeven';
-import { useSmartSeventyEight } from '@/hooks/useSmartSeventyEight';
-import { useSmartSeventyNine } from '@/hooks/useSmartSeventyNine';
-import { useSmartEighty } from '@/hooks/useSmartEighty';
-import { useSmartEightyOne } from '@/hooks/useSmartEightyOne';
-import { useSmartEightyTwo } from '@/hooks/useSmartEightyTwo';
-import { useSmartEightyThree } from '@/hooks/useSmartEightyThree';
-import { useSmartEightyFour } from '@/hooks/useSmartEightyFour';
-import { useSmartEightyFive } from '@/hooks/useSmartEightyFive';
-import { useSmartEightySix } from '@/hooks/useSmartEightySix';
-import { useSmartEightySeven } from '@/hooks/useSmartEightySeven';
-import { useSmartEightyEight } from '@/hooks/useSmartEightyEight';
-import { useSmartEightyNine } from '@/hooks/useSmartEightyNine';
-import { useSmartNinety } from '@/hooks/useSmartNinety';
-import { useSmartNinetyOne } from '@/hooks/useSmartNinetyOne';
-import { useSmartNinetyTwo } from '@/hooks/useSmartNinetyTwo';
-import { useSmartNinetyThree } from '@/hooks/useSmartNinetyThree';
-import { useSmartNinetyFour } from '@/hooks/useSmartNinetyFour';
-import { useSmartNinetyFive } from '@/hooks/useSmartNinetyFive';
-import { useSmartNinetySix } from '@/hooks/useSmartNinetySix';
-import { useSmartNinetySeven } from '@/hooks/useSmartNinetySeven';
-import { useSmartNinetyEight } from '@/hooks/useSmartNinetyEight';
-import { useSmartNinetyNine } from '@/hooks/useSmartNinetyNine';
-import { useSmartHundred } from '@/hooks/useSmartHundred';
 
 const formSchema = z.object({
   webhookUrl: z.string().url({ message: "Please enter a valid URL." }),
   active: z.boolean().default(false),
-  includeDetails: z.boolean().default(false),
-});
+})
 
-interface WebhookSetterProps {
-  botName: string;
+interface WebhookInfo {
+  url: string;
+  has_custom_certificate: boolean;
+  pending_update_count: number;
+  last_error_date: number | null;
+  last_error_message: string | null;
+  max_connections: number;
+  ip_address: string | null;
 }
 
-export function WebhookSetter({ botName }: WebhookSetterProps) {
-  const { toast } = useToast()
-  const [isLoading, setIsLoading] = useState(false);
-  const [webhookLog, setWebhookLog] = useState<any>(null);
-  const [showDetails, setShowDetails] = useState(false);
-  const { settings, updateSettings } = useSettings();
-  const { makeWebhook } = useMakeWebhooks();
-  const { makeTestPayload } = useMakeTestPayloads();
-  const { botInfo, fetchBotInfo } = useTelegramBotInfo(botName);
-  const { handleDelete, handleForward, handleReprocess, isProcessing } = useTelegramOperations();
-  const { syncMediaGroup } = useMediaUtils();
-  const { callEdgeFunction } = useEdgeFunctions();
-  const { connectToDatabase, disconnectFromDatabase } = useDatabaseIntegrations();
-  const { uploadFile, downloadFile, deleteFile } = useStorageIntegrations();
-  const { analyzeText, generateImage, translateText } = useAIIntegrations();
-  const { trackEvent, identifyUser } = useAnalytics();
-  const { createUser, updateUser, deleteUser } = useUserManagement();
-  const { sendNotification, scheduleNotification } = useNotifications();
-  const { toggleTheme, getTheme } = useTheme();
-  const { openDialog, closeDialog } = useUI();
-  const { signIn, signOut, signUp } = useAuthentication();
-  const { checkPermission, requirePermission } = useAuthorization();
-  const { sendTelemetryData } = useTelemetry();
-  const { integrateThirdPartyService, disconnectThirdPartyService } = useThirdPartyServices();
-  const { generateUUID, hashString, encryptData, decryptData } = useUtilities();
-  const { integrateService, disconnectService } = useIntegrations();
-  const { makeAPIRequest, handleAPIResponse } = useAPI();
-  const { backupData, restoreData, archiveData } = useDataManagement();
-  const { enableDevTools, disableDevTools } = useDevTools();
-  const { monitorPerformance, logError, trackUsage } = usePerformanceMonitoring();
-  const { enableSecurityMeasures, disableSecurityMeasures } = useSecurity();
-  const { ensureCompliance, generateReport } = useCompliance();
-  const { improveAccessibility, testAccessibility } = useAccessibility();
-  const { translateContent, localizeApp } = useInternationalization();
-  const { searchContent, indexData } = useSearch();
-  const { enableRealtimeUpdates, disableRealtimeUpdates } = useRealtime();
-  const { createWebhook, updateWebhook, deleteWebhook } = useWebhooks();
-  const { createWorkflow, executeWorkflow, monitorWorkflow } = useWorkflows();
-  const { automateTask, scheduleTask, triggerEvent } = useAutomation();
-  const { enableCollaboration, disableCollaboration } = useCollaboration();
-  const { createContent, updateContent, deleteContent } = useContentManagement();
-  const { uploadAsset, downloadAsset, manageAsset } = useDigitalAssetManagement();
-  const { createProduct, processOrder, manageInventory } = useECommerce();
-  const { postToSocialMedia, trackEngagement, analyzeSentiment } = useSocialMedia();
-  const { handleSupportTicket, manageKnowledgeBase, automateResponse } = useCustomerSupport();
-  const { sendEmailCampaign, trackCampaignPerformance, segmentAudience } = useMarketing();
-  const { manageLead, trackOpportunity, forecastSales } = useSales();
-  const { generateInvoice, processPayment, reconcileAccount } = useFinance();
-  const { onboardEmployee, managePerformance, processPayroll } = useHumanResources();
-  const { generateContract, ensureComplianceLegal, manageIP } = useLegal();
-  const { monitorSystem, automateResponseOperations, optimizeResource } = useOperations();
-  const { conductResearch, developProduct, testPrototype } = useResearchAndDevelopment();
-  const { createCourse, deliverLesson, assessStudent } = useEducation();
-  const { deliverService, manageCitizen, ensureComplianceGovernment } = useGovernment();
-  const { deliverCare, managePatient, ensureComplianceHealthcare } = useHealthcare();
-  const { manufactureProduct, manageSupplyChain, ensureQuality } = useManufacturing();
-  const { sellProduct, manageCustomer, optimizeInventory } = useRetail();
-  const { bookTrip, manageGuest, optimizeExperience } = useTravelAndHospitality();
-  const { generatePower, manageGrid, ensureSustainability } = useEnergy();
-  const { growCrop, manageFarm, ensureSustainabilityAgriculture } = useAgriculture();
-  const { buildStructure, manageProject, ensureSafety } = useConstruction();
-  const { sellProperty, manageTenant, optimizeInvestment } = useRealEstate();
-  const { transportGoods, manageFleet, optimizeRoute } = useTransportationAndLogistics();
-  const { produceContent, manageRights, engageAudience } = useMediaAndEntertainment();
-  const { deliverServiceNonprofit, manageDonor, ensureImpact } = useNonprofit();
-  const { deliverServiceTelecommunications, manageNetwork, optimizePerformance } = useTelecommunications();
-  const { deliverServiceConsulting, manageClient, optimizeSolution } = useConsulting();
-  const { deliverServiceOutsourcing, manageProcess, optimizeEfficiency } = useOutsourcing();
-  const { deliverServiceFranchising, manageBrand, optimizeExpansion } = useFranchising();
-  const { deliverServiceLicensing, manageProperty, optimizeRevenue } = useLicensing();
-  const { deliverServiceMergersAndAcquisitions, manageDeal, optimizeValue } = useMergersAndAcquisitions();
-  const { deliverServiceVentureCapital, managePortfolio, optimizeReturn } = useVentureCapital();
-  const { deliverServicePrivateEquity, manageInvestment, optimizeGrowth } = usePrivateEquity();
-  const { deliverServiceInvestmentBanking, manageTransaction, optimizeCapital } = useInvestmentBanking();
-  const { deliverServiceWealthManagement, manageAsset, optimizeReturnWealth } = useWealthManagement();
-  const { deliverServiceInsurance, managePolicy, optimizeRisk } = useInsurance();
-  const { deliverServiceAccounting, manageRecord, optimizeAccuracy } = useAccounting();
-  const { deliverServiceAuditing, manageControl, optimizeCompliance } = useAuditing();
-  const { deliverServiceTaxation, manageLiability, optimizeSavings } = useTaxation();
-  const { deliverServiceFinancialPlanning, manageGoal, optimizeStrategy } = useFinancialPlanning();
-  const { deliverServiceRiskManagement, manageThreat, optimizeSecurity } = useRiskManagement();
-  const { deliverServiceActuarialScience, manageModel, optimizePrediction } = useActuarialScience();
-  const { deliverServiceEconomics, manageResource, optimizeAllocation } = useEconomics();
-  const { deliverServiceStatistics, manageData, optimizeAnalysis } = useStatistics();
-  const { deliverServiceMathematics, manageProblem, optimizeSolutionMathematics } = useMathematics();
-  const { deliverServicePhysics, manageEnergy, optimizeForce } = usePhysics();
-  const { deliverServiceChemistry, manageMolecule, optimizeReaction } = useChemistry();
-  const { deliverServiceBiology, manageOrganism, optimizeFunction } = useBiology();
-  const [isWebhookActive, setIsWebhookActive] = useState(settings?.telegram_webhook_active || false);
+async function getWebhookInfo(): Promise<WebhookInfo | null> {
+  try {
+    const response = await fetch('/api/get-telegram-webhook-info');
+    if (!response.ok) {
+      console.error('Failed to get webhook info:', response.status, response.statusText);
+      return null;
+    }
+    const data = await response.json();
+    return data.result || null;
+  } catch (error) {
+    console.error('Error getting webhook info:', error);
+    return null;
+  }
+}
+
+async function setWebhook(url: string): Promise<boolean> {
+  try {
+    const response = await fetch('/api/set-telegram-webhook', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url }),
+    });
+
+    if (!response.ok) {
+      console.error('Failed to set webhook:', response.status, response.statusText);
+      return false;
+    }
+
+    const data = await response.json();
+    if (!data.ok) {
+      console.error('Failed to set webhook:', data.description);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error setting webhook:', error);
+    return false;
+  }
+}
+
+async function deleteWebhook(): Promise<boolean> {
+  try {
+    const response = await fetch('/api/delete-telegram-webhook', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Failed to delete webhook:', response.status, response.statusText);
+      return false;
+    }
+
+    const data = await response.json();
+    return data.ok === true;
+  } catch (error) {
+    console.error('Error deleting webhook:', error);
+    return false;
+  }
+}
+
+const WebhookSetter = () => {
+  const [isSetting, setIsSetting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [webhookInfo, setWebhookInfo] = useState<WebhookInfo | null>(null);
+  const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      webhookUrl: settings?.telegram_webhook_url || "",
+      webhookUrl: "",
+      active: false,
+    },
+  })
+
+  useEffect(() => {
+    const fetchWebhookStatus = async () => {
+      const info = await getWebhookInfo();
+      setWebhookInfo(info);
+      form.setValue("active", !!info?.url)
+      form.setValue("webhookUrl", info?.url || "")
+    };
+
+    fetchWebhookStatus();
+  }, [form]);
+
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (values.active) {
+      setIsSetting(true);
+      const success = await setWebhook(values.webhookUrl);
+      setIsSetting(false);
+
+      if (success) {
+        toast({
+          title: 'Webhook Set',
+          description: 'Webhook URL has been successfully set.',
+        });
+        const info = await getWebhookInfo();
+        setWebhookInfo(info);
+      } else {
+        toast({
+          title: 'Failed to Set Webhook',
+          description: 'Failed to set the webhook URL. Check the console for errors.',
+          variant: 'destructive',
+        });
+      }
+    } else {
+      setIsDeleting(true);
+      const success = await deleteWebhook();
+      setIsDeleting(false);
+
+      if (success) {
+        toast({
+          title: 'Webhook Deleted',
+          description: 'Webhook has been successfully deleted.',
+        });
+        const info = await getWebhookInfo();
+        setWebhookInfo(info);
+      } else {
+        toast({
+          title: 'Failed to Delete Webhook',
+          description: 'Failed to delete the webhook. Check the console for errors.',
+          variant: 'destructive',
+        });
+      }
+    }
+  };
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="webhookUrl"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Webhook URL</FormLabel>
+              <FormControl>
+                <Input placeholder="https://your-app.com/api/telegram-webhook" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="active"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">Webhook Active</FormLabel>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+        <Button type="submit" disabled={isSetting || isDeleting}>
+          {isSetting
+            ? 'Setting Webhook...'
+            : isDeleting
+              ? 'Deleting Webhook...'
+              : 'Save Changes'}
+        </Button>
+
+        {webhookInfo && (
+          <div className="mt-4">
+            <h3 className="text-lg font-semibold">Webhook Info:</h3>
+            <pre>{JSON.stringify(webhookInfo, null, 2)}</pre>
+          </div>
+        )}
+      </form>
+    </Form>
+  );
+}
+export default WebhookSetter;

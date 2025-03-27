@@ -1,7 +1,6 @@
 
 -- Fix the media group sync function signature issue
--- The function is being called with wrong parameter types, so we'll create a new version
--- with the correct signature
+-- The function is being called with wrong parameter types
 
 CREATE OR REPLACE FUNCTION public.xdelo_sync_media_group_content(
     p_message_id uuid,
