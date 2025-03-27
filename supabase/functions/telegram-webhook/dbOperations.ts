@@ -438,10 +438,8 @@ export async function getMessageById(messageId: string) {
  */
 export async function syncMediaGroupContent(
   sourceMessageId: string,
-  analyzedContent: any,
-  correlationId: string,
-  forceSync: boolean = true,
-  syncEditHistory: boolean = false
+  mediaGroupId: string,
+  correlationId: string
 ): Promise<{ success: boolean; updatedCount?: number; error?: string }> {
   try {
     // Call the database function with correct parameter types
@@ -449,9 +447,9 @@ export async function syncMediaGroupContent(
       "xdelo_sync_media_group_content",
       {
         p_message_id: sourceMessageId,
-        p_analyzed_content: analyzedContent,
-        p_force_sync: forceSync,
-        p_sync_edit_history: syncEditHistory,
+        p_media_group_id: mediaGroupId,
+        p_force_sync: true,
+        p_sync_edit_history: false,
       }
     );
 
