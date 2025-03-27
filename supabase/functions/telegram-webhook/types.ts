@@ -1,35 +1,42 @@
-import { Logger } from './utils/logger.ts';
+import { Logger } from "./utils/logger.ts";
 
+/**
+ * Input format for message creation
+ */
 export interface MessageInput {
   telegram_message_id: number;
   chat_id: number;
   chat_type: string;
   chat_title?: string;
   caption?: string;
+  text?: string;
   media_group_id?: string;
-  file_id: string;
-  file_unique_id: string;
+  file_id?: string;
+  file_unique_id?: string;
   mime_type?: string;
   mime_type_original?: string;
   file_size?: number;
   width?: number;
   height?: number;
   duration?: number;
-  storage_path: string;
+  storage_path?: string;
   public_url?: string;
   correlation_id: string;
   processing_state: string;
   telegram_data: any;
+  telegram_metadata?: any;
   forward_info?: ForwardInfo;
   is_edited_channel_post?: boolean;
   edit_date?: string;
   is_duplicate?: boolean;
+  duplicate_reference_id?: string;
   is_forward?: boolean;
   edit_history?: any[];
+  old_analyzed_content?: any[];
   storage_exists?: boolean;
   storage_path_standardized?: boolean;
   message_url?: string;
-  text?: string;
+  message_text?: string;
 }
 
 export interface ForwardInfo {

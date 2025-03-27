@@ -252,20 +252,59 @@ export async function createMessage(
       is_edited_channel_post: input.is_edited_channel_post || false,
       correlation_id: input.correlation_id,
       message_url: input.message_url,
+      is_duplicate: input.is_duplicate || false,
+      duplicate_reference_id: input.duplicate_reference_id,
+      old_analyzed_content: input.old_analyzed_content,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
 
-    // First insert the base record
-    const { data: baseData, error: baseError } = await client
+    // First try to look if this is an exact duplicate (same telegram_message_id + chat_id)
+    let existingMessageId: string | undefined;
+
+    const { data: existingMessage, error: lookupError } = await client
       .from("messages")
-      .insert(baseRecord)
       .select("id")
+      .eq("telegram_message_id", input.telegram_message_id)
+      .eq("chat_id", input.chat_id)
+      .limit(1)
       .single();
 
-    if (baseError) {
-      logger?.error("Failed to create base message record:", baseError);
-      return { success: false, error_message: baseError.message };
+    if (!lookupError && existingMessage) {
+      logger?.info(`Found existing message, will update instead of insert`);
+      existingMessageId = existingMessage.id;
+
+      // Update the existing message with new data
+      const { error: updateError } = await client
+        .from("messages")
+        .update(baseRecord)
+        .eq("id", existingMessageId);
+
+      if (updateError) {
+        logger?.error("Failed to update existing message:", updateError);
+        return { success: false, error_message: updateError.message };
+      }
+    } else {
+      // Insert a new record
+      const { data: baseData, error: baseError } = await client
+        .from("messages")
+        .insert(baseRecord)
+        .select("id")
+        .single();
+
+      if (baseError) {
+        logger?.error("Failed to create base message record:", baseError);
+        return { success: false, error_message: baseError.message };
+      }
+
+      existingMessageId = baseData.id;
+    }
+
+    if (!existingMessageId) {
+      return {
+        success: false,
+        error_message: "Failed to get message ID after create/update",
+      };
     }
 
     // Then update with the larger fields in a separate transaction
@@ -280,7 +319,7 @@ export async function createMessage(
         storage_exists: input.storage_exists,
         storage_path_standardized: input.storage_path_standardized,
       })
-      .eq("id", baseData.id);
+      .eq("id", existingMessageId);
 
     if (updateError) {
       logger?.error(
@@ -291,7 +330,7 @@ export async function createMessage(
       logger?.warn("Message created but some fields may be missing");
     }
 
-    return { id: baseData.id, success: true };
+    return { id: existingMessageId, success: true };
   } catch (error) {
     logger?.error("Exception in createMessage:", error);
     return {
@@ -420,6 +459,50 @@ export async function syncMediaGroupContent(
       updatedCount: data?.updated_count || 0,
     };
   } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Trigger caption analysis for a message
+ */
+export async function triggerCaptionAnalysis(
+  messageId: string,
+  correlationId: string,
+  force: boolean = false,
+  logger?: any
+): Promise<{ success: boolean; error?: string; result?: any }> {
+  try {
+    logger?.info(`Triggering caption analysis for message ${messageId}`);
+
+    // Call the database function directly with RPC
+    const { data, error } = await supabaseClient.rpc(
+      "xdelo_process_caption_workflow",
+      {
+        p_message_id: messageId,
+        p_correlation_id: correlationId,
+        p_force: force,
+      }
+    );
+
+    if (error) {
+      logger?.warn(`Caption analysis error: ${error.message}`);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+
+    logger?.info(`Caption analysis completed successfully`);
+    return {
+      success: true,
+      result: data,
+    };
+  } catch (error) {
+    logger?.error(`Exception in triggerCaptionAnalysis: ${error.message}`);
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),

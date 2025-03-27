@@ -6,6 +6,7 @@ import { supabaseClient } from "../../_shared/supabase.ts";
 import {
   checkDuplicateFile,
   createMessage,
+  triggerCaptionAnalysis,
   xdelo_logProcessingEvent,
 } from "../dbOperations.ts";
 import {
@@ -326,7 +327,7 @@ async function xdelo_handleEditedMediaMessage(
 }
 
 /**
- * Helper function to handle new media messages
+ * Handler for new media messages
  */
 async function xdelo_handleNewMediaMessage(
   message: TelegramMessage,
@@ -334,15 +335,35 @@ async function xdelo_handleNewMediaMessage(
 ): Promise<Response> {
   const { correlationId, logger } = context;
 
-  // First check if this is a duplicate message we've already processed
   try {
-    const isDuplicate = await checkDuplicateFile(
+    // Construct the message URL for referencing
+    const messageUrl = constructTelegramMessageUrl(
+      message.chat.id,
+      message.message_id
+    );
+
+    logger?.info(`Processing new media message: ${message.message_id}`, {
+      chat_id: message.chat.id,
+      message_url: messageUrl,
+    });
+
+    // Prepare the message data
+    const telegramFile = message.photo
+      ? message.photo[message.photo.length - 1]
+      : message.video || message.document;
+
+    if (!telegramFile) {
+      throw new Error("No media file found in message");
+    }
+
+    // First check if we've already processed THIS EXACT message (telegram_message_id + chat_id)
+    const exactDuplicate = await checkDuplicateFile(
       supabaseClient,
       message.message_id,
       message.chat.id
     );
 
-    if (isDuplicate) {
+    if (exactDuplicate) {
       logger?.info(
         `Duplicate message detected: ${message.message_id} in chat ${message.chat.id}`
       );
@@ -365,29 +386,52 @@ async function xdelo_handleNewMediaMessage(
       );
     }
 
-    // Process the media message
-    const messageUrl = constructTelegramMessageUrl(
-      message.chat.id,
-      message.message_id
-    );
+    // Then check if we've seen this file before by file_unique_id (could be forwarded/reposted)
+    const { data: existingFileMessages, error: fileSearchError } =
+      await supabaseClient
+        .from("messages")
+        .select("*")
+        .eq("file_unique_id", telegramFile.file_unique_id)
+        .limit(1);
 
-    logger?.info(`Processing new media message: ${message.message_id}`, {
-      chat_id: message.chat.id,
-      message_url: messageUrl,
-    });
+    if (fileSearchError) {
+      logger?.warn(
+        `Error searching for existing file: ${fileSearchError.message}`
+      );
+    }
 
-    // Prepare the message data
-    const telegramFile = message.photo
-      ? message.photo[message.photo.length - 1]
-      : message.video || message.document;
+    const existingFileMessage =
+      existingFileMessages && existingFileMessages.length > 0
+        ? existingFileMessages[0]
+        : null;
 
-    // Process media
-    const mediaResult = await xdelo_processMessageMedia(
-      message,
-      telegramFile.file_id,
-      telegramFile.file_unique_id,
-      TELEGRAM_BOT_TOKEN
-    );
+    // Process media - but skip download if we already have this file
+    let mediaResult;
+    if (existingFileMessage && !message.media_group_id) {
+      // For non-media group messages, we can reuse the existing file info
+      logger?.info(
+        `Found existing file with same file_unique_id: ${telegramFile.file_unique_id}`
+      );
+
+      mediaResult = {
+        success: true,
+        isDuplicate: true,
+        fileInfo: {
+          storage_path: existingFileMessage.storage_path,
+          mime_type: existingFileMessage.mime_type,
+          file_size: existingFileMessage.file_size,
+          public_url: existingFileMessage.public_url,
+        },
+      };
+    } else {
+      // Download and process the media
+      mediaResult = await xdelo_processMessageMedia(
+        message,
+        telegramFile.file_id,
+        telegramFile.file_unique_id,
+        TELEGRAM_BOT_TOKEN
+      );
+    }
 
     if (!mediaResult.success) {
       throw new Error(`Failed to process media: ${mediaResult.error}`);
@@ -410,6 +454,29 @@ async function xdelo_handleNewMediaMessage(
           original_message_id: message.forward_origin.message_id,
         }
       : undefined;
+
+    // For duplicate files, we might want to preserve the analyzed content history
+    let oldAnalyzedContent = [];
+    let duplicateReferenceId = null;
+
+    if (existingFileMessage && existingFileMessage.analyzed_content) {
+      logger?.info(`Preserving analyzed content history from existing file`);
+
+      // If the existing message has old_analyzed_content, preserve it
+      if (existingFileMessage.old_analyzed_content) {
+        oldAnalyzedContent = Array.isArray(
+          existingFileMessage.old_analyzed_content
+        )
+          ? existingFileMessage.old_analyzed_content
+          : [existingFileMessage.old_analyzed_content];
+      }
+
+      // Add the current analyzed_content to history
+      oldAnalyzedContent.push(existingFileMessage.analyzed_content);
+
+      // Record the original message ID for reference
+      duplicateReferenceId = existingFileMessage.id;
+    }
 
     // Create message input
     const messageInput: MessageInput = {
@@ -453,6 +520,10 @@ async function xdelo_handleNewMediaMessage(
       storage_exists: true,
       storage_path_standardized: true,
       message_url: messageUrl,
+      is_duplicate: !!existingFileMessage,
+      duplicate_reference_id: duplicateReferenceId,
+      old_analyzed_content:
+        oldAnalyzedContent.length > 0 ? oldAnalyzedContent : undefined,
     };
 
     // Create the message
@@ -492,6 +563,36 @@ async function xdelo_handleNewMediaMessage(
         : "document",
       storage_path: mediaResult.fileInfo.storage_path,
     });
+
+    // If message has caption, trigger caption analysis
+    if (message.caption && result.id) {
+      try {
+        logger?.info(`Triggering caption analysis for message ${result.id}`);
+
+        // Use our helper function to trigger caption analysis
+        const parseResult = await triggerCaptionAnalysis(
+          result.id,
+          correlationId,
+          false,
+          logger
+        );
+
+        if (!parseResult.success) {
+          logger?.warn(
+            `Caption analysis error (non-fatal): ${parseResult.error}`
+          );
+        } else {
+          logger?.info(
+            `Caption analysis complete: ${JSON.stringify(parseResult.result)}`
+          );
+        }
+      } catch (parseError) {
+        logger?.warn(
+          `Error triggering caption analysis: ${parseError.message}`
+        );
+        // This is non-fatal, we continue
+      }
+    }
 
     return new Response(
       JSON.stringify({ success: true, id: result.id, correlationId }),
