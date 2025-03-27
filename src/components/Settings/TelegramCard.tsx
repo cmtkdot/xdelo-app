@@ -29,6 +29,11 @@ interface WebhookInfo {
   is_active?: boolean;
 }
 
+interface WebhookLogDisplayProps {
+  logs: any[];
+  showDetails?: boolean;
+}
+
 export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
   const { toast } = useToast();
   const supabase = useSupabase();
@@ -411,3 +416,15 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
     </Card>
   );
 }
+
+const WebhookLogDisplay = ({ logs, showDetails = false }: WebhookLogDisplayProps) => {
+  return (
+    <div>
+      {logs.map((log, index) => (
+        <div key={index} className="p-2 border-b border-gray-200">
+          {log}
+        </div>
+      ))}
+    </div>
+  );
+};
