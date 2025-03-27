@@ -33,6 +33,8 @@ export interface RepairResult {
   error?: string;
   message?: string;
   details?: any[];
+  successful?: number;
+  failed?: number;
 }
 
 /**

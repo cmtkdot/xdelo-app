@@ -7,12 +7,13 @@ import { createMediaProcessingState, withRetry } from './utils';
 
 export function useMediaUtils() {
   const [isLoading, setLoading] = useState(false);
-  const { toast } = useToast();
   
   // Create the media processing state (manages which messages are currently processing)
   const [mediaProcessingState, mediaProcessingActions] = createMediaProcessingState();
   const { isProcessing, processingMessageIds } = mediaProcessingState;
   const { setIsProcessing, addProcessingMessageId, removeProcessingMessageId } = mediaProcessingActions;
+  
+  const { toast } = useToast();
   
   /**
    * Synchronize content across media group messages
@@ -95,16 +96,23 @@ export function useMediaUtils() {
   /**
    * Process a single message caption
    */
-  const syncMessageCaption = async (params: { messageId: string }): Promise<CaptionFlowData | null> => {
+  const syncMessageCaption = async (
+    messageId: string,
+    caption?: string
+  ): Promise<CaptionFlowData | null> => {
     try {
       setLoading(true);
-      addProcessingMessageId(params.messageId);
+      addProcessingMessageId(messageId);
+      
+      const correlationId = crypto.randomUUID();
       
       // Call edge function to process caption
-      const { data, error } = await supabase.functions.invoke('manual-caption-parser', {
+      const { data, error } = await supabase.functions.invoke('utility-functions', {
         body: { 
-          messageId: params.messageId,
-          correlationId: crypto.randomUUID()
+          action: 'process_caption',
+          messageId, 
+          caption,
+          correlationId
         }
       });
       
@@ -143,7 +151,7 @@ export function useMediaUtils() {
       return null;
     } finally {
       setLoading(false);
-      removeProcessingMessageId(params.messageId);
+      removeProcessingMessageId(messageId);
     }
   };
 
@@ -155,13 +163,13 @@ export function useMediaUtils() {
       setLoading(true);
       addProcessingMessageId(messageId);
       
-      // Call RPC to fix content disposition
-      const { error } = await supabase.rpc(
-        'xdelo_fix_mime_types',
-        {
-          p_message_id: messageId
+      // Call edge function to fix content disposition
+      const { data, error } = await supabase.functions.invoke('utility-functions', {
+        body: { 
+          action: 'fix_content_disposition',
+          messageId 
         }
-      );
+      });
       
       if (error) {
         console.error('Error fixing content disposition:', error);
@@ -242,12 +250,14 @@ export function useMediaUtils() {
   /**
    * Repair media in batch
    */
-  const repairMediaBatch = async (messageIds: string[]): Promise<RepairResult> => {
+  const repairMediaBatch = async (messageIds?: string[]): Promise<RepairResult> => {
     try {
       setIsProcessing(true);
-      messageIds.forEach(id => addProcessingMessageId(id));
+      if (messageIds) {
+        messageIds.forEach(id => addProcessingMessageId(id));
+      }
       
-      // Call RPC to repair media
+      // Call edge function to repair media
       const { data, error } = await supabase.functions.invoke('utility-functions', {
         body: { 
           action: 'repair_media_batch',
@@ -283,7 +293,9 @@ export function useMediaUtils() {
       };
     } finally {
       setIsProcessing(false);
-      messageIds.forEach(id => removeProcessingMessageId(id));
+      if (messageIds) {
+        messageIds.forEach(id => removeProcessingMessageId(id));
+      }
     }
   };
 
@@ -336,10 +348,12 @@ export function useMediaUtils() {
   /**
    * Fix broken media URLs
    */
-  const fixMediaUrls = async (messageIds: string[]): Promise<RepairResult> => {
+  const fixMediaUrls = async (messageIds?: string[]): Promise<RepairResult> => {
     try {
       setIsProcessing(true);
-      messageIds.forEach(id => addProcessingMessageId(id));
+      if (messageIds) {
+        messageIds.forEach(id => addProcessingMessageId(id));
+      }
       
       // Call edge function to fix URLs
       const { data, error } = await supabase.functions.invoke('utility-functions', {
@@ -377,7 +391,9 @@ export function useMediaUtils() {
       };
     } finally {
       setIsProcessing(false);
-      messageIds.forEach(id => removeProcessingMessageId(id));
+      if (messageIds) {
+        messageIds.forEach(id => removeProcessingMessageId(id));
+      }
     }
   };
   
