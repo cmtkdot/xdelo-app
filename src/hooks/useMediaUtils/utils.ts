@@ -1,34 +1,47 @@
 
+import { useState } from 'react';
 import { MediaProcessingState, MediaProcessingStateActions } from './types';
 
 /**
- * Create a state manager for tracking processing messages
+ * Create a media processing state with actions to manipulate it
  */
-export function createMediaProcessingState(): [
-  MediaProcessingState,
-  MediaProcessingStateActions
-] {
-  const state: MediaProcessingState = {
+export function createMediaProcessingState(): [MediaProcessingState, MediaProcessingStateActions] {
+  const [state, setState] = useState<MediaProcessingState>({
     isProcessing: false,
     processingMessageIds: {}
+  });
+
+  const setIsProcessing = (isProcessing: boolean) => {
+    setState(prev => ({ ...prev, isProcessing }));
   };
-  
+
+  const addProcessingMessageId = (messageId: string) => {
+    setState(prev => ({
+      ...prev,
+      processingMessageIds: {
+        ...prev.processingMessageIds,
+        [messageId]: true
+      }
+    }));
+  };
+
+  const removeProcessingMessageId = (messageId: string) => {
+    setState(prev => {
+      const updatedIds = { ...prev.processingMessageIds };
+      delete updatedIds[messageId];
+      return {
+        ...prev,
+        processingMessageIds: updatedIds
+      };
+    });
+  };
+
   const actions: MediaProcessingStateActions = {
-    setIsProcessing: (isProcessing: boolean) => {
-      state.isProcessing = isProcessing;
-    },
-    
-    addProcessingMessageId: (messageId: string) => {
-      state.processingMessageIds[messageId] = true;
-      state.isProcessing = true;
-    },
-    
-    removeProcessingMessageId: (messageId: string) => {
-      delete state.processingMessageIds[messageId];
-      state.isProcessing = Object.keys(state.processingMessageIds).length > 0;
-    }
+    setIsProcessing,
+    addProcessingMessageId,
+    removeProcessingMessageId
   };
-  
+
   return [state, actions];
 }
 
@@ -37,31 +50,29 @@ export function createMediaProcessingState(): [
  */
 export async function withRetry<T>(
   fn: () => Promise<T>,
-  options: {
-    maxAttempts: number;
-    delay: number;
-    retryableErrors?: string[];
-  }
+  options: { maxAttempts: number; delay: number; retryableErrors?: string[] }
 ): Promise<T> {
   const { maxAttempts, delay, retryableErrors = ['timeout', 'connection', 'network'] } = options;
-  let lastError: any;
+  let lastError: Error | null = null;
   
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       return await fn();
     } catch (error) {
-      lastError = error;
+      lastError = error as Error;
+      const shouldRetry = 
+        attempt < maxAttempts && 
+        (retryableErrors.length === 0 || retryableErrors.some(errType => 
+          lastError?.message?.toLowerCase().includes(errType.toLowerCase())
+        ));
       
-      // Check if this error is retryable
-      const errorString = String(error);
-      const shouldRetry = retryableErrors.some(errType => errorString.includes(errType));
-      
-      if (!shouldRetry || attempt === maxAttempts) {
-        throw error;
+      if (!shouldRetry) {
+        throw lastError;
       }
       
-      // Wait before retrying with exponential backoff
-      const waitTime = delay * Math.pow(2, attempt - 1);
+      // Exponential backoff with jitter
+      const jitter = Math.random() * 0.3 + 0.7; // Random value between 0.7 and 1.0
+      const waitTime = delay * Math.pow(1.5, attempt - 1) * jitter;
       await new Promise(resolve => setTimeout(resolve, waitTime));
     }
   }

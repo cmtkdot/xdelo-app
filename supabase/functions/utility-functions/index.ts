@@ -21,7 +21,7 @@ serve(async (req) => {
   }
 
   try {
-    const { action, messageId, caption, mediaGroupId, correlationId, messageIds, batch_size, auto_repair } = await req.json();
+    const { action, messageId, caption, correlationId, messageIds, limit } = await req.json();
     
     // Generate a unique correlation ID if not provided
     const requestCorrelationId = correlationId || crypto.randomUUID();
@@ -31,7 +31,7 @@ serve(async (req) => {
     // Route to the appropriate handler based on the action
     switch (action) {
       case 'process_caption':
-        return await handleProcessCaption(req, requestCorrelationId);
+        return await handleProcessCaption(messageId, caption, requestCorrelationId);
       
       case 'reupload_media':
         return await handleReuploadMedia(messageId, requestCorrelationId);
@@ -40,13 +40,13 @@ serve(async (req) => {
         return await handleFixContentDisposition(messageId, requestCorrelationId);
       
       case 'repair_media_batch':
-        return await handleRepairMediaBatch(messageIds, requestCorrelationId);
+        return await handleRepairMediaBatch(messageIds, limit, requestCorrelationId);
       
       case 'standardize_paths':
-        return await handleStandardizePaths(messageIds, batch_size, requestCorrelationId);
+        return await handleStandardizePaths(messageIds, limit, requestCorrelationId);
       
       case 'fix_media_urls':
-        return await handleFixMediaUrls(messageIds, requestCorrelationId);
+        return await handleFixMediaUrls(messageIds, limit, requestCorrelationId);
         
       default:
         throw new Error(`Unknown action: ${action}`);
@@ -69,43 +69,51 @@ serve(async (req) => {
 /**
  * Process and analyze a message caption
  */
-async function handleProcessCaption(req: Request, correlationId: string) {
-  const { messageId, caption } = await req.json();
-  
+async function handleProcessCaption(messageId: string, caption?: string, correlationId: string = crypto.randomUUID()) {
   if (!messageId) {
     throw new Error("messageId is required");
   }
   
   try {
-    // Call the manual caption parser function to process the caption
-    const response = await fetch(
-      `${Deno.env.get("SUPABASE_URL")}/functions/v1/manual-caption-parser`,
+    // First, if a caption is provided, update the message's caption
+    if (caption !== undefined) {
+      const { error: updateError } = await supabaseClient
+        .from('messages')
+        .update({ 
+          caption,
+          updated_at: new Date().toISOString(),
+          needs_caption_analysis: true,
+          correlation_id: correlationId
+        })
+        .eq('id', messageId);
+        
+      if (updateError) {
+        throw new Error(`Error updating caption: ${updateError.message}`);
+      }
+    }
+    
+    // Call the database function to analyze the caption
+    const { data, error } = await supabaseClient.rpc(
+      'xdelo_process_caption_workflow',
       {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        },
-        body: JSON.stringify({
-          messageId: messageId,
-          caption: caption,
-          correlationId: correlationId,
-          isEdit: caption ? true : false,
-        }),
+        p_message_id: messageId,
+        p_correlation_id: correlationId,
+        p_force: true
       }
     );
-
-    if (!response.ok) {
-      throw new Error(`Error from caption parser: ${response.status} ${response.statusText}`);
+    
+    if (error) {
+      throw new Error(`Error analyzing caption: ${error.message}`);
     }
-
-    const result = await response.json();
     
     return new Response(
       JSON.stringify({
         success: true,
         message: "Caption processed successfully",
-        ...result
+        message_id: messageId,
+        caption_updated: caption !== undefined,
+        media_group_synced: data?.media_group_synced || false,
+        analyzed_content: data?.analyzed_content || null
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -276,62 +284,38 @@ async function handleFixContentDisposition(messageId: string, correlationId: str
 /**
  * Repair a batch of media files
  */
-async function handleRepairMediaBatch(messageIds?: string[], correlationId: string = crypto.randomUUID()) {
+async function handleRepairMediaBatch(messageIds?: string[], limit: number = 50, correlationId: string = crypto.randomUUID()) {
   try {
-    let query = supabaseClient
-      .from('messages')
-      .select('id, file_id, needs_redownload, storage_path, public_url')
-      .is('storage_exists', false);
+    // Call the redownload-missing-files function
+    const response = await fetch(
+      `${Deno.env.get('SUPABASE_URL')}/functions/v1/redownload-missing-files`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+        },
+        body: JSON.stringify({
+          messageIds,
+          limit,
+          correlationId
+        })
+      }
+    );
     
-    if (messageIds && messageIds.length > 0) {
-      query = query.in('id', messageIds);
-    } else {
-      query = query.is('needs_redownload', false).limit(50);
+    if (!response.ok) {
+      throw new Error(`Error calling redownload-missing-files: ${response.status} ${response.statusText}`);
     }
     
-    const { data, error } = await query;
-    
-    if (error) {
-      throw new Error(`Error querying messages: ${error.message}`);
-    }
-    
-    if (!data || data.length === 0) {
-      return new Response(
-        JSON.stringify({
-          success: true,
-          repaired: 0,
-          message: "No messages found needing repair",
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-    
-    // Flag all messages for redownload
-    const updates = data.map(message => ({
-      id: message.id,
-      needs_redownload: true,
-      redownload_reason: 'repair_batch',
-      redownload_flagged_at: new Date().toISOString(),
-      redownload_attempts: 0,
-      correlation_id: correlationId
-    }));
-    
-    const { error: updateError } = await supabaseClient
-      .from('messages')
-      .upsert(updates);
-    
-    if (updateError) {
-      throw new Error(`Error updating messages: ${updateError.message}`);
-    }
+    const result = await response.json();
     
     return new Response(
       JSON.stringify({
         success: true,
-        repaired: data.length,
-        message: `Flagged ${data.length} messages for repair`,
-        details: data.map(m => m.id)
+        repaired: result.queued || 0,
+        message: `Queued ${result.queued || 0} messages for repair`,
+        successful: result.queued || 0,
+        failed: 0
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -356,17 +340,17 @@ async function handleRepairMediaBatch(messageIds?: string[], correlationId: stri
 /**
  * Standardize storage paths for messages
  */
-async function handleStandardizePaths(messageIds?: string[], batchSize: number = 50, correlationId: string = crypto.randomUUID()) {
+async function handleStandardizePaths(messageIds?: string[], limit: number = 50, correlationId: string = crypto.randomUUID()) {
   try {
     let query = supabaseClient
       .from('messages')
       .select('id, storage_path, file_unique_id')
-      .is('storage_path_standardized', false);
+      .not('storage_path', 'is', null);
     
     if (messageIds && messageIds.length > 0) {
       query = query.in('id', messageIds);
     } else {
-      query = query.limit(batchSize);
+      query = query.limit(limit);
     }
     
     const { data, error } = await query;
@@ -390,18 +374,35 @@ async function handleStandardizePaths(messageIds?: string[], batchSize: number =
     
     // Generate standardized paths
     const updates = data.map(message => {
-      const fileExtension = getFileExtension(message.storage_path);
-      const newPath = `media/${message.file_unique_id}${fileExtension}`;
+      if (!message.storage_path) return null;
+      
+      // Extract file extension from the storage path
+      const fileExtension = message.storage_path.split('.').pop();
+      const ext = fileExtension ? `.${fileExtension}` : '';
+      const newPath = `media/${message.file_unique_id}${ext}`;
       
       return {
         id: message.id,
         storage_path: newPath,
         storage_path_standardized: true,
-        public_url: `https://xjhhehxcxkiumnwbirel.supabase.co/storage/v1/object/public/telegram-media/${newPath}`,
+        public_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${newPath}`,
         updated_at: new Date().toISOString(),
         correlation_id: correlationId
       };
-    });
+    }).filter(Boolean);
+    
+    if (updates.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          repaired: 0,
+          message: "No valid paths to standardize",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
     
     const { error: updateError } = await supabaseClient
       .from('messages')
@@ -414,8 +415,10 @@ async function handleStandardizePaths(messageIds?: string[], batchSize: number =
     return new Response(
       JSON.stringify({
         success: true,
-        repaired: data.length,
-        message: `Standardized paths for ${data.length} messages`,
+        repaired: updates.length,
+        message: `Standardized paths for ${updates.length} messages`,
+        successful: updates.length,
+        failed: 0
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -440,17 +443,18 @@ async function handleStandardizePaths(messageIds?: string[], batchSize: number =
 /**
  * Fix media URLs
  */
-async function handleFixMediaUrls(messageIds?: string[], correlationId: string = crypto.randomUUID()) {
+async function handleFixMediaUrls(messageIds?: string[], limit: number = 50, correlationId: string = crypto.randomUUID()) {
   try {
     let query = supabaseClient
       .from('messages')
       .select('id, storage_path')
-      .not('storage_path', 'is', null);
+      .not('storage_path', 'is', null)
+      .is('public_url', null);
     
     if (messageIds && messageIds.length > 0) {
       query = query.in('id', messageIds);
     } else {
-      query = query.limit(50);
+      query = query.limit(limit);
     }
     
     const { data, error } = await query;
@@ -473,12 +477,29 @@ async function handleFixMediaUrls(messageIds?: string[], correlationId: string =
     }
     
     // Generate correct URLs
-    const updates = data.map(message => ({
-      id: message.id,
-      public_url: `https://xjhhehxcxkiumnwbirel.supabase.co/storage/v1/object/public/telegram-media/${message.storage_path}`,
-      updated_at: new Date().toISOString(),
-      correlation_id: correlationId
-    }));
+    const updates = data.map(message => {
+      if (!message.storage_path) return null;
+      
+      return {
+        id: message.id,
+        public_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/telegram-media/${message.storage_path}`,
+        updated_at: new Date().toISOString(),
+        correlation_id: correlationId
+      };
+    }).filter(Boolean);
+    
+    if (updates.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          repaired: 0,
+          message: "No valid URLs to fix",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
     
     const { error: updateError } = await supabaseClient
       .from('messages')
@@ -491,8 +512,10 @@ async function handleFixMediaUrls(messageIds?: string[], correlationId: string =
     return new Response(
       JSON.stringify({
         success: true,
-        repaired: data.length,
-        message: `Fixed URLs for ${data.length} messages`,
+        repaired: updates.length,
+        message: `Fixed URLs for ${updates.length} messages`,
+        successful: updates.length,
+        failed: 0
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -514,13 +537,11 @@ async function handleFixMediaUrls(messageIds?: string[], correlationId: string =
   }
 }
 
-// Helper function to get file extension from a path
-function getFileExtension(path?: string): string {
+/**
+ * Helper function to get file extension
+ */
+function getFileExtension(path: string | null): string {
   if (!path) return '';
-  
-  const match = path.match(/\.([a-zA-Z0-9]+)$/);
-  if (match && match[1]) {
-    return '.' + match[1].toLowerCase();
-  }
-  return '';
+  const parts = path.split('.');
+  return parts.length > 1 ? `.${parts[parts.length - 1]}` : '';
 }
