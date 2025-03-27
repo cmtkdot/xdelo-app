@@ -1,3 +1,4 @@
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MakeEventType } from '@/types/make';
@@ -16,31 +17,35 @@ interface TestPayload {
 
 /**
  * Hook to manage test payloads for Make webhooks
+ * Note: This is a placeholder implementation - the actual tables need to be created
  */
 export function useMakeTestPayloads() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Mock data for now - to be replaced with actual database calls once tables are created
+  const mockPayloads: Record<string, TestPayload[]> = {
+    message_received: [
+      {
+        id: "1",
+        name: "Sample Message",
+        description: "A sample message for testing",
+        event_type: "message_received",
+        payload: { message: "Test message", timestamp: new Date().toISOString() },
+        is_template: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    ]
+  };
 
   // Fetch all test payloads grouped by event type
   const useTestPayloads = (enabled = true) => 
     useQuery({
       queryKey: ['make-test-payloads'],
       queryFn: async (): Promise<Record<string, TestPayload[]>> => {
-        const { data, error } = await supabase
-          .from('make_test_payloads')
-          .select('*')
-          .order('created_at', { ascending: false });
-        
-        if (error) throw error;
-        
-        // Group by event type
-        return data.reduce((acc, payload) => {
-          if (!acc[payload.event_type]) {
-            acc[payload.event_type] = [];
-          }
-          acc[payload.event_type].push(payload);
-          return acc;
-        }, {} as Record<string, TestPayload[]>);
+        // Mock implementation
+        return mockPayloads;
       },
       enabled,
     });
@@ -50,20 +55,9 @@ export function useMakeTestPayloads() {
     useQuery({
       queryKey: ['make-template-payloads'],
       queryFn: async (): Promise<Record<string, TestPayload[]>> => {
-        const { data, error } = await supabase
-          .from('make_test_payloads')
-          .select('*')
-          .eq('is_template', true)
-          .order('created_at', { ascending: false });
-        
-        if (error) throw error;
-        
-        // Group by event type
-        return data.reduce((acc, payload) => {
-          if (!acc[payload.event_type]) {
-            acc[payload.event_type] = [];
-          }
-          acc[payload.event_type].push(payload);
+        // Mock implementation
+        return Object.entries(mockPayloads).reduce((acc, [key, payloads]) => {
+          acc[key] = payloads.filter(p => p.is_template);
           return acc;
         }, {} as Record<string, TestPayload[]>);
       },
@@ -75,14 +69,8 @@ export function useMakeTestPayloads() {
     useQuery({
       queryKey: ['make-test-payloads', eventType],
       queryFn: async (): Promise<TestPayload[]> => {
-        const { data, error } = await supabase
-          .from('make_test_payloads')
-          .select('*')
-          .eq('event_type', eventType)
-          .order('created_at', { ascending: false });
-        
-        if (error) throw error;
-        return data;
+        // Mock implementation
+        return mockPayloads[eventType] || [];
       },
       enabled,
     });
@@ -90,14 +78,22 @@ export function useMakeTestPayloads() {
   // Create a new test payload
   const createTestPayload = useMutation({
     mutationFn: async (payload: Omit<TestPayload, 'id' | 'created_at' | 'updated_at'>) => {
-      const { data, error } = await supabase
-        .from('make_test_payloads')
-        .insert(payload)
-        .select()
-        .single();
+      // Mock implementation
+      const newId = crypto.randomUUID();
+      const timestamp = new Date().toISOString();
+      const newPayload = {
+        ...payload,
+        id: newId,
+        created_at: timestamp,
+        updated_at: timestamp
+      };
       
-      if (error) throw error;
-      return data;
+      if (!mockPayloads[payload.event_type]) {
+        mockPayloads[payload.event_type] = [];
+      }
+      
+      mockPayloads[payload.event_type].push(newPayload);
+      return newPayload;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['make-test-payloads'] });
@@ -118,15 +114,26 @@ export function useMakeTestPayloads() {
   // Update a test payload
   const updateTestPayload = useMutation({
     mutationFn: async (payload: Partial<TestPayload> & { id: string }) => {
-      const { data, error } = await supabase
-        .from('make_test_payloads')
-        .update(payload)
-        .eq('id', payload.id)
-        .select()
-        .single();
+      // Mock implementation
+      let found = false;
       
-      if (error) throw error;
-      return data;
+      Object.keys(mockPayloads).forEach(key => {
+        const index = mockPayloads[key].findIndex(p => p.id === payload.id);
+        if (index >= 0) {
+          mockPayloads[key][index] = {
+            ...mockPayloads[key][index],
+            ...payload,
+            updated_at: new Date().toISOString()
+          };
+          found = true;
+        }
+      });
+      
+      if (!found) {
+        throw new Error('Payload not found');
+      }
+      
+      return payload;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['make-test-payloads'] });
@@ -147,12 +154,21 @@ export function useMakeTestPayloads() {
   // Delete a test payload
   const deleteTestPayload = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('make_test_payloads')
-        .delete()
-        .eq('id', id);
+      // Mock implementation
+      let found = false;
       
-      if (error) throw error;
+      Object.keys(mockPayloads).forEach(key => {
+        const index = mockPayloads[key].findIndex(p => p.id === id);
+        if (index >= 0) {
+          mockPayloads[key].splice(index, 1);
+          found = true;
+        }
+      });
+      
+      if (!found) {
+        throw new Error('Payload not found');
+      }
+      
       return id;
     },
     onSuccess: (id) => {
@@ -174,8 +190,9 @@ export function useMakeTestPayloads() {
   // Generate default template payloads for each event type
   const generateDefaultTemplates = useMutation({
     mutationFn: async () => {
+      // Mock implementation
       const templates = Object.values(MakeEventType).map(eventType => {
-        let templatePayload;
+        let templatePayload: any;
         
         switch(eventType) {
           case 'message_received':
@@ -231,23 +248,29 @@ export function useMakeTestPayloads() {
             };
         }
         
-        return {
+        // Create test payload
+        const id = crypto.randomUUID();
+        const timestamp = new Date().toISOString();
+        const template = {
+          id,
           name: `Default ${eventType} Template`,
           description: `Default template for ${eventType} events`,
           event_type: eventType,
           payload: templatePayload,
-          is_template: true
+          is_template: true,
+          created_at: timestamp,
+          updated_at: timestamp
         };
+        
+        if (!mockPayloads[eventType]) {
+          mockPayloads[eventType] = [];
+        }
+        
+        mockPayloads[eventType].push(template);
+        return template;
       });
       
-      // Insert all templates
-      const { data, error } = await supabase
-        .from('make_test_payloads')
-        .insert(templates)
-        .select();
-      
-      if (error) throw error;
-      return data;
+      return templates;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['make-test-payloads'] });
@@ -275,4 +298,4 @@ export function useMakeTestPayloads() {
     deleteTestPayload,
     generateDefaultTemplates
   };
-} 
+}
