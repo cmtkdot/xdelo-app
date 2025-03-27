@@ -1,4 +1,3 @@
-
 import {
   createSupabaseClient,
   extractTelegramMetadata,
@@ -105,7 +104,7 @@ export async function createNonMediaMessage(input: {
 
     // Create the message record using a transaction for atomicity
     const { data, error } = await supabaseClient
-      .from("messages")
+      .from("other_messages")
       .insert({
         telegram_message_id: input.telegram_message_id,
         chat_id: input.chat_id,

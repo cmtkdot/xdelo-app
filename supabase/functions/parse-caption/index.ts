@@ -156,24 +156,29 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
         console.log(
           `Starting media group content sync for group ${media_group_id}, message ${messageId}, isEdit: ${isEdit}, force_reprocess: ${force_reprocess}`
         );
-
-        // Use the database function directly with the correct parameters
-        const { data, error } = await supabaseClient.rpc(
-          "xdelo_sync_media_group_content",
-          {
-            p_message_id: messageId,
-            p_analyzed_content: parsedContent,
-            p_force_sync: true,
-            p_sync_edit_history: isEdit || force_reprocess,
-          }
-        );
-
-        if (error) {
-          throw new Error(`Direct sync failed: ${error.message}`);
-        }
-
-        syncResult = data;
-        console.log(`Media group sync result: ${JSON.stringify(syncResult)}`);
+{
+  "event_message": "{\n  \"summary\": \"🔴 [ERROR] [telegram-webhook] ❌ Error processing non-media message:\",\n  \"level\": \"ERROR\",\n  \"correlation_id\": \"75102c74-3996-4b32-8fa4-3d1c6b8036d6\",\n  \"component\": \"telegram-webhook\",\n  \"message\": \"❌ Error processing non-media message:\",\n  \"timestamp\": \"2025-03-27T02:09:10.857Z\",\n  \"error\": \"Could not find the 'message_type' column of 'messages' in the schema cache\",\n  \"stack\": \"Error: Could not find the 'message_type' column of 'messages' in the schema cache\\n    at handleOtherMessage (file:///Users/lamjo/xdelo-app-2/supabase/functions/telegram-webhook/handlers/textMessageHandler.ts:35:13)\\n    at eventLoopTick (ext:core/01_core.js:168:7)\\n    at async Server.<anonymous> (file:///Users/lamjo/xdelo-app-2/supabase/functions/telegram-webhook/index.ts:117:20)\\n    at async #respond (https://deno.land/std@0.208.0/http/server.ts:224:18)\",\n  \"message_id\": 6248\n}\n",
+  "id": "b7f53dbe-69f3-495a-8f21-c4af777dafaa",
+  "metadata": [
+    {
+      "boot_time": null,
+      "cpu_time_used": null,
+      "deployment_id": "xjhhehxcxkiumnwbirel_fd6019e1-94c7-4952-9f79-d7bf86e23159_60",
+      "event_type": "Log",
+      "execution_id": "e57b0199-3c94-4619-8185-f672eb959a24",
+      "function_id": "fd6019e1-94c7-4952-9f79-d7bf86e23159",
+      "level": "log",
+      "memory_used": [],
+      "project_ref": "xjhhehxcxkiumnwbirel",
+      "reason": null,
+      "region": "eu-central-1",
+      "served_by": "supabase-edge-runtime-1.67.3 (compatible with Deno v1.45.2)",
+      "timestamp": "2025-03-27T02:09:10.857Z",
+      "version": "60"
+    }
+  ],
+  "timestamp": 1743041351425835
+}${JSON.stringify(syncResult)}`);
       } catch (syncError) {
         console.error(
           `Media group sync error (non-fatal): ${syncError.message}`
