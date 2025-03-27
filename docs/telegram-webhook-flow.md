@@ -1,4 +1,3 @@
-
 # Telegram Webhook Processing Flow
 
 This document outlines the architecture, data flow, and components of the Telegram webhook system.
@@ -18,42 +17,42 @@ The Telegram webhook system processes incoming messages from Telegram and stores
 
 ### Edge Functions
 
-| Function | Purpose | Status | Notes |
-|----------|---------|--------|-------|
-| `telegram-webhook` | Main entry point for Telegram updates. Routes messages to handlers. | Active | - |
-| `direct-caption-processor` | **Core processing engine.** Polls for 'pending' messages, parses captions, updates DB, triggers sync. | Active | Uses `_shared/captionParser.ts`. |
-| `media-management` | Handles media file operations (download/upload). | Active | Called by `telegram-webhook`. |
-| `xdelo_unified_media_repair` | Repairs missing or corrupted media. | Active | Separate utility/process. |
+| Function                     | Purpose                                                                                               | Status | Notes                            |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- | ------ | -------------------------------- |
+| `telegram-webhook`           | Main entry point for Telegram updates. Routes messages to handlers.                                   | Active | -                                |
+| `direct-caption-processor`   | **Core processing engine.** Polls for 'pending' messages, parses captions, updates DB, triggers sync. | Active | Uses `_shared/captionParser.ts`. |
+| `media-management`           | Handles media file operations (download/upload).                                                      | Active | Called by `telegram-webhook`.    |
+| `xdelo_unified_media_repair` | Repairs missing or corrupted media.                                                                   | Active | Separate utility/process.        |
 
 ### Shared Code
 
-| Module | Purpose | Location |
-|--------|---------|----------|
-| `captionParser.ts` | Contains `xdelo_parseCaption` function for parsing logic. | `_shared/` |
-| `consolidatedMessageUtils.ts` | Shared utilities for metadata extraction, logging, etc. | `_shared/` |
-| `dbOperations.ts` | DB interaction helpers for `telegram-webhook`. | `telegram-webhook/` |
-| `mediaStorage.ts` | Media download/upload logic. | `_shared/` |
+| Module                        | Purpose                                                   | Location            |
+| ----------------------------- | --------------------------------------------------------- | ------------------- |
+| `captionParser.ts`            | Contains `xdelo_parseCaption` function for parsing logic. | `_shared/`          |
+| `consolidatedMessageUtils.ts` | Shared utilities for metadata extraction, logging, etc.   | `_shared/`          |
+| `dbOperations.ts`             | DB interaction helpers for `telegram-webhook`. Implements upsert pattern for message handling. | `telegram-webhook/` |
+| `mediaStorage.ts`             | Media download/upload logic.                              | `_shared/`          |
 
 ### Database Functions
 
-| Function | Purpose | Status | Notes |
-|----------|---------|--------|-------|
-| `xdelo_extract_telegram_metadata` | Extracts essential data from telegram_data JSON. | Active | Called by DB triggers. |
-| `xdelo_set_caption_pending_trigger` | Sets `processing_state` to 'pending' for messages with captions. | Active | Called by `trg_process_caption`. |
-| `xdelo_sync_media_group_content` | Synchronizes `analyzed_content` across media group members. | Active | Called by `direct-caption-processor`. |
-| `xdelo_recheck_media_groups` | Safety net: Periodically finds & fixes inconsistent media groups. | Active | Called by `pg_cron`. |
-| `xdelo_sync_incomplete_media_group` | Helper for `xdelo_recheck_media_groups`. | Active | Called by `xdelo_recheck_media_groups`. |
-| `xdelo_reset_stalled_messages` | Safety net: Periodically resets messages stuck in 'processing'. | Active | Called by `pg_cron`. |
-| `set_public_url` | Generates public URLs for stored media. | Active | Called by `set_public_url` trigger. |
+| Function                            | Purpose                                                           | Status | Notes                                   |
+| ----------------------------------- | ----------------------------------------------------------------- | ------ | --------------------------------------- |
+| `xdelo_extract_telegram_metadata`   | Extracts essential data from telegram_data JSON.                  | Active | Called by DB triggers.                  |
+| `xdelo_set_caption_pending_trigger` | Sets `processing_state` to 'pending' for messages with captions.  | Active | Called by `trg_process_caption`.        |
+| `xdelo_sync_media_group_content`    | Synchronizes `analyzed_content` across media group members.       | Active | Called by `direct-caption-processor`.   |
+| `xdelo_recheck_media_groups`        | Safety net: Periodically finds & fixes inconsistent media groups. | Active | Called by `pg_cron`.                    |
+| `xdelo_sync_incomplete_media_group` | Helper for `xdelo_recheck_media_groups`.                          | Active | Called by `xdelo_recheck_media_groups`. |
+| `xdelo_reset_stalled_messages`      | Safety net: Periodically resets messages stuck in 'processing'.   | Active | Called by `pg_cron`.                    |
+| `set_public_url`                    | Generates public URLs for stored media.                           | Active | Called by `set_public_url` trigger.     |
 
 ### Database Triggers
 
-| Trigger | Function | Event | Purpose | Status | Notes |
-|---------|----------|-------|---------|--------|-------|
-| `trg_process_caption` | `xdelo_set_caption_pending_trigger` | BEFORE INSERT/UPDATE OF caption | Sets state to 'pending' if caption exists. | Active | Core part of new flow. |
-| `set_public_url` | `set_public_url` | BEFORE INSERT/UPDATE | Generates public URLs. | Active | Unchanged. |
-| `trg_handle_telegram_data_insert` | `handle_telegram_data_insert` | BEFORE INSERT | Sets telegram_metadata | Active | Extracts metadata. |
-| `trg_handle_telegram_data_update` | `handle_telegram_data_update` | BEFORE UPDATE | Updates telegram_metadata | Active | Keeps metadata in sync. |
+| Trigger                           | Function                            | Event                           | Purpose                                    | Status | Notes                   |
+| --------------------------------- | ----------------------------------- | ------------------------------- | ------------------------------------------ | ------ | ----------------------- |
+| `trg_process_caption`             | `xdelo_set_caption_pending_trigger` | BEFORE INSERT/UPDATE OF caption | Sets state to 'pending' if caption exists. | Active | Core part of new flow.  |
+| `set_public_url`                  | `set_public_url`                    | BEFORE INSERT/UPDATE            | Generates public URLs.                     | Active | Unchanged.              |
+| `trg_handle_telegram_data_insert` | `handle_telegram_data_insert`       | BEFORE INSERT                   | Sets telegram_metadata                     | Active | Extracts metadata.      |
+| `trg_handle_telegram_data_update` | `handle_telegram_data_update`       | BEFORE UPDATE                   | Updates telegram_metadata                  | Active | Keeps metadata in sync. |
 
 ## Data Flow (Hybrid Plan)
 
@@ -70,10 +69,10 @@ sequenceDiagram
     participant SYNC as xdelo_sync_media_group_content (DB Fn)
 
     T->>W: Message Update (New/Edit)
-    W->>DB: createMessage() / updateMessage()
+    W->>DB: createMessage() (Upsert by telegram_message_id + chat_id)
     Note over DB,TRG: IF caption exists/changed THEN trigger fires BEFORE save
     TRG->>DB: Set state='pending', start_time=NOW()
-    DB-->>W: Save Complete (Message ID)
+    DB-->>W: Upsert Complete (Message ID)
     W-->>T: Acknowledge Receipt (HTTP 200)
 
     Note right of EF: Runs periodically (e.g., cron/timer)

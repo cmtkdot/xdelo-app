@@ -13,10 +13,11 @@ Media messages → handleMediaMessage
 Other messages → handleOtherMessage
 Media Message Handling (mediaMessageHandler.ts):
 
-Duplicate Detection:
+Duplicate Handling (Upsert):
 
-Checks for existing messages with same file_unique_id used for the name directly in the telegram-storage bucket
-Updates existing record if found instead of creating new one
+The `createMessage` database operation performs an upsert based on `telegram_message_id` and `chat_id`.
+If a message with the same ID and chat ID exists, the entire record is updated with the new message's data (caption, metadata, file info, etc.), effectively reprocessing it.
+If no existing message is found, a new record is inserted.
 Media Group Handling:
 
 Recognizes messages part of a media group
@@ -260,11 +261,11 @@ sequenceDiagram
     
     User->>TG: Send Media Message (with Caption)
     TG->>W: Webhook Notification
-    W->>DB: Store Raw Message (state='initialized')
-    Note over DB, TRG: BEFORE Trigger fires
-    TRG->>DB: Set state='pending'
-    DB-->>W: Save Complete
-    W-->>TG: Acknowledge Receipt (HTTP 200)
+W->>DB: createMessage() Upsert (Inserts or Updates based on telegram_message_id + chat_id)
+Note over DB, TRG: BEFORE Trigger fires on INSERT/UPDATE if caption present/changed
+TRG->>DB: Set state='pending'
+DB-->>W: Upsert Complete (Message ID)
+W-->>TG: Acknowledge Receipt (HTTP 200)
     
     Note right of EF: Polls periodically...
     EF->>DB: Query for state='pending'
@@ -291,9 +292,9 @@ sequenceDiagram
 ```mermaid
 graph TD
     A[Telegram] --> B(telegram-webhook Edge Fn);
-    B --> C{Save Message};
+    B --> C{Upsert Message};
     C --> D[messages Table];
-    D -- caption exists --> E(trg_process_caption);
+    D -- caption exists/changed --> E(trg_process_caption);
     E --> F[Set state='pending'];
     G(direct-caption-processor Edge Fn) -- Polls --> F;
     G --> H(Parse Caption);
@@ -310,7 +311,7 @@ graph TD
     subgraph "Caption Analysis & Sync"
         G; H; I; J;
     end
-    subgraph "Webhook Ingestion"
+    subgraph "Webhook Ingestion & Upsert"
         B; C; D; E; F;
     end
     subgraph "Safety Nets"
@@ -381,7 +382,7 @@ A robust system for processing Telegram messages with media attachments, designe
 - Extract structured product data from media captions
 - Maintain media group synchronization
 - Provide comprehensive audit logging
-- Handle message edits and updates gracefully
+- Handle message edits and updates gracefully, fully reprocessing duplicates.
 
 **Core Technologies:**
 - Supabase (PostgreSQL + Storage)
@@ -436,8 +437,8 @@ This system processes Telegram messages with media and captions, extracting stru
 flowchart TD
     A[Telegram Message] --> B{Message Type};
     B -->|Media/Text/Edit| C[telegram-webhook];
-    C --> D[Store/Update Message in DB];
-    D -- Has Caption? --> E[Trigger sets state='pending'];
+    C --> D[Upsert Message in DB (via createMessage)];
+    D -- Has Caption/Changed? --> E[Trigger sets state='pending'];
     E --> F(direct-caption-processor polls);
     F --> G[Parse Caption];
     G --> H[Update analyzed_content];
