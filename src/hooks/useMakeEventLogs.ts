@@ -1,8 +1,7 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { MakeWebhookLog } from '@/types/make';
 import { useToast } from '@/hooks/useToast';
+import { MakeWebhookConfig, MakeWebhookLog } from '@/types/make';
 import { useState } from 'react';
 
 // Export the type for components to use

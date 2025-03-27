@@ -37,13 +37,15 @@ export function useMediaUtils() {
       addProcessingMessageId(params.messageId);
       
       // Call edge function to process caption
-      const { data, error } = await supabase.functions.invoke('direct-caption-processor', {
+      const response = await supabase.functions.invoke('direct-caption-processor', {
         body: { 
           messageId: params.messageId,
           caption: params.newCaption,
           correlationId: crypto.randomUUID()
         }
       });
+      
+      const { data, error } = response;
       
       if (error) {
         console.error('Error processing caption:', error);
@@ -115,22 +117,27 @@ export function useMediaUtils() {
       }
       
       // Call the database function with retry logic
-      const { data, error } = await withRetry(
-        () => supabase.rpc(
-          'xdelo_sync_media_group_content',
-          {
-            p_message_id: sourceMessageId,
-            p_analyzed_content: message.analyzed_content,
-            p_force_sync: options.forceSync !== false,
-            p_sync_edit_history: !!options.syncEditHistory
-          }
-        ),
+      const result = await withRetry(
+        async () => {
+          const response = await supabase.rpc(
+            'xdelo_sync_media_group_content',
+            {
+              p_message_id: sourceMessageId,
+              p_analyzed_content: message.analyzed_content,
+              p_force_sync: options.forceSync !== false,
+              p_sync_edit_history: !!options.syncEditHistory
+            }
+          );
+          return response;
+        },
         {
           maxAttempts: 3,
           delay: 1000,
           retryableErrors: ['timeout', 'connection', 'network']
         }
       );
+      
+      const { data, error } = result;
       
       if (error) {
         console.error('Error syncing media group:', error);
@@ -263,19 +270,23 @@ export function useMediaUtils() {
       setIsProcessing(true);
       messageIds.forEach(id => addProcessingMessageId(id));
       
-      // Call RPC to repair media
-      const { data, error } = await supabase.rpc(
+      // Use the general rpc call to avoid typechecking issues
+      const response = await supabase.rpc(
         'xdelo_repair_media_batch',
         {
           p_message_ids: messageIds
         }
       );
       
+      const { data, error } = response;
+      
       if (error) {
         return {
           success: false,
           repaired: 0,
-          error: error.message
+          error: error.message,
+          successful: 0,
+          failed: messageIds.length
         };
       }
       
@@ -313,19 +324,23 @@ export function useMediaUtils() {
     try {
       setIsProcessing(true);
       
-      // Call RPC to standardize paths
-      const { data, error } = await supabase.rpc(
+      // Use the general rpc call to avoid typechecking issues
+      const response = await supabase.rpc(
         'xdelo_standardize_storage_paths_batch',
         {
           p_limit: limit
         }
       );
       
+      const { data, error } = response;
+      
       if (error) {
         return {
           success: false,
           repaired: 0,
-          error: error.message
+          error: error.message,
+          successful: 0,
+          failed: 0
         };
       }
       
@@ -337,14 +352,18 @@ export function useMediaUtils() {
       return {
         success: true,
         repaired: data.updated_count || 0,
-        details: data.details || []
+        details: data.details || [],
+        successful: data.updated_count || 0,
+        failed: 0
       };
     } catch (err) {
       console.error('Error in standardizeStoragePaths:', err);
       return {
         success: false,
         repaired: 0,
-        error: err instanceof Error ? err.message : 'Unknown error'
+        error: err instanceof Error ? err.message : 'Unknown error',
+        successful: 0,
+        failed: 0
       };
     } finally {
       setIsProcessing(false);
@@ -358,38 +377,44 @@ export function useMediaUtils() {
     try {
       setIsProcessing(true);
       
-      // Call RPC to fix URLs
-      const { data, error } = await supabase.rpc(
-        'xdelo_fix_public_urls',
-        {
-          p_limit: limit
+      const { data, error } = await supabase.functions.invoke('fix-media-urls', {
+        body: { 
+          limit,
+          fixMissingPublicUrls: true,
+          regenerateUrls: false
         }
-      );
+      });
       
       if (error) {
         return {
           success: false,
           repaired: 0,
-          error: error.message
+          error: error.message,
+          successful: 0,
+          failed: 0
         };
       }
       
       toast({
         title: 'URL Fix Complete',
-        description: `Fixed ${data?.length || 0} URLs`,
+        description: `Fixed ${data?.processed || 0} URLs`,
       });
       
       return {
         success: true,
-        repaired: data?.length || 0,
-        details: data || []
+        repaired: data?.processed || 0,
+        details: data?.details || [],
+        successful: data?.processed || 0,
+        failed: 0
       };
     } catch (err) {
       console.error('Error in fixMediaUrls:', err);
       return {
         success: false,
         repaired: 0,
-        error: err instanceof Error ? err.message : 'Unknown error'
+        error: err instanceof Error ? err.message : 'Unknown error',
+        successful: 0,
+        failed: 0
       };
     } finally {
       setIsProcessing(false);

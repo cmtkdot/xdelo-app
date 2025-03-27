@@ -1,125 +1,126 @@
 
-import { useState } from 'react';
-import { MediaProcessingState, MediaProcessingStateActions, ContentValidationRules, ValidationResult } from './types';
+import { MediaProcessingState, ContentValidationRules, ValidationResult } from './types';
 
 /**
- * Creates state management for tracking media processing operations
+ * Creates a state for tracking media processing status
  */
-export function createMediaProcessingState(): [MediaProcessingState, MediaProcessingStateActions] {
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingMessageIds, setProcessingMessageIds] = useState<string[]>([]);
-  
-  const addProcessingMessageId = (id: string) => {
-    setProcessingMessageIds(prev => [...prev, id]);
+export function createMediaProcessingState(): [
+  MediaProcessingState, 
+  { 
+    setIsProcessing: (isProcessing: boolean) => void;
+    addProcessingMessageId: (id: string) => void;
+    removeProcessingMessageId: (id: string) => void;
+  }
+] {
+  // Initial state
+  const state: MediaProcessingState = {
+    isProcessing: false,
+    processingMessageIds: {}
   };
   
-  const removeProcessingMessageId = (id: string) => {
-    setProcessingMessageIds(prev => prev.filter(messageId => messageId !== id));
+  // Actions
+  const actions = {
+    setIsProcessing: (isProcessing: boolean) => {
+      state.isProcessing = isProcessing;
+    },
+    addProcessingMessageId: (id: string) => {
+      state.processingMessageIds[id] = true;
+    },
+    removeProcessingMessageId: (id: string) => {
+      delete state.processingMessageIds[id];
+    }
   };
   
-  return [
-    { isProcessing, processingMessageIds },
-    { setIsProcessing, addProcessingMessageId, removeProcessingMessageId }
-  ];
+  return [state, actions];
 }
 
 /**
- * Sleep utility for retry operations
- */
-export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-/**
- * Retry a function with exponential backoff
+ * Retry mechanism for network requests
  */
 export async function withRetry<T>(
-  operation: () => Promise<T>,
-  options: {
-    maxAttempts?: number;
-    delay?: number;
-    backoffFactor?: number;
-    retryableErrors?: string[];
-  } = {}
+  fn: () => Promise<T>, 
+  options = { maxAttempts: 3, delay: 1000, retryableErrors: ['timeout', 'connection'] }
 ): Promise<T> {
-  const {
-    maxAttempts = 3,
-    delay = 1000,
-    backoffFactor = 2,
-    retryableErrors = []
-  } = options;
+  let attempts = 0;
   
-  let attempt = 0;
-  let lastError: Error | undefined;
-  
-  while (attempt < maxAttempts) {
+  while (attempts < options.maxAttempts) {
     try {
-      return await operation();
+      return await fn();
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      attempt++;
+      attempts++;
       
-      // Check if we should retry
-      const isRetryable = 
-        retryableErrors.length === 0 || 
-        retryableErrors.some(errMsg => lastError!.message.includes(errMsg));
-      
-      // If we've used all attempts or error is not retryable, throw
-      if (attempt >= maxAttempts || !isRetryable) {
-        throw lastError;
+      // If this was the last attempt, throw the error
+      if (attempts >= options.maxAttempts) {
+        throw error;
       }
       
-      // Wait with exponential backoff
-      const waitTime = delay * Math.pow(backoffFactor, attempt - 1);
-      console.log(`Retry attempt ${attempt}/${maxAttempts} in ${waitTime}ms: ${lastError.message}`);
-      await sleep(waitTime);
+      // Check if this error type is retryable
+      const errorMessage = error instanceof Error ? error.message.toLowerCase() : '';
+      const isRetryable = options.retryableErrors.some(type => errorMessage.includes(type));
+      
+      if (!isRetryable) {
+        throw error;
+      }
+      
+      // Wait before retry (with exponential backoff)
+      const backoffDelay = options.delay * Math.pow(2, attempts - 1);
+      await new Promise(resolve => setTimeout(resolve, backoffDelay));
     }
   }
   
-  throw lastError;
+  throw new Error('Retry failed: Maximum attempts reached');
 }
 
 /**
- * Validate content against rules
+ * Validates content against a set of rules
  */
 export function validateContent(
   content: Record<string, any>,
-  rules: ContentValidationRules
+  rules: ContentValidationRules = standardContentValidationRules
 ): ValidationResult {
+  // Initialize result
   const result: ValidationResult = {
     valid: true,
-    missingFields: [],
-    invalidFormats: [],
-    customErrors: {}
+    missing_fields: [],
+    invalid_formats: [],
+    custom_errors: {}
   };
   
   // Check required fields
   if (rules.required) {
     for (const field of rules.required) {
-      if (content[field] === undefined || content[field] === null || content[field] === '') {
-        result.missingFields.push(field);
+      if (!content[field] || content[field] === '') {
+        result.missing_fields.push(field);
         result.valid = false;
       }
     }
   }
   
-  // Check formats
+  // Check format rules
   if (rules.format) {
     for (const [field, pattern] of Object.entries(rules.format)) {
-      if (content[field] !== undefined && content[field] !== null && content[field] !== '') {
-        const value = String(content[field]);
-        if (!pattern.test(value)) {
-          result.invalidFormats.push(field);
+      if (content[field] && content[field] !== '') {
+        let regex: RegExp;
+        if (typeof pattern === 'string') {
+          regex = new RegExp(pattern);
+        } else {
+          regex = pattern;
+        }
+        
+        if (!regex.test(String(content[field]))) {
+          result.invalid_formats.push(field);
           result.valid = false;
         }
       }
     }
   }
   
-  // Run custom validations
+  // Check custom validation rules
   if (rules.custom) {
     for (const [field, validator] of Object.entries(rules.custom)) {
-      if (content[field] !== undefined && content[field] !== null) {
+      if (content[field] !== undefined) {
         if (!validator(content[field])) {
-          result.customErrors[field] = `Custom validation failed for ${field}`;
+          result.custom_errors[field] = `Invalid value for ${field}`;
           result.valid = false;
         }
       }
@@ -129,9 +130,7 @@ export function validateContent(
   return result;
 }
 
-/**
- * Standard content validation rules
- */
+// Standard validation rules to use by default
 export const standardContentValidationRules: ContentValidationRules = {
   required: ['product_name', 'product_code'],
   format: {

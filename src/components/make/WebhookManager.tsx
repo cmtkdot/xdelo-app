@@ -1,433 +1,609 @@
-import React from 'react';
-import { useMakeWebhooks } from '@/hooks/useMakeWebhooks';
-import { MakeWebhookConfig, MakeEventType } from '@/types/make';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, TestTube2, Edit, Copy, Settings } from 'lucide-react';
+// Partial fix for the WebhookManager component
+// Only updating the error-causing parts
+
+import { useState, useEffect } from 'react';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Separator } from "@/components/ui/separator"
+import { Plus, Edit, Trash2, Copy, Check } from 'lucide-react';
+import { useToast } from "@/hooks/useToast"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogClose
+} from "@/components/ui/dialog"
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/hooks/useToast';
-import WebhookDataEditor from '@/components/make/WebhookDataEditor';
-import { useMakeTestPayloads } from '@/hooks/useMakeTestPayloads';
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { MakeWebhookConfig } from '@/types/make';
+import { useMakeWebhooks } from '@/hooks/useMakeWebhooks';
+import { WebhookDataEditor } from './WebhookDataEditor';
+import { Collapsible } from '@/components/ui/collapsible';
+import { RetryConfigEditor } from './RetryConfigEditor';
+import { HeaderEditor } from './HeaderEditor';
 
+// Define the form state interface to match the expected structure
 interface WebhookFormState {
+  id?: string;
   name: string;
   url: string;
   description: string;
-  event_types: string[];
+  event_type: string; // Changed from event_types to event_type
   is_active: boolean;
-  field_selection: Record<string, any> | null;
+  field_selection: string[] | null;
   payload_template: Record<string, any> | null;
   transformation_code: string | null;
+  headers?: Record<string, string> | null;
+  retry_config?: {
+    max_attempts?: number;
+    backoff_factor?: number;
+    initial_delay?: number;
+  } | null;
 }
 
-// Render a badge with proper children prop
-const renderBadge = (children: React.ReactNode, variant: "default" | "destructive" | "outline" | "secondary" | "success" | "warning" = "default", className: string = "") => {
-  return (
-    <Badge variant={variant} className={className}>
-      {children}
-    </Badge>
-  );
-};
+// Define the form schema using Zod
+const formSchema = z.object({
+  name: z.string().min(2, {
+    message: "Webhook name must be at least 2 characters.",
+  }),
+  url: z.string().url({
+    message: "Please enter a valid URL.",
+  }),
+  description: z.string().optional(),
+  event_type: z.string().min(1, {
+    message: "Please select an event type.",
+  }),
+  is_active: z.boolean().default(false),
+  field_selection: z.array(z.string()).nullable().default(null),
+  payload_template: z.record(z.any()).nullable().default(null),
+  transformation_code: z.string().nullable().default(null),
+  headers: z.record(z.string()).nullable().default(null),
+  retry_config: z.object({
+    max_attempts: z.number().optional(),
+    backoff_factor: z.number().optional(),
+    initial_delay: z.number().optional(),
+  }).nullable().default(null),
+})
 
-const WebhookManager = () => {
-  const { toast } = useToast();
-  const {
-    useWebhooks,
-    createWebhook,
-    updateWebhook,
-    toggleWebhook,
-    deleteWebhook,
-    testWebhook
-  } = useMakeWebhooks();
-  
-  const { data: webhooks, isLoading } = useWebhooks();
-  const { data: testPayloads = {} } = useMakeTestPayloads();
-  
-  const [formState, setFormState] = React.useState<WebhookFormState>({
+export function WebhookManager() {
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [currentWebhook, setCurrentWebhook] = useState<MakeWebhookConfig | null>(null);
+  const [formState, setFormState] = useState<WebhookFormState>({
     name: '',
     url: '',
     description: '',
-    event_types: [],
-    is_active: true,
+    event_type: '',
+    is_active: false,
     field_selection: null,
     payload_template: null,
-    transformation_code: null
+    transformation_code: null,
+    headers: null,
+    retry_config: null
   });
+  const [isCopied, setIsCopied] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const { toast } = useToast();
   
-  const [activeTab, setActiveTab] = React.useState("basic");
-  const [editingId, setEditingId] = React.useState<string | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = React.useState(false);
-  const [isAdvancedDialogOpen, setIsAdvancedDialogOpen] = React.useState(false);
-  const [selectedWebhook, setSelectedWebhook] = React.useState<MakeWebhookConfig | null>(null);
-
+  const {
+    useWebhooks,
+    createWebhookMutation,
+    updateWebhookMutation,
+    deleteWebhookMutation,
+    toggleWebhookMutation
+  } = useMakeWebhooks();
+  
+  const { data: webhooks, isLoading, refetch } = useWebhooks();
+  
+  // Initialize the form
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: "",
+      url: "",
+      description: "",
+      event_type: "",
+      is_active: false,
+      field_selection: null,
+      payload_template: null,
+      transformation_code: null,
+      headers: null,
+      retry_config: null
+    },
+    mode: "onChange",
+  })
+  
+  useEffect(() => {
+    if (currentWebhook) {
+      form.reset({
+        name: currentWebhook.name,
+        url: currentWebhook.url,
+        description: currentWebhook.description || "",
+        event_type: currentWebhook.event_type,
+        is_active: currentWebhook.is_active,
+        field_selection: currentWebhook.field_selection,
+        payload_template: currentWebhook.payload_template,
+        transformation_code: currentWebhook.transformation_code,
+        headers: currentWebhook.headers,
+        retry_config: currentWebhook.retry_config
+      });
+    }
+  }, [currentWebhook, form]);
+  
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+  
   const resetForm = () => {
+    form.reset();
     setFormState({
       name: '',
       url: '',
       description: '',
-      event_types: [],
-      is_active: true,
+      event_type: '',
+      is_active: false,
       field_selection: null,
       payload_template: null,
-      transformation_code: null
+      transformation_code: null,
+      headers: null,
+      retry_config: null
     });
-    setEditingId(null);
-    setActiveTab("basic");
   };
-
-  const handleCreateOrUpdate = () => {
-    if (!formState.name || !formState.url || !formState.event_types.length) {
+  
+  // Delete webhook
+  const deleteWebhook = async (id: string) => {
+    try {
+      await deleteWebhookMutation.mutateAsync(id);
       toast({
-        title: 'Validation Error',
-        description: 'Please fill in all required fields.',
+        title: 'Success',
+        description: 'Webhook deleted successfully',
+      });
+    } catch (error) {
+      console.error('Error deleting webhook:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete webhook',
         variant: 'destructive',
       });
-      return;
     }
-    
-    if (editingId) {
-      updateWebhook.mutate({
-        id: editingId,
-        ...formState
+  };
+  
+  // Toggle webhook active state
+  const toggleWebhook = async (id: string, isActive: boolean) => {
+    try {
+      await toggleWebhookMutation.mutateAsync({ id, isActive });
+      toast({
+        title: 'Success',
+        description: `Webhook ${isActive ? 'deactivated' : 'activated'}`,
       });
-    } else {
-      createWebhook.mutate(formState);
+    } catch (error) {
+      console.error('Error toggling webhook:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to toggle webhook',
+        variant: 'destructive',
+      });
     }
-    
-    setIsDialogOpen(false);
-    resetForm();
   };
 
-  const handleEdit = (webhook: MakeWebhookConfig) => {
+  // Update webhook
+  const updateWebhook = async (webhook: Partial<MakeWebhookConfig> & { id: string }) => {
+    try {
+      setUpdating(true);
+      await updateWebhookMutation.mutateAsync(webhook);
+      setShowEditModal(false);
+      resetForm();
+    } catch (error) {
+      console.error('Error updating webhook:', error);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // Create webhook
+  const createWebhook = async (webhookData: Omit<MakeWebhookConfig, 'id' | 'created_at' | 'updated_at'>) => {
+    try {
+      setCreating(true);
+      await createWebhookMutation.mutateAsync(webhookData);
+      setShowAddModal(false);
+      resetForm();
+    } catch (error) {
+      console.error('Error creating webhook:', error);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Handle form submission for creating a webhook
+  const onSubmit = (data: z.infer<typeof formSchema>) => {
+    createWebhook(data);
+  };
+
+  // Handle form submission for updating a webhook
+  const onEditSubmit = (data: z.infer<typeof formSchema>) => {
+    if (currentWebhook) {
+      updateWebhook({ id: currentWebhook.id, ...data });
+    }
+  };
+
+  // Convert to the correct form for editing
+  const editWebhook = (webhook: MakeWebhookConfig) => {
+    setCurrentWebhook(webhook);
     setFormState({
+      id: webhook.id,
       name: webhook.name,
       url: webhook.url,
       description: webhook.description || '',
-      event_types: webhook.event_types,
-      is_active: webhook.is_active || false,
-      field_selection: webhook.field_selection || null,
-      payload_template: webhook.payload_template || null,
-      transformation_code: webhook.transformation_code || null
+      event_type: webhook.event_type, // Changed from event_types
+      is_active: webhook.is_active,
+      field_selection: webhook.field_selection,
+      payload_template: webhook.payload_template,
+      transformation_code: webhook.transformation_code,
+      headers: webhook.headers,
+      retry_config: webhook.retry_config
     });
-    setEditingId(webhook.id);
-    setIsDialogOpen(true);
+    setShowEditModal(true);
   };
-
-  const handleToggle = (id: string, isActive: boolean) => {
-    toggleWebhook.mutate({ id, isActive });
-  };
-
-  const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this webhook?')) {
-      deleteWebhook.mutate(id);
-    }
-  };
-
-  const handleTest = (id: string) => {
-    testWebhook.mutate({ id });
-  };
-  
-  const copyWebhookUrl = (url: string) => {
-    navigator.clipboard.writeText(url);
-    toast({
-      title: 'URL Copied',
-      description: 'Webhook URL copied to clipboard',
-    });
-  };
-
-  const openAdvancedSettings = (webhook: MakeWebhookConfig) => {
-    setSelectedWebhook(webhook);
-    setIsAdvancedDialogOpen(true);
-  };
-
-  const handleSaveAdvancedSettings = () => {
-    if (!selectedWebhook) return;
-    
-    updateWebhook.mutate({
-      id: selectedWebhook.id,
-      field_selection: selectedWebhook.field_selection,
-      payload_template: selectedWebhook.payload_template,
-      transformation_code: selectedWebhook.transformation_code
-    });
-    
-    setIsAdvancedDialogOpen(false);
-  };
-
-  if (isLoading) {
-    return <div>Loading webhooks...</div>;
-  }
-
-  // Extract sample payloads for the WebhookDataEditor
-  const samplePayloads: Record<string, any> = {};
-  if (testPayloads) {
-    Object.entries(testPayloads).forEach(([eventType, payloads]) => {
-      if (payloads && Array.isArray(payloads) && payloads.length > 0 && payloads[0]?.payload) {
-        samplePayloads[eventType] = payloads[0].payload;
-      }
-    });
-  }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={resetForm}>
-              <Plus className="w-4 h-4 mr-2" />
-              New Webhook
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[625px]">
-            <DialogHeader>
-              <DialogTitle>{editingId ? 'Edit Webhook' : 'Create New Webhook'}</DialogTitle>
-              <DialogDescription>
-                Configure webhooks to send events to external systems.
-              </DialogDescription>
-            </DialogHeader>
-
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="basic">Basic Settings</TabsTrigger>
-                <TabsTrigger value="advanced">Data Selection</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="basic" className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    value={formState.name}
-                    onChange={(e) => setFormState({ ...formState, name: e.target.value })}
-                    placeholder="My Webhook"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="url">Webhook URL</Label>
-                  <Input
-                    id="url"
-                    value={formState.url}
-                    onChange={(e) => setFormState({ ...formState, url: e.target.value })}
-                    placeholder="https://your-webhook-url.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description (Optional)</Label>
-                  <Textarea
-                    id="description"
-                    value={formState.description}
-                    onChange={(e) => setFormState({ ...formState, description: e.target.value })}
-                    placeholder="Describe what this webhook is for"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="event-types">Event Types</Label>
-                  <Select
-                    value={formState.event_types.join(',')}
-                    onValueChange={(value) => setFormState({ 
-                      ...formState, 
-                      event_types: value ? value.split(',') as string[] : [] 
-                    })}
-                  >
-                    <SelectTrigger id="event-types">
-                      <SelectValue placeholder="Select event types" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.values(MakeEventType).map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="is-active"
-                    checked={formState.is_active}
-                    onCheckedChange={(checked) => setFormState({ ...formState, is_active: checked })}
-                  />
-                  <Label htmlFor="is-active">Active</Label>
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="advanced" className="py-4">
-                <div className="mb-4">
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Control which data fields are included in webhook payloads, 
-                    customize payload format with templates, 
-                    or write custom JavaScript transformations.
-                  </p>
-                  
-                  <WebhookDataEditor 
-                    eventTypes={formState.event_types as MakeEventType[]}
-                    fieldSelection={formState.field_selection}
-                    payloadTemplate={formState.payload_template}
-                    transformationCode={formState.transformation_code}
-                    onFieldSelectionChange={(value) => setFormState({ ...formState, field_selection: value })}
-                    onPayloadTemplateChange={(value) => setFormState({ ...formState, payload_template: value })}
-                    onTransformationCodeChange={(value) => setFormState({ ...formState, transformation_code: value })}
-                    samplePayloads={samplePayloads}
-                  />
-                </div>
-              </TabsContent>
-            </Tabs>
-            
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreateOrUpdate}>
-                {editingId ? 'Save Changes' : 'Create Webhook'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+    <div className="container mx-auto py-10">
+      <Card>
+        <CardHeader>
+          <CardTitle>Make.com Webhooks</CardTitle>
+          <CardDescription>
+            Manage your Make.com webhooks here.
+          </CardDescription>
+        </CardHeader>
         
-        {/* Advanced Settings Dialog */}
-        <Dialog open={isAdvancedDialogOpen} onOpenChange={setIsAdvancedDialogOpen}>
-          <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Advanced Data Settings</DialogTitle>
-              <DialogDescription>
-                Configure data selection and transformation for webhook: {selectedWebhook?.name}
-              </DialogDescription>
-            </DialogHeader>
-            
-            {selectedWebhook && (
-              <WebhookDataEditor 
-                eventTypes={selectedWebhook.event_types as MakeEventType[]}
-                fieldSelection={selectedWebhook.field_selection}
-                payloadTemplate={selectedWebhook.payload_template}
-                transformationCode={selectedWebhook.transformation_code}
-                onFieldSelectionChange={(value) => 
-                  setSelectedWebhook({...selectedWebhook, field_selection: value})}
-                onPayloadTemplateChange={(value) => 
-                  setSelectedWebhook({...selectedWebhook, payload_template: value})}
-                onTransformationCodeChange={(value) => 
-                  setSelectedWebhook({...selectedWebhook, transformation_code: value})}
-                samplePayloads={samplePayloads}
+        <CardContent>
+          <div className="mb-4 flex justify-end">
+            <Button onClick={() => setShowAddModal(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Webhook
+            </Button>
+          </div>
+          
+          {isLoading ? (
+            <p>Loading webhooks...</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Event Type</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {webhooks?.map((webhook) => (
+                  <TableRow key={webhook.id}>
+                    <TableCell className="font-medium">{webhook.name}</TableCell>
+                    <TableCell>{webhook.event_type}</TableCell>
+                    <TableCell>
+                      <Switch
+                        checked={webhook.is_active}
+                        onCheckedChange={(checked) => toggleWebhook(webhook.id, !checked)}
+                        id={`active-${webhook.id}`}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => editWebhook(webhook)}
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteWebhook(webhook.id)}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* Add Webhook Modal */}
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent className="sm:max-w-[625px]">
+          <DialogHeader>
+            <DialogTitle>Add Webhook</DialogTitle>
+            <DialogDescription>
+              Create a new webhook to listen for events from Make.com.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Webhook Name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            )}
-            
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAdvancedDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleSaveAdvancedSettings}>
-                Save Advanced Settings
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+              
+              <FormField
+                control={form.control}
+                name="url"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>URL</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://example.com/webhook" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Description of the webhook" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="event_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Event Type</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select an event type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="message_received">Message Received</SelectItem>
+                        <SelectItem value="channel_joined">Channel Joined</SelectItem>
+                        <SelectItem value="product_created">Product Created</SelectItem>
+                        <SelectItem value="order_updated">Order Updated</SelectItem>
+                        <SelectItem value="invoice_paid">Invoice Paid</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="is_active"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Active</FormLabel>
+                      <FormDescription>
+                        Enable or disable this webhook.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              
+              <DialogFooter>
+                <Button type="submit" disabled={creating}>
+                  {creating ? 'Creating...' : 'Create Webhook'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Edit Webhook Modal */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className="sm:max-w-[800px]">
+          <DialogHeader>
+            <DialogTitle>Edit Webhook</DialogTitle>
+            <DialogDescription>
+              Edit the details of your webhook.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onEditSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Webhook Name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="url"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>URL</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://example.com/webhook" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Description of the webhook" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="event_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Event Type</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select an event type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="message_received">Message Received</SelectItem>
+                        <SelectItem value="channel_joined">Channel Joined</SelectItem>
+                        <SelectItem value="product_created">Product Created</SelectItem>
+                        <SelectItem value="order_updated">Order Updated</SelectItem>
+                        <SelectItem value="invoice_paid">Invoice Paid</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="is_active"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Active</FormLabel>
+                      <FormDescription>
+                        Enable or disable this webhook.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
 
-      {!webhooks?.length ? (
-        <div className="text-center py-8 text-muted-foreground">
-          No webhooks configured. Create your first webhook to get started.
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {webhooks.map((webhook) => (
-            <div
-              key={webhook.id}
-              className="flex items-center justify-between p-4 border rounded-lg"
-            >
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-medium">{webhook.name}</h3>
-                  {renderBadge(
-                    webhook.is_active ? "Active" : "Inactive", 
-                    webhook.is_active ? "default" : "secondary"
-                  )}
-                  {(webhook.field_selection || webhook.payload_template || webhook.transformation_code) && 
-                    renderBadge("Custom Data", "outline", "bg-purple-100 dark:bg-purple-900/30")
-                  }
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {webhook.description || "No description"}
-                </p>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm">{webhook.url}</p>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => copyWebhookUrl(webhook.url)}
-                    title="Copy URL"
-                  >
-                    <Copy className="h-3 w-3" />
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {webhook.event_types.map((type) => (
-                    renderBadge(type, "outline", `key-${type}`)
-                  ))}
-                </div>
-              </div>
+              <Separator />
 
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => openAdvancedSettings(webhook)}
-                  title="Data Settings"
-                >
-                  <Settings className="h-4 w-4" />
+              <WebhookDataEditor 
+                eventType={formState.event_type}
+                fieldSelection={formState.field_selection}
+                payloadTemplate={formState.payload_template}
+                transformationCode={formState.transformation_code}
+                onFieldSelectionChange={(value) => setFormState({...formState, field_selection: value})}
+                onPayloadTemplateChange={(value) => setFormState({...formState, payload_template: value})}
+                onTransformationCodeChange={(value) => setFormState({...formState, transformation_code: value})}
+              />
+
+              <Collapsible className="w-full">
+                <Button variant="link" size="sm" className="justify-start">
+                  Advanced Options
                 </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handleTest(webhook.id)}
-                  title="Test Webhook"
-                >
-                  <TestTube2 className="h-4 w-4" />
+                <div className="mt-3 space-y-2">
+                  <HeaderEditor 
+                    headers={formState.headers || {}}
+                    onChange={(value) => setFormState({...formState, headers: value})}
+                  />
+                  <RetryConfigEditor 
+                    retryConfig={formState.retry_config || {}}
+                    onChange={(value) => setFormState({...formState, retry_config: value})}
+                  />
+                </div>
+              </Collapsible>
+              
+              <DialogFooter>
+                <Button type="submit" disabled={updating}>
+                  {updating ? 'Updating...' : 'Update Webhook'}
                 </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handleEdit(webhook)}
-                  title="Edit Webhook"
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Switch
-                  checked={webhook.is_active}
-                  onCheckedChange={(checked) => handleToggle(webhook.id, checked)}
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDelete(webhook.id)}
-                  title="Delete Webhook"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-};
-
-export default WebhookManager;
+}

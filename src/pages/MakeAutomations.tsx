@@ -1,146 +1,147 @@
+'use client'
 
-import React, { useState } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
-import AutomationList from '@/components/make/AutomationList';
-import WebhookManager from '@/components/make/WebhookManager';
-import EventMonitor from '@/components/make/EventMonitor';
-import AutomationTestPanel from '@/components/make/AutomationTestPanel';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { useMakeAutomations } from '@/hooks/useMakeAutomations';
-import AutomationForm from '@/components/make/AutomationForm';
+import React, { useState, useMemo } from 'react';
+import { Message } from '@/types/entities/Message';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/useToast';
+import { useDebounce } from '@/hooks/useDebounce';
+import { useIsMobile } from '@/hooks/useMobile';
+import { useMessageViewHandlers } from '@/hooks/useMessageViewHandlers';
+import { useEnhancedMessages } from '@/hooks/enhancedMessages';
+import { MediaViewer } from '@/components/ui/media-viewer';
+import { MessageFilterBar } from '@/components/EnhancedMessages/MessageFilterBar';
+import { MessageFilterPanel } from '@/components/EnhancedMessages/MessageFilterPanel';
+import { MessageViewContainer } from '@/components/EnhancedMessages/MessageViewContainer';
 import { MakeAutomationRule } from '@/types/make';
-import { PageContainer } from '@/components/Layout/PageContainer';
 
-const MakeAutomations = () => {
-  const [activeTab, setActiveTab] = useState('automations');
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [currentRule, setCurrentRule] = useState<MakeAutomationRule | null>(null);
+const ITEMS_PER_PAGE = 50;
+
+export default function MessagesEnhanced() {
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch] = useDebounce(search, 300);
+  const [showMode, setShowMode] = useState<'list' | 'grid'>('grid');
+  const [selectedChatIds, setSelectedChatIds] = useState<string[]>([]);
+  const [selectedDateRange, setSelectedDateRange] = useState<Date[] | undefined>(undefined);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [sliderValue, setSliderValue] = useState<number[]>([100]);
   
-  const { createAutomationRule } = useMakeAutomations();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const isMobile = useIsMobile();
   
-  const handleCreateAutomation = () => {
-    setCurrentRule(null);
-    setIsDialogOpen(true);
+  const { 
+    selectedMessages, 
+    handleToggleSelect, 
+    clearSelection,
+    getSelectedMessageIds,
+    deleteMessage,
+    fixContentDispositionForMessage,
+    reuploadMediaFromTelegram,
+    isProcessing,
+    processingMessageIds
+  } = useMessageViewHandlers();
+  
+  const { 
+    messages: items, 
+    groupedMessages,
+    isLoading, 
+    refetch
+  } = useEnhancedMessages({
+    limit: ITEMS_PER_PAGE,
+    searchTerm: debouncedSearch,
+    grouped: showMode === 'grid', // Request grouped data for grid view
+  });
+  
+  const [viewItem, setViewItem] = useState<Message[] | null>(null);
+  const [editItem, setEditItem] = useState<Message | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  
+  const totalItems = items?.length || 0;
+  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+  
+  const paginatedItems = useMemo(() => {
+    if (!items) return [];
+    // Use the appropriate data structure for each view mode
+    return showMode === 'grid' ? groupedMessages : items;
+  }, [items, groupedMessages, showMode]);
+  
+  // View handler consistently accepts array of messages
+  const handleViewMessage = (messages: Message[]) => {
+    if (!messages || messages.length === 0) return;
+    setViewItem(messages);
+    setViewerOpen(true);
   };
   
-  const handleEditAutomation = (rule: MakeAutomationRule) => {
-    setCurrentRule(rule);
-    setIsDialogOpen(true);
+  const handleEditMessage = (message: Message) => {
+    setEditItem(message);
   };
   
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
-  };
-  
-  const handleCloseDialog = () => {
-    setIsDialogOpen(false);
-    setCurrentRule(null);
+  const handleDeleteMessage = async (id: string) => {
+    try {
+      await deleteMessage({id} as Message, false);
+      toast({
+        title: 'Message deleted',
+        description: 'The message has been successfully deleted.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error deleting message',
+        description: 'There was an error deleting the message. Please try again.',
+      });
+    }
   };
 
+  // Function to handle loading more items
+  const handleLoadMore = async () => {
+    await refetch();
+  };
+
+  // Check if we can load more based on the available data
+  const hasMoreItems = useMemo(() => {
+    return totalItems > paginatedItems.length;
+  }, [totalItems, paginatedItems]);
+
+  const toggleFilterPanel = () => setIsFilterOpen(!isFilterOpen);
+  const toggleShowMode = () => setShowMode(showMode === 'grid' ? 'list' : 'grid');
+  
   return (
-    <PageContainer
-      title="Make Automations"
-      breadcrumbs={[
-        { label: 'Dashboard', path: '/' },
-        { label: 'Make Automations', path: '/make-automations' }
-      ]}
-    >
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div className="space-y-1">
-            <h2 className="text-3xl font-bold tracking-tight">Make Automations</h2>
-            <p className="text-muted-foreground">
-              Create automation rules and webhooks to integrate with external systems.
-            </p>
-          </div>
-          <Button onClick={handleCreateAutomation}>
-            <Plus className="w-4 h-4 mr-2" />
-            New Automation
-          </Button>
-        </div>
-
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="bg-muted/50 p-1">
-            <TabsTrigger value="automations">Automations</TabsTrigger>
-            <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
-            <TabsTrigger value="events">Event Log</TabsTrigger>
-            <TabsTrigger value="test">Test</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="automations" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Active Automations</CardTitle>
-                <CardDescription>
-                  Manage automation rules that trigger actions based on events.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AutomationList onEditRule={handleEditAutomation} />
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="webhooks" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Webhook Configurations</CardTitle>
-                <CardDescription>
-                  Configure webhooks to send data to external systems.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <WebhookManager />
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="events" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Event History</CardTitle>
-                <CardDescription>
-                  View and monitor events processed by the automation system.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <EventMonitor />
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="test" className="space-y-6">
-            <AutomationTestPanel />
-          </TabsContent>
-        </Tabs>
-      </div>
+    <div className="container mx-auto py-10">
+      <MessageFilterBar 
+        search={search}
+        onSearchChange={setSearch}
+        isFilterOpen={isFilterOpen}
+        toggleFilter={toggleFilterPanel}
+        showMode={showMode}
+        onToggleShowMode={toggleShowMode}
+        clearSelection={clearSelection}
+        getSelectedMessageIds={getSelectedMessageIds}
+      />
       
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto">
-          <DialogHeader>
-            <DialogTitle>{currentRule ? 'Edit Automation' : 'Create Automation'}</DialogTitle>
-            <DialogDescription>
-              {currentRule 
-                ? 'Modify the settings for this automation rule' 
-                : 'Create a new automation rule to trigger actions based on events'
-              }
-            </DialogDescription>
-          </DialogHeader>
-          
-          <AutomationForm rule={currentRule} onClose={handleCloseDialog} />
-        </DialogContent>
-      </Dialog>
-    </PageContainer>
+      <MessageFilterPanel isVisible={isFilterOpen} />
+      
+      <MessageViewContainer 
+        showMode={showMode}
+        paginatedItems={paginatedItems}
+        isLoading={isLoading}
+        hasMoreItems={hasMoreItems}
+        handleLoadMore={handleLoadMore}
+        handleViewMessage={handleViewMessage}
+        handleEditMessage={handleEditMessage}
+        handleDeleteMessage={handleDeleteMessage}
+        handleToggleSelect={handleToggleSelect}
+        selectedMessages={selectedMessages}
+      />
+      
+      {viewItem && (
+        <MediaViewer
+          isOpen={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+          currentGroup={viewItem}
+        />
+      )}
+    </div>
   );
-};
-
-export default MakeAutomations;
+}

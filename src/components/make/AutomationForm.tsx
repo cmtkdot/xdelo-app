@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useMakeAutomations } from '@/hooks/useMakeAutomations';
-import { MakeAutomationRule, MakeEventType, MakeCondition, MakeAction } from '@/types/make';
+import { MakeEventType, MakeAutomationRule, MakeCondition, MakeAction } from '@/types/make';
 import { Plus, Trash2, Save } from 'lucide-react';
 
 interface AutomationFormProps {
@@ -53,6 +53,30 @@ const FIELD_OPTIONS = [
   'custom.field'
 ];
 
+const eventTypeOptions = [
+  { value: MakeEventType.MESSAGE_RECEIVED, label: 'Message Received' },
+  { value: MakeEventType.CHANNEL_JOINED, label: 'Channel Joined' },
+  { value: MakeEventType.PRODUCT_CREATED, label: 'Product Created' },
+  { value: MakeEventType.ORDER_UPDATED, label: 'Order Updated' },
+  { value: MakeEventType.INVOICE_PAID, label: 'Invoice Paid' },
+];
+
+const getFieldTypeOptions = (eventType: string) => {
+  switch (eventType) {
+    case MakeEventType.MESSAGE_RECEIVED:
+      return [
+        { value: 'caption', label: 'Caption' },
+        { value: 'chat_title', label: 'Chat Title' },
+        { value: 'media_group_id', label: 'Media Group ID' },
+        { value: 'file_size', label: 'File Size' },
+        { value: 'mime_type', label: 'MIME Type' },
+      ];
+    // ... other cases
+    default:
+      return [];
+  }
+};
+
 const AutomationForm = ({ rule, onClose }: AutomationFormProps) => {
   const { createAutomationRule, updateAutomationRule } = useMakeAutomations();
   
@@ -66,7 +90,6 @@ const AutomationForm = ({ rule, onClose }: AutomationFormProps) => {
     actions: [{ type: 'forward_webhook', config: { url: '', headers: {} } }] as MakeAction[]
   });
   
-  // Initialize form with rule data if editing
   useEffect(() => {
     if (rule) {
       setFormState({
@@ -81,12 +104,10 @@ const AutomationForm = ({ rule, onClose }: AutomationFormProps) => {
     }
   }, [rule]);
   
-  // Handle input changes
   const handleInputChange = (field: string, value: any) => {
     setFormState(prev => ({ ...prev, [field]: value }));
   };
   
-  // Condition handlers
   const handleAddCondition = () => {
     setFormState(prev => ({
       ...prev,
@@ -109,7 +130,6 @@ const AutomationForm = ({ rule, onClose }: AutomationFormProps) => {
     });
   };
   
-  // Action handlers
   const handleAddAction = () => {
     setFormState(prev => ({
       ...prev,
@@ -143,7 +163,6 @@ const AutomationForm = ({ rule, onClose }: AutomationFormProps) => {
     });
   };
   
-  // Form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -164,13 +183,11 @@ const AutomationForm = ({ rule, onClose }: AutomationFormProps) => {
     
     try {
       if (rule) {
-        // Update existing rule
         await updateAutomationRule.mutateAsync({
           id: rule.id,
           ...automationData
         });
       } else {
-        // Create new rule
         await createAutomationRule.mutateAsync(automationData);
       }
       
@@ -185,7 +202,6 @@ const AutomationForm = ({ rule, onClose }: AutomationFormProps) => {
     <form onSubmit={handleSubmit}>
       <Card className="border-0 shadow-none">
         <CardContent className="space-y-6 pt-0">
-          {/* Basic Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label htmlFor="name">Rule Name</Label>
@@ -250,7 +266,6 @@ const AutomationForm = ({ rule, onClose }: AutomationFormProps) => {
             </div>
           </div>
           
-          {/* Conditions */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium">Conditions</h3>
@@ -285,9 +300,9 @@ const AutomationForm = ({ rule, onClose }: AutomationFormProps) => {
                         <SelectValue placeholder="Select field" />
                       </SelectTrigger>
                       <SelectContent>
-                        {FIELD_OPTIONS.map((field) => (
-                          <SelectItem key={field} value={field}>
-                            {field}
+                        {getFieldTypeOptions(formState.event_type).map((field) => (
+                          <SelectItem key={field.value} value={field.value}>
+                            {field.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -327,7 +342,6 @@ const AutomationForm = ({ rule, onClose }: AutomationFormProps) => {
             ))}
           </div>
           
-          {/* Actions */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium">Actions</h3>
@@ -371,7 +385,6 @@ const AutomationForm = ({ rule, onClose }: AutomationFormProps) => {
                     </Select>
                   </div>
                   
-                  {/* Action-specific configuration */}
                   {action.type === 'forward_webhook' && (
                     <div className="space-y-2">
                       <Label htmlFor={`action-${index}-webhook-url`}>Webhook URL</Label>

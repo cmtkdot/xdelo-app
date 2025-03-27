@@ -1,47 +1,43 @@
 
+// Types for media utility functions
+
 export interface RepairResult {
   success: boolean;
-  repaired: number;
-  details?: any[];
-  message?: string;
+  repaired?: number;
   error?: string;
+  message?: string;
+  details?: any[];
+  successful?: number;
+  failed?: number;
 }
 
 export interface MediaSyncOptions {
-  forceSync?: boolean; 
+  forceSync?: boolean;
   syncEditHistory?: boolean;
 }
 
 export interface MediaProcessingState {
   isProcessing: boolean;
-  processingMessageIds: string[];
+  processingMessageIds: Record<string, boolean>;
 }
 
-export interface MediaProcessingStateActions {
-  setIsProcessing: (value: boolean) => void;
-  addProcessingMessageId: (id: string) => void;
-  removeProcessingMessageId: (id: string) => void;
-}
-
-// Caption content validation types
 export interface ContentValidationRules {
   required?: string[];
-  format?: Record<string, RegExp>;
+  format?: Record<string, RegExp | string>;
   custom?: Record<string, (value: any) => boolean>;
 }
 
 export interface ValidationResult {
   valid: boolean;
-  missingFields: string[];
-  invalidFormats: string[];
-  customErrors: Record<string, string>;
+  missing_fields?: string[];
+  invalid_formats?: string[];
+  custom_errors?: Record<string, string>;
 }
 
 export interface CaptionFlowData {
-  id: string;
-  content: string;
-  stage: string;
-  captionText?: string;
-  analyzedContent?: Record<string, any>;
-  validationResult?: ValidationResult;
+  success: boolean;
+  message?: string;
+  message_id?: string;
+  media_group_synced?: boolean;
+  caption_updated?: boolean;
 }
