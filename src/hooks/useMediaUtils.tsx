@@ -2,7 +2,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/useToast';
-import { Message } from '@/types/MessagesTypes';
 
 // Types
 export interface MediaSyncOptions {
