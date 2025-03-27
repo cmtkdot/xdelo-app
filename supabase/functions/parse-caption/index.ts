@@ -1,21 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { ParsedContent, xdelo_parseCaption } from "../_shared/captionParser.ts";
 import {
   logErrorToDatabase,
   updateMessageWithError,
-  withErrorHandling,
 } from "../_shared/errorHandler.ts";
-import { SecurityLevel } from "../_shared/jwt-verification.ts";
 import {
   getMessage,
   logAnalysisEvent,
-  markQueueItemAsFailed,
-  syncMediaGroupContent,
   updateMessageWithAnalysis,
 } from "./dbOperations.ts";
-import { ParsedContent } from "./types.ts";
 
-// Define corsHeaders here since we deleted the import
+// Define corsHeaders for cross-origin requests
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
@@ -24,47 +20,15 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400", // 24 hours caching for preflight requests
 };
 
-// Define a simple version of xdelo_parseCaption since we deleted the import
-function xdelo_parseCaption(
-  caption: string | null | undefined,
-  options: {
-    extractPurchaseDate?: boolean;
-    extractProductCode?: boolean;
-    extractVendorUid?: boolean;
-    extractPricing?: boolean;
-  } = {}
-): ParsedContent {
-  // Simple implementation of the parser
-  if (!caption) {
-    return {
-      parsing_metadata: {},
-    };
-  }
-
-  const lines = caption
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  const result: ParsedContent = {
-    caption,
-    raw_lines: lines,
-    raw_text: caption,
-    parsing_metadata: {},
-  };
-
-  if (lines.length > 0) {
-    result.product_name = lines[0];
-  }
-
-  return result;
-}
-
+// Create Supabase client
 const supabaseClient = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 );
 
+/**
+ * Handle caption parsing request
+ */
 const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
   const body = await req.json();
 
@@ -98,10 +62,10 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
 
   try {
     console.log(`Fetching current state for message ${messageId}`);
-    const existingMessage = await getMessage(messageId);
+    const message = await getMessage(messageId);
 
     // If message has analyzed content, and we're not editing or force reprocessing, skip
-    if (existingMessage?.analyzed_content && !isEdit && !force_reprocess) {
+    if (message?.analyzed_content && !isEdit && !force_reprocess) {
       console.log(
         `Message ${messageId} already has analyzed content and force_reprocess is not enabled, skipping`
       );
@@ -109,7 +73,7 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
         JSON.stringify({
           success: true,
           message: `Message already has analyzed content`,
-          data: existingMessage.analyzed_content,
+          data: message.analyzed_content,
           correlation_id: requestCorrelationId,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -118,16 +82,16 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
 
     console.log(
       `Current message state: ${JSON.stringify({
-        id: existingMessage?.id,
-        processing_state: existingMessage?.processing_state,
-        has_analyzed_content: !!existingMessage?.analyzed_content,
-        media_group_id: existingMessage?.media_group_id,
+        id: message?.id,
+        processing_state: message?.processing_state,
+        has_analyzed_content: !!message?.analyzed_content,
+        media_group_id: message?.media_group_id,
         force_reprocess: force_reprocess,
       })}`
     );
 
     console.log(`Performing manual parsing on caption: ${captionForLog}`);
-    // Use the shared parser function
+    // Use the shared parser function from _shared/captionParser.ts
     let parsedContent: ParsedContent = xdelo_parseCaption(caption);
     console.log(`Manual parsing result: ${JSON.stringify(parsedContent)}`);
 
@@ -161,7 +125,7 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     await logAnalysisEvent(
       messageId,
       requestCorrelationId,
-      { analyzed_content: existingMessage?.analyzed_content },
+      { analyzed_content: message?.analyzed_content },
       { analyzed_content: parsedContent },
       {
         source: "parse-caption",
@@ -180,7 +144,7 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     const updateResult = await updateMessageWithAnalysis(
       messageId,
       parsedContent,
-      existingMessage,
+      message,
       queue_id,
       isEdit || force_reprocess
     );
@@ -193,49 +157,23 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
           `Starting media group content sync for group ${media_group_id}, message ${messageId}, isEdit: ${isEdit}, force_reprocess: ${force_reprocess}`
         );
 
-        const syncResponse = await fetch(
-          `${Deno.env.get("SUPABASE_URL")}/functions/v1/xdelo_sync_media_group`,
+        // Use the database function directly with the correct parameters
+        const { data, error } = await supabaseClient.rpc(
+          "xdelo_sync_media_group_content",
           {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${Deno.env.get(
-                "SUPABASE_SERVICE_ROLE_KEY"
-              )}`,
-            },
-            body: JSON.stringify({
-              mediaGroupId: media_group_id,
-              sourceMessageId: messageId,
-              correlationId: requestCorrelationId,
-              forceSync: true,
-              syncEditHistory: isEdit || force_reprocess,
-            }),
+            p_message_id: messageId,
+            p_analyzed_content: parsedContent,
+            p_force_sync: true,
+            p_sync_edit_history: isEdit || force_reprocess,
           }
         );
 
-        if (syncResponse.ok) {
-          syncResult = await syncResponse.json();
-          console.log(
-            `Media group sync result from edge function: ${JSON.stringify(
-              syncResult
-            )}`
-          );
-        } else {
-          console.warn(
-            `Edge function sync failed with ${syncResponse.status}, trying direct sync`
-          );
-          syncResult = await syncMediaGroupContent(
-            media_group_id,
-            messageId,
-            requestCorrelationId,
-            isEdit || force_reprocess
-          );
-          console.log(
-            `Media group sync result from direct function: ${JSON.stringify(
-              syncResult
-            )}`
-          );
+        if (error) {
+          throw new Error(`Direct sync failed: ${error.message}`);
         }
+
+        syncResult = data;
+        console.log(`Media group sync result: ${JSON.stringify(syncResult)}`);
       } catch (syncError) {
         console.error(
           `Media group sync error (non-fatal): ${syncError.message}`
@@ -247,25 +185,29 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
           functionName: "parse-caption",
         });
       }
-    } else {
-      console.log(`No media_group_id provided, skipping group sync`);
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Caption analyzed successfully for message ${messageId}`,
-        data: parsedContent,
-        sync_result: syncResult,
+        message: "Caption parsed successfully",
+        message_id: messageId,
+        media_group_id: media_group_id,
         correlation_id: requestCorrelationId,
         is_edit: isEdit,
         force_reprocess: force_reprocess,
+        parsed_content: parsedContent,
+        sync_result: syncResult,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error(`Error analyzing caption: ${error.message}`);
+    console.error(`Error processing caption: ${error.message}`);
 
+    // Update message to error state
+    await updateMessageWithError(supabaseClient, messageId, error.message);
+
+    // Log the error
     await logErrorToDatabase(supabaseClient, {
       messageId,
       errorMessage: error.message,
@@ -273,26 +215,164 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
       functionName: "parse-caption",
     });
 
-    await updateMessageWithError(
-      supabaseClient,
-      messageId,
-      error.message,
-      requestCorrelationId
+    return new Response(
+      JSON.stringify({
+        success: false,
+        message: "Error parsing caption",
+        error: error.message,
+        message_id: messageId,
+        correlation_id: requestCorrelationId,
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      }
     );
-
-    if (queue_id) {
-      await markQueueItemAsFailed(queue_id, error.message);
-    }
-
-    throw error;
   }
 };
 
-// Use the withErrorHandling wrapper with the SecurityLevel.PUBLIC for backward compatibility
-// We could change this to AUTHENTICATED if we want to restrict access
-serve(
-  withErrorHandling("parse-caption", handleCaptionAnalysis, {
-    securityLevel: SecurityLevel.PUBLIC, // Keep backward compatibility
-    bypassForServiceRole: true, // Allow service role tokens to bypass
-  })
-);
+/**
+ * Get a message by ID
+ */
+async function getMessage(messageId: string) {
+  const { data, error } = await supabaseClient
+    .from("messages")
+    .select("*")
+    .eq("id", messageId)
+    .single();
+
+  if (error) {
+    throw new Error(`Error fetching message: ${error.message}`);
+  }
+
+  return data;
+}
+
+/**
+ * Update a message with analyzed content
+ */
+async function updateMessageWithAnalysis(
+  messageId: string,
+  parsedContent: any,
+  existingMessage: any,
+  queueId?: string,
+  isEdit: boolean = false
+) {
+  const updateData: any = {
+    analyzed_content: parsedContent,
+    processing_state: "completed",
+    processing_completed_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (existingMessage?.media_group_id) {
+    updateData.is_original_caption = true;
+  }
+
+  if (isEdit && existingMessage?.analyzed_content) {
+    // Store the previous content as old_analyzed_content to preserve history
+    updateData.old_analyzed_content = existingMessage.analyzed_content;
+  }
+
+  const { data, error } = await supabaseClient
+    .from("messages")
+    .update(updateData)
+    .eq("id", messageId)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Error updating message: ${error.message}`);
+  }
+
+  // If there's a queue item to update, do it
+  if (queueId) {
+    try {
+      await supabaseClient
+        .from("message_processing_queue")
+        .update({
+          status: "completed",
+          processed_at: new Date().toISOString(),
+          result: parsedContent,
+        })
+        .eq("id", queueId);
+    } catch (queueError) {
+      console.error(`Error updating queue item: ${queueError.message}`);
+      // Non-fatal, continue processing
+    }
+  }
+
+  return data;
+}
+
+/**
+ * Log an analysis event
+ */
+async function logAnalysisEvent(
+  messageId: string,
+  correlationId: string,
+  oldState: any,
+  newState: any,
+  metadata: any
+) {
+  try {
+    await supabaseClient.from("unified_audit_logs").insert({
+      event_type: "caption_analyzed",
+      entity_id: messageId,
+      correlation_id: correlationId,
+      previous_state: oldState,
+      new_state: newState,
+      metadata: {
+        ...metadata,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error(`Error logging analysis event: ${error.message}`);
+    // Non-fatal, continue processing
+  }
+}
+
+// Serve HTTP requests
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      headers: corsHeaders,
+    });
+  }
+
+  // Generate a correlation ID for tracking
+  const correlationId = crypto.randomUUID();
+
+  try {
+    if (req.method === "POST") {
+      return await handleCaptionAnalysis(req, correlationId);
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: "Method not allowed",
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 405,
+      }
+    );
+  } catch (error) {
+    console.error(`Unhandled error: ${error.message}`);
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message,
+        correlation_id: correlationId,
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      }
+    );
+  }
+});
