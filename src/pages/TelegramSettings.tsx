@@ -1,55 +1,71 @@
 
-import React from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { Settings } from '@/components/Settings/Settings';
-import { TelegramWebhookManager } from '@/components/TelegramManager/TelegramWebhookManager';
-import { SystemRepairPanel } from '@/components/TelegramManager/SystemRepairPanel';
+import React, { useState, useEffect } from 'react';
+import { PageContainer } from '@/components/Layout/PageContainer';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { ResetStuckMessages } from '@/components/TelegramManager/ResetStuckMessages';
+import { TelegramCard } from '@/components/Settings/Telegram/TelegramCard';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function TelegramSettings() {
+  const [botToken, setBotToken] = useState<string | null>(null);
+  const [webhookUrl, setWebhookUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchSettings() {
+      try {
+        setIsLoading(true);
+        const { data, error } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('id', '1')
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          setBotToken(data.bot_token || null);
+          setWebhookUrl(data.webhook_url || null);
+        }
+      } catch (error) {
+        console.error('Error fetching settings:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchSettings();
+  }, []);
+
   return (
-    <div className="container mx-auto py-10">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Telegram Settings</h1>
-          <p className="text-muted-foreground">
-            Manage your Telegram configuration and system settings
-          </p>
-        </div>
-      </div>
-      
-      <Separator className="my-6" />
-      
-      <Tabs defaultValue="settings" className="space-y-4">
+    <PageContainer>
+      <h1 className="text-2xl font-bold mb-4">Telegram Settings</h1>
+
+      <Tabs defaultValue="settings" className="space-y-6">
         <TabsList>
           <TabsTrigger value="settings">Bot Settings</TabsTrigger>
-          <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
-          <TabsTrigger value="system">System Repair</TabsTrigger>
+          <TabsTrigger value="management">Message Management</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="settings">
+        <TabsContent value="settings" className="space-y-6">
+          <TelegramCard botToken={botToken} webhookUrl={webhookUrl} />
+        </TabsContent>
+        
+        <TabsContent value="management" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Telegram Bot Configuration</CardTitle>
+              <CardTitle>Message Management</CardTitle>
               <CardDescription>
-                Manage your Telegram bot token and webhook settings
+                Utilities to manage Telegram messages and their processing.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <Settings />
+            <CardContent className="space-y-6">
+              <ResetStuckMessages />
             </CardContent>
           </Card>
         </TabsContent>
-        
-        <TabsContent value="webhooks">
-          <TelegramWebhookManager />
-        </TabsContent>
-        
-        <TabsContent value="system">
-          <SystemRepairPanel />
-        </TabsContent>
       </Tabs>
-    </div>
+    </PageContainer>
   );
 }

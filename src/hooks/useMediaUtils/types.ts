@@ -8,6 +8,15 @@ export interface MediaProcessingState {
 }
 
 /**
+ * Actions for manipulating MediaProcessingState
+ */
+export interface MediaProcessingStateActions {
+  setIsProcessing: (isProcessing: boolean) => void;
+  addProcessingMessageId: (messageId: string) => void;
+  removeProcessingMessageId: (messageId: string) => void;
+}
+
+/**
  * Options for media group synchronization
  */
 export interface MediaSyncOptions {
@@ -22,6 +31,7 @@ export interface RepairResult {
   success: boolean;
   repaired: number;
   error?: string;
+  message?: string;
   details?: any[];
 }
 

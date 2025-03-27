@@ -1,23 +1,19 @@
 
-import { MediaProcessingState } from './types';
+import { MediaProcessingState, MediaProcessingStateActions } from './types';
 
 /**
  * Create a state manager for tracking processing messages
  */
 export function createMediaProcessingState(): [
   MediaProcessingState,
-  {
-    setIsProcessing: (isProcessing: boolean) => void;
-    addProcessingMessageId: (messageId: string) => void;
-    removeProcessingMessageId: (messageId: string) => void;
-  }
+  MediaProcessingStateActions
 ] {
   const state: MediaProcessingState = {
     isProcessing: false,
     processingMessageIds: {}
   };
   
-  const actions = {
+  const actions: MediaProcessingStateActions = {
     setIsProcessing: (isProcessing: boolean) => {
       state.isProcessing = isProcessing;
     },
@@ -44,10 +40,10 @@ export async function withRetry<T>(
   options: {
     maxAttempts: number;
     delay: number;
-    retryableErrors: string[];
+    retryableErrors?: string[];
   }
 ): Promise<T> {
-  const { maxAttempts, delay, retryableErrors } = options;
+  const { maxAttempts, delay, retryableErrors = ['timeout', 'connection', 'network'] } = options;
   let lastError: any;
   
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {

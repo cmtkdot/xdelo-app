@@ -2,7 +2,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/useToast';
-import { MediaProcessingState, MediaSyncOptions, RepairResult } from './types';
+import { MediaProcessingState, MediaSyncOptions, RepairResult, CaptionFlowData } from './types';
 import { createMediaProcessingState, withRetry } from './utils';
 
 export function useMediaUtils() {
@@ -95,15 +95,15 @@ export function useMediaUtils() {
   /**
    * Process a single message caption
    */
-  const syncMessageCaption = async (messageId: string): Promise<boolean> => {
+  const syncMessageCaption = async (params: { messageId: string }): Promise<CaptionFlowData | null> => {
     try {
       setLoading(true);
-      addProcessingMessageId(messageId);
+      addProcessingMessageId(params.messageId);
       
       // Call edge function to process caption
       const { data, error } = await supabase.functions.invoke('manual-caption-parser', {
         body: { 
-          messageId,
+          messageId: params.messageId,
           correlationId: crypto.randomUUID()
         }
       });
@@ -115,24 +115,24 @@ export function useMediaUtils() {
           description: error.message,
           variant: 'destructive',
         });
-        return false;
+        return null;
       }
       
       if (!data.success) {
         toast({
           title: 'Processing Failed',
-          description: data.error || 'Unknown error',
+          description: data.message || 'Unknown error',
           variant: 'destructive',
         });
-        return false;
+        return null;
       }
       
       toast({
         title: 'Caption Processed',
-        description: `Successfully processed message caption${data.has_media_group ? ' and synced media group' : ''}`,
+        description: `Successfully processed message caption${data.media_group_synced ? ' and synced media group' : ''}`,
       });
       
-      return true;
+      return data;
     } catch (err) {
       console.error('Error in syncMessageCaption:', err);
       toast({
@@ -140,10 +140,10 @@ export function useMediaUtils() {
         description: err instanceof Error ? err.message : 'Unknown error',
         variant: 'destructive',
       });
-      return false;
+      return null;
     } finally {
       setLoading(false);
-      removeProcessingMessageId(messageId);
+      removeProcessingMessageId(params.messageId);
     }
   };
 
@@ -202,9 +202,9 @@ export function useMediaUtils() {
       addProcessingMessageId(messageId);
       
       // Call edge function to handle reupload
-      const { data, error } = await supabase.functions.invoke('media-management', {
+      const { data, error } = await supabase.functions.invoke('utility-functions', {
         body: { 
-          action: 'reupload',
+          action: 'reupload_media',
           messageId 
         }
       });
@@ -248,12 +248,12 @@ export function useMediaUtils() {
       messageIds.forEach(id => addProcessingMessageId(id));
       
       // Call RPC to repair media
-      const { data, error } = await supabase.rpc(
-        'xdelo_fix_mime_types',
-        {
-          p_message_ids: messageIds
+      const { data, error } = await supabase.functions.invoke('utility-functions', {
+        body: { 
+          action: 'repair_media_batch',
+          messageIds
         }
-      );
+      });
       
       if (error) {
         return {
@@ -265,13 +265,14 @@ export function useMediaUtils() {
       
       toast({
         title: 'Repair Complete',
-        description: `Repaired ${data?.length || 0} messages`,
+        description: `Repaired ${data?.repaired || 0} messages`,
       });
       
       return {
         success: true,
-        repaired: data?.length || 0,
-        details: data || []
+        repaired: data?.repaired || 0,
+        message: data?.message,
+        details: data?.details || []
       };
     } catch (err) {
       console.error('Error in repairMediaBatch:', err);
@@ -289,18 +290,17 @@ export function useMediaUtils() {
   /**
    * Standardize storage paths for messages
    */
-  const standardizeStoragePaths = async (messageIds: string[]): Promise<RepairResult> => {
+  const standardizeStoragePaths = async (limit: number = 100): Promise<RepairResult> => {
     try {
       setIsProcessing(true);
-      messageIds.forEach(id => addProcessingMessageId(id));
       
-      // Call RPC to standardize paths
-      const { data, error } = await supabase.rpc(
-        'xdelo_fix_storage_paths',
-        {
-          p_message_ids: messageIds
+      // Call edge function to standardize paths
+      const { data, error } = await supabase.functions.invoke('utility-functions', {
+        body: { 
+          action: 'standardize_paths',
+          limit
         }
-      );
+      });
       
       if (error) {
         return {
@@ -312,13 +312,14 @@ export function useMediaUtils() {
       
       toast({
         title: 'Standardization Complete',
-        description: `Standardized ${data?.length || 0} paths`,
+        description: `Standardized ${data?.repaired || 0} paths`,
       });
       
       return {
         success: true,
-        repaired: data?.length || 0,
-        details: data || []
+        repaired: data?.repaired || 0,
+        message: data?.message,
+        details: data?.details || []
       };
     } catch (err) {
       console.error('Error in standardizeStoragePaths:', err);
@@ -329,7 +330,6 @@ export function useMediaUtils() {
       };
     } finally {
       setIsProcessing(false);
-      messageIds.forEach(id => removeProcessingMessageId(id));
     }
   };
 
@@ -341,10 +341,10 @@ export function useMediaUtils() {
       setIsProcessing(true);
       messageIds.forEach(id => addProcessingMessageId(id));
       
-      // Call RPC to fix URLs
-      const { data, error } = await supabase.functions.invoke('media-management', {
+      // Call edge function to fix URLs
+      const { data, error } = await supabase.functions.invoke('utility-functions', {
         body: { 
-          action: 'fix_urls',
+          action: 'fix_media_urls',
           messageIds
         }
       });
@@ -359,13 +359,14 @@ export function useMediaUtils() {
       
       toast({
         title: 'URL Fix Complete',
-        description: `Fixed ${data?.fixed || 0} URLs`,
+        description: `Fixed ${data?.repaired || 0} URLs`,
       });
       
       return {
         success: true,
-        repaired: data?.fixed || 0,
-        details: data || []
+        repaired: data?.repaired || 0,
+        message: data?.message,
+        details: data?.details || []
       };
     } catch (err) {
       console.error('Error in fixMediaUrls:', err);
