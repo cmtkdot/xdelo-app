@@ -1,90 +1,57 @@
 
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { MakeWebhookLog } from '@/types/make';
-import { formatDistanceToNow } from 'date-fns';
 
 export interface WebhookLogDisplayProps {
-  logs: MakeWebhookLog[];
-  showDetails?: boolean;
+  logs: any[];
+  showDetails?: boolean; // Made optional
 }
 
-const WebhookLogDisplay: React.FC<WebhookLogDisplayProps> = ({ logs, showDetails = false }) => {
+export function WebhookLogDisplay({ logs, showDetails = false }: WebhookLogDisplayProps) {
+  const [expandedLog, setExpandedLog] = useState<string | null>(null);
+
   if (!logs || logs.length === 0) {
     return (
-      <Card className="bg-muted/40">
-        <CardContent className="p-4 text-center text-muted-foreground">
-          No logs available
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-sm text-muted-foreground">No webhook logs available.</p>
         </CardContent>
       </Card>
     );
   }
 
-  const getStatusBadge = (statusCode: number) => {
-    if (statusCode >= 200 && statusCode < 300) {
-      return <Badge variant="success">Success ({statusCode})</Badge>;
-    } else if (statusCode >= 400 && statusCode < 500) {
-      return <Badge variant="destructive">Client Error ({statusCode})</Badge>;
-    } else if (statusCode >= 500) {
-      return <Badge variant="destructive">Server Error ({statusCode})</Badge>;
-    } else {
-      return <Badge variant="outline">{statusCode}</Badge>;
-    }
-  };
-
   return (
     <div className="space-y-4">
-      {logs.map((log) => (
-        <Card key={log.id} className="border-muted">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-sm font-medium flex items-center justify-between">
-              <span>
-                {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
-              </span>
-              {getStatusBadge(log.status_code)}
-            </CardTitle>
-          </CardHeader>
-          {showDetails && (
-            <CardContent className="p-4 pt-0">
-              <Accordion type="single" collapsible className="w-full">
-                <AccordionItem value="request-body">
-                  <AccordionTrigger className="py-2 text-sm">Request Body</AccordionTrigger>
-                  <AccordionContent>
-                    <pre className="text-xs bg-muted p-2 rounded-md overflow-auto max-h-[300px]">
-                      {JSON.stringify(log.request_body, null, 2)}
-                    </pre>
-                  </AccordionContent>
-                </AccordionItem>
-                <AccordionItem value="response-body">
-                  <AccordionTrigger className="py-2 text-sm">Response Body</AccordionTrigger>
-                  <AccordionContent>
-                    <pre className="text-xs bg-muted p-2 rounded-md overflow-auto max-h-[300px]">
-                      {log.response_body
-                        ? JSON.stringify(log.response_body, null, 2)
-                        : 'No response body'}
-                    </pre>
-                  </AccordionContent>
-                </AccordionItem>
-                {log.error_message && (
-                  <AccordionItem value="error">
-                    <AccordionTrigger className="py-2 text-sm">Error Message</AccordionTrigger>
-                    <AccordionContent>
-                      <div className="text-xs bg-destructive/10 text-destructive p-2 rounded-md">
-                        {log.error_message}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                )}
-              </Accordion>
-            </CardContent>
+      {showDetails ? (
+        <Accordion type="single" collapsible>
+          {logs.map((log, index) => (
+            <AccordionItem key={index} value={`log-${index}`}>
+              <AccordionTrigger className="text-sm">
+                {log.event || 'Webhook Event'} - {new Date(log.timestamp).toLocaleString()}
+              </AccordionTrigger>
+              <AccordionContent>
+                <pre className="bg-muted p-2 rounded-md text-xs overflow-auto max-h-64">
+                  {JSON.stringify(log, null, 2)}
+                </pre>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+      ) : (
+        <ul className="space-y-2">
+          {logs.slice(0, 5).map((log, index) => (
+            <li key={index} className="text-sm border-b pb-2">
+              {log.event || 'Webhook Event'} - {new Date(log.timestamp).toLocaleString()}
+            </li>
+          ))}
+          {logs.length > 5 && (
+            <li className="text-sm text-muted-foreground">
+              + {logs.length - 5} more events...
+            </li>
           )}
-        </Card>
-      ))}
+        </ul>
+      )}
     </div>
   );
-};
-
-export default WebhookLogDisplay;
+}
