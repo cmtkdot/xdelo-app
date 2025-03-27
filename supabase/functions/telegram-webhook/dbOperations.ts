@@ -230,13 +230,13 @@ export async function createMessage(
     // Set a longer timeout for complex operations
     const options = { timeoutMs: 30000 };
 
-    // Extract essential metadata first to avoid doing it in the transaction
+    // Extract essential metadata
     const telegramMetadata =
       input.telegram_metadata ||
       (input.telegram_data ? extractTelegramMetadata(input.telegram_data) : {});
 
-    // Prepare the base record without large fields
-    const baseRecord = {
+    // Prepare the full record data for upsert
+    const fullRecordData: Record<string, any> = {
       telegram_message_id: input.telegram_message_id,
       chat_id: input.chat_id,
       chat_type: input.chat_type,
@@ -259,85 +259,77 @@ export async function createMessage(
       is_edited_channel_post: input.is_edited_channel_post || false,
       correlation_id: input.correlation_id,
       message_url: input.message_url,
-      is_duplicate: input.is_duplicate || false,
+      is_duplicate: input.is_duplicate || false, // Keep track if it was a duplicate based on file_unique_id check earlier
       duplicate_reference_id: input.duplicate_reference_id,
       old_analyzed_content: input.old_analyzed_content,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      telegram_data: input.telegram_data, // Include large fields
+      telegram_metadata: telegramMetadata, // Include large fields
+      forward_info: input.forward_info, // Include large fields
+      edit_date: input.edit_date, // Include large fields
+      edit_history: input.edit_history || [], // Include large fields
+      storage_exists: input.storage_exists, // Include large fields
+      storage_path_standardized: input.storage_path_standardized, // Include large fields
+      updated_at: new Date().toISOString(), // Always update timestamp
     };
 
-    // First try to look if this is an exact duplicate (same telegram_message_id + chat_id)
-    let existingMessageId: string | undefined;
-
+    // Check if a message with this telegram_message_id and chat_id already exists
     const { data: existingMessage, error: lookupError } = await client
       .from("messages")
       .select("id")
       .eq("telegram_message_id", input.telegram_message_id)
       .eq("chat_id", input.chat_id)
-      .limit(1)
-      .single();
+      .maybeSingle(); // Use maybeSingle to handle null case gracefully
 
-    if (!lookupError && existingMessage) {
-      logger?.info(`Found existing message, will update instead of insert`);
-      existingMessageId = existingMessage.id;
+    if (lookupError) {
+      logger?.error("Error looking up existing message:", lookupError);
+      return { success: false, error_message: lookupError.message };
+    }
 
-      // Update the existing message with new data
+    let messageId: string | undefined;
+
+    if (existingMessage) {
+      // Update existing message
+      logger?.info(
+        `Found existing message ${existingMessage.id}, updating with new data.`
+      );
       const { error: updateError } = await client
         .from("messages")
-        .update(baseRecord)
-        .eq("id", existingMessageId);
+        .update(fullRecordData) // Update with the full record
+        .eq("id", existingMessage.id);
 
       if (updateError) {
         logger?.error("Failed to update existing message:", updateError);
         return { success: false, error_message: updateError.message };
       }
+      messageId = existingMessage.id;
+      logger?.success(`Successfully updated message ${messageId}`);
     } else {
-      // Insert a new record
-      const { data: baseData, error: baseError } = await client
+      // Insert new message
+      logger?.info(`No existing message found, inserting new record.`);
+      // Add created_at only for new records
+      fullRecordData.created_at = new Date().toISOString();
+
+      const { data: insertData, error: insertError } = await client
         .from("messages")
-        .insert(baseRecord)
+        .insert(fullRecordData) // Insert the full record
         .select("id")
         .single();
 
-      if (baseError) {
-        logger?.error("Failed to create base message record:", baseError);
-        return { success: false, error_message: baseError.message };
+      if (insertError) {
+        logger?.error("Failed to insert new message:", insertError);
+        return { success: false, error_message: insertError.message };
       }
-
-      existingMessageId = baseData.id;
+      messageId = insertData.id;
+      logger?.success(`Successfully inserted new message ${messageId}`);
     }
 
-    if (!existingMessageId) {
-      return {
-        success: false,
-        error_message: "Failed to get message ID after create/update",
-      };
+    if (!messageId) {
+      const errorMsg = "Failed to obtain message ID after insert/update.";
+      logger?.error(errorMsg);
+      return { success: false, error_message: errorMsg };
     }
 
-    // Then update with the larger fields in a separate transaction
-    const { error: updateError } = await client
-      .from("messages")
-      .update({
-        telegram_data: input.telegram_data,
-        telegram_metadata: telegramMetadata,
-        forward_info: input.forward_info,
-        edit_date: input.edit_date,
-        edit_history: input.edit_history || [],
-        storage_exists: input.storage_exists,
-        storage_path_standardized: input.storage_path_standardized,
-      })
-      .eq("id", existingMessageId);
-
-    if (updateError) {
-      logger?.error(
-        "Failed to update message with additional data:",
-        updateError
-      );
-      // Don't fail the operation if the update fails, just log it
-      logger?.warn("Message created but some fields may be missing");
-    }
-
-    return { id: existingMessageId, success: true };
+    return { id: messageId, success: true };
   } catch (error) {
     logger?.error("Exception in createMessage:", error);
     return {

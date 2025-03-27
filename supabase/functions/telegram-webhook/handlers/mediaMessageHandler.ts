@@ -1,11 +1,10 @@
 import { corsHeaders } from "../../_shared/cors.ts";
+import { retryDbOperation } from "../../_shared/dbRetryUtils.ts";
 import { xdelo_processMessageMedia } from "../../_shared/mediaStorage.ts";
 import { xdelo_detectMimeType } from "../../_shared/mediaUtils.ts";
 import { constructTelegramMessageUrl } from "../../_shared/messageUtils.ts";
 import { supabaseClient } from "../../_shared/supabase.ts";
-import { retryDbOperation } from '../../_shared/dbRetryUtils.ts';
 import {
-  checkDuplicateFile,
   createMessage,
   // triggerCaptionAnalysis, // Removed - No longer used
   xdelo_logProcessingEvent,
@@ -150,9 +149,18 @@ async function xdelo_handleEditedMediaMessage(
           : message.video || message.document;
 
         // Check immediately if media file details are present in the edited message
-        if (!telegramFile || !telegramFile.file_id || !telegramFile.file_unique_id) {
-            logger?.error("Essential media file details missing from edited message", { message_id: message.message_id });
-            throw new Error("Essential media file details missing from edited message");
+        if (
+          !telegramFile ||
+          !telegramFile.file_id ||
+          !telegramFile.file_unique_id
+        ) {
+          logger?.error(
+            "Essential media file details missing from edited message",
+            { message_id: message.message_id }
+          );
+          throw new Error(
+            "Essential media file details missing from edited message"
+          );
         }
 
         // Get mime type
@@ -182,8 +190,8 @@ async function xdelo_handleEditedMediaMessage(
             file_unique_id: telegramFile.file_unique_id,
             mime_type: detectedMimeType,
             // Safely access width/height, defaulting to undefined if not applicable (e.g., for documents)
-            width: 'width' in telegramFile ? telegramFile.width : undefined,
-            height: 'height' in telegramFile ? telegramFile.height : undefined,
+            width: "width" in telegramFile ? telegramFile.width : undefined,
+            height: "height" in telegramFile ? telegramFile.height : undefined,
             duration: message.video?.duration,
             file_size: telegramFile.file_size,
             edit_date: message.edit_date
@@ -358,87 +366,25 @@ async function xdelo_handleNewMediaMessage(
       : message.video || message.document;
 
     // Check immediately if media file details are present
-    if (!telegramFile || !telegramFile.file_id || !telegramFile.file_unique_id) {
-      logger?.error("Essential media file details (file_id, file_unique_id) missing from message", { message_id: message.message_id });
+    if (
+      !telegramFile ||
+      !telegramFile.file_id ||
+      !telegramFile.file_unique_id
+    ) {
+      logger?.error(
+        "Essential media file details (file_id, file_unique_id) missing from message",
+        { message_id: message.message_id }
+      );
       throw new Error("Essential media file details missing");
     }
 
-    // First check if we've already processed THIS EXACT message (telegram_message_id + chat_id)
-    const exactDuplicate = await checkDuplicateFile(
-      supabaseClient,
-      message.message_id,
-      message.chat.id
+    // Always process the media as new
+    const mediaResult = await xdelo_processMessageMedia(
+      message,
+      telegramFile.file_id,
+      telegramFile.file_unique_id,
+      TELEGRAM_BOT_TOKEN
     );
-
-    if (exactDuplicate) {
-      logger?.info(
-        `Duplicate message detected: ${message.message_id} in chat ${message.chat.id}`
-      );
-
-      // Log the duplicate detection
-      await xdelo_logProcessingEvent(
-        "duplicate_message_detected",
-        message.message_id.toString(),
-        correlationId,
-        {
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          media_group_id: message.media_group_id,
-        }
-      );
-
-      return new Response(
-        JSON.stringify({ success: true, duplicate: true, correlationId }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Then check if we've seen this file before by file_unique_id (could be forwarded/reposted)
-    const { data: existingFileMessages, error: fileSearchError } =
-      await supabaseClient
-        .from("messages")
-        .select("*")
-        .eq("file_unique_id", telegramFile.file_unique_id)
-        .limit(1);
-
-    if (fileSearchError) {
-      logger?.warn(
-        `Error searching for existing file: ${fileSearchError.message}`
-      );
-    }
-
-    const existingFileMessage =
-      existingFileMessages && existingFileMessages.length > 0
-        ? existingFileMessages[0]
-        : null;
-
-    // Process media - but skip download if we already have this file
-    let mediaResult;
-    if (existingFileMessage && !message.media_group_id) {
-      // For non-media group messages, we can reuse the existing file info
-      logger?.info(
-        `Found existing file with same file_unique_id: ${telegramFile.file_unique_id}`
-      );
-
-      mediaResult = {
-        success: true,
-        isDuplicate: true,
-        fileInfo: {
-          storage_path: existingFileMessage.storage_path,
-          mime_type: existingFileMessage.mime_type,
-          file_size: existingFileMessage.file_size,
-          public_url: existingFileMessage.public_url,
-        },
-      };
-    } else {
-      // Download and process the media
-      mediaResult = await xdelo_processMessageMedia(
-        message,
-        telegramFile.file_id,
-        telegramFile.file_unique_id,
-        TELEGRAM_BOT_TOKEN
-      );
-    }
 
     if (!mediaResult.success) {
       throw new Error(`Failed to process media: ${mediaResult.error}`);
@@ -462,33 +408,6 @@ async function xdelo_handleNewMediaMessage(
         }
       : undefined;
 
-    // For duplicate files, we might want to preserve the analyzed content history
-    let oldAnalyzedContent: any[] = []; // Explicitly type array
-    let duplicateReferenceId: string | undefined = undefined; // Use undefined instead of null
-
-    if (existingFileMessage && existingFileMessage.analyzed_content) {
-      logger?.info(`Preserving analyzed content history from existing file`);
-
-      // If the existing message has old_analyzed_content, preserve it
-      if (existingFileMessage.old_analyzed_content) {
-        oldAnalyzedContent = Array.isArray(
-          existingFileMessage.old_analyzed_content
-        )
-          ? existingFileMessage.old_analyzed_content
-          : [existingFileMessage.old_analyzed_content];
-      }
-
-      // Add the current analyzed_content to history
-      // Ensure analyzed_content is not null/undefined before pushing
-      if (existingFileMessage.analyzed_content) {
-          oldAnalyzedContent.push(existingFileMessage.analyzed_content);
-      }
-
-
-      // Record the original message ID for reference
-      duplicateReferenceId = existingFileMessage.id;
-    }
-
     // Create message input
     const messageInput: MessageInput = {
       telegram_message_id: message.message_id,
@@ -505,10 +424,18 @@ async function xdelo_handleNewMediaMessage(
       storage_path: mediaResult.fileInfo.storage_path,
       public_url: mediaResult.fileInfo.public_url,
       // Safely access width/height, defaulting to undefined if not applicable
-      width: telegramFile && 'width' in telegramFile ? telegramFile.width : undefined,
-      height: telegramFile && 'height' in telegramFile ? telegramFile.height : undefined,
+      width:
+        telegramFile && "width" in telegramFile
+          ? telegramFile.width
+          : undefined,
+      height:
+        telegramFile && "height" in telegramFile
+          ? telegramFile.height
+          : undefined,
       duration: message.video?.duration,
-      file_size: (telegramFile ? telegramFile.file_size : undefined) || mediaResult.fileInfo.file_size,
+      file_size:
+        (telegramFile ? telegramFile.file_size : undefined) ||
+        mediaResult.fileInfo.file_size,
       correlation_id: correlationId,
       // Initial state is 'pending' if caption exists, otherwise 'initialized'
       processing_state: message.caption ? "pending" : "initialized",
@@ -533,10 +460,6 @@ async function xdelo_handleNewMediaMessage(
       storage_exists: true,
       storage_path_standardized: true,
       message_url: messageUrl,
-      is_duplicate: !!existingFileMessage,
-      duplicate_reference_id: duplicateReferenceId,
-      old_analyzed_content:
-        oldAnalyzedContent.length > 0 ? oldAnalyzedContent : undefined,
     };
 
     // Create the message with retry logic to handle timeouts
@@ -547,12 +470,15 @@ async function xdelo_handleNewMediaMessage(
         initialDelayMs: 1000,
         timeoutMs: 60000,
         onRetry: (attempt, error, delay) => {
-          logger?.warn(`Retrying createMessage (attempt ${attempt} after ${delay}ms delay)`, {
-            error: error.message,
-            telegram_message_id: message.message_id,
-            chat_id: message.chat.id,
-          });
-        }
+          logger?.warn(
+            `Retrying createMessage (attempt ${attempt} after ${delay}ms delay)`,
+            {
+              error: error.message,
+              telegram_message_id: message.message_id,
+              chat_id: message.chat.id,
+            }
+          );
+        },
       }
     );
 
@@ -595,7 +521,9 @@ async function xdelo_handleNewMediaMessage(
     // will set its state to 'pending' automatically.
     // No need to explicitly trigger analysis here anymore.
     if (message.caption && result.id) {
-        logger?.info(`Message ${result.id} has caption, DB trigger will set state to 'pending'.`);
+      logger?.info(
+        `Message ${result.id} has caption, DB trigger will set state to 'pending'.`
+      );
     }
 
     return new Response(
