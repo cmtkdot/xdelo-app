@@ -83,27 +83,31 @@ export async function checkDuplicateFile(
 /**
  * Creates a new non-media message record in the database with transaction support
  */
-export async function createNonMediaMessage(input: {
-  telegram_message_id: number;
-  chat_id: number;
-  chat_type: string;
-  chat_title?: string;
-  message_type: string;
-  message_text?: string;
-  telegram_data: any;
-  telegram_metadata?: any; // Add support for telegram_metadata
-  processing_state?: string;
-  is_forward?: boolean;
-  correlation_id: string;
-  message_url?: string;
-}): Promise<{ id?: string; success: boolean; error?: string }> {
+export async function createNonMediaMessage(
+  client: any,
+  input: {
+    telegram_message_id: number;
+    chat_id: number;
+    chat_type: string;
+    chat_title?: string;
+    message_type: string;
+    message_text?: string;
+    telegram_data: any;
+    telegram_metadata?: any;
+    processing_state?: string;
+    is_forward?: boolean;
+    correlation_id: string;
+    message_url?: string;
+  },
+  logger?: any
+): Promise<{ id?: string; success: boolean; error?: string }> {
   try {
     // If telegram_metadata is not provided, extract it from telegram_data
     const telegramMetadata =
       input.telegram_metadata || extractTelegramMetadata(input.telegram_data);
 
-    // Create the message record using a transaction for atomicity
-    const { data, error } = await supabaseClient
+    // Create the message record using the other_messages table
+    const { data, error } = await client
       .from("other_messages")
       .insert({
         telegram_message_id: input.telegram_message_id,
@@ -113,7 +117,7 @@ export async function createNonMediaMessage(input: {
         message_type: input.message_type,
         text: input.message_text || "",
         telegram_data: input.telegram_data,
-        telegram_metadata: telegramMetadata, // Store the extracted metadata
+        telegram_metadata: telegramMetadata,
         processing_state: input.processing_state || "initialized",
         is_forward: input.is_forward || false,
         correlation_id: input.correlation_id,
@@ -125,13 +129,13 @@ export async function createNonMediaMessage(input: {
       .single();
 
     if (error) {
-      console.error("Failed to create message record:", error);
+      logger?.error("Failed to create non-media message record:", error);
       return { success: false, error: error.message };
     }
 
     return { id: data.id, success: true };
   } catch (error) {
-    console.error("Exception in createNonMediaMessage:", error);
+    logger?.error("Exception in createNonMediaMessage:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),
@@ -187,7 +191,7 @@ export async function createMediaMessage(input: {
         duration: input.duration,
         storage_path: input.storage_path,
         public_url: input.public_url,
-        telegram_metadata: telegramMetadata, // Store the minimal metadata
+        telegram_metadata: telegramMetadata,
         processing_state: input.processing_state || "initialized",
         is_forward: input.is_forward || false,
         correlation_id: input.correlation_id,
@@ -430,42 +434,29 @@ export async function getMessageById(messageId: string) {
 
 /**
  * Sync media group content from one message to others
- * FIXED: Updated parameter types to match database function signature
+ * FIXED: Using the correct parameter signature that matches the database function
  */
 export async function syncMediaGroupContent(
   sourceMessageId: string,
-  mediaGroupId: string,
+  analyzedContent: any,
   correlationId: string,
-  forceSync: boolean = false
+  forceSync: boolean = true,
+  syncEditHistory: boolean = false
 ): Promise<{ success: boolean; updatedCount?: number; error?: string }> {
   try {
-    // First find if there's an analyzed content in the source message
-    const { data: sourceMessage, error: sourceError } = await supabaseClient
-      .from("messages")
-      .select("analyzed_content")
-      .eq("id", sourceMessageId)
-      .single();
-
-    if (sourceError || !sourceMessage?.analyzed_content) {
-      console.error("Error getting source message content:", sourceError);
-      return {
-        success: false,
-        error: sourceError?.message || "No analyzed content in source message",
-      };
-    }
-
     // Call the database function with correct parameter types
     const { data, error } = await supabaseClient.rpc(
       "xdelo_sync_media_group_content",
       {
         p_message_id: sourceMessageId,
-        p_analyzed_content: sourceMessage.analyzed_content,
+        p_analyzed_content: analyzedContent,
         p_force_sync: forceSync,
-        p_sync_edit_history: false,
+        p_sync_edit_history: syncEditHistory,
       }
     );
 
     if (error) {
+      console.error("Error syncing media group content:", error);
       return {
         success: false,
         error: error.message,
@@ -477,6 +468,7 @@ export async function syncMediaGroupContent(
       updatedCount: data?.updated_count || 0,
     };
   } catch (error) {
+    console.error("Exception in syncMediaGroupContent:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),

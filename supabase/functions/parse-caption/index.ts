@@ -11,16 +11,14 @@ import {
   updateMessageWithAnalysis,
 } from "./dbOperations.ts";
 
-// Define corsHeaders for cross-origin requests
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-correlation-id",
-  "Access-Control-Max-Age": "86400", // 24 hours caching for preflight requests
+  "Access-Control-Max-Age": "86400",
 };
 
-// Create Supabase client
 const supabaseClient = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -64,7 +62,6 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     console.log(`Fetching current state for message ${messageId}`);
     const message = await getMessage(messageId);
 
-    // If message has analyzed content, and we're not editing or force reprocessing, skip
     if (message?.analyzed_content && !isEdit && !force_reprocess) {
       console.log(
         `Message ${messageId} already has analyzed content and force_reprocess is not enabled, skipping`
@@ -91,7 +88,6 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     );
 
     console.log(`Performing manual parsing on caption: ${captionForLog}`);
-    // Use the shared parser function from _shared/captionParser.ts
     let parsedContent: ParsedContent = xdelo_parseCaption(caption);
     console.log(`Manual parsing result: ${JSON.stringify(parsedContent)}`);
 
@@ -203,10 +199,8 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
   } catch (error) {
     console.error(`Error processing caption: ${error.message}`);
 
-    // Update message to error state
     await updateMessageWithError(supabaseClient, messageId, error.message);
 
-    // Log the error
     await logErrorToDatabase(supabaseClient, {
       messageId,
       errorMessage: error.message,
@@ -269,7 +263,6 @@ async function updateMessageWithAnalysis(
   }
 
   if (isEdit && existingMessage?.analyzed_content) {
-    // Store the previous content as old_analyzed_content to preserve history
     updateData.old_analyzed_content = existingMessage.analyzed_content;
   }
 
@@ -284,7 +277,6 @@ async function updateMessageWithAnalysis(
     throw new Error(`Error updating message: ${error.message}`);
   }
 
-  // If there's a queue item to update, do it
   if (queueId) {
     try {
       await supabaseClient
@@ -297,7 +289,6 @@ async function updateMessageWithAnalysis(
         .eq("id", queueId);
     } catch (queueError) {
       console.error(`Error updating queue item: ${queueError.message}`);
-      // Non-fatal, continue processing
     }
   }
 
@@ -328,20 +319,62 @@ async function logAnalysisEvent(
     });
   } catch (error) {
     console.error(`Error logging analysis event: ${error.message}`);
-    // Non-fatal, continue processing
+  }
+}
+
+/**
+ * Sync media group content from one message to others
+ */
+async function syncMediaGroup(message: any, mediaGroupId: string) {
+  try {
+    if (!message.analyzed_content) {
+      console.warn(`No analyzed content to sync for message ${message.id}`);
+      return {
+        success: false,
+        error: "No analyzed content to sync"
+      };
+    }
+    
+    const { data, error } = await supabaseClient.rpc(
+      "xdelo_sync_media_group_content",
+      {
+        p_message_id: message.id,
+        p_analyzed_content: message.analyzed_content,
+        p_force_sync: true,
+        p_sync_edit_history: false
+      }
+    );
+    
+    if (error) {
+      console.error(`Error syncing media group: ${error.message}`);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+    
+    return {
+      success: true,
+      updatedCount: data?.updated_count || 0,
+      mediaGroupId
+    };
+  } catch (e) {
+    console.error(`Exception in syncMediaGroup: ${e instanceof Error ? e.message : String(e)}`);
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : String(e)
+    };
   }
 }
 
 // Serve HTTP requests
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, {
       headers: corsHeaders,
     });
   }
 
-  // Generate a correlation ID for tracking
   const correlationId = crypto.randomUUID();
 
   try {

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -47,7 +46,6 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
   }>({});
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
-  // Fetch available tokens from edge function secrets
   useEffect(() => {
     const fetchSecrets = async () => {
       try {
@@ -65,7 +63,6 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
         }
       } catch (error) {
         console.error("Error fetching Telegram secrets:", error);
-        // Fallback to static token option if can't fetch secrets
         if (botToken) {
           setAvailableTokens([botToken]);
           setSelectedToken(botToken);
@@ -76,7 +73,6 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
     fetchSecrets();
   }, [botToken, supabase.functions]);
 
-  // Fetch webhook info when token changes or on refresh
   useEffect(() => {
     if (selectedToken && selectedToken !== 'custom') {
       fetchWebhookInfo();
@@ -114,7 +110,6 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
     }
   };
 
-  // Mask the bot token to only show the first few and last few characters
   const maskToken = (token: string | null) => {
     if (!token) return "Not configured";
     if (token.length <= 10) return token;
@@ -149,7 +144,6 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
         description: "Telegram webhook has been set successfully",
       });
       
-      // Refresh webhook info after setting webhook
       await fetchWebhookInfo();
     } catch (error) {
       console.error("Error setting webhook:", error);
@@ -192,7 +186,6 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
         description: "Bot token has been saved successfully",
       });
       
-      // Refresh webhook info after saving token
       await fetchWebhookInfo();
     } catch (error) {
       console.error("Error saving token:", error);
@@ -409,10 +402,10 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
         </div>
         
         {webhookLog && (
-          <div className="mt-4">
-            <h4 className="text-sm font-medium mb-2">Webhook Setup Log</h4>
-            <WebhookLogDisplay log={webhookLog} showDetails={true} />
-          </div>
+          <WebhookLogDisplay 
+            logs={Array.isArray(webhookLog) ? webhookLog : [webhookLog]} 
+            showDetails={true} 
+          />
         )}
       </CardContent>
     </Card>

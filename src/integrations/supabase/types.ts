@@ -3479,10 +3479,23 @@ export type Database = {
           updated_count: number
         }[]
       }
+      xdelo_retry_operation: {
+        Args: {
+          p_max_attempts?: number
+          p_initial_delay_ms?: number
+        }
+        Returns: Json
+      }
       xdelo_set_message_processing: {
         Args: {
           p_message_id: string
           p_correlation_id: string
+        }
+        Returns: undefined
+      }
+      xdelo_set_statement_timeout: {
+        Args: {
+          p_timeout_ms?: number
         }
         Returns: undefined
       }
@@ -3514,6 +3527,14 @@ export type Database = {
               p_analyzed_content: Json
               p_force_sync?: boolean
               p_sync_edit_history?: boolean
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_source_message_id: string
+              p_media_group_id: string
+              p_correlation_id: string
             }
             Returns: Json
           }
