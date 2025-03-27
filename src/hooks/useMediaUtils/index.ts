@@ -1,5 +1,12 @@
 
 import { useMediaUtils } from './useMediaUtils';
-export type { RepairResult } from './types';
+export type { 
+  RepairResult, 
+  MediaSyncOptions, 
+  MediaProcessingState, 
+  ContentValidationRules, 
+  ValidationResult,
+  CaptionFlowData
+} from './types';
 
-export { useMediaUtils };
+export { useMediaUtils, validateContent, standardContentValidationRules } from './useMediaUtils';

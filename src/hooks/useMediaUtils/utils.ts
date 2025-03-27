@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { MediaProcessingState, MediaProcessingStateActions } from './types';
+import { MediaProcessingState, MediaProcessingStateActions, ContentValidationRules, ValidationResult } from './types';
 
 /**
  * Creates state management for tracking media processing operations
@@ -76,3 +76,69 @@ export async function withRetry<T>(
   
   throw lastError;
 }
+
+/**
+ * Validate content against rules
+ */
+export function validateContent(
+  content: Record<string, any>,
+  rules: ContentValidationRules
+): ValidationResult {
+  const result: ValidationResult = {
+    valid: true,
+    missingFields: [],
+    invalidFormats: [],
+    customErrors: {}
+  };
+  
+  // Check required fields
+  if (rules.required) {
+    for (const field of rules.required) {
+      if (content[field] === undefined || content[field] === null || content[field] === '') {
+        result.missingFields.push(field);
+        result.valid = false;
+      }
+    }
+  }
+  
+  // Check formats
+  if (rules.format) {
+    for (const [field, pattern] of Object.entries(rules.format)) {
+      if (content[field] !== undefined && content[field] !== null && content[field] !== '') {
+        const value = String(content[field]);
+        if (!pattern.test(value)) {
+          result.invalidFormats.push(field);
+          result.valid = false;
+        }
+      }
+    }
+  }
+  
+  // Run custom validations
+  if (rules.custom) {
+    for (const [field, validator] of Object.entries(rules.custom)) {
+      if (content[field] !== undefined && content[field] !== null) {
+        if (!validator(content[field])) {
+          result.customErrors[field] = `Custom validation failed for ${field}`;
+          result.valid = false;
+        }
+      }
+    }
+  }
+  
+  return result;
+}
+
+/**
+ * Standard content validation rules
+ */
+export const standardContentValidationRules: ContentValidationRules = {
+  required: ['product_name', 'product_code'],
+  format: {
+    product_code: /^[A-Za-z]{1,4}\d{5,6}(?:-[A-Za-z0-9-]+)?$/,
+    purchase_date: /^\d{4}-\d{2}-\d{2}$/,
+  },
+  custom: {
+    quantity: (value) => typeof value === 'number' && value > 0,
+  }
+};

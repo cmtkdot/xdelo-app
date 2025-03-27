@@ -1,10 +1,9 @@
-
-import { xdelo_parseCaption } from "../_shared/captionParser.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { AnalysisRequest, MediaGroupResult } from "./types.ts";
+import { xdelo_parseCaption } from "../_shared/captionParser.ts";
+import { AnalysisRequest, MediaGroupResult, AnalysisResponse, FLOW_STAGES } from "./types.ts";
 
-// Set up CORS headers for browser clients
+// Set up CORS headers
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -16,14 +15,14 @@ const supabaseClient = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-async function handleCaptionParsing(request: AnalysisRequest) {
+async function handleCaptionParsing(request: AnalysisRequest): Promise<AnalysisResponse> {
   // Input validation
   if (!request.messageId) {
     throw new Error("Missing required parameter: messageId");
   }
 
   try {
-    // Fetch the message to get its caption
+    // Fetch the message
     const { data: message, error: fetchError } = await supabaseClient
       .from("messages")
       .select("*")
@@ -42,15 +41,36 @@ async function handleCaptionParsing(request: AnalysisRequest) {
     const captionToAnalyze = request.caption || message.caption;
     
     if (!captionToAnalyze) {
-      throw new Error("No caption available for analysis");
+      // If no caption, check if it's part of a media group 
+      if (message.media_group_id) {
+        return await handleMediaGroupSync(message.media_group_id, request.messageId, request.correlationId);
+      }
+      
+      // Handle empty caption - set to initialized state
+      await updateMessageState(request.messageId, FLOW_STAGES.INITIALIZED);
+      
+      return {
+        success: true,
+        message_id: request.messageId,
+        analyzed: false,
+        caption_length: 0,
+        has_media_group: false,
+        validation_result: {
+          valid: false,
+          missing_fields: ['product_name', 'product_code']
+        }
+      };
     }
 
     console.log(`Analyzing caption for message ${request.messageId}: "${captionToAnalyze.substring(0, 100)}${captionToAnalyze.length > 100 ? '...' : ''}"`);
     
+    // Update to processing state
+    await updateMessageState(request.messageId, FLOW_STAGES.PROCESSING);
+    
     // Determine if this is an edit operation
     const isEdit = request.isEdit || false;
     
-    // Analyze the caption using our shared parser from _shared/captionParser.ts
+    // Analyze the caption using the parser
     const parsedContent = xdelo_parseCaption(captionToAnalyze);
     
     // Add metadata about this processing operation
@@ -62,7 +82,7 @@ async function handleCaptionParsing(request: AnalysisRequest) {
     };
     
     if (request.trigger_source) {
-      // Add additional metadata that might be useful but not part of the core type
+      // Add additional metadata
       parsedContent.parsing_metadata = {
         ...parsingMetadata,
         trigger_source: request.trigger_source
@@ -71,12 +91,17 @@ async function handleCaptionParsing(request: AnalysisRequest) {
       parsedContent.parsing_metadata = parsingMetadata;
     }
 
+    // Calculate the next flow state based on parsing result
+    const nextState = parsedContent.parsing_metadata.partial_success 
+      ? FLOW_STAGES.PARTIAL_SUCCESS 
+      : FLOW_STAGES.COMPLETED;
+
     // Save the analysis results to the database
     const { error: updateError } = await supabaseClient
       .from("messages")
       .update({
         analyzed_content: parsedContent,
-        processing_state: "completed",
+        processing_state: nextState,
         processing_completed_at: new Date().toISOString(),
         is_original_caption: message.media_group_id ? true : null,
         group_caption_synced: false,
@@ -102,6 +127,13 @@ async function handleCaptionParsing(request: AnalysisRequest) {
       console.log(`Media group sync completed: ${syncResult.synced_count} messages updated`);
     }
 
+    // Prepare validation result
+    const validationResult = {
+      valid: !parsedContent.parsing_metadata.partial_success,
+      missing_fields: parsedContent.parsing_metadata.missing_fields || [],
+      invalid_formats: []
+    };
+
     return {
       success: true,
       message_id: request.messageId,
@@ -110,10 +142,77 @@ async function handleCaptionParsing(request: AnalysisRequest) {
       has_media_group: !!message.media_group_id,
       media_group_id: message.media_group_id,
       media_group_synced: !!syncResult,
-      synced_count: syncResult?.synced_count || 0
+      synced_count: syncResult?.synced_count || 0,
+      validation_result: validationResult
     };
   } catch (error) {
     console.error(`Error in handleCaptionParsing: ${error.message}`);
+    
+    // Update message to error state
+    await updateMessageState(request.messageId, FLOW_STAGES.ERROR, error.message);
+    
+    throw error;
+  }
+}
+
+async function handleMediaGroupSync(
+  mediaGroupId: string,
+  messageId: string,
+  correlationId?: string
+): Promise<AnalysisResponse> {
+  try {
+    // Find a message in the group that has a caption
+    const { data: messages } = await supabaseClient
+      .from("messages")
+      .select("id, caption, analyzed_content")
+      .eq("media_group_id", mediaGroupId)
+      .neq("id", messageId)
+      .order("is_original_caption", { ascending: false })
+      .order("created_at", { ascending: true });
+    
+    // Find a suitable source message
+    const sourceMessage = messages?.find(m => 
+      m.analyzed_content && m.caption && m.caption.trim().length > 0
+    );
+    
+    if (!sourceMessage) {
+      // No source message found, keep in pending state
+      await updateMessageState(messageId, FLOW_STAGES.PENDING);
+      
+      return {
+        success: true,
+        message_id: messageId,
+        analyzed: false,
+        caption_length: 0,
+        has_media_group: true,
+        media_group_id: mediaGroupId,
+        media_group_synced: false,
+        validation_result: {
+          valid: false,
+          missing_fields: ['product_name', 'product_code']
+        }
+      };
+    }
+    
+    // Call the sync function using the source message
+    const syncResult = await syncMediaGroupContent(
+      mediaGroupId,
+      sourceMessage.id,
+      correlationId || crypto.randomUUID(),
+    );
+    
+    return {
+      success: true,
+      message_id: messageId,
+      analyzed: true,
+      caption_length: 0,
+      has_media_group: true,
+      media_group_id: mediaGroupId,
+      media_group_synced: syncResult.success,
+      synced_count: syncResult.synced_count
+    };
+  } catch (error) {
+    console.error(`Error in handleMediaGroupSync: ${error.message}`);
     throw error;
   }
 }
@@ -125,35 +224,47 @@ async function syncMediaGroupContent(
   isEdit: boolean = false
 ): Promise<MediaGroupResult> {
   try {
-    // Use the dedicated edge function for media group synchronization
-    const response = await fetch(
-      `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
+    // Try to get the analyzed content from the source message
+    const { data: sourceMessage, error: sourceError } = await supabaseClient
+      .from("messages")
+      .select("analyzed_content")
+      .eq("id", sourceMessageId)
+      .single();
+    
+    if (sourceError || !sourceMessage || !sourceMessage.analyzed_content) {
+      return {
+        success: false,
+        media_group_id: mediaGroupId,
+        synced_count: 0,
+        error: sourceError?.message || "No analyzed content in source message"
+      };
+    }
+    
+    // Use the internal Supabase RPC function for group sync
+    const { data, error } = await supabaseClient.rpc(
+      'xdelo_sync_media_group_content',
       {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-        },
-        body: JSON.stringify({
-          mediaGroupId,
-          sourceMessageId,
-          correlationId,
-          forceSync: true,
-          syncEditHistory: isEdit
-        })
+        p_message_id: sourceMessageId,
+        p_analyzed_content: sourceMessage.analyzed_content,
+        p_force_sync: true,
+        p_sync_edit_history: isEdit
       }
     );
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Edge function sync failed: ${errorText || response.statusText}`);
+    if (error) {
+      console.error(`Error in syncMediaGroupContent RPC: ${error.message}`);
+      return {
+        success: false,
+        media_group_id: mediaGroupId,
+        synced_count: 0,
+        error: error.message
+      };
     }
     
-    const result = await response.json();
     return {
-      success: result.success,
-      synced_count: result.synced_count || 0,
-      media_group_id: mediaGroupId
+      success: true,
+      media_group_id: mediaGroupId,
+      synced_count: data.updated_count || 0
     };
   } catch (error) {
     console.error(`Error in syncMediaGroupContent: ${error.message}`);
@@ -163,6 +274,38 @@ async function syncMediaGroupContent(
       media_group_id: mediaGroupId,
       error: error.message
     };
+  }
+}
+
+async function updateMessageState(
+  messageId: string, 
+  state: string, 
+  errorMessage?: string
+): Promise<boolean> {
+  try {
+    const updates: Record<string, any> = {
+      processing_state: state,
+      updated_at: new Date().toISOString()
+    };
+    
+    if (state === FLOW_STAGES.PROCESSING) {
+      updates.processing_started_at = new Date().toISOString();
+    } else if (state === FLOW_STAGES.COMPLETED || state === FLOW_STAGES.PARTIAL_SUCCESS) {
+      updates.processing_completed_at = new Date().toISOString();
+    } else if (state === FLOW_STAGES.ERROR && errorMessage) {
+      updates.error_message = errorMessage;
+      updates.last_error_at = new Date().toISOString();
+    }
+    
+    const { error } = await supabaseClient
+      .from('messages')
+      .update(updates)
+      .eq('id', messageId);
+      
+    return !error;
+  } catch (error) {
+    console.error(`Error updating message state: ${error.message}`);
+    return false;
   }
 }
 

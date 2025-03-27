@@ -1,213 +1,280 @@
-/**
- * Central caption parser implementation for use across all functions
- * This consolidated implementation replaces the separate ones from:
- * - manual-caption-parser
- * - parse-caption
- */
 
-export interface ParsedContent {
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string | null;
-  purchase_date?: string | null;
-  quantity?: number | null;
-  notes?: string;
-  caption?: string;
-  raw_lines?: string[];
-  raw_text?: string;
-  parsing_metadata: {
-    method?: string;
-    timestamp?: string;
-    partial_success?: boolean;
-    missing_fields?: string[];
-    quantity_pattern?: string;
-    used_fallback?: boolean;
-    original_caption?: string;
-    is_edit?: boolean;
-    edit_timestamp?: string;
-    error?: string;
-    force_reprocess?: boolean;
-    reprocess_timestamp?: string;
-    retry_count?: number;
-    retry_timestamp?: string;
-    trigger_source?: string;
-  };
-  sync_metadata?: {
-    media_group_id?: string;
-    sync_source_message_id?: string;
-  };
-}
+import { AnalyzedContent } from "./types.ts";
 
 /**
- * Parse a caption to extract structured product data
+ * Standard caption parser that converts caption text to analyzed content
  */
-export function xdelo_parseCaption(
-  caption: string | null | undefined,
-  options: {
-    extractPurchaseDate?: boolean;
-    extractProductCode?: boolean;
-    extractVendorUid?: boolean;
-    extractPricing?: boolean;
-  } = {}
-): ParsedContent {
-  if (!caption) {
-    return {
-      parsing_metadata: {
-        method: "manual",
-        timestamp: new Date().toISOString(),
-        error: "Empty caption",
-      },
-    };
-  }
-
+export function xdelo_parseCaption(caption: string): AnalyzedContent {
   const trimmedCaption = caption.trim();
   const currentTimestamp = new Date().toISOString();
-
+  
   // Initialize with default values
-  const parsedContent: ParsedContent = {
-    product_name: "",
-    product_code: "",
-    vendor_uid: null,
-    purchase_date: null,
-    quantity: null,
-    notes: "",
-    caption: trimmedCaption,
-    raw_lines: trimmedCaption
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean),
-    raw_text: trimmedCaption,
+  const analyzedContent: AnalyzedContent = {
+    product_name: '',
+    product_code: '',
+    vendor_uid: undefined,
+    purchase_date: undefined,
+    quantity: undefined,
+    notes: '',
     parsing_metadata: {
-      method: "manual",
+      method: 'manual',
       timestamp: currentTimestamp,
-      partial_success: false,
-      missing_fields: [],
-    },
+    }
   };
-
+  
+  // Handle empty captions
+  if (!trimmedCaption) {
+    return {
+      ...analyzedContent,
+      parsing_metadata: {
+        ...analyzedContent.parsing_metadata,
+        partial_success: true,
+        missing_fields: ['product_name', 'product_code', 'vendor_uid', 'purchase_date', 'quantity']
+      }
+    };
+  }
+  
+  // Track missing fields for partial success
+  const missingFields: string[] = [];
+  
   try {
-    // Track missing fields for partial success
-    const missingFields: string[] = [];
-
-    // Extract product name (text before '#')
-    const productNameMatch = trimmedCaption.match(/^(.*?)(?=#|\n|$)/);
-    if (productNameMatch && productNameMatch[1].trim()) {
-      parsedContent.product_name = productNameMatch[1].trim();
-    } else {
-      missingFields.push("product_name");
-    }
-
-    // Extract product code (text following '#')
-    const productCodeMatch = trimmedCaption.match(/#([A-Za-z0-9-]+)/);
-    if (productCodeMatch) {
-      parsedContent.product_code = productCodeMatch[1];
-
-      // Extract vendor UID (first 1-4 letters of product code)
-      const vendorMatch = productCodeMatch[1].match(/^([A-Za-z]{1,4})/);
-      if (vendorMatch) {
-        parsedContent.vendor_uid = vendorMatch[1].toUpperCase();
+    // Multi-line vs single-line parsing
+    if (trimmedCaption.includes('\n')) {
+      // Multi-line caption
+      const lines = trimmedCaption.split('\n');
+      
+      // Extract product name from first line
+      if (lines.length > 0 && lines[0].trim()) {
+        analyzedContent.product_name = lines[0].trim().replace(/^['"]|['"]$/g, '');
       } else {
-        missingFields.push("vendor_uid");
+        missingFields.push('product_name');
       }
-
-      // Extract purchase date (digits after vendor letters)
-      const dateMatch = productCodeMatch[1].match(/^[A-Za-z]{1,4}(\d{5,6})/);
-      if (dateMatch) {
-        const dateDigits = dateMatch[1];
-        try {
-          parsedContent.purchase_date = formatPurchaseDate(dateDigits);
-        } catch (dateError) {
-          console.log("Date parsing error:", dateError);
-          missingFields.push("purchase_date");
+      
+      // Find line with product code
+      let codeLineIdx = -1;
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes('#')) {
+          codeLineIdx = i;
+          break;
+        }
+      }
+      
+      // Extract product code if found
+      if (codeLineIdx >= 0) {
+        const codeMatch = lines[codeLineIdx].match(/#([A-Za-z0-9-]+)/);
+        if (codeMatch) {
+          analyzedContent.product_code = codeMatch[1];
+          
+          // Extract vendor UID from product code
+          const vendorMatch = codeMatch[1].match(/^([A-Za-z]{1,4})/);
+          if (vendorMatch) {
+            analyzedContent.vendor_uid = vendorMatch[1].toUpperCase();
+          } else {
+            missingFields.push('vendor_uid');
+          }
+          
+          // Extract purchase date from product code
+          const dateMatch = codeMatch[1].match(/^[A-Za-z]{1,4}(\d{5,6})/);
+          if (dateMatch) {
+            const dateDigits = dateMatch[1];
+            try {
+              analyzedContent.purchase_date = formatPurchaseDate(dateDigits);
+            } catch (e) {
+              missingFields.push('purchase_date');
+            }
+          } else {
+            missingFields.push('purchase_date');
+          }
+        } else {
+          missingFields.push('product_code');
+          missingFields.push('vendor_uid');
+          missingFields.push('purchase_date');
         }
       } else {
-        missingFields.push("purchase_date");
+        missingFields.push('product_code');
+        missingFields.push('vendor_uid');
+        missingFields.push('purchase_date');
       }
-    } else {
-      missingFields.push("product_code", "vendor_uid", "purchase_date");
-    }
-
-    // Extract quantity (number following 'x')
-    const quantityMatch = trimmedCaption.match(/x\s*(\d+)/i);
-    if (quantityMatch) {
-      parsedContent.quantity = parseInt(quantityMatch[1], 10);
-      parsedContent.parsing_metadata.quantity_pattern = `x${quantityMatch[1]}`;
-    } else {
-      // Try alternative quantity patterns
-      const altQuantityMatch =
-        trimmedCaption.match(/(?:qty|quantity):\s*(\d+)/i) ||
-        trimmedCaption.match(/(\d+)\s*(?:pcs|pieces|units)/i);
-
-      if (altQuantityMatch) {
-        parsedContent.quantity = parseInt(altQuantityMatch[1], 10);
-        parsedContent.parsing_metadata.quantity_pattern = altQuantityMatch[0];
-      } else {
-        missingFields.push("quantity");
-      }
-    }
-
-    // Extract notes (text in parentheses or remaining text)
-    const notesMatch = trimmedCaption.match(/\(([^)]+)\)/);
-    if (notesMatch) {
-      parsedContent.notes = notesMatch[1].trim();
-    } else {
-      // Use any text after the product code as notes
-      const afterCodeMatch = trimmedCaption.match(/#[A-Za-z0-9-]+(.+)/);
-      if (afterCodeMatch && afterCodeMatch[1].trim()) {
-        // Remove quantity pattern from notes if present
-        let notes = afterCodeMatch[1].trim();
-        if (parsedContent.parsing_metadata.quantity_pattern) {
-          notes = notes
-            .replace(parsedContent.parsing_metadata.quantity_pattern, "")
-            .trim();
+      
+      // Gather remaining lines as notes
+      if (lines.length > 1) {
+        const noteLines: string[] = [];
+        for (let i = 1; i < lines.length; i++) {
+          if (i !== codeLineIdx) {
+            noteLines.push(lines[i].trim());
+          }
         }
-        parsedContent.notes = notes;
+        analyzedContent.notes = noteLines.join('\n').trim();
+      }
+      
+      // Look for quantity in notes
+      if (analyzedContent.notes) {
+        const qtyMatch = analyzedContent.notes.match(/(?:^|\s)x\s*(\d+)(?:\s|$)/i);
+        if (qtyMatch) {
+          analyzedContent.quantity = parseInt(qtyMatch[1], 10);
+          analyzedContent.parsing_metadata.quantity_pattern = `x${qtyMatch[1]}`;
+          // Remove quantity from notes
+          analyzedContent.notes = analyzedContent.notes.replace(qtyMatch[0], ' ').trim();
+        } else {
+          const altQtyMatch = analyzedContent.notes.match(/(?:^|\s)(\d+)\s*x(?:\s|$)/i);
+          if (altQtyMatch) {
+            analyzedContent.quantity = parseInt(altQtyMatch[1], 10);
+            analyzedContent.parsing_metadata.quantity_pattern = `${altQtyMatch[1]}x`;
+            // Remove quantity from notes
+            analyzedContent.notes = analyzedContent.notes.replace(altQtyMatch[0], ' ').trim();
+          } else {
+            missingFields.push('quantity');
+          }
+        }
+      } else {
+        missingFields.push('quantity');
+      }
+    } else {
+      // Single line caption
+      
+      // Simple case: Just quantity "14x"
+      const simpleQtyMatch = trimmedCaption.match(/^(\d+)x$/);
+      if (simpleQtyMatch) {
+        analyzedContent.quantity = parseInt(simpleQtyMatch[1], 10);
+        analyzedContent.parsing_metadata.quantity_pattern = trimmedCaption;
+        missingFields.push('product_name');
+        missingFields.push('product_code');
+        missingFields.push('vendor_uid');
+        missingFields.push('purchase_date');
+      } else {
+        // Complex case
+        const productCodeMatch = trimmedCaption.match(/#([A-Za-z0-9-]+)/);
+        if (productCodeMatch) {
+          // Extract product code
+          analyzedContent.product_code = productCodeMatch[1];
+          
+          // Extract product name (text before code)
+          const beforeCodeText = trimmedCaption.substring(0, trimmedCaption.indexOf('#')).trim();
+          if (beforeCodeText) {
+            analyzedContent.product_name = beforeCodeText;
+          } else {
+            missingFields.push('product_name');
+          }
+          
+          // Extract vendor UID
+          const vendorMatch = productCodeMatch[1].match(/^([A-Za-z]{1,4})/);
+          if (vendorMatch) {
+            analyzedContent.vendor_uid = vendorMatch[1].toUpperCase();
+          } else {
+            missingFields.push('vendor_uid');
+          }
+          
+          // Extract purchase date
+          const dateMatch = productCodeMatch[1].match(/^[A-Za-z]{1,4}(\d{5,6})/);
+          if (dateMatch) {
+            const dateDigits = dateMatch[1];
+            try {
+              analyzedContent.purchase_date = formatPurchaseDate(dateDigits);
+            } catch (e) {
+              missingFields.push('purchase_date');
+            }
+          } else {
+            missingFields.push('purchase_date');
+          }
+          
+          // Extract quantity
+          const qtyMatch = trimmedCaption.match(/x\s*(\d+)/i);
+          if (qtyMatch) {
+            analyzedContent.quantity = parseInt(qtyMatch[1], 10);
+            analyzedContent.parsing_metadata.quantity_pattern = `x${qtyMatch[1]}`;
+          } else {
+            const altQtyMatch = trimmedCaption.match(/(\d+)\s*x/i);
+            if (altQtyMatch) {
+              analyzedContent.quantity = parseInt(altQtyMatch[1], 10);
+              analyzedContent.parsing_metadata.quantity_pattern = `${altQtyMatch[1]}x`;
+            } else {
+              missingFields.push('quantity');
+            }
+          }
+          
+          // Extract notes (content in parentheses)
+          const notesMatch = trimmedCaption.match(/\(([^)]+)\)/);
+          if (notesMatch) {
+            analyzedContent.notes = notesMatch[1].trim();
+          } else {
+            // Use text after product code and quantity as notes
+            const afterCodeText = trimmedCaption.substring(
+              trimmedCaption.indexOf('#') + productCodeMatch[0].length
+            ).trim();
+            
+            if (afterCodeText) {
+              // Remove quantity pattern if present
+              let notes = afterCodeText;
+              if (analyzedContent.parsing_metadata.quantity_pattern) {
+                notes = notes.replace(analyzedContent.parsing_metadata.quantity_pattern, '').trim();
+              }
+              if (notes) {
+                analyzedContent.notes = notes;
+              }
+            }
+          }
+        } else {
+          // No product code found
+          analyzedContent.product_name = trimmedCaption;
+          missingFields.push('product_code');
+          missingFields.push('vendor_uid');
+          missingFields.push('purchase_date');
+          missingFields.push('quantity');
+        }
       }
     }
-
-    // Check if we have at least a product name - this means partial success
-    if (parsedContent.product_name) {
-      parsedContent.parsing_metadata.partial_success = missingFields.length > 0;
-      parsedContent.parsing_metadata.missing_fields =
-        missingFields.length > 0 ? missingFields : undefined;
+    
+    // Mark partial success if we have a product name but are missing other fields
+    if (analyzedContent.product_name) {
+      if (missingFields.length > 0) {
+        analyzedContent.parsing_metadata.partial_success = true;
+        analyzedContent.parsing_metadata.missing_fields = missingFields;
+      }
+    } else {
+      // Missing required product name
+      analyzedContent.parsing_metadata.partial_success = true;
+      if (!missingFields.includes('product_name')) {
+        missingFields.push('product_name');
+      }
+      analyzedContent.parsing_metadata.missing_fields = missingFields;
     }
-
-    return parsedContent;
+    
+    return analyzedContent;
   } catch (error) {
     console.error("Error parsing caption:", error);
-    parsedContent.parsing_metadata.error = error.message;
-    return parsedContent;
+    return {
+      ...analyzedContent,
+      parsing_metadata: {
+        ...analyzedContent.parsing_metadata,
+        partial_success: true,
+        error: error.message,
+        missing_fields: ['product_name', 'product_code', 'vendor_uid', 'purchase_date', 'quantity']
+      }
+    };
   }
 }
 
-/**
- * Format purchase date from digits to YYYY-MM-DD
- */
 function formatPurchaseDate(dateDigits: string): string {
-  // Add leading zero for 5-digit dates (missing leading zero in month)
-  const normalizedDigits =
-    dateDigits.length === 5 ? "0" + dateDigits : dateDigits;
-
+  // Add leading zero for 5-digit dates
+  const normalizedDigits = dateDigits.length === 5 ? `0${dateDigits}` : dateDigits;
+  
   if (normalizedDigits.length !== 6) {
     throw new Error(`Invalid date format: ${dateDigits}`);
   }
-
+  
   // Format is mmDDyy
   const month = normalizedDigits.substring(0, 2);
   const day = normalizedDigits.substring(2, 4);
   const year = normalizedDigits.substring(4, 6);
-
+  
   // Convert to YYYY-MM-DD
-  const fullYear = "20" + year; // Assuming 20xx year
-
+  const fullYear = `20${year}`; // Assuming 20xx year
+  
   // Validate date
   const dateObj = new Date(`${fullYear}-${month}-${day}`);
   if (isNaN(dateObj.getTime())) {
     throw new Error(`Invalid date: ${month}/${day}/${fullYear}`);
   }
-
+  
   return `${fullYear}-${month}-${day}`;
 }
-
-// Re-export parseCaption as an alias of xdelo_parseCaption for compatibility
-export const parseCaption = xdelo_parseCaption;
