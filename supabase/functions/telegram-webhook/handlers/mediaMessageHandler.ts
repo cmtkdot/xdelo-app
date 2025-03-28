@@ -2,14 +2,12 @@ import { logProcessingEvent } from "../../_shared/auditLogger.ts"; // Import fro
 import { constructTelegramMessageUrl } from "../../_shared/consolidatedMessageUtils.ts"; // Only need constructTelegramMessageUrl
 import { corsHeaders } from "../../_shared/cors.ts";
 import { xdelo_processMessageMedia } from "../../_shared/mediaStorage.ts";
-import { xdelo_detectMimeType } from "../../_shared/mediaUtils.ts";
 import { supabaseClient } from "../../_shared/supabase.ts";
 // Removed createMessage import from dbOperations.ts
 import {
   ForwardInfo,
   MessageContext,
-  MessageInput,
-  TelegramMessage,
+  TelegramMessage
 } from "../types.ts";
 
 interface DenoRuntime {
@@ -368,7 +366,42 @@ async function xdelo_handleNewMediaMessage(
       mime_type_original: message.document?.mime_type || message.video?.mime_type,
     };
 
-    // 5. Call the handle_media_message RPC function
+    // 5. Check for existing media group duplicates before processing
+    if (message.media_group_id) {
+      const { data: existingMedia, error: lookupError } = await supabaseClient
+        .from('messages')
+        .select('id, processing_state')
+        .eq('media_group_id', message.media_group_id)
+        .eq('file_unique_id', telegramFile.file_unique_id)
+        .neq('id', existingMessage?.id || '')
+        .maybeSingle();
+
+      if (lookupError) {
+        logger?.error(`Error checking for media duplicates: ${lookupError.message}`);
+        throw lookupError;
+      }
+
+      if (existingMedia) {
+        logger?.warn(`Duplicate media detected in media group`, {
+          existing_id: existingMedia.id,
+          file_unique_id: telegramFile.file_unique_id,
+          media_group_id: message.media_group_id
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            id: existingMedia.id,
+            correlationId,
+            status: 'duplicate',
+            action: 'skipped'
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // 6. Call the handle_media_message RPC function
     const { data: rpcResult, error: rpcError } = await supabaseClient.rpc('handle_media_message', {
       p_telegram_message_id: message.message_id,
       p_chat_id: message.chat.id,
