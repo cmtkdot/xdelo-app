@@ -1,4 +1,4 @@
-import { serve } from "std/http/server.ts"; // Use mapped import
+import { serve } from "https://deno.land/std@0.217.0/http/server.ts"; // Use mapped import
 import { createHandler, SecurityLevel, RequestMetadata } from "../_shared/unifiedHandler.ts"; // Import unified handler
 import { isMessageForwarded, logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts"; // Import logProcessingEvent from consolidated utils
 // Remove redundant import: import { xdelo_logProcessingEvent } from "../_shared/databaseOperations.ts";

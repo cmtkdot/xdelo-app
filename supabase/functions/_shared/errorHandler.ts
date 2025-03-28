@@ -1,12 +1,12 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 interface ErrorLogParams {
   messageId: string;
   errorMessage: string;
   correlationId?: string;
   functionName?: string;
-  additionalData?: Record<string, any>; 
+  additionalData?: Record<string, any>;
 }
 
 /**
@@ -22,7 +22,7 @@ const supabase = createClient(
  */
 export async function logErrorToDatabase(params: ErrorLogParams): Promise<void> {
   const { messageId, errorMessage, correlationId, functionName, additionalData } = params;
-  
+
   try {
     const metadata = {
       error_message: errorMessage,

@@ -392,7 +392,7 @@ export async function xdelo_uploadMediaToStorage(
 
     // Import dynamically to avoid issues in edge function context
     const { createClient } = await import(
-      "https://esm.sh/@supabase/supabase-js@2.38.4"
+      "https://esm.sh/@supabase/supabase-js@2"
     );
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -647,7 +647,7 @@ export async function xdelo_processMessageMedia(
 
     // Import dynamically to avoid issues in edge function context
     const { createClient } = await import(
-      "https://esm.sh/@supabase/supabase-js@2.38.4"
+      "https://esm.sh/@supabase/supabase-js@2"
     );
     const supabase = createClient(supabaseUrl, supabaseKey);
 

@@ -1,9 +1,9 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../../_shared/cors.ts";
-import { SecurityLevel } from "../../_shared/jwt-verification.ts";
 import { withErrorHandling } from "../../_shared/errorHandler.ts";
+import { SecurityLevel } from "../../_shared/jwt-verification.ts";
 
 // Create Supabase client for database operations
 const supabaseClient = createClient(

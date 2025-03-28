@@ -1,6 +1,6 @@
 // Standardized Supabase client for Edge Functions
-import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { createClient } from '@supabase/supabase-js'; // Use mapped import
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Default options for the Supabase client
 const defaultOptions = {
@@ -18,11 +18,7 @@ const defaultOptions = {
 /**
  * Create a Supabase client with default options, timeout, and retry config
  */
-export function createSupabaseClient(options: {
-  timeoutSeconds?: number;
-  retryAttempts?: number; // Placeholder for retry logic if needed later
-} = {}): SupabaseClient {
-  const { timeoutSeconds = 15 } = options; // Default timeout 15s
+export function createSupabaseClient(options = {}): SupabaseClient {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -97,9 +93,7 @@ export async function executeQuery<T = any>(
       case "rpc":
         return await supabaseClient.rpc(table, options.params || {});
       default:
-        // Ensure operation is one of the expected types before throwing
-        const exhaustiveCheck: never = operation;
-        throw new Error(`Invalid operation provided: ${exhaustiveCheck}`);
+        throw new Error(`Invalid operation: ${operation}`);
     }
 
     // Apply filters if provided

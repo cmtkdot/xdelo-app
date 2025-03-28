@@ -1,8 +1,8 @@
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { 
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  xdelo_detectMimeType,
   xdelo_downloadMediaFromTelegram,
-  xdelo_uploadMediaToStorage,
-  xdelo_detectMimeType
+  xdelo_uploadMediaToStorage
 } from "./mediaUtils.ts";
 
 /**
@@ -44,11 +44,11 @@ export async function xdelo_processMessageMedia(
   fileUniqueId: string,
   telegramBotToken: string,
   messageId?: string
-): Promise<{ 
-  success: boolean; 
-  isDuplicate: boolean; 
-  fileInfo: any; 
-  error?: string 
+): Promise<{
+  success: boolean;
+  isDuplicate: boolean;
+  fileInfo: any;
+  error?: string
 }> {
   try {
     // First check if this is a duplicate file
@@ -69,7 +69,7 @@ export async function xdelo_processMessageMedia(
 
     if (exists && existingMessage) {
       console.log(`Found existing file: ${fileUniqueId}`);
-      
+
       // Return existing file info
       return {
         success: true,
@@ -85,7 +85,7 @@ export async function xdelo_processMessageMedia(
 
     // Detect MIME type
     const detectedMimeType = xdelo_detectMimeType(message);
-    
+
     // Download from Telegram
     const downloadResult = await xdelo_downloadMediaFromTelegram(
       fileId,
@@ -93,11 +93,11 @@ export async function xdelo_processMessageMedia(
       detectedMimeType,
       telegramBotToken
     );
-    
+
     if (!downloadResult.success || !downloadResult.blob) {
       throw new Error(`Failed to download media: ${downloadResult.error || 'Unknown error'}`);
     }
-    
+
     // Upload to Supabase Storage
     const uploadResult = await xdelo_uploadMediaToStorage(
       downloadResult.storagePath || `${fileUniqueId}.bin`,
@@ -105,11 +105,11 @@ export async function xdelo_processMessageMedia(
       downloadResult.mimeType || detectedMimeType,
       messageId
     );
-    
+
     if (!uploadResult.success) {
       throw new Error(`Failed to upload media: ${uploadResult.error || 'Unknown error'}`);
     }
-    
+
     // Return the file info
     return {
       success: true,
