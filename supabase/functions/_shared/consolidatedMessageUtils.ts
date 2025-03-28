@@ -71,6 +71,20 @@ export function constructTelegramMessageUrl(
 }
 
 /**
+ * Check if a message was forwarded from another chat
+ */
+export function isMessageForwarded(message: any): boolean {
+  return !!(
+    message.forward_from ||
+    message.forward_from_chat ||
+    message.forward_from_message_id ||
+    message.forward_signature ||
+    message.forward_sender_name ||
+    message.forward_date
+  );
+}
+
+/**
  * Unified function to log processing events
  */
 export async function logProcessingEvent(
