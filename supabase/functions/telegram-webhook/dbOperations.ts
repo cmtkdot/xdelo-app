@@ -8,25 +8,6 @@ import { supabaseClient } from "../_shared/supabase.ts";
 // Removed local supabaseClient creation
 
 /**
- * Legacy wrapper function for backwards compatibility - FIXED
- */
-export async function xdelo_logProcessingEvent(
-  eventType: string,
-  entityId: string,
-  correlationId: string,
-  errorMessage?: string
-): Promise<void> {
-  // Pass empty metadata object as the 4th argument
-  await logProcessingEvent(
-    eventType,
-    entityId,
-    correlationId,
-    {}, // metadata
-    errorMessage
-  );
-}
-
-/**
  * Check if a message with the same Telegram message ID already exists in the database
  */
 export async function checkDuplicateMessage(
