@@ -2,23 +2,22 @@
 /**
  * Handler for media messages
  */
-import { TelegramMessage, MessageContext, MessageProcessResult } from "../types.ts";
-import { supabaseClient } from "../../_shared/supabase.ts";
 import { RetryHandler, shouldRetryOperation } from "../../_shared/retryUtils.ts";
-import { buildTelegramMessageUrl } from "../utils/urlBuilder.ts";
-import { processMessageMedia } from "../services/mediaService.ts";
+import { supabaseClient } from "../../_shared/supabase.ts";
 import {
   checkExistingMessage,
   checkMediaGroupDuplicate,
-  handleEditedMessage,
-  createMessage
+  createMessage,
+  handleEditedMessage
 } from "../services/databaseService.ts";
+import { logErrorEvent, logEvent } from "../services/loggingService.ts";
+import { processMessageMedia } from "../services/mediaService.ts";
 import {
   createSuccessResponse,
   createTelegramErrorResponse
 } from "../services/responseService.ts";
-import { logEvent, logErrorEvent } from "../services/loggingService.ts";
-import { TELEGRAM_BOT_TOKEN } from "../config/environment.ts";
+import { MessageContext, MessageProcessResult, TelegramMessage } from "../types.ts";
+import { buildTelegramMessageUrl } from "../utils/urlBuilder.ts";
 
 /**
  * Main handler for media messages (new or edited)
@@ -119,17 +118,18 @@ async function handleEditedMediaMessage(
       throw new Error(`Failed to process media during edit: ${mediaResult.error}`);
     }
 
-    // Call the edit handler
-    const editResult = await handleEditedMessage(
-      existingMessageId,
-      message.message_id,
-      message.chat.id,
-      null, // No text for media messages
-      message.caption,
-      mediaResult.mediaData, // Pass processed media data
-      isChannelPost,
-      editSource
-    );
+    // Call the duplicate handler which will handle edits too
+    const editResult = await supabaseClient.rpc('md_handle_duplicate_media_message', {
+      file_unique_id: mediaResult.mediaData.file_unique_id,
+      chat_id: message.chat.id,
+      telegram_message_id: message.message_id,
+      media_data: {
+        ...mediaResult.mediaData,
+        is_edit: true,
+        edit_source: editSource,
+        is_channel_post: isChannelPost
+      }
+    });
 
     if (!editResult.success) {
       throw new Error(`Failed to update message: ${editResult.error}`);
