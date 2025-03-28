@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/useToast';
@@ -446,11 +447,11 @@ export function useMediaUtils() {
   };
 
   // Helper function for retrying operations with configurable attempts and delay
-  function withRetry<T>(operation: () => Promise<T>, options: {
+  const withRetry = async <T>(operation: () => Promise<T>, options: {
     maxAttempts: number;
     delay: number;
     retryableErrors?: string[];
-  }): Promise<T> {
+  }): Promise<T> => {
     const { maxAttempts, delay, retryableErrors = [] } = options;
     let attempt = 0;
     let lastError: Error | null = null;
@@ -475,7 +476,7 @@ export function useMediaUtils() {
     };
 
     return execute();
-  }
+  };
 
   return {
     // Media group operations

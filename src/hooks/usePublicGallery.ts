@@ -1,5 +1,5 @@
 
-import { useEffect } from 'react';
+import { useState } from 'react';
 import { Message } from '@/types';
 import { useGalleryData } from './publicGallery/useGalleryData';
 import { useGalleryFilters } from './publicGallery/useGalleryFilters';
@@ -100,4 +100,4 @@ export function usePublicGallery({
 }
 
 // Missing import
-import { useState } from 'react';
+import { useEffect } from 'react';
