@@ -44,7 +44,7 @@ serve(async (req) => {
     
     // Process each pending message
     const results = await Promise.all(
-      pendingMessages.map(message => processMessage(message, params.forceReprocess))
+      pendingMessages.map(message => processMessage(message, params.forceReprocess, params.enableDetailedLogs))
     );
     
     // Count successes and failures
@@ -87,19 +87,22 @@ async function parseRequest(req: Request): Promise<{
   batchSize?: number;
   specificIds?: string[];
   forceReprocess?: boolean;
+  enableDetailedLogs?: boolean;
 }> {
   try {
     const body = await req.json();
     return {
       batchSize: body.batchSize || BATCH_SIZE,
       specificIds: Array.isArray(body.messageIds) ? body.messageIds : undefined,
-      forceReprocess: !!body.forceReprocess
+      forceReprocess: !!body.forceReprocess,
+      enableDetailedLogs: !!body.enableDetailedLogs
     };
   } catch {
     return {
       batchSize: BATCH_SIZE,
       specificIds: undefined,
-      forceReprocess: false
+      forceReprocess: false,
+      enableDetailedLogs: false
     };
   }
 }
@@ -116,6 +119,7 @@ async function fetchPendingMessages(
       .from("messages")
       .select("*")
       .eq("processing_state", "pending")
+      .is("caption", "not.null")
       .order("created_at", { ascending: false })
       .limit(batchSize);
     
@@ -143,23 +147,55 @@ async function fetchPendingMessages(
 /**
  * Process a single message
  */
-async function processMessage(message: any, forceReprocess: boolean = false): Promise<{
+async function processMessage(
+  message: any, 
+  forceReprocess: boolean = false,
+  enableDetailedLogs: boolean = false
+): Promise<{
   success: boolean;
   message_id: string;
   error?: string;
   sync_status?: string;
+  debug_info?: any;
 }> {
+  const startTime = Date.now();
+  const debugInfo: any = {
+    timestamps: {
+      start: new Date().toISOString(),
+    },
+    steps: []
+  };
+  
+  const logStep = (step: string, data?: any) => {
+    if (enableDetailedLogs) {
+      debugInfo.steps.push({
+        step,
+        timestamp: new Date().toISOString(),
+        elapsed_ms: Date.now() - startTime,
+        data
+      });
+    }
+  };
+  
   try {
     // Skip if no caption
     if (!message.caption) {
+      logStep("caption_check", { has_caption: false });
       return {
         success: false,
         message_id: message.id,
-        error: "No caption to process"
+        error: "No caption to process",
+        debug_info: enableDetailedLogs ? debugInfo : undefined
       };
     }
     
+    logStep("caption_check", { 
+      has_caption: true, 
+      caption: message.caption.substring(0, 50) + (message.caption.length > 50 ? "..." : "")
+    });
+    
     // Atomically update status to 'processing' to prevent double-processing
+    logStep("attempt_lock");
     const { data: lockedMessage, error: lockError } = await supabaseClient
       .from("messages")
       .update({
@@ -172,32 +208,39 @@ async function processMessage(message: any, forceReprocess: boolean = false): Pr
       .select()
       .single();
     
+    logStep("lock_result", { success: !lockError, error: lockError?.message });
+    
     // If update failed, the message is likely being processed by another worker
     if (lockError || !lockedMessage) {
       return {
         success: false,
         message_id: message.id,
-        error: lockError?.message || "Message already being processed by another worker"
+        error: lockError?.message || "Message already being processed by another worker",
+        debug_info: enableDetailedLogs ? debugInfo : undefined
       };
     }
     
     // Process the caption
-    console.log(`Processing caption for message ${message.id}`);
+    logStep("start_parsing", { message_id: message.id });
     
     // Generate a correlation ID for tracking
     const correlationId = crypto.randomUUID();
     
     // Parse the caption using both the legacy and V2 parsers
     // This ensures backward compatibility while testing the new parser
+    logStep("parse_legacy_start");
     const legacyResult = xdelo_parseCaption(message.caption, {
       messageId: message.id,
       correlationId: correlationId
     });
+    logStep("parse_legacy_complete", { success: !!legacyResult });
     
+    logStep("parse_v2_start");
     const v2Result = parseCaptionV2(message.caption, {
       messageId: message.id,
       correlationId: correlationId
     });
+    logStep("parse_v2_complete", { success: !!v2Result });
     
     // Use V2 result as primary, but include legacy result for comparison
     const parsedContent: ParsedContent = {
@@ -209,6 +252,7 @@ async function processMessage(message: any, forceReprocess: boolean = false): Pr
     };
     
     // Update the message with the parsed content
+    logStep("update_message_start");
     const { error: updateError } = await supabaseClient
       .from("messages")
       .update({
@@ -218,6 +262,8 @@ async function processMessage(message: any, forceReprocess: boolean = false): Pr
       })
       .eq("id", message.id);
     
+    logStep("update_message_complete", { error: updateError?.message });
+    
     if (updateError) {
       throw updateError;
     }
@@ -226,6 +272,7 @@ async function processMessage(message: any, forceReprocess: boolean = false): Pr
     let syncStatus = "not_needed";
     if (message.media_group_id) {
       try {
+        logStep("sync_group_start", { media_group_id: message.media_group_id });
         // Call RPC function to sync content to other messages in the group
         const { data: syncData, error: syncError } = await supabaseClient.rpc(
           "xdelo_sync_media_group_content",
@@ -237,6 +284,12 @@ async function processMessage(message: any, forceReprocess: boolean = false): Pr
           }
         );
         
+        logStep("sync_group_complete", { 
+          success: !syncError, 
+          error: syncError?.message, 
+          data: syncData 
+        });
+        
         if (syncError) {
           console.error(`Error syncing media group ${message.media_group_id}:`, syncError);
           syncStatus = "failed";
@@ -246,10 +299,12 @@ async function processMessage(message: any, forceReprocess: boolean = false): Pr
       } catch (syncError) {
         console.error(`Exception syncing media group ${message.media_group_id}:`, syncError);
         syncStatus = "exception";
+        logStep("sync_group_exception", { error: syncError instanceof Error ? syncError.message : String(syncError) });
       }
     }
     
     // Log the successful processing
+    logStep("logging_audit", { correlation_id: correlationId });
     await supabaseClient.from("unified_audit_logs").insert({
       event_type: "caption_processed",
       entity_type: "message",
@@ -264,32 +319,43 @@ async function processMessage(message: any, forceReprocess: boolean = false): Pr
       }
     });
     
+    debugInfo.timestamps.end = new Date().toISOString();
+    debugInfo.total_duration_ms = Date.now() - startTime;
+    
     return {
       success: true,
       message_id: message.id,
-      sync_status: syncStatus
+      sync_status: syncStatus,
+      debug_info: enableDetailedLogs ? debugInfo : undefined
     };
   } catch (error) {
     console.error(`Error processing message ${message.id}:`, error);
+    logStep("processing_error", { error: error instanceof Error ? error.message : String(error) });
     
     // Update message to error state
     try {
+      logStep("update_to_error_state");
       await supabaseClient
         .from("messages")
         .update({
           processing_state: "error" as ProcessingState,
-          error_message: error.message || "Unknown error",
+          error_message: error instanceof Error ? error.message : String(error),
           last_error_at: new Date().toISOString()
         })
         .eq("id", message.id);
     } catch (updateError) {
       console.error(`Error updating message ${message.id} to error state:`, updateError);
+      logStep("error_update_failed", { error: updateError instanceof Error ? updateError.message : String(updateError) });
     }
+    
+    debugInfo.timestamps.end = new Date().toISOString();
+    debugInfo.total_duration_ms = Date.now() - startTime;
     
     return {
       success: false,
       message_id: message.id,
-      error: error.message || "Unknown error during processing"
+      error: error instanceof Error ? error.message : String(error),
+      debug_info: enableDetailedLogs ? debugInfo : undefined
     };
   }
 }
