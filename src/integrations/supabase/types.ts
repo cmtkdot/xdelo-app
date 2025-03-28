@@ -123,6 +123,83 @@ export type Database = {
         }
         Relationships: []
       }
+      message_edit_history: {
+        Row: {
+          edit_reason: string | null
+          edit_source: string | null
+          edited_at: string
+          editor_user_id: number | null
+          id: string
+          is_channel_post: boolean | null
+          message_id: string
+          new_caption: string | null
+          new_telegram_data: Json | null
+          new_text: string | null
+          previous_caption: string | null
+          previous_telegram_data: Json | null
+          previous_text: string | null
+        }
+        Insert: {
+          edit_reason?: string | null
+          edit_source?: string | null
+          edited_at?: string
+          editor_user_id?: number | null
+          id?: string
+          is_channel_post?: boolean | null
+          message_id: string
+          new_caption?: string | null
+          new_telegram_data?: Json | null
+          new_text?: string | null
+          previous_caption?: string | null
+          previous_telegram_data?: Json | null
+          previous_text?: string | null
+        }
+        Update: {
+          edit_reason?: string | null
+          edit_source?: string | null
+          edited_at?: string
+          editor_user_id?: number | null
+          id?: string
+          is_channel_post?: boolean | null
+          message_id?: string
+          new_caption?: string | null
+          new_telegram_data?: Json | null
+          new_text?: string | null
+          previous_caption?: string | null
+          previous_telegram_data?: Json | null
+          previous_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_edit_history_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_edit_history_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_edit_history_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_forwards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_edit_history_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_messages_compatibility"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           analyzed_content: Json | null
@@ -138,6 +215,7 @@ export type Database = {
           edit_count: number | null
           edit_date: string | null
           edit_history: Json | null
+          edit_source: string | null
           edited_channel_post: boolean | null
           error_code: string | null
           error_message: string | null
@@ -168,6 +246,8 @@ export type Database = {
           is_forwarded_from: string | null
           is_miscellaneous_item: boolean | null
           is_original_caption: boolean | null
+          last_edit_at: string | null
+          last_edit_user_id: number | null
           last_error_at: string | null
           last_processing_attempt: string | null
           media_group_id: string | null
@@ -232,6 +312,7 @@ export type Database = {
           edit_count?: number | null
           edit_date?: string | null
           edit_history?: Json | null
+          edit_source?: string | null
           edited_channel_post?: boolean | null
           error_code?: string | null
           error_message?: string | null
@@ -262,6 +343,8 @@ export type Database = {
           is_forwarded_from?: string | null
           is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
+          last_edit_at?: string | null
+          last_edit_user_id?: number | null
           last_error_at?: string | null
           last_processing_attempt?: string | null
           media_group_id?: string | null
@@ -326,6 +409,7 @@ export type Database = {
           edit_count?: number | null
           edit_date?: string | null
           edit_history?: Json | null
+          edit_source?: string | null
           edited_channel_post?: boolean | null
           error_code?: string | null
           error_message?: string | null
@@ -356,6 +440,8 @@ export type Database = {
           is_forwarded_from?: string | null
           is_miscellaneous_item?: boolean | null
           is_original_caption?: boolean | null
+          last_edit_at?: string | null
+          last_edit_user_id?: number | null
           last_error_at?: string | null
           last_processing_attempt?: string | null
           media_group_id?: string | null
@@ -1505,6 +1591,28 @@ export type Database = {
         }
         Returns: number
       }
+      handle_media_message: {
+        Args: {
+          p_telegram_message_id: number
+          p_chat_id: number
+          p_file_unique_id: string
+          p_media_data: Json
+        }
+        Returns: Json
+      }
+      handle_message_edit: {
+        Args: {
+          p_message_id: string
+          p_telegram_message_id: number
+          p_chat_id: number
+          p_new_text: string
+          p_new_caption: string
+          p_telegram_data: Json
+          p_is_channel_post?: boolean
+          p_edit_source?: string
+        }
+        Returns: Json
+      }
       hnsw_bit_support: {
         Args: {
           "": unknown
@@ -1592,6 +1700,15 @@ export type Database = {
           similarity: number
         }[]
       }
+      md_handle_duplicate_media_message: {
+        Args: {
+          p_file_unique_id: string
+          p_chat_id: number
+          p_telegram_message_id: number
+          p_media_data: Json
+        }
+        Returns: Json
+      }
       pg_stat_statements: {
         Args: {
           showtext: boolean
@@ -1617,6 +1734,10 @@ export type Database = {
           p_correlation_id: string
         }
         Returns: Json
+      }
+      process_pending_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       process_telegram_message: {
         Args: {
@@ -1842,12 +1963,15 @@ export type Database = {
         | "completed"
         | "partial_success"
         | "error"
+        | "pending_reprocess"
       processing_state_type:
         | "initialized"
         | "pending"
         | "processing"
         | "completed"
         | "error"
+        | "pending_reprocess"
+        | "partial_success"
       sync_direction_type: "to_supabase" | "to_glide" | "both"
       sync_operation: "sync" | "create" | "update" | "delete"
       sync_resolution_status:

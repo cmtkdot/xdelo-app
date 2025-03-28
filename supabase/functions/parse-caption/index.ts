@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"; // Keep for serve at the bottom
 import { xdelo_parseCaption as parseCaption, ParsedContent } from "../_shared/captionParsers.ts";
 import {
@@ -6,11 +7,8 @@ import {
   RequestMetadata,
   SecurityLevel,
 } from "../_shared/unifiedHandler.ts";
-// Assuming MediaGroupResult is defined correctly elsewhere or adjust as needed
-// import { MediaGroupResult } from "./types.ts";
-import { logProcessingEvent } from "../_shared/auditLogger.ts"; // Import from dedicated module
-// Keep specific DB operations for this function's logic
-import { syncMediaGroupContent } from "../_shared/mediaGroupSync.ts"; // Uses singleton client internally
+import { logProcessingEvent } from "../_shared/auditLogger.ts"; 
+// Remove syncMediaGroupContent import as we no longer need it
 import {
   getMessage,
   logAnalysisEvent,
@@ -21,11 +19,11 @@ interface ParseCaptionBody {
     messageId: string;
     caption: string;
     media_group_id?: string;
-    queue_id?: string; // Assuming this is relevant
+    queue_id?: string; 
     isEdit?: boolean;
     retryCount?: number;
     force_reprocess?: boolean;
-    correlationId?: string; // Allow passing correlationId in body
+    correlationId?: string; 
 }
 
 /**
@@ -77,7 +75,7 @@ async function handleParseCaption(req: Request, metadata: RequestMetadata): Prom
   try {
     // --- Fetch Existing Message ---
     const fetchStart = Date.now();
-    const message = await getMessage(messageId); // Uses singleton client via dbOperations
+    const message = await getMessage(messageId); 
     console.log(`[${requestCorrelationId}] Fetched message ${messageId} in ${Date.now() - fetchStart}ms`);
 
     // --- Check if Reprocessing Needed ---
@@ -116,7 +114,6 @@ async function handleParseCaption(req: Request, metadata: RequestMetadata): Prom
     }
 
     // --- Log Analysis Event ---
-    // Consider if this specific log is still needed or if unified logs are sufficient
     await logAnalysisEvent(
       messageId,
       requestCorrelationId,
@@ -137,29 +134,13 @@ async function handleParseCaption(req: Request, metadata: RequestMetadata): Prom
     console.log(`[${requestCorrelationId}] Update result: ${JSON.stringify(updateResult)}`);
     await logProcessingEvent('caption_parse_db_updated', messageId, requestCorrelationId, { updateResult });
 
-
-    // --- Trigger Media Group Sync (if applicable) ---
-    // Removed explicit sync call - handled by DB trigger
-    // let syncResult: any | null = null; // Use 'any' or define MediaGroupResult
+    // --- Media Group Sync Handling ---
+    // We've removed the explicit media group sync code here 
+    // The database trigger will now handle this automatically
+    // Just log that we're relying on the trigger
     if (media_group_id) {
-      // try {
-        console.log(`[${requestCorrelationId}] Triggering media group sync for group ${media_group_id}`);
-        // Call syncMediaGroupContent correctly with the new signature
-        syncResult = await syncMediaGroupContent(
-          messageId,          // sourceMessageId
-          parsedContent,      // analyzedContent
-          requestCorrelationId, // correlationId
-          true,               // forceSync (defaulting to true)
-          isEdit              // syncEditHistory
-        );
-        console.log(`[${requestCorrelationId}] Media group sync completed: ${JSON.stringify(syncResult)}`);
-        await logProcessingEvent('media_group_sync_triggered', messageId, requestCorrelationId, { media_group_id, syncResult });
-      } catch (syncError: unknown) {
-        const syncErrorMessage = syncError instanceof Error ? syncError.message : String(syncError);
-        console.error(`[${requestCorrelationId}] Media group sync error (non-fatal): ${syncErrorMessage}`);
-        // Log error but don't fail the entire request
-        // await logProcessingEvent('media_group_sync_failed', messageId, requestCorrelationId, { media_group_id }, syncErrorMessage);
-      // }
+      console.log(`[${requestCorrelationId}] Media group ${media_group_id} sync will be handled by database trigger`);
+      await logProcessingEvent('media_group_sync_delegated_to_trigger', messageId, requestCorrelationId, { media_group_id });
     }
 
     // --- Success Response ---
@@ -169,7 +150,7 @@ async function handleParseCaption(req: Request, metadata: RequestMetadata): Prom
         message: "Caption parsed successfully",
         message_id: messageId,
         parsed_content: parsedContent,
-        // sync_result: syncResult, // Removed - Sync handled by trigger
+        // No sync_result field needed anymore
       }, requestCorrelationId);
 
   } catch (error: unknown) {
@@ -179,14 +160,10 @@ async function handleParseCaption(req: Request, metadata: RequestMetadata): Prom
     // Log the error using the standard mechanism
     await logProcessingEvent('caption_parse_failed', messageId || 'unknown', requestCorrelationId, { isEdit, retryCount, force_reprocess }, errorMessage);
 
-    // Removed call to updateMessageWithError - error is logged via logProcessingEvent
-    // The unifiedHandler will return an error response.
-
     // Throw the original error to be handled by unifiedHandler
     throw new Error(errorMessage);
   }
 }
-
 
 // Create and configure the handler
 const handler = createHandler(handleParseCaption)
@@ -196,4 +173,3 @@ const handler = createHandler(handleParseCaption)
 
 // Serve the handler
 serve(handler);
-
