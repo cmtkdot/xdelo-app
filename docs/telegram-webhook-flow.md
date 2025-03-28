@@ -28,7 +28,7 @@ The Telegram webhook system processes incoming messages from Telegram and stores
 
 | Module                        | Purpose                                                   | Location            |
 | ----------------------------- | --------------------------------------------------------- | ------------------- |
-| `captionParser.ts`            | Contains `xdelo_parseCaption` function for parsing logic. | `_shared/`          |
+| `captionParser.ts`            | Contains enhanced `xdelo_parseCaption` function with detailed logging and error handling. | `_shared/`          |
 | `consolidatedMessageUtils.ts` | Shared utilities for metadata extraction, logging, etc.   | `_shared/`          |
 | `dbOperations.ts`             | DB interaction helpers for `telegram-webhook`. Implements upsert pattern for message handling. | `telegram-webhook/` |
 | `mediaStorage.ts`             | Media download/upload logic.                              | `_shared/`          |
