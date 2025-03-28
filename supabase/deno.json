@@ -1,10 +1,34 @@
 {
   "compilerOptions": {
+    "allowJs": true,
     "lib": ["deno.window", "deno.unstable"],
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
     "types": [
-      "https://deno.land/x/supabase_deno/mod.ts",
-      "https://deno.land/std@0.208.0/http/server.ts"
+      "https://deno.land/std@0.208.0/types/node.d.ts",
+      "https://deno.land/x/zod@v3.22.4/index.d.ts"
     ]
   },
-  "importMap": "import_map.json"
+  "importMap": "./import_map.json",
+  "lint": {
+    "files": {
+      "include": ["functions/"]
+    },
+    "rules": {
+      "tags": ["recommended"]
+    }
+  },
+  "fmt": {
+    "files": {
+      "include": ["functions/"]
+    },
+    "options": {
+      "useTabs": false,
+      "lineWidth": 80,
+      "indentWidth": 2,
+      "singleQuote": true,
+      "proseWrap": "always"
+    }
+  }
 }
