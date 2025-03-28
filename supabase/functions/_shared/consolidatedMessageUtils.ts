@@ -10,14 +10,6 @@ import { supabaseClient } from "./supabase.ts";
  * @param message The Telegram message object.
  * @returns True if the message is forwarded, false otherwise.
  */
-export function isMessageForwarded(message: any): boolean {
-  return !!(
-    message.forward_from ||
-    message.forward_from_chat ||
-    message.forward_sender_name ||
-    message.forward_date
-  );
-}
 
 /**
  * Construct a shareable message URL for a Telegram message
