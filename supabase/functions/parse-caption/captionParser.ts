@@ -4,7 +4,7 @@ export interface ParsedContent {
   product_code: string;
   vendor_uid: string | null; // Make vendor_uid optional
   purchase_date: string | null; // Make purchase_date optional
-  quantity: string | null;
+  quantity: number | null;
   notes: string;
   caption: string;
   parsing_metadata: {
@@ -94,16 +94,22 @@ export function parseCaption(caption: string, context?: {messageId?: string, cor
       missingFields.push('product_code', 'vendor_uid', 'purchase_date');
     }
 
-    // Extract quantity (keep as raw string)
-    const quantityMatch = trimmedCaption.match(/x\s*(\d+)/i) ||
-                         trimmedCaption.match(/(?:qty|quantity):\s*(\d+)/i) ||
-                         trimmedCaption.match(/(\d+)\s*(?:pcs|pieces|units)/i);
-
+    // Extract quantity (number following 'x')
+    const quantityMatch = trimmedCaption.match(/x\s*(\d+)/i);
     if (quantityMatch) {
-      parsedContent.quantity = quantityMatch[1]; // Store raw string
-      parsedContent.parsing_metadata.quantity_pattern = quantityMatch[0];
+      parsedContent.quantity = parseInt(quantityMatch[1], 10);
+      parsedContent.parsing_metadata.quantity_pattern = `x${quantityMatch[1]}`;
     } else {
-      missingFields.push('quantity');
+      // Try alternative quantity patterns
+      const altQuantityMatch = trimmedCaption.match(/(?:qty|quantity):\s*(\d+)/i) ||
+                               trimmedCaption.match(/(\d+)\s*(?:pcs|pieces|units)/i);
+
+      if (altQuantityMatch) {
+        parsedContent.quantity = parseInt(altQuantityMatch[1], 10);
+        parsedContent.parsing_metadata.quantity_pattern = altQuantityMatch[0];
+      } else {
+        missingFields.push('quantity');
+      }
     }
 
     // Extract notes (text in parentheses or remaining text)

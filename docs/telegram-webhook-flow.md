@@ -4,21 +4,11 @@ This document outlines the architecture, data flow, and components of the Telegr
 
 ## Overview
 
-The Telegram webhook system processes incoming messages from Telegram and stores them in the database. It implements sophisticated duplicate handling with these cases:
+The Telegram webhook system processes incoming messages from Telegram and stores them in the database. It handles:
 
-1. Exact Duplicate (same telegram_message_id + chat_id): 
-   - Skip processing, update last_seen_at timestamp
-2. File Duplicate (same file_unique_id):
-   - Insert new message record but reuse existing storage_path/public_url
-   - Link via duplicate_reference_id to original
-   - Update original's metadata to note duplicate count
-3. New Message/File:
-   - Insert new record and process normally
-
-Additional handling includes:
 1. Media messages (photos, videos, documents)
 2. Text messages
-3. Caption parsing and analysis  
+3. Caption parsing and analysis
 4. Media group synchronization
 5. Forwarded messages
 6. Edited messages
@@ -79,23 +69,10 @@ sequenceDiagram
     participant SYNC as xdelo_sync_media_group_content (DB Fn)
 
     T->>W: Message Update (New/Edit)
-    W->>DB: Check for existing message (telegram_message_id + chat_id)
-    alt Exact Duplicate Found
-        W->>DB: Update last_seen_at only
-        DB-->>W: Update Complete
-    else File Duplicate (file_unique_id exists)
-        W->>DB: Insert new message with duplicate_reference_id
-        W->>DB: Reuse storage_path/public_url from original
-        W->>DB: Update original's duplicate_count
-        Note over DB,TRG: IF caption exists/changed THEN trigger fires
-        TRG->>DB: Set state='pending', start_time=NOW()
-        DB-->>W: Insert Complete (Message ID)
-    else New Message
-        W->>DB: createMessage() (Full insert)
-        Note over DB,TRG: IF caption exists/changed THEN trigger fires
-        TRG->>DB: Set state='pending', start_time=NOW()
-        DB-->>W: Insert Complete (Message ID)
-    end
+    W->>DB: createMessage() (Upsert by telegram_message_id + chat_id)
+    Note over DB,TRG: IF caption exists/changed THEN trigger fires BEFORE save
+    TRG->>DB: Set state='pending', start_time=NOW()
+    DB-->>W: Upsert Complete (Message ID)
     W-->>T: Acknowledge Receipt (HTTP 200)
 
     Note right of EF: Runs periodically (e.g., cron/timer)
@@ -159,33 +136,11 @@ graph TD
 - The metadata extraction function `xdelo_extract_telegram_metadata` keeps only essential fields, reducing storage requirements.
 - Having this metadata extracted makes queries faster and reduces load on the database.
 
-## Error Recovery & Duplicate Handling
+## Error Recovery
 
-The system has multiple layers of error recovery and duplicate handling:
+The system has multiple layers of error recovery:
 
-1. **Duplicate Detection**:
-   - Exact matches (telegram_message_id + chat_id): Skip processing, update timestamp
-   - File duplicates (file_unique_id): Reuse storage, track references
-   - Media group duplicates: Link to existing group members
-
-2. **Worker Pattern**: 
-   - The direct-caption-processor uses atomic updates to lock messages
-   - Prevents duplicate processing of the same message
-
-3. **Stalled Message Detection**:
-   - pg_cron job periodically resets messages stuck in 'processing'
-   - Configurable timeout threshold (default: 5 minutes)
-
-4. **Media Group Consistency**:
-   - Separate pg_cron job finds and fixes inconsistent groups
-   - Ensures all group members have matching analyzed_content
-
-5. **System Repair Tools**:
-   - UI tools for manual reset of stuck messages
-   - Ability to force reprocess specific messages
-   - Tools to recheck and repair media groups
-
-6. **Duplicate Recovery**:
-   - Automatic handling of file_unique_id conflicts
-   - Preserves original file storage while allowing new metadata
-   - Tracks duplicate relationships via duplicate_reference_id
+1. **Worker Pattern**: The direct-caption-processor uses atomic updates to lock messages, preventing duplicate processing.
+2. **Stalled Message Detection**: A pg_cron job periodically resets messages stuck in 'processing' for too long.
+3. **Media Group Consistency**: A separate pg_cron job finds and fixes inconsistencies in media groups.
+4. **System Repair Tools**: UI tools are available for administrators to manually reset stuck messages or recheck media groups.

@@ -86,39 +86,22 @@ export async function updateMessageWithAnalysis(
       } else {
         updates.old_analyzed_content = [...message.old_analyzed_content, message.analyzed_content];
       }
-
+      
       updates.is_edited = true;
       updates.edit_date = new Date().toISOString();
-
+      
       // Increment edit count
       updates.edit_count = (message.edit_count || 0) + 1;
     }
 
-    // Extract fields for dedicated columns - only update known columns
+    // Extract fields for dedicated columns if available
     if (analyzedContent) {
-      // Always store full parsed content in analyzed_content
-      updates.analyzed_content = analyzedContent;
-
-      // Only update dedicated columns for these specific fields
-      if (analyzedContent.product_name !== undefined) {
-        updates.product_name = analyzedContent.product_name;
-      }
-      if (analyzedContent.product_code !== undefined) {
-        updates.product_code = analyzedContent.product_code;
-      }
-      if (analyzedContent.vendor_uid !== undefined) {
-        updates.vendor_uid = analyzedContent.vendor_uid;
-      }
-      if (analyzedContent.purchase_date !== undefined) {
-        updates.purchase_date = analyzedContent.purchase_date;
-      }
-      // Update quantity field directly (as text)
-      if (analyzedContent.quantity !== undefined) {
-        updates.quantity = String(analyzedContent.quantity);
-      }
-      if (analyzedContent.notes !== undefined) {
-        updates.notes = analyzedContent.notes;
-      }
+      if (analyzedContent.product_name) updates.product_name = analyzedContent.product_name;
+      if (analyzedContent.product_code) updates.product_code = analyzedContent.product_code;
+      if (analyzedContent.vendor_uid) updates.vendor_uid = analyzedContent.vendor_uid;
+      if (analyzedContent.purchase_date) updates.purchase_date = analyzedContent.purchase_date;
+      if (analyzedContent.quantity) updates.product_quantity = analyzedContent.quantity;
+      if (analyzedContent.notes) updates.notes = analyzedContent.notes;
     }
 
     // Update the message
