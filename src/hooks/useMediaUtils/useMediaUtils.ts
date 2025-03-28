@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/useToast';
-import { MediaProcessingState, MediaProcessingStateActions, RepairResult, MediaSyncOptions, CaptionFlowData } from './types';
+import { MediaProcessingState, MediaProcessingActions, RepairResult, MediaSyncOptions, CaptionFlowData, CaptionParams } from './types';
 import { createMediaProcessingState, withRetry } from './utils';
 
 /**
@@ -75,18 +75,18 @@ export function useMediaUtils() {
    * Update a message caption and trigger analysis
    */
   const syncMessageCaption = async (
-    { messageId, caption }: { messageId: string; caption?: string }
+    params: CaptionParams
   ): Promise<CaptionFlowData> => {
     try {
       setIsLoading(true);
-      addProcessingMessageId(messageId);
+      addProcessingMessageId(params.messageId);
       
       // Call the edge function to update the caption
       const { data, error } = await supabase.functions.invoke('utility-functions', {
         body: {
           action: 'process_caption',
-          messageId,
-          caption,
+          messageId: params.messageId,
+          caption: params.caption,
           correlationId: crypto.randomUUID()
         }
       });
@@ -101,7 +101,7 @@ export function useMediaUtils() {
         return {
           success: false,
           message: error.message,
-          message_id: messageId
+          message_id: params.messageId
         };
       }
       
@@ -113,7 +113,7 @@ export function useMediaUtils() {
       return {
         success: true,
         message: 'Caption updated and processed successfully',
-        message_id: messageId,
+        message_id: params.messageId,
         caption_updated: data.caption_updated,
         media_group_synced: data.media_group_synced
       };
@@ -127,10 +127,10 @@ export function useMediaUtils() {
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Unknown error',
-        message_id: messageId
+        message_id: params.messageId
       };
     } finally {
-      removeProcessingMessageId(messageId);
+      removeProcessingMessageId(params.messageId);
       setIsLoading(false);
     }
   };
