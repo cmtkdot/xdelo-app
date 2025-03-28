@@ -1,44 +1,83 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
-import { forcePendingMessagesProcessing } from "../_shared/processingUtils.ts";
 
 serve(async (req) => {
+  // Support CORS preflight requests
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      headers: corsHeaders,
+    });
+  }
+
   try {
-    // Handle CORS preflight request
-    if (req.method === "OPTIONS") {
-      return new Response(null, {
-        headers: corsHeaders,
-      });
+    const { messageIds } = await req.json();
+    
+    if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "No message IDs provided"
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        }
+      );
     }
 
-    // Parse request body
-    const { limit = 10, messageIds, detailedLogs = false } = await req.json();
-
-    // Process pending messages
-    const result = await forcePendingMessagesProcessing(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+    // Call the direct-caption-processor function with the specific message IDs
+    const processorResponse = await fetch(
+      `${Deno.env.get("SUPABASE_URL")}/functions/v1/direct-caption-processor`,
       {
-        limit: typeof limit === 'number' ? limit : 10,
-        specificIds: Array.isArray(messageIds) ? messageIds : undefined,
-        detailedLogs
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
+        },
+        body: JSON.stringify({
+          specificIds: messageIds,
+          forceReprocess: true
+        })
       }
     );
 
+    if (!processorResponse.ok) {
+      let errorMessage = "Failed to process messages";
+      try {
+        const errorData = await processorResponse.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch {}
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: errorMessage
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        }
+      );
+    }
+
+    const result = await processorResponse.json();
+    
     return new Response(
-      JSON.stringify(result),
+      JSON.stringify({
+        success: true,
+        data: result
+      }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       }
     );
   } catch (error) {
-    console.error("Error:", error);
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "An unknown error occurred"
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

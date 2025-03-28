@@ -1,79 +1,74 @@
 
 import { useState } from 'react';
-import { MediaProcessingState, MediaProcessingActions } from './types';
+import { MediaProcessingState, MediaProcessingStateActions } from './types';
 
 /**
- * Creates a state manager for tracking media processing state
+ * Creates state and actions for tracking processing message IDs
  */
-export function createMediaProcessingState(): [MediaProcessingState, MediaProcessingActions] {
+export function createMediaProcessingState(): [MediaProcessingState, MediaProcessingStateActions] {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessageIds, setProcessingMessageIds] = useState<string[]>([]);
-  
-  const addProcessingMessageId = (id: string) => {
+
+  const addProcessingMessageId = (messageId: string) => {
     setProcessingMessageIds(prev => {
-      if (prev.includes(id)) return prev;
-      return [...prev, id];
+      if (prev.includes(messageId)) return prev;
+      return [...prev, messageId];
     });
   };
-  
-  const removeProcessingMessageId = (id: string) => {
-    setProcessingMessageIds(prev => prev.filter(messageId => messageId !== id));
+
+  const removeProcessingMessageId = (messageId: string) => {
+    setProcessingMessageIds(prev => prev.filter(id => id !== messageId));
   };
-  
-  const resetProcessingMessageIds = () => {
-    setProcessingMessageIds([]);
-  };
-  
+
   return [
     { isProcessing, processingMessageIds },
-    { setIsProcessing, addProcessingMessageId, removeProcessingMessageId, resetProcessingMessageIds }
+    { setIsProcessing, addProcessingMessageId, removeProcessingMessageId }
   ];
 }
 
 /**
- * Utility function to retry operations with exponential backoff
+ * Retry a function with exponential backoff
  */
 export async function withRetry<T>(
-  operation: () => Promise<T>,
+  fn: () => Promise<T>,
   options: {
-    maxAttempts?: number;
-    delay?: number;
-    backoffFactor?: number;
+    maxAttempts: number;
+    delay: number;
     retryableErrors?: string[];
-  } = {}
+  }
 ): Promise<T> {
-  const {
-    maxAttempts = 3,
-    delay = 1000,
-    backoffFactor = 2,
-    retryableErrors = []
-  } = options;
+  const { maxAttempts, delay, retryableErrors } = options;
   
   let lastError: any;
-  let currentDelay = delay;
   
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      return await operation();
-    } catch (err: any) {
-      lastError = err;
+      return await fn();
+    } catch (error) {
+      lastError = error;
       
       // Check if error is retryable
-      const errorMessage = err.message?.toLowerCase() || '';
-      const isRetryable = retryableErrors.some(retryableErr => 
-        errorMessage.includes(retryableErr.toLowerCase())
-      );
-      
-      // Don't retry if this is the last attempt or error is not retryable
-      if (attempt === maxAttempts || !isRetryable) {
-        break;
+      if (retryableErrors) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const isRetryable = retryableErrors.some(retryText => 
+          errorMessage.toLowerCase().includes(retryText.toLowerCase())
+        );
+        
+        if (!isRetryable) {
+          throw error;
+        }
       }
       
-      // Wait before retry with exponential backoff
-      await new Promise(resolve => setTimeout(resolve, currentDelay));
-      currentDelay *= backoffFactor;
+      // Last attempt - don't wait, just throw
+      if (attempt === maxAttempts) {
+        throw error;
+      }
+      
+      // Wait with exponential backoff before retrying
+      const waitTime = delay * Math.pow(2, attempt - 1);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
     }
   }
   
-  throw lastError;
+  throw lastError; // This should never happen due to the checks above
 }
