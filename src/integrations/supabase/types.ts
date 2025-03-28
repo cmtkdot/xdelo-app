@@ -1457,28 +1457,9 @@ export type Database = {
             }
             Returns: unknown
           }
-      cleanup_orphaned_records: {
-        Args: {
-          table_name: string
-        }
-        Returns: number
-      }
       compute_data_hash: {
         Args: {
           data: Json
-        }
-        Returns: string
-      }
-      construct_purchase_order: {
-        Args: {
-          analyzed_content: Json
-        }
-        Returns: string
-      }
-      convert_estimate_to_invoice: {
-        Args: {
-          estimate_id: string
-          user_email: string
         }
         Returns: string
       }
@@ -1548,18 +1529,6 @@ export type Database = {
         }
         Returns: unknown
       }
-      is_customer: {
-        Args: {
-          account_type: string
-        }
-        Returns: boolean
-      }
-      is_vendor: {
-        Args: {
-          account_type: string
-        }
-        Returns: boolean
-      }
       ivfflat_bit_support: {
         Args: {
           "": unknown
@@ -1610,21 +1579,6 @@ export type Database = {
             }
             Returns: unknown
           }
-      make_log_webhook_test: {
-        Args: {
-          webhook_id: string
-          payload: Json
-        }
-        Returns: string
-      }
-      make_test_webhook_field_mapping: {
-        Args: {
-          webhook_id: string
-          message_id: string
-          event_type: string
-        }
-        Returns: Json
-      }
       match_documents: {
         Args: {
           query_embedding: string
@@ -1678,14 +1632,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      rebuild_calculated_fields: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      recalculate_all_totals: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
       recheck_media_groups: {
         Args: Record<PropertyKey, never>
         Returns: Json
@@ -1701,46 +1647,11 @@ export type Database = {
         }
         Returns: string
       }
-      refresh_all_materialized_views: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      refresh_materialized_view: {
-        Args: {
-          view_name: string
-        }
-        Returns: undefined
-      }
-      refresh_purchase_order_summary: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
       reset_stalled_messages: {
         Args: {
           p_timeout_minutes?: number
         }
         Returns: Json
-      }
-      schedule_relationship_maintenance: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      schedule_sync_check: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      search_related_records: {
-        Args: {
-          search_term: string
-        }
-        Returns: {
-          record_type: string
-          record_id: string
-          account_name: string
-          document_number: string
-          amount: number
-          created_date: string
-        }[]
       }
       sparsevec_out: {
         Args: {
@@ -1766,24 +1677,6 @@ export type Database = {
           p_correlation_id: string
         }
         Returns: Json
-      }
-      update_estimate_totals: {
-        Args: {
-          estimate_id: string
-        }
-        Returns: undefined
-      }
-      update_invoice_totals: {
-        Args: {
-          invoice_id: string
-        }
-        Returns: undefined
-      }
-      update_po_totals: {
-        Args: {
-          po_id: string
-        }
-        Returns: undefined
       }
       vector_avg: {
         Args: {
@@ -1857,7 +1750,7 @@ export type Database = {
           p_force_sync?: boolean
           p_sync_edit_history?: boolean
         }
-        Returns: boolean
+        Returns: Json
       }
     }
     Enums: {
