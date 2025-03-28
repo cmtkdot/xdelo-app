@@ -70,7 +70,7 @@ export async function updateMessageWithAnalysis(
 ) {
   try {
     // Prepare the updates
-    const updates: Record<string, any> = {
+    const updates: Record<string, unknown> = {
       analyzed_content: analyzedContent,
       processing_state: "completed",
       processing_completed_at: new Date().toISOString(),
