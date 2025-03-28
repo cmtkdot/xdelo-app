@@ -1,4 +1,5 @@
 import { corsHeaders } from "./cors.ts";
+import { supabaseClient } from "./supabase.ts"; // Import the singleton client
 
 // Determine if a file should be viewable in browser based on its MIME type
 export function xdelo_isViewableMimeType(mimeType: string): boolean {
@@ -304,58 +305,16 @@ async function xdelo_fetchWithRetry(
   throw lastError || new Error("Unknown error during fetch");
 }
 
-// Improved function to find existing file
-export async function xdelo_findExistingFile(
-  supabase: SupabaseClient,
-  fileUniqueId: string
-): Promise<{ exists: boolean; message?: any }> {
-  try {
-    if (!fileUniqueId) {
-      return { exists: false };
-    }
-
-    // Find message with this file_unique_id
-    const { data: existingMessages, error } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("file_unique_id", fileUniqueId)
-      .eq("deleted_from_telegram", false)
-      .order("created_at", { ascending: false })
-      .limit(1);
-
-    if (error || !existingMessages?.length) {
-      return { exists: false };
-    }
-
-    const existingMessage = existingMessages[0];
-
-    // Verify the file actually exists in storage
-    if (existingMessage.storage_path) {
-      const storageExists = await xdelo_verifyFileExists(
-        supabase,
-        existingMessage.storage_path
-      );
-
-      if (storageExists) {
-        return { exists: true, message: existingMessage };
-      }
-    }
-
-    return { exists: false };
-  } catch (error) {
-    console.error("Error finding existing file:", error);
-    return { exists: false };
-  }
-}
+// NOTE: xdelo_findExistingFile removed from here, use the version in mediaStorage.ts
 
 // Check if file exists in storage
 export async function xdelo_verifyFileExists(
-  supabase: SupabaseClient,
   storagePath: string,
   bucket: string = "telegram-media"
 ): Promise<boolean> {
   try {
-    const { data, error } = await supabase.storage
+    // Use the imported singleton client
+    const { data, error } = await supabaseClient.storage
       .from(bucket)
       .createSignedUrl(storagePath, 60);
 
@@ -382,25 +341,15 @@ export async function xdelo_uploadMediaToStorage(
     // Get correct upload options based on mime type
     const uploadOptions = xdelo_getUploadOptions(mimeType);
 
-    // Get Supabase client instance
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Missing Supabase credentials");
-    }
-
-    // Import dynamically to avoid issues in edge function context
-    const { createClient } = await import(
-      "https://esm.sh/@supabase/supabase-js@2"
-    );
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Use the imported singleton client
+    // const supabase = supabaseClient; // No need to reassign
 
     // Upload the file with retry for network stability
     let uploadError = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const { error } = await supabase.storage
+        // Use the imported singleton client
+        const { error } = await supabaseClient.storage
           .from(bucket)
           .upload(storagePath, fileData, uploadOptions);
 
@@ -442,12 +391,16 @@ export async function xdelo_uploadMediaToStorage(
     }
 
     // Construct public URL
+    // Construct public URL using environment variable
+    const supabaseUrl = Deno.env.get("SUPABASE_URL"); // Get base URL
+    if (!supabaseUrl) throw new Error("SUPABASE_URL environment variable not set");
     const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}`;
     console.log(`File uploaded successfully, public URL: ${publicUrl}`);
 
     // If messageId provided, update the message with the public URL
     if (messageId) {
-      await supabase
+      // Use the imported singleton client
+      await supabaseClient
         .from("messages")
         .update({
           storage_path: storagePath,
@@ -624,160 +577,4 @@ export async function xdelo_downloadMediaFromTelegram(
   }
 }
 
-// Process media for a message with duplicate detection and improved error handling
-export async function xdelo_processMessageMedia(
-  telegramData: any,
-  fileId: string,
-  fileUniqueId: string,
-  telegramBotToken: string,
-  messageId?: string
-): Promise<{
-  success: boolean;
-  isDuplicate: boolean;
-  fileInfo: any;
-  error?: string;
-}> {
-  try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Missing Supabase credentials");
-    }
-
-    // Import dynamically to avoid issues in edge function context
-    const { createClient } = await import(
-      "https://esm.sh/@supabase/supabase-js@2"
-    );
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Step 1: Check if this file already exists in our system
-    const { exists, message: existingMessage } = await xdelo_findExistingFile(
-      supabase,
-      fileUniqueId
-    );
-
-    // If file exists and is properly stored, reuse it
-    if (exists && existingMessage) {
-      console.log(
-        `Duplicate file detected: ${fileUniqueId}, reusing existing file`
-      );
-
-      // If messageId provided, update the message to reference existing file
-      if (messageId) {
-        await supabase
-          .from("messages")
-          .update({
-            is_duplicate: true,
-            duplicate_reference_id: existingMessage.id,
-            storage_path: existingMessage.storage_path,
-            public_url: existingMessage.public_url,
-            mime_type: existingMessage.mime_type,
-            storage_exists: true,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", messageId);
-      }
-
-      return {
-        success: true,
-        is: true,
-        fileInfo: {
-          storage_path: existingMessage.storage_path,
-          public_url: existingMessage.public_url,
-          mime_type: existingMessage.mime_type,
-          file_id: fileId,
-          file_unique_id: fileUniqueId,
-          width: existingMessage.width,
-          height: existingMessage.height,
-          duration: existingMessage.duration,
-          file_size: existingMessage.file_size,
-        },
-      };
-    }
-
-    // Step 2: Not a duplicate, need to download and process the file
-    console.log(
-      `New file detected: ${fileUniqueId}, downloading from Telegram`
-    );
-
-    // Step 3: Determine MIME type
-    const mimeType = xdelo_detectMimeType(telegramData);
-    console.log(`Detected MIME type: ${mimeType} for file ${fileUniqueId}`);
-
-    // Step 4: Download file from Telegram
-    const downloadResult = await xdelo_downloadMediaFromTelegram(
-      fileId,
-      fileUniqueId,
-      mimeType,
-      telegramBotToken
-    );
-
-    if (!downloadResult.success || !downloadResult.blob) {
-      throw new Error(
-        downloadResult.error || "Failed to download media from Telegram"
-      );
-    }
-
-    // Step 5: Upload to storage with proper content disposition
-    const uploadResult = await xdelo_uploadMediaToStorage(
-      downloadResult.storagePath,
-      downloadResult.blob,
-      downloadResult.mimeType || mimeType,
-      messageId
-    );
-
-    if (!uploadResult.success) {
-      throw new Error(
-        uploadResult.error || "Failed to upload media to storage"
-      );
-    }
-
-    // Step 6: Get media dimensions
-    const media = telegramData.photo
-      ? telegramData.photo[telegramData.photo.length - 1]
-      : telegramData.video || telegramData.document;
-
-    const fileInfo = {
-      storage_path: downloadResult.storagePath,
-      public_url: uploadResult.publicUrl,
-      mime_type: downloadResult.mimeType || mimeType,
-      mime_type_original:
-        telegramData.video?.mime_type || telegramData.document?.mime_type,
-      file_id: fileId,
-      file_unique_id: fileUniqueId,
-      width: media?.width,
-      height: media?.height,
-      duration: telegramData.video?.duration,
-      file_size: media?.file_size || downloadResult.blob.size,
-    };
-
-    // Step 7: If messageId provided but not yet updated (because we didn't pass it to uploadMediaToStorage)
-    if (messageId && !uploadResult.publicUrl) {
-      await supabase
-        .from("messages")
-        .update({
-          ...fileInfo,
-          is_duplicate: false,
-          storage_exists: true,
-          storage_path_standardized: true,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", messageId);
-    }
-
-    return {
-      success: true,
-      isDuplicate: false,
-      fileInfo,
-    };
-  } catch (error) {
-    console.error("Error processing message media:", error);
-    return {
-      success: false,
-      isDuplicate: false,
-      fileInfo: null,
-      error: error.message,
-    };
-  }
-}
+// NOTE: xdelo_processMessageMedia removed from here, use the version in mediaStorage.ts

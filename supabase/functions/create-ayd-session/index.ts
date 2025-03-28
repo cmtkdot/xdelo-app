@@ -6,7 +6,7 @@ import {
   RequestMetadata,
   SecurityLevel,
 } from "../_shared/unifiedHandler.ts";
-import { logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts"; // Import if specific logging needed beyond unifiedHandler
+import { logProcessingEvent } from "../_shared/auditLogger.ts"; // Import from dedicated module
 
 // Core logic for creating an AYD session
 async function handleCreateAydSession(req: Request, metadata: RequestMetadata): Promise<Response> {

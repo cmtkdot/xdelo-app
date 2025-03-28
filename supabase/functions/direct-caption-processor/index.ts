@@ -6,7 +6,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 // Import unified handler and helpers
 import { createHandler, SecurityLevel, RequestMetadata, createSuccessResponse } from '../_shared/unifiedHandler.ts';
 // Import logging utility (assuming it exists or using logProcessingEvent directly)
-import { logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts";
+import { logProcessingEvent } from "../_shared/auditLogger.ts"; // Import from dedicated module
 
 const BATCH_SIZE = 10;
 const POLLING_INTERVAL_MS = 10000;

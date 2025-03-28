@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.217.0/http/server.ts"; // Use versioned import
 import { createHandler, SecurityLevel, RequestMetadata } from "../_shared/unifiedHandler.ts"; // Import unified handler
-import { isMessageForwarded, logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts"; // Import logProcessingEvent from consolidated utils
+import { isMessageForwarded } from "../_shared/consolidatedMessageUtils.ts"; // Only need isMessageForwarded
+import { logProcessingEvent } from "../_shared/auditLogger.ts"; // Import from dedicated module
 // Remove redundant import: import { xdelo_logProcessingEvent } from "../_shared/databaseOperations.ts";
 import { handleEditedMessage } from "./handlers/editedMessageHandler.ts";
 import { handleMediaMessage } from "./handlers/mediaMessageHandler.ts";

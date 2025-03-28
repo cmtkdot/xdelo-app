@@ -1,7 +1,7 @@
 import { corsHeaders } from "./cors.ts";
 // Export RequestMetadata
 import { FunctionOptions, RequestMetadata, ApiResponse, ErrorResponse, SuccessResponse } from "./types.ts";
-import { logProcessingEvent } from "./consolidatedMessageUtils.ts"; // Import logging function
+import { logProcessingEvent } from "./auditLogger.ts"; // Import logging function from dedicated module
 export type { RequestMetadata }; // Re-export the type
 
 export enum SecurityLevel {

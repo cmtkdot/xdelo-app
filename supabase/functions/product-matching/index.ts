@@ -6,7 +6,7 @@ import {
   SecurityLevel,
 } from "../_shared/unifiedHandler.ts";
 import { supabaseClient } from "../_shared/supabase.ts"; // Use singleton client
-import { logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts";
+import { logProcessingEvent } from "../_shared/auditLogger.ts"; // Import from dedicated module
 import { findBestProductMatch } from './matching-utils.ts';
 import { ProductMatchRequest, ProductMatchResponse, GlProduct } from './types.ts';
 

@@ -1,5 +1,5 @@
 // Use the singleton client
-import { logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts";
+import { logProcessingEvent } from "../_shared/auditLogger.ts"; // Import from dedicated module
 import { supabaseClient } from "../_shared/supabase.ts";
 // Removed createSupabaseClient import
 // Removed createClient import

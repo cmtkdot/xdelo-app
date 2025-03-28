@@ -6,7 +6,7 @@ import {
   SecurityLevel,
 } from "../_shared/unifiedHandler.ts";
 import { supabaseClient } from "../_shared/supabase.ts"; // Import singleton client
-import { logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts"; // Import standard logging
+import { logProcessingEvent } from "../_shared/auditLogger.ts"; // Import from dedicated module
 
 // Define expected request body structure (optional but good practice)
 interface DeleteRequestBody {

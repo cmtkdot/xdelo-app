@@ -9,7 +9,7 @@ import { supabaseClient } from "../_shared/supabase.ts"; // Use singleton client
 import { ParsedContent, xdelo_parseCaption as parseCaption } from "../_shared/captionParsers.ts";
 // Assuming MediaGroupResult is defined correctly elsewhere or adjust as needed
 // import { MediaGroupResult } from "./types.ts";
-import { logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts";
+import { logProcessingEvent } from "../_shared/auditLogger.ts"; // Import from dedicated module
 // Keep specific DB operations for this function's logic
 import {
   getMessage,

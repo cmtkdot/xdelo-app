@@ -1,7 +1,7 @@
-
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
-import { constructTelegramMessageUrl, isMessageForwarded, logProcessingEvent } from '../../_shared/consolidatedMessageUtils.ts'; // Import logProcessingEvent
+import { constructTelegramMessageUrl, isMessageForwarded } from '../../_shared/consolidatedMessageUtils.ts'; // Only need these
+import { logProcessingEvent } from '../../_shared/auditLogger.ts'; // Import from dedicated module
 import { supabaseClient } from '../../_shared/supabase.ts'; // Import supabaseClient from its dedicated file
 
 /**

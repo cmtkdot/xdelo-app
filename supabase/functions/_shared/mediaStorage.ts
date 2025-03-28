@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { supabaseClient } from "./supabase.ts"; // Import the singleton client
 import {
   xdelo_detectMimeType,
   xdelo_downloadMediaFromTelegram,
@@ -9,11 +9,11 @@ import {
  * Find an existing file in the database by file_unique_id
  */
 export async function xdelo_findExistingFile(
-  supabase: SupabaseClient,
   fileUniqueId: string
 ): Promise<{ exists: boolean; message?: any }> {
   try {
-    const { data, error } = await supabase
+    // Use the imported singleton client
+    const { data, error } = await supabaseClient
       .from('messages')
       .select('*')
       .eq('file_unique_id', fileUniqueId)
@@ -51,19 +51,8 @@ export async function xdelo_processMessageMedia(
   error?: string
 }> {
   try {
-    // First check if this is a duplicate file
+    // First check if this is a duplicate file using the singleton client
     const { exists, message: existingMessage } = await xdelo_findExistingFile(
-      // Get Supabase client
-      createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-        {
-          auth: {
-            persistSession: false,
-            autoRefreshToken: false
-          }
-        }
-      ),
       fileUniqueId
     );
 

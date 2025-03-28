@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"; // Keep for serve
-import { logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts"; // Use standard logging
+import { logProcessingEvent } from "../_shared/auditLogger.ts"; // Import from dedicated module
 import { supabaseClient } from "../_shared/supabase.ts"; // Use singleton client
 import {
   createHandler,

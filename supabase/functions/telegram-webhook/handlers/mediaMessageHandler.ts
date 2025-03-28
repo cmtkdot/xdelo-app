@@ -2,7 +2,8 @@ import { corsHeaders } from "../../_shared/cors.ts";
 import { syncMediaGroupContent } from "../../_shared/mediaGroupSync.ts";
 import { xdelo_processMessageMedia } from "../../_shared/mediaStorage.ts";
 import { xdelo_detectMimeType } from "../../_shared/mediaUtils.ts";
-import { constructTelegramMessageUrl, logProcessingEvent } from "../../_shared/consolidatedMessageUtils.ts"; // Import logProcessingEvent
+import { constructTelegramMessageUrl } from "../../_shared/consolidatedMessageUtils.ts"; // Only need constructTelegramMessageUrl
+import { logProcessingEvent } from "../../_shared/auditLogger.ts"; // Import from dedicated module
 import { supabaseClient } from "../../_shared/supabase.ts";
 import {
   createMessage,

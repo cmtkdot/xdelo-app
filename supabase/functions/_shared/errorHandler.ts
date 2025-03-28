@@ -1,3 +1,5 @@
+import { supabaseClient } from './supabase.ts'; // Import the singleton client
+
 interface ErrorLogParams {
   messageId: string;
   errorMessage: string;
@@ -6,47 +8,17 @@ interface ErrorLogParams {
   additionalData?: Record<string, any>;
 }
 
-/**
- * Initialize Supabase client for database operations
- */
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-);
+// Removed local client initialization
 
-/**
- * Log an error to the database
- */
-export async function logErrorToDatabase(params: ErrorLogParams): Promise<void> {
-  const { messageId, errorMessage, correlationId, functionName, additionalData } = params;
-
-  try {
-    const metadata = {
-      error_message: errorMessage,
-      function_name: functionName || 'unknown',
-      ...(additionalData || {})
-    };
-
-    await supabase.from('unified_audit_logs').insert({
-      event_type: 'edge_function_error',
-      entity_id: messageId,
-      error_message: errorMessage,
-      metadata,
-      correlation_id: correlationId || crypto.randomUUID(),
-      event_timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Error logging to database:', error);
-    // Cannot do much if logging fails - at least we have console logs
-  }
-}
+// Removed redundant logErrorToDatabase function. Use logProcessingEvent from consolidatedMessageUtils.ts instead.
 
 /**
  * Update a message with error state
  */
 export async function updateMessageWithError(messageId: string, errorMessage: string): Promise<void> {
   try {
-    await supabase
+    // Use the imported singleton client
+    await supabaseClient
       .from('messages')
       .update({
         processing_state: 'error',

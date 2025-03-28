@@ -6,7 +6,7 @@ import {
   SecurityLevel,
 } from "../_shared/unifiedHandler.ts";
 import { supabaseClient } from "../_shared/supabase.ts"; // Use singleton client
-import { logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts"; // Use standard logging
+import { logProcessingEvent } from "../_shared/auditLogger.ts"; // Import from dedicated module
 
 // Removed local logEvent function
 
