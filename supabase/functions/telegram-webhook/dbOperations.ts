@@ -1,6 +1,5 @@
 import {
   createSupabaseClient,
-  extractTelegramMetadata,
   logProcessingEvent,
 } from "../_shared/consolidatedMessageUtils.ts";
 
@@ -77,10 +76,6 @@ export async function createMessage(
     // Set a longer timeout for complex operations
     const options = { timeoutMs: 30000 };
 
-    // Extract essential metadata
-    const telegramMetadata =
-      input.telegram_metadata ||
-      (input.telegram_data ? extractTelegramMetadata(input.telegram_data) : {});
 
     // Prepare the full record data for upsert
     const fullRecordData: Record<string, any> = {
@@ -110,7 +105,6 @@ export async function createMessage(
       duplicate_reference_id: input.duplicate_reference_id,
       old_analyzed_content: input.old_analyzed_content,
       telegram_data: input.telegram_data,
-      telegram_metadata: telegramMetadata,
       forward_info: input.forward_info,
       edit_date: input.edit_date,
       edit_history: input.edit_history || [],

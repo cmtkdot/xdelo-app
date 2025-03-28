@@ -1,5 +1,4 @@
 import { supabaseClient } from "./dbOperations.ts";
-import { extractTelegramMetadata } from "../_shared/consolidatedMessageUtils.ts";
 import { MessageInput } from "./types.ts";
 
 // Deep equality comparison for objects/arrays
@@ -98,16 +97,6 @@ export async function createMessage(
        *
        * Logs warnings if extraction fails but continues operation
        */
-    let telegramMetadata: Record<string, unknown> = {};
-    if (typeof input.telegram_metadata !== "undefined") {
-      telegramMetadata = input.telegram_metadata;
-    } else if (input.telegram_data) {
-      try {
-        telegramMetadata = extractTelegramMetadata(input.telegram_data);
-      } catch (e) {
-        if (logger?.warn) logger.warn("Failed to extract telegram metadata", e);
-      }
-    }
 
     /**
      * Prepare complete message record for database upsert
@@ -151,7 +140,6 @@ export async function createMessage(
       duplicate_reference_id: input.duplicate_reference_id,
       old_analyzed_content: input.old_analyzed_content,
       telegram_data: input.telegram_data,
-      telegram_metadata: telegramMetadata,
       forward_info: input.forward_info,
       edit_date: input.edit_date,
       edit_history: input.edit_history || [],
