@@ -1,4 +1,4 @@
-import { supabaseClient } from './supabase.ts'; // Import the singleton client
+import { supabaseClient } from "./supabase.ts";
 
 interface ErrorLogParams {
   messageId: string;

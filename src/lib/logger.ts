@@ -11,7 +11,7 @@ export class Logger {
 
   constructor(context: string, correlationId?: string) {
     this.context = context;
-    this.correlationId = correlationId || crypto.randomUUID();
+    this.correlationId = correlationId || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : this.generateFallbackUUID());
   }
 
   /**
@@ -20,11 +20,11 @@ export class Logger {
   async logEvent(
     eventType: LogEventType | string,
     entityId: string,
-    metadata: Record<string, any> = {}
+    metadata: Record<string, unknown> = {}
   ): Promise<void> {
     try {
       // Add standard metadata
-      const enhancedMetadata: Record<string, any> = {
+      const enhancedMetadata: Record<string, unknown> = {
         ...metadata,
         context: this.context,
         timestamp: new Date().toISOString(),
@@ -42,8 +42,8 @@ export class Logger {
       if (process.env.NODE_ENV !== 'production') {
         console.log(`[${eventType}] [${this.context}] ${entityId}`, enhancedMetadata);
       }
-      
-      // Log to database 
+
+      // Log to database
       await supabase.rpc('xdelo_logprocessingevent', {
         p_event_type: String(eventType),
         p_entity_id: safeEntityId,
@@ -63,16 +63,29 @@ export class Logger {
     try {
       // Check for valid UUID format
       const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      
+
       if (uuidPattern.test(id)) {
         return id;
       }
-      
+
       // Generate a new UUID if not valid
-      return crypto.randomUUID().toString();
+      return typeof crypto !== 'undefined' && crypto.randomUUID ?
+        crypto.randomUUID().toString() :
+        this.generateFallbackUUID();
     } catch {
-      return crypto.randomUUID().toString();
+      return this.generateFallbackUUID();
     }
+  }
+
+  /**
+   * Fallback UUID generation when crypto.randomUUID is not available
+   */
+  private generateFallbackUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 
   /**
@@ -92,11 +105,11 @@ export class Logger {
   /**
    * Convenience methods for common log levels
    */
-  async info(message: string, entityId: string, metadata: Record<string, any> = {}): Promise<void> {
+  async info(message: string, entityId: string, metadata: Record<string, unknown> = {}): Promise<void> {
     await this.logEvent(`info:${message}`, entityId, metadata);
   }
 
-  async error(message: string, entityId: string, error: unknown, metadata: Record<string, any> = {}): Promise<void> {
+  async error(message: string, entityId: string, error: unknown, metadata: Record<string, unknown> = {}): Promise<void> {
     const errorData = {
       ...metadata,
       error_message: error instanceof Error ? error.message : String(error),
@@ -105,14 +118,14 @@ export class Logger {
     await this.logEvent(`error:${message}`, entityId, errorData);
   }
 
-  async warn(message: string, entityId: string, metadata: Record<string, any> = {}): Promise<void> {
+  async warn(message: string, entityId: string, metadata: Record<string, unknown> = {}): Promise<void> {
     await this.logEvent(`warning:${message}`, entityId, metadata);
   }
 
-  async success(message: string, entityId: string, metadata: Record<string, any> = {}): Promise<void> {
+  async success(message: string, entityId: string, metadata: Record<string, unknown> = {}): Promise<void> {
     await this.logEvent(`success:${message}`, entityId, metadata);
   }
-  
+
   /**
    * Log media processing operations
    */
@@ -120,7 +133,7 @@ export class Logger {
     operation: string,
     messageId: string,
     success: boolean,
-    metadata: Record<string, any> = {}
+    metadata: Record<string, unknown> = {}
   ): Promise<void> {
     const eventType = success ? `media_${operation}_success` : `media_${operation}_failed`;
     await this.logEvent(eventType, messageId, metadata);

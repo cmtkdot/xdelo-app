@@ -1,5 +1,5 @@
-import { SupabaseClient } from '@supabase/supabase-js';
-import { logger } from './logger';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { logProcessingEvent } from "../../_shared/auditLogger.ts";
 
 interface RetryOptions {
   maxAttempts?: number;
@@ -34,7 +34,11 @@ export class RetryHandler {
         }
 
         const delay = this.calculateBackoff();
-        logger.warn(`Retry attempt ${this.attempts}, waiting ${delay}ms`, { error });
+        logProcessingEvent('retry_attempt', {
+          attempt: this.attempts,
+          delay_ms: delay,
+          error: error.message
+        });
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
