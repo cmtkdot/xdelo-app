@@ -1,1 +1,40 @@
 project_id = "xjhhehxcxkiumnwbirel"
+
+[functions.analyze-with-ai]
+verify_jwt = false
+[functions.cleanup-storage-on-delete]
+verify_jwt = false
+[functions.create-analyze-message-caption]
+verify_jwt = false
+[functions.create-ayd-session]
+verify_jwt = false
+[functions.delete-telegram-message]
+verify_jwt = false
+[functions.direct-caption-processor]
+verify_jwt = false
+[functions.generic-webhook]
+verify_jwt = false
+[functions.log-operation]
+verify_jwt = false
+[functions.manual-caption-parser]
+verify_jwt = false
+[functions.media-management]
+verify_jwt = false
+[functions.openai-request]
+verify_jwt = false
+[functions.parse-caption]
+verify_jwt = false
+[functions.process-audio-upload]
+verify_jwt = false
+[functions.product-matching]
+verify_jwt = false
+[functions.redownload-missing-files]
+verify_jwt = false
+[functions.telegram-webhook]
+verify_jwt = false
+[functions.update-telegram-caption]
+verify_jwt = false
+[functions.user-data]
+verify_jwt = false
+[functions.validate-storage-files]
+verify_jwt = false

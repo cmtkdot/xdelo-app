@@ -1,4 +1,3 @@
-
 import { Message } from "@/types/entities/Message";
 import { AnalyzedContent } from "@/types/utils/AnalyzedContent";
 import { MediaItem } from "@/types/entities/MediaItem";
@@ -75,8 +74,10 @@ function getMediaType(mimeType: string): 'image' | 'video' | 'document' | 'audio
 export { cn } from './generalUtils';
 
 // Explicitly import and re-export from productMatching to avoid conflicts
-import { findMatches, matchProduct, updateProduct } from './productMatching';
-export { findMatches, matchProduct, updateProduct };
+import { findMatches, matchProduct, batchMatchProducts } from './product-matching';
+
+// Export product matching functions
+export { findMatches, matchProduct, batchMatchProducts };
 
 // Export from logUtils
 import { logEvent, LogEventType } from './logUtils';

@@ -1,89 +1,120 @@
 
 import React, { useState } from 'react';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { RotateCw, Database, AlertTriangle, Wrench } from 'lucide-react';
-import { useSystemRepair } from '@/hooks/useSystemRepair';
-import { useMediaUtils } from '@/hooks/useMediaUtils';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Spinner } from '@/components/ui/spinner';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/useToast';
+import { ResetStuckMessages } from './ResetStuckMessages';
 
 export function SystemRepairPanel() {
-  const { repairSystem, isRepairing: isSystemRepairing } = useSystemRepair();
-  const { repairMediaBatch, isProcessing: isMediaRepairing } = useMediaUtils();
-  const [repairResults, setRepairResults] = useState<any>(null);
+  const [isRepairing, setIsRepairing] = useState(false);
+  const [isRecheckingGroups, setIsRecheckingGroups] = useState(false);
+  const { toast } = useToast();
 
-  const handleRepairSystem = async () => {
-    const results = await repairSystem();
-    setRepairResults(results);
+  const handleRepairMetadataFunctions = async () => {
+    setIsRepairing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('xdelo_run_sql_migration', {
+        body: {
+          migration: 'add_telegram_metadata_function',
+          description: 'Repair telegram metadata extraction function'
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'System functions repaired',
+        description: 'The missing metadata functions have been added to the database.',
+      });
+    } catch (error) {
+      console.error('Error repairing system:', error);
+      toast({
+        title: 'Repair failed',
+        description: error.message || 'An unknown error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRepairing(false);
+    }
   };
 
-  const handleRepairFiles = async () => {
-    const results = await repairMediaBatch([]);
-    setRepairResults(results);
+  const handleRecheckMediaGroups = async () => {
+    setIsRecheckingGroups(true);
+    try {
+      // Call the edge function instead of the RPC directly
+      const { data, error } = await supabase.functions.invoke('utility-functions', {
+        body: {
+          action: 'recheck_media_groups'
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Media groups checked',
+        description: 'All media groups have been processed for consistency.',
+      });
+    } catch (error) {
+      console.error('Error checking media groups:', error);
+      toast({
+        title: 'Check failed',
+        description: error.message || 'An unknown error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRecheckingGroups(false);
+    }
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Wrench className="h-5 w-5" />
-          System Repair Tools
-        </CardTitle>
-        <CardDescription>
-          Tools to repair and maintain system functionality
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div>
-          <h3 className="text-sm font-medium mb-2">Database Maintenance</h3>
-          <div className="flex flex-wrap gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleRepairSystem}
-              disabled={isSystemRepairing}
-            >
-              <Database className="mr-2 h-4 w-4" />
-              Repair Processing Flow
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              disabled={isMediaRepairing}
-              onClick={handleRepairFiles}
-            >
-              <RotateCw className="mr-2 h-4 w-4" />
-              Repair File References
-            </Button>
-          </div>
-        </div>
-        
-        <Separator />
-        
-        <div>
-          <h3 className="text-sm font-medium mb-2">Advanced Repairs</h3>
-          <div className="flex flex-wrap gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => alert("This feature is not implemented yet")}
-            >
-              <AlertTriangle className="mr-2 h-4 w-4" />
-              Clean Orphaned Records
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-      {repairResults && (
-        <CardFooter className="border-t p-4 bg-muted/20">
-          <div className="text-sm">
-            <p className="font-medium">Repair Results:</p>
-            <pre className="mt-2 text-xs overflow-auto max-h-40 p-2 bg-muted rounded">
-              {JSON.stringify(repairResults, null, 2)}
-            </pre>
-          </div>
-        </CardFooter>
-      )}
-    </Card>
+    <>
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle>System Repair</CardTitle>
+          <CardDescription>
+            Tools to fix system issues and ensure smooth operation
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Alert className="mb-4">
+            <AlertTitle>Database Function Repairs</AlertTitle>
+            <AlertDescription>
+              If you're seeing errors about missing database functions, use this tool to repair them.
+            </AlertDescription>
+            <div className="mt-4">
+              <Button 
+                onClick={handleRepairMetadataFunctions} 
+                disabled={isRepairing}
+              >
+                {isRepairing && <Spinner className="mr-2 h-4 w-4" />}
+                Repair Metadata Functions
+              </Button>
+            </div>
+          </Alert>
+
+          <Alert className="mb-4">
+            <AlertTitle>Media Group Consistency</AlertTitle>
+            <AlertDescription>
+              Fix inconsistencies between messages in the same media group.
+            </AlertDescription>
+            <div className="mt-4">
+              <Button 
+                onClick={handleRecheckMediaGroups} 
+                disabled={isRecheckingGroups}
+                variant="outline"
+              >
+                {isRecheckingGroups && <Spinner className="mr-2 h-4 w-4" />}
+                Recheck Media Groups
+              </Button>
+            </div>
+          </Alert>
+
+          <ResetStuckMessages />
+        </CardContent>
+      </Card>
+    </>
   );
 }

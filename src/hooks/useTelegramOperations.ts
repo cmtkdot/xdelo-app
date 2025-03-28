@@ -3,8 +3,10 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types/MessagesTypes';
 import { useToast } from '@/hooks/useToast';
-import { logMessageOperation } from '@/lib/syncLogger';
-import { LogEventType } from '@/types/api/LogEventType';
+import { createLogger } from '@/lib/logger';
+
+// Create a logger specific to telegram operations
+const logger = createLogger('telegram-operations');
 
 export function useTelegramOperations() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -14,8 +16,8 @@ export function useTelegramOperations() {
     try {
       setIsProcessing(true);
       
-      // Log the operation
-      await logMessageOperation(LogEventType.MESSAGE_DELETED, message.id, {
+      // Log the operation with simplified logging
+      await logger.logEvent('MESSAGE_DELETED', message.id, {
         delete_from_telegram: deleteTelegram,
         file_unique_id: message.file_unique_id,
         media_group_id: message.media_group_id
@@ -56,8 +58,8 @@ export function useTelegramOperations() {
     try {
       setIsProcessing(true);
       
-      // Log the operation
-      await logMessageOperation(LogEventType.USER_ACTION, message.id, {
+      // Log the operation with simplified logging
+      await logger.logEvent('USER_ACTION', message.id, {
         action: 'forward',
         target_chat_id: chatId,
         file_unique_id: message.file_unique_id
@@ -96,8 +98,8 @@ export function useTelegramOperations() {
     try {
       setIsProcessing(true);
       
-      // Log the operation
-      await logMessageOperation(LogEventType.USER_ACTION, messageId, {
+      // Log the operation with simplified logging
+      await logger.logEvent('USER_ACTION', messageId, {
         action: 'manual_reprocess'
       });
       

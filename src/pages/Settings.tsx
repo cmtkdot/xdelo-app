@@ -2,8 +2,10 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { AccountCard } from "@/components/Settings/AccountCard";
-import { TelegramCard } from "@/components/Settings/TelegramCard";
+import { TelegramCard } from "@/components/Settings/Telegram";
 import { DangerZoneCard } from "@/components/Settings/DangerZoneCard";
+import { DatabaseFixCard } from "@/components/Settings/DatabaseFixCard";
+import { LogFixerCard } from "@/components/Settings/LogFixerCard";
 
 const Settings = () => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -41,6 +43,8 @@ const Settings = () => {
         botToken={botToken} 
         webhookUrl={webhookUrl}
       />
+      <LogFixerCard />
+      <DatabaseFixCard />
       <DangerZoneCard />
     </div>
   );

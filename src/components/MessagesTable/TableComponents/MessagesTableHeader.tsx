@@ -1,3 +1,7 @@
+/**
+ * @deprecated This component is no longer used. Table header has been integrated into MessagesTable.tsx
+ * Keep this file for reference until all usages have been migrated.
+ */
 
 import { TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
