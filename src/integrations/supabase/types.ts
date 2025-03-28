@@ -250,6 +250,7 @@ export type Database = {
           last_edit_user_id: number | null
           last_error_at: string | null
           last_processing_attempt: string | null
+          max_processing_attempts: number | null
           media_group_id: string | null
           media_group_sync: string | null
           message_caption_id: string | null
@@ -257,6 +258,7 @@ export type Database = {
           mime_type: string | null
           mime_type_original: string | null
           needs_redownload: boolean | null
+          next_retry_at: string | null
           notes: string | null
           old_analyzed_content: Json[] | null
           old_product_code: string | null
@@ -347,6 +349,7 @@ export type Database = {
           last_edit_user_id?: number | null
           last_error_at?: string | null
           last_processing_attempt?: string | null
+          max_processing_attempts?: number | null
           media_group_id?: string | null
           media_group_sync?: string | null
           message_caption_id?: string | null
@@ -354,6 +357,7 @@ export type Database = {
           mime_type?: string | null
           mime_type_original?: string | null
           needs_redownload?: boolean | null
+          next_retry_at?: string | null
           notes?: string | null
           old_analyzed_content?: Json[] | null
           old_product_code?: string | null
@@ -444,6 +448,7 @@ export type Database = {
           last_edit_user_id?: number | null
           last_error_at?: string | null
           last_processing_attempt?: string | null
+          max_processing_attempts?: number | null
           media_group_id?: string | null
           media_group_sync?: string | null
           message_caption_id?: string | null
@@ -451,6 +456,7 @@ export type Database = {
           mime_type?: string | null
           mime_type_original?: string | null
           needs_redownload?: boolean | null
+          next_retry_at?: string | null
           notes?: string | null
           old_analyzed_content?: Json[] | null
           old_product_code?: string | null
@@ -1964,6 +1970,7 @@ export type Database = {
         | "partial_success"
         | "error"
         | "pending_reprocess"
+        | "failed"
       processing_state_type:
         | "initialized"
         | "pending"
@@ -1972,6 +1979,7 @@ export type Database = {
         | "error"
         | "pending_reprocess"
         | "partial_success"
+        | "failed"
       sync_direction_type: "to_supabase" | "to_glide" | "both"
       sync_operation: "sync" | "create" | "update" | "delete"
       sync_resolution_status:

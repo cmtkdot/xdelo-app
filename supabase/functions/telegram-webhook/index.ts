@@ -1,11 +1,14 @@
-import { serve } from "https://deno.land/std@0.217.0/http/server.ts"; // Use versioned import
-import { createHandler, SecurityLevel, RequestMetadata } from "../_shared/unifiedHandler.ts"; // Import unified handler
-import { isMessageForwarded } from "../_shared/consolidatedMessageUtils.ts"; // Only need isMessageForwarded
-import { logProcessingEvent } from "../_shared/auditLogger.ts"; // Import from dedicated module
-import { createMessage } from "./dbOperations.ts"; // Import createMessage
-import { handleEditedMessage } from "./handlers/editedMessageHandler.ts";
-import { handleMediaMessage } from "./handlers/mediaMessageHandler.ts";
-import { handleOtherMessage } from "./handlers/textMessageHandler.ts";
+
+/**
+ * Main entry point for the Telegram webhook
+ */
+import { serve } from "https://deno.land/std@0.217.0/http/server.ts";
+import { createHandler, SecurityLevel, RequestMetadata } from "../_shared/unifiedHandler.ts";
+import { isMessageForwarded } from "./utils/messageUtils.ts";
+import { logEvent, logErrorEvent } from "./services/loggingService.ts";
+import { checkExistingMessage } from "./services/databaseService.ts";
+import { handleEditedMessage, handleMediaMessage, handleOtherMessage } from "./handlers/index.ts";
+import { createTelegramErrorResponse } from "./services/responseService.ts";
 import { Logger } from "./utils/logger.ts";
 
 // Define the core handler logic
@@ -20,7 +23,7 @@ const webhookHandler = async (req: Request, metadata: RequestMetadata) => {
       path: metadata.path,
     });
 
-    await logProcessingEvent( // Use the imported logProcessingEvent
+    await logEvent(
       "webhook_received",
       "system",
       metadata.correlationId,
@@ -44,12 +47,14 @@ const webhookHandler = async (req: Request, metadata: RequestMetadata) => {
           .filter((k) => k !== "update_id")
           .join(", "),
       });
-    } catch (error: unknown) { // Add type annotation
+    } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorName = error instanceof Error ? error.name : "UnknownError";
       logger.error("Failed to parse request body", { error: errorMessage });
-      // Let the unified handler manage the error response creation
-      throw new Error(errorName === "AbortError" ? "Request timeout parsing JSON" : `Invalid JSON in request body: ${errorMessage}`);
+      
+      throw new Error(errorName === "AbortError" 
+        ? "Request timeout parsing JSON" 
+        : `Invalid JSON in request body: ${errorMessage}`);
     }
 
     // Get the message object
@@ -58,85 +63,81 @@ const webhookHandler = async (req: Request, metadata: RequestMetadata) => {
       update.edited_message ||
       update.channel_post ||
       update.edited_channel_post;
+      
     if (!message) {
       logger.warn("No processable content in update", {
         update_keys: Object.keys(update),
       });
-      // Let the unified handler manage the error response creation
       throw new Error("No processable content in update");
     }
 
-    // --- Retry Limit Check ---
+    // --- Check Retry Limit ---
     const MAX_RETRIES = 3;
-    // Prepare minimal input for createMessage to check/get retry count
-    const messageCheckInput = {
-      telegram_message_id: message.message_id,
-      chat_id: message.chat?.id,
-      correlation_id: metadata.correlationId,
-      // Add other minimal required fields if necessary for createMessage lookup
-    };
+    
+    // Check if message already exists and has reached retry limit
+    const { exists, id: existingId, retryCount } = await checkExistingMessage(
+      message.message_id,
+      message.chat?.id
+    );
 
-    // Call createMessage primarily to check for existing record and retry count
-    // Note: This might create a basic record if it doesn't exist yet.
-    // Consider if this initial create is desired or if a dedicated 'getMessageRetryCount' function is better.
-    // For now, let's use createMessage as it handles upsert logic.
-    const dbResult = await createMessage(messageCheckInput, logger);
-
-    if (!dbResult.success && !dbResult.duplicate) {
-      // If createMessage failed even to lookup/create initial record, log and exit
-      logger.error("Initial database check/create failed", { error: dbResult.error_message });
-      // Return 200 OK to Telegram despite internal error
-      return new Response(JSON.stringify({ success: false, error: "Database check failed", correlationId: metadata.correlationId }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    }
-
-    // Check retry count if the message was found (duplicate=true)
-    if (dbResult.duplicate && (dbResult.retry_count || 0) >= MAX_RETRIES) {
+    if (exists && (retryCount || 0) >= MAX_RETRIES) {
       logger.warn(`Max retries (${MAX_RETRIES}) reached for message ${message.message_id}. Skipping processing.`, {
         message_id: message.message_id,
         chat_id: message.chat?.id,
-        retry_count: dbResult.retry_count,
+        retry_count: retryCount,
       });
-      await logProcessingEvent(
+      
+      await logEvent(
         "max_retries_reached",
-        dbResult.id || message.message_id.toString(), // Use DB ID if available
+        existingId || message.message_id.toString(),
         metadata.correlationId,
         {
           message_id: message.message_id,
           chat_id: message.chat?.id,
-          retry_count: dbResult.retry_count,
+          retry_count: retryCount,
         }
       );
+      
       // Return 200 OK to Telegram to stop further retries
-      return new Response(JSON.stringify({ success: true, message: "Max retries reached, skipping.", correlationId: metadata.correlationId }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: "Max retries reached, skipping.", 
+          correlationId: metadata.correlationId 
+        }), 
+        { 
+          status: 200, 
+          headers: { 'Content-Type': 'application/json' } 
+        }
+      );
     }
     // --- End Retry Limit Check ---
 
-
-    // Determine message context using metadata
+    // Determine message context
     const context = {
       isChannelPost: !!update.channel_post || !!update.edited_channel_post,
       isForwarded: isMessageForwarded(message),
-      correlationId: metadata.correlationId, // Use correlationId from metadata
+      correlationId: metadata.correlationId,
       isEdit: !!update.edited_message || !!update.edited_channel_post,
       previousMessage: update.edited_message || update.edited_channel_post,
       logger,
-      startTime: new Date().toISOString(), // Keep startTime for internal duration tracking if needed
-      metadata // Pass full metadata if sub-handlers need it
+      startTime: new Date().toISOString(),
+      metadata
     };
 
     // Log message details
     logger.info("Processing message", {
       message_id: message.message_id,
       chat_id: message.chat?.id,
-      // ... (other logging details)
     });
 
     // Handle different message types
-    let response;
     try {
       // Determine if the message (new or edited) contains media
       const hasMedia = !!(message.photo || message.video || message.document);
 
+      let response;
+      
       if (context.isEdit) {
         // Handle edited messages
         if (hasMedia) {
@@ -166,12 +167,12 @@ const webhookHandler = async (req: Request, metadata: RequestMetadata) => {
         processing_time: new Date().getTime() - new Date(context.startTime).getTime(),
       });
 
-      // Return the raw response; unified handler will add headers
+      // Return the raw response
       return response;
-
-    } catch (handlerError: unknown) { // Add type annotation
+    } catch (handlerError) {
       const handlerErrorMessage = handlerError instanceof Error ? handlerError.message : String(handlerError);
       const handlerErrorStack = handlerError instanceof Error ? handlerError.stack : undefined;
+      
       logger.error("Error in message handler", {
         error: handlerErrorMessage,
         stack: handlerErrorStack,
@@ -179,45 +180,31 @@ const webhookHandler = async (req: Request, metadata: RequestMetadata) => {
       });
 
       // Log the error to the database
-      await logProcessingEvent( // Use the imported logProcessingEvent
+      await logErrorEvent(
         "message_processing_failed",
         message.message_id.toString(),
         metadata.correlationId,
-        { /* ... error metadata ... */ },
-        handlerErrorMessage || "Unknown handler error"
-      );
-
-      // IMPORTANT: Re-throw the error so the unified handler can catch it and return the standard error response.
-      // However, Telegram requires a 200 OK even on errors to prevent retries.
-      // We need a way to signal this specific case to the unified handler.
-      // For now, let's return a specific error type or status that the unified handler can interpret.
-      // Or, modify the unified handler to allow overriding the status code for specific errors.
-
-      // Temporary solution: Return a successful response with error details
-      // This acknowledges receipt to Telegram but indicates processing failure.
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: handlerErrorMessage, // Use extracted message
-          correlationId: metadata.correlationId,
-        }),
+        handlerError,
         {
-          // Return 200 OK to Telegram
-          status: 200,
-          headers: { 'Content-Type': 'application/json' } // Basic headers, unified handler adds CORS
+          message_id: message.message_id,
+          chat_id: message.chat?.id,
+          handler_type: "message_handler"
         }
       );
-      // Ideally, modify unifiedHandler to handle this specific 200-on-error case.
-      // throw handlerError; // Re-throwing would cause a 500 error response
+
+      // Return Telegram compatible error response (status 200)
+      return createTelegramErrorResponse(handlerError, metadata.correlationId);
     }
-  } catch (error: unknown) { // Add type annotation
+  } catch (error) {
     const initialErrorMessage = error instanceof Error ? error.message : String(error);
     const initialErrorStack = error instanceof Error ? error.stack : undefined;
-    // Log any unexpected errors during initial processing (e.g., JSON parsing)
+    
+    // Log any unexpected errors during initial processing
     logger.error("Unhandled error during initial webhook processing", {
       error: initialErrorMessage,
       stack: initialErrorStack,
     });
+    
     // Re-throw for the unified handler to catch and format
     throw error;
   }
@@ -225,10 +212,10 @@ const webhookHandler = async (req: Request, metadata: RequestMetadata) => {
 
 // Create the handler instance using the builder
 const handler = createHandler(webhookHandler)
-  .withMethods(['POST']) // Only allow POST requests
-  .withSecurity(SecurityLevel.PUBLIC) // Webhook is public
-  .withLogging(true) // Enable logging via the handler
-  .withMetrics(true); // Enable metrics
+  .withMethods(['POST'])
+  .withSecurity(SecurityLevel.PUBLIC)
+  .withLogging(true)
+  .withMetrics(true);
 
 // Serve the built handler
 serve(handler.build());

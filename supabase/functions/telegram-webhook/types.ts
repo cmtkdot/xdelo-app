@@ -41,16 +41,13 @@ export interface MessageInput {
 }
 
 export interface ForwardInfo {
-  is_forwarded?: boolean;
-  from_chat_id?: number;
-  from_message_id?: number;
-  from_chat_title?: string;
-  forward_date?: string;
+  is_forwarded: boolean;
   forward_origin_type?: string;
   forward_from_chat_id?: number;
   forward_from_chat_title?: string;
   forward_from_chat_type?: string;
   forward_from_message_id?: number;
+  forward_date?: string;
   original_chat_id?: number;
   original_chat_title?: string;
   original_message_id?: number;
@@ -60,13 +57,14 @@ export interface ForwardInfo {
  * Context provided to message handlers
  */
 export interface MessageContext {
+  correlationId: string;
   isChannelPost: boolean;
   isForwarded: boolean;
-  correlationId: string;
   isEdit: boolean;
-  previousMessage?: any;
-  startTime?: string; // ISO date when processing started
-  logger?: Logger; // Logger instance
+  previousMessage?: TelegramMessage;
+  logger?: any;
+  startTime: string;
+  metadata?: any;
 }
 
 /**
@@ -123,4 +121,22 @@ export interface TelegramMessage {
   forward_date?: number;
   // Media group ID for grouped media
   media_group_id?: string;
+}
+
+export interface MessageProcessResult {
+  success: boolean;
+  id?: string;
+  status?: string;
+  error?: string;
+  action?: string;
+  needsProcessing?: boolean;
+  editHistoryId?: string;
+  editCount?: number;
+}
+
+export interface MediaProcessResult {
+  success: boolean;
+  fileInfo?: any;
+  mediaData?: any;
+  error?: string;
 }
