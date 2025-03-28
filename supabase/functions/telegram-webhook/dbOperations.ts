@@ -132,6 +132,24 @@ export async function createMessage(
       updated_at: new Date().toISOString(),
     };
 
+    // Ensure analyzed_content is properly formatted as JSONB
+    if (input.analyzed_content) {
+      try {
+        // If it's already an object, stringify it
+        if (typeof input.analyzed_content === 'object') {
+          fullRecordData.analyzed_content = JSON.stringify(input.analyzed_content);
+        }
+        // If it's a string, parse it to validate JSON then stringify again
+        else if (typeof input.analyzed_content === 'string') {
+          const parsed = JSON.parse(input.analyzed_content);
+          fullRecordData.analyzed_content = JSON.stringify(parsed);
+        }
+      } catch (e) {
+        logger?.error('Invalid analyzed_content format:', e);
+        throw new Error('analyzed_content must be valid JSON');
+      }
+    }
+
     // First, check if this exact message already exists (telegram_message_id + chat_id)
     let { data: existingMessage, error: lookupError } = await client
       .from("messages")
