@@ -34,8 +34,3 @@ export interface CaptionFlowData {
   media_group_synced?: boolean;
   analyzed_content?: any;
 }
-
-export interface CaptionParams {
-  messageId: string;
-  caption: string;
-}
