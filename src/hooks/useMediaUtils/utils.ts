@@ -1,71 +1,39 @@
 
-import { useState, useCallback } from 'react';
-import { MediaProcessingState, MediaProcessingStateActions } from './types';
+import { RepairResult } from './types';
 
 /**
- * Creates a state object and actions for tracking message processing state
+ * Validates if a message has meaningful caption for processing
  */
-export function createMediaProcessingState(): [MediaProcessingState, MediaProcessingStateActions] {
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingMessageIds, setProcessingMessageIds] = useState<Record<string, boolean>>({});
-
-  const addProcessingMessageId = useCallback((messageId: string) => {
-    setProcessingMessageIds(prev => ({ ...prev, [messageId]: true }));
-  }, []);
-
-  const removeProcessingMessageId = useCallback((messageId: string) => {
-    setProcessingMessageIds(prev => {
-      const newState = { ...prev };
-      delete newState[messageId];
-      return newState;
-    });
-  }, []);
-
-  return [
-    { isProcessing, processingMessageIds },
-    { setIsProcessing, addProcessingMessageId, removeProcessingMessageId }
-  ];
+export function hasValidCaption(caption?: string): boolean {
+  return caption !== undefined && caption !== null && caption.trim().length > 0;
 }
 
 /**
- * Retry helper for API calls
+ * Formats repair operation results into user-friendly format
  */
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  options: {
-    maxAttempts?: number;
-    delay?: number;
-    retryableErrors?: string[];
-  } = {}
-): Promise<T> {
-  const { maxAttempts = 3, delay = 1000, retryableErrors = [] } = options;
-  let lastError: any;
-  
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await fn();
-    } catch (error: any) {
-      lastError = error;
-      
-      // Check if we should retry based on error type
-      const shouldRetry = attempt < maxAttempts && (
-        retryableErrors.length === 0 || // Retry all errors if no specific errors provided
-        retryableErrors.some(errType => 
-          error.message?.toLowerCase().includes(errType) || 
-          error.code?.toLowerCase().includes(errType)
-        )
-      );
-      
-      if (shouldRetry) {
-        // Add exponential backoff
-        const backoff = delay * Math.pow(2, attempt - 1);
-        console.log(`Retry attempt ${attempt}/${maxAttempts} after ${backoff}ms`);
-        await new Promise(resolve => setTimeout(resolve, backoff));
-      } else {
-        break;
-      }
-    }
+export function formatRepairResults(result: RepairResult): string {
+  if (!result.success) {
+    return `Repair failed: ${result.error || 'Unknown error'}`;
   }
+
+  return `Repair completed: ${result.successful || 0} messages fixed, ${result.failed || 0} failed.`;
+}
+
+/**
+ * Extracts Telegram file ID from storage path
+ */
+export function extractFileIdFromPath(path?: string): string | null {
+  if (!path) return null;
   
-  throw lastError;
+  // Common pattern is {fileUniqueId}.{extension}
+  const match = path.match(/^([A-Za-z0-9\-_]+)\./);
+  return match ? match[1] : null;
+}
+
+/**
+ * Determines if a string is a valid UUID
+ */
+export function isValidUuid(str: string): boolean {
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidPattern.test(str);
 }

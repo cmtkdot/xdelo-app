@@ -3260,9 +3260,13 @@ export type Database = {
           }
         | {
             Args: {
-              p_timeout_minutes?: number
+              minutes_threshold?: number
             }
-            Returns: Json
+            Returns: {
+              message_id: string
+              old_state: string
+              new_state: string
+            }[]
           }
       xdelo_sync_incomplete_media_group: {
         Args: {
