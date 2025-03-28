@@ -1,6 +1,24 @@
 import { extractTelegramMetadata, supabaseClient } from "./dbOperations.ts";
 import { MessageInput } from "./types.ts";
 
+// Deep equality comparison for objects/arrays
+function deepEqual(a: any, b: any): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+
+  if (keysA.length !== keysB.length) return false;
+
+  for (const key of keysA) {
+    if (!keysB.includes(key)) return false;
+    if (!deepEqual(a[key], b[key])) return false;
+  }
+
+  return true;
+}
+
 /**
  * Database record structure for a Telegram message
  */
@@ -161,17 +179,52 @@ export async function createMessage(
 
     // Simplified upsert logic
     if (existingMessage) {
-      // Update existing message
-      if (logger?.info) logger.info(`Found existing message ${existingMessage.id}, updating with new data.`);
-      const { error: updateError } = await client
-        .from("messages")
-        .update(fullRecordData)
-        .eq("id", existingMessage.id);
+      // Update existing message only if there are changes - exclude immutable fields
+      if (logger?.info) logger.info(`Checking existing message ${existingMessage.id} for updates.`);
 
-      if (updateError) {
-        if (logger?.error) logger.error("Failed to update existing message:", updateError);
-        return { success: false, error_message: updateError.message };
+      // First get current message data
+      const { data: currentData, error: fetchError } = await client
+        .from("messages")
+        .select()
+        .eq("id", existingMessage.id)
+        .single();
+
+      if (fetchError) {
+        if (logger?.error) logger.error("Error fetching current message data:", fetchError);
+        return { success: false, error_message: fetchError.message };
       }
+
+      // Prepare update data without immutable fields
+      const updateData = { ...fullRecordData };
+      delete updateData.media_group_id;
+      delete updateData.file_unique_id;
+      delete updateData.file_id;
+
+      // Filter out unchanged fields
+      const changedFields: Record<string, any> = {};
+      for (const [key, newValue] of Object.entries(updateData)) {
+        if (!deepEqual(newValue, currentData[key])) {
+          changedFields[key] = newValue;
+        }
+      }
+
+      // Only update if there are changes
+      if (Object.keys(changedFields).length > 0) {
+        if (logger?.info) logger.info(`Updating message ${existingMessage.id} with changed fields:`, changedFields);
+
+        const { error: updateError } = await client
+          .from("messages")
+          .update(changedFields)
+          .eq("id", existingMessage.id);
+
+        if (updateError) {
+          if (logger?.error) logger.error("Failed to update existing message:", updateError);
+          return { success: false, error_message: updateError.message };
+        }
+      } else {
+        if (logger?.info) logger.info(`No changes detected for message ${existingMessage.id}, skipping update.`);
+      }
+
       messageId = existingMessage.id;
       if (logger?.success) logger.success(`Successfully updated message ${messageId}`);
     } else {
