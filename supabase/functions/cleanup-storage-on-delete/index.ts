@@ -1,353 +1,229 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"; // Keep for serve
+import {
+  createHandler,
+  createSuccessResponse,
+  RequestMetadata,
+  SecurityLevel,
+} from "../_shared/unifiedHandler.ts";
+import { supabaseClient } from "../_shared/supabase.ts"; // Use singleton client
+import { logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts"; // Use standard logging
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+// Removed local logEvent function
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-/**
- * Log an event to the unified audit system
- */
-async function logEvent(
-  supabase: any,
-  eventType: string,
-  entityId: string,
-  metadata: Record<string, unknown> = {},
-  correlationId?: string,
-  errorMessage?: string
-) {
-  try {
-    // Generate a correlation ID if not provided
-    const logCorrelationId = correlationId || `storage_cleanup_${crypto.randomUUID()}`;
-    
-    // Insert the log entry
-    const { error } = await supabase
-      .from('unified_audit_logs')
-      .insert({
-        event_type: eventType,
-        entity_id: entityId,
-        metadata,
-        correlation_id: logCorrelationId,
-        error_message: errorMessage
-      });
-    
-    if (error) {
-      console.error('Error logging event:', error);
-    }
-    
-    return logCorrelationId;
-  } catch (err) {
-    console.error('Failed to log event:', err);
-    return null;
-  }
+interface CleanupRequestBody {
+  message_id: string; // DB message UUID
+  cascade?: boolean;
 }
 
 /**
- * Delete a file from storage
+ * Delete a file from storage. Throws error on failure.
  */
-async function deleteFromStorage(supabase: any, storagePath: string, correlationId: string) {
+async function deleteFromStorage(storagePath: string, correlationId: string, messageIdForLog: string) {
+  const logMeta = { storagePath, messageId: messageIdForLog };
+  console.log(`[${correlationId}] Attempting to delete from storage: ${storagePath}`);
   try {
-    // Extract bucket and path from storage path
-    // Format is typically: storage/bucket/path/to/file
-    const parts = storagePath.split('/');
-    if (parts.length < 3) {
-      throw new Error(`Invalid storage path format: ${storagePath}`);
+    // Extract bucket and path
+    // Assuming format: bucket/path/to/file (relative to bucket root in DB)
+    // Or maybe just path/to/file if bucket is implicit? Adjust based on actual storage_path content.
+    // Let's assume storage_path is just the path within a default bucket (e.g., 'telegram-media')
+    const bucket = 'telegram-media'; // Make configurable if needed
+    const path = storagePath; // Assuming storage_path is the path within the bucket
+
+    if (!path) {
+        throw new Error(`Invalid storage path provided: ${storagePath}`);
     }
-    
-    const bucket = parts[1];
-    const path = parts.slice(2).join('/');
-    
-    // Delete the file from storage
-    const { error } = await supabase
+
+    const { error } = await supabaseClient
       .storage
       .from(bucket)
       .remove([path]);
-      
+
     if (error) {
-      throw error;
+      // Throw specific error to be caught by caller
+      throw new Error(`Storage deletion error: ${error.message}`);
     }
-    
-    return true;
-  } catch (error) {
-    console.error(`Error deleting file from storage: ${storagePath}`, error);
-    return false;
+
+    console.log(`[${correlationId}] Successfully deleted from storage: ${storagePath}`);
+    await logProcessingEvent('storage_file_deleted', messageIdForLog, correlationId, logMeta);
+    // No return needed on success, absence of error implies success
+
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[${correlationId}] Error deleting file ${storagePath} from storage:`, errorMessage);
+    await logProcessingEvent('storage_file_delete_failed', messageIdForLog, correlationId, logMeta, errorMessage);
+    // Re-throw the error for the main handler to catch
+    throw new Error(`Storage deletion failed for ${storagePath}: ${errorMessage}`);
   }
 }
 
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+// Core logic for cleaning up storage and DB entries
+async function handleCleanupStorage(req: Request, metadata: RequestMetadata): Promise<Response> {
+  const { correlationId } = metadata;
+  console.log(`[${correlationId}] Processing cleanup-storage-on-delete request`);
+
+  // --- Request Body Parsing and Validation ---
+  let requestBody: CleanupRequestBody;
+  try {
+    requestBody = await req.json();
+  } catch (parseError: unknown) {
+    const errorMessage = parseError instanceof Error ? parseError.message : "Invalid JSON body";
+    console.error(`[${correlationId}] Failed to parse request body: ${errorMessage}`);
+    throw new Error(`Invalid request: ${errorMessage}`);
   }
 
-  // Generate a correlation ID for this operation
-  const correlationId = `storage_cleanup_${crypto.randomUUID()}`;
-  
+  const { message_id, cascade = true } = requestBody; // Default cascade to true
+  if (!message_id) {
+    console.error(`[${correlationId}] Missing required field message_id`);
+    throw new Error("Invalid request: Message ID (message_id) is required.");
+  }
+
+  await logProcessingEvent('storage_cleanup_started', message_id, correlationId, { cascade });
+  console.log(`[${correlationId}] Starting cleanup for message ${message_id}, cascade: ${cascade}`);
+
+  let mainMessageStoragePath: string | null = null;
+  let mediaGroupId: string | null = null;
+  const mediaGroupResults = [];
+  let mainStorageDeleted = false; // Track main file deletion status
+  let mainDbDeleted = false; // Track main DB deletion status
+
   try {
-    const { message_id, cascade = true } = await req.json();
-
-    if (!message_id) {
-      throw new Error('Message ID is required');
-    }
-
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    // Log the start of the cleanup process
-    await logEvent(
-      supabaseClient,
-      'storage_deleted',
-      message_id,
-      { 
-        operation: 'cleanup_started',
-        cascade
-      },
-      correlationId
-    );
-
-    // Get message details before deletion
+    // --- Fetch Main Message Details ---
     const { data: message, error: fetchError } = await supabaseClient
       .from('messages')
-      .select('*')
+      .select('id, storage_path, media_group_id') // Select only needed fields
       .eq('id', message_id)
       .single();
 
     if (fetchError) {
-      await logEvent(
-        supabaseClient,
-        'storage_deleted',
-        message_id,
-        { 
-          error: fetchError.message,
-          operation: 'cleanup_failed',
-          stage: 'fetch_message'
-        },
-        correlationId,
-        fetchError.message
-      );
-      throw fetchError;
+      // Log and throw specific error
+      await logProcessingEvent('storage_cleanup_failed', message_id, correlationId, { stage: 'fetch_message' }, fetchError.message);
+      throw new Error(`Database error fetching message: ${fetchError.message}`);
+    }
+    if (!message) {
+      // Message already deleted or never existed, maybe return success? Or specific error?
+      console.warn(`[${correlationId}] Message ${message_id} not found during cleanup.`);
+      await logProcessingEvent('storage_cleanup_skipped', message_id, correlationId, { reason: 'message_not_found' });
+      // Return success as the goal (message deleted) is achieved.
+      return createSuccessResponse({ success: true, message: "Message not found, cleanup skipped.", storage_deleted: false, db_deleted: false }, correlationId);
     }
 
-    if (!message) {
-      const errorMsg = 'Message not found';
-      await logEvent(
-        supabaseClient,
-        'storage_deleted',
-        message_id,
-        { 
-          error: errorMsg,
-          operation: 'cleanup_failed',
-          stage: 'message_not_found'
-        },
-        correlationId,
-        errorMsg
-      );
-      return new Response(
-        JSON.stringify({ 
-          error: errorMsg,
-          correlation_id: correlationId
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-      );
-    }
-    
-    // Check if this is part of a media group and we need to cascade delete
-    const mediaGroupResults = [];
-    if (cascade && message.media_group_id) {
-      // Log the start of cascading deletion
-      await logEvent(
-        supabaseClient,
-        'storage_deleted',
-        message_id,
-        { 
-          media_group_id: message.media_group_id,
-          operation: 'cascade_deletion_started'
-        },
-        correlationId
-      );
-      
-      // Find all related messages in the same media group
+    mainMessageStoragePath = message.storage_path;
+    mediaGroupId = message.media_group_id;
+
+    // --- Cascade Deletion for Media Group ---
+    if (cascade && mediaGroupId) {
+      console.log(`[${correlationId}] Starting cascade deletion for media group ${mediaGroupId}`);
+      await logProcessingEvent('cascade_delete_started', mediaGroupId, correlationId, { parent_message_id: message_id });
+
       const { data: groupMessages, error: groupError } = await supabaseClient
         .from('messages')
-        .select('id, storage_path, file_id, file_unique_id')
-        .eq('media_group_id', message.media_group_id)
-        .neq('id', message_id); // Exclude the current message
-        
+        .select('id, storage_path') // Select needed fields
+        .eq('media_group_id', mediaGroupId)
+        .neq('id', message_id); // Exclude the main message
+
       if (groupError) {
-        await logEvent(
-          supabaseClient,
-          'storage_deleted',
-          message_id,
-          { 
-            media_group_id: message.media_group_id,
-            error: groupError.message,
-            operation: 'cascade_deletion_failed',
-            stage: 'fetch_group_messages'
-          },
-          correlationId,
-          groupError.message
-        );
+        // Log error but continue, main message deletion is primary goal
+        console.error(`[${correlationId}] Error fetching group messages for ${mediaGroupId}:`, groupError.message);
+        await logProcessingEvent('cascade_delete_failed', mediaGroupId, correlationId, { stage: 'fetch_group' }, groupError.message);
       } else if (groupMessages && groupMessages.length > 0) {
-        // Process each related message
+        console.log(`[${correlationId}] Found ${groupMessages.length} other messages in group ${mediaGroupId}.`);
         for (const groupMsg of groupMessages) {
+          let groupStorageDeleted = false;
+          let groupDbDeleted = false;
+          let groupErrorMsg: string | null = null;
           try {
-            // Delete the file from storage if it has a storage path
-            let storageResult = null;
+            // Delete storage file
             if (groupMsg.storage_path) {
-              storageResult = await deleteFromStorage(
-                supabaseClient, 
-                groupMsg.storage_path,
-                correlationId
-              );
+              await deleteFromStorage(groupMsg.storage_path, correlationId, groupMsg.id);
+              groupStorageDeleted = true; // Assumes deleteFromStorage throws on error
             }
-            
-            // Delete the message from the database
-            const { error: deleteError } = await supabaseClient
+            // Delete DB record
+            const { error: deleteDbError } = await supabaseClient
               .from('messages')
               .delete()
               .eq('id', groupMsg.id);
-              
+            if (deleteDbError) throw new Error(`DB delete error: ${deleteDbError.message}`);
+            groupDbDeleted = true;
+            await logProcessingEvent('cascade_message_deleted', groupMsg.id, correlationId, { parent_message_id: message_id, media_group_id: mediaGroupId });
+          } catch (groupMsgError: unknown) {
+            groupErrorMsg = groupMsgError instanceof Error ? groupMsgError.message : String(groupMsgError);
+            console.error(`[${correlationId}] Error processing group message ${groupMsg.id}:`, groupErrorMsg);
+            // Log specific error for this message
+            await logProcessingEvent('cascade_message_failed', groupMsg.id, correlationId, { parent_message_id: message_id, media_group_id: mediaGroupId }, groupErrorMsg);
+          } finally {
             mediaGroupResults.push({
               id: groupMsg.id,
-              storage_deleted: storageResult,
-              database_deleted: !deleteError,
-              error: deleteError ? deleteError.message : null
+              storage_deleted: groupStorageDeleted,
+              database_deleted: groupDbDeleted,
+              error: groupErrorMsg
             });
-            
-            // Log the result for this group message
-            await logEvent(
-              supabaseClient,
-              'storage_deleted',
-              groupMsg.id,
-              { 
-                media_group_id: message.media_group_id,
-                parent_message_id: message_id,
-                storage_path: groupMsg.storage_path,
-                storage_deleted: storageResult,
-                database_deleted: !deleteError,
-                operation: deleteError ? 'group_message_deletion_failed' : 'group_message_deleted'
-              },
-              correlationId,
-              deleteError ? deleteError.message : null
-            );
-          } catch (groupMsgError) {
-            console.error(`Error processing group message ${groupMsg.id}:`, groupMsgError);
-            mediaGroupResults.push({
-              id: groupMsg.id,
-              error: groupMsgError.message
-            });
-            
-            // Log the error
-            await logEvent(
-              supabaseClient,
-              'storage_deleted',
-              groupMsg.id,
-              { 
-                media_group_id: message.media_group_id,
-                parent_message_id: message_id,
-                error: groupMsgError.message,
-                operation: 'group_message_deletion_failed'
-              },
-              correlationId,
-              groupMsgError.message
-            );
           }
         }
+        await logProcessingEvent('cascade_delete_finished', mediaGroupId, correlationId, { parent_message_id: message_id, results_count: mediaGroupResults.length });
+      } else {
+         console.log(`[${correlationId}] No other messages found in group ${mediaGroupId}.`);
+         await logProcessingEvent('cascade_delete_skipped', mediaGroupId, correlationId, { parent_message_id: message_id, reason: 'no_other_messages'});
       }
-      
-      // Log the completion of cascading deletion
-      await logEvent(
-        supabaseClient,
-        'storage_deleted',
-        message_id,
-        { 
-          media_group_id: message.media_group_id,
-          group_results: mediaGroupResults,
-          operation: 'cascade_deletion_completed'
-        },
-        correlationId
-      );
-    }
-    
-    // Delete the file from storage if it has a storage path
-    let storageResult = null;
-    if (message.storage_path) {
-      storageResult = await deleteFromStorage(
-        supabaseClient, 
-        message.storage_path,
-        correlationId
-      );
-      
-      // Log the storage deletion result
-      await logEvent(
-        supabaseClient,
-        'storage_deleted',
-        message_id,
-        { 
-          storage_path: message.storage_path,
-          storage_deleted: storageResult,
-          operation: storageResult ? 'storage_deleted' : 'storage_deletion_failed'
-        },
-        correlationId,
-        storageResult ? null : 'Failed to delete from storage'
-      );
     }
 
-    // Delete the message from the database
-    const { error: deleteError } = await supabaseClient
+    // --- Delete Main Message Storage File ---
+    if (mainMessageStoragePath) {
+      try {
+        await deleteFromStorage(mainMessageStoragePath, correlationId, message_id);
+        mainStorageDeleted = true; // Assumes deleteFromStorage throws on error
+      } catch (storageError: unknown) {
+         // Log the error but proceed to delete the DB record
+         console.error(`[${correlationId}] Failed to delete main storage file ${mainMessageStoragePath}:`, storageError instanceof Error ? storageError.message : String(storageError));
+         // Error already logged within deleteFromStorage
+      }
+    } else {
+        console.log(`[${correlationId}] No storage path for main message ${message_id}, skipping storage deletion.`);
+        await logProcessingEvent('storage_cleanup_skipped', message_id, correlationId, { reason: 'no_storage_path' });
+    }
+
+    // --- Delete Main Message DB Record ---
+    const { error: deleteMainDbError } = await supabaseClient
       .from('messages')
       .delete()
       .eq('id', message_id);
 
-    if (deleteError) {
-      await logEvent(
-        supabaseClient,
-        'storage_deleted',
-        message_id,
-        { 
-          error: deleteError.message,
-          operation: 'database_deletion_failed'
-        },
-        correlationId,
-        deleteError.message
-      );
-      throw deleteError;
+    if (deleteMainDbError) {
+      // Log and throw, as this is a critical failure
+      await logProcessingEvent('storage_cleanup_failed', message_id, correlationId, { stage: 'delete_main_db' }, deleteMainDbError.message);
+      throw new Error(`Database error deleting main message: ${deleteMainDbError.message}`);
     }
-    
-    // Log successful database deletion
-    await logEvent(
-      supabaseClient,
-      'storage_deleted',
-      message_id,
-      { 
-        operation: 'database_deletion_completed',
-        storage_deleted: storageResult
-      },
-      correlationId
-    );
+    mainDbDeleted = true;
+    await logProcessingEvent('storage_cleanup_completed', message_id, correlationId, { main_storage_deleted: mainStorageDeleted, cascade_results_count: mediaGroupResults.length });
 
-    return new Response(
-      JSON.stringify({ 
+    // --- Success Response ---
+    return createSuccessResponse({
         success: true,
-        storage_deleted: storageResult,
-        media_group_results: mediaGroupResults.length > 0 ? mediaGroupResults : null,
-        correlation_id: correlationId
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+        message: "Cleanup completed.",
+        storage_deleted: mainStorageDeleted,
+        database_deleted: mainDbDeleted,
+        media_group_results: cascade && mediaGroupId ? mediaGroupResults : null, // Only include if cascade was attempted
+      }, correlationId);
 
-  } catch (error) {
-    console.error('Error:', error);
-    return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        correlation_id: correlationId
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-    );
+  } catch (error: unknown) {
+    // Catch errors thrown from steps above
+    const errorMessage = error instanceof Error ? error.message : "Unknown error during cleanup";
+    // Avoid double logging if already logged
+    if (!errorMessage.includes('error:')) {
+        console.error(`[${correlationId}] Top-level error during cleanup for message ${message_id}: ${errorMessage}`);
+        // Log here if not already logged by specific steps
+        await logProcessingEvent('storage_cleanup_failed', message_id || 'unknown', correlationId, { stage: 'top_level' }, errorMessage);
+    }
+    throw error; // Re-throw for unifiedHandler
   }
-});
+}
+
+// Create and configure the handler
+const handler = createHandler(handleCleanupStorage)
+  .withMethods(['POST'])
+  .withSecurity(SecurityLevel.AUTHENTICATED) // Cleanup should require auth
+  .build();
+
+// Serve the handler
+serve(handler);
+
+console.log("cleanup-storage-on-delete function deployed and listening.");

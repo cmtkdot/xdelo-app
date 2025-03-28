@@ -1,4 +1,3 @@
-
 /**
  * Shared caption parser utility for consistent parsing across edge functions
  */
@@ -43,7 +42,7 @@ export function xdelo_parseCaption(caption: string, context?: {messageId?: strin
   // Add context to log output
   const logPrefix = context ? `[${context.messageId || 'unknown'}] [${context.correlationId || 'unknown'}] ` : '';
   console.log(`${logPrefix}Starting caption parse: ${caption.length > 50 ? caption.substring(0, 50) + '...' : caption}`);
-  
+
   // Make sure caption is not empty
   if (!caption || caption.trim() === '') {
     const errorMsg = 'Empty caption provided for parsing';
@@ -115,8 +114,9 @@ export function xdelo_parseCaption(caption: string, context?: {messageId?: strin
         const dateDigits = dateMatch[1];
         try {
           parsedContent.purchase_date = formatPurchaseDate(dateDigits);
-        } catch (dateError) {
-          console.log(`${logPrefix}Date parsing error:`, dateError);
+        } catch (dateError: unknown) { // Added type annotation
+          const dateErrorMessage = dateError instanceof Error ? dateError.message : String(dateError);
+          console.log(`${logPrefix}Date parsing error:`, dateErrorMessage);
           missingFields.push('purchase_date');
         }
       } else {
@@ -169,9 +169,10 @@ export function xdelo_parseCaption(caption: string, context?: {messageId?: strin
 
     console.log(`${logPrefix}Caption parsing completed successfully`);
     return parsedContent;
-  } catch (error) {
-    console.error(`${logPrefix}Error parsing caption:`, error);
-    parsedContent.parsing_metadata.error = error.message;
+  } catch (error: unknown) { // Added type annotation
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`${logPrefix}Error parsing caption:`, errorMessage, error);
+    parsedContent.parsing_metadata.error = errorMessage;
     return parsedContent;
   }
 }
@@ -192,11 +193,20 @@ function formatPurchaseDate(dateDigits: string): string {
   // Convert to YYYY-MM-DD
   const fullYear = '20' + year; // Assuming 20xx year
 
-  // Validate date
-  const dateObj = new Date(`${fullYear}-${month}-${day}`);
-  if (isNaN(dateObj.getTime())) {
+  // Validate date components
+  const monthNum = parseInt(month, 10);
+  const dayNum = parseInt(day, 10);
+  const yearNum = parseInt(fullYear, 10);
+
+  if (monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
+     throw new Error(`Invalid date components: ${month}/${day}/${year}`);
+  }
+
+  // Basic validation, doesn't check days in month perfectly but catches obvious errors
+  const dateObj = new Date(Date.UTC(yearNum, monthNum - 1, dayNum)); // Use UTC to avoid timezone issues
+  if (isNaN(dateObj.getTime()) || dateObj.getUTCFullYear() !== yearNum || dateObj.getUTCMonth() !== monthNum - 1 || dateObj.getUTCDate() !== dayNum) {
     throw new Error(`Invalid date: ${month}/${day}/${fullYear}`);
   }
 
-  return `${fullYear}-${month}-${day}`;
+  return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`; // Ensure padding
 }

@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.window", "deno.unstable"],
+    "types": [
+      "https://deno.land/x/supabase_deno/mod.ts",
+      "https://deno.land/std@0.208.0/http/server.ts"
+    ]
+  },
+  "importMap": "import_map.json"
+}

@@ -1,5 +1,5 @@
-
-import { createSupabaseClient } from "./supabase.ts";
+// Import the singleton client instance
+import { supabaseClient } from "./supabase.ts";
 
 /**
  * Sync content across media group
@@ -7,14 +7,14 @@ import { createSupabaseClient } from "./supabase.ts";
  */
 export async function syncMediaGroupContent(
   messageId: string,
-  analyzedContent: any,
+  analyzedContent: any, // Consider defining a stricter type for analyzedContent
   options: {
     forceSync?: boolean;
     syncEditHistory?: boolean;
   } = {}
-): Promise<any> {
-  // Create Supabase client
-  const supabase = createSupabaseClient();
+): Promise<any> { // Consider defining a stricter return type
+  // Use the imported singleton client
+  const supabase = supabaseClient;
 
   // Default options
   const { forceSync = true, syncEditHistory = false } = options;
@@ -22,6 +22,7 @@ export async function syncMediaGroupContent(
   try {
     // Only sync if we have valid analyzed content
     if (!analyzedContent) {
+      console.warn(`[syncMediaGroupContent] No analyzed content provided for message ${messageId}`);
       return {
         success: false,
         error: 'No analyzed content provided'
@@ -40,22 +41,24 @@ export async function syncMediaGroupContent(
     );
 
     if (error) {
-      console.error('Media group sync error:', error);
+      console.error(`[syncMediaGroupContent] Media group sync RPC error for message ${messageId}:`, error);
       return {
         success: false,
         error: error.message
       };
     }
 
+    console.log(`[syncMediaGroupContent] Successfully synced media group for message ${messageId}`, data);
     return {
       success: true,
-      ...data
+      ...data // Spread the result data from the RPC call
     };
-  } catch (error) {
-    console.error('Exception in syncMediaGroupContent:', error);
+  } catch (error: unknown) { // Added type annotation
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[syncMediaGroupContent] Exception syncing media group for message ${messageId}:`, errorMessage, error);
     return {
       success: false,
-      error: error.message
+      error: errorMessage
     };
   }
 }

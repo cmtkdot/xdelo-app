@@ -1,153 +1,144 @@
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"; // Keep serve for potential health checks or manual triggers
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { xdelo_parseCaption } from "../_shared/captionParser.ts"; // Import the shared parser - CORRECTED NAME
+import { serve } from "std/http/server.ts"; // Use mapped import
+// Import the shared singleton client
+import { supabaseClient } from "../_shared/supabase.ts";
+import { xdelo_parseCaption } from "../_shared/captionParser.ts";
 import { corsHeaders } from "../_shared/cors.ts";
-// Assuming a shared logger exists, otherwise implement basic console logging
-// import { Logger } from "../_shared/logger.ts";
-// Assuming shared DB operations exist for logging, otherwise implement directly
-// import { logProcessingEvent } from "../_shared/databaseOperations.ts";
+// Import unified handler and helpers
+import { createHandler, SecurityLevel, RequestMetadata, createSuccessResponse } from '../_shared/unifiedHandler.ts';
+// Import logging utility (assuming it exists or using logProcessingEvent directly)
+import { logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts";
 
-const BATCH_SIZE = 10; // Number of messages to process per poll interval
-const POLLING_INTERVAL_MS = 10000; // Poll every 10 seconds (adjust as needed)
-const PROCESSING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes for a message to be considered stalled
+const BATCH_SIZE = 10;
+const POLLING_INTERVAL_MS = 10000;
+// const PROCESSING_TIMEOUT_MS = 5 * 60 * 1000; // Keep for potential stalled message logic
 
-// Initialize Supabase client (consider moving to a shared utility)
-const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const supabase: SupabaseClient = createClient(supabaseUrl, supabaseServiceKey);
+// Use the imported shared client
+const supabase = supabaseClient;
 
-// --- Main Processing Logic ---
+// --- Main Processing Logic (Polling) ---
 
 async function processPendingMessages() {
-  console.log("Polling for pending messages...");
   const correlationId = crypto.randomUUID(); // New correlation ID for this batch run
-  // const logger = new Logger(correlationId, "direct-caption-processor");
-  // logger.info("Polling started");
+  console.log(`[${correlationId}] Polling for pending messages...`);
+  // TODO: Replace console.log with structured logging if a dedicated logger is implemented
 
   try {
-    // 1. Fetch Pending Messages - ENSURE only messages with non-empty captions are retrieved
+    // 1. Fetch Pending Messages
     const { data: pendingMessages, error: fetchError } = await supabase
       .from('messages')
-      .select('id, caption, media_group_id')
+      .select('id, caption, media_group_id') // Select only needed fields initially
       .eq('processing_state', 'pending')
       .not('caption', 'is', null)
       .not('caption', 'eq', '')
-      .order('processing_started_at', { ascending: true })
+      .order('created_at', { ascending: true }) // Poll oldest first
       .limit(BATCH_SIZE);
 
     if (fetchError) {
-      console.error("Error fetching pending messages:", fetchError);
-      // logger.error("Error fetching pending messages", { error: fetchError.message });
-      return; // Exit if fetch fails
+      console.error(`[${correlationId}] Error fetching pending messages:`, fetchError);
+      await logProcessingEvent('polling_fetch_error', correlationId, correlationId, { error: fetchError.message }, fetchError.message);
+      return;
     }
 
     if (!pendingMessages || pendingMessages.length === 0) {
-      console.log("No pending messages found.");
-      // logger.info("No pending messages found.");
-      return; // Exit if no messages
+      console.log(`[${correlationId}] No pending messages found.`);
+      return;
     }
 
-    console.log(`Found ${pendingMessages.length} pending messages. Processing...`);
-    // logger.info(`Found ${pendingMessages.length} pending messages. Processing...`);
+    console.log(`[${correlationId}] Found ${pendingMessages.length} pending messages. Processing...`);
+    await logProcessingEvent('polling_batch_started', correlationId, correlationId, { count: pendingMessages.length });
 
-    // 2. Process Each Message in the Batch
+    // 2. Process Each Message
     for (const message of pendingMessages) {
       const messageId = message.id;
-      // const messageLogger = new Logger(correlationId, `direct-caption-processor:${messageId}`);
-      console.log(`Attempting to process message ${messageId}`);
-      // messageLogger.info("Attempting to process message");
+      const messageCorrelationId = `${correlationId}-${messageId.substring(0, 8)}`; // More specific ID per message
+      console.log(`[${messageCorrelationId}] Attempting to process message ${messageId}`);
 
       let lockedMessage: any = null;
 
       try {
-        // Double-check that caption is not empty before proceeding
         if (!message.caption || message.caption.trim() === '') {
-          console.log(`Message ${messageId} has empty caption, skipping and setting to error state.`);
-          await updateMessageState(messageId, 'error', 'Empty caption despite database filter');
+          console.warn(`[${messageCorrelationId}] Message ${messageId} has empty caption, skipping and setting to error state.`);
+          await updateMessageState(messageId, 'error', 'Empty caption despite database filter', undefined, messageCorrelationId);
+          await logProcessingEvent('caption_processing_skipped', messageId, messageCorrelationId, { reason: 'Empty caption' }, 'Empty caption');
           continue;
         }
 
         // 3. Lock Message (Atomic Update)
-        // Use RPC to combine fetch and update for atomicity might be better,
-        // but a simple update-and-check works for basic locking.
         const { data: updatedMessage, error: lockError } = await supabase
           .from('messages')
           .update({
             processing_state: 'processing',
-            processing_started_at: new Date().toISOString(), // Reset start time for this attempt
+            processing_started_at: new Date().toISOString(),
             processing_attempts: supabase.sql`(COALESCE(processing_attempts, 0) + 1)`,
             last_processing_attempt: new Date().toISOString()
           })
           .eq('id', messageId)
-          .eq('processing_state', 'pending') // Ensure it's still pending
-          .select('*') // Select the full message data after locking
+          .eq('processing_state', 'pending')
+          .select('*') // Select full data after locking
           .single();
 
         if (lockError || !updatedMessage) {
-          // Could be a conflict (another instance got it) or a genuine error
-          console.warn(`Failed to lock message ${messageId} or already processed:`, lockError?.message || 'No message returned');
-          // messageLogger.warn("Failed to lock message or already processed", { error: lockError?.message });
-          continue; // Skip to the next message
+          console.warn(`[${messageCorrelationId}] Failed to lock message ${messageId} or already processed:`, lockError?.message || 'No message returned');
+          // No need to log error here, it's an expected condition (race condition)
+          continue;
         }
 
-        lockedMessage = updatedMessage; // Store the full message data
-        console.log(`Locked message ${messageId} for processing.`);
-        // messageLogger.info("Locked message for processing");
+        lockedMessage = updatedMessage;
+        console.log(`[${messageCorrelationId}] Locked message ${messageId} for processing.`);
+        await logProcessingEvent('message_lock_acquired', messageId, messageCorrelationId);
 
         // 4. Parse Caption
         if (!lockedMessage.caption || lockedMessage.caption === '') {
-           // This shouldn't happen if the trigger works correctly, but handle defensively
-           console.warn(`Message ${messageId} is pending but has no caption. Setting to error.`);
-           // messageLogger.warn("Message is pending but has no caption. Setting to error.");
-           await updateMessageState(messageId, 'error', 'Pending state without caption');
-            continue;
+           console.warn(`[${messageCorrelationId}] Message ${messageId} locked but has no caption. Setting to error.`);
+           await updateMessageState(messageId, 'error', 'Locked state without caption', undefined, messageCorrelationId);
+           await logProcessingEvent('caption_processing_error', messageId, messageCorrelationId, { reason: 'Locked state without caption' }, 'Locked state without caption');
+           continue;
          }
 
-         const analyzedContent = xdelo_parseCaption(lockedMessage.caption, { 
-           messageId, 
-           correlationId 
+         const analyzedContent = xdelo_parseCaption(lockedMessage.caption, {
+           messageId,
+           correlationId: messageCorrelationId // Pass specific correlation ID
          });
-         
-         // messageLogger.info("Caption parsed", { partial: analyzedContent?.parsing_metadata?.partial_success });
+         console.log(`[${messageCorrelationId}] Caption parsed. Partial success: ${!!analyzedContent?.parsing_metadata?.partial_success}`);
 
         // 5. Update DB (Success)
-        await updateMessageState(messageId, 'completed', undefined, analyzedContent);
-        console.log(`Message ${messageId} processed successfully.`);
-        // messageLogger.info("Message processed successfully");
-        // await logProcessingEvent('caption_processed', messageId, correlationId, { success: true, partial: analyzedContent?.parsing_metadata?.partial_success });
+        await updateMessageState(messageId, 'completed', undefined, analyzedContent, messageCorrelationId);
+        console.log(`[${messageCorrelationId}] Message ${messageId} processed successfully.`);
+        await logProcessingEvent('caption_processed', messageId, messageCorrelationId, { success: true, partial: !!analyzedContent?.parsing_metadata?.partial_success });
 
         // 6. Trigger Sync (Conditional)
         if (lockedMessage.media_group_id) {
-          console.log(`Message ${messageId} belongs to media group ${lockedMessage.media_group_id}. Triggering sync.`);
-          // messageLogger.info("Triggering media group sync");
-          await syncMediaGroup(messageId, lockedMessage.media_group_id, analyzedContent, correlationId);
+          console.log(`[${messageCorrelationId}] Message ${messageId} belongs to media group ${lockedMessage.media_group_id}. Triggering sync.`);
+          await syncMediaGroup(messageId, lockedMessage.media_group_id, analyzedContent, messageCorrelationId);
         }
 
       } catch (processingError) {
-        console.error(`Error processing message ${messageId}:`, processingError);
-        // messageLogger.error("Error during processing", { error: processingError.message, stack: processingError.stack });
-        // 7. Update DB (Error)
-        if (messageId) { // Ensure we have messageId even if locking failed somehow before this point
-            await updateMessageState(messageId, 'error', processingError.message);
-            // await logProcessingEvent('caption_processing_failed', messageId, correlationId, { error: processingError.message });
+        console.error(`[${messageCorrelationId}] Error processing message ${messageId}:`, processingError);
+        if (messageId) {
+            await updateMessageState(messageId, 'error', processingError.message, undefined, messageCorrelationId);
+            await logProcessingEvent('caption_processing_failed', messageId, messageCorrelationId, { error: processingError.message }, processingError.message);
+        } else {
+            // Log general processing error if messageId wasn't available
+             await logProcessingEvent('caption_processing_unidentified_error', correlationId, correlationId, { error: processingError.message }, processingError.message);
         }
       }
-    } // End loop through messages
+    } // End loop
+
+    await logProcessingEvent('polling_batch_finished', correlationId, correlationId, { processed_count: pendingMessages.length });
 
   } catch (batchError) {
-    console.error("Error in polling batch:", batchError);
-    // logger.error("Error in polling batch", { error: batchError.message, stack: batchError.stack });
+    console.error(`[${correlationId}] Error in polling batch:`, batchError);
+    await logProcessingEvent('polling_batch_error', correlationId, correlationId, { error: batchError.message }, batchError.message);
   } finally {
-    // Schedule the next poll regardless of errors in this run
-    // logger.info("Polling finished");
+    // Schedule the next poll
+    console.log(`[${correlationId}] Polling finished. Scheduling next poll in ${POLLING_INTERVAL_MS}ms.`);
     setTimeout(processPendingMessages, POLLING_INTERVAL_MS);
   }
 }
 
 // --- Helper Functions ---
 
-async function updateMessageState(messageId: string, state: 'completed' | 'error', errorMessage?: string, analyzedContent?: any) {
+async function updateMessageState(messageId: string, state: 'completed' | 'error', errorMessage?: string, analyzedContent?: any, correlationId?: string) {
   const updates: any = {
     processing_state: state,
     updated_at: new Date().toISOString(),
@@ -167,63 +158,71 @@ async function updateMessageState(messageId: string, state: 'completed' | 'error
     .eq('id', messageId);
 
   if (error) {
-    console.error(`Failed to update message ${messageId} state to ${state}:`, error);
-    // Consider more robust error handling here, maybe retry update?
+    console.error(`[${correlationId || 'updateState'}] Failed to update message ${messageId} state to ${state}:`, error);
+    // Log this failure
+    await logProcessingEvent('message_update_state_failed', messageId, correlationId || crypto.randomUUID(), { target_state: state, error: error.message }, error.message);
   }
 }
 
 async function syncMediaGroup(messageId: string, mediaGroupId: string, analyzedContent: any, correlationId: string) {
-  // const syncLogger = new Logger(correlationId, `direct-caption-processor:${messageId}:sync`);
   try {
-    // syncLogger.info(`Calling xdelo_sync_media_group_content for group ${mediaGroupId}`);
+    console.log(`[${correlationId}] Calling xdelo_sync_media_group_content for group ${mediaGroupId}`);
     const { error: rpcError, data: rpcData } = await supabase.rpc(
       'xdelo_sync_media_group_content',
       {
         p_message_id: messageId,
         p_analyzed_content: analyzedContent,
-        p_force_sync: true, // Force sync since this is the primary processing path
-        p_sync_edit_history: false // Typically don't sync edit history automatically
+        p_force_sync: true,
+        p_sync_edit_history: false
       }
     );
 
     if (rpcError) {
-      console.error(`RPC Error syncing media group ${mediaGroupId} for message ${messageId}:`, rpcError);
-      // syncLogger.error("RPC Error syncing media group", { error: rpcError });
-      // Log failure to audit log if needed
-      // await logProcessingEvent('media_group_sync_failed', messageId, correlationId, { media_group_id: mediaGroupId, error: rpcError.message });
+      console.error(`[${correlationId}] RPC Error syncing media group ${mediaGroupId}:`, rpcError);
+      await logProcessingEvent('media_group_sync_failed', messageId, correlationId, { media_group_id: mediaGroupId, error: rpcError.message }, rpcError.message);
     } else {
-      console.log(`Media group ${mediaGroupId} sync call completed for message ${messageId}. Result:`, rpcData);
-      // syncLogger.info("Media group sync call completed", { result: rpcData });
-      // await logProcessingEvent('media_group_sync_triggered', messageId, correlationId, { media_group_id: mediaGroupId, result: rpcData });
+      console.log(`[${correlationId}] Media group ${mediaGroupId} sync call completed. Result:`, rpcData);
+      await logProcessingEvent('media_group_sync_triggered', messageId, correlationId, { media_group_id: mediaGroupId, result: rpcData });
     }
   } catch (syncError) {
-    console.error(`Exception syncing media group ${mediaGroupId} for message ${messageId}:`, syncError);
-    // syncLogger.error("Exception syncing media group", { error: syncError });
-    // await logProcessingEvent('media_group_sync_exception', messageId, correlationId, { media_group_id: mediaGroupId, error: syncError.message });
+    console.error(`[${correlationId}] Exception syncing media group ${mediaGroupId}:`, syncError);
+    await logProcessingEvent('media_group_sync_exception', messageId, correlationId, { media_group_id: mediaGroupId, error: syncError.message }, syncError.message);
   }
 }
 
 // --- Server & Initial Poll ---
 
 // Start the first poll immediately
-console.log("Starting initial poll...");
+console.log("Starting initial poll for direct-caption-processor...");
 processPendingMessages();
 
-// Keep the function alive for subsequent polling via setTimeout
-// OR rely on Supabase cron trigger if configured.
-
-// Optional: Basic HTTP server for health checks or manual triggers
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+// --- HTTP Server Part (Refactored with unifiedHandler) ---
+const serverHandler = async (req: Request, metadata: RequestMetadata) => {
+  // Health check endpoint
+  if (metadata.path === '/_health') {
+    return createSuccessResponse({ status: 'running', timestamp: new Date().toISOString() }, metadata.correlationId);
   }
-  // Could add a manual trigger endpoint if needed:
-  // if (req.url.includes('/trigger-poll')) {
-  //   console.log("Manual poll triggered via HTTP request.");
-  //   await processPendingMessages(); // Run immediately, don't wait for interval
-  //   return new Response(JSON.stringify({ success: true, message: "Manual poll triggered." }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  // }
-  return new Response(JSON.stringify({ status: 'running', timestamp: new Date().toISOString() }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-});
 
-console.log(`direct-caption-processor edge function started. Polling every ${POLLING_INTERVAL_MS / 1000} seconds.`);
+  // Manual trigger endpoint
+  if (metadata.path === '/trigger-poll' && metadata.method === 'POST') {
+    console.log(`[${metadata.correlationId}] Manual poll triggered via HTTP request.`);
+    // Run immediately, don't wait for interval. Run async, don't await here.
+    processPendingMessages().catch(err => console.error(`[${metadata.correlationId}] Error during manually triggered poll:`, err));
+    return createSuccessResponse({ success: true, message: "Manual poll triggered." }, metadata.correlationId);
+  }
+
+  // Default response for other paths
+  return new Response(JSON.stringify({ error: "Not Found" }), { status: 404 });
+};
+
+// Create the handler instance using the builder for the HTTP server part
+const handler = createHandler(serverHandler)
+  .withMethods(['GET', 'POST', 'OPTIONS']) // Allow GET for health, POST for trigger
+  .withSecurity(SecurityLevel.PUBLIC) // Keep endpoints public for now
+  .withLogging(true)
+  .withMetrics(true);
+
+// Serve the built handler
+serve(handler.build());
+
+console.log(`direct-caption-processor edge function started. Polling every ${POLLING_INTERVAL_MS / 1000} seconds. HTTP server running.`);

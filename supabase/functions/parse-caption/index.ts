@@ -1,30 +1,55 @@
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { ParsedContent, xdelo_parseCaption as parseCaption } from "../_shared/captionParsers.ts";
-import { MediaGroupResult } from "./types.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"; // Keep for serve at the bottom
 import {
-  logErrorToDatabase,
-  updateMessageWithError,
-} from "../_shared/errorHandler.ts";
+  createHandler,
+  createSuccessResponse,
+  RequestMetadata,
+  SecurityLevel,
+} from "../_shared/unifiedHandler.ts";
+import { supabaseClient } from "../_shared/supabase.ts"; // Use singleton client
+import { ParsedContent, xdelo_parseCaption as parseCaption } from "../_shared/captionParsers.ts";
+// Assuming MediaGroupResult is defined correctly elsewhere or adjust as needed
+// import { MediaGroupResult } from "./types.ts";
+import { logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts";
+// Keep specific DB operations for this function's logic
 import {
   getMessage,
   logAnalysisEvent,
   updateMessageWithAnalysis,
+  // updateMessageWithError, // Removed - Error state handled by logging/unifiedHandler
 } from "./dbOperations.ts";
-import { syncMediaGroupContent } from "../_shared/mediaGroupSync.ts";
-import { corsHeaders } from "../_shared/cors.ts";
+import { syncMediaGroupContent } from "../_shared/mediaGroupSync.ts"; // Uses singleton client internally
 
-const supabaseClient = createClient(
-  Deno.env.get("SUPABASE_URL") ?? "",
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-);
+interface ParseCaptionBody {
+    messageId: string;
+    caption: string;
+    media_group_id?: string;
+    queue_id?: string; // Assuming this is relevant
+    isEdit?: boolean;
+    retryCount?: number;
+    force_reprocess?: boolean;
+    correlationId?: string; // Allow passing correlationId in body
+}
 
 /**
- * Handle caption parsing request
+ * Core logic for handling caption parsing request
  */
-const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
-  const body = await req.json();
+async function handleParseCaption(req: Request, metadata: RequestMetadata): Promise<Response> {
+  // Use correlationId from unifiedHandler, but allow override from body if provided
+  const handlerCorrelationId = metadata.correlationId;
+  let body: ParseCaptionBody;
+  let requestCorrelationId = handlerCorrelationId; // Default to handler's ID
+
+  try {
+    body = await req.json();
+    // If correlationId is in the body, prefer it for logging continuity
+    if (body.correlationId) {
+        requestCorrelationId = body.correlationId;
+    }
+  } catch (parseError: unknown) {
+    const errorMessage = parseError instanceof Error ? parseError.message : "Invalid JSON body";
+    console.error(`[${requestCorrelationId}] Failed to parse request body: ${errorMessage}`);
+    throw new Error(`Invalid request: ${errorMessage}`);
+  }
 
   const {
     messageId,
@@ -36,280 +61,142 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     force_reprocess = false,
   } = body;
 
-  const requestCorrelationId = body.correlationId || correlationId;
-
   const captionForLog = caption
-    ? caption.length > 50
-      ? `${caption.substring(0, 50)}...`
-      : caption
+    ? caption.length > 50 ? `${caption.substring(0, 50)}...` : caption
     : "(none)";
 
   console.log(
-    `Processing caption for message ${messageId}, correlation_id: ${requestCorrelationId}, isEdit: ${isEdit}, retry: ${retryCount}, force_reprocess: ${force_reprocess}, caption: ${captionForLog}`
+    `[${requestCorrelationId}] Processing caption for message ${messageId}. isEdit: ${isEdit}, retry: ${retryCount}, force: ${force_reprocess}, caption: ${captionForLog}`
   );
+  await logProcessingEvent('caption_parse_started', messageId, requestCorrelationId, { isEdit, retryCount, force_reprocess, captionLength: caption?.length ?? 0 });
 
   if (!messageId || !caption) {
-    throw new Error(
-      "Required parameters missing: messageId and caption are required"
-    );
+    console.error(`[${requestCorrelationId}] Missing required parameters: messageId and caption`);
+    await logProcessingEvent('caption_parse_failed', messageId || 'unknown', requestCorrelationId, { reason: 'Missing parameters' }, 'Missing messageId or caption');
+    throw new Error("Invalid request: messageId and caption are required.");
   }
 
   try {
-    const startTime = Date.now();
-    console.log(JSON.stringify({
-      event: "fetch_message_start",
-      messageId,
-      correlationId: requestCorrelationId,
-      timestamp: new Date().toISOString()
-    }));
+    // --- Fetch Existing Message ---
+    const fetchStart = Date.now();
+    const message = await getMessage(messageId); // Uses singleton client via dbOperations
+    console.log(`[${requestCorrelationId}] Fetched message ${messageId} in ${Date.now() - fetchStart}ms`);
 
-    const message = await getMessage(messageId);
-
-    console.log(JSON.stringify({
-      event: "fetch_message_complete",
-      messageId,
-      correlationId: requestCorrelationId,
-      durationMs: Date.now() - startTime,
-      timestamp: new Date().toISOString()
-    }));
-
+    // --- Check if Reprocessing Needed ---
     if (message?.analyzed_content && !isEdit && !force_reprocess) {
-      console.log(
-        `Message ${messageId} already has analyzed content and force_reprocess is not enabled, skipping`
-      );
-      return new Response(
-        JSON.stringify({
+      console.log(`[${requestCorrelationId}] Message ${messageId} already analyzed. Skipping.`);
+      await logProcessingEvent('caption_parse_skipped', messageId, requestCorrelationId, { reason: 'Already analyzed' });
+      // Return success, but indicate it was skipped
+      return createSuccessResponse({
           success: true,
+          skipped: true,
           message: `Message already has analyzed content`,
           data: message.analyzed_content,
-          correlation_id: requestCorrelationId,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+        }, requestCorrelationId);
     }
 
-    console.log(
-      `Current message state: ${JSON.stringify({
-        id: message?.id,
-        processing_state: message?.processing_state,
-        has_analyzed_content: !!message?.analyzed_content,
-        media_group_id: message?.media_group_id,
-        force_reprocess: force_reprocess,
-      })}`
-    );
-
+    // --- Parse Caption ---
     const parseStart = Date.now();
-    console.log(`Performing manual parsing on caption: ${captionForLog}`);
-    let parsedContent: ParsedContent = parseCaption(caption, {
-      messageId,
-      correlationId: requestCorrelationId
-    });
-    console.log(JSON.stringify({
-      event: "parse_complete",
-      messageId,
-      correlationId: requestCorrelationId,
-      durationMs: Date.now() - parseStart,
-      timestamp: new Date().toISOString()
-    }));
-    console.log(`Manual parsing result: ${JSON.stringify(parsedContent)}`);
+    console.log(`[${requestCorrelationId}] Performing manual parsing on caption: ${captionForLog}`);
+    let parsedContent: ParsedContent = parseCaption(caption, { messageId, correlationId: requestCorrelationId });
+    console.log(`[${requestCorrelationId}] Caption parsed in ${Date.now() - parseStart}ms. Partial: ${!!parsedContent?.parsing_metadata?.partial_success}`);
 
-    parsedContent.caption = caption;
-
-    if (media_group_id) {
-      parsedContent.sync_metadata = {
-        media_group_id: media_group_id,
-      };
-    }
-
+    // --- Enrich Parsing Metadata ---
+    parsedContent.caption = caption; // Ensure original caption is stored if needed
+    if (media_group_id) parsedContent.sync_metadata = { media_group_id };
     if (isEdit) {
-      console.log(`Message ${messageId} is being processed as an edit`);
-      parsedContent.parsing_metadata.is_edit = true;
-      parsedContent.parsing_metadata.edit_timestamp = new Date().toISOString();
+        parsedContent.parsing_metadata.is_edit = true;
+        parsedContent.parsing_metadata.edit_timestamp = new Date().toISOString();
     }
-
     if (force_reprocess) {
-      console.log(`Message ${messageId} is being force reprocessed`);
-      parsedContent.parsing_metadata.force_reprocess = true;
-      parsedContent.parsing_metadata.reprocess_timestamp =
-        new Date().toISOString();
+        parsedContent.parsing_metadata.force_reprocess = true;
+        parsedContent.parsing_metadata.reprocess_timestamp = new Date().toISOString();
     }
-
     if (retryCount > 0) {
-      parsedContent.parsing_metadata.retry_count = retryCount;
-      parsedContent.parsing_metadata.retry_timestamp = new Date().toISOString();
+        parsedContent.parsing_metadata.retry_count = retryCount;
+        parsedContent.parsing_metadata.retry_timestamp = new Date().toISOString();
     }
 
-    console.log(`Logging analysis event for message ${messageId}`);
+    // --- Log Analysis Event ---
+    // Consider if this specific log is still needed or if unified logs are sufficient
     await logAnalysisEvent(
       messageId,
       requestCorrelationId,
-      { analyzed_content: message?.analyzed_content },
-      { analyzed_content: parsedContent },
-      {
-        source: "parse-caption",
-        caption: captionForLog,
-        media_group_id: media_group_id,
-        method: "manual",
-        is_edit: isEdit,
-        force_reprocess: force_reprocess,
-        retry_count: retryCount,
-      }
+      { analyzed_content: message?.analyzed_content }, // Previous state
+      { analyzed_content: parsedContent }, // New state
+      { /* Additional metadata */ }
     );
 
-    console.log(
-      `Updating message ${messageId} with analyzed content, isEdit: ${isEdit}, force_reprocess: ${force_reprocess}`
-    );
+    // --- Update Message in DB ---
+    console.log(`[${requestCorrelationId}] Updating message ${messageId} with analyzed content.`);
     const updateResult = await updateMessageWithAnalysis(
       messageId,
       parsedContent,
-      message,
+      message, // Pass fetched message for context
       queue_id,
       isEdit || force_reprocess
     );
-    console.log(`Update result: ${JSON.stringify(updateResult)}`);
+    console.log(`[${requestCorrelationId}] Update result: ${JSON.stringify(updateResult)}`);
+    await logProcessingEvent('caption_parse_db_updated', messageId, requestCorrelationId, { updateResult });
 
-    let syncResult: MediaGroupResult | null = null;
+
+    // --- Trigger Media Group Sync (if applicable) ---
+    let syncResult: any | null = null; // Use 'any' or define MediaGroupResult
     if (media_group_id) {
       try {
-        console.log(
-          `Starting media group content sync for group ${media_group_id}, message ${messageId}, isEdit: ${isEdit}, force_reprocess: ${force_reprocess}`
-        );
-
-        // Use our shared utility for media group sync with the correct parameters
+        console.log(`[${requestCorrelationId}] Triggering media group sync for group ${media_group_id}`);
+        // Call syncMediaGroupContent correctly (it uses singleton client internally)
         syncResult = await syncMediaGroupContent(
-          Deno.env.get("SUPABASE_URL") ?? "",
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
           messageId,
           parsedContent,
           {
-            forceSync: true,
+            forceSync: true, // Or determine based on context
             syncEditHistory: isEdit
           }
         );
-
-        console.log(`Media group sync completed with result: ${JSON.stringify(syncResult)}`);
-      } catch (syncError) {
-        console.error(
-          `Media group sync error (non-fatal): ${syncError.message}`
-        );
-    await logErrorToDatabase({
-      messageId,
-      errorMessage: `Media group sync error: ${syncError.message}`,
-      correlationId: requestCorrelationId,
-      functionName: "parse-caption",
-    });
+        console.log(`[${requestCorrelationId}] Media group sync completed: ${JSON.stringify(syncResult)}`);
+        await logProcessingEvent('media_group_sync_triggered', messageId, requestCorrelationId, { media_group_id, syncResult });
+      } catch (syncError: unknown) {
+        const syncErrorMessage = syncError instanceof Error ? syncError.message : String(syncError);
+        console.error(`[${requestCorrelationId}] Media group sync error (non-fatal): ${syncErrorMessage}`);
+        // Log error but don't fail the entire request
+        await logProcessingEvent('media_group_sync_failed', messageId, requestCorrelationId, { media_group_id }, syncErrorMessage);
       }
     }
 
-    let forward_info: {
-      from_user: any;
-      from_chat: any;
-      from_message_id: any;
-      signature: any;
-      sender_name: any;
-      date: string | null;
-      origin: any;
-    } | null = null;
-    if (message.forward_from) {
-      forward_info = {
-        from_user: message.forward_from,
-        from_chat: message.forward_from_chat,
-        from_message_id: message.forward_from_message_id,
-        signature: message.forward_signature,
-        sender_name: message.forward_sender_name,
-        date: message.forward_date
-          ? new Date(message.forward_date * 1000).toISOString()
-          : null,
-        origin: message.forward_origin,
-      };
-    }
-
-    return new Response(
-      JSON.stringify({
+    // --- Success Response ---
+    console.log(`[${requestCorrelationId}] Caption processing successful for message ${messageId}.`);
+    return createSuccessResponse({
         success: true,
         message: "Caption parsed successfully",
         message_id: messageId,
-        media_group_id: media_group_id,
-        correlation_id: requestCorrelationId,
-        is_edit: isEdit,
-        force_reprocess: force_reprocess,
         parsed_content: parsedContent,
         sync_result: syncResult,
-        forward_info: forward_info,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (error) {
-    console.error(`Error processing caption: ${error.message}`);
-    console.error(`Stack: ${error.stack}`);
+      }, requestCorrelationId);
 
-    await updateMessageWithError(
-      messageId,
-      error.message
-    );
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error during caption parsing";
+    console.error(`[${requestCorrelationId}] Error processing caption for message ${messageId}: ${errorMessage}`, error);
 
-    await logErrorToDatabase({
-      messageId,
-      errorMessage: error.message,
-      correlationId: requestCorrelationId,
-      functionName: "parse-caption",
-    });
+    // Log the error using the standard mechanism
+    await logProcessingEvent('caption_parse_failed', messageId || 'unknown', requestCorrelationId, { isEdit, retryCount, force_reprocess }, errorMessage);
 
-    return new Response(
-      JSON.stringify({
-        success: false,
-        message: "Error parsing caption",
-        error: error.message,
-        message_id: messageId,
-        correlation_id: requestCorrelationId,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      }
-    );
+    // Removed call to updateMessageWithError - error is logged via logProcessingEvent
+    // The unifiedHandler will return an error response.
+
+    // Throw the original error to be handled by unifiedHandler
+    throw new Error(errorMessage);
   }
-};
+}
 
 
-// Serve HTTP requests
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      headers: corsHeaders,
-    });
-  }
+// Create and configure the handler
+const handler = createHandler(handleParseCaption)
+  .withMethods(['POST']) // Parsing is triggered via POST
+  .withSecurity(SecurityLevel.AUTHENTICATED) // Assume internal service or authenticated user triggers parsing
+  .build();
 
-  const correlationId = crypto.randomUUID();
+// Serve the handler
+serve(handler);
 
-  try {
-    if (req.method === "POST") {
-      return await handleCaptionAnalysis(req, correlationId);
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: "Method not allowed",
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 405,
-      }
-    );
-  } catch (error) {
-    console.error(`Unhandled error: ${error.message}`);
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message,
-        correlation_id: correlationId,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      }
-    );
-  }
-});
+console.log("parse-caption function deployed and listening.");

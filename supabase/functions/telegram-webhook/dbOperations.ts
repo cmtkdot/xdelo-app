@@ -1,42 +1,27 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
-import {
-  createSupabaseClient,
-  extractTelegramMetadata,
-  logProcessingEvent,
-} from "../_shared/consolidatedMessageUtils.ts";
+// Use the singleton client
+import { logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts";
+import { supabaseClient } from "../_shared/supabase.ts";
+// Removed createSupabaseClient import
+// Removed createClient import
+// Removed Deno.env gets (client is imported)
 
-// Get environment variables
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+// Removed local supabaseClient creation
 
 /**
- * Enhanced Supabase client with improved timeout and retry capabilities
- */
-export const supabaseClient =
-  SUPABASE_URL && SUPABASE_KEY
-    ? createClient(SUPABASE_URL, SUPABASE_KEY, {
-        auth: {
-          persistSession: false,
-        },
-      })
-    : createSupabaseClient();
-
-/**
- * Legacy wrapper function for backwards compatibility
+ * Legacy wrapper function for backwards compatibility - FIXED
  */
 export async function xdelo_logProcessingEvent(
   eventType: string,
   entityId: string,
   correlationId: string,
-  metadata: Record<string, unknown> = {},
   errorMessage?: string
 ): Promise<void> {
+  // Pass empty metadata object as the 4th argument
   await logProcessingEvent(
     eventType,
     entityId,
     correlationId,
-    metadata,
+    {}, // metadata
     errorMessage
   );
 }
@@ -76,9 +61,9 @@ interface MessageRecord {
 }
 
 export async function createMessage(
-  client: ReturnType<typeof createSupabaseClient>,
-  input: any,
-  logger?: any
+  // client parameter removed, using imported singleton supabaseClient
+  input: any, // Consider defining a stricter type for input
+  logger?: any // Consider a stricter logger type
 ): Promise<{
   id?: string;
   success: boolean;
@@ -89,11 +74,6 @@ export async function createMessage(
   try {
     // Set a longer timeout for complex operations
     const options = { timeoutMs: 30000 };
-
-    // Extract essential metadata
-    const telegramMetadata =
-      input.telegram_metadata ||
-      (input.telegram_data ? extractTelegramMetadata(input.telegram_data) : {});
 
     // Prepare the full record data for upsert
     const fullRecordData: Record<string, any> = {
@@ -115,7 +95,7 @@ export async function createMessage(
       storage_path: input.storage_path,
       public_url: input.public_url,
       processing_state: input.processing_state || "initialized",
-      is_forward: input.is_forward || false,
+      is_forward: !!input.forward_info, // Derive from forward_info
       is_edited_channel_post: input.is_edited_channel_post || false,
       correlation_id: input.correlation_id,
       message_url: input.message_url,
@@ -123,7 +103,6 @@ export async function createMessage(
       duplicate_reference_id: input.duplicate_reference_id,
       old_analyzed_content: input.old_analyzed_content,
       telegram_data: input.telegram_data,
-      telegram_metadata: telegramMetadata,
       forward_info: input.forward_info,
       edit_date: input.edit_date,
       edit_history: input.edit_history || [],
@@ -151,7 +130,7 @@ export async function createMessage(
     }
 
     // First, check if this exact message already exists (telegram_message_id + chat_id)
-    let { data: existingMessage, error: lookupError } = await client
+    let { data: existingMessage, error: lookupError } = await supabaseClient // Use imported client
       .from("messages")
       .select("id, caption, file_unique_id")
       .eq("telegram_message_id", input.telegram_message_id)
@@ -165,7 +144,7 @@ export async function createMessage(
 
     // If not exact duplicate, check for file duplicate
     if (!existingMessage?.id && input.file_unique_id) {
-      const { data: fileDuplicate, error: fileLookupError } = await client
+      const { data: fileDuplicate, error: fileLookupError } = await supabaseClient // Use imported client
         .from("messages")
         .select("id, caption")
         .eq("file_unique_id", input.file_unique_id)
@@ -209,7 +188,7 @@ export async function createMessage(
         fullRecordData.analyzed_content = null;
       }
 
-      const { error: updateError } = await client
+      const { error: updateError } = await supabaseClient // Use imported client
         .from("messages")
         .update(fullRecordData)
         .eq("id", existingMessage.id);
@@ -240,7 +219,7 @@ export async function createMessage(
           `Inserting new record with file_unique_id: ${fullRecordData.file_unique_id}`
         );
 
-        const { data: insertData, error: insertError } = await client
+        const { data: insertData, error: insertError } = await supabaseClient // Use imported client
           .from("messages")
           .insert(fullRecordData)
           .select("id")
@@ -262,7 +241,7 @@ export async function createMessage(
             fullRecordData.is_duplicate = true;
 
             // Try again with the modified unique ID
-            const { data: retryData, error: retryError } = await client
+            const { data: retryData, error: retryError } = await supabaseClient // Use imported client
               .from("messages")
               .insert(fullRecordData)
               .select("id")
@@ -288,17 +267,15 @@ export async function createMessage(
           messageId = insertData.id;
           logger?.success(`Successfully inserted new message ${messageId}`);
         }
-      } catch (insertError) {
-        logger?.error("Exception during message insert:", insertError);
-        return {
-          success: false,
-          error_message:
-            insertError instanceof Error
-              ? insertError.message
-              : String(insertError),
-        };
+      } catch (insertError: unknown) { // Add type annotation
+          const insertErrorMessage = insertError instanceof Error ? insertError.message : String(insertError);
+          logger?.error("Exception during message insert:", insertErrorMessage);
+          return {
+            success: false,
+            error_message: insertErrorMessage,
+          };
+        }
       }
-    }
 
     if (!messageId) {
       const errorMsg = "Failed to obtain message ID after insert/update.";
@@ -309,11 +286,12 @@ export async function createMessage(
     // Simplified flow - no duplicate file logging
 
     return { id: messageId, success: true };
-  } catch (error) {
-    logger?.error("Exception in createMessage:", error);
+  } catch (error: unknown) { // Add type annotation
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger?.error("Exception in createMessage:", errorMessage);
     return {
       success: false,
-      error_message: error instanceof Error ? error.message : String(error),
+      error_message: errorMessage,
     };
   }
 }
@@ -346,9 +324,10 @@ export async function updateMessageState(
         if (errorMessage) {
           updates.error_message = errorMessage;
           updates.last_error_at = new Date().toISOString();
-          updates.retry_count = supabaseClient.rpc("increment_retry_count", {
-            message_id: messageId,
-          });
+          // Assuming increment_retry_count exists and works as intended
+          // updates.retry_count = supabaseClient.rpc("increment_retry_count", {
+          //   message_id: messageId,
+          // });
         }
         break;
     }
@@ -364,12 +343,9 @@ export async function updateMessageState(
     }
 
     return true;
-  } catch (error) {
-    console.error(
-      `Error updating message state: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
+  } catch (error: unknown) { // Add type annotation
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`Error updating message state: ${errorMessage}`);
     return false;
   }
 }
@@ -393,12 +369,9 @@ export async function getMessageById(messageId: string) {
     }
 
     return data;
-  } catch (error) {
-    console.error(
-      `Error getting message: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
+  } catch (error: unknown) { // Add type annotation
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`Error getting message: ${errorMessage}`);
     return null;
   }
 }
@@ -419,8 +392,8 @@ export async function syncMediaGroupContent(
       {
         p_message_id: sourceMessageId,
         p_media_group_id: mediaGroupId,
-        p_force_sync: true,
-        p_sync_edit_history: false,
+        p_force_sync: true, // Assuming force sync is always desired here
+        p_sync_edit_history: false, // Assuming edit history sync is not needed here
       }
     );
 
@@ -436,11 +409,12 @@ export async function syncMediaGroupContent(
       success: true,
       updatedCount: data?.updated_count || 0,
     };
-  } catch (error) {
-    console.error("Exception in syncMediaGroupContent:", error);
+  } catch (error: unknown) { // Add type annotation
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Exception in syncMediaGroupContent:", errorMessage);
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage,
     };
   }
 }
@@ -504,29 +478,83 @@ export async function recoverDuplicateFileMessages(
         } else {
           result.recovered++;
 
-          // Log the recovery
-          await xdelo_logProcessingEvent(
+          // Log the recovery using the correct function and signature
+          await logProcessingEvent(
             "message_recovered",
             message.id,
             correlationId || crypto.randomUUID(),
-            {
+            { // metadata object
               telegram_message_id: message.telegram_message_id,
               chat_id: message.chat_id,
               original_file_unique_id: message.file_unique_id,
               new_file_unique_id: newUniqueId,
               recovery_type: "duplicate_file_id",
             }
+            // No separate errorMessage needed here
           );
         }
-      } catch (messageError) {
-        console.error(`Error recovering message ${message.id}:`, messageError);
+      } catch (messageError: unknown) { // Add type annotation
+        const errorMessage = messageError instanceof Error ? messageError.message : String(messageError);
+        console.error(`Error recovering message ${message.id}:`, errorMessage);
         result.errors++;
       }
     }
 
     return result;
-  } catch (error) {
-    console.error("Error in recoverDuplicateFileMessages:", error);
+  } catch (error: unknown) { // Add type annotation
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Error in recoverDuplicateFileMessages:", errorMessage);
     return { recovered: 0, errors: 1 };
   }
+}
+
+// Added for parse-caption function
+export async function logAnalysisEvent(
+    messageId: string,
+    correlationId: string,
+    previousState: any,
+    newState: any,
+    metadata: any
+): Promise<void> {
+    await logProcessingEvent(
+        'analysis_event',
+        messageId,
+        correlationId,
+        { ...metadata, previousState, newState }
+    );
+}
+
+export async function updateMessageWithAnalysis(
+    messageId: string,
+    parsedContent: any,
+    message: any, // Consider defining type
+    queue_id: string | undefined, // Assuming queue_id is string | undefined
+    isEditOrForce: boolean
+): Promise<any> { // Define return type
+    const updates: any = {
+        analyzed_content: parsedContent,
+        processing_state: 'completed',
+        processing_completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        error_message: null, // Clear previous errors
+    };
+    // Add specific logic based on isEditOrForce if needed
+
+    const { data, error } = await supabaseClient
+        .from('messages')
+        .update(updates)
+        .eq('id', messageId)
+        .select() // Select updated data if needed
+        .single(); // Assuming only one row is updated
+
+    if (error) {
+        console.error(`Error updating message ${messageId} with analysis:`, error);
+        // Optionally log error using logProcessingEvent
+        throw new Error(`DB update failed: ${error.message}`);
+    }
+    return data; // Return updated data or success indicator
+}
+
+export async function getMessage(messageId: string): Promise<any> { // Define return type
+    return getMessageById(messageId); // Reuse existing function
 }

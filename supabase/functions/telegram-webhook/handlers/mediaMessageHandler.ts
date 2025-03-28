@@ -1,9 +1,9 @@
 import { corsHeaders } from "../../_shared/cors.ts";
+import { syncMediaGroupContent } from "../../_shared/mediaGroupSync.ts";
 import { xdelo_processMessageMedia } from "../../_shared/mediaStorage.ts";
 import { xdelo_detectMimeType } from "../../_shared/mediaUtils.ts";
 import { constructTelegramMessageUrl } from "../../_shared/messageUtils.ts";
 import { supabaseClient } from "../../_shared/supabase.ts";
-import { syncMediaGroupContent } from "../../_shared/mediaGroupSync.ts";
 import {
   createMessage,
   // triggerCaptionAnalysis, // Removed - No longer used
@@ -26,17 +26,14 @@ declare const Deno: DenoRuntime;
 
 // Validate and get Telegram bot token from environment
 const getTelegramBotToken = (): string => {
-  if (typeof Deno !== 'undefined' && typeof Deno?.env?.get === 'function') {
+  if (typeof Deno !== "undefined" && typeof Deno?.env?.get === "function") {
     const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
-    if (!token) throw new Error("Missing TELEGRAM_BOT_TOKEN in Deno environment");
+    if (!token)
+      throw new Error("Missing TELEGRAM_BOT_TOKEN in Deno environment");
     return token;
   }
-
-  if (process?.env?.TELEGRAM_BOT_TOKEN) {
-    return process.env.TELEGRAM_BOT_TOKEN;
-  }
-
-  throw new Error("Missing TELEGRAM_BOT_TOKEN environment variable");
+  // Removed process.env fallback as it causes TS errors in Deno context
+  throw new Error("Missing TELEGRAM_BOT_TOKEN environment variable or Deno environment not detected");
 };
 
 const TELEGRAM_BOT_TOKEN = getTelegramBotToken();
@@ -99,7 +96,7 @@ export async function handleMediaMessage(
     }
 
     return response;
-  } catch (error) {
+  } catch (error: unknown) { // Added type annotation
     const errorMessage = error instanceof Error ? error.message : String(error);
     context.logger?.error(`Error processing media message: ${errorMessage}`, {
       error: error instanceof Error ? error : { message: errorMessage },
@@ -120,11 +117,10 @@ export async function handleMediaMessage(
         },
         errorMessage
       );
-    } catch (logError) {
+    } catch (logError: unknown) { // Added type annotation
+      const logErrorMessage = logError instanceof Error ? logError.message : String(logError);
       context.logger?.error(
-        `Failed to log error to database: ${
-          logError instanceof Error ? logError.message : String(logError)
-        }`
+        `Failed to log error to database: ${logErrorMessage}`
       );
     }
 
@@ -151,12 +147,12 @@ async function xdelo_handleEditedMediaMessage(
 ): Promise<Response> {
   const { correlationId, logger } = context;
 
-    // Edit Processing Workflow
-    // 1. Retrieve existing message record
-    // 2. Compare changes (media/caption/both)
-    // 3. Update storage if media changed
-    // 4. Maintain edit history
-    // 5. Preserve original file references
+  // Edit Processing Workflow
+  // 1. Retrieve existing message record
+  // 2. Compare changes (media/caption/both)
+  // 3. Update storage if media changed
+  // 4. Maintain edit history
+  // 5. Preserve original file references
   const { data: existingMessage, error: lookupError } = await supabaseClient
     .from("messages")
     .select("*")
@@ -280,14 +276,16 @@ async function xdelo_handleEditedMediaMessage(
               storage_path: mediaProcessResult.fileInfo.storage_path,
             }
           );
-        } catch (logError) {
+        } catch (logError: unknown) { // Added type annotation
+          const logErrorMessage = logError instanceof Error ? logError.message : String(logError);
           logger?.error(
-            `Failed to log media edit operation: ${logError.message}`
+            `Failed to log media edit operation: ${logErrorMessage}`
           );
         }
-      } catch (mediaError) {
-        logger?.error(`Error processing edited media: ${mediaError.message}`);
-        throw mediaError;
+      } catch (mediaError: unknown) { // Added type annotation
+        const mediaErrorMessage = mediaError instanceof Error ? mediaError.message : String(mediaError);
+        logger?.error(`Error processing edited media: ${mediaErrorMessage}`);
+        throw mediaError; // Re-throw original error
       }
     }
     // If only caption has changed, just update the caption
@@ -334,9 +332,10 @@ async function xdelo_handleEditedMediaMessage(
             new_caption: message.caption,
           }
         );
-      } catch (logError) {
+      } catch (logError: unknown) { // Added type annotation
+        const logErrorMessage = logError instanceof Error ? logError.message : String(logError);
         logger?.error(
-          `Failed to log caption edit operation: ${logError.message}`
+          `Failed to log caption edit operation: ${logErrorMessage}`
         );
       }
     } else {
@@ -374,8 +373,9 @@ async function xdelo_handleEditedMediaMessage(
             no_changes: true,
           }
         );
-      } catch (logError) {
-        console.error("Error logging edit operation:", logError);
+      } catch (logError: unknown) { // Added type annotation
+        const logErrorMessage = logError instanceof Error ? logError.message : String(logError);
+        console.error("Error logging edit operation:", logErrorMessage);
       }
     }
 
@@ -544,7 +544,11 @@ async function xdelo_handleNewMediaMessage(
       duplicate_reference_id: undefined, // Set to original message ID if duplicate
     };
 
-    const result = await createMessage(supabaseClient, enhancedMessageInput, logger);
+    const result = await createMessage(
+      supabaseClient,
+      enhancedMessageInput,
+      logger
+    );
 
     if (result.duplicate && logger) {
       logger.warn(`Duplicate message detected and handled`, {
@@ -600,21 +604,26 @@ async function xdelo_handleNewMediaMessage(
     // Only sync media group if this is part of one AND has analyzed content
     if (message.media_group_id && result.id && message.caption) {
       try {
-        logger?.info(`Starting media group sync for group ${message.media_group_id}`);
+        logger?.info(
+          `Starting media group sync for group ${message.media_group_id}`
+        );
         const syncResult = await syncMediaGroupContent(
           result.id,
           {
             media_group_id: message.media_group_id,
-            caption: message.caption
+            caption: message.caption,
           },
           {
             forceSync: true,
-            syncEditHistory: false
+            syncEditHistory: false,
           }
         );
-        logger?.info(`Media group sync completed: ${JSON.stringify(syncResult)}`);
-      } catch (syncError) {
-        logger?.error(`Media group sync failed: ${syncError.message}`);
+        logger?.info(
+          `Media group sync completed: ${JSON.stringify(syncResult)}`
+        );
+      } catch (syncError: unknown) { // Added type annotation
+        const syncErrorMessage = syncError instanceof Error ? syncError.message : String(syncError);
+        logger?.error(`Media group sync failed: ${syncErrorMessage}`);
         // Non-fatal error, continue
       }
     }
@@ -623,18 +632,17 @@ async function xdelo_handleNewMediaMessage(
       JSON.stringify({ success: true, id: result.id, correlationId }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (createError) {
+  } catch (createError: unknown) { // Added type annotation
+    const createErrorMessage = createError instanceof Error ? createError.message : String(createError);
     logger?.error(
-      `Error creating new media message: ${
-        createError instanceof Error ? createError.message : String(createError)
-      }`,
+      `Error creating new media message: ${createErrorMessage}`,
       {
         message_id: message.message_id,
         chat_id: message.chat.id,
         media_group_id: message.media_group_id,
         error_type: typeof createError,
-        error_keys:
-          typeof createError === "object" ? Object.keys(createError) : "N/A",
+        // Added null check for Object.keys
+        error_keys: typeof createError === "object" && createError !== null ? Object.keys(createError) : "N/A",
       }
     );
 
@@ -647,20 +655,16 @@ async function xdelo_handleNewMediaMessage(
         {
           message_id: message.message_id,
           chat_id: message.chat.id,
-          error:
-            createError instanceof Error
-              ? createError.message
-              : String(createError),
+          error: createErrorMessage,
           stack: createError instanceof Error ? createError.stack : undefined,
           media_group_id: message.media_group_id,
         },
-        createError instanceof Error ? createError.message : String(createError)
+        createErrorMessage
       );
-    } catch (logError) {
+    } catch (logError: unknown) { // Added type annotation
+      const logErrorMessage = logError instanceof Error ? logError.message : String(logError);
       console.error(
-        `Error logging failure: ${
-          logError instanceof Error ? logError.message : String(logError)
-        }`
+        `Error logging failure: ${logErrorMessage}`
       );
     }
 

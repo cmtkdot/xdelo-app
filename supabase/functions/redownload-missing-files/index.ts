@@ -1,110 +1,136 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"; // Keep for serve
+import { logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts"; // Use standard logging
+import { supabaseClient } from "../_shared/supabase.ts"; // Use singleton client
+import {
+  createHandler,
+  createSuccessResponse,
+  RequestMetadata,
+  SecurityLevel,
+} from "../_shared/unifiedHandler.ts";
 
-// Set up CORS headers
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+interface RedownloadRequestBody {
+  messageIds?: string[];
+  limit?: number;
+  correlationId?: string; // Allow passing correlationId
+}
 
-// Create Supabase client
-const supabaseClient = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-);
+// Core logic for flagging messages for redownload
+async function handleRedownloadRequest(req: Request, metadata: RequestMetadata): Promise<Response> {
+  const handlerCorrelationId = metadata.correlationId;
+  let requestCorrelationId = handlerCorrelationId;
 
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+  let requestBody: RedownloadRequestBody;
+  try {
+    requestBody = await req.json();
+    if (requestBody.correlationId) {
+      requestCorrelationId = requestBody.correlationId; // Prefer body correlationId if provided
+    }
+  } catch (parseError: unknown) {
+    const errorMessage = parseError instanceof Error ? parseError.message : "Invalid JSON body";
+    console.error(`[${requestCorrelationId}] Failed to parse request body: ${errorMessage}`);
+    throw new Error(`Invalid request: ${errorMessage}`);
   }
+
+  const { messageIds, limit = 10 } = requestBody; // Default limit to 10
+
+  console.log(`[${requestCorrelationId}] Processing redownload request. MessageIDs: ${messageIds?.length ?? 'None'}, Limit: ${limit}`);
+  await logProcessingEvent('redownload_request_received', requestCorrelationId, requestCorrelationId, { messageIdsCount: messageIds?.length, limit });
 
   try {
-    const { messageIds, limit = 10, correlationId = crypto.randomUUID() } = await req.json();
-    
-    console.log(`Processing redownload request (${correlationId}): ${messageIds?.length || limit} messages`);
-    
+    // --- Query Messages ---
     let query = supabaseClient
       .from('messages')
-      .select('id, file_id, telegram_data');
-    
-    // If specific message IDs were provided, use those
+      .select('id, redownload_attempts'); // Select only needed fields
+
     if (messageIds && messageIds.length > 0) {
+      console.log(`[${requestCorrelationId}] Querying specific message IDs: ${messageIds.length}`);
       query = query.in('id', messageIds);
     } else {
-      // Otherwise, get messages that need redownload
+      console.log(`[${requestCorrelationId}] Querying messages needing redownload (limit ${limit}).`);
+      // Find messages flagged or failed previously, prioritizing lower attempts
       query = query
         .eq('needs_redownload', true)
-        .is('redownload_failed', false)
-        .order('redownload_attempts', { ascending: true })
+        // .is('redownload_failed', false) // Maybe allow retrying failed ones? Revisit logic if needed.
+        .order('redownload_attempts', { ascending: true, nullsFirst: true })
+        .order('updated_at', { ascending: true }) // Process older ones first
         .limit(limit);
     }
-    
-    const { data: messages, error } = await query;
-    
-    if (error) {
-      throw new Error(`Error querying messages: ${error.message}`);
+
+    const { data: messages, error: queryError } = await query;
+
+    if (queryError) {
+      console.error(`[${requestCorrelationId}] Error querying messages:`, queryError);
+      await logProcessingEvent('redownload_query_failed', requestCorrelationId, requestCorrelationId, {}, queryError.message);
+      throw new Error(`Database query error: ${queryError.message}`);
     }
-    
+
     if (!messages || messages.length === 0) {
-      return new Response(
-        JSON.stringify({
+      console.log(`[${requestCorrelationId}] No messages found matching criteria.`);
+      await logProcessingEvent('redownload_no_messages_found', requestCorrelationId, requestCorrelationId);
+      return createSuccessResponse({
           success: true,
-          message: "No messages found needing redownload",
-          processed: 0
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+          message: "No messages found needing redownload based on criteria",
+          queued: 0
+        }, requestCorrelationId);
     }
-    
-    // Flag these messages for redownload in a background process
-    const updates = messages.map(message => ({
+
+    console.log(`[${requestCorrelationId}] Found ${messages.length} messages to flag for redownload.`);
+
+    // --- Update Messages to Flag for Redownload ---
+    // Add type for message parameter
+    const updates = messages.map((message: { id: string; redownload_attempts: number | null }) => ({
       id: message.id,
+      needs_redownload: true, // Ensure flag is set
+      redownload_failed: false, // Reset failed flag on new attempt
       redownload_attempts: (message.redownload_attempts || 0) + 1,
       redownload_flagged_at: new Date().toISOString(),
-      correlation_id: correlationId
+      // Storing correlationId here might be redundant if logged elsewhere, but can be useful for tracking
+      // correlation_id: requestCorrelationId
     }));
-    
+
     const { error: updateError } = await supabaseClient
       .from('messages')
-      .upsert(updates);
-    
+      .upsert(updates); // Use upsert for safety
+
     if (updateError) {
-      throw new Error(`Error updating messages: ${updateError.message}`);
+      console.error(`[${requestCorrelationId}] Error updating messages to flag redownload:`, updateError);
+      await logProcessingEvent('redownload_update_failed', requestCorrelationId, requestCorrelationId, { messageCount: messages.length }, updateError.message);
+      throw new Error(`Database update error: ${updateError.message}`);
     }
-    
-    // Log the operation
-    await supabaseClient.from('unified_audit_logs').insert({
-      event_type: 'redownload_batch_queued',
-      entity_id: null,
-      correlation_id: correlationId,
-      metadata: {
+
+    console.log(`[${requestCorrelationId}] Successfully flagged ${messages.length} messages for redownload.`);
+    await logProcessingEvent('redownload_batch_queued', requestCorrelationId, requestCorrelationId, {
         message_count: messages.length,
-        message_ids: messages.map(m => m.id),
-        timestamp: new Date().toISOString()
-      }
+        // Add type for m parameter
+        message_ids: messages.map((m: { id: string }) => m.id)
     });
-    
-    return new Response(
-      JSON.stringify({
+
+    // --- Success Response ---
+    return createSuccessResponse({
         success: true,
-        message: `Queued ${messages.length} messages for redownload`,
+        message: `Flagged ${messages.length} messages for redownload processing.`,
         queued: messages.length,
-        correlation_id: correlationId
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (error) {
-    console.error('Error in redownload-missing-files function:', error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message || 'Unknown error'
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500
-      }
-    );
+      }, requestCorrelationId);
+
+  } catch (error: unknown) {
+    // Catch errors thrown from steps above
+    const errorMessage = error instanceof Error ? error.message : "Unknown error processing redownload request";
+    // Log if not already logged
+    if (!errorMessage.includes('error:')) {
+        console.error(`[${requestCorrelationId}] Top-level error in redownload request: ${errorMessage}`);
+        await logProcessingEvent('redownload_request_failed', requestCorrelationId, requestCorrelationId, {}, errorMessage);
+    }
+    throw error; // Re-throw for unifiedHandler
   }
-});
+}
+
+// Create and configure the handler
+const handler = createHandler(handleRedownloadRequest)
+  .withMethods(['POST'])
+  .withSecurity(SecurityLevel.AUTHENTICATED) // Triggering redownloads should require auth
+  .build();
+
+// Serve the handler
+serve(handler);
+
+console.log("redownload-missing-files function deployed and listening.");

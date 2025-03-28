@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    // --- Deno/Edge Function Specific Settings ---
+    "target": "esnext",             // Target modern JavaScript
+    "module": "esnext",             // Use ES modules
+    "moduleResolution": "bundler",  // Handles URL imports, recommended for Deno/modern setups
+    "lib": ["esnext", "dom", "dom.iterable"], // Include ESNext and DOM types. Deno types are provided by the Deno LSP.
+    "allowImportingTsExtensions": true, // Allow '.ts' extensions in imports (Deno style)
+    "noEmit": true,                 // Supabase CLI handles bundling/emitting, TS server shouldn't emit files
+
+    // --- General Best Practices ---
+    "strict": true,                 // Enable all strict type-checking options
+    "skipLibCheck": true,           // Skip type checking of declaration files (.d.ts)
+    "forceConsistentCasingInFileNames": true, // Disallow inconsistently-cased references to the same file
+    "esModuleInterop": true,        // Enables emit interoperability between CommonJS and ES Modules
+    "resolveJsonModule": true,      // Include modules imported with .json extension
+    "isolatedModules": true,        // Ensure each file can be safely transpiled without relying on other imports
+
+    // --- Project Specific (Adjust if needed) ---
+    "jsx": "react-jsx",             // Set JSX mode if React/JSX is used (even indirectly)
+    "baseUrl": "."                 // Base directory for module resolution
+    // Removed "paths" - Deno extension should handle import_map.json resolution
+  },
+  "include": [
+    "./**/*.ts",                    // Include all TypeScript files in the functions directory
+    "./**/*.tsx"                    // Include TSX files if any
+    // Do NOT include deno.json or import_map.json here; VS Code Deno extension handles them
+  ],
+  "exclude": [
+    "../../node_modules"            // Exclude the root node_modules directory
+  ]
+}

@@ -1,14 +1,11 @@
-
 import {
   constructTelegramMessageUrl,
   isMessageForwarded,
+  logProcessingEvent, // Import the correct 5-argument function
 } from "../../_shared/consolidatedMessageUtils.ts";
 import { corsHeaders } from "../../_shared/cors.ts";
 import {
   createMessage,
-  supabaseClient,
-  xdelo_logProcessingEvent,
-  // triggerCaptionAnalysis, // Removed - No longer used
 } from "../dbOperations.ts";
 import { MessageContext, TelegramMessage } from "../types.ts";
 
@@ -47,8 +44,7 @@ export async function handleOtherMessage(
       id: messageId,
       success,
       error_message,
-    } = await createMessage(
-      supabaseClient,
+    } = await createMessage( // Remove supabaseClient argument
       {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
@@ -57,7 +53,7 @@ export async function handleOtherMessage(
         message_type: isChannelPost ? "channel_post" : "message",
         text: message.text || "",
         telegram_data: message,
-        processing_state: "pending",
+        processing_state: "pending", // Assuming text messages might need processing later
         is_forward: isForwarded,
         correlation_id: correlationId,
         message_url: message_url,
@@ -75,18 +71,19 @@ export async function handleOtherMessage(
     // (which it isn't for these messages handled here).
     // If text analysis is needed, a different mechanism should be implemented.
 
-    // Log successful processing
-    await xdelo_logProcessingEvent(
-      "message_created",
-      messageId,
-      correlationId,
-      {
+    // Log successful processing using the 5-argument logProcessingEvent
+    await logProcessingEvent(
+      "message_created", // eventType
+      messageId, // entityId
+      correlationId, // correlationId
+      { // metadata
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         message_type: "text",
         is_forward: isForwarded,
         message_url: message_url,
-      }
+      },
+      undefined // errorMessage
     );
 
     logger?.success(
@@ -107,30 +104,41 @@ export async function handleOtherMessage(
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
-    context.logger?.error(`❌ Error processing non-media message:`, {
-      error: error.message,
-      stack: error.stack,
+  } catch (error: unknown) { // Added type annotation
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    context.logger?.error(`❌ Error processing non-media message: ${errorMessage}`, {
+      error: errorMessage, // Log the message string
+      stack: errorStack,
       message_id: message.message_id,
     });
 
-    // Log the error
-    await xdelo_logProcessingEvent(
-      "message_processing_error",
-      "system",
-      context.correlationId,
-      {
-        telegram_message_id: message.message_id,
-        chat_id: message.chat.id,
-        handler_type: "other_message",
-      },
-      error.message
-    );
+    // Log the error to the database using the 5-argument logProcessingEvent
+    try {
+      await logProcessingEvent(
+        "message_processing_error", // eventType
+        "system", // entityId
+        context.correlationId, // correlationId
+        { // metadata
+            telegram_message_id: message.message_id,
+            chat_id: message.chat.id,
+            handler_type: "other_message",
+            error: errorMessage, // Include error in metadata
+            stack: errorStack,
+        },
+        errorMessage // errorMessage
+      );
+    } catch (logError: unknown) {
+      const logErrorMessage = logError instanceof Error ? logError.message : String(logError);
+      console.error(`Failed to log processing error to database: ${logErrorMessage}`);
+    }
+
 
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || "Unknown error processing message",
+        error: errorMessage || "Unknown error processing message",
         correlationId: context.correlationId,
       }),
       {
