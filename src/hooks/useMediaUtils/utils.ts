@@ -3,7 +3,7 @@ import { useState, useCallback } from 'react';
 import { MediaProcessingState, MediaProcessingStateActions } from './types';
 
 /**
- * Create state and actions for tracking media processing status
+ * Creates a state object and actions for tracking message processing state
  */
 export function createMediaProcessingState(): [MediaProcessingState, MediaProcessingStateActions] {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -28,35 +28,44 @@ export function createMediaProcessingState(): [MediaProcessingState, MediaProces
 }
 
 /**
- * Retry an operation with configurable attempts and delay
+ * Retry helper for API calls
  */
-export async function withRetry<T>(operation: () => Promise<T>, options: {
-  maxAttempts: number;
-  delay: number;
-  retryableErrors?: string[];
-}): Promise<T> {
-  const { maxAttempts, delay, retryableErrors = [] } = options;
-  let attempt = 0;
-  let lastError: Error | null = null;
-
-  const execute = async (): Promise<T> => {
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: {
+    maxAttempts?: number;
+    delay?: number;
+    retryableErrors?: string[];
+  } = {}
+): Promise<T> {
+  const { maxAttempts = 3, delay = 1000, retryableErrors = [] } = options;
+  let lastError: any;
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      return await operation();
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      attempt++;
-
-      const shouldRetry = retryableErrors.length === 0 ||
-        retryableErrors.some(errMsg => lastError?.message.includes(errMsg));
-
-      if (attempt >= maxAttempts || !shouldRetry) {
-        throw lastError;
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Check if we should retry based on error type
+      const shouldRetry = attempt < maxAttempts && (
+        retryableErrors.length === 0 || // Retry all errors if no specific errors provided
+        retryableErrors.some(errType => 
+          error.message?.toLowerCase().includes(errType) || 
+          error.code?.toLowerCase().includes(errType)
+        )
+      );
+      
+      if (shouldRetry) {
+        // Add exponential backoff
+        const backoff = delay * Math.pow(2, attempt - 1);
+        console.log(`Retry attempt ${attempt}/${maxAttempts} after ${backoff}ms`);
+        await new Promise(resolve => setTimeout(resolve, backoff));
+      } else {
+        break;
       }
-
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return execute();
     }
-  };
-
-  return execute();
+  }
+  
+  throw lastError;
 }

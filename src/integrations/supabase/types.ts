@@ -2376,6 +2376,18 @@ export type Database = {
         }
         Relationships: []
       }
+      v_media_group_consistency: {
+        Row: {
+          media_group_id: string | null
+          newest_message: string | null
+          oldest_message: string | null
+          status: string | null
+          total_messages: number | null
+          with_content: number | null
+          without_content: number | null
+        }
+        Relationships: []
+      }
       v_message_forwards: {
         Row: {
           analyzed_content: Json | null
@@ -2394,6 +2406,21 @@ export type Database = {
             | Database["public"]["Enums"]["processing_state_type"]
             | null
           telegram_message_id: number | null
+        }
+        Relationships: []
+      }
+      v_message_processing_stats: {
+        Row: {
+          in_media_group: number | null
+          message_count: number | null
+          newest_started: string | null
+          oldest_started: string | null
+          processing_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          with_analyzed_content: number | null
+          with_caption: number | null
+          with_errors: number | null
         }
         Relationships: []
       }
@@ -3226,14 +3253,17 @@ export type Database = {
         }
         Returns: Json
       }
-      xdelo_recheck_media_groups: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      xdelo_reset_stalled_messages: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      xdelo_reset_stalled_messages:
+        | {
+            Args: Record<PropertyKey, never>
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_timeout_minutes?: number
+            }
+            Returns: Json
+          }
       xdelo_sync_incomplete_media_group: {
         Args: {
           p_media_group_id: string

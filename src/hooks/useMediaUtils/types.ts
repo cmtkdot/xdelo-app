@@ -1,4 +1,6 @@
 
+// Types for useMediaUtils hook
+
 export interface MediaProcessingState {
   isProcessing: boolean;
   processingMessageIds: Record<string, boolean>;
@@ -36,4 +38,5 @@ export interface CaptionFlowData {
   message_id?: string;
   media_group_synced?: boolean;
   caption_updated?: boolean;
+  parsed_content?: any;
 }

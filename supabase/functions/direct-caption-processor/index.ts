@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"; // Keep serve for potential health checks or manual triggers
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { xdelo_parseCaption } from "../_shared/captionParser.ts"; // Import the shared parser - CORRECTED NAME
@@ -25,11 +26,13 @@ async function processPendingMessages() {
   // logger.info("Polling started");
 
   try {
-    // 1. Fetch Pending Messages
+    // 1. Fetch Pending Messages - ENSURE only messages with non-empty captions are retrieved
     const { data: pendingMessages, error: fetchError } = await supabase
       .from('messages')
       .select('id, caption, media_group_id')
       .eq('processing_state', 'pending')
+      .not('caption', 'is', null)
+      .not('caption', 'eq', '')
       .order('processing_started_at', { ascending: true })
       .limit(BATCH_SIZE);
 
@@ -58,6 +61,13 @@ async function processPendingMessages() {
       let lockedMessage: any = null;
 
       try {
+        // Double-check that caption is not empty before proceeding
+        if (!message.caption || message.caption.trim() === '') {
+          console.log(`Message ${messageId} has empty caption, skipping and setting to error state.`);
+          await updateMessageState(messageId, 'error', 'Empty caption despite database filter');
+          continue;
+        }
+
         // 3. Lock Message (Atomic Update)
         // Use RPC to combine fetch and update for atomicity might be better,
         // but a simple update-and-check works for basic locking.
@@ -94,7 +104,11 @@ async function processPendingMessages() {
             continue;
          }
 
-         const analyzedContent = xdelo_parseCaption(lockedMessage.caption); // Use correct function name
+         const analyzedContent = xdelo_parseCaption(lockedMessage.caption, { 
+           messageId, 
+           correlationId 
+         });
+         
          // messageLogger.info("Caption parsed", { partial: analyzedContent?.parsing_metadata?.partial_success });
 
         // 5. Update DB (Success)
