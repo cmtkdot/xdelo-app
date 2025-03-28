@@ -79,11 +79,6 @@ export async function createMessage(
     // Set a longer timeout for complex operations
     const options = { timeoutMs: 30000 };
 
-    // Extract essential metadata
-    const telegramMetadata =
-      input.telegram_metadata ||
-      (input.telegram_data ? extractTelegramMetadata(input.telegram_data) : {});
-
     // Prepare the full record data for upsert
     const fullRecordData: Record<string, any> = {
       telegram_message_id: input.telegram_message_id,
