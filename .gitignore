@@ -39,3 +39,4 @@ supabase/functions/deno.json
 supabase/functions/import_map.json
 eslint.config.js
 supabase/functions/deno.jsonc
+eslint.config.js

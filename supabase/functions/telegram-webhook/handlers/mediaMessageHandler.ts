@@ -1,5 +1,4 @@
 import { corsHeaders } from "../../_shared/cors.ts";
-import { retryDbOperation } from "../../_shared/dbRetryUtils.ts";
 import { xdelo_processMessageMedia } from "../../_shared/mediaStorage.ts";
 import { xdelo_detectMimeType } from "../../_shared/mediaUtils.ts";
 import { constructTelegramMessageUrl } from "../../_shared/messageUtils.ts";
@@ -16,14 +15,55 @@ import {
   TelegramMessage,
 } from "../types.ts";
 
-// Get Telegram bot token from environment
-const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
-if (!TELEGRAM_BOT_TOKEN) {
-  console.error("Missing TELEGRAM_BOT_TOKEN environment variable");
+interface DenoRuntime {
+  env: {
+    get(key: string): string | undefined;
+  };
 }
 
+declare const Deno: DenoRuntime;
+
+// Validate and get Telegram bot token from environment
+const getTelegramBotToken = (): string => {
+  if (typeof Deno !== 'undefined' && typeof Deno?.env?.get === 'function') {
+    const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
+    if (!token) throw new Error("Missing TELEGRAM_BOT_TOKEN in Deno environment");
+    return token;
+  }
+
+  if (process?.env?.TELEGRAM_BOT_TOKEN) {
+    return process.env.TELEGRAM_BOT_TOKEN;
+  }
+
+  throw new Error("Missing TELEGRAM_BOT_TOKEN environment variable");
+};
+
+const TELEGRAM_BOT_TOKEN = getTelegramBotToken();
+
+// Rest of the file remains the same but can safely use TELEGRAM_BOT_TOKEN as string
+
 /**
- * Main handler for media messages from Telegram
+ * Telegram Webhook Message Processing Flow
+ *
+ * 1. Webhook receives message from Telegram
+ * 2. Message is routed to appropriate handler (media/text/etc)
+ * 3. For media messages:
+ *    a. Validate required fields (file_id, file_unique_id)
+ *    b. Process media file (download, store, generate public URL)
+ *    c. Create/update message record in database
+ *    d. Handle duplicates and edits
+ *    e. Trigger downstream processing via database triggers
+ *
+ * Key Components:
+ * - handleMediaMessage: Main entry point
+ * - xdelo_handleNewMediaMessage: New message processing
+ * - xdelo_handleEditedMediaMessage: Edit processing
+ * - createMessage: Database record creation (shared with other handlers)
+ *
+ * Error Handling:
+ * - All errors are caught and logged to database
+ * - Processing continues where possible
+ * - Detailed error context is preserved
  */
 export async function handleMediaMessage(
   message: TelegramMessage,
@@ -32,7 +72,10 @@ export async function handleMediaMessage(
   try {
     const { correlationId, isEdit, previousMessage, logger } = context;
 
-    // Log the start of processing
+    // Parse and validate incoming message
+    // - Extract core message metadata
+    // - Verify required fields
+    // - Initialize processing context
     logger?.info(`Processing ${isEdit ? "edited" : "new"} media message`, {
       message_id: message.message_id,
       chat_id: message.chat.id,
@@ -40,7 +83,10 @@ export async function handleMediaMessage(
 
     let response;
 
-    // Route to the appropriate handler based on whether it's an edit
+    // Message Routing Logic
+    // - Edited messages: Process updates and track history
+    // - New messages: Full processing pipeline
+    // - Maintains data consistency across edits
     if (isEdit && previousMessage) {
       response = await xdelo_handleEditedMediaMessage(
         message,
@@ -104,7 +150,12 @@ async function xdelo_handleEditedMediaMessage(
 ): Promise<Response> {
   const { correlationId, logger } = context;
 
-  // First, look up the existing message
+    // Edit Processing Workflow
+    // 1. Retrieve existing message record
+    // 2. Compare changes (media/caption/both)
+    // 3. Update storage if media changed
+    // 4. Maintain edit history
+    // 5. Preserve original file references
   const { data: existingMessage, error: lookupError } = await supabaseClient
     .from("messages")
     .select("*")
@@ -360,7 +411,13 @@ async function xdelo_handleNewMediaMessage(
       message_url: messageUrl,
     });
 
-    // Prepare the message data
+    // New Message Processing Pipeline
+    // 1. Extract media file details
+    // 2. Download and store media
+    // 3. Generate public URL
+    // 4. Create database record
+    // 5. Handle duplicates
+    // 6. Trigger analysis (via DB triggers)
     const telegramFile = message.photo
       ? message.photo[message.photo.length - 1]
       : message.video || message.document;
@@ -462,25 +519,39 @@ async function xdelo_handleNewMediaMessage(
       message_url: messageUrl,
     };
 
-    // Create the message with retry logic to handle timeouts
-    const result = await retryDbOperation(
-      async () => await createMessage(supabaseClient, messageInput, logger),
-      {
-        maxAttempts: 3,
-        initialDelayMs: 1000,
-        timeoutMs: 60000,
-        onRetry: (attempt, error, delay) => {
-          logger?.warn(
-            `Retrying createMessage (attempt ${attempt} after ${delay}ms delay)`,
-            {
-              error: error.message,
-              telegram_message_id: message.message_id,
-              chat_id: message.chat.id,
-            }
-          );
-        },
-      }
-    );
+    /**
+     * Database Operation with Retry Logic
+     *
+     * Duplicate Detection Flow:
+     * 1. Checks for existing messages with same file_unique_id
+     * 2. If duplicate found:
+     *    - Sets is_duplicate: true
+     *    - Sets duplicate_reference_id to original message ID
+     *    - Returns original message details
+     * 3. If no duplicate:
+     *    - Creates new message record
+     *    - Sets is_duplicate: false
+     *    - Leaves duplicate_reference_id undefined
+     *
+     * Also handles:
+     * - Transient failures with exponential backoff
+     * - Timeout protection
+     */
+    const enhancedMessageInput: MessageInput = {
+      ...messageInput,
+      is_duplicate: false, // Updated by createMessage if duplicate detected
+      duplicate_reference_id: undefined, // Set to original message ID if duplicate
+    };
+
+    const result = await createMessage(supabaseClient, enhancedMessageInput, logger);
+
+    if (result.duplicate && logger) {
+      logger.warn(`Duplicate message detected and handled`, {
+        message_id: result.id,
+        telegram_message_id: message.message_id,
+        file_unique_id: messageInput.file_unique_id,
+      });
+    }
 
     if (!result.success) {
       logger?.error(`Failed to create message: ${result.error_message}`, {

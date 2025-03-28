@@ -37,6 +37,7 @@ export interface MessageInput {
   storage_path_standardized?: boolean;
   message_url?: string;
   message_text?: string;
+  message_type?: string;
 }
 
 export interface ForwardInfo {
