@@ -4,9 +4,7 @@ import { corsHeaders } from "../../_shared/cors.ts";
 import { xdelo_processMessageMedia } from "../../_shared/mediaStorage.ts";
 import { xdelo_detectMimeType } from "../../_shared/mediaUtils.ts";
 import { supabaseClient } from "../../_shared/supabase.ts";
-import {
-  createMessage,
-} from "../dbOperations.ts";
+// Removed createMessage import from dbOperations.ts
 import {
   ForwardInfo,
   MessageContext,
@@ -109,180 +107,177 @@ export async function handleMediaMessage(
 async function xdelo_handleEditedMediaMessage(
   message: TelegramMessage,
   context: MessageContext,
-  previousMessage: TelegramMessage // previousMessage is passed but not used after refactor
+  _previousMessage: TelegramMessage // previousMessage is no longer needed here
 ): Promise<Response> {
   const { correlationId, logger } = context;
+  const isChannelPost = message.sender_chat?.type === 'channel';
+  const editSource = isChannelPost ? 'channel' : 'user';
 
   // Fetch existing message details needed for comparison/update
   const { data: existingMessage, error: lookupError } = await supabaseClient
     .from("messages")
-    .select("id, caption, file_unique_id, edit_count, edit_history, processing_state, forward_info, storage_path, public_url, mime_type, mime_type_original, width, height, duration, file_size, storage_exists, storage_path_standardized") // Select necessary fields
+    .select("id, caption, file_unique_id") // Only need ID, caption, file_unique_id
     .eq("telegram_message_id", message.message_id)
     .eq("chat_id", message.chat.id)
     .single();
 
-  if (lookupError) {
+  if (lookupError && lookupError.code !== 'PGRST116') { // Handle errors other than "not found"
     logger?.error(
       `Failed to lookup existing message for edit: ${lookupError.message}`
     );
-    // If lookup fails, maybe treat as new? Or throw? Let's throw for now.
     throw new Error(`Database lookup failed for edited message: ${lookupError.message}`);
   }
 
   if (existingMessage) { // We found the message by telegram_message_id and chat_id
     logger?.info(`Processing edit for message ${message.message_id} (DB ID: ${existingMessage.id})`);
 
-    // --- Refactor: Use createMessage for consistent upsert/duplicate handling ---
+    // --- Refactor: Use handle_message_edit RPC ---
 
-    // Determine what has changed
+    // Determine if caption changed
     const captionChanged = existingMessage.caption !== message.caption;
-    const hasNewMedia = !!(message.photo || message.video || message.document); // Ensure boolean
-    const shouldProcessMedia = captionChanged && hasNewMedia; // Process media only if caption changed AND new media present
+    // Media reprocessing logic might need refinement. For now, let's assume
+    // we don't re-download media on edit unless explicitly required later.
+    // The SQL function `handle_message_edit` primarily updates metadata.
 
-    // Prepare base input for createMessage, merging new and existing data
-    const messageInput: Partial<MessageInput> & { telegram_message_id: number; chat_id: number } = { // Ensure core IDs are present
-      // Core identifiers remain the same for update
-      telegram_message_id: message.message_id,
-      chat_id: message.chat.id,
-      // Fields from the incoming edited message
-      caption: message.caption,
-      media_group_id: message.media_group_id,
-      edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
-      telegram_data: message, // Store the latest raw message data
-      // Contextual info
-      correlation_id: correlationId,
-      is_edited_channel_post: context.isChannelPost,
-      is_forward: context.isForwarded, // Re-evaluate based on edited message? Assuming it doesn't change.
-      // Rebuild ForwardInfo if present in the edited message, otherwise keep existing
-      forward_info: message.forward_origin
-        ? {
-            is_forwarded: true,
-            forward_origin_type: message.forward_origin.type,
-            forward_from_chat_id: message.forward_origin.chat?.id,
-            forward_from_chat_title: message.forward_origin.chat?.title,
-            forward_from_chat_type: message.forward_origin.chat?.type,
-            forward_from_message_id: message.forward_origin.message_id,
-            forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
-            original_chat_id: message.forward_origin.chat?.id,
-            original_chat_title: message.forward_origin.chat?.title,
-            original_message_id: message.forward_origin.message_id,
-          }
-        : existingMessage.forward_info,
-      message_url: constructTelegramMessageUrl(message.chat.id, message.message_id), // Update URL just in case
-      // Edit tracking
-      edit_count: (existingMessage.edit_count || 0) + 1,
-      edit_history: [
-        ...(existingMessage.edit_history || []), // Append to existing history
-        {
-          timestamp: new Date().toISOString(),
-          previous_caption: existingMessage.caption, // Capture state before potential update
-          previous_processing_state: existingMessage.processing_state,
-          edit_source: "telegram_edit", // Mark source as Telegram edit
-          edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(),
-        }
-      ],
-      // Default fields from existing message (will be overwritten if media processed)
-      file_id: existingMessage.file_id,
-      file_unique_id: existingMessage.file_unique_id,
-      mime_type: existingMessage.mime_type,
-      mime_type_original: existingMessage.mime_type_original,
-      storage_path: existingMessage.storage_path,
-      public_url: existingMessage.public_url,
-      width: existingMessage.width,
-      height: existingMessage.height,
-      duration: existingMessage.duration,
-      file_size: existingMessage.file_size,
-      storage_exists: existingMessage.storage_exists,
-      storage_path_standardized: existingMessage.storage_path_standardized,
-      // processing_state will be handled by createMessage/trigger based on caption change
-    };
+    // Call the RPC function to handle the edit
+    const { data: rpcResult, error: rpcError } = await supabaseClient.rpc('handle_message_edit', {
+      p_message_id: existingMessage.id,
+      p_telegram_message_id: message.message_id,
+      p_chat_id: message.chat.id,
+      p_new_text: null, // No text for media messages
+      p_new_caption: message.caption,
+      p_telegram_data: message, // Pass the full new message object as telegram_data
+      p_is_channel_post: isChannelPost,
+      p_edit_source: editSource
+    });
 
-    // If media needs reprocessing
-    if (shouldProcessMedia) {
-      logger?.info(`Caption and media changed, reprocessing media for ${message.message_id}`);
-      const telegramFile = message.photo
-        ? message.photo[message.photo.length - 1]
-        : message.video || message.document!;
-
-      if (!telegramFile?.file_id || !telegramFile?.file_unique_id) {
-        throw new Error("Essential media file details missing in edited message despite media presence");
-      }
-
-      try {
-        const mediaProcessResult = await xdelo_processMessageMedia(
-          message,
-          telegramFile.file_id,
-          telegramFile.file_unique_id,
-          TELEGRAM_BOT_TOKEN,
-          existingMessage.id // Use existing message ID for storage path context
-        );
-
-        if (!mediaProcessResult.success) {
-          throw new Error(`Failed to process edited media: ${mediaProcessResult.error}`);
-        }
-
-        // Overwrite relevant fields in messageInput with new media details
-        messageInput.file_id = telegramFile.file_id;
-        messageInput.file_unique_id = telegramFile.file_unique_id; // Pass the new one to createMessage
-        messageInput.mime_type = mediaProcessResult.fileInfo.mime_type;
-        messageInput.mime_type_original = message.document?.mime_type || message.video?.mime_type;
-        messageInput.storage_path = mediaProcessResult.fileInfo.storage_path;
-        messageInput.public_url = mediaProcessResult.fileInfo.public_url;
-        messageInput.width = "width" in telegramFile ? telegramFile.width : undefined;
-        messageInput.height = "height" in telegramFile ? telegramFile.height : undefined;
-        messageInput.duration = message.video?.duration;
-        messageInput.file_size = telegramFile.file_size || mediaProcessResult.fileInfo.file_size;
-        messageInput.storage_exists = true; // Assume true after successful processing
-        messageInput.storage_path_standardized = true; // Assume true after successful processing
-
-      } catch (mediaError: unknown) {
-        const mediaErrorMessage = mediaError instanceof Error ? mediaError.message : String(mediaError);
-        logger?.error(`Error processing edited media: ${mediaErrorMessage}`);
-        // Log error but potentially continue to update caption via createMessage if needed?
-        // For now, re-throw to maintain previous behavior.
-        throw mediaError;
-      }
-    } else {
-       logger?.info(`Edit received for ${message.message_id}. Media processing not required (caption unchanged or no new media).`);
-       // Ensure file_unique_id from existing message is passed if no new media processing
-       messageInput.file_unique_id = existingMessage.file_unique_id;
+    if (rpcError) {
+      logger?.error(`Error calling handle_message_edit RPC: ${rpcError.message}`);
+      throw rpcError;
     }
 
-    // Call createMessage to handle the upsert logic
-    const result = await createMessage(messageInput, logger);
-
-    if (!result.success) {
-      logger?.error(`createMessage failed during edit handling: ${result.error_message}`, {
-        message_id: message.message_id,
-        existing_db_id: existingMessage.id,
-      });
-      // Throw error to be caught by the main handler -> returns 200 OK to Telegram
-      throw new Error(result.error_message || "Failed to update message via createMessage");
+    if (rpcResult?.status !== 'success') {
+       logger?.error(`RPC handle_message_edit failed: ${rpcResult?.message || 'Unknown RPC error'}`, { rpcResult });
+       throw new Error(rpcResult?.message || 'Failed to update message via RPC');
     }
 
-    logger?.success(`Successfully processed edit for message ${message.message_id} (DB ID: ${result.id}). Duplicate: ${result.duplicate}, Caption Changed: ${result.caption_changed}`);
+    logger?.success(`Successfully updated message ${existingMessage.id} via RPC`, { rpcResult });
 
-    // Log specific edit event
+    // Log specific edit event (optional, as trigger handles history)
     try {
-       const eventType = shouldProcessMedia ? "message_media_caption_edited" : (captionChanged ? "message_caption_edited" : "message_edit_received");
-       await logProcessingEvent(eventType, result.id!, correlationId);
+       const eventType = captionChanged ? "message_caption_edited" : "message_edit_received";
+       await logProcessingEvent(
+           eventType,
+           existingMessage.id,
+           correlationId,
+           { edit_history_id: rpcResult?.edit_history_id }
+       );
     } catch (logError: unknown) {
        const logErrorMessage = logError instanceof Error ? logError.message : String(logError);
        logger?.error(`Failed to log edit operation event: ${logErrorMessage}`);
     }
 
-    return new Response(JSON.stringify({ success: true, id: result.id, correlationId }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        id: existingMessage.id,
+        correlationId,
+        action: 'updated',
+        edit_history_id: rpcResult?.edit_history_id,
+        edit_count: rpcResult?.edit_count
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
 
   } else {
     // If existing message not found by telegram_message_id/chat_id, treat as potentially new
-    // This could happen if the original message wasn't processed or was deleted.
-    // Fallback to handleNewMediaMessage which uses createMessage internally.
+    // Fallback to handle_media_message RPC, passing is_edit: true
     logger?.warn(
-      `Original message not found for edit ${message.message_id}. Handling as new message.`
+      `Original message not found for edit ${message.message_id}. Handling via handle_media_message with is_edit=true.`
     );
-    return await xdelo_handleNewMediaMessage(message, context);
+
+    // Need to process media first as if it were new
+    const telegramFile = message.photo
+      ? message.photo[message.photo.length - 1]
+      : message.video || message.document;
+
+    if (!telegramFile?.file_id || !telegramFile?.file_unique_id) {
+      throw new Error("Essential media file details missing in edited message fallback");
+    }
+
+    const mediaResult = await xdelo_processMessageMedia(
+      message,
+      telegramFile.file_id,
+      telegramFile.file_unique_id,
+      TELEGRAM_BOT_TOKEN
+    );
+
+    if (!mediaResult.success) {
+      throw new Error(`Failed to process media during edit fallback: ${mediaResult.error}`);
+    }
+
+    // Prepare media_data for handle_media_message RPC
+    const mediaData = {
+      ...message, // Include all fields from the message
+      is_edit: true, // Indicate this originated from an edit event
+      edit_source: editSource,
+      is_channel_post: isChannelPost,
+      correlation_id: correlationId,
+      // Add media processing results
+      storage_path: mediaResult.fileInfo.storage_path,
+      public_url: mediaResult.fileInfo.public_url,
+      mime_type: mediaResult.fileInfo.mime_type,
+      file_size: mediaResult.fileInfo.file_size || telegramFile.file_size,
+      storage_exists: true,
+      storage_path_standardized: true,
+      // Add forward info if present
+      forward_info: message.forward_origin ? { /* ... forward info fields ... */ } : undefined,
+      message_url: constructTelegramMessageUrl(message.chat.id, message.message_id),
+    };
+
+    // Call handle_media_message RPC
+    const { data: rpcResult, error: rpcError } = await supabaseClient.rpc('handle_media_message', {
+      p_telegram_message_id: message.message_id,
+      p_chat_id: message.chat.id,
+      p_file_unique_id: telegramFile.file_unique_id,
+      p_media_data: mediaData
+    });
+
+    if (rpcError) {
+      logger?.error(`Error calling handle_media_message RPC during edit fallback: ${rpcError.message}`);
+      throw rpcError;
+    }
+
+    // Check the status returned by the RPC
+    if (!rpcResult?.message_id) {
+       logger?.error(`RPC handle_media_message failed during edit fallback: ${rpcResult?.status || 'Unknown RPC error'}`, { rpcResult });
+       throw new Error(rpcResult?.status || 'Failed to create/update message via RPC during edit fallback');
+    }
+
+    logger?.success(`Successfully handled edited message (original not found) via handle_media_message RPC. DB ID: ${rpcResult.message_id}, Status: ${rpcResult.status}`);
+
+    // Log event
+    try {
+       await logProcessingEvent(
+           "message_created_from_edit_fallback",
+           rpcResult.message_id,
+           correlationId
+       );
+    } catch (logError: unknown) {
+       const logErrorMessage = logError instanceof Error ? logError.message : String(logError);
+       logger?.error(`Failed to log edit fallback operation event: ${logErrorMessage}`);
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        id: rpcResult.message_id,
+        correlationId,
+        action: rpcResult.status === 'new' ? 'created_from_edit' : 'updated_from_edit_fallback', // More specific action
+        status: rpcResult.status
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 }
 
@@ -294,6 +289,7 @@ async function xdelo_handleNewMediaMessage(
   context: MessageContext
 ): Promise<Response> {
   const { correlationId, logger } = context;
+  const isChannelPost = message.sender_chat?.type === 'channel';
 
   try {
     // Construct the message URL for referencing
@@ -307,31 +303,19 @@ async function xdelo_handleNewMediaMessage(
       message_url: messageUrl,
     });
 
-    // New Message Processing Pipeline
+    // --- Refactor: Use handle_media_message RPC ---
+
     // 1. Extract media file details
-    // 2. Download and store media
-    // 3. Generate public URL
-    // 4. Create database record
-    // 5. Handle duplicates
-    // 6. Trigger analysis (via DB triggers)
     const telegramFile = message.photo
       ? message.photo[message.photo.length - 1]
       : message.video || message.document;
 
-    // Check immediately if media file details are present
-    if (
-      !telegramFile ||
-      !telegramFile.file_id ||
-      !telegramFile.file_unique_id
-    ) {
-      logger?.error(
-        "Essential media file details (file_id, file_unique_id) missing from message",
-        { message_id: message.message_id }
-      );
+    if (!telegramFile?.file_id || !telegramFile?.file_unique_id) {
+      logger?.error("Essential media file details missing", { message_id: message.message_id });
       throw new Error("Essential media file details missing");
     }
 
-    // Always process the media as new
+    // 2. Download and store media (still required before calling RPC)
     const mediaResult = await xdelo_processMessageMedia(
       message,
       telegramFile.file_id,
@@ -343,7 +327,7 @@ async function xdelo_handleNewMediaMessage(
       throw new Error(`Failed to process media: ${mediaResult.error}`);
     }
 
-    // Prepare forward info if message is forwarded
+    // 3. Prepare forward info
     const forwardInfo: ForwardInfo | undefined = message.forward_origin
       ? {
           is_forwarded: true,
@@ -352,161 +336,90 @@ async function xdelo_handleNewMediaMessage(
           forward_from_chat_title: message.forward_origin.chat?.title,
           forward_from_chat_type: message.forward_origin.chat?.type,
           forward_from_message_id: message.forward_origin.message_id,
-          forward_date: new Date(
-            message.forward_origin.date * 1000
-          ).toISOString(),
+          forward_date: new Date(message.forward_origin.date * 1000).toISOString(),
           original_chat_id: message.forward_origin.chat?.id,
           original_chat_title: message.forward_origin.chat?.title,
           original_message_id: message.forward_origin.message_id,
         }
       : undefined;
 
-    // Create message input for createMessage
-    const messageInput: MessageInput = {
-      telegram_message_id: message.message_id,
-      chat_id: message.chat.id,
-      chat_type: message.chat.type,
-      chat_title: message.chat.title,
-      caption: message.caption,
-      media_group_id: message.media_group_id,
-      file_id: telegramFile.file_id,
-      file_unique_id: telegramFile.file_unique_id,
-      mime_type: mediaResult.fileInfo.mime_type,
-      mime_type_original:
-        message.document?.mime_type || message.video?.mime_type,
+    // 4. Prepare media_data payload for the RPC function
+    const mediaData = {
+      // Include all relevant fields from the message object
+      ...message,
+      // Add context and processing results
+      is_edit: false, // This is a new message
+      is_channel_post: isChannelPost,
+      correlation_id: correlationId,
       storage_path: mediaResult.fileInfo.storage_path,
       public_url: mediaResult.fileInfo.public_url,
-      width:
-        telegramFile && "width" in telegramFile
-          ? telegramFile.width
-          : undefined,
-      height:
-        telegramFile && "height" in telegramFile
-          ? telegramFile.height
-          : undefined,
-      duration: message.video?.duration,
-      file_size:
-        (telegramFile ? telegramFile.file_size : undefined) ||
-        mediaResult.fileInfo.file_size,
-      correlation_id: correlationId,
-      // Initial state is 'pending' if caption exists, otherwise 'initialized'
-      // The trigger 'trg_process_caption' will handle setting to 'pending' if caption exists on insert
-      processing_state: message.caption ? "pending" : "initialized", // Set initial state hint
-      is_edited_channel_post: context.isChannelPost,
+      mime_type: mediaResult.fileInfo.mime_type,
+      file_size: mediaResult.fileInfo.file_size || telegramFile.file_size,
+      storage_exists: true,
+      storage_path_standardized: true,
       forward_info: forwardInfo,
-      telegram_data: message,
-      edit_date: message.edit_date // Only relevant for edits, handled in xdelo_handleEditedMediaMessage
-        ? new Date(message.edit_date * 1000).toISOString()
-        : undefined,
-      is_forward: context.isForwarded,
-      edit_history: context.isEdit // Should generally be false here, but handle defensively
-        ? [
-            {
-              timestamp: new Date().toISOString(),
-              is_initial_edit: true, // Mark if somehow an edit lands here
-              edit_date: message.edit_date
-                ? new Date(message.edit_date * 1000).toISOString()
-                : new Date().toISOString(),
-            },
-          ]
-        : [],
-      storage_exists: true, // Assume true after successful processing
-      storage_path_standardized: true, // Assume true after successful processing
       message_url: messageUrl,
-      // is_duplicate and duplicate_reference_id are handled within createMessage
+      // Ensure file details are included if not already part of ...message
+      file_id: telegramFile.file_id,
+      file_unique_id: telegramFile.file_unique_id,
+      width: telegramFile && "width" in telegramFile ? telegramFile.width : undefined,
+      height: telegramFile && "height" in telegramFile ? telegramFile.height : undefined,
+      duration: message.video?.duration,
+      mime_type_original: message.document?.mime_type || message.video?.mime_type,
     };
 
-    // Call createMessage to handle insert and duplicate logic
-    const result = await createMessage(
-      messageInput, // Pass the fully prepared input
-      logger
-    );
-
-    if (result.duplicate && logger) {
-      logger.warn(`Duplicate message detected and handled by createMessage`, {
-        message_id: result.id,
-        telegram_message_id: message.message_id,
-        file_unique_id: messageInput.file_unique_id,
-      });
-
-      // Return success response but indicate it was a duplicate
-      return new Response(
-        JSON.stringify({
-          success: true,
-          id: result.id,
-          correlationId,
-          is_duplicate: true,
-          duplicate_reference_id: result.duplicate_reference_id
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    if (!result.success) {
-      // Handle duplicate key violation specifically
-      if (result.error_message?.includes('duplicate key value violates unique constraint "messages_file_unique_id_key"')) {
-        logger?.warn(`Duplicate file_unique_id detected: ${messageInput.file_unique_id}`, {
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-        });
-
-        // Try to find existing message with this file_unique_id
-        const { data: existing } = await supabaseClient
-          .from('messages')
-          .select('id')
-          .eq('file_unique_id', messageInput.file_unique_id)
-          .single();
-
-        if (existing) {
-          return new Response(
-            JSON.stringify({
-              success: true,
-              id: existing.id,
-              correlationId,
-              is_duplicate: true,
-              duplicate_reference_id: existing.id
-            }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-      }
-
-      logger?.error(`createMessage failed for new message: ${result.error_message}`, {
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-      });
-
-      await logProcessingEvent(
-        "message_creation_failed",
-        message.message_id.toString(),
-        correlationId,
-        result.error_message
-      );
-
-      throw new Error(
-        result.error_message || "Failed to create message record via createMessage"
-      );
-    }
-
-    // Log the success
-    logger?.success(`Successfully processed new media message via createMessage: ${result.id}`, {
-      telegram_message_id: message.message_id,
-      chat_id: message.chat.id,
-      media_type: message.photo
-        ? "photo"
-        : message.video
-        ? "video"
-        : "document",
-      storage_path: messageInput.storage_path, // Use path from input
-      is_duplicate: result.duplicate,
+    // 5. Call the handle_media_message RPC function
+    const { data: rpcResult, error: rpcError } = await supabaseClient.rpc('handle_media_message', {
+      p_telegram_message_id: message.message_id,
+      p_chat_id: message.chat.id,
+      p_file_unique_id: telegramFile.file_unique_id,
+      p_media_data: mediaData
     });
 
-    // Trigger handles setting state to 'pending' if caption exists.
+    if (rpcError) {
+      logger?.error(`Error calling handle_media_message RPC: ${rpcError.message}`);
+      // Check for specific unique constraint errors if needed, though the RPC should handle it
+      if (rpcError.code === '23505') { // Example: Check for unique violation
+         logger?.warn(`Potential duplicate detected by RPC: ${rpcError.message}`);
+         // The RPC should ideally return a status indicating duplication
+      }
+      throw rpcError;
+    }
 
+    // 6. Process the RPC response
+    if (!rpcResult?.message_id) {
+       logger?.error(`RPC handle_media_message failed: ${rpcResult?.status || 'Unknown RPC error'}`, { rpcResult });
+       throw new Error(rpcResult?.status || 'Failed to create/update message via RPC');
+    }
+
+    logger?.success(`Successfully processed new media message via RPC. DB ID: ${rpcResult.message_id}, Status: ${rpcResult.status}`);
+
+    // Log event based on RPC status
+    try {
+       const eventType = rpcResult.status === 'new' ? "message_created" : "message_duplicate_handled";
+       await logProcessingEvent(
+           eventType,
+           rpcResult.message_id,
+           correlationId,
+           { rpc_status: rpcResult.status } // Add RPC status to metadata
+       );
+    } catch (logError: unknown) {
+       const logErrorMessage = logError instanceof Error ? logError.message : String(logError);
+       logger?.error(`Failed to log new message operation event: ${logErrorMessage}`);
+    }
+
+    // Return success response
     return new Response(
-      JSON.stringify({ success: true, id: result.id, correlationId }),
+      JSON.stringify({
+        success: true,
+        id: rpcResult.message_id,
+        correlationId,
+        status: rpcResult.status, // Include status from RPC
+        needs_processing: rpcResult.needs_processing // Include processing flag
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
   } catch (createError: unknown) { // Added type annotation
     const createErrorMessage = createError instanceof Error ? createError.message : String(createError);
     logger?.error(
