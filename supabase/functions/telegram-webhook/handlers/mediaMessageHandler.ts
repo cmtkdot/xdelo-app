@@ -4,6 +4,7 @@
  */
 import { TelegramMessage, MessageContext, MessageProcessResult } from "../types.ts";
 import { supabaseClient } from "../../_shared/supabase.ts";
+import { RetryHandler, shouldRetryOperation } from "../../_shared/retryUtils.ts";
 import { buildTelegramMessageUrl } from "../utils/urlBuilder.ts";
 import { processMessageMedia } from "../services/mediaService.ts";
 import {
@@ -107,8 +108,12 @@ async function handleEditedMediaMessage(
   if (exists && existingMessageId) {
     logger?.info(`Processing edit for message ${message.message_id} (DB ID: ${existingMessageId})`);
 
-    // Process media if needed
-    const mediaResult = await processMessageMedia(message);
+    // Process media with retry logic
+    const retry = new RetryHandler({ maxAttempts: 3 });
+    const mediaResult = await retry.execute(
+      () => processMessageMedia(message),
+      shouldRetryOperation
+    );
 
     if (!mediaResult.success) {
       throw new Error(`Failed to process media during edit: ${mediaResult.error}`);
@@ -158,8 +163,12 @@ async function handleEditedMediaMessage(
       `Original message not found for edit ${message.message_id}. Handling as new message with is_edit=true.`
     );
 
-    // Process media
-    const mediaResult = await processMessageMedia(message);
+    // Process media with retry logic
+    const retry = new RetryHandler({ maxAttempts: 3 });
+    const mediaResult = await retry.execute(
+      () => processMessageMedia(message),
+      shouldRetryOperation
+    );
 
     if (!mediaResult.success) {
       throw new Error(`Failed to process media: ${mediaResult.error}`);
