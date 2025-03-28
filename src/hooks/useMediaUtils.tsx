@@ -447,11 +447,14 @@ export function useMediaUtils() {
   };
 
   // Helper function for retrying operations with configurable attempts and delay
-  const withRetry = async <T>(operation: () => Promise<T>, options: {
-    maxAttempts: number;
-    delay: number;
-    retryableErrors?: string[];
-  }): Promise<T> => {
+  const withRetry = async <T extends unknown>(
+    operation: () => Promise<T>,
+    options: {
+      maxAttempts: number;
+      delay: number;
+      retryableErrors?: string[];
+    }
+  ): Promise<T> => {
     const { maxAttempts, delay, retryableErrors = [] } = options;
     let attempt = 0;
     let lastError: Error | null = null;

@@ -1,16 +1,26 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 import {
   createSupabaseClient,
   extractTelegramMetadata,
   logProcessingEvent,
 } from "../_shared/consolidatedMessageUtils.ts";
 
+// Get environment variables
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
 /**
  * Enhanced Supabase client with improved timeout and retry capabilities
  */
-export const supabaseClient = createSupabaseClient({
-  supabaseUrl: Deno.env.get("SUPABASE_URL"),
-  supabaseKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
-});
+export const supabaseClient =
+  SUPABASE_URL && SUPABASE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: {
+          persistSession: false,
+        },
+      })
+    : createSupabaseClient();
 
 /**
  * Legacy wrapper function for backwards compatibility
@@ -74,6 +84,7 @@ export async function createMessage(
   success: boolean;
   error_message?: string;
   duplicate?: boolean;
+  caption_changed?: boolean;
 }> {
   try {
     // Set a longer timeout for complex operations
@@ -121,10 +132,10 @@ export async function createMessage(
       updated_at: new Date().toISOString(),
     };
 
-    // First, check if this exact message already exists
+    // First, check if this exact message already exists (telegram_message_id + chat_id)
     let { data: existingMessage, error: lookupError } = await client
       .from("messages")
-      .select("id")
+      .select("id, caption, file_unique_id")
       .eq("telegram_message_id", input.telegram_message_id)
       .eq("chat_id", input.chat_id)
       .maybeSingle();
@@ -134,8 +145,28 @@ export async function createMessage(
       return { success: false, error_message: lookupError.message };
     }
 
-    // Simplified flow - just update existing messages or insert new ones
-    // No duplicate file checking since we want to process all updates
+    // If not exact duplicate, check for file duplicate
+    if (!existingMessage?.id && input.file_unique_id) {
+      const { data: fileDuplicate, error: fileLookupError } = await client
+        .from("messages")
+        .select("id, caption")
+        .eq("file_unique_id", input.file_unique_id)
+        .limit(1);
+
+      if (fileLookupError) {
+        logger?.error("Error checking for file duplicate:", fileLookupError);
+        return { success: false, error_message: fileLookupError.message };
+      }
+
+      if (fileDuplicate?.length) {
+        existingMessage = fileDuplicate[0];
+        // Reuse storage path from original
+        fullRecordData.storage_path = null;
+        fullRecordData.public_url = null;
+        fullRecordData.is_duplicate = true;
+        fullRecordData.duplicate_reference_id = existingMessage.id;
+      }
+    }
 
     let messageId: string | undefined;
 
@@ -144,6 +175,22 @@ export async function createMessage(
       logger?.info(
         `Found existing message ${existingMessage.id}, updating with new data.`
       );
+
+      // Preserve existing storage if this is a file duplicate
+      if (fullRecordData.is_duplicate) {
+        delete fullRecordData.storage_path;
+        delete fullRecordData.public_url;
+      }
+
+      // Check if caption changed and needs reprocessing
+      const captionChanged =
+        input.caption && input.caption !== existingMessage.caption;
+
+      if (captionChanged) {
+        fullRecordData.processing_state = "pending";
+        fullRecordData.analyzed_content = null;
+      }
+
       const { error: updateError } = await client
         .from("messages")
         .update(fullRecordData)
@@ -156,8 +203,12 @@ export async function createMessage(
       messageId = existingMessage.id;
       logger?.success(`Successfully updated message ${messageId}`);
 
-      // Return with success but flag as duplicate
-      return { id: messageId, success: true, duplicate: true };
+      return {
+        id: messageId,
+        success: true,
+        duplicate: true,
+        caption_changed: captionChanged,
+      };
     } else {
       // Simplified flow - use the original file_unique_id
       // Let the database handle any uniqueness constraints
