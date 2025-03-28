@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 /**
  * Utility function to manually trigger media group synchronization
  * for a specific message or media group.
- * Updated to use the correct function signature.
+ * Updated to use the correct function signature and work with the database trigger approach.
  */
 export async function syncMediaGroup(
   mediaGroupId: string,
