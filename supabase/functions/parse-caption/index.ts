@@ -1,19 +1,21 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { ParsedContent, xdelo_parseCaption as parseCaption } from "../_shared/captionParsers.ts";
-import { MediaGroupResult } from "./types.ts";
+import {
+  ParsedContent,
+  xdelo_parseCaption as parseCaption,
+} from "../_shared/captionParsers.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 import {
   logErrorToDatabase,
   updateMessageWithError,
 } from "../_shared/errorHandler.ts";
+import { syncMediaGroupContent } from "../_shared/mediaGroupSync.ts";
 import {
   getMessage,
   logAnalysisEvent,
   updateMessageWithAnalysis,
 } from "./dbOperations.ts";
-import { syncMediaGroupContent } from "../_shared/mediaGroupSync.ts";
-import { corsHeaders } from "../_shared/cors.ts";
+import { MediaGroupResult } from "./types.ts";
 
 const supabaseClient = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
@@ -48,30 +50,35 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     `Processing caption for message ${messageId}, correlation_id: ${requestCorrelationId}, isEdit: ${isEdit}, retry: ${retryCount}, force_reprocess: ${force_reprocess}, caption: ${captionForLog}`
   );
 
-  if (!messageId || !caption) {
-    throw new Error(
-      "Required parameters missing: messageId and caption are required"
-    );
+  if (!messageId) {
+    throw new Error("Required parameter missing: messageId is required");
+  }
+  if (!caption) {
+    throw new Error("Required parameter missing: caption is required");
   }
 
   try {
     const startTime = Date.now();
-    console.log(JSON.stringify({
-      event: "fetch_message_start",
-      messageId,
-      correlationId: requestCorrelationId,
-      timestamp: new Date().toISOString()
-    }));
+    console.log(
+      JSON.stringify({
+        event: "fetch_message_start",
+        messageId,
+        correlationId: requestCorrelationId,
+        timestamp: new Date().toISOString(),
+      })
+    );
 
     const message = await getMessage(messageId);
 
-    console.log(JSON.stringify({
-      event: "fetch_message_complete",
-      messageId,
-      correlationId: requestCorrelationId,
-      durationMs: Date.now() - startTime,
-      timestamp: new Date().toISOString()
-    }));
+    console.log(
+      JSON.stringify({
+        event: "fetch_message_complete",
+        messageId,
+        correlationId: requestCorrelationId,
+        durationMs: Date.now() - startTime,
+        timestamp: new Date().toISOString(),
+      })
+    );
 
     if (message?.analyzed_content && !isEdit && !force_reprocess) {
       console.log(
@@ -102,15 +109,17 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     console.log(`Performing manual parsing on caption: ${captionForLog}`);
     let parsedContent: ParsedContent = parseCaption(caption, {
       messageId,
-      correlationId: requestCorrelationId
-    });
-    console.log(JSON.stringify({
-      event: "parse_complete",
-      messageId,
       correlationId: requestCorrelationId,
-      durationMs: Date.now() - parseStart,
-      timestamp: new Date().toISOString()
-    }));
+    });
+    console.log(
+      JSON.stringify({
+        event: "parse_complete",
+        messageId,
+        correlationId: requestCorrelationId,
+        durationMs: Date.now() - parseStart,
+        timestamp: new Date().toISOString(),
+      })
+    );
     console.log(`Manual parsing result: ${JSON.stringify(parsedContent)}`);
 
     parsedContent.caption = caption;
@@ -183,21 +192,25 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
           parsedContent,
           {
             forceSync: true,
-            syncEditHistory: isEdit
+            syncEditHistory: isEdit,
           }
         );
 
-        console.log(`Media group sync completed with result: ${JSON.stringify(syncResult)}`);
+        console.log(
+          `Media group sync completed with result: ${JSON.stringify(
+            syncResult
+          )}`
+        );
       } catch (syncError) {
         console.error(
           `Media group sync error (non-fatal): ${syncError.message}`
         );
-    await logErrorToDatabase({
-      messageId,
-      errorMessage: `Media group sync error: ${syncError.message}`,
-      correlationId: requestCorrelationId,
-      functionName: "parse-caption",
-    });
+        await logErrorToDatabase({
+          messageId,
+          errorMessage: `Media group sync error: ${syncError.message}`,
+          correlationId: requestCorrelationId,
+          functionName: "parse-caption",
+        });
       }
     }
 
@@ -243,10 +256,7 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     console.error(`Error processing caption: ${error.message}`);
     console.error(`Stack: ${error.stack}`);
 
-    await updateMessageWithError(
-      messageId,
-      error.message
-    );
+    await updateMessageWithError(messageId, error.message);
 
     await logErrorToDatabase({
       messageId,
@@ -270,7 +280,6 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     );
   }
 };
-
 
 // Serve HTTP requests
 serve(async (req) => {
