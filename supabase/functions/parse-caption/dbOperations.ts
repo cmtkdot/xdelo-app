@@ -7,17 +7,22 @@ const supabaseClient = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-export async function getMessage(messageId: string) {
+export async function getMessage(messageId: string, correlationId?: string) {
   const { data, error } = await supabaseClient
     .from('messages')
     .select('id, caption, analyzed_content, processing_state, media_group_id, is_original_caption, old_analyzed_content, edit_history')
     .eq('id', messageId)
     .single();
-    
+
   if (error) {
-    throw new Error(`Error fetching message: ${error.message}`);
+    const enrichedError = new Error(`Error fetching message: ${error.message}`);
+    enrichedError.stack += `\nAdditional Context:\n` +
+      `- Message ID: ${messageId}\n` +
+      `- Correlation ID: ${correlationId || 'none'}\n` +
+      `- Timestamp: ${new Date().toISOString()}`;
+    throw enrichedError;
   }
-  
+
   return data;
 }
 
@@ -31,31 +36,31 @@ export async function updateMessageWithAnalysis(
   try {
     // Determine if we need to save old content for edit history
     let oldAnalyzedContent = [];
-    
+
     if (isForceUpdate && existingMessage?.analyzed_content) {
       // Get existing old_analyzed_content array
       oldAnalyzedContent = existingMessage?.old_analyzed_content || [];
-      
+
       // Add current content to history with archive reason
-      const archiveReason = parsedContent.parsing_metadata.is_edit ? 
-        'edit' : 
+      const archiveReason = parsedContent.parsing_metadata.is_edit ?
+        'edit' :
         'forced_reprocess';
-        
+
       oldAnalyzedContent.push({
         ...existingMessage.analyzed_content,
         archived_timestamp: new Date().toISOString(),
         archived_reason: archiveReason
       });
     }
-    
+
     // Update edit history
     let editHistory = existingMessage?.edit_history || [];
     if (isForceUpdate) {
       // Determine edit type
-      const editType = parsedContent.parsing_metadata.is_edit ? 
-        'edit' : 
+      const editType = parsedContent.parsing_metadata.is_edit ?
+        'edit' :
         'forced_reprocess';
-        
+
       // Add to edit history
       editHistory.push({
         timestamp: new Date().toISOString(),
@@ -63,10 +68,10 @@ export async function updateMessageWithAnalysis(
         previous_analyzed_content: existingMessage?.analyzed_content || null
       });
     }
-    
+
     // Always use 'completed' as the processing state
     const processingState = 'completed';
-    
+
     // Update message with analyzed content using direct update
     const { error: updateError } = await supabaseClient
       .from('messages')
@@ -82,11 +87,11 @@ export async function updateMessageWithAnalysis(
         updated_at: new Date().toISOString()
       })
       .eq('id', messageId);
-      
+
     if (updateError) {
       throw new Error(`Error updating message with analysis: ${updateError.message}`);
     }
-    
+
     // Log the analysis completion
     await logAnalysisEvent(
       messageId,
@@ -105,7 +110,7 @@ export async function updateMessageWithAnalysis(
         timestamp: new Date().toISOString()
       }
     );
-    
+
     // If part of a media group, sync the content to other messages using our simplified edge function
     if (existingMessage?.media_group_id) {
       try {
@@ -126,23 +131,28 @@ export async function updateMessageWithAnalysis(
             })
           }
         );
-        
+
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`Edge function sync failed: ${errorText || response.statusText}`);
         }
-        
+
         return await response.json();
       } catch (syncError) {
         console.error(`Error syncing media group content: ${syncError.message}`);
         throw syncError;
       }
     }
-    
+
     return { success: true, processed: true };
   } catch (error) {
-    console.error(`Error in updateMessageWithAnalysis: ${error.message}`);
-    throw error;
+    const enrichedError = new Error(`Error in updateMessageWithAnalysis: ${error.message}`);
+    enrichedError.stack += `\nAdditional Context:\n` +
+      `- Message ID: ${messageId}\n` +
+      `- Correlation ID: ${existingMessage?.correlation_id || 'none'}\n` +
+      `- Timestamp: ${new Date().toISOString()}`;
+    console.error(enrichedError.stack);
+    throw enrichedError;
   }
 }
 
@@ -177,12 +187,12 @@ export async function syncMediaGroupContent(
         })
       }
     );
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Edge function sync failed: ${errorText || response.statusText}`);
     }
-    
+
     return await response.json();
   } catch (error) {
     console.error(`Error syncing media group content: ${error.message}`);

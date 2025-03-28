@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { ParsedContent, parseCaption } from "./captionParser.ts";
+import { ParsedContent, xdelo_parseCaption as parseCaption } from "../_shared/captionParsers.ts";
 import { MediaGroupResult } from "./types.ts";
 import {
   logErrorToDatabase,
@@ -55,8 +55,23 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
   }
 
   try {
-    console.log(`Fetching current state for message ${messageId}`);
+    const startTime = Date.now();
+    console.log(JSON.stringify({
+      event: "fetch_message_start",
+      messageId,
+      correlationId: requestCorrelationId,
+      timestamp: new Date().toISOString()
+    }));
+
     const message = await getMessage(messageId);
+
+    console.log(JSON.stringify({
+      event: "fetch_message_complete",
+      messageId,
+      correlationId: requestCorrelationId,
+      durationMs: Date.now() - startTime,
+      timestamp: new Date().toISOString()
+    }));
 
     if (message?.analyzed_content && !isEdit && !force_reprocess) {
       console.log(
@@ -83,8 +98,19 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
       })}`
     );
 
+    const parseStart = Date.now();
     console.log(`Performing manual parsing on caption: ${captionForLog}`);
-    let parsedContent: ParsedContent = parseCaption(caption);
+    let parsedContent: ParsedContent = parseCaption(caption, {
+      messageId,
+      correlationId: requestCorrelationId
+    });
+    console.log(JSON.stringify({
+      event: "parse_complete",
+      messageId,
+      correlationId: requestCorrelationId,
+      durationMs: Date.now() - parseStart,
+      timestamp: new Date().toISOString()
+    }));
     console.log(`Manual parsing result: ${JSON.stringify(parsedContent)}`);
 
     parsedContent.caption = caption;

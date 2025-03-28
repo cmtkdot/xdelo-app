@@ -29,7 +29,9 @@ export interface ParsedContent {
   };
 }
 
-export function parseCaption(caption: string): ParsedContent {
+export function parseCaption(caption: string, context?: {messageId?: string, correlationId?: string}): ParsedContent {
+  const logPrefix = context ? `[${context.messageId || 'unknown'}] [${context.correlationId || 'unknown'}] ` : '';
+  console.log(`${logPrefix}Starting caption parse: ${caption.length > 50 ? caption.substring(0, 50) + '...' : caption}`);
   const trimmedCaption = caption.trim();
   const currentTimestamp = new Date().toISOString();
 
