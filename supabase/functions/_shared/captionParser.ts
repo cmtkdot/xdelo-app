@@ -1,10 +1,10 @@
 
-import { AnalyzedContent } from "./types.ts";
+import { AnalyzedContent, ParsedContent } from "./types.ts";
 
 /**
  * Standard caption parser that converts caption text to analyzed content
  */
-export function xdelo_parseCaption(caption: string): AnalyzedContent {
+export function xdelo_parseCaption(caption: string, options?: { messageId?: string, correlationId?: string }): ParsedContent {
   const trimmedCaption = caption.trim();
   const currentTimestamp = new Date().toISOString();
 
@@ -27,13 +27,14 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
     // Explicitly set required fields for the return type
     return {
       ...analyzedContent,
+      caption: trimmedCaption,
       parsing_metadata: {
         method: 'manual', // Explicitly set required method
         timestamp: analyzedContent.parsing_metadata.timestamp, // Carry over timestamp
         partial_success: true,
         missing_fields: ['product_name', 'product_code', 'vendor_uid', 'purchase_date', 'quantity']
       }
-    };
+    } as ParsedContent;
   }
 
   // Track missing fields for partial success
@@ -241,11 +242,15 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
       analyzedContent.parsing_metadata.missing_fields = missingFields;
     }
 
-    return analyzedContent;
+    return {
+      ...analyzedContent,
+      caption: trimmedCaption
+    } as ParsedContent;
   } catch (error) {
     console.error("Error parsing caption:", error);
     return {
       ...analyzedContent,
+      caption: trimmedCaption,
       parsing_metadata: {
         // Ensure required fields are present, remove non-existent 'error' field
         method: analyzedContent.parsing_metadata.method || 'manual',
@@ -254,7 +259,7 @@ export function xdelo_parseCaption(caption: string): AnalyzedContent {
         // error: error.message, // Removed: 'error' is not a valid property
         missing_fields: ['parsing_error', 'product_name', 'product_code', 'vendor_uid', 'purchase_date', 'quantity'] // Add 'parsing_error'
       }
-    };
+    } as ParsedContent;
   }
 }
 
