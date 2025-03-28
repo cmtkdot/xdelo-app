@@ -3,6 +3,7 @@ import { xdelo_processMessageMedia } from "../../_shared/mediaStorage.ts";
 import { xdelo_detectMimeType } from "../../_shared/mediaUtils.ts";
 import { constructTelegramMessageUrl } from "../../_shared/messageUtils.ts";
 import { supabaseClient } from "../../_shared/supabase.ts";
+import { syncMediaGroupContent } from "../../_shared/mediaGroupSync.ts";
 import {
   createMessage,
   // triggerCaptionAnalysis, // Removed - No longer used
@@ -590,11 +591,28 @@ async function xdelo_handleNewMediaMessage(
 
     // If message has caption, the database trigger 'trg_process_caption'
     // will set its state to 'pending' automatically.
-    // No need to explicitly trigger analysis here anymore.
     if (message.caption && result.id) {
       logger?.info(
         `Message ${result.id} has caption, DB trigger will set state to 'pending'.`
       );
+    }
+
+    // Only sync media group if this is part of one AND has analyzed content
+    if (message.media_group_id && result.id && message.caption) {
+      try {
+        logger?.info(`Starting media group sync for group ${message.media_group_id}`);
+        const syncResult = await syncMediaGroupContent(
+          Deno.env.get("SUPABASE_URL") ?? "",
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+          result.id,
+          message.media_group_id,
+          { forceSync: true }
+        );
+        logger?.info(`Media group sync completed: ${JSON.stringify(syncResult)}`);
+      } catch (syncError) {
+        logger?.error(`Media group sync failed: ${syncError.message}`);
+        // Non-fatal error, continue
+      }
     }
 
     return new Response(
