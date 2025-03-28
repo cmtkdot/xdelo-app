@@ -6,6 +6,7 @@ import { TelegramMessage, MessageContext } from '../types.ts';
 import { buildTelegramMessageUrl } from '../utils/urlBuilder.ts';
 import { isMessageForwarded } from '../utils/messageUtils.ts';
 import { checkExistingMessage, handleEditedMessage } from '../services/databaseService.ts';
+import { RetryHandler, shouldRetryOperation } from '../../_shared/retryUtils.ts';
 import { createSuccessResponse, createTelegramErrorResponse } from '../services/responseService.ts';
 import { logEvent, logErrorEvent } from '../services/loggingService.ts';
 import { supabaseClient } from '../../_shared/supabase.ts';
@@ -30,10 +31,11 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
 
     logger?.info(`Processing edited text message ${message.message_id}`);
 
-    // Find existing message
-    const { exists, id: existingMessageId } = await checkExistingMessage(
-      message.message_id,
-      message.chat.id
+    // Find existing message with retry
+    const retry = new RetryHandler({ maxAttempts: 3 });
+    const { exists, id: existingMessageId } = await retry.execute(
+      () => checkExistingMessage(message.message_id, message.chat.id),
+      shouldRetryOperation
     );
 
     // Get message URL for reference
@@ -43,8 +45,9 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
     if (exists && existingMessageId) {
       logger?.info(`Found existing message ${existingMessageId} for edit`);
 
-      // Call the edit handler
-      const editResult = await handleEditedMessage(
+      // Call the edit handler with retry
+      const editResult = await retry.execute(
+        () => handleEditedMessage(
         existingMessageId,
         message.message_id,
         message.chat.id,
@@ -53,7 +56,8 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
         message,
         isChannelPost,
         isChannelPost ? 'channel' : 'user'
-      );
+      ),
+      shouldRetryOperation);
 
       if (!editResult.success) {
         throw new Error(`Failed to update message: ${editResult.error}`);
@@ -91,8 +95,9 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
 
       const isForward = isMessageForwarded(message);
 
-      // Insert new message
-      const { data, error: insertError } = await supabaseClient
+      // Insert new message with retry
+      const { data, error: insertError } = await retry.execute(
+        () => supabaseClient
         .from('messages')
         .insert({
           telegram_message_id: message.message_id,
@@ -113,15 +118,16 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
           processing_state: 'pending'
         })
         .select('id')
-        .single();
+        .single(),
+      shouldRetryOperation);
 
       if (insertError) {
         logger?.error(`Error creating new record for edited message: ${insertError.message}`);
-        
+
         // Check for unique violation (race condition)
         if (insertError.code === '23505') {
           logger?.warn(`Race condition detected: Message ${message.message_id} likely inserted by another process. Skipping creation.`);
-          
+
           // Attempt to find the message again
           const { data: raceMessage, error: raceError } = await supabaseClient
             .from('messages')
@@ -134,7 +140,7 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
             logger?.error(`Failed to find message after race condition: ${raceError?.message || 'Not found'}`);
             throw insertError;
           }
-          
+
           return createSuccessResponse({
             success: true,
             messageId: raceMessage.id,
@@ -170,8 +176,8 @@ export async function handleEditedMessage(message: TelegramMessage, context: Mes
       });
     }
   } catch (error) {
-    context.logger?.error(`Error processing edited message: ${error instanceof Error ? error.message : String(error)}`, { 
-      stack: error instanceof Error ? error.stack : undefined 
+    context.logger?.error(`Error processing edited message: ${error instanceof Error ? error.message : String(error)}`, {
+      stack: error instanceof Error ? error.stack : undefined
     });
 
     // Ensure message object exists for logging context
