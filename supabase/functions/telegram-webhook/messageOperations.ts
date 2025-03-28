@@ -1,5 +1,4 @@
-import { supabaseClient } from "./dbOperations.ts";
-import { extractTelegramMetadata } from "../_shared/consolidatedMessageUtils.ts";
+import { extractTelegramMetadata, supabaseClient } from "./dbOperations.ts";
 import { MessageInput } from "./types.ts";
 
 // Deep equality comparison for objects/arrays
@@ -160,86 +159,74 @@ export async function createMessage(
       updated_at: new Date().toISOString(),
     };
 
-    // Enhanced duplicate checking - check by both file_unique_id and (telegram_message_id + chat_id)
-    let existingMessage: {id: string, is_duplicate?: boolean} | null = null;
-
-    // First check by file_unique_id if available
+    // Simplified lookup - only check by file_unique_id if provided
+    let existingMessage: {id: string} | null = null;
     if (input.file_unique_id) {
       const { data, error } = await client
         .from("messages")
-        .select("id, is_duplicate")
+        .select("id")
         .eq("file_unique_id", input.file_unique_id)
         .maybeSingle();
 
       if (error) {
-        if (logger?.error) logger.error("Error looking up existing message by file_unique_id:", error);
+        if (logger?.error) logger.error("Error looking up existing message:", error);
         return { success: false, error_message: error.message };
       }
       existingMessage = data;
-    }
-
-    // If not found by file_unique_id, check by telegram_message_id + chat_id
-    if (!existingMessage) {
-      const { data, error } = await client
-        .from("messages")
-        .select("id, is_duplicate")
-        .eq("telegram_message_id", input.telegram_message_id)
-        .eq("chat_id", input.chat_id)
-        .maybeSingle();
-
-      if (error) {
-        if (logger?.error) logger.error("Error looking up existing message by telegram_message_id:", error);
-        return { success: false, error_message: error.message };
-      }
-      existingMessage = data;
-    }
-
-    // If we found a duplicate, mark it in the input
-    if (existingMessage) {
-      input.is_duplicate = true;
-      input.duplicate_reference_id = existingMessage.id;
     }
 
     let messageId: string | undefined;
 
-    // Enhanced upsert logic with duplicate handling
+    // Simplified upsert logic
     if (existingMessage) {
-      if (logger?.info) logger.info(`Processing duplicate message ${existingMessage.id}`);
+      // Update existing message only if there are changes - exclude immutable fields
+      if (logger?.info) logger.info(`Checking existing message ${existingMessage.id} for updates.`);
 
-      // For duplicates, we:
-      // 1. Preserve the original message
-      // 2. Only update certain fields (caption, text, processing_state)
-      // 3. Mark as duplicate in the database
-      const updateData = {
-        caption: input.caption || "",
-        text: input.text || input.message_text || "",
-        processing_state: input.processing_state || "duplicate_processed",
-        is_duplicate: true,
-        duplicate_reference_id: existingMessage.id,
-        updated_at: new Date().toISOString()
-      };
-
-      const { error: updateError } = await client
+      // First get current message data
+      const { data: currentData, error: fetchError } = await client
         .from("messages")
-        .update(updateData)
-        .eq("id", existingMessage.id);
+        .select()
+        .eq("id", existingMessage.id)
+        .single();
 
-      if (updateError) {
-        if (logger?.error) logger.error("Failed to update duplicate message:", updateError);
-        return {
-          success: false,
-          error_message: updateError.message,
-          duplicate: true
-        };
+      if (fetchError) {
+        if (logger?.error) logger.error("Error fetching current message data:", fetchError);
+        return { success: false, error_message: fetchError.message };
+      }
+
+      // Prepare update data without immutable fields
+      const updateData = { ...fullRecordData };
+      delete updateData.media_group_id;
+      delete updateData.file_unique_id;
+      delete updateData.file_id;
+
+      // Filter out unchanged fields
+      const changedFields: Record<string, any> = {};
+      for (const [key, newValue] of Object.entries(updateData)) {
+        if (!deepEqual(newValue, currentData[key])) {
+          changedFields[key] = newValue;
+        }
+      }
+
+      // Only update if there are changes
+      if (Object.keys(changedFields).length > 0) {
+        if (logger?.info) logger.info(`Updating message ${existingMessage.id} with changed fields:`, changedFields);
+
+        const { error: updateError } = await client
+          .from("messages")
+          .update(changedFields)
+          .eq("id", existingMessage.id);
+
+        if (updateError) {
+          if (logger?.error) logger.error("Failed to update existing message:", updateError);
+          return { success: false, error_message: updateError.message };
+        }
+      } else {
+        if (logger?.info) logger.info(`No changes detected for message ${existingMessage.id}, skipping update.`);
       }
 
       messageId = existingMessage.id;
-      if (logger?.success) logger.success(`Successfully processed duplicate message ${messageId}`);
-      return {
-        id: messageId,
-        success: true,
-        duplicate: true
-      };
+      if (logger?.success) logger.success(`Successfully updated message ${messageId}`);
     } else {
       // Insert new message
       fullRecordData.created_at = new Date().toISOString();
