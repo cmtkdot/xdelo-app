@@ -6,15 +6,15 @@ import { TelegramMessage, MessageContext, MessageProcessResult } from "../types.
 import { supabaseClient } from "../../_shared/supabase.ts";
 import { buildTelegramMessageUrl } from "../utils/urlBuilder.ts";
 import { processMessageMedia } from "../services/mediaService.ts";
-import { 
-  checkExistingMessage, 
-  checkMediaGroupDuplicate, 
+import {
+  checkExistingMessage,
+  checkMediaGroupDuplicate,
   handleEditedMessage,
   createMessage
 } from "../services/databaseService.ts";
-import { 
-  createSuccessResponse, 
-  createTelegramErrorResponse 
+import {
+  createSuccessResponse,
+  createTelegramErrorResponse
 } from "../services/responseService.ts";
 import { logEvent, logErrorEvent } from "../services/loggingService.ts";
 import { TELEGRAM_BOT_TOKEN } from "../config/environment.ts";
@@ -58,7 +58,7 @@ export async function handleMediaMessage(
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
+
     context.logger?.error(`Error processing media message: ${errorMessage}`, {
       error: error instanceof Error ? error : { message: errorMessage },
       message_id: message.message_id,
@@ -109,7 +109,7 @@ async function handleEditedMediaMessage(
 
     // Process media if needed
     const mediaResult = await processMessageMedia(message);
-    
+
     if (!mediaResult.success) {
       throw new Error(`Failed to process media during edit: ${mediaResult.error}`);
     }
@@ -137,7 +137,7 @@ async function handleEditedMediaMessage(
       "message_media_edited",
       existingMessageId,
       correlationId,
-      { 
+      {
         edit_history_id: editResult.edit_history_id,
         message_id: message.message_id,
         chat_id: message.chat.id
@@ -160,7 +160,7 @@ async function handleEditedMediaMessage(
 
     // Process media
     const mediaResult = await processMessageMedia(message);
-    
+
     if (!mediaResult.success) {
       throw new Error(`Failed to process media: ${mediaResult.error}`);
     }
@@ -179,8 +179,8 @@ async function handleEditedMediaMessage(
       ...editMediaData,
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
-      file_unique_id: message.photo 
-        ? message.photo[message.photo.length - 1].file_unique_id 
+      file_unique_id: message.photo
+        ? message.photo[message.photo.length - 1].file_unique_id
         : message.video?.file_unique_id || message.document?.file_unique_id
     }, logger);
 
@@ -228,14 +228,62 @@ async function handleNewMediaMessage(
   });
 
   // Check for existing message first
-  const { exists: messageExists, id: existingMessageId } = await checkExistingMessage(
+  const { exists: messageExists, id: existingMessageId, caption: existingCaption } = await checkExistingMessage(
     message.message_id,
     message.chat.id
   );
 
   if (messageExists && existingMessageId) {
     logger?.info(`Message ${message.message_id} already exists (DB ID: ${existingMessageId})`);
-    
+
+    // For media groups, skip processing if message exists (no captions allowed)
+    if (message.media_group_id) {
+      return {
+        success: true,
+        id: existingMessageId,
+        status: 'existing',
+        action: 'skipped',
+        needsProcessing: false
+      };
+    }
+
+    // For non-media group messages with caption
+    if (message.caption) {
+      // If caption is the same, skip processing
+      if (existingCaption === message.caption) {
+        return {
+          success: true,
+          id: existingMessageId,
+          status: 'existing',
+          action: 'skipped',
+          needsProcessing: false
+        };
+      }
+
+      // If caption changed, update it without creating edit history
+      const { success, error_message } = await supabaseClient
+        .from('messages')
+        .update({
+          caption: message.caption,
+          processing_state: 'pending',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingMessageId);
+
+      if (!success) {
+        throw new Error(error_message || "Failed to update message caption");
+      }
+
+      return {
+        success: true,
+        id: existingMessageId,
+        status: 'updated',
+        action: 'caption_updated',
+        needsProcessing: true
+      };
+    }
+
+    // For non-media group messages without caption, skip processing
     return {
       success: true,
       id: existingMessageId,
@@ -250,7 +298,7 @@ async function handleNewMediaMessage(
     const telegramFile = message.photo
       ? message.photo[message.photo.length - 1]
       : message.video || message.document;
-      
+
     if (telegramFile?.file_unique_id) {
       const { exists: duplicateExists, id: duplicateId } = await checkMediaGroupDuplicate(
         message.media_group_id,
@@ -277,7 +325,7 @@ async function handleNewMediaMessage(
 
   // Process media
   const mediaResult = await processMessageMedia(message);
-  
+
   if (!mediaResult.success) {
     throw new Error(`Failed to process media: ${mediaResult.error}`);
   }
@@ -289,8 +337,8 @@ async function handleNewMediaMessage(
     correlation_id: correlationId,
     telegram_message_id: message.message_id,
     chat_id: message.chat.id,
-    file_unique_id: message.photo 
-      ? message.photo[message.photo.length - 1].file_unique_id 
+    file_unique_id: message.photo
+      ? message.photo[message.photo.length - 1].file_unique_id
       : message.video?.file_unique_id || message.document?.file_unique_id
   }, logger);
 
@@ -306,7 +354,7 @@ async function handleNewMediaMessage(
     eventType,
     id,
     correlationId,
-    { 
+    {
       rpc_status: status,
       message_id: message.message_id,
       chat_id: message.chat.id
