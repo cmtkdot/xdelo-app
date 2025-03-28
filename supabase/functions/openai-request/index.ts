@@ -1,13 +1,12 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"; // Assuming this version is correct/intended
-import {
-  createHandler,
-  // createSuccessResponse, // Not using standard success wrapper for proxy
-  RequestMetadata,
-  SecurityLevel,
-} from "../_shared/unifiedHandler.ts";
 import { corsHeaders } from "../_shared/cors.ts"; // Import corsHeaders for direct response modification
+import {
+    createHandler,
+    // createSuccessResponse, // Not using standard success wrapper for proxy
+    RequestMetadata,
+    SecurityLevel,
+} from "../_shared/unifiedHandler.ts";
 // Optional: Import logProcessingEvent if specific logging needed
-// import { logProcessingEvent } from "../_shared/consolidatedMessageUtils.ts";
 
 // Define expected request body structure
 interface OpenAIRequestBody {

@@ -1,8 +1,9 @@
 import {
   constructTelegramMessageUrl,
   isMessageForwarded,
-  logProcessingEvent, // Import the correct 5-argument function
+  // logProcessingEvent removed, imported from auditLogger below
 } from "../../_shared/consolidatedMessageUtils.ts";
+import { logProcessingEvent } from "../../_shared/auditLogger.ts"; // Import the correct 5-argument function
 import { corsHeaders } from "../../_shared/cors.ts";
 import {
   createMessage,
