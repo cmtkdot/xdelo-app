@@ -16,8 +16,6 @@ verify_jwt = false
 verify_jwt = false
 [functions.log-operation]
 verify_jwt = false
-[functions.manual-caption-parser]
-verify_jwt = false
 [functions.media-management]
 verify_jwt = false
 [functions.openai-request]
@@ -28,13 +26,19 @@ verify_jwt = false
 verify_jwt = false
 [functions.product-matching]
 verify_jwt = false
+[functions.recover-duplicate-messages]
+verify_jwt = false
 [functions.redownload-missing-files]
 verify_jwt = false
 [functions.telegram-webhook]
 verify_jwt = false
+[functions.unified-logging]
+verify_jwt = false
 [functions.update-telegram-caption]
 verify_jwt = false
-[functions.user-data]
+[functions.utility-functions]
 verify_jwt = false
 [functions.validate-storage-files]
+verify_jwt = false
+[functions.xdelo_run_sql_migration]
 verify_jwt = false
