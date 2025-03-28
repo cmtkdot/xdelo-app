@@ -602,11 +602,15 @@ async function xdelo_handleNewMediaMessage(
       try {
         logger?.info(`Starting media group sync for group ${message.media_group_id}`);
         const syncResult = await syncMediaGroupContent(
-          Deno.env.get("SUPABASE_URL") ?? "",
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
           result.id,
-          message.media_group_id,
-          { forceSync: true }
+          {
+            media_group_id: message.media_group_id,
+            caption: message.caption
+          },
+          {
+            forceSync: true,
+            syncEditHistory: false
+          }
         );
         logger?.info(`Media group sync completed: ${JSON.stringify(syncResult)}`);
       } catch (syncError) {
