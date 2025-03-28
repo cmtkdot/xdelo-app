@@ -1,13 +1,16 @@
 
+export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error' | 'initialized';
+
 export interface MediaProcessingState {
   isProcessing: boolean;
-  processingMessageIds: Record<string, boolean>;
+  processingMessageIds: string[];
 }
 
-export interface MediaProcessingStateActions {
+export interface MediaProcessingActions {
   setIsProcessing: (isProcessing: boolean) => void;
-  addProcessingMessageId: (messageId: string) => void;
-  removeProcessingMessageId: (messageId: string) => void;
+  addProcessingMessageId: (id: string) => void;
+  removeProcessingMessageId: (id: string) => void;
+  resetProcessingMessageIds: () => void;
 }
 
 export interface MediaSyncOptions {
@@ -17,23 +20,17 @@ export interface MediaSyncOptions {
 
 export interface RepairResult {
   success: boolean;
-  repaired?: number;
-  message?: string;
+  repaired: number;
   error?: string;
-  details?: Array<{
-    messageId: string;
-    success: boolean;
-    error?: string;
-    message?: string;
-  }>;
-  successful?: number;
-  failed?: number;
+  message?: string;
+  details?: any[];
 }
 
 export interface CaptionFlowData {
   success: boolean;
-  message: string;
+  message?: string;
   message_id?: string;
-  media_group_synced?: boolean;
   caption_updated?: boolean;
+  media_group_synced?: boolean;
+  analyzed_content?: any;
 }
