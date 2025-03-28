@@ -145,14 +145,13 @@ async function handleParseCaption(req: Request, metadata: RequestMetadata): Prom
     if (media_group_id) {
       try {
         console.log(`[${requestCorrelationId}] Triggering media group sync for group ${media_group_id}`);
-        // Call syncMediaGroupContent correctly (it uses singleton client internally)
+        // Call syncMediaGroupContent correctly with the new signature
         syncResult = await syncMediaGroupContent(
-          messageId,
-          parsedContent,
-          {
-            forceSync: true, // Or determine based on context
-            syncEditHistory: isEdit
-          }
+          messageId,          // sourceMessageId
+          parsedContent,      // analyzedContent
+          requestCorrelationId, // correlationId
+          true,               // forceSync (defaulting to true)
+          isEdit              // syncEditHistory
         );
         console.log(`[${requestCorrelationId}] Media group sync completed: ${JSON.stringify(syncResult)}`);
         await logProcessingEvent('media_group_sync_triggered', messageId, requestCorrelationId, { media_group_id, syncResult });

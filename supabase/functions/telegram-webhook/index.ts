@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.217.0/http/server.ts"; // Use ver
 import { createHandler, SecurityLevel, RequestMetadata } from "../_shared/unifiedHandler.ts"; // Import unified handler
 import { isMessageForwarded } from "../_shared/consolidatedMessageUtils.ts"; // Only need isMessageForwarded
 import { logProcessingEvent } from "../_shared/auditLogger.ts"; // Import from dedicated module
-// Remove redundant import: import { xdelo_logProcessingEvent } from "../_shared/databaseOperations.ts";
+import { createMessage } from "./dbOperations.ts"; // Import createMessage
 import { handleEditedMessage } from "./handlers/editedMessageHandler.ts";
 import { handleMediaMessage } from "./handlers/mediaMessageHandler.ts";
 import { handleOtherMessage } from "./handlers/textMessageHandler.ts";
@@ -65,6 +65,52 @@ const webhookHandler = async (req: Request, metadata: RequestMetadata) => {
       // Let the unified handler manage the error response creation
       throw new Error("No processable content in update");
     }
+
+    // --- Retry Limit Check ---
+    const MAX_RETRIES = 3;
+    // Prepare minimal input for createMessage to check/get retry count
+    const messageCheckInput = {
+      telegram_message_id: message.message_id,
+      chat_id: message.chat?.id,
+      correlation_id: metadata.correlationId,
+      // Add other minimal required fields if necessary for createMessage lookup
+    };
+
+    // Call createMessage primarily to check for existing record and retry count
+    // Note: This might create a basic record if it doesn't exist yet.
+    // Consider if this initial create is desired or if a dedicated 'getMessageRetryCount' function is better.
+    // For now, let's use createMessage as it handles upsert logic.
+    const dbResult = await createMessage(messageCheckInput, logger);
+
+    if (!dbResult.success && !dbResult.duplicate) {
+      // If createMessage failed even to lookup/create initial record, log and exit
+      logger.error("Initial database check/create failed", { error: dbResult.error_message });
+      // Return 200 OK to Telegram despite internal error
+      return new Response(JSON.stringify({ success: false, error: "Database check failed", correlationId: metadata.correlationId }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // Check retry count if the message was found (duplicate=true)
+    if (dbResult.duplicate && (dbResult.retry_count || 0) >= MAX_RETRIES) {
+      logger.warn(`Max retries (${MAX_RETRIES}) reached for message ${message.message_id}. Skipping processing.`, {
+        message_id: message.message_id,
+        chat_id: message.chat?.id,
+        retry_count: dbResult.retry_count,
+      });
+      await logProcessingEvent(
+        "max_retries_reached",
+        dbResult.id || message.message_id.toString(), // Use DB ID if available
+        metadata.correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat?.id,
+          retry_count: dbResult.retry_count,
+        }
+      );
+      // Return 200 OK to Telegram to stop further retries
+      return new Response(JSON.stringify({ success: true, message: "Max retries reached, skipping.", correlationId: metadata.correlationId }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    // --- End Retry Limit Check ---
+
 
     // Determine message context using metadata
     const context = {

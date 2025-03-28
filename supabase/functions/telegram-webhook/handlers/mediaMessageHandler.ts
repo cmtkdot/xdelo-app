@@ -578,32 +578,10 @@ async function xdelo_handleNewMediaMessage(
       );
     }
 
-    // Only sync media group if this is part of one AND has analyzed content
-    if (message.media_group_id && result.id && message.caption) {
-      try {
-        logger?.info(
-          `Starting media group sync for group ${message.media_group_id}`
-        );
-        const syncResult = await syncMediaGroupContent(
-          result.id,
-          {
-            media_group_id: message.media_group_id,
-            caption: message.caption,
-          },
-          {
-            forceSync: true,
-            syncEditHistory: false,
-          }
-        );
-        logger?.info(
-          `Media group sync completed: ${JSON.stringify(syncResult)}`
-        );
-      } catch (syncError: unknown) { // Added type annotation
-        const syncErrorMessage = syncError instanceof Error ? syncError.message : String(syncError);
-        logger?.error(`Media group sync failed: ${syncErrorMessage}`);
-        // Non-fatal error, continue
-      }
-    }
+    // Media group sync logic is moved to after caption analysis completes.
+    // The trigger 'trg_process_caption' sets state to 'pending',
+    // which should eventually lead to the 'parse-caption' function being called.
+    // The sync should be initiated there.
 
     return new Response(
       JSON.stringify({ success: true, id: result.id, correlationId }),

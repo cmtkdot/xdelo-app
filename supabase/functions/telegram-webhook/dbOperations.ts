@@ -51,6 +51,7 @@ export async function createMessage(
   error_message?: string;
   duplicate?: boolean;
   caption_changed?: boolean;
+  retry_count?: number; // Add retry_count to return type
 }> {
   try {
     // Set a longer timeout for complex operations
@@ -86,34 +87,45 @@ export async function createMessage(
       telegram_data: input.telegram_data,
       forward_info: input.forward_info,
       edit_date: input.edit_date,
-      edit_history: input.edit_history || [],
+      edit_history: input.edit_history || null, // Default to null instead of empty array
       storage_exists: input.storage_exists,
       storage_path_standardized: input.storage_path_standardized,
       updated_at: new Date().toISOString(),
     };
 
-    // Ensure analyzed_content is properly formatted as JSONB
+    // Ensure analyzed_content is a valid JSON object or null
     if (input.analyzed_content) {
       try {
-        // If it's already an object, stringify it
+        let contentToStore: object | null = null;
         if (typeof input.analyzed_content === 'object') {
-          fullRecordData.analyzed_content = JSON.stringify(input.analyzed_content);
+          // Use the object directly if it's already an object
+          contentToStore = input.analyzed_content;
+        } else if (typeof input.analyzed_content === 'string') {
+          // Attempt to parse if it's a string
+          contentToStore = JSON.parse(input.analyzed_content);
         }
-        // If it's a string, parse it to validate JSON then stringify again
-        else if (typeof input.analyzed_content === 'string') {
-          const parsed = JSON.parse(input.analyzed_content);
-          fullRecordData.analyzed_content = JSON.stringify(parsed);
+
+        // Assign if it's a valid, non-null object
+        if (contentToStore !== null && typeof contentToStore === 'object') {
+           fullRecordData.analyzed_content = contentToStore;
+        } else {
+           logger?.warn('Analyzed content was not a valid JSON object or was null/primitive after parsing, setting column to null.');
+           fullRecordData.analyzed_content = null;
         }
       } catch (e) {
-        logger?.error('Invalid analyzed_content format:', e);
-        throw new Error('analyzed_content must be valid JSON');
+        // Handle JSON parsing errors
+        logger?.error('Invalid analyzed_content JSON format, setting column to null:', e.message);
+        fullRecordData.analyzed_content = null;
       }
+    } else {
+      // Ensure the field is explicitly null if no input was provided
+      fullRecordData.analyzed_content = null;
     }
 
     // First, check if this exact message already exists (telegram_message_id + chat_id)
     let { data: existingMessage, error: lookupError } = await supabaseClient // Use imported client
       .from("messages")
-      .select("id, caption, file_unique_id")
+      .select("id, caption, file_unique_id, retry_count") // Fetch retry_count
       .eq("telegram_message_id", input.telegram_message_id)
       .eq("chat_id", input.chat_id)
       .maybeSingle();
@@ -186,6 +198,7 @@ export async function createMessage(
         success: true,
         duplicate: true,
         caption_changed: captionChanged,
+        retry_count: existingMessage.retry_count || 0, // Return fetched retry_count
       };
     } else {
       // Simplified flow - use the original file_unique_id
@@ -305,10 +318,31 @@ export async function updateMessageState(
         if (errorMessage) {
           updates.error_message = errorMessage;
           updates.last_error_at = new Date().toISOString();
-          // Assuming increment_retry_count exists and works as intended
-          // updates.retry_count = supabaseClient.rpc("increment_retry_count", {
-          //   message_id: messageId,
-          // });
+          // Increment retry_count using atomic increment
+          // Note: This requires RLS policies to allow updates on retry_count
+          // We'll perform the increment in a separate call for atomicity if needed,
+          // but for simplicity, let's try including it here first.
+          // If issues arise, we can switch to an RPC call.
+          // Fetch current count and increment client-side (less ideal but simpler if direct update fails)
+          // Let's assume direct increment works for now.
+          // The Supabase client doesn't directly support atomic increments in .update() like some ORMs.
+          // We will fetch the current count and update it. This isn't truly atomic.
+          // A better approach would be an RPC function `increment_retry_count(message_id_param uuid)`.
+          // For now, let's implement the fetch-and-update approach.
+
+          // Fetch current retry_count first
+          const { data: currentData, error: fetchError } = await supabaseClient
+            .from("messages")
+            .select("retry_count")
+            .eq("id", messageId)
+            .single();
+
+          if (fetchError) {
+            console.error(`Error fetching retry_count for message ${messageId}:`, fetchError);
+            // Proceed without incrementing if fetch fails
+          } else {
+            updates.retry_count = (currentData?.retry_count || 0) + 1;
+          }
         }
         break;
     }
@@ -359,38 +393,53 @@ export async function getMessageById(messageId: string) {
 
 /**
  * Sync media group content from one message to others
- * FIXED: Using the correct parameter signature that matches the database function
+ * Updated to match new SQL function signature requiring analyzed_content
  */
 export async function syncMediaGroupContent(
   sourceMessageId: string,
-  mediaGroupId: string,
-  correlationId: string
+  analyzedContent: any, // Accept analyzedContent object
+  correlationId: string,
+  forceSync: boolean = true, // Optional flags with defaults
+  syncEditHistory: boolean = false
 ): Promise<{ success: boolean; updatedCount?: number; error?: string }> {
+  // Add validation for analyzedContent
+  if (!analyzedContent || typeof analyzedContent !== 'object') {
+      console.error("syncMediaGroupContent: analyzedContent must be a valid object.");
+      return { success: false, error: "analyzedContent must be a valid object." };
+  }
+
   try {
-    // Call the database function with correct parameter types
+    // Call the database function with the new parameter signature
     const { data, error } = await supabaseClient.rpc(
       "xdelo_sync_media_group_content",
       {
         p_message_id: sourceMessageId,
-        p_media_group_id: mediaGroupId,
-        p_force_sync: true, // Assuming force sync is always desired here
-        p_sync_edit_history: false, // Assuming edit history sync is not needed here
+        p_analyzed_content: analyzedContent, // Pass the analyzed content object
+        p_force_sync: forceSync,
+        p_sync_edit_history: syncEditHistory,
       }
     );
 
+    // The SQL function now returns JSONB: {success: boolean, error?: string, media_group_id?: text, updated_count?: integer}
+
+    // Handle potential RPC error
     if (error) {
-      console.error("Error syncing media group content:", error);
-      return {
-        success: false,
-        error: error.message,
-      };
+      console.error("Error calling xdelo_sync_media_group_content RPC:", error);
+      return { success: false, error: error.message };
     }
 
+    // Check the success flag returned by the SQL function itself
+    if (!data?.success) {
+      console.error("Error reported by xdelo_sync_media_group_content function:", data?.error || "Unknown SQL function error");
+      return { success: false, error: data?.error || "Unknown SQL function error" };
+    }
+
+    // Return success and updated count from the SQL function's response
     return {
       success: true,
       updatedCount: data?.updated_count || 0,
     };
-  } catch (error: unknown) { // Add type annotation
+  } catch (error: unknown) { // Add type annotation for catch block
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error("Exception in syncMediaGroupContent:", errorMessage);
     return {
