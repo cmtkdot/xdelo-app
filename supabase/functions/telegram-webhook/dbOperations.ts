@@ -99,9 +99,10 @@ export async function createMessage(
         // FIX: Don't stringify the object! Supabase will handle JSON conversion for JSONB columns
         // Just assign the object directly - this was a potential source of the "malformed array literal" error
         fullRecordData.analyzed_content = input.analyzed_content;
-      } catch (e) {
+      } catch (e: unknown) { // Add type annotation
+        const errorMessage = e instanceof Error ? e.message : String(e);
         // Handle JSON parsing errors
-        logger?.error('Invalid analyzed_content JSON format, setting column to null:', e.message);
+        logger?.error('Invalid analyzed_content JSON format, setting column to null:', errorMessage);
         fullRecordData.analyzed_content = null;
       }
     } else {
@@ -126,7 +127,7 @@ export async function createMessage(
     if (!existingMessage?.id && input.file_unique_id) {
       const { data: fileDuplicate, error: fileLookupError } = await supabaseClient // Use imported client
         .from("messages")
-        .select("id, caption")
+        .select("id, caption, storage_path, public_url") // Fetch storage path/url from original
         .eq("file_unique_id", input.file_unique_id)
         .limit(1);
 
@@ -138,10 +139,11 @@ export async function createMessage(
       if (fileDuplicate?.length) {
         existingMessage = fileDuplicate[0];
         // Reuse storage path from original
-        fullRecordData.storage_path = null;
-        fullRecordData.public_url = null;
+        fullRecordData.storage_path = existingMessage.storage_path; // Use original storage path
+        fullRecordData.public_url = existingMessage.public_url; // Use original public url
         fullRecordData.is_duplicate = true;
         fullRecordData.duplicate_reference_id = existingMessage.id;
+        logger?.info(`Identified as file duplicate of ${existingMessage.id}. Reusing storage path.`);
       }
     }
 
@@ -158,18 +160,19 @@ export async function createMessage(
       if (fullRecordData.is_duplicate) {
         // Don't update the file_unique_id as it's the cause of the constraint violation
         delete fullRecordData.file_unique_id;
-        delete fullRecordData.storage_path;
-        delete fullRecordData.public_url;
+        // storage_path and public_url are already set to the original's above
       }
 
       // Check if caption changed and needs reprocessing
       const captionChanged =
         input.caption && input.caption !== existingMessage.caption;
 
-      if (captionChanged) {
-        fullRecordData.processing_state = "pending";
-        fullRecordData.analyzed_content = null;
-      }
+      // The trigger 'trg_process_caption' handles setting state to 'pending' if caption changes.
+      // We don't need to explicitly set it here anymore.
+      // if (captionChanged) {
+      //   fullRecordData.processing_state = "pending";
+      //   fullRecordData.analyzed_content = null; // Trigger should handle old_analyzed_content
+      // }
 
       const { error: updateError } = await supabaseClient // Use imported client
         .from("messages")
@@ -186,92 +189,118 @@ export async function createMessage(
       return {
         id: messageId,
         success: true,
-        duplicate: true,
+        duplicate: fullRecordData.is_duplicate, // Return the final duplicate status
         caption_changed: captionChanged,
         retry_count: existingMessage.retry_count || 0, // Return fetched retry_count
       };
     } else {
+      // Insert new message
       // FIX: For new messages, check for duplicate file_unique_id before inserting
-      if (input.file_unique_id) {
-        // Generate a uniqueness suffix if we're worried about duplication
-        const timestamp = Date.now();
-        const randomSuffix = Math.floor(Math.random() * 1000);
-        // For recovery from possible duplicate key errors, prepare a modified ID
-        const backupUniqueId = `${input.file_unique_id}_${timestamp}_${randomSuffix}`;
+      // The recovery logic below handles the case where the constraint is hit anyway.
 
-        try {
-          // Add created_at only for new records
-          fullRecordData.created_at = new Date().toISOString();
+      // Generate a uniqueness suffix if we're worried about duplication
+      const timestamp = Date.now();
+      const randomSuffix = Math.floor(Math.random() * 1000);
+      // For recovery from possible duplicate key errors, prepare a modified ID
+      const backupUniqueId = `${input.file_unique_id}_${timestamp}_${randomSuffix}`;
 
-          // Try to insert new message
-          logger?.info(
-            `Inserting new record with file_unique_id: ${fullRecordData.file_unique_id}`
-          );
+      try {
+        // Add created_at only for new records
+        fullRecordData.created_at = new Date().toISOString();
 
-          const { data: insertData, error: insertError } = await supabaseClient // Use imported client
-            .from("messages")
-            .insert(fullRecordData)
-            .select("id")
-            .single();
+        // Try to insert new message
+        logger?.info(
+          `Inserting new record with file_unique_id: ${fullRecordData.file_unique_id}`
+        );
 
-          if (insertError) {
-            // If we hit a unique constraint error despite our checks
-            if (
-              insertError.code === "23505" &&
-              insertError.message.includes("messages_file_unique_id_key")
-            ) {
-              logger?.warn(
-                "Hit unique constraint despite checks, attempting recovery with modified unique ID..."
-              );
+        const { data: insertData, error: insertError } = await supabaseClient // Use imported client
+          .from("messages")
+          .insert(fullRecordData)
+          .select("id")
+          .single();
 
-              // Use the backup unique ID we prepared
-              fullRecordData.file_unique_id = backupUniqueId;
-              fullRecordData.is_duplicate = true;
+        if (insertError) {
+          // If we hit a unique constraint error despite our checks
+          if (
+            insertError.code === "23505" &&
+            insertError.message.includes("messages_file_unique_id_key") &&
+            input.file_unique_id // Only attempt recovery if there was an initial file_unique_id
+          ) {
+            logger?.warn(
+              "Hit unique constraint on insert, attempting recovery with modified unique ID..."
+            );
 
-              // Try again with the modified unique ID
-              const { data: retryData, error: retryError } = await supabaseClient // Use imported client
-                .from("messages")
-                .insert(fullRecordData)
-                .select("id")
-                .single();
+            // Find the original message causing the conflict
+            const { data: originalDuplicate, error: findDupError } = await supabaseClient
+              .from("messages")
+              .select("id, storage_path, public_url")
+              .eq("file_unique_id", input.file_unique_id)
+              .single();
 
-              if (retryError) {
-                logger?.error(
-                  "Failed final retry to insert message:",
-                  retryError
-                );
-                return { success: false, error_message: retryError.message };
-              }
-
-              messageId = retryData.id;
-              logger?.success(
-                `Successfully inserted message with generated unique ID: ${messageId}`
-              );
-            } else {
-              logger?.error("Failed to insert new message:", insertError);
-              return { success: false, error_message: insertError.message };
+            if (findDupError || !originalDuplicate) {
+               logger?.error("Could not find original message during recovery:", findDupError);
+               return { success: false, error_message: insertError.message }; // Return original insert error
             }
+
+            // Use the backup unique ID we prepared
+            fullRecordData.file_unique_id = backupUniqueId;
+            fullRecordData.is_duplicate = true;
+            fullRecordData.duplicate_reference_id = originalDuplicate.id;
+            // Reuse storage path from the conflicting original
+            fullRecordData.storage_path = originalDuplicate.storage_path;
+            fullRecordData.public_url = originalDuplicate.public_url;
+
+            logger?.info(`Retrying insert with modified file_unique_id: ${backupUniqueId} and reusing storage from ${originalDuplicate.id}`);
+
+            // Try again with the modified unique ID
+            const { data: retryData, error: retryError } = await supabaseClient // Use imported client
+              .from("messages")
+              .insert(fullRecordData)
+              .select("id")
+              .single();
+
+            if (retryError) {
+              logger?.error(
+                "Failed final retry to insert message:",
+                retryError
+              );
+              return { success: false, error_message: retryError.message };
+            }
+
+            messageId = retryData.id;
+            logger?.success(
+              `Successfully inserted message with generated unique ID: ${messageId}`
+            );
+            // Return duplicate status true since we recovered
+             return { id: messageId, success: true, duplicate: true };
+
           } else {
-            messageId = insertData.id;
-            logger?.success(`Successfully inserted new message ${messageId}`);
+            // Other insert error
+            logger?.error("Failed to insert new message:", insertError);
+            return { success: false, error_message: insertError.message };
           }
-        } catch (insertError: unknown) { // Add type annotation
-          const insertErrorMessage = insertError instanceof Error ? insertError.message : String(insertError);
-          logger?.error("Exception during message insert:", insertErrorMessage);
-          return {
-            success: false,
-            error_message: insertErrorMessage,
-          };
+        } else {
+          // Successful initial insert
+          messageId = insertData.id;
+          logger?.success(`Successfully inserted new message ${messageId}`);
         }
+      } catch (insertError: unknown) { // Add type annotation
+        const insertErrorMessage = insertError instanceof Error ? insertError.message : String(insertError);
+        logger?.error("Exception during message insert:", insertErrorMessage);
+        return {
+          success: false,
+          error_message: insertErrorMessage,
+        };
       }
 
+      // This part might be unreachable if recovery path returns directly
       if (!messageId) {
-        const errorMsg = "Failed to obtain message ID after insert/update.";
+        const errorMsg = "Failed to obtain message ID after insert.";
         logger?.error(errorMsg);
         return { success: false, error_message: errorMsg };
       }
 
-      return { id: messageId, success: true };
+      return { id: messageId, success: true, duplicate: false }; // Explicitly duplicate: false for successful new insert
     }
   } catch (error: unknown) { // Add type annotation
     const errorMessage = error instanceof Error ? error.message : String(error);

@@ -134,15 +134,31 @@ const webhookHandler = async (req: Request, metadata: RequestMetadata) => {
     // Handle different message types
     let response;
     try {
+      // Determine if the message (new or edited) contains media
+      const hasMedia = !!(message.photo || message.video || message.document);
+
       if (context.isEdit) {
-        logger.info("Routing to edited message handler");
-        response = await handleEditedMessage(message, context);
-      } else if (message.photo || message.video || message.document) {
-        logger.info("Routing to media message handler");
-        response = await handleMediaMessage(message, context);
+        // Handle edited messages
+        if (hasMedia) {
+          // Edited message WITH media -> media handler
+          logger.info("Routing edited message with media to media message handler");
+          response = await handleMediaMessage(message, context);
+        } else {
+          // Edited message WITHOUT media -> generic edit handler
+          logger.info("Routing edited message without media to edited message handler");
+          response = await handleEditedMessage(message, context);
+        }
       } else {
-        logger.info("Routing to text message handler");
-        response = await handleOtherMessage(message, context);
+        // Handle new messages
+        if (hasMedia) {
+          // New message WITH media -> media handler
+          logger.info("Routing new media message to media message handler");
+          response = await handleMediaMessage(message, context);
+        } else {
+          // New message WITHOUT media -> text handler
+          logger.info("Routing new text message to text message handler");
+          response = await handleOtherMessage(message, context);
+        }
       }
 
       logger.info("Successfully processed message", {
