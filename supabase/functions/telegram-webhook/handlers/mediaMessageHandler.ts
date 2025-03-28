@@ -2,12 +2,12 @@ import { corsHeaders } from "../../_shared/cors.ts";
 import { syncMediaGroupContent } from "../../_shared/mediaGroupSync.ts";
 import { xdelo_processMessageMedia } from "../../_shared/mediaStorage.ts";
 import { xdelo_detectMimeType } from "../../_shared/mediaUtils.ts";
-import { constructTelegramMessageUrl } from "../../_shared/messageUtils.ts";
+import { constructTelegramMessageUrl, logProcessingEvent } from "../../_shared/consolidatedMessageUtils.ts"; // Import logProcessingEvent
 import { supabaseClient } from "../../_shared/supabase.ts";
 import {
   createMessage,
   // triggerCaptionAnalysis, // Removed - No longer used
-  xdelo_logProcessingEvent,
+  // xdelo_logProcessingEvent, // Removed import
 } from "../dbOperations.ts";
 import {
   ForwardInfo,
@@ -106,7 +106,7 @@ export async function handleMediaMessage(
 
     // Also log to database for tracking using 4-arg wrapper
     try {
-      await xdelo_logProcessingEvent(
+      await logProcessingEvent( // Use imported logProcessingEvent
         "media_processing_error", // eventType
         message.message_id.toString(), // entityId
         context.correlationId, // correlationId
@@ -259,7 +259,7 @@ async function xdelo_handleEditedMediaMessage(
 
         // Log the edit operation using 4-arg wrapper
         try {
-          await xdelo_logProcessingEvent(
+          await logProcessingEvent( // Use imported logProcessingEvent
             "message_media_edited", // eventType
             existingMessage.id, // entityId
             correlationId, // correlationId
@@ -310,7 +310,7 @@ async function xdelo_handleEditedMediaMessage(
 
       // Log the caption edit using 4-arg wrapper
       try {
-        await xdelo_logProcessingEvent(
+        await logProcessingEvent( // Use imported logProcessingEvent
           "message_caption_edited", // eventType
           existingMessage.id, // entityId
           correlationId, // correlationId
@@ -347,7 +347,7 @@ async function xdelo_handleEditedMediaMessage(
 
       // Log the edit operation anyway using 4-arg wrapper
       try {
-        await xdelo_logProcessingEvent(
+        await logProcessingEvent( // Use imported logProcessingEvent
           "message_edit_received", // eventType
           existingMessage.id, // entityId
           correlationId, // correlationId
@@ -545,7 +545,7 @@ async function xdelo_handleNewMediaMessage(
       });
 
       // Also try to log to the database using 4-arg wrapper
-      await xdelo_logProcessingEvent(
+      await logProcessingEvent( // Use imported logProcessingEvent
         "message_creation_failed", // eventType
         message.message_id.toString(), // entityId
         correlationId, // correlationId
@@ -624,7 +624,7 @@ async function xdelo_handleNewMediaMessage(
 
     // Log detailed error to database using 4-arg wrapper
     try {
-      await xdelo_logProcessingEvent(
+      await logProcessingEvent( // Use imported logProcessingEvent
         "media_processing_error", // eventType
         message.message_id.toString(), // entityId
         correlationId, // correlationId
