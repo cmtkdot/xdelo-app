@@ -1,18 +1,50 @@
+
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/useToast';
-import { MediaProcessingState, MediaSyncOptions, RepairResult, CaptionFlowData } from './types';
-import { createMediaProcessingState, withRetry } from './utils';
+
+// Types
+export interface MediaSyncOptions {
+  forceSync?: boolean;
+  syncEditHistory?: boolean;
+}
+
+export interface RepairResult {
+  success: boolean;
+  repaired?: number;
+  message?: string;
+  error?: string;
+  details?: any[];
+  successful?: number;
+  failed?: number;
+}
+
+export interface CaptionFlowData {
+  success: boolean;
+  message: string;
+  message_id?: string;
+  media_group_synced?: boolean;
+  caption_updated?: boolean;
+}
 
 export function useMediaUtils() {
   const [isLoading, setLoading] = useState(false);
-  
-  // Create the media processing state (manages which messages are currently processing)
-  const [mediaProcessingState, mediaProcessingActions] = createMediaProcessingState();
-  const { isProcessing, processingMessageIds } = mediaProcessingState;
-  const { setIsProcessing, addProcessingMessageId, removeProcessingMessageId } = mediaProcessingActions;
-  
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingMessageIds, setProcessingMessageIds] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
+  
+  // Helper function to manage processing state for individual messages
+  const addProcessingMessageId = useCallback((messageId: string) => {
+    setProcessingMessageIds(prev => ({ ...prev, [messageId]: true }));
+  }, []);
+  
+  const removeProcessingMessageId = useCallback((messageId: string) => {
+    setProcessingMessageIds(prev => {
+      const newState = { ...prev };
+      delete newState[messageId];
+      return newState;
+    });
+  }, []);
   
   /**
    * Synchronize content across media group messages
@@ -44,21 +76,14 @@ export function useMediaUtils() {
         return false;
       }
       
-      // Call the database function with retry logic
-      const { data, error } = await withRetry(
-        () => supabase.rpc(
-          'xdelo_sync_media_group_content',
-          {
-            p_message_id: sourceMessageId,
-            p_analyzed_content: message.analyzed_content,
-            p_force_sync: options.forceSync !== false,
-            p_sync_edit_history: !!options.syncEditHistory
-          }
-        ),
+      // Call the database function directly with RPC using the correct parameter signature
+      const { data, error } = await supabase.rpc(
+        'xdelo_sync_media_group_content',
         {
-          maxAttempts: 3,
-          delay: 1000,
-          retryableErrors: ['timeout', 'connection', 'network']
+          p_message_id: sourceMessageId,
+          p_analyzed_content: message.analyzed_content,
+          p_force_sync: options.forceSync !== false,
+          p_sync_edit_history: !!options.syncEditHistory
         }
       );
       
@@ -95,13 +120,9 @@ export function useMediaUtils() {
   /**
    * Process a single message caption
    */
-  const syncMessageCaption = async ({
-    messageId,
-    caption
-  }: {
-    messageId: string;
-    caption?: string;
-  }): Promise<CaptionFlowData | null> => {
+  const syncMessageCaption = async (
+    { messageId, caption }: { messageId: string; caption?: string }
+  ): Promise<CaptionFlowData> => {
     try {
       setLoading(true);
       addProcessingMessageId(messageId);
@@ -125,7 +146,10 @@ export function useMediaUtils() {
           description: error.message,
           variant: 'destructive',
         });
-        return null;
+        return {
+          success: false,
+          message: error.message
+        };
       }
       
       if (!data.success) {
@@ -134,7 +158,10 @@ export function useMediaUtils() {
           description: data.message || 'Unknown error',
           variant: 'destructive',
         });
-        return null;
+        return {
+          success: false,
+          message: data.message || 'Unknown error'
+        };
       }
       
       toast({
@@ -142,7 +169,13 @@ export function useMediaUtils() {
         description: `Successfully processed message caption${data.media_group_synced ? ' and synced media group' : ''}`,
       });
       
-      return data;
+      return {
+        success: true,
+        message: 'Caption processed successfully',
+        message_id: messageId,
+        media_group_synced: data.media_group_synced,
+        caption_updated: data.caption_updated
+      };
     } catch (err) {
       console.error('Error in syncMessageCaption:', err);
       toast({
@@ -150,7 +183,10 @@ export function useMediaUtils() {
         description: err instanceof Error ? err.message : 'Unknown error',
         variant: 'destructive',
       });
-      return null;
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Unknown error'
+      };
     } finally {
       setLoading(false);
       removeProcessingMessageId(messageId);
@@ -167,9 +203,9 @@ export function useMediaUtils() {
       
       // Call edge function to fix content disposition
       const { data, error } = await supabase.functions.invoke('utility-functions', {
-        body: {
+        body: { 
           action: 'fix_content_disposition',
-          messageId
+          messageId 
         }
       });
       
@@ -213,9 +249,9 @@ export function useMediaUtils() {
       
       // Call edge function to handle reupload
       const { data, error } = await supabase.functions.invoke('utility-functions', {
-        body: {
+        body: { 
           action: 'reupload_media',
-          messageId
+          messageId 
         }
       });
       
@@ -261,7 +297,7 @@ export function useMediaUtils() {
       
       // Call edge function to repair media
       const { data, error } = await supabase.functions.invoke('utility-functions', {
-        body: {
+        body: { 
           action: 'repair_media_batch',
           messageIds
         }
@@ -312,7 +348,7 @@ export function useMediaUtils() {
       
       // Call edge function to standardize paths
       const { data, error } = await supabase.functions.invoke('utility-functions', {
-        body: {
+        body: { 
           action: 'standardize_paths',
           limit
         }
@@ -363,7 +399,7 @@ export function useMediaUtils() {
       
       // Call edge function to fix URLs
       const { data, error } = await supabase.functions.invoke('utility-functions', {
-        body: {
+        body: { 
           action: 'fix_media_urls',
           messageIds
         }
@@ -404,39 +440,43 @@ export function useMediaUtils() {
       }
     }
   };
-
-  // Helper function for retrying operations with configurable attempts and delay
-  const withRetry = async <T>(operation: () => Promise<T>, options: {
-    maxAttempts: number;
-    delay: number;
-    retryableErrors?: string[];
-  }): Promise<T> => {
+  
+  // Now let's create a helper function for retrying operations
+  const withRetry = async <T>(
+    operation: () => Promise<T>,
+    options: {
+      maxAttempts: number;
+      delay: number;
+      retryableErrors?: string[];
+    }
+  ): Promise<T> => {
     const { maxAttempts, delay, retryableErrors = [] } = options;
     let attempt = 0;
-    let lastError: Error | null = null;
+    let lastError: Error;
     
-    const execute = async (): Promise<T> => {
+    while (attempt < maxAttempts) {
       try {
         return await operation();
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         attempt++;
         
-        const shouldRetry = retryableErrors.length === 0 ||
-          retryableErrors.some(errMsg => lastError?.message.includes(errMsg));
+        // Check if we should retry based on the error message
+        const shouldRetry = retryableErrors.length === 0 || 
+          retryableErrors.some(errMsg => lastError.message.includes(errMsg));
         
         if (attempt >= maxAttempts || !shouldRetry) {
           throw lastError;
         }
         
+        // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, delay));
-        return execute();
       }
-    };
+    }
     
-    return execute();
+    throw lastError!;
   };
-
+  
   return {
     // Media group operations
     syncMediaGroup,
@@ -448,6 +488,9 @@ export function useMediaUtils() {
     repairMediaBatch,
     standardizeStoragePaths,
     fixMediaUrls,
+    
+    // Helper functions
+    withRetry,
     
     // Loading states
     isLoading,

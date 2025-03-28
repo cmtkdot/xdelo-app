@@ -18,15 +18,6 @@ BEGIN
       NEW.is_edited = TRUE;
   END IF;
 
-  -- Ensure required parameters are set for parse-caption
-  IF NEW.caption IS NULL THEN
-    RAISE EXCEPTION 'Caption cannot be null when setting to pending state';
-  END IF;
-
-  IF NEW.id IS NULL THEN
-    RAISE EXCEPTION 'Message ID cannot be null when setting to pending state';
-  END IF;
-
   RETURN NEW; -- Return NEW because this is a BEFORE trigger
 END;
 $function$;

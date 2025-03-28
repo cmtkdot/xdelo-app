@@ -1,36 +1,37 @@
 
 import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { ChevronDown, Loader2 } from "lucide-react";
 
 interface LoadMoreButtonProps {
   onClick: () => void;
-  isLoading: boolean;
+  isLoading?: boolean;
   hasMoreItems: boolean;
 }
 
-export function LoadMoreButton({ onClick, isLoading, hasMoreItems }: LoadMoreButtonProps) {
-  if (!hasMoreItems) {
-    return null;
-  }
-
+export const LoadMoreButton = ({ 
+  onClick, 
+  isLoading = false,
+  hasMoreItems
+}: LoadMoreButtonProps) => {
+  if (!hasMoreItems) return null;
+  
   return (
-    <div className="flex justify-center mt-8">
+    <div className="w-full flex justify-center my-8">
       <Button
+        variant="outline"
+        size="lg"
         onClick={onClick}
         disabled={isLoading}
-        variant="outline"
-        className="min-w-[120px]"
+        className="px-6 py-6 rounded-full flex items-center gap-2 transition-all hover:bg-muted"
       >
         {isLoading ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Loading...
-          </>
+          <Loader2 className="h-5 w-5 animate-spin" />
         ) : (
-          'Load More'
+          <ChevronDown className="h-5 w-5" />
         )}
+        {isLoading ? "Loading..." : "Load More"}
       </Button>
     </div>
   );
-}
+};

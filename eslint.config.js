@@ -17,7 +17,7 @@ export default tseslint.config(
         React: "readonly",
       },
       parserOptions: {
-        project: "./tsconfig.app.json",
+        project: "./tsconfig.json",
       },
     },
     plugins: {

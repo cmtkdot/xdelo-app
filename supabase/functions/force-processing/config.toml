@@ -1,3 +1,0 @@
-
-project_id = "xjhhehxcxkiumnwbirel"
-verify_jwt = false  # We handle JWT verification in code with more granular control

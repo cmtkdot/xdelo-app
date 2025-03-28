@@ -1,74 +1,66 @@
 
-import { useState } from 'react';
-import { MediaProcessingState, MediaProcessingStateActions } from './types';
-
 /**
- * Creates state and actions for tracking processing message IDs
+ * Helper utilities for media operations
  */
-export function createMediaProcessingState(): [MediaProcessingState, MediaProcessingStateActions] {
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingMessageIds, setProcessingMessageIds] = useState<string[]>([]);
 
-  const addProcessingMessageId = (messageId: string) => {
-    setProcessingMessageIds(prev => {
-      if (prev.includes(messageId)) return prev;
-      return [...prev, messageId];
-    });
+// Create the media processing state hooks
+export function createMediaProcessingState() {
+  const state = {
+    isProcessing: false,
+    processingMessageIds: {} as Record<string, boolean>
   };
-
-  const removeProcessingMessageId = (messageId: string) => {
-    setProcessingMessageIds(prev => prev.filter(id => id !== messageId));
+  
+  const actions = {
+    setIsProcessing: (isProcessing: boolean) => {
+      state.isProcessing = isProcessing;
+    },
+    
+    addProcessingMessageId: (messageId: string) => {
+      state.processingMessageIds[messageId] = true;
+    },
+    
+    removeProcessingMessageId: (messageId: string) => {
+      delete state.processingMessageIds[messageId];
+    }
   };
-
-  return [
-    { isProcessing, processingMessageIds },
-    { setIsProcessing, addProcessingMessageId, removeProcessingMessageId }
-  ];
+  
+  return [state, actions] as const;
 }
 
 /**
- * Retry a function with exponential backoff
+ * Execute an operation with retry logic
  */
 export async function withRetry<T>(
-  fn: () => Promise<T>,
+  operation: () => Promise<T>,
   options: {
     maxAttempts: number;
     delay: number;
     retryableErrors?: string[];
   }
 ): Promise<T> {
-  const { maxAttempts, delay, retryableErrors } = options;
+  const { maxAttempts, delay, retryableErrors = [] } = options;
+  let attempt = 0;
+  let lastError: Error;
   
-  let lastError: any;
-  
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  while (attempt < maxAttempts) {
     try {
-      return await fn();
+      return await operation();
     } catch (error) {
-      lastError = error;
+      lastError = error instanceof Error ? error : new Error(String(error));
+      attempt++;
       
-      // Check if error is retryable
-      if (retryableErrors) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const isRetryable = retryableErrors.some(retryText => 
-          errorMessage.toLowerCase().includes(retryText.toLowerCase())
-        );
-        
-        if (!isRetryable) {
-          throw error;
-        }
+      // Check if we should retry based on the error message
+      const shouldRetry = retryableErrors.length === 0 || 
+        retryableErrors.some(errMsg => lastError.message.includes(errMsg));
+      
+      if (attempt >= maxAttempts || !shouldRetry) {
+        throw lastError;
       }
       
-      // Last attempt - don't wait, just throw
-      if (attempt === maxAttempts) {
-        throw error;
-      }
-      
-      // Wait with exponential backoff before retrying
-      const waitTime = delay * Math.pow(2, attempt - 1);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
   
-  throw lastError; // This should never happen due to the checks above
+  throw lastError!;
 }

@@ -20,7 +20,7 @@ The Telegram webhook system processes incoming messages from Telegram and stores
 | Function                     | Purpose                                                                                               | Status | Notes                            |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------- | ------ | -------------------------------- |
 | `telegram-webhook`           | Main entry point for Telegram updates. Routes messages to handlers.                                   | Active | -                                |
-| `parse-caption`             | **Core processing engine.** Polls for 'pending' messages, parses captions, updates DB, triggers sync. | Active | Uses enhanced parsing logic from `parse-caption` function. |
+| `direct-caption-processor`   | **Core processing engine.** Polls for 'pending' messages, parses captions, updates DB, triggers sync. | Active | Uses `_shared/captionParser.ts`. |
 | `media-management`           | Handles media file operations (download/upload).                                                      | Active | Called by `telegram-webhook`.    |
 | `xdelo_unified_media_repair` | Repairs missing or corrupted media.                                                                   | Active | Separate utility/process.        |
 
@@ -28,7 +28,7 @@ The Telegram webhook system processes incoming messages from Telegram and stores
 
 | Module                        | Purpose                                                   | Location            |
 | ----------------------------- | --------------------------------------------------------- | ------------------- |
-| `captionParser.ts`            | Contains enhanced `xdelo_parseCaption` function with detailed logging and error handling. | `_shared/`          |
+| `captionParser.ts`            | Contains `xdelo_parseCaption` function for parsing logic. | `_shared/`          |
 | `consolidatedMessageUtils.ts` | Shared utilities for metadata extraction, logging, etc.   | `_shared/`          |
 | `dbOperations.ts`             | DB interaction helpers for `telegram-webhook`. Implements upsert pattern for message handling. | `telegram-webhook/` |
 | `mediaStorage.ts`             | Media download/upload logic.                              | `_shared/`          |
