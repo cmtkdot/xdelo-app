@@ -1,19 +1,3 @@
-/**
- * Consolidated message utilities to centralize common functions
- * used across multiple edge functions.
- */
-// Import the shared Supabase client instead of creating a new one
-import { supabaseClient } from "./supabase.ts";
-
-/**
- * Checks if a Telegram message is forwarded.
- * @param message The Telegram message object.
- * @returns True if the message is forwarded, false otherwise.
- */
-
-/**
- * Construct a shareable message URL for a Telegram message
- */
 export function constructTelegramMessageUrl(
   chatId: number,
   messageId: number

@@ -104,18 +104,13 @@ export async function handleMediaMessage(
       chat_id: message.chat?.id,
     });
 
-    // Also log to database for tracking
+    // Also log to database for tracking using 4-arg wrapper
     try {
       await xdelo_logProcessingEvent(
-        "media_processing_error",
-        message.message_id.toString(),
-        context.correlationId,
-        {
-          message_id: message.message_id,
-          chat_id: message.chat?.id,
-          error: errorMessage,
-        },
-        errorMessage
+        "media_processing_error", // eventType
+        message.message_id.toString(), // entityId
+        context.correlationId, // correlationId
+        errorMessage // errorMessage
       );
     } catch (logError: unknown) { // Added type annotation
       const logErrorMessage = logError instanceof Error ? logError.message : String(logError);
@@ -262,19 +257,13 @@ async function xdelo_handleEditedMediaMessage(
           );
         }
 
-        // Log the edit operation
+        // Log the edit operation using 4-arg wrapper
         try {
           await xdelo_logProcessingEvent(
-            "message_media_edited",
-            existingMessage.id,
-            correlationId,
-            {
-              message_id: message.message_id,
-              chat_id: message.chat.id,
-              file_id: telegramFile.file_id,
-              file_unique_id: telegramFile.file_unique_id,
-              storage_path: mediaProcessResult.fileInfo.storage_path,
-            }
+            "message_media_edited", // eventType
+            existingMessage.id, // entityId
+            correlationId, // correlationId
+            undefined // errorMessage
           );
         } catch (logError: unknown) { // Added type annotation
           const logErrorMessage = logError instanceof Error ? logError.message : String(logError);
@@ -319,18 +308,13 @@ async function xdelo_handleEditedMediaMessage(
         );
       }
 
-      // Log the caption edit
+      // Log the caption edit using 4-arg wrapper
       try {
         await xdelo_logProcessingEvent(
-          "message_caption_edited",
-          existingMessage.id,
-          correlationId,
-          {
-            message_id: message.message_id,
-            chat_id: message.chat.id,
-            previous_caption: existingMessage.caption,
-            new_caption: message.caption,
-          }
+          "message_caption_edited", // eventType
+          existingMessage.id, // entityId
+          correlationId, // correlationId
+          undefined // errorMessage
         );
       } catch (logError: unknown) { // Added type annotation
         const logErrorMessage = logError instanceof Error ? logError.message : String(logError);
@@ -361,17 +345,13 @@ async function xdelo_handleEditedMediaMessage(
         logger?.warn(`Failed to update edit metadata: ${updateError.message}`);
       }
 
-      // Log the edit operation anyway
+      // Log the edit operation anyway using 4-arg wrapper
       try {
         await xdelo_logProcessingEvent(
-          "message_edit_received",
-          existingMessage.id,
-          correlationId,
-          {
-            message_id: message.message_id,
-            chat_id: message.chat.id,
-            no_changes: true,
-          }
+          "message_edit_received", // eventType
+          existingMessage.id, // entityId
+          correlationId, // correlationId
+          undefined // errorMessage
         );
       } catch (logError: unknown) { // Added type annotation
         const logErrorMessage = logError instanceof Error ? logError.message : String(logError);
@@ -544,8 +524,8 @@ async function xdelo_handleNewMediaMessage(
       duplicate_reference_id: undefined, // Set to original message ID if duplicate
     };
 
+    // Remove supabaseClient argument from createMessage call
     const result = await createMessage(
-      supabaseClient,
       enhancedMessageInput,
       logger
     );
@@ -564,16 +544,12 @@ async function xdelo_handleNewMediaMessage(
         chat_id: message.chat.id,
       });
 
-      // Also try to log to the database
+      // Also try to log to the database using 4-arg wrapper
       await xdelo_logProcessingEvent(
-        "message_creation_failed",
-        message.message_id.toString(),
-        correlationId,
-        {
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          error: result.error_message,
-        }
+        "message_creation_failed", // eventType
+        message.message_id.toString(), // entityId
+        correlationId, // correlationId
+        result.error_message // errorMessage
       );
 
       throw new Error(
@@ -646,20 +622,13 @@ async function xdelo_handleNewMediaMessage(
       }
     );
 
-    // Log detailed error to database
+    // Log detailed error to database using 4-arg wrapper
     try {
       await xdelo_logProcessingEvent(
-        "media_processing_error",
-        message.message_id.toString(),
-        correlationId,
-        {
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          error: createErrorMessage,
-          stack: createError instanceof Error ? createError.stack : undefined,
-          media_group_id: message.media_group_id,
-        },
-        createErrorMessage
+        "media_processing_error", // eventType
+        message.message_id.toString(), // entityId
+        correlationId, // correlationId
+        createErrorMessage // errorMessage
       );
     } catch (logError: unknown) { // Added type annotation
       const logErrorMessage = logError instanceof Error ? logError.message : String(logError);

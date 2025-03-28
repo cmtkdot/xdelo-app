@@ -1,13 +1,4 @@
-// Import the shared singleton client instead of creating a new one
-import { supabaseClient } from './supabase.ts';
 
-// Removed local Supabase client creation
-
-// Removed redundant xdelo_logProcessingEvent function.
-// Use logProcessingEvent from consolidatedMessageUtils.ts instead.
-
-
-/**
  * Update message processing state
  */
 export async function updateMessageState(
