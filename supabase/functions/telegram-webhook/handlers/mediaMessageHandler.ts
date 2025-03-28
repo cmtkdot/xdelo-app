@@ -373,7 +373,6 @@ async function xdelo_handleNewMediaMessage(
         .select('id, processing_state')
         .eq('media_group_id', message.media_group_id)
         .eq('file_unique_id', telegramFile.file_unique_id)
-        .neq('id', existingMessage?.id || '')
         .maybeSingle();
 
       if (lookupError) {
