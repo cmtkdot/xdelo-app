@@ -20,7 +20,7 @@ The Telegram webhook system processes incoming messages from Telegram and stores
 | Function                     | Purpose                                                                                               | Status | Notes                            |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------- | ------ | -------------------------------- |
 | `telegram-webhook`           | Main entry point for Telegram updates. Routes messages to handlers.                                   | Active | -                                |
-| `direct-caption-processor`   | **Core processing engine.** Polls for 'pending' messages, parses captions, updates DB, triggers sync. | Active | Uses `_shared/captionParser.ts`. |
+| `parse-caption`             | **Core processing engine.** Polls for 'pending' messages, parses captions, updates DB, triggers sync. | Active | Uses enhanced parsing logic from `parse-caption` function. |
 | `media-management`           | Handles media file operations (download/upload).                                                      | Active | Called by `telegram-webhook`.    |
 | `xdelo_unified_media_repair` | Repairs missing or corrupted media.                                                                   | Active | Separate utility/process.        |
 
