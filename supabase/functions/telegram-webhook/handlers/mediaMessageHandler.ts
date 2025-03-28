@@ -118,24 +118,34 @@ async function handleEditedMediaMessage(
       throw new Error(`Failed to process media during edit: ${mediaResult.error}`);
     }
 
-    // Call the duplicate handler which will handle edits too
-    const editResult = await supabaseClient.rpc('md_handle_duplicate_media_message', {
-      file_unique_id: mediaResult.mediaData.file_unique_id,
-      chat_id: message.chat.id,
-      telegram_message_id: message.message_id,
-      media_data: {
+    // Call the enhanced duplicate handler which handles both edits and duplicates
+    const { data: editResult, error } = await supabaseClient.rpc('md_handle_duplicate_media_message', {
+      p_file_unique_id: mediaResult.mediaData.file_unique_id,
+      p_chat_id: message.chat.id,
+      p_telegram_message_id: message.message_id,
+      p_media_data: {
         ...mediaResult.mediaData,
         is_edit: true,
         edit_source: editSource,
-        is_channel_post: isChannelPost
+        is_channel_post: isChannelPost,
+        correlation_id: correlationId,
+        telegram_data: message // Include full original message
       }
-    });
+    }).select('*').single();
 
-    if (!editResult.success) {
-      throw new Error(`Failed to update message: ${editResult.error}`);
+    if (error) {
+      throw new Error(`Failed to update message: ${error.message}`);
     }
 
-    logger?.success(`Successfully updated message ${existingMessageId}`);
+    if (!editResult || editResult.status === 'error') {
+      throw new Error(editResult?.message || 'Unknown error during message edit');
+    }
+
+    logger?.success(`Successfully processed message edit`, {
+      message_id: existingMessageId,
+      status: editResult.status,
+      edit_count: editResult.edit_count
+    });
 
     // Log edit event
     await logEvent(
@@ -145,17 +155,20 @@ async function handleEditedMediaMessage(
       {
         edit_history_id: editResult.edit_history_id,
         message_id: message.message_id,
-        chat_id: message.chat.id
+        chat_id: message.chat.id,
+        status: editResult.status,
+        needs_processing: editResult.needs_processing
       }
     );
 
     return {
       success: true,
       id: existingMessageId,
-      status: 'updated',
+      status: editResult.status,
       action: 'updated',
       editHistoryId: editResult.edit_history_id,
-      editCount: editResult.edit_count
+      editCount: editResult.edit_count,
+      needsProcessing: editResult.needs_processing
     };
   } else {
     // If message not found, handle as new message with is_edit flag
