@@ -1,146 +1,240 @@
-# Telegram Webhook Processing Flow
 
-This document outlines the architecture, data flow, and components of the Telegram webhook system.
+# Telegram Webhook Flow Documentation
 
-## Overview
+This document provides a comprehensive overview of the Telegram webhook implementation, including how it handles different types of messages, stores media, manages message edits, tracks forwarded messages, and handles duplicate detection.
 
-The Telegram webhook system processes incoming messages from Telegram and stores them in the database. It handles:
+## System Architecture
 
-1. Media messages (photos, videos, documents)
-2. Text messages
-3. Caption parsing and analysis
-4. Media group synchronization
-5. Forwarded messages
-6. Edited messages
-
-## Architecture Components (Hybrid Plan)
-
-### Edge Functions
-
-| Function                     | Purpose                                                                                               | Status | Notes                            |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------- | ------ | -------------------------------- |
-| `telegram-webhook`           | Main entry point for Telegram updates. Routes messages to handlers.                                   | Active | -                                |
-| `direct-caption-processor`   | **Core processing engine.** Polls for 'pending' messages, parses captions, updates DB, triggers sync. | Active | Uses `_shared/captionParser.ts`. |
-| `media-management`           | Handles media file operations (download/upload).                                                      | Active | Called by `telegram-webhook`.    |
-| `xdelo_unified_media_repair` | Repairs missing or corrupted media.                                                                   | Active | Separate utility/process.        |
-
-### Shared Code
-
-| Module                        | Purpose                                                   | Location            |
-| ----------------------------- | --------------------------------------------------------- | ------------------- |
-| `captionParser.ts`            | Contains `xdelo_parseCaption` function for parsing logic. | `_shared/`          |
-| `consolidatedMessageUtils.ts` | Shared utilities for metadata extraction, logging, etc.   | `_shared/`          |
-| `dbOperations.ts`             | DB interaction helpers for `telegram-webhook`. Implements upsert pattern for message handling. | `telegram-webhook/` |
-| `mediaStorage.ts`             | Media download/upload logic.                              | `_shared/`          |
-
-### Database Functions
-
-| Function                            | Purpose                                                           | Status | Notes                                   |
-| ----------------------------------- | ----------------------------------------------------------------- | ------ | --------------------------------------- |
-| `xdelo_extract_telegram_metadata`   | Extracts essential data from telegram_data JSON.                  | Active | Called by DB triggers.                  |
-| `xdelo_set_caption_pending_trigger` | Sets `processing_state` to 'pending' for messages with captions.  | Active | Called by `trg_process_caption`.        |
-| `xdelo_sync_media_group_content`    | Synchronizes `analyzed_content` across media group members.       | Active | Called by `direct-caption-processor`.   |
-| `xdelo_recheck_media_groups`        | Safety net: Periodically finds & fixes inconsistent media groups. | Active | Called by `pg_cron`.                    |
-| `xdelo_sync_incomplete_media_group` | Helper for `xdelo_recheck_media_groups`.                          | Active | Called by `xdelo_recheck_media_groups`. |
-| `xdelo_reset_stalled_messages`      | Safety net: Periodically resets messages stuck in 'processing'.   | Active | Called by `pg_cron`.                    |
-| `set_public_url`                    | Generates public URLs for stored media.                           | Active | Called by `set_public_url` trigger.     |
-
-### Database Triggers
-
-| Trigger                           | Function                            | Event                           | Purpose                                    | Status | Notes                   |
-| --------------------------------- | ----------------------------------- | ------------------------------- | ------------------------------------------ | ------ | ----------------------- |
-| `trg_process_caption`             | `xdelo_set_caption_pending_trigger` | BEFORE INSERT/UPDATE OF caption | Sets state to 'pending' if caption exists. | Active | Core part of new flow.  |
-| `set_public_url`                  | `set_public_url`                    | BEFORE INSERT/UPDATE            | Generates public URLs.                     | Active | Unchanged.              |
-| `trg_handle_telegram_data_insert` | `handle_telegram_data_insert`       | BEFORE INSERT                   | Sets telegram_metadata                     | Active | Extracts metadata.      |
-| `trg_handle_telegram_data_update` | `handle_telegram_data_update`       | BEFORE UPDATE                   | Updates telegram_metadata                  | Active | Keeps metadata in sync. |
-
-## Data Flow (Hybrid Plan)
-
-### Overall Message Flow
-
-```mermaid
-sequenceDiagram
-    participant T as Telegram
-    participant W as telegram-webhook
-    participant DB as Database (Messages Table)
-    participant TRG as trg_process_caption
-    participant EF as direct-caption-processor
-    participant P as _shared/captionParser.ts
-    participant SYNC as xdelo_sync_media_group_content (DB Fn)
-
-    T->>W: Message Update (New/Edit)
-    W->>DB: createMessage() (Upsert by telegram_message_id + chat_id)
-    Note over DB,TRG: IF caption exists/changed THEN trigger fires BEFORE save
-    TRG->>DB: Set state='pending', start_time=NOW()
-    DB-->>W: Upsert Complete (Message ID)
-    W-->>T: Acknowledge Receipt (HTTP 200)
-
-    Note right of EF: Runs periodically (e.g., cron/timer)
-    EF->>DB: Query for state='pending' (Batch)
-    DB-->>EF: Pending Message(s)
-    loop For Each Pending Message
-        EF->>DB: Atomic UPDATE state='processing' WHERE state='pending'
-        alt Lock Successful
-            EF->>P: xdelo_parseCaption(caption)
-            P-->>EF: analyzedContent / Error
-            alt Parse Success
-                EF->>DB: UPDATE analyzed_content, state='completed'
-                alt Is Media Group
-                    EF->>SYNC: Call RPC(message_id, media_group_id)
-                    SYNC->>DB: Update Group Members
-                    SYNC-->>EF: Sync Result
-                end
-            else Parse Error
-                EF->>DB: UPDATE state='error', error_message
-            end
-        else Lock Failed (Another instance processing)
-            EF->>EF: Skip message
-        end
-    end
-```
-
-### Safety Net Flows
+The Telegram webhook is implemented as a Supabase Edge Function that receives updates from the Telegram Bot API whenever a new message is sent to the bot. The system follows this high-level architecture:
 
 ```mermaid
 graph TD
-    subgraph Stalled Message Reset
-        CRON1[pg_cron Schedule] --> RF1[xdelo_reset_stalled_messages()]
-        RF1 --> DB1[Query messages WHERE state='processing' AND started_at < timeout]
-        DB1 --> RF1
-        RF1 --> DB2[UPDATE state='pending']
-    end
-
-    subgraph Inconsistent Group Check
-        CRON2[pg_cron Schedule] --> RF2[xdelo_recheck_media_groups()]
-        RF2 --> DB3[Find groups with mixed states]
-        DB3 --> RF2
-        RF2 --> RF3[xdelo_sync_incomplete_media_group(group_id)]
-        RF3 --> DB4[Find source message in group]
-        DB4 --> RF3
-        RF3 --> DB5[UPDATE incomplete messages in group]
-    end
+    A[Telegram Bot API] -->|Webhook Event| B[Supabase Edge Function]
+    B -->|Parse & Route| C{Message Type}
+    C -->|Media| D[Media Handler]
+    C -->|Text| E[Text Handler]
+    C -->|Edited| F[Edit Handler]
+    D --> G[Media Storage]
+    D --> H[Database: messages]
+    E --> I[Database: other_messages]
+    F --> J{Contains Media?}
+    J -->|Yes| D
+    J -->|No| E
+    H --> K[Caption Analysis]
+    H --> L[Media Group Sync]
+    H --> M[Audit Logging]
 ```
 
-## Message Processing States (Hybrid Plan)
+## Webhook Entry Point
 
-- `initialized`: Initial state after message is stored by webhook.
-- `pending`: Caption exists, ready for processing by `direct-caption-processor`. Set by `trg_process_caption`.
-- `processing`: Actively being processed by an instance of `direct-caption-processor`. Set by `direct-caption-processor`.
-- `completed`: Processing and parsing successful. `analyzed_content` is populated. Set by `direct-caption-processor` or `xdelo_sync_media_group_content`.
-- `error`: Processing failed. `error_message` field contains details. Set by `direct-caption-processor`.
+The primary entry point is `index.ts`, which receives all webhook events from Telegram, identifies the message type, and routes it to the appropriate handler:
 
-## Metadata Extraction
+1. **Initialization**: Creates a correlation ID for request tracing
+2. **Message Extraction**: Extracts message data from various update types
+3. **Context Building**: Determines message context (forwarded, edited, channel post)
+4. **Routing**: Routes to appropriate handler based on message type
+   - Media messages → `handleMediaMessage`
+   - Edited messages → `handleEditedMessage`
+   - Other messages → `handleOtherMessage`
 
-- All incoming messages have their `telegram_metadata` extracted from the full `telegram_data` JSON.
-- This extraction happens automatically via the `trg_handle_telegram_data_insert` and `trg_handle_telegram_data_update` triggers.
-- The metadata extraction function `xdelo_extract_telegram_metadata` keeps only essential fields, reducing storage requirements.
-- Having this metadata extracted makes queries faster and reduces load on the database.
+## Message Types & Handling
 
-## Error Recovery
+### Media Messages
 
-The system has multiple layers of error recovery:
+Media messages (photos, videos, documents) are processed by `mediaMessageHandler.ts`:
 
-1. **Worker Pattern**: The direct-caption-processor uses atomic updates to lock messages, preventing duplicate processing.
-2. **Stalled Message Detection**: A pg_cron job periodically resets messages stuck in 'processing' for too long.
-3. **Media Group Consistency**: A separate pg_cron job finds and fixes inconsistencies in media groups.
-4. **System Repair Tools**: UI tools are available for administrators to manually reset stuck messages or recheck media groups.
+1. **MIME Type Detection**: Accurately determines file type based on Telegram message structure
+2. **Duplicate Detection**: Checks if the file has been seen before (based on `file_unique_id`)
+3. **Media Download**: Downloads media from Telegram to Supabase Storage with proper content-type
+4. **Storage Path Generation**: Creates standardized paths based on file ID and correct extension
+5. **Database Storage**: Stores metadata in the `messages` table
+6. **Caption Processing**: Extracts product information from captions
+
+Media Group handling:
+- Messages with the same `media_group_id` are treated as a group
+- Caption from one message can be synchronized across the group
+- Media groups are identified and linked together
+
+### Edited Messages
+
+Edited messages are processed by `editedMessageHandler.ts`:
+
+1. **Original Message Lookup**: Finds the original message in the database
+2. **Edit Tracking**: Records edit history including:
+   - Previous caption/content
+   - Edit timestamp
+   - Changes in media (if applicable)
+3. **Media Changes**: If media was replaced:
+   - Downloads new media from Telegram with accurate MIME type detection
+   - Updates storage and database records
+   - Preserves edit history
+4. **Caption**: always reprocess and update caption
+   - Reset the caption and parsing and media group syncing logic 
+   - Updates caption in database set procesing state back to processing if it has a caption
+   - Reprocesses caption for product information
+   - Synchronizes changes across media groups
+
+### Text Messages
+
+Non-media messages are processed by `textMessageHandler.ts`:
+
+1. **Database Storage**: Stored in the `other_messages` table
+2. **Edit Handling**: For edited text messages:
+   - Maintains edit history
+   - Updates message content
+   - Records edit metadata
+3. Falls back to just storing the telegram webhook data as a jsonb as a error handling
+
+## Forwarded Messages
+
+Forwarded messages have special handling:
+
+1. **Origin Detection**: Identifies message source:
+   - Original chat ID
+   - Original message ID
+   - Forward source (user, channel)
+2. **Metadata Storage**: Records forward information in the `forward_info` field
+3. **Relationship Tracking**: Maintains relationships between original and forwarded content
+4. Update the caption and analyzed_content product info with the new info from the forwarded content if it has a duplicate then sync changes with media group
+
+## Media Storage & Management
+
+Media files are managed by `mediaUtils.ts`:
+
+1. **Enhanced MIME Type Detection**:
+   - Analyzes Telegram message structure for accurate file type identification
+   - Handles all media types: photos, videos, documents, stickers, etc.
+   - Uses fallback detection based on file extensions when needed
+2. **Download Process**:
+   - Retrieves file information from Telegram
+   - Downloads the actual file content with proper MIME type detection
+   - Uses retry logic with exponential backoff
+   - Handles timeouts and network errors
+3. **Storage Organization**:
+   - Files are stored using their `file_unique_id` as a unique identifier
+   - File extensions are derived from accurate MIME types
+   - Standardized storage paths ensure consistency
+4. **Content Disposition**:
+   - Viewable media (images, videos) set as "inline"
+   - Documents set as "attachment" for downloading
+
+## Media Repair Capabilities
+
+The system includes robust media repair functionality:
+
+1. **Storage Verification**: Checks if files exist in storage
+2. **MIME Type Correction**: Fixes incorrect content types
+3. **Path Standardization**: Ensures consistent path formatting
+4. **Redownload**: Can re-fetch files from Telegram when needed
+5. **Batch Processing**: Can repair individual files or entire media groups
+6. **Content-Type Fixing**: Updates content-disposition for proper display
+
+## Database Schema
+
+### Messages Table
+
+Stores media messages with fields:
+
+```
+- id: UUID (primary key)
+- telegram_message_id: int (Telegram's message identifier)
+- chat_id: int (Telegram chat identifier)
+- chat_type: string (group, private, channel)
+- chat_title: string (optional, for groups/channels)
+- media_group_id: string (optional, for grouped media)
+- caption: string (optional message caption)
+- file_id: string (Telegram file identifier)
+- file_unique_id: string (Telegram's permanent unique file ID)
+- mime_type: string (e.g., image/jpeg, video/mp4)
+- mime_type_original: string (original mime type from Telegram)
+- mime_type_verified: boolean (whether mime type is verified)
+- file_size: int (bytes)
+- width/height: int (for photos/videos)
+- duration: int (for videos, in seconds)
+- storage_path: string (location in Supabase Storage)
+- public_url: string (direct URL to media)
+- content_disposition: string ('inline' or 'attachment')
+- processing_state: enum ('pending', 'processing', 'completed', 'error')
+- analyzed_content: JSON (extracted product data)
+- old_analyzed_content: JSON array (history of product data from edits)
+- telegram_data: JSON (full Telegram message data)
+- forward_info: JSON (metadata about forwarded messages)
+- edit_history: JSON array (record of edits)
+- edit_count: int (number of edits)
+- needs_redownload: boolean (flag for failed downloads)
+- redownload_reason: string (why redownload is needed)
+- storage_exists: boolean (verification flag)
+- storage_path_standardized: boolean (if path follows standards)
+```
+
+### Other Messages Table
+
+Stores non-media messages with fields:
+
+```
+- id: UUID (primary key)
+- telegram_message_id: int
+- chat_id: int
+- chat_type: string
+- chat_title: string (optional)
+- message_type: string
+- message_text: string
+- telegram_data: JSON
+- processing_state: enum ('pending', 'processing', 'completed', 'error')
+- is_forward: boolean
+- edit_history: JSON array
+- edit_count: int
+- correlation_id: string (for request tracing)
+```
+
+### Unified Audit Logs
+
+Records all operations for tracking and debugging:
+
+```
+- id: UUID (primary key)
+- event_type: string (e.g., 'message_created', 'processing_state_changed')
+- entity_id: UUID (reference to message)
+- telegram_message_id: int
+- chat_id: int
+- previous_state: JSON (state before change)
+- new_state: JSON (state after change)
+- metadata: JSON (contextual information)
+- event_timestamp: timestamp
+- correlation_id: string
+```
+
+## Duplicate Detection
+
+The system prevents duplicate message storage through:
+
+1. **File Uniqueness Check**: Using Telegram's `file_unique_id` as a stable identifier
+2. **Database Lookup**: Checking if file has been previously processed
+3. **Smart Reuse**: If duplicate is detected:
+   - Uses existing storage path and file information
+   - Updates message metadata if needed
+   - Links to existing file rather than re-downloading
+
+## Audit Logging
+
+All operations are logged for traceability using the `unified_audit_logs` table:
+
+1. **Event Tracking**:
+   - Message creation/modification
+   - Processing state changes
+   - File operations
+   - Analysis results
+2. **Logging Context**:
+   - Records both previous and new states
+   - Tracks correlation IDs for request tracing
+   - Preserves event timestamps
+   - Maintains entity relationships
+
+## Media Group Synchronization
+
+For media groups (multiple files sent together):
+
+1. **Group Detection**: Messages with the same `media_group_id` are linked
+2. **Caption Propagation**: Caption from one message can be applied to all group members
+3. **Shared Analysis**: Product data extracted from caption is synchronized
+4. **Edit Consistency**: Edits to one group member can propagate to others

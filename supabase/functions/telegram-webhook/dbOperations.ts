@@ -1,642 +1,615 @@
-import {
-  createSupabaseClient,
-  extractTelegramMetadata,
-  logProcessingEvent,
-} from "../_shared/consolidatedMessageUtils.ts";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { ProcessingState, Message, AnalyzedContent } from "../_shared/types.ts";
+import { MessageInput, ForwardInfo } from "./types.ts";
 
-/**
- * Enhanced Supabase client with improved timeout and retry capabilities
- */
-export const supabaseClient = createSupabaseClient({
-  supabaseUrl: Deno.env.get("SUPABASE_URL"),
-  supabaseKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
-});
-
-/**
- * Legacy wrapper function for backwards compatibility
- */
-export async function xdelo_logProcessingEvent(
-  eventType: string,
-  entityId: string,
-  correlationId: string,
-  metadata: Record<string, unknown> = {},
-  errorMessage?: string
-): Promise<void> {
-  await logProcessingEvent(
-    eventType,
-    entityId,
-    correlationId,
-    metadata,
-    errorMessage
-  );
-}
-
-/**
- * Check if a message with the same Telegram message ID already exists in the database
- */
-export async function checkDuplicateMessage(
-  chatId: number,
-  telegramMessageId: number
-): Promise<boolean> {
-  const { data, error } = await supabaseClient
-    .from("messages")
-    .select("id")
-    .eq("chat_id", chatId)
-    .eq("telegram_message_id", telegramMessageId)
-    .limit(1);
-
-  if (error) {
-    console.error("Error checking for duplicate message:", error);
-    return false;
-  }
-
-  return data && data.length > 0;
-}
-
-/**
- * Check if a file with the same Telegram message ID already exists in the database
- * @param client Supabase client instance
- * @param telegramMessageId Telegram message ID
- * @param chatId Chat ID
- * @returns Boolean indicating if the file is a duplicate
- */
-export async function checkDuplicateFile(
-  client: any,
-  telegramMessageId: number,
-  chatId: number
-): Promise<boolean> {
-  const { data, error } = await client
-    .from("messages")
-    .select("id")
-    .eq("chat_id", chatId)
-    .eq("telegram_message_id", telegramMessageId)
-    .limit(1);
-
-  if (error) {
-    console.error("Error checking for duplicate file:", error);
-    return false;
-  }
-
-  return data && data.length > 0;
-}
-
-/**
- * Creates a new non-media message record in the database with transaction support
- */
-export async function createNonMediaMessage(
-  client: any,
-  input: {
-    telegram_message_id: number;
-    chat_id: number;
-    chat_type: string;
-    chat_title?: string;
-    message_type: string;
-    message_text?: string;
-    telegram_data: any;
-    telegram_metadata?: any;
-    processing_state?: string;
-    is_forward?: boolean;
-    correlation_id: string;
-    message_url?: string;
-  },
-  logger?: any
-): Promise<{ id?: string; success: boolean; error?: string }> {
-  try {
-    // If telegram_metadata is not provided, extract it from telegram_data
-    const telegramMetadata =
-      input.telegram_metadata || extractTelegramMetadata(input.telegram_data);
-
-    // Create the message record using the other_messages table
-    const { data, error } = await client
-      .from("other_messages")
-      .insert({
-        telegram_message_id: input.telegram_message_id,
-        chat_id: input.chat_id,
-        chat_type: input.chat_type,
-        chat_title: input.chat_title,
-        message_type: input.message_type,
-        text: input.message_text || "",
-        telegram_data: input.telegram_data,
-        telegram_metadata: telegramMetadata,
-        processing_state: input.processing_state || "initialized",
-        is_forward: input.is_forward || false,
-        correlation_id: input.correlation_id,
-        message_url: input.message_url,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
-
-    if (error) {
-      logger?.error("Failed to create non-media message record:", error);
-      return { success: false, error: error.message };
-    }
-
-    return { id: data.id, success: true };
-  } catch (error) {
-    logger?.error("Exception in createNonMediaMessage:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Creates a new media message record in the database with transaction support
- */
-export async function createMediaMessage(input: {
+interface BaseMessageRecord {
+  id: string;
   telegram_message_id: number;
   chat_id: number;
   chat_type: string;
   chat_title?: string;
+  correlation_id: string;
+  processing_state: ProcessingState;
+  processing_started_at?: string;
+  processing_completed_at?: string;
+  analyzed_content?: AnalyzedContent;
+  old_analyzed_content?: AnalyzedContent[];
+  error_message?: string;
+  created_at: string;
+  updated_at: string;
+  telegram_data: Record<string, unknown>;
+  edit_history?: Record<string, unknown>[];
+  edit_count?: number;
+  is_edited_channel_post?: boolean;
+  forward_info?: ForwardInfo;
+  edit_date?: string;
+  user_id?: string;
+  retry_count?: number;
+  last_error_at?: string;
+}
+
+interface MediaMessage extends BaseMessageRecord {
+  media_group_id?: string;
+  message_caption_id?: string;
+  is_original_caption?: boolean;
+  group_caption_synced?: boolean;
   caption?: string;
   file_id: string;
   file_unique_id: string;
-  media_group_id?: string;
   mime_type?: string;
   file_size?: number;
   width?: number;
   height?: number;
   duration?: number;
-  storage_path?: string;
-  public_url?: string;
-  telegram_data: any;
-  processing_state?: string;
-  is_forward?: boolean;
-  correlation_id: string;
-  message_url?: string;
-}): Promise<{ id?: string; success: boolean; error?: string }> {
-  try {
-    // Extract essential metadata only
-    const telegramMetadata = extractTelegramMetadata(input.telegram_data);
+  group_message_count?: number;
+  group_first_message_time?: string;
+  group_last_message_time?: string;
+}
 
-    // Create the message record
-    const { data, error } = await supabaseClient
-      .from("messages")
-      .insert({
-        telegram_message_id: input.telegram_message_id,
-        chat_id: input.chat_id,
-        chat_type: input.chat_type,
-        chat_title: input.chat_title,
-        caption: input.caption || "",
-        file_id: input.file_id,
-        file_unique_id: input.file_unique_id,
-        media_group_id: input.media_group_id,
-        mime_type: input.mime_type,
-        file_size: input.file_size,
-        width: input.width,
-        height: input.height,
-        duration: input.duration,
-        storage_path: input.storage_path,
-        public_url: input.public_url,
-        telegram_metadata: telegramMetadata,
-        processing_state: input.processing_state || "initialized",
-        is_forward: input.is_forward || false,
-        correlation_id: input.correlation_id,
-        message_url: input.message_url,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
+interface NonMediaMessage extends BaseMessageRecord {
+  message_type: string;
+  message_text?: string;
+  product_name?: string;
+  product_code?: string;
+  vendor_uid?: string;
+  product_quantity?: number;
+  purchase_date?: string;
+  notes?: string;
+}
 
-    if (error) {
-      console.error("Failed to create media message record:", error);
-      return { success: false, error: error.message };
-    }
+interface MessageResponse {
+  id: string;
+  success: boolean;
+  error_message?: string;
+  error_code?: string;
+}
 
-    return { id: data.id, success: true };
-  } catch (error) {
-    console.error("Exception in createMediaMessage:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+interface UpdateProcessingStateParams {
+  messageId: string;
+  state: ProcessingState;
+  analyzedContent?: AnalyzedContent;
+  error?: string;
+  processingStarted?: boolean;
+  processingCompleted?: boolean;
+}
+
+interface LoggerInterface {
+  error: (message: string, error: unknown) => void;
+  info?: (message: string, data?: unknown) => void;
+  warn?: (message: string, data?: unknown) => void;
 }
 
 /**
- * Creates a new message record in the database
- * This is a unified function that handles both media and non-media messages
- * with improved duplicate handling and recovery
+ * Create a media message with duplicate detection based on file_unique_id
  */
 export async function createMessage(
-  client: any,
-  input: any,
-  logger?: any
-): Promise<{ id?: string; success: boolean; error_message?: string; duplicate?: boolean }> {
+  supabase: SupabaseClient,
+  messageData: MessageInput,
+  logger: LoggerInterface
+): Promise<MessageResponse> {
   try {
-    // Set a longer timeout for complex operations
-    const options = { timeoutMs: 30000 };
-
-    // Extract essential metadata
-    const telegramMetadata =
-      input.telegram_metadata ||
-      (input.telegram_data ? extractTelegramMetadata(input.telegram_data) : {});
-
-    // Prepare the full record data for upsert
-    const fullRecordData: Record<string, any> = {
-      telegram_message_id: input.telegram_message_id,
-      chat_id: input.chat_id,
-      chat_type: input.chat_type,
-      chat_title: input.chat_title,
-      caption: input.caption || "",
-      text: input.text || input.message_text || "",
-      file_id: input.file_id,
-      file_unique_id: input.file_unique_id,
-      media_group_id: input.media_group_id,
-      mime_type: input.mime_type,
-      mime_type_original: input.mime_type_original,
-      file_size: input.file_size,
-      width: input.width,
-      height: input.height,
-      duration: input.duration,
-      storage_path: input.storage_path,
-      public_url: input.public_url,
-      processing_state: input.processing_state || "initialized",
-      is_forward: input.is_forward || false,
-      is_edited_channel_post: input.is_edited_channel_post || false,
-      correlation_id: input.correlation_id,
-      message_url: input.message_url,
-      is_duplicate: input.is_duplicate || false,
-      duplicate_reference_id: input.duplicate_reference_id,
-      old_analyzed_content: input.old_analyzed_content,
-      telegram_data: input.telegram_data,
-      telegram_metadata: telegramMetadata,
-      forward_info: input.forward_info,
-      edit_date: input.edit_date,
-      edit_history: input.edit_history || [],
-      storage_exists: input.storage_exists,
-      storage_path_standardized: input.storage_path_standardized,
-      updated_at: new Date().toISOString(),
-    };
-
-    // First, check if this exact message already exists
-    let { data: existingMessage, error: lookupError } = await client
-      .from("messages")
-      .select("id")
-      .eq("telegram_message_id", input.telegram_message_id)
-      .eq("chat_id", input.chat_id)
-      .maybeSingle();
-
-    if (lookupError) {
-      logger?.error("Error looking up existing message:", lookupError);
-      return { success: false, error_message: lookupError.message };
+    // Ensure correlation_id is stored as string
+    const correlationId = messageData.correlation_id ? 
+      messageData.correlation_id.toString() : 
+      crypto.randomUUID().toString();
+    
+    // Validate required fields
+    if (!messageData.file_unique_id) {
+      throw new Error("Missing required field: file_unique_id");
     }
-
-    // If we have a file_unique_id, also check for duplicate files
-    let duplicateFileReference = null;
-    if (input.file_unique_id && !existingMessage) {
-      const { data: duplicateFile, error: fileCheckError } = await client
-        .from("messages")
-        .select("id, telegram_message_id, chat_id, processing_state, created_at")
-        .eq("file_unique_id", input.file_unique_id)
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      if (fileCheckError) {
-        logger?.error("Error checking for duplicate file:", fileCheckError);
-      } else if (duplicateFile && duplicateFile.length > 0) {
-        duplicateFileReference = duplicateFile[0];
-        logger?.info(`Found existing file with same file_unique_id: ${duplicateFileReference.id}`);
-        
-        // If this is a resend of the same file in the same chat, treat it as an existing message
-        if (duplicateFileReference.chat_id === input.chat_id) {
-          existingMessage = { id: duplicateFileReference.id };
-          logger?.info(`Treating as existing message since it's in the same chat: ${existingMessage.id}`);
-        }
-      }
+    
+    if (!messageData.chat_id) {
+      throw new Error("Missing required field: chat_id");
     }
+    
+    if (!messageData.telegram_message_id) {
+      throw new Error("Missing required field: telegram_message_id");
+    }
+    
+    if (!messageData.storage_path) {
+      throw new Error("Missing required field: storage_path");
+    }
+    
+    if (!messageData.public_url) {
+      throw new Error("Missing required field: public_url");
+    }
+    
+    logger.info?.('Creating message with correlation_id', { 
+      correlation_id: correlationId,
+      file_unique_id: messageData.file_unique_id
+    });
 
-    let messageId: string | undefined;
-
-    if (existingMessage) {
-      // Update existing message
-      logger?.info(
-        `Found existing message ${existingMessage.id}, updating with new data.`
-      );
-      const { error: updateError } = await client
-        .from("messages")
-        .update(fullRecordData)
-        .eq("id", existingMessage.id);
-
-      if (updateError) {
-        logger?.error("Failed to update existing message:", updateError);
-        return { success: false, error_message: updateError.message };
+    // First check if a message with this file_unique_id already exists
+    // This is our primary duplicate detection mechanism
+    if (messageData.file_unique_id) {
+      const { data: existingFile, error: queryError } = await supabase
+        .from('messages')
+        .select('id, file_unique_id, storage_path, telegram_message_id, chat_id, public_url')
+        .eq('file_unique_id', messageData.file_unique_id)
+        .maybeSingle();
+        
+      if (queryError) {
+        logger.error('Error checking for existing file:', queryError);
+        throw new Error(`Database query error: ${queryError.message}`);
       }
-      messageId = existingMessage.id;
-      logger?.success(`Successfully updated message ${messageId}`);
-      
-      // Return with success but flag as duplicate
-      return { id: messageId, success: true, duplicate: true };
-    } else {
-      // If we found a duplicate file in a different chat, handle it specially
-      if (duplicateFileReference) {
-        // Add reference to the duplicate and mark as duplicate
-        fullRecordData.is_duplicate = true;
-        fullRecordData.duplicate_reference_id = duplicateFileReference.id;
-        
-        // Modify file_unique_id to avoid constraint violation
-        // Append chat_id to make it unique
-        fullRecordData.file_unique_id = `${input.file_unique_id}_${input.chat_id}`;
-        
-        logger?.info(`Modified file_unique_id to avoid constraint violation: ${fullRecordData.file_unique_id}`);
-      }
-      
-      // Add created_at only for new records
-      fullRecordData.created_at = new Date().toISOString();
 
-      try {
-        // Insert new message
-        logger?.info(`Inserting new record with file_unique_id: ${fullRecordData.file_unique_id}`);
-        
-        const { data: insertData, error: insertError } = await client
-          .from("messages")
-          .insert(fullRecordData)
-          .select("id")
-          .single();
+      if (existingFile) {
+        logger.info?.('Found existing file with same file_unique_id', { 
+          existing_id: existingFile.id,
+          file_unique_id: messageData.file_unique_id
+        });
 
-        if (insertError) {
-          // If we hit a unique constraint error despite our checks
-          if (insertError.code === "23505" && insertError.message.includes("messages_file_unique_id_key")) {
-            logger?.warn("Hit unique constraint despite checks, attempting recovery...");
-            
-            // Generate a truly unique file_unique_id as a last resort
-            const timestamp = Date.now();
-            fullRecordData.file_unique_id = `${input.file_unique_id}_${timestamp}`;
-            fullRecordData.is_duplicate = true;
-            
-            // Try again with the modified unique ID
-            const { data: retryData, error: retryError } = await client
-              .from("messages")
-              .insert(fullRecordData)
-              .select("id")
-              .single();
-              
-            if (retryError) {
-              logger?.error("Failed final retry to insert message:", retryError);
-              return { success: false, error_message: retryError.message };
-            }
-            
-            messageId = retryData.id;
-            logger?.success(`Successfully inserted message with generated unique ID: ${messageId}`);
-          } else {
-            logger?.error("Failed to insert new message:", insertError);
-            return { success: false, error_message: insertError.message };
+        // Log duplicate detection
+        await logMessageEvent(supabase, 'duplicate_file_detected', {
+          entity_id: existingFile.id,
+          telegram_message_id: messageData.telegram_message_id,
+          chat_id: messageData.chat_id,
+          metadata: {
+            file_unique_id: messageData.file_unique_id,
+            correlation_id: correlationId,
+            existing_message_id: existingFile.id,
+            new_telegram_message_id: messageData.telegram_message_id,
+            new_chat_id: messageData.chat_id
           }
-        } else {
-          messageId = insertData.id;
-          logger?.success(`Successfully inserted new message ${messageId}`);
-        }
-      } catch (insertError) {
-        logger?.error("Exception during message insert:", insertError);
+        });
+
         return { 
-          success: false, 
-          error_message: insertError instanceof Error ? insertError.message : String(insertError)
+          id: existingFile.id, 
+          success: true,
+          error_message: "File already exists in database" 
         };
       }
     }
 
-    if (!messageId) {
-      const errorMsg = "Failed to obtain message ID after insert/update.";
-      logger?.error(errorMsg);
-      return { success: false, error_message: errorMsg };
-    }
-
-    // If we have a duplicate file, log the correlation
-    if (duplicateFileReference) {
-      try {
-        await client.from("unified_audit_logs").insert({
-          event_type: "duplicate_file_detected",
-          entity_id: messageId,
-          correlation_id: input.correlation_id,
-          metadata: {
-            original_file_id: duplicateFileReference.id,
-            telegram_message_id: input.telegram_message_id,
-            chat_id: input.chat_id,
-            file_unique_id: input.file_unique_id,
-            timestamp: new Date().toISOString()
-          }
-        });
-      } catch (logError) {
-        logger?.error("Failed to log duplicate file detection:", logError);
-      }
-    }
-
-    return { id: messageId, success: true };
-  } catch (error) {
-    logger?.error("Exception in createMessage:", error);
-    return {
-      success: false,
-      error_message: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Updates message state with enhanced error handling
- */
-export async function updateMessageState(
-  messageId: string,
-  state: "pending" | "processing" | "completed" | "error",
-  errorMessage?: string
-): Promise<boolean> {
-  if (!messageId) return false;
-
-  try {
-    const updates: Record<string, unknown> = {
-      processing_state: state,
+    // Prepare message data with consistent format
+    // Use the public_url directly from messageData
+    // This will now be properly set by the mediaUtils.ts uploadMediaToStorage function
+    const safeMessageData = {
+      telegram_message_id: messageData.telegram_message_id,
+      chat_id: messageData.chat_id,
+      chat_type: messageData.chat_type || 'unknown',
+      chat_title: messageData.chat_title,
+      caption: messageData.caption,
+      media_group_id: messageData.media_group_id,
+      file_id: messageData.file_id,
+      file_unique_id: messageData.file_unique_id,
+      mime_type: messageData.mime_type,
+      file_size: messageData.file_size,
+      width: messageData.width,
+      height: messageData.height,
+      duration: messageData.duration,
+      storage_path: messageData.storage_path,
+      public_url: messageData.public_url, // Use the URL set by the uploader
+      correlation_id: correlationId,
+      processing_state: 'pending' as ProcessingState,
+      telegram_data: messageData.telegram_data || {},
+      forward_info: messageData.forward_info,
+      is_edited_channel_post: messageData.is_edited_channel_post,
+      created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      message_url: messageData.message_url
     };
+    
+    // Log the data being inserted
+    logger.info?.('Inserting message data', {
+      correlation_id: correlationId,
+      telegram_message_id: safeMessageData.telegram_message_id,
+      chat_id: safeMessageData.chat_id,
+      file_unique_id: safeMessageData.file_unique_id,
+      storage_path: safeMessageData.storage_path
+    });
 
-    switch (state) {
-      case "processing":
-        updates.processing_started_at = new Date().toISOString();
-        break;
-      case "completed":
-        updates.processing_completed_at = new Date().toISOString();
-        updates.error_message = null;
-        break;
-      case "error":
-        if (errorMessage) {
-          updates.error_message = errorMessage;
-          updates.last_error_at = new Date().toISOString();
-          updates.retry_count = supabaseClient.rpc("increment_retry_count", {
-            message_id: messageId,
-          });
-        }
-        break;
-    }
-
-    const { error } = await supabaseClient
-      .from("messages")
-      .update(updates)
-      .eq("id", messageId);
-
-    if (error) {
-      console.error(`Error updating message state: ${error.message}`);
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.error(
-      `Error updating message state: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
-    return false;
-  }
-}
-
-/**
- * Get message by ID with error handling
- */
-export async function getMessageById(messageId: string) {
-  if (!messageId) return null;
-
-  try {
-    const { data, error } = await supabaseClient
-      .from("messages")
-      .select("*")
-      .eq("id", messageId)
+    // Insert message data directly
+    const { data, error } = await supabase
+      .from('messages')
+      .insert(safeMessageData)
+      .select('id')
       .single();
 
     if (error) {
-      console.error(`Error getting message: ${error.message}`);
-      return null;
+      // Enhanced error logging
+      logger.error('Database insert error:', error);
+      
+      // Include more diagnostic information
+      if (typeof error === 'object') {
+        for (const [key, value] of Object.entries(error)) {
+          logger.error(`Error detail - ${key}:`, value);
+        }
+      }
+      
+      throw error;
     }
 
+    if (!data || !data.id) {
+      throw new Error('No ID returned from insert operation');
+    }
+
+    const messageId = data.id;
+
+    // Log message creation event
+    await logMessageEvent(supabase, 'message_created', {
+      entity_id: messageId,
+      telegram_message_id: messageData.telegram_message_id,
+      chat_id: messageData.chat_id,
+      new_state: safeMessageData,
+      metadata: {
+        media_group_id: messageData.media_group_id,
+        is_forward: !!messageData.forward_info,
+        correlation_id: correlationId
+      }
+    });
+
+    return { id: messageId, success: true };
+  } catch (error) {
+    // Enhanced error logging with better error object handling
+    const errorMessage = error instanceof Error 
+      ? `${error.message}${error.stack ? ` (${error.stack})` : ''}`
+      : (typeof error === 'object' ? JSON.stringify(error) : String(error));
+      
+    logger.error('Error creating message:', errorMessage);
+    
+    // Include error object structure for better debugging
+    if (typeof error === 'object') {
+      logger.error('Error object structure:', {
+        type: typeof error,
+        constructor: error.constructor?.name,
+        keys: Object.keys(error),
+        code: 'code' in error ? (error as any).code : undefined,
+        message: 'message' in error ? (error as any).message : undefined
+      });
+    }
+    
+    // Extract error code with fallback
+    const errorCode = error instanceof Error && 'code' in error 
+      ? (error as any).code 
+      : (typeof error === 'object' && 'code' in error ? (error as any).code : 'DB_INSERT_ERROR');
+    
+    return { 
+      id: '', 
+      success: false, 
+      error_message: errorMessage,
+      error_code: errorCode
+    };
+  }
+}
+
+export async function createNonMediaMessage(
+  supabase: SupabaseClient,
+  messageData: Omit<NonMediaMessage, 'id' | 'created_at' | 'updated_at'>,
+  logger: LoggerInterface
+): Promise<MessageResponse> {
+  try {
+    // Ensure correlation_id is stored as string
+    const correlationId = messageData.correlation_id ? 
+      messageData.correlation_id.toString() : 
+      crypto.randomUUID().toString();
+    
+    logger.info?.('Creating non-media message with correlation_id', { 
+      correlation_id: correlationId,
+      message_type: messageData.message_type
+    });
+
+    const messageDataWithTimestamps = {
+      ...messageData,
+      correlation_id: correlationId,
+      processing_state: 'pending' as ProcessingState,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('other_messages')
+      .insert(messageDataWithTimestamps)
+      .select('id')
+      .single();
+
+    if (error) throw error;
+
+    const messageId = data.id;
+
+    // Log message creation
+    await logMessageEvent(supabase, 'non_media_message_created', {
+      entity_id: messageId,
+      telegram_message_id: messageData.telegram_message_id,
+      chat_id: messageData.chat_id,
+      new_state: messageDataWithTimestamps,
+      metadata: {
+        message_type: messageData.message_type,
+        correlation_id: correlationId
+      }
+    });
+
+    return { id: messageId, success: true };
+  } catch (error) {
+    logger.error('Error creating non-media message:', error);
+    return { 
+      id: '', 
+      success: false, 
+      error_message: error instanceof Error ? error.message : String(error),
+      error_code: error instanceof Error && 'code' in error ? (error as {code?: string}).code : 'NON_MEDIA_INSERT_ERROR'
+    };
+  }
+}
+
+export async function updateMessage(
+  supabase: SupabaseClient,
+  chatId: number,
+  messageId: number,
+  updateData: Partial<MediaMessage>,
+  logger: LoggerInterface
+): Promise<MessageResponse> {
+  try {
+    // Remove public_url if it's in the update data
+    if ('public_url' in updateData) {
+      delete updateData.public_url;
+    }
+    
+    // Log the start of update operation
+    logger.info?.('Updating message', {
+      chat_id: chatId,
+      telegram_message_id: messageId,
+      update_keys: Object.keys(updateData)
+    });
+
+    // Get existing message
+    const { data: existingMessage, error: fetchError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('chat_id', chatId)
+      .eq('telegram_message_id', messageId)
+      .single();
+
+    if (fetchError || !existingMessage) {
+      throw new Error(fetchError?.message || 'Message not found');
+    }
+
+    // Handle analyzed_content history
+    let old_analyzed_content = existingMessage.old_analyzed_content || [];
+    if (existingMessage.analyzed_content) {
+      old_analyzed_content = [...old_analyzed_content, existingMessage.analyzed_content];
+    }
+
+    // Prepare update data
+    const updateWithTimestamp = {
+      ...updateData,
+      old_analyzed_content,
+      updated_at: new Date().toISOString(),
+      edit_count: (existingMessage.edit_count || 0) + 1
+    };
+
+    // Update message
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update(updateWithTimestamp)
+      .eq('chat_id', chatId)
+      .eq('telegram_message_id', messageId);
+
+    if (updateError) throw updateError;
+
+    // Log update event
+    await logMessageEvent(supabase, 'message_updated', {
+      entity_id: existingMessage.id,
+      telegram_message_id: messageId,
+      chat_id: chatId,
+      previous_state: existingMessage,
+      new_state: updateData,
+      metadata: {
+        media_group_id: existingMessage.media_group_id,
+        is_edit: true,
+        correlation_id: updateData.correlation_id
+      }
+    });
+
+    return { id: existingMessage.id, success: true };
+  } catch (error) {
+    logger.error('Error updating message:', error);
+    return { 
+      id: '', 
+      success: false, 
+      error_message: error instanceof Error ? error.message : String(error),
+      error_code: error instanceof Error && 'code' in error ? (error as {code?: string}).code : 'MESSAGE_UPDATE_ERROR'
+    };
+  }
+}
+
+export async function updateMessageProcessingState(
+  supabase: SupabaseClient,
+  params: UpdateProcessingStateParams,
+  logger: LoggerInterface
+): Promise<MessageResponse> {
+  try {
+    // Log state update operation
+    logger.info?.('Updating message processing state', {
+      message_id: params.messageId,
+      new_state: params.state
+    });
+
+    // Get existing message
+    const { data: existingMessage, error: fetchError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', params.messageId)
+      .single();
+
+    if (fetchError || !existingMessage) {
+      throw new Error(fetchError?.message || 'Message not found');
+    }
+
+    // Prepare update data
+    const updateData: Record<string, unknown> = {
+      processing_state: params.state,
+      updated_at: new Date().toISOString()
+    };
+
+    if (params.analyzedContent) {
+      updateData.analyzed_content = params.analyzedContent;
+      updateData.processing_completed_at = new Date().toISOString();
+    }
+
+    if (params.error) {
+      updateData.error_message = params.error;
+      updateData.last_error_at = new Date().toISOString();
+      updateData.retry_count = (existingMessage.retry_count || 0) + 1;
+    }
+
+    if (params.processingStarted) {
+      updateData.processing_started_at = new Date().toISOString();
+    }
+
+    // Update message state
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update(updateData)
+      .eq('id', params.messageId);
+
+    if (updateError) throw updateError;
+
+    // Get correlation_id for logging
+    const correlationId = existingMessage?.correlation_id ? 
+      existingMessage.correlation_id.toString() : 
+      null;
+
+    // Log state change
+    await logMessageEvent(supabase, 'processing_state_changed', {
+      entity_id: params.messageId,
+      telegram_message_id: existingMessage?.telegram_message_id,
+      chat_id: existingMessage?.chat_id,
+      previous_state: { 
+        processing_state: existingMessage?.processing_state,
+        analyzed_content: existingMessage?.analyzed_content 
+      },
+      new_state: { 
+        processing_state: params.state,
+        analyzed_content: params.analyzedContent 
+      },
+      metadata: {
+        error_message: params.error,
+        media_group_id: existingMessage?.media_group_id,
+        retry_count: updateData.retry_count,
+        correlation_id: correlationId
+      }
+    });
+
+    return { id: params.messageId, success: true };
+  } catch (error) {
+    if (logger?.error) {
+      logger.error('Error updating message processing state:', error);
+    } else {
+      console.error('Error updating message processing state:', error);
+    }
+    return { 
+      id: params.messageId, 
+      success: false, 
+      error_message: error instanceof Error ? error.message : String(error),
+      error_code: error instanceof Error && 'code' in error ? (error as {code?: string}).code : 'PROCESSING_STATE_UPDATE_ERROR'
+    };
+  }
+}
+
+/**
+ * Check if a message with this file_unique_id already exists
+ */
+export async function checkDuplicateFile(
+  supabase: SupabaseClient,
+  fileUniqueId: string
+): Promise<Message | null> {
+  try {
+    if (!fileUniqueId) {
+      console.warn('Attempted to check for duplicate file with empty fileUniqueId');
+      return null;
+    }
+    
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('file_unique_id', fileUniqueId)
+      .maybeSingle();
+      
+    if (error) {
+      console.error('Error checking for duplicate file:', error);
+      // Don't throw - we want graceful fallback to creating a new record
+      return null;
+    }
+    
     return data;
   } catch (error) {
-    console.error(
-      `Error getting message: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
+    console.error('Exception checking for duplicate file:', 
+      error instanceof Error ? error.message : String(error));
     return null;
   }
 }
 
 /**
- * Sync media group content from one message to others
- * FIXED: Using the correct parameter signature that matches the database function
+ * Log an event to the unified_audit_logs table
  */
-export async function syncMediaGroupContent(
-  sourceMessageId: string,
-  mediaGroupId: string,
-  correlationId: string
-): Promise<{ success: boolean; updatedCount?: number; error?: string }> {
-  try {
-    // Call the database function with correct parameter types
-    const { data, error } = await supabaseClient.rpc(
-      "xdelo_sync_media_group_content",
-      {
-        p_message_id: sourceMessageId,
-        p_media_group_id: mediaGroupId,
-        p_force_sync: true,
-        p_sync_edit_history: false,
-      }
-    );
-
-    if (error) {
-      console.error("Error syncing media group content:", error);
-      return {
-        success: false,
-        error: error.message,
-      };
-    }
-
-    return {
-      success: true,
-      updatedCount: data?.updated_count || 0,
-    };
-  } catch (error) {
-    console.error("Exception in syncMediaGroupContent:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
+async function logMessageEvent(
+  supabase: SupabaseClient,
+  eventType: string,
+  data: {
+    entity_id: string;
+    telegram_message_id?: number;
+    chat_id?: number;
+    previous_state?: Record<string, unknown>;
+    new_state?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+    error_message?: string;
   }
-}
-
-/**
- * Recovers messages stuck in error state due to duplicate file_unique_id issues
- */
-export async function recoverDuplicateFileMessages(correlationId: string = ""): Promise<{ recovered: number; errors: number }> {
+): Promise<void> {
   try {
-    const result = { recovered: 0, errors: 0 };
+    // Validate entity_id is provided
+    if (!data.entity_id) {
+      console.error('Missing entity_id in logMessageEvent, generating UUID');
+      data.entity_id = crypto.randomUUID();
+    }
     
-    // Find messages in error state with duplicate file_unique_id errors
-    const { data: errorMessages, error: findError } = await supabaseClient
-      .from("messages")
-      .select("id, telegram_message_id, chat_id, file_unique_id, error_message")
-      .eq("processing_state", "error")
-      .ilike("error_message", "%file_unique_id%")
-      .order("created_at", { ascending: false })
-      .limit(50);
+    // Ensure metadata always has a timestamp
+    const metadata = {
+      ...(data.metadata || {}),
+      event_timestamp: new Date().toISOString()
+    };
+
+    const { error } = await supabase.from('unified_audit_logs').insert({
+      event_type: eventType,
+      entity_id: data.entity_id,
+      telegram_message_id: data.telegram_message_id,
+      chat_id: data.chat_id,
+      previous_state: data.previous_state,
+      new_state: data.new_state,
+      metadata: metadata,
+      error_message: data.error_message,
+      event_timestamp: new Date().toISOString(),
+      correlation_id: metadata.correlation_id
+    });
+    
+    if (error) {
+      console.error('Error logging event:', error);
       
-    if (findError) {
-      console.error("Error finding stuck messages:", findError);
-      return result;
-    }
-    
-    if (!errorMessages || errorMessages.length === 0) {
-      return result;
-    }
-    
-    console.log(`Found ${errorMessages.length} messages to recover from duplicate file_unique_id errors`);
-    
-    // Process each message
-    for (const message of errorMessages) {
-      try {
-        // Generate a truly unique ID using timestamp
-        const timestamp = Date.now();
-        const newUniqueId = `${message.file_unique_id}_${timestamp}`;
+      // Try with minimized payload if the original is too large
+      if (data.previous_state || data.new_state) {
+        console.warn('Retrying with simplified payload');
+        const { error: retryError } = await supabase.from('unified_audit_logs').insert({
+          event_type: eventType,
+          entity_id: data.entity_id,
+          telegram_message_id: data.telegram_message_id,
+          chat_id: data.chat_id,
+          metadata: {
+            ...metadata,
+            previous_state_simplified: true,
+            new_state_simplified: true,
+            original_error: error.message,
+          },
+          error_message: data.error_message,
+          event_timestamp: new Date().toISOString(),
+          correlation_id: metadata.correlation_id
+        });
         
-        // Update the message
-        const { error: updateError } = await supabaseClient
-          .from("messages")
-          .update({
-            file_unique_id: newUniqueId,
-            is_duplicate: true,
-            processing_state: "pending", // Reset to pending for reprocessing
-            error_message: null,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", message.id);
-          
-        if (updateError) {
-          console.error(`Failed to recover message ${message.id}:`, updateError);
-          result.errors++;
-        } else {
-          result.recovered++;
-          
-          // Log the recovery
-          await xdelo_logProcessingEvent(
-            "message_recovered",
-            message.id,
-            correlationId || crypto.randomUUID(),
-            {
-              telegram_message_id: message.telegram_message_id,
-              chat_id: message.chat_id,
-              original_file_unique_id: message.file_unique_id,
-              new_file_unique_id: newUniqueId,
-              recovery_type: "duplicate_file_id"
-            }
-          );
+        if (retryError) {
+          console.error('Error logging simplified event:', retryError);
         }
-      } catch (messageError) {
-        console.error(`Error recovering message ${message.id}:`, messageError);
-        result.errors++;
       }
     }
-    
-    return result;
   } catch (error) {
-    console.error("Error in recoverDuplicateFileMessages:", error);
-    return { recovered: 0, errors: 1 };
+    console.error('Exception in logMessageEvent:', 
+      error instanceof Error ? error.message : String(error));
   }
 }

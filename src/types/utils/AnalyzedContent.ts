@@ -1,6 +1,6 @@
 
 /**
- * Interface for analyzed message content structure
+ * Structured content data extracted from message analysis
  */
 export interface AnalyzedContent {
   product_name?: string;
@@ -11,6 +11,7 @@ export interface AnalyzedContent {
   unit_price?: number;
   total_price?: number;
   notes?: string;
+  caption?: string;
   parsing_metadata?: {
     method: 'manual' | 'ai';
     timestamp: string;

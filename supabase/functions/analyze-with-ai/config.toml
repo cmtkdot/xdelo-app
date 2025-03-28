@@ -1,3 +1,6 @@
 
 project_id = "xjhhehxcxkiumnwbirel"
+name = "analyze-with-ai"
+version = 1
+path = "analyze-with-ai"
 verify_jwt = false

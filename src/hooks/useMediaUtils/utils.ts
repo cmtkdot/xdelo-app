@@ -1,66 +1,35 @@
 
-/**
- * Helper utilities for media operations
- */
-
-// Create the media processing state hooks
-export function createMediaProcessingState() {
-  const state = {
-    isProcessing: false,
-    processingMessageIds: {} as Record<string, boolean>
-  };
-  
-  const actions = {
-    setIsProcessing: (isProcessing: boolean) => {
-      state.isProcessing = isProcessing;
-    },
-    
-    addProcessingMessageId: (messageId: string) => {
-      state.processingMessageIds[messageId] = true;
-    },
-    
-    removeProcessingMessageId: (messageId: string) => {
-      delete state.processingMessageIds[messageId];
-    }
-  };
-  
-  return [state, actions] as const;
-}
+import { useState, useCallback } from 'react';
+import { MediaUtilsState } from './types';
 
 /**
- * Execute an operation with retry logic
+ * Create state management hooks for media operations
  */
-export async function withRetry<T>(
-  operation: () => Promise<T>,
-  options: {
-    maxAttempts: number;
-    delay: number;
-    retryableErrors?: string[];
+export function createMediaProcessingState(): [
+  MediaUtilsState,
+  {
+    setIsProcessing: (value: boolean) => void;
+    addProcessingMessageId: (id: string) => void;
+    removeProcessingMessageId: (id: string) => void;
   }
-): Promise<T> {
-  const { maxAttempts, delay, retryableErrors = [] } = options;
-  let attempt = 0;
-  let lastError: Error;
-  
-  while (attempt < maxAttempts) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      attempt++;
-      
-      // Check if we should retry based on the error message
-      const shouldRetry = retryableErrors.length === 0 || 
-        retryableErrors.some(errMsg => lastError.message.includes(errMsg));
-      
-      if (attempt >= maxAttempts || !shouldRetry) {
-        throw lastError;
-      }
-      
-      // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-  
-  throw lastError!;
+] {
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingMessageIds, setProcessingMessageIds] = useState<Record<string, boolean>>({});
+
+  const addProcessingMessageId = useCallback((id: string) => {
+    setProcessingMessageIds(prev => ({ ...prev, [id]: true }));
+  }, []);
+
+  const removeProcessingMessageId = useCallback((id: string) => {
+    setProcessingMessageIds(prev => {
+      const updated = { ...prev };
+      delete updated[id];
+      return updated;
+    });
+  }, []);
+
+  return [
+    { isProcessing, processingMessageIds },
+    { setIsProcessing, addProcessingMessageId, removeProcessingMessageId }
+  ];
 }

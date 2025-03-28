@@ -1,125 +1,147 @@
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/useToast';
-import { logEvent, LogEventType } from "@/lib/logUtils";
+import { useToast } from './useToast';
+import { Message } from '@/types/entities/Message';
+import { logEvent, LogEventType } from '@/lib/logUtils';
+import { RepairResult } from '@/lib/mediaOperations';
 
 export function useMessageOperations() {
-  const [isLoading, setIsLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
-  // Function to handle message updates
-  const updateMessage = async (messageId: string, updates: any) => {
-    setIsLoading(true);
+  // Process a batch of messages
+  const processMessageBatch = useCallback(async (count: number = 10): Promise<RepairResult> => {
     try {
-      const { error } = await supabase
-        .from('messages')
-        .update(updates)
-        .eq('id', messageId);
-
-      if (error) {
-        throw error;
-      }
-
-      toast({
-        title: 'Message updated',
-        description: 'The message has been updated successfully.',
+      setIsProcessing(prev => ({ ...prev, batch: true }));
+      
+      // Call the edge function to process messages
+      const { data, error } = await supabase.functions.invoke('direct-caption-processor', {
+        body: { 
+          count,
+          auto_process: true 
+        }
       });
+
+      if (error) throw error;
+      
+      toast({
+        title: "Processing Complete",
+        description: `Processed ${data.processed_count || 0} messages.`
+      });
+      
+      return {
+        success: true,
+        successful: data.processed_count || 0,
+        message: `Processing complete: Processed ${data.processed_count || 0} messages.`
+      };
     } catch (error) {
+      console.error('Processing error:', error);
+      
       toast({
-        title: 'Failed to update message',
-        description: error.message,
-        variant: 'destructive',
+        title: "Processing Failed",
+        description: error.message || "Failed to process messages",
+        variant: "destructive"
       });
+      
+      return {
+        success: false,
+        message: error.message || "Unknown error occurred"
+      };
     } finally {
-      setIsLoading(false);
+      setIsProcessing(prev => {
+        const updated = { ...prev };
+        delete updated.batch;
+        return updated;
+      });
     }
-  };
+  }, [toast]);
 
-  // Function to delete a message
-  const deleteMessage = async (messageId: string) => {
-    setIsLoading(true);
+  // Sync captions for a message or group
+  const syncMessageCaption = useCallback(async ({ 
+    messageId, 
+    mediaGroupId 
+  }: { 
+    messageId?: string; 
+    mediaGroupId?: string;
+  }): Promise<RepairResult> => {
     try {
-      const { error } = await supabase
-        .from('messages')
-        .delete()
-        .eq('id', messageId);
-
-      if (error) {
-        throw error;
+      if (!messageId && !mediaGroupId) {
+        throw new Error('Either messageId or mediaGroupId is required');
       }
-
-      toast({
-        title: 'Message deleted',
-        description: 'The message has been deleted successfully.',
+      
+      const id = messageId || `group_${mediaGroupId}`;
+      setIsProcessing(prev => ({ ...prev, [id]: true }));
+      
+      const { data, error } = await supabase.functions.invoke('xdelo_sync_media_group', {
+        body: { 
+          messageId,
+          mediaGroupId,
+          forceSync: true 
+        }
       });
-
-      // Redirect to home page
-      window.location.href = '/';
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Sync Complete",
+        description: "Media group has been synchronized."
+      });
+      
+      return {
+        success: true,
+        message: "Media group has been synchronized."
+      };
     } catch (error) {
+      console.error('Sync error:', error);
+      
       toast({
-        title: 'Failed to delete message',
-        description: error.message,
-        variant: 'destructive',
+        title: "Sync Failed",
+        description: error.message || "Failed to sync media group",
+        variant: "destructive"
       });
+      
+      return {
+        success: false,
+        message: error.message || "Unknown error occurred"
+      };
     } finally {
-      setIsLoading(false);
+      const id = messageId || `group_${mediaGroupId}`;
+      setIsProcessing(prev => {
+        const updated = { ...prev };
+        delete updated[id];
+        return updated;
+      });
     }
-  };
+  }, [toast]);
 
-  // Log user actions
-  const logUserAction = async (messageId: string, action: string, details?: any) => {
+  // Log an event and track state
+  const logMessageOperation = useCallback(async (
+    message: Message,
+    action: string,
+    details: Record<string, any> = {}
+  ) => {
     try {
       await logEvent(
         LogEventType.USER_ACTION,
-        messageId,
+        message.id,
         {
           action,
-          timestamp: new Date().toISOString(),
+          media_group_id: message.media_group_id,
           ...details
         }
       );
     } catch (error) {
-      console.error("Error logging user action:", error);
+      console.error(`Error logging ${action}:`, error);
     }
-  };
-
-  // Function to reprocess a message
-  const reprocessMessage = async (messageId: string) => {
-    setIsLoading(true);
-    try {
-      // Call the function to reprocess the message
-      const { error } = await supabase.functions.invoke('xdelo_process_message', {
-        body: {
-          message_id: messageId,
-          force_reprocess: true
-        }
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      toast({
-        title: 'Message reprocessing initiated',
-        description: 'The message will be reprocessed shortly.',
-      });
-    } catch (error) {
-      toast({
-        title: 'Failed to reprocess message',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, []);
 
   return {
-    isLoading,
-    updateMessage,
-    deleteMessage,
-    reprocessMessage,
-    logUserAction
+    isProcessing,
+    errors,
+    processMessageBatch,
+    syncMessageCaption,
+    logMessageOperation
   };
 }

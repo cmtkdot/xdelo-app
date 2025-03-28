@@ -160,7 +160,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
       
       <CardContent className="p-2 space-y-2">
         <div className="line-clamp-2 text-xs font-medium">
-          {message.analyzed_content?.product_name || message.caption || "No title"}
+          {message.caption || "No caption"}
         </div>
         
         <div className="flex flex-wrap gap-1 items-center text-[10px] text-muted-foreground">
@@ -170,11 +170,6 @@ export const MessageCard: React.FC<MessageCardProps> = ({
           {message.analyzed_content?.vendor_uid && (
             <Badge variant="outline" className="text-[9px] h-4 px-1">
               {message.analyzed_content.vendor_uid}
-            </Badge>
-          )}
-          {message.analyzed_content?.product_code && (
-            <Badge variant="outline" className="text-[9px] h-4 px-1 bg-muted/30">
-              {message.analyzed_content.product_code}
             </Badge>
           )}
         </div>

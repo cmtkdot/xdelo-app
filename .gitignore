@@ -30,12 +30,3 @@ Dockerfile
 src/env.d.ts
 tsconfig.app.json
 supabase/.branches/_current_branch
-supabase/.temp/gotrue-version
-supabase/.temp/pooler-url
-supabase/.temp/postgres-version
-supabase/.temp/project-ref
-supabase/.temp/rest-version
-supabase/functions/deno.json
-supabase/functions/import_map.json
-eslint.config.js
-supabase/functions/deno.jsonc

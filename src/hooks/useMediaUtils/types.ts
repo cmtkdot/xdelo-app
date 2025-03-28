@@ -1,49 +1,22 @@
 
-/**
- * Interface for managing message processing state
- */
-export interface MediaProcessingState {
-  isProcessing: boolean;
-  processingMessageIds: Record<string, boolean>;
-}
+import { Message } from '@/types/entities/Message';
 
 /**
- * Actions for manipulating MediaProcessingState
- */
-export interface MediaProcessingStateActions {
-  setIsProcessing: (isProcessing: boolean) => void;
-  addProcessingMessageId: (messageId: string) => void;
-  removeProcessingMessageId: (messageId: string) => void;
-}
-
-/**
- * Options for media group synchronization
- */
-export interface MediaSyncOptions {
-  forceSync?: boolean;
-  syncEditHistory?: boolean;
-}
-
-/**
- * Result of a batch repair operation
+ * Result type for media operations
  */
 export interface RepairResult {
   success: boolean;
-  repaired: number;
-  error?: string;
   message?: string;
-  details?: any[];
   successful?: number;
   failed?: number;
+  error?: string;
+  data?: any;
 }
 
 /**
- * Data returned from caption flow operations
+ * State types for media operations
  */
-export interface CaptionFlowData {
-  success: boolean;
-  message: string;
-  message_id: string;
-  caption_updated?: boolean;
-  media_group_synced?: boolean;
+export interface MediaUtilsState {
+  isProcessing: boolean;
+  processingMessageIds: Record<string, boolean>;
 }

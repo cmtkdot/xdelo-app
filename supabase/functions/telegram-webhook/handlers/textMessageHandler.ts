@@ -1,119 +1,87 @@
 
-import {
-  constructTelegramMessageUrl,
-  isMessageForwarded,
-} from "../../_shared/consolidatedMessageUtils.ts";
-import { corsHeaders } from "../../_shared/cors.ts";
-import {
-  createMessage,
-  supabaseClient,
-  xdelo_logProcessingEvent,
-  // triggerCaptionAnalysis, // Removed - No longer used
-} from "../dbOperations.ts";
-import { MessageContext, TelegramMessage } from "../types.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { corsHeaders } from '../../_shared/cors.ts';
+import { TelegramMessage, MessageContext } from '../types.ts';
+import { xdelo_logProcessingEvent } from '../../_shared/databaseOperations.ts';
+import { constructTelegramMessageUrl, isMessageForwarded } from '../../_shared/messageUtils.ts';
 
-export async function handleOtherMessage(
-  message: TelegramMessage,
-  context: MessageContext
-): Promise<Response> {
+// Create Supabase client
+const supabaseClient = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  }
+);
+
+export async function handleOtherMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
-    const { isChannelPost, correlationId, logger } = context;
+    const { isChannelPost, correlationId } = context;
     // Use the utility function to determine if message is forwarded
     const isForwarded = isMessageForwarded(message);
-
+    
     // Log the start of message processing
-    logger?.info(
-      `📝 Processing non-media message ${message.message_id} in chat ${message.chat.id}`,
-      {
-        message_text: message.text
-          ? `${message.text.substring(0, 50)}${
-              message.text.length > 50 ? "..." : ""
-            }`
-          : null,
-        message_type: isChannelPost ? "channel_post" : "message",
-        is_forwarded: isForwarded,
-      }
-    );
-
-    // Generate message URL using consolidated utility function
-    const message_url = constructTelegramMessageUrl(
-      message.chat.id,
-      message.message_id
-    );
-
-    // Create message record with optimized operation - using the unified createMessage function
-    // to avoid the issue with telegram_metadata column
-    const {
-      id: messageId,
-      success,
-      error_message,
-    } = await createMessage(
-      supabaseClient,
-      {
+    console.log(`[${correlationId}] Processing non-media message ${message.message_id} in chat ${message.chat.id}`);
+    
+    // Generate message URL using our utility function from _shared/messageUtils.ts
+    const message_url = constructTelegramMessageUrl(message);
+    
+    // Store message data in the other_messages table
+    const { data, error } = await supabaseClient
+      .from('other_messages')
+      .insert({
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
         chat_type: message.chat.type,
         chat_title: message.chat.title,
-        message_type: isChannelPost ? "channel_post" : "message",
-        text: message.text || "",
+        message_type: isChannelPost ? 'channel_post' : 'message',
+        message_text: message.text || message.caption || '',
         telegram_data: message,
-        processing_state: "pending",
+        processing_state: 'completed',
         is_forward: isForwarded,
         correlation_id: correlationId,
-        message_url: message_url,
-      },
-      logger
-    );
-
-    if (!success || !messageId) {
-      logger?.error(`❌ Failed to store text message in database`, { error: error_message });
-      throw new Error(error_message || "Failed to create message record");
+        message_url: message_url, // Add the constructed URL
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select('id')
+      .single();
+      
+    if (error) {
+      throw error;
     }
-
-    // Text message saved. Caption processing is handled separately by the
-    // database trigger 'trg_process_caption' if the 'caption' field is set
-    // (which it isn't for these messages handled here).
-    // If text analysis is needed, a different mechanism should be implemented.
-
+    
     // Log successful processing
     await xdelo_logProcessingEvent(
       "message_created",
-      messageId,
+      data.id,
       correlationId,
       {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
-        message_type: "text",
+        message_type: 'text',
         is_forward: isForwarded,
-        message_url: message_url,
+        message_url: message_url
       }
     );
-
-    logger?.success(
-      `✅ Successfully processed text message ${message.message_id}`,
-      {
-        message_id: message.message_id,
-        db_id: messageId,
-        message_url: message_url,
-      }
-    );
-
+    
+    console.log(`[${correlationId}] Successfully processed text message ${message.message_id}`);
+    
     return new Response(
-      JSON.stringify({
-        success: true,
-        messageId,
+      JSON.stringify({ 
+        success: true, 
+        messageId: data.id, 
         correlationId,
-        message_url: message_url,
+        message_url: message_url 
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    context.logger?.error(`❌ Error processing non-media message:`, {
-      error: error.message,
-      stack: error.stack,
-      message_id: message.message_id,
-    });
-
+    console.error(`Error processing non-media message:`, error);
+    
     // Log the error
     await xdelo_logProcessingEvent(
       "message_processing_error",
@@ -122,21 +90,18 @@ export async function handleOtherMessage(
       {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
-        handler_type: "other_message",
+        handler_type: 'other_message'
       },
       error.message
     );
-
+    
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message || "Unknown error processing message",
-        correlationId: context.correlationId,
+      JSON.stringify({ 
+        success: false, 
+        error: error.message || 'Unknown error processing message',
+        correlationId: context.correlationId
       }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 }

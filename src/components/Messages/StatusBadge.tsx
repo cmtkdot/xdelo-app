@@ -15,7 +15,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
     case 'error':
       return <Badge variant="destructive" className="text-xs">Error</Badge>;
     case 'pending':
-      return <Badge variant="warning" className="text-xs">Pending</Badge>;
+      return <Badge variant="warning" className="text-xs bg-yellow-500">Pending</Badge>;
     default:
       return <Badge variant="outline" className="text-xs">Unknown</Badge>;
   }
