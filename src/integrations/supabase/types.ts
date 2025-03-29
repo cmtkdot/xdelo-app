@@ -883,6 +883,7 @@ export type Database = {
           chat_id: number | null
           correlation_id: string | null
           entity_id: string
+          entity_type: string | null
           error_message: string | null
           event_timestamp: string
           event_type: string
@@ -903,6 +904,7 @@ export type Database = {
           chat_id?: number | null
           correlation_id?: string | null
           entity_id: string
+          entity_type?: string | null
           error_message?: string | null
           event_timestamp?: string
           event_type: string
@@ -923,6 +925,7 @@ export type Database = {
           chat_id?: number | null
           correlation_id?: string | null
           entity_id?: string
+          entity_type?: string | null
           error_message?: string | null
           event_timestamp?: string
           event_type?: string

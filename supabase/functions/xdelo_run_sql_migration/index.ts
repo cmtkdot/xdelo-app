@@ -32,7 +32,9 @@ serve(async (req) => {
       "SQL_MIGRATION_STARTED",
       "system",
       correlation_id || crypto.randomUUID().toString(),
-      { sql_length: sql.length }
+      { sql_length: sql.length },
+      undefined,
+      "system"
     );
 
     // Execute the SQL query
@@ -48,7 +50,8 @@ serve(async (req) => {
         "system",
         correlation_id || crypto.randomUUID().toString(),
         { error: error.message },
-        error.message
+        error.message,
+        "system"
       );
 
       return new Response(
@@ -65,7 +68,9 @@ serve(async (req) => {
       "SQL_MIGRATION_COMPLETED",
       "system",
       correlation_id || crypto.randomUUID().toString(),
-      { result: data }
+      { result: data },
+      undefined,
+      "system"
     );
 
     return new Response(
@@ -82,7 +87,8 @@ serve(async (req) => {
       "system",
       crypto.randomUUID().toString(),
       { error: error.message },
-      error.message
+      error.message,
+      "system"
     );
 
     return new Response(
