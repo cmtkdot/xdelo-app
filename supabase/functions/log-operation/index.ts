@@ -1,6 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { logProcessingEvent, logErrorEvent } from "../_shared/auditLogger.ts";
+import { logProcessingEvent, logErrorEvent } from "../_shared/consolidatedMessageUtils.ts";
 import { RetryHandler, shouldRetryOperation } from "../_shared/retryUtils.ts";
 
 const corsHeaders = {

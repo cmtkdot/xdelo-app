@@ -1,8 +1,5 @@
 
-/**
- * Service for standardized logging and telemetry
- */
-import { logProcessingEvent } from "../../_shared/auditLogger.ts";
+import { logProcessingEvent } from "../../_shared/consolidatedMessageUtils.ts";
 
 /**
  * Log a processing event with standardized format
