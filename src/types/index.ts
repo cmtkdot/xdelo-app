@@ -1,16 +1,15 @@
 
 // Re-export all type definitions for easy importing throughout the app
-export * from './api/ProcessingState';
-export * from './entities/Message';
-export * from './entities/MediaItem';
-export * from './entities/Product';
-export * from './MessagesTypes';
-export * from './MediaItem';
-export * from './GlProducts';
-export * from './GlobalTypes';
+// Using named exports to avoid ambiguity
 
-// Define SyncStatus type which was referenced but not defined
-export type SyncStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+// Core entity types with proper naming to avoid conflicts
+export { ProcessingState } from './api/ProcessingState';
+export { Message } from './entities/Message';
+export { MediaItem } from './entities/MediaItem';
+export { GlProduct } from './entities/Product';
+
+// Additional types used throughout the app
+export type SyncStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'partial';
 
 // Export AnalyzedContent interface for common use
 export interface AnalyzedContent {

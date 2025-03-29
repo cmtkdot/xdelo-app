@@ -20,6 +20,7 @@ export interface Message {
   duration?: number;
   storage_path?: string;
   public_url?: string;
+  message_url?: string;
   correlation_id?: string;
   processing_state?: string;
   telegram_data?: any;
@@ -39,12 +40,24 @@ export interface Message {
     quantity?: number;
     notes?: string;
     caption?: string;
+    unit_price?: number;
+    total_price?: number;
     parsing_metadata?: {
       method?: string;
       timestamp?: string;
       partial_success?: boolean;
     };
   };
+  old_analyzed_content?: any[];
+  product_name?: string;
+  product_code?: string;
   vendor_uid?: string;
+  purchase_date?: string;
+  quantity?: number;
   deleted_from_telegram?: boolean;
+  storage_path_standardized?: string | boolean;
+  storage_exists?: string | boolean;
+  content_disposition?: 'inline' | 'attachment';
+  is_original_caption?: boolean;
+  group_caption_synced?: boolean;
 }

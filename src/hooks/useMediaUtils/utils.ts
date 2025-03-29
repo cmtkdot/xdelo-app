@@ -1,4 +1,6 @@
 
+import React from 'react';
+import { supabase } from "@/integrations/supabase/client";
 import { RetryHandler, shouldRetryOperation } from './retryHandler';
 
 /**
@@ -6,9 +8,13 @@ import { RetryHandler, shouldRetryOperation } from './retryHandler';
  */
 export const withRetry = async <T>(
   operation: () => Promise<T>,
-  options = { maxAttempts: 3, baseDelayMs: 1000, maxDelayMs: 10000 }
+  options = { maxAttempts: 3, baseDelayMs: 1000, maxDelayMs: 10000, retryableErrors: [] }
 ): Promise<T> => {
-  const retryHandler = new RetryHandler(options);
+  const retryHandler = new RetryHandler({
+    maxAttempts: options.maxAttempts,
+    baseDelayMs: options.baseDelayMs,
+    maxDelayMs: options.maxDelayMs
+  });
   
   try {
     return await retryHandler.execute(operation, shouldRetryOperation);
@@ -16,6 +22,45 @@ export const withRetry = async <T>(
     // Rethrow the error after retry attempts are exhausted
     throw error;
   }
+};
+
+/**
+ * Create a standard media processing state manager
+ */
+export const createMediaProcessingState = () => {
+  const [state, setState] = React.useState<{
+    isProcessing: boolean;
+    processingMessageIds: Record<string, boolean>;
+  }>({
+    isProcessing: false,
+    processingMessageIds: {}
+  });
+
+  const actions = {
+    setIsProcessing: (isProcessing: boolean) => {
+      setState(prev => ({ ...prev, isProcessing }));
+    },
+    
+    addProcessingMessageId: (messageId: string) => {
+      setState(prev => ({
+        ...prev,
+        processingMessageIds: { ...prev.processingMessageIds, [messageId]: true }
+      }));
+    },
+    
+    removeProcessingMessageId: (messageId: string) => {
+      setState(prev => {
+        const updatedIds = { ...prev.processingMessageIds };
+        delete updatedIds[messageId];
+        return {
+          ...prev,
+          processingMessageIds: updatedIds
+        };
+      });
+    }
+  };
+
+  return [state, actions] as const;
 };
 
 /**
@@ -34,4 +79,63 @@ export const isValidUuid = (str: string): boolean => {
   // UUID regex pattern
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return uuidPattern.test(str);
+};
+
+/**
+ * Add error catch and retry functionality to media group syncing
+ */
+export const syncMediaGroupWithRetry = async (
+  messageId: string,
+  mediaGroupId: string,
+  analyzedContent: any,
+  options: {
+    forceSync?: boolean;
+    syncEditHistory?: boolean;
+    maxRetries?: number;
+  } = {}
+) => {
+  const { forceSync = true, syncEditHistory = false, maxRetries = 3 } = options;
+  let retryCount = 0;
+  let lastError = null;
+
+  const attemptSync = async () => {
+    try {
+      // Call the RPC function to sync the media group
+      const { data, error } = await supabase.rpc('xdelo_sync_media_group_content', {
+        p_message_id: messageId,
+        p_analyzed_content: analyzedContent,
+        p_force_sync: forceSync,
+        p_sync_edit_history: syncEditHistory
+      });
+
+      if (error) throw error;
+      return { success: true, result: data };
+    } catch (err) {
+      retryCount++;
+      lastError = err;
+      
+      // Log the failure
+      console.error(`Failed to sync media group (attempt ${retryCount}/${maxRetries}):`, err);
+      
+      // If we've reached the max retries, stop trying
+      if (retryCount >= maxRetries) {
+        console.error(`Max retries (${maxRetries}) reached for media group sync. Giving up.`);
+        return { 
+          success: false, 
+          error: lastError, 
+          retryCount 
+        };
+      }
+      
+      // Exponential backoff
+      const backoffMs = Math.min(1000 * Math.pow(2, retryCount - 1), 10000);
+      console.log(`Retrying in ${backoffMs}ms...`);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+      
+      // Try again
+      return await attemptSync();
+    }
+  };
+
+  return attemptSync();
 };

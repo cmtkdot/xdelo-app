@@ -1,18 +1,18 @@
 
 import { useState, useCallback } from 'react';
 import { supabase } from "@/integrations/supabase/client";
-import { MediaProcessingState, MediaProcessingStateActions, MediaSyncOptions, RepairResult } from './types';
+import { MediaProcessingState, MediaSyncOptions } from './types';
 import { useToast } from '@/hooks/useToast';
-import { hasValidCaption, isValidUuid } from './utils';
+import { hasValidCaption, isValidUuid, withRetry, createMediaProcessingState, syncMediaGroupWithRetry } from './utils';
 
 /**
  * Hook providing media utility functions for working with Telegram media messages
  */
 export function useMediaUtils() {
-  const [processingState, setProcessingState] = useState<MediaProcessingState>({
-    isProcessing: false,
-    processingMessageIds: {}
-  });
+  const [mediaState, mediaActions] = createMediaProcessingState();
+  const { isProcessing, processingMessageIds } = mediaState;
+  const { setIsProcessing, addProcessingMessageId, removeProcessingMessageId } = mediaActions;
+  
   const { toast } = useToast();
 
   /**
@@ -29,11 +29,7 @@ export function useMediaUtils() {
     }
 
     try {
-      setProcessingState(prev => ({
-        ...prev,
-        isProcessing: true,
-        processingMessageIds: { ...prev.processingMessageIds, [messageId]: true }
-      }));
+      addProcessingMessageId(messageId);
 
       const { data, error } = await supabase
         .from('messages')
@@ -64,16 +60,13 @@ export function useMediaUtils() {
       });
       return false;
     } finally {
-      setProcessingState(prev => ({
-        ...prev,
-        isProcessing: false,
-        processingMessageIds: { ...prev.processingMessageIds, [messageId]: false }
-      }));
+      removeProcessingMessageId(messageId);
     }
-  }, [toast]);
+  }, [toast, addProcessingMessageId, removeProcessingMessageId]);
 
   /**
    * Sync media group content from one message to others in the same group
+   * with improved error handling and retry mechanism
    */
   const syncMediaGroup = useCallback(async (
     messageId: string,
@@ -81,29 +74,49 @@ export function useMediaUtils() {
     options?: MediaSyncOptions
   ): Promise<boolean> => {
     try {
-      setProcessingState(prev => ({
-        ...prev,
-        isProcessing: true,
-        processingMessageIds: { ...prev.processingMessageIds, [messageId]: true }
-      }));
+      setIsProcessing(true);
+      addProcessingMessageId(messageId);
 
-      const { data, error } = await supabase.rpc('xdelo_sync_media_group_content', {
-        p_message_id: messageId,
-        p_media_group_id: mediaGroupId,
-        p_force_sync: options?.forceSync || false,
-        p_sync_edit_history: options?.syncEditHistory || false
-      });
+      // First get the source message's analyzed content
+      const { data: message, error: fetchError } = await supabase
+        .from('messages')
+        .select('analyzed_content')
+        .eq('id', messageId)
+        .single();
+      
+      if (fetchError || !message?.analyzed_content) {
+        throw new Error(fetchError?.message || 'No analyzed content to sync');
+      }
+      
+      // Use the retry-enabled sync function
+      const syncResult = await syncMediaGroupWithRetry(
+        messageId,
+        mediaGroupId,
+        message.analyzed_content,
+        {
+          forceSync: options?.forceSync !== false,
+          syncEditHistory: !!options?.syncEditHistory,
+          maxRetries: 3 // Limit retries to prevent excessive attempts
+        }
+      );
+      
+      if (!syncResult.success) {
+        throw syncResult.error || new Error('Failed to sync media group');
+      }
 
-      if (error) throw error;
-
+      // Success - display updated count if available
+      const updatedCount = syncResult.result?.updated_count;
       toast({
         title: "Media group synced",
-        description: `Media group ${mediaGroupId} has been synced successfully`,
+        description: `Media group ${mediaGroupId} has been synced successfully${
+          updatedCount !== undefined ? ` (${updatedCount} messages updated)` : ''
+        }`,
         variant: "default"
       });
 
       return true;
     } catch (error) {
+      console.error('Error in syncMediaGroup:', error);
       toast({
         title: "Media group sync failed",
         description: error instanceof Error ? error.message : String(error),
@@ -111,113 +124,23 @@ export function useMediaUtils() {
       });
       return false;
     } finally {
-      setProcessingState(prev => ({
-        ...prev,
-        isProcessing: false,
-        processingMessageIds: { ...prev.processingMessageIds, [messageId]: false }
-      }));
+      setIsProcessing(false);
+      removeProcessingMessageId(messageId);
     }
-  }, [toast]);
-
-  /**
-   * Repair media files with missing or incorrect file information
-   */
-  const repairMediaFiles = useCallback(async (messageIds: string[]): Promise<RepairResult> => {
-    try {
-      if (!messageIds.length) {
-        return {
-          success: false,
-          error: "No message IDs provided"
-        };
-      }
-
-      setProcessingState(prev => ({
-        ...prev,
-        isProcessing: true
-      }));
-
-      const { data, error } = await supabase.functions.invoke('media-management', {
-        body: {
-          action: 'repair',
-          messageIds: messageIds
-        }
-      });
-
-      if (error) throw error;
-
-      const result: RepairResult = data || {
-        success: true,
-        message: 'Repair operation completed',
-        successful: messageIds.length,
-        failed: 0,
-        details: []
-      };
-
-      toast({
-        title: result.success ? "Repair successful" : "Repair failed",
-        description: result.message || (result.success ? "Media files repaired" : "Failed to repair media files"),
-        variant: result.success ? "default" : "destructive"
-      });
-
-      return result;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      toast({
-        title: "Repair failed",
-        description: errorMessage,
-        variant: "destructive"
-      });
-      
-      return {
-        success: false,
-        error: errorMessage,
-        details: [],
-        successful: 0,
-        failed: messageIds.length
-      };
-    } finally {
-      setProcessingState(prev => ({
-        ...prev,
-        isProcessing: false
-      }));
-    }
-  }, [toast]);
-
-  // Group functions for state management
-  const processingStateActions: MediaProcessingStateActions = {
-    setIsProcessing: useCallback((isProcessing: boolean) => {
-      setProcessingState(prev => ({ ...prev, isProcessing }));
-    }, []),
-    
-    addProcessingMessageId: useCallback((messageId: string) => {
-      setProcessingState(prev => ({
-        ...prev,
-        processingMessageIds: { ...prev.processingMessageIds, [messageId]: true }
-      }));
-    }, []),
-    
-    removeProcessingMessageId: useCallback((messageId: string) => {
-      setProcessingState(prev => {
-        const updatedIds = { ...prev.processingMessageIds };
-        delete updatedIds[messageId];
-        return {
-          ...prev,
-          processingMessageIds: updatedIds
-        };
-      });
-    }, [])
-  };
+  }, [toast, setIsProcessing, addProcessingMessageId, removeProcessingMessageId]);
 
   return {
     // State
-    processingState,
+    isProcessing,
+    processingMessageIds,
     
-    // State actions
-    processingStateActions,
+    // Actions
+    setIsProcessing,
+    addProcessingMessageId,
+    removeProcessingMessageId,
     
     // Media operations
     resetMessage,
-    syncMediaGroup,
-    repairMediaFiles
+    syncMediaGroup
   };
 }
