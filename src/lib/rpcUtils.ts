@@ -29,7 +29,7 @@ export async function safeRpcCall<T>(
         throw error;
       }
       
-      return { success: true, data };
+      return { success: true, data: data as T };
     } catch (error: any) {
       console.error(`RPC error in ${functionName}:`, error);
       
@@ -106,4 +106,45 @@ export async function callRpc<T>(
 ): Promise<T | null> {
   const result = await safeRpcCall<T>(functionName, params);
   return result.success ? (result.data as T) : null;
+}
+
+// Create a type-safe utility for handling custom RPC functions
+interface CustomRpcFunctions {
+  [key: string]: boolean;
+}
+
+// Register all custom RPC functions that aren't in the type definition
+export const customRpcFunctions: CustomRpcFunctions = {
+  'xdelo_process_caption_workflow': true,
+  'xdelo_get_product_matching_config': true,
+  'xdelo_update_product_matching_config': true,
+  'xdelo_fix_audit_log_uuids': true,
+  'xdelo_kill_long_queries': true,
+  'xdelo_execute_sql_migration': true,
+  'xdelo_logprocessingevent': true,
+  'gl_products': true
+};
+
+/**
+ * Enhanced RPC caller that supports both standard and custom functions
+ */
+export async function callCustomRpc<T>(
+  functionName: string,
+  params: Record<string, any> = {}
+): Promise<T | null> {
+  // Use the dynamic approach to bypass TypeScript restrictions
+  try {
+    // @ts-ignore - Intentional bypass
+    const { data, error } = await supabase.rpc(functionName, params);
+    
+    if (error) {
+      console.error(`Error calling custom RPC function ${functionName}:`, error);
+      return null;
+    }
+    
+    return data as T;
+  } catch (err) {
+    console.error(`Exception in custom RPC call to ${functionName}:`, err);
+    return null;
+  }
 }

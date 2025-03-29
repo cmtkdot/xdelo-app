@@ -1,26 +1,26 @@
 
 /**
- * Options for retry behavior
- */
-export interface RetryOptions {
-  maxAttempts?: number;
-  baseDelayMs?: number;
-  maxDelayMs?: number;
-}
-
-/**
- * Utility class to handle retry logic with exponential backoff
+ * Utility class to handle retry logic for operations
  */
 export class RetryHandler {
-  private attempts = 0;
-  private readonly maxAttempts: number;
-  private readonly baseDelayMs: number;
-  private readonly maxDelayMs: number;
+  private maxAttempts: number;
+  private baseDelayMs: number;
+  private maxDelayMs: number;
+  private retryableErrors: any[];
+  private delay?: number; // Added delay option
 
-  constructor(options: RetryOptions = {}) {
+  constructor(options: {
+    maxAttempts: number;
+    baseDelayMs: number;
+    maxDelayMs: number;
+    retryableErrors: any[];
+    delay?: number; // Added delay option
+  }) {
     this.maxAttempts = options.maxAttempts || 3;
     this.baseDelayMs = options.baseDelayMs || 1000;
     this.maxDelayMs = options.maxDelayMs || 10000;
+    this.retryableErrors = options.retryableErrors || [];
+    this.delay = options.delay; // Store the delay option
   }
 
   /**
@@ -30,53 +30,72 @@ export class RetryHandler {
     operation: () => Promise<T>,
     shouldRetry: (error: any) => boolean
   ): Promise<T> {
-    while (this.attempts < this.maxAttempts) {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
       try {
+        // Attempt the operation
         return await operation();
       } catch (error) {
-        this.attempts++;
-
-        if (!shouldRetry(error) || this.attempts >= this.maxAttempts) {
-          throw error;
+        lastError = error as Error;
+        
+        // Check if we should retry
+        if (attempt >= this.maxAttempts || !shouldRetry(error)) {
+          break;
         }
-
-        const delay = this.calculateBackoff();
-        console.log(`Retrying operation (attempt ${this.attempts}/${this.maxAttempts}) after ${delay}ms`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        // Calculate delay with exponential backoff or use fixed delay if provided
+        const delay = this.delay || Math.min(
+          this.baseDelayMs * Math.pow(2, attempt - 1),
+          this.maxDelayMs
+        );
+        
+        // Add jitter to prevent thundering herd
+        const jitter = Math.random() * 0.2 * delay;
+        const totalDelay = delay + jitter;
+        
+        console.log(`Retry attempt ${attempt}/${this.maxAttempts} after ${Math.round(totalDelay)}ms delay`);
+        
+        // Wait before next attempt
+        await new Promise(resolve => setTimeout(resolve, totalDelay));
       }
     }
-    throw new Error('Max retry attempts exceeded');
-  }
-
-  /**
-   * Calculate backoff delay with jitter
-   */
-  private calculateBackoff(): number {
-    const jitter = Math.random() * 0.2 - 0.1; // ±10% jitter
-    const delay = Math.min(
-      this.baseDelayMs * Math.pow(2, this.attempts - 1),
-      this.maxDelayMs
-    );
-    return delay * (1 + jitter);
+    
+    // If we got here, we've exhausted our retries
+    throw lastError || new Error('Operation failed after multiple retries');
   }
 }
 
 /**
- * Determine if an operation should be retried based on the error type
+ * Default predicate to determine if an operation should be retried
  */
-export const shouldRetryOperation = (error: any): boolean => {
-  // Retry on network errors, timeouts, and rate limits
-  if (error.code === 'ETIMEDOUT' ||
-      error.code === 'ECONNRESET' ||
-      error.code === '429') {
+export function shouldRetryOperation(error: any): boolean {
+  // Network errors
+  if (error?.message?.includes('network') ||
+      error?.message?.includes('timeout') ||
+      error?.message?.includes('connection')) {
+    return true;
+  }
+  
+  // Rate limiting (429) or server errors (5xx)
+  const statusCode = error?.status || error?.statusCode;
+  if (statusCode === 429 || (statusCode >= 500 && statusCode < 600)) {
+    return true;
+  }
+  
+  // Specific Supabase error codes that are retryable
+  const errorCode = error?.code;
+  const retryableCodes = ['40001', '40197', '10928', '10929']; // Transaction conflicts, throttling
+  if (retryableCodes.includes(errorCode)) {
     return true;
   }
 
-  // Don't retry on client errors (4xx) except 429
-  if (error.statusCode >= 400 && error.statusCode < 500 && error.statusCode !== 429) {
-    return false;
+  // Custom check for media processing retriable errors
+  if (error?.message?.includes('media group sync already in progress') ||
+      error?.message?.includes('temporary failure') ||
+      error?.message?.includes('try again')) {
+    return true;
   }
-
-  // Default to retry for server errors (5xx)
-  return error.statusCode >= 500;
-};
+  
+  return false;
+}

@@ -3,10 +3,10 @@
 // Using named exports to avoid ambiguity
 
 // Core entity types with proper naming to avoid conflicts
-export { ProcessingState } from './api/ProcessingState';
-export { Message } from './entities/Message';
-export { MediaItem } from './entities/MediaItem';
-export { GlProduct } from './entities/Product';
+export type { ProcessingState } from './api/ProcessingState';
+export type { Message } from './entities/Message';
+export type { MediaItem } from './entities/MediaItem';
+export type { GlProduct } from './entities/Product';
 
 // Additional types used throughout the app
 export type SyncStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'partial';
@@ -40,4 +40,5 @@ export interface MatchResult {
     matchedFields: string[];
     confidence: number;
   };
+  isMatch?: boolean; // Added for backward compatibility
 }

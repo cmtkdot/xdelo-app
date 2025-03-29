@@ -8,12 +8,20 @@ import { RetryHandler, shouldRetryOperation } from './retryHandler';
  */
 export const withRetry = async <T>(
   operation: () => Promise<T>,
-  options = { maxAttempts: 3, baseDelayMs: 1000, maxDelayMs: 10000, retryableErrors: [] }
+  options = { 
+    maxAttempts: 3, 
+    baseDelayMs: 1000, 
+    maxDelayMs: 10000, 
+    retryableErrors: [],
+    delay: undefined as number | undefined 
+  }
 ): Promise<T> => {
   const retryHandler = new RetryHandler({
     maxAttempts: options.maxAttempts,
     baseDelayMs: options.baseDelayMs,
-    maxDelayMs: options.maxDelayMs
+    maxDelayMs: options.maxDelayMs,
+    retryableErrors: options.retryableErrors,
+    delay: options.delay
   });
   
   try {
@@ -82,6 +90,33 @@ export const isValidUuid = (str: string): boolean => {
 };
 
 /**
+ * Helper function to safely extract properties from JSON data
+ */
+export const safeJsonExtract = <T>(json: any, propertyPath: string, defaultValue: T): T => {
+  try {
+    if (!json) return defaultValue;
+    
+    // Handle nested properties using a path like "result.updated_count"
+    const parts = propertyPath.split('.');
+    let current = json;
+    
+    for (const part of parts) {
+      if (current === null || current === undefined || typeof current !== 'object') {
+        return defaultValue;
+      }
+      current = current[part];
+    }
+    
+    return current !== undefined && current !== null 
+      ? current as unknown as T 
+      : defaultValue;
+  } catch (err) {
+    console.warn(`Error extracting ${propertyPath} from JSON:`, err);
+    return defaultValue;
+  }
+};
+
+/**
  * Add error catch and retry functionality to media group syncing
  */
 export const syncMediaGroupWithRetry = async (
@@ -109,7 +144,17 @@ export const syncMediaGroupWithRetry = async (
       });
 
       if (error) throw error;
-      return { success: true, result: data };
+      
+      // Safely extract updated_count from the response
+      const updatedCount = safeJsonExtract(data, 'updated_count', 0);
+      
+      return { 
+        success: true, 
+        result: {
+          ...data,
+          updated_count: updatedCount
+        }
+      };
     } catch (err) {
       retryCount++;
       lastError = err;

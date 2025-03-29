@@ -19,9 +19,11 @@ export interface Message {
   group_caption_synced?: boolean;
   caption?: string;
   file_id?: string;
-  file_unique_id: string;
-  public_url: string;
+  file_unique_id: string; // Required
+  public_url: string; // Required
   storage_path?: string;
+  storage_path_standardized?: boolean | string; 
+  storage_exists?: boolean | string;
   mime_type?: string;
   mime_type_verified?: boolean;
   mime_type_original?: string;
@@ -36,11 +38,10 @@ export interface Message {
   processing_started_at?: string;
   processing_completed_at?: string;
   analyzed_content?: Record<string, any>;
+  old_analyzed_content?: Record<string, unknown>[];
   telegram_data?: Record<string, unknown>;
   error_message?: string;
   error_code?: string;
-  storage_exists?: boolean | string; 
-  storage_path_standardized?: boolean | string;
   chat_id?: number;
   chat_type?: string;
   chat_title?: string;
@@ -56,7 +57,6 @@ export interface Message {
   forward_from?: Record<string, unknown>;
   forward_from_chat?: Record<string, unknown>;
   forward_chain?: Record<string, unknown>[];
-  old_analyzed_content?: Record<string, unknown>[];
   needs_redownload?: boolean;
   redownload_reason?: string;
   redownload_flagged_at?: string;
@@ -76,6 +76,16 @@ export interface Message {
   forward_info?: Record<string, unknown>;
   edit_history?: Record<string, unknown>[];
   edit_date?: string;
+  is_edited?: boolean;
+  is_edited_channel_post?: boolean;
+  
+  // Fields from other interfaces that might be used in place of analyzed_content
+  product_name?: string;
+  product_code?: string;
+  vendor_uid?: string;
+  purchase_date?: string;
+  quantity?: number;
+  notes?: string;
 }
 
 export interface MessageApiResponse {

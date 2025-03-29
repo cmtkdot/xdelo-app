@@ -4,9 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { GLProductGrid } from "@/components/GlProducts/GLProductGrid";
 import { GLProductFilters } from "@/components/GlProducts/GLProductFilters";
-import { supabase } from "@/integrations/supabase/client";
-import { GlProduct, convertToGlProduct } from '@/types/GlProducts';
-import { GlProduct as EntityGlProduct } from '@/types/entities/Product';
+import { extendedSupabase } from "@/integrations/supabase/extendedClient";
+import { GlProduct } from "@/types";
+import { convertToGlProduct } from '@/types/GlProducts';
 
 const GlProducts = () => {
   const [search, setSearch] = useState("");
@@ -17,7 +17,7 @@ const GlProducts = () => {
   const { data: products, isLoading, error } = useQuery({
     queryKey: ["glapp_products", search, showUntitled, sortField, sortOrder],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await extendedSupabase
         .from("gl_products")
         .select(`
           *,
@@ -39,15 +39,18 @@ const GlProducts = () => {
         const searchLower = search.toLowerCase();
         productsWithImages = productsWithImages.filter(product => 
           product.main_new_product_name?.toLowerCase().includes(searchLower) || 
-          product.main_vendor_product_name?.toLowerCase().includes(searchLower)
+          product.new_product_name?.toLowerCase().includes(searchLower) ||
+          product.main_vendor_product_name?.toLowerCase().includes(searchLower) ||
+          product.vendor_product_name?.toLowerCase().includes(searchLower)
         );
       }
 
       // Filter out untitled products if showUntitled is false
       if (!showUntitled) {
         productsWithImages = productsWithImages.filter(product => 
-          product.main_new_product_name && 
-          product.main_new_product_name.toLowerCase() !== "untitled"
+          (product.main_new_product_name || product.new_product_name) && 
+          (product.main_new_product_name?.toLowerCase() !== "untitled" || 
+           product.new_product_name?.toLowerCase() !== "untitled")
         );
       }
 
@@ -56,8 +59,10 @@ const GlProducts = () => {
         let valueA, valueB;
 
         if (sortField === "purchase_date") {
-          valueA = a.main_product_purchase_date ? new Date(a.main_product_purchase_date).getTime() : 0;
-          valueB = b.main_product_purchase_date ? new Date(b.main_product_purchase_date).getTime() : 0;
+          valueA = a.main_product_purchase_date || a.product_purchase_date ? 
+                 new Date(a.main_product_purchase_date || a.product_purchase_date as string).getTime() : 0;
+          valueB = b.main_product_purchase_date || b.product_purchase_date ? 
+                 new Date(b.main_product_purchase_date || b.product_purchase_date as string).getTime() : 0;
         } else {
           valueA = a.created_at ? new Date(a.created_at).getTime() : 0;
           valueB = b.created_at ? new Date(b.created_at).getTime() : 0;
@@ -68,7 +73,7 @@ const GlProducts = () => {
           : valueB - valueA;
       });
 
-      return productsWithImages as unknown as EntityGlProduct[];
+      return productsWithImages;
     },
   });
 
