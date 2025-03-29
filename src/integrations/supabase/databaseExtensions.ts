@@ -8,49 +8,6 @@ import { Database } from './types';
 export interface ExtendedDatabase extends Database {
   public: Database['public'] & {
     Tables: Database['public']['Tables'] & {
-      gl_products: {
-        Row: {
-          id: string;
-          new_product_name?: string;
-          vendor_product_name?: string;
-          product_purchase_date?: string;
-          total_qty_purchased?: number;
-          cost?: number;
-          category?: string;
-          product_image1?: string;
-          purchase_notes?: string;
-          created_at: string;
-          updated_at: string;
-          [key: string]: any;
-        };
-        Insert: {
-          id?: string;
-          new_product_name?: string;
-          vendor_product_name?: string;
-          product_purchase_date?: string;
-          total_qty_purchased?: number;
-          cost?: number;
-          category?: string;
-          product_image1?: string;
-          purchase_notes?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          new_product_name?: string;
-          vendor_product_name?: string;
-          product_purchase_date?: string;
-          total_qty_purchased?: number;
-          cost?: number;
-          category?: string;
-          product_image1?: string;
-          purchase_notes?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
     };
     Functions: Database['public']['Functions'] & {
       xdelo_process_caption_workflow: {
@@ -58,16 +15,6 @@ export interface ExtendedDatabase extends Database {
           p_message_id: string;
           p_correlation_id?: string;
           p_force?: boolean;
-        };
-        Returns: unknown;
-      };
-      xdelo_get_product_matching_config: {
-        Args: Record<string, never>;
-        Returns: unknown;
-      };
-      xdelo_update_product_matching_config: {
-        Args: {
-          p_config: unknown;
         };
         Returns: unknown;
       };
@@ -117,8 +64,6 @@ export function isCustomRpcFunction(name: string): name is CustomRpcFunction {
  */
 export const customRpcFunctions: Record<string, boolean> = {
   'xdelo_process_caption_workflow': true,
-  'xdelo_get_product_matching_config': true,
-  'xdelo_update_product_matching_config': true,
   'xdelo_fix_audit_log_uuids': true,
   'xdelo_kill_long_queries': true,
   'xdelo_execute_sql_migration': true,
