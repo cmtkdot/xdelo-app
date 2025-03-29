@@ -1,5 +1,6 @@
+
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { logProcessingEvent } from "../../_shared/auditLogger.ts";
+import { logProcessingEvent } from "./auditLogger.ts";
 
 interface RetryOptions {
   maxAttempts?: number;
@@ -34,11 +35,18 @@ export class RetryHandler {
         }
 
         const delay = this.calculateBackoff();
-        logProcessingEvent('retry_attempt', {
-          attempt: this.attempts,
-          delay_ms: delay,
-          error: error.message
-        });
+        // Log retry attempt
+        await logProcessingEvent(
+          'retry_attempt', 
+          'system',
+          crypto.randomUUID().toString(),
+          {
+            attempt: this.attempts,
+            max_attempts: this.maxAttempts,
+            delay_ms: delay,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        );
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
@@ -56,6 +64,15 @@ export class RetryHandler {
 }
 
 export const shouldRetryOperation = (error: any): boolean => {
+  // Don't retry on validation errors or bad input
+  if (error.message && (
+      error.message.includes('validation') ||
+      error.message.includes('invalid') ||
+      error.message.includes('required parameter')
+  )) {
+    return false;
+  }
+
   // Retry on network errors, timeouts, and rate limits
   if (error.code === 'ETIMEDOUT' ||
       error.code === 'ECONNRESET' ||
