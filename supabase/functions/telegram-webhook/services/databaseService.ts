@@ -11,11 +11,11 @@ import { TelegramMessage } from "../types.ts";
 export async function checkExistingMessage(
   telegramMessageId: number,
   chatId: number
-): Promise<{ exists: boolean; id?: string; retryCount?: number }> {
+): Promise<{ exists: boolean; id?: string; retryCount?: number; caption?: string }> {
   try {
     const { data, error } = await supabaseClient
       .from("messages")
-      .select("id, retry_count")
+      .select("id, retry_count, caption")
       .eq("telegram_message_id", telegramMessageId)
       .eq("chat_id", chatId)
       .maybeSingle();
@@ -28,7 +28,8 @@ export async function checkExistingMessage(
     return {
       exists: !!data,
       id: data?.id,
-      retryCount: data?.retry_count
+      retryCount: data?.retry_count,
+      caption: data?.caption
     };
   } catch (error) {
     console.error(`Exception checking for existing message: ${error instanceof Error ? error.message : String(error)}`);

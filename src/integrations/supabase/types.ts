@@ -216,6 +216,7 @@ export type Database = {
           edit_date: string | null
           edit_history: Json | null
           edit_source: string | null
+          edited: string | null
           edited_channel_post: boolean | null
           error_code: string | null
           error_message: string | null
@@ -315,6 +316,7 @@ export type Database = {
           edit_date?: string | null
           edit_history?: Json | null
           edit_source?: string | null
+          edited?: string | null
           edited_channel_post?: boolean | null
           error_code?: string | null
           error_message?: string | null
@@ -414,6 +416,7 @@ export type Database = {
           edit_date?: string | null
           edit_history?: Json | null
           edit_source?: string | null
+          edited?: string | null
           edited_channel_post?: boolean | null
           error_code?: string | null
           error_message?: string | null

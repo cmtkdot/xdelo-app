@@ -1,3 +1,4 @@
+
 -- Migration to fix trigger that references non-existent 'edited' field
 BEGIN;
 

@@ -1,3 +1,4 @@
+
 import { supabaseClient } from "./supabase.ts";
 
 interface ErrorLogParams {
