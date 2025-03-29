@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { safeRpcCall } from './rpcUtils';
 
@@ -196,5 +195,52 @@ export async function repairMediaGroups(limit = 10): Promise<{
       repaired: 0,
       error: error.message
     };
+  }
+}
+
+export async function fetchMediaGroupMessages(
+  mediaGroupId: string
+): Promise<Message[]> {
+  if (!mediaGroupId) {
+    throw new Error('Media group ID is required');
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('media_group_id', mediaGroupId)
+      .order('created_at', { ascending: true });
+      
+    if (error) {
+      throw new Error(`Failed to fetch media group: ${error.message}`);
+    }
+    
+    return data || [];
+  } catch (err) {
+    console.error('Error in fetchMediaGroupMessages:', err);
+    return [];
+  }
+}
+
+export async function identifySourceCaption(mediaGroupId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('media_group_id', mediaGroupId)
+      .eq('is_original_caption', true)
+      .limit(1)
+      .single();
+      
+    if (error || !data) {
+      return null;
+    }
+    
+    // Safely convert the result to string
+    return typeof data.id === 'string' ? data.id : String(data.id);
+  } catch (error) {
+    console.error('Error identifying source caption:', error);
+    return null;
   }
 }

@@ -1,7 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { logProcessingEvent } from "../../../supabase/functions/_shared/consolidatedMessageUtils";
 
+// Import directly from the shared utils
 export enum LogEventType {
   // Message events
   MESSAGE_RECEIVED = "MESSAGE_RECEIVED",

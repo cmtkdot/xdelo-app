@@ -1,8 +1,8 @@
-
 'use client'
 
 import React, { useState, useMemo } from 'react';
 import { Message } from '@/types/entities/Message';
+import { adaptMessage } from '@/lib/messageAdapter';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/useToast';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -79,7 +79,21 @@ export default function MessagesEnhanced() {
   
   const handleDeleteMessage = async (id: string) => {
     try {
-      await deleteMessage({id} as Message, false);
+      // Find the message by ID first
+      const messageToDelete = items?.find(msg => msg.id === id);
+      if (!messageToDelete) {
+        toast({
+          variant: 'destructive',
+          title: 'Error deleting message',
+          description: 'Message not found.',
+        });
+        return;
+      }
+      
+      // Convert the message to ensure required fields are present
+      const adaptedMessage = adaptMessage(messageToDelete);
+      
+      await deleteMessage(adaptedMessage, false);
       toast({
         title: 'Message deleted',
         description: 'The message has been successfully deleted.',

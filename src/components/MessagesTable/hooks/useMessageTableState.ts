@@ -1,8 +1,8 @@
-
 import { useState } from "react";
 import { useToast } from "@/hooks/useToast";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
 import { Message, AnalyzedContent } from "@/types";
+import { adaptMessage } from "@/lib/messageAdapter";
 
 export interface EditableMessage extends Message {
   isEditing: boolean;
@@ -78,15 +78,9 @@ export function useMessageTableState(initialMessages: Message[]) {
   };
 
   const handleDeleteClick = (message: Message) => {
-    const typedMessage: Message = {
-      ...message,
-      file_unique_id: message.file_unique_id,
-      public_url: message.public_url,
-      storage_path_standardized: message.storage_path_standardized,
-      storage_exists: message.storage_exists
-    };
+    const adaptedMessage = adaptMessage(message);
     
-    setMessageToDelete(typedMessage);
+    setMessageToDelete(adaptedMessage);
     setIsDeleteDialogOpen(true);
   };
 

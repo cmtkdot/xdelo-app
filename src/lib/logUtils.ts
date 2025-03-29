@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Logger, createLogger } from "@/lib/logger";
+import { Logger, LogEventType, createLogger, logEvent } from "./logger";
 
 /**
  * Create a logger for a specific component or feature
@@ -36,3 +36,6 @@ export async function logSystemEvent(
     console.error('Failed to log system event:', error);
   }
 }
+
+// Re-export these from logger for backwards compatibility
+export { logEvent, LogEventType };
