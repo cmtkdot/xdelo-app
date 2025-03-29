@@ -1,7 +1,6 @@
 
 // Standardized Supabase client for Edge Functions
-// Recommended approach in _shared/supabase.ts
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Singleton instance of the Supabase client
 export const supabaseClient = createClient(

@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Search } from "lucide-react";
 import { TestResultsDisplay } from "./TestResultsDisplay";
 import { fetchMatchingConfig } from "@/lib/productMatchingConfig";
+import { GlProduct } from "@/integrations/supabase/dbExtensions";
 
 interface TestResult {
   messageId: string;
@@ -117,12 +118,12 @@ export const TestMatchingPanel = () => {
       
       // If we have a match
       if (matchingResult?.bestMatch) {
-        // Get product details
-        const { data: product } = await supabase
-          .from('gl_products')
-          .select('new_product_name, id')
-          .eq('id', matchingResult.bestMatch.product_id)
-          .single();
+        // Get product details using functions.invoke to bypass type issues
+        const { data: products } = await supabase.functions.invoke('gl-products-lookup', {
+          body: { productIds: [matchingResult.bestMatch.product_id] }
+        });
+        
+        const product = products?.length > 0 ? products[0] : null;
           
         setResult({
           messageId: useCustomText ? 'custom-text' : selectedMessageId,

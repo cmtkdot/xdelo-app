@@ -1,57 +1,85 @@
 
-import React from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Wrench, RefreshCw } from 'lucide-react';
-import { useMediaUtils } from '@/hooks/useMediaUtils';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { RotateCw } from 'lucide-react';
+import { useToast } from '@/hooks/useToast';
+import { repairMediaBatch } from '@/lib/mediaOperations';
 
-export function MediaFixButton() {
-  const { 
-    isProcessing, 
-    standardizeStoragePaths, 
-    fixMediaUrls 
-  } = useMediaUtils();
+interface MediaFixButtonProps {
+  messageIds: string[];
+  onSuccess?: () => void;
+  variant?: 'default' | 'outline' | 'ghost';
+  size?: 'default' | 'sm' | 'lg' | 'icon';
+  label?: string;
+  showIcon?: boolean;
+}
+
+export function MediaFixButton({
+  messageIds,
+  onSuccess,
+  variant = 'default',
+  size = 'default',
+  label = 'Fix Media',
+  showIcon = true
+}: MediaFixButtonProps) {
+  const [isProcessing, setIsProcessing] = useState(false);
+  const { toast } = useToast();
+
+  const handleFix = async () => {
+    if (!messageIds.length) {
+      toast({
+        title: 'No messages selected',
+        description: 'Please select at least one message to fix.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+    
+    try {
+      // Convert single ID to array if needed
+      const idsToFix = Array.isArray(messageIds) ? messageIds : [messageIds];
+      
+      const result = await repairMediaBatch(idsToFix);
+      
+      if (result.success) {
+        toast({
+          title: 'Media Fixed',
+          description: `Successfully repaired ${result.successful} out of ${idsToFix.length} media items.`,
+        });
+        
+        if (onSuccess) {
+          onSuccess();
+        }
+      } else {
+        toast({
+          title: 'Error',
+          description: result.message || 'Failed to repair media',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error repairing media:', error);
+      toast({
+        title: 'Error',
+        description: 'An unexpected error occurred while trying to repair media.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="flex items-center gap-2"
-          disabled={isProcessing}
-        >
-          <Wrench className="h-4 w-4" />
-          Media Utilities
-          {isProcessing && <RefreshCw className="h-3 w-3 animate-spin" />}
-        </Button>
-      </PopoverTrigger>
-      
-      <PopoverContent className="w-56 p-2">
-        <div className="space-y-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start"
-            disabled={isProcessing}
-            onClick={() => standardizeStoragePaths(100)}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            <span>Standardize Storage Paths</span>
-          </Button>
-          
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start"
-            disabled={isProcessing}
-            onClick={() => fixMediaUrls(100)}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            <span>Fix Public URLs</span>
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
+    <Button
+      variant={variant}
+      size={size}
+      onClick={handleFix}
+      disabled={isProcessing || !messageIds.length}
+    >
+      {showIcon && <RotateCw className={`h-4 w-4 ${isProcessing ? 'animate-spin' : ''} ${label ? 'mr-2' : ''}`} />}
+      {label}
+    </Button>
   );
 }

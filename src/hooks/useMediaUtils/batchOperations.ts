@@ -1,261 +1,214 @@
-import { useState } from 'react';
+
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/useToast';
-import { MediaProcessingStateActions, RepairResult } from './types';
 import { withRetry } from './utils';
-import { syncMediaGroup } from '@/lib/mediaGroupSync';
+import { logEvent, LogEventType } from '@/lib/logger';
+
+export interface RepairResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+  data?: any;
+  successful?: number;
+  failed?: number;
+  retryCount?: number;
+}
+
+export interface BatchRepairOptions {
+  limit?: number;
+  repairAll?: boolean;
+  messageIds?: string[];
+  enableRedownload?: boolean;
+  fixPaths?: boolean;
+  fixUrls?: boolean;
+  fixContentDisposition?: boolean;
+}
 
 /**
- * Hook for batch media operations
+ * Repair a batch of media messages with various fixes
  */
-export function useBatchOperations(
-  setIsProcessing: MediaProcessingStateActions['setIsProcessing'],
-  addProcessingMessageId: MediaProcessingStateActions['addProcessingMessageId'],
-  removeProcessingMessageId: MediaProcessingStateActions['removeProcessingMessageId']
-) {
-  const { toast } = useToast();
-  
-  /**
-   * Standardize storage paths for multiple messages
-   */
-  const standardizeStoragePaths = async (messageIds?: string[]): Promise<boolean> => {
-    try {
-      setIsProcessing(true);
-      
-      // If no specific message IDs were provided, standardize all paths
-      const { data, error } = await supabase.functions.invoke('media-management', {
-        body: { 
-          action: 'standardize-paths',
-          messageIds 
-        }
-      });
-      
-      if (error) {
-        console.error('Error standardizing storage paths:', error);
-        toast({
-          title: 'Operation Failed',
-          description: error.message,
-          variant: 'destructive',
-        });
-        return false;
+export async function repairMediaBatch(options: BatchRepairOptions): Promise<RepairResult> {
+  try {
+    // Generate tracking ID for this operation
+    const operationId = crypto.randomUUID();
+    
+    // Log start of operation
+    await logEvent(
+      LogEventType.MEDIA_REUPLOAD_REQUESTED, 
+      'batch',
+      {
+        operation_id: operationId,
+        options,
+        timestamp: new Date().toISOString()
       }
-      
-      toast({
-        title: 'Paths Standardized',
-        description: data.message || `Processed ${data.count || 0} messages`,
-      });
-      
-      return true;
-    } catch (err) {
-      console.error('Error in standardizeStoragePaths:', err);
-      toast({
-        title: 'Operation Error',
-        description: err instanceof Error ? err.message : 'Unknown error',
-        variant: 'destructive',
-      });
-      return false;
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-  
-  /**
-   * Fix media URLs for multiple messages
-   */
-  const fixMediaUrls = async (messageIds?: string[]): Promise<boolean> => {
-    try {
-      setIsProcessing(true);
-      
-      const { data, error } = await supabase.functions.invoke('media-management', {
-        body: { 
-          action: 'fix-urls',
-          messageIds 
-        }
-      });
-      
-      if (error) {
-        console.error('Error fixing media URLs:', error);
-        toast({
-          title: 'Operation Failed',
-          description: error.message,
-          variant: 'destructive',
-        });
-        return false;
+    );
+    
+    // Call the edge function with retry mechanism
+    const { data, error, retryCount } = await withRetry(
+      () => supabase.functions.invoke('xdelo_unified_media_repair', {
+        body: options
+      }),
+      {
+        maxAttempts: 3,
+        baseDelayMs: 1000,
+        maxDelayMs: 10000,
+        retryableErrors: ['timeout', 'connection']
       }
-      
-      toast({
-        title: 'Media URLs Fixed',
-        description: data.message || `Fixed URLs for ${data.count || 0} messages`,
-      });
-      
-      return true;
-    } catch (err) {
-      console.error('Error in fixMediaUrls:', err);
-      toast({
-        title: 'Operation Error',
-        description: err instanceof Error ? err.message : 'Unknown error',
-        variant: 'destructive',
-      });
-      return false;
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-  
-  /**
-   * Repair media batch issues
-   */
-  const repairMediaBatch = async (limit = 10): Promise<RepairResult> => {
-    try {
-      setIsProcessing(true);
-      
-      // Get media groups that need repair
-      const result = await withRetry(
-        () => supabase.functions.invoke('media-management', {
-          body: { 
-            action: 'repair-media-groups',
-            limit
-          }
-        }),
-        { maxAttempts: 3, delay: 1000 }
+    );
+    
+    if (error) {
+      // Log failure
+      await logEvent(
+        LogEventType.MEDIA_REUPLOAD_FAILED,
+        'batch',
+        {
+          operation_id: operationId,
+          error: error.message,
+          options,
+          retry_count: retryCount
+        }
       );
-      
-      if (result.error) {
-        throw new Error(result.error.message);
-      }
-      
-      const repairResult: RepairResult = result.data;
-      
-      if (repairResult.success) {
-        toast({
-          title: 'Repair Completed',
-          description: repairResult.message || `Repaired ${repairResult.repaired} media groups`,
-        });
-      } else {
-        toast({
-          title: 'Repair Issues',
-          description: repairResult.error || 'Problems occurred during repair',
-          variant: 'destructive',
-        });
-      }
-      
-      return repairResult;
-    } catch (err) {
-      console.error('Error in repairMediaBatch:', err);
-      toast({
-        title: 'Repair Error',
-        description: err instanceof Error ? err.message : 'Unknown error',
-        variant: 'destructive',
-      });
       
       return {
         success: false,
-        repaired: 0,
-        error: err instanceof Error ? err.message : 'Unknown error'
+        message: error.message || 'Failed to repair media batch',
+        error: error.message,
+        retryCount
       };
-    } finally {
-      setIsProcessing(false);
     }
-  };
-  
-  /**
-   * Process all pending messages
-   */
-  const processAllPendingMessages = async (): Promise<boolean> => {
-    try {
-      setIsProcessing(true);
-      
-      const { data: pendingMessages, error: fetchError } = await supabase
-        .from('messages')
-        .select('id, media_group_id')
-        .eq('processing_state', 'pending')
-        .limit(50);
-      
-      if (fetchError) {
-        throw new Error(`Failed to fetch pending messages: ${fetchError.message}`);
+    
+    // Log success
+    await logEvent(
+      LogEventType.MEDIA_REUPLOAD_SUCCESS,
+      'batch',
+      {
+        operation_id: operationId,
+        result: data,
+        options,
+        retry_count: retryCount
       }
-      
-      if (!pendingMessages || pendingMessages.length === 0) {
-        toast({
-          title: 'No Pending Messages',
-          description: 'No messages found that need processing',
-        });
-        return true;
+    );
+    
+    return {
+      success: true,
+      message: data?.message || 'Successfully repaired media batch',
+      successful: data?.successful || 0,
+      failed: data?.failed || 0,
+      data,
+      retryCount
+    };
+  } catch (error) {
+    console.error('Error in repairMediaBatch:', error);
+    
+    // Log exception
+    await logEvent(
+      LogEventType.MEDIA_REUPLOAD_FAILED,
+      'batch',
+      {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        options
       }
-      
-      // Process each message
-      const results = [];
-      let successCount = 0;
-      
-      for (const message of pendingMessages) {
-        try {
-          addProcessingMessageId(message.id);
-          
-          // For media group messages, try to sync from existing content
-          if (message.media_group_id) {
-            const result = await syncMediaGroup(message.media_group_id);
-            if (result.success) {
-              successCount++;
-            }
-            results.push(result);
-          } else {
-            // For non-media group messages, trigger caption analysis
-            const { data, error } = await supabase.rpc('xdelo_process_caption_workflow', {
-              p_message_id: message.id,
-              p_correlation_id: crypto.randomUUID(),
-              p_force: true
-            });
-            
-            if (error) {
-              results.push({
-                message_id: message.id,
-                success: false,
-                error: error.message
-              });
-            } else {
-              successCount++;
-              results.push({
-                message_id: message.id,
-                success: true,
-                result: data
-              });
-            }
-          }
-        } catch (err) {
-          results.push({
-            message_id: message.id,
-            success: false,
-            error: err instanceof Error ? err.message : String(err)
-          });
-        } finally {
-          removeProcessingMessageId(message.id);
+    );
+    
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Unknown error occurred',
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+/**
+ * Process caption for a single message, using database RPC
+ */
+export async function processCaptionRpc(messageId: string, force: boolean = false): Promise<RepairResult> {
+  try {
+    // Generate correlation ID
+    const correlationId = crypto.randomUUID().toString();
+    
+    // Log the operation start
+    await logEvent(
+      LogEventType.CAPTION_PARSED,
+      messageId,
+      {
+        force,
+        method: 'rpc',
+        correlationId
+      }
+    );
+    
+    // Call the RPC function with retry
+    const { data, error, retryCount } = await withRetry(
+      // Here we safely use RPC with our extended client types
+      () => supabase.functions.invoke('xdelo_process_caption', {
+        body: {
+          messageId,
+          correlationId,
+          force
         }
+      }),
+      {
+        maxAttempts: 3,
+        baseDelayMs: 1000,
+        maxDelayMs: 10000,
+        retryableErrors: ['timeout', 'connection']
       }
+    );
+    
+    if (error) {
+      await logEvent(
+        LogEventType.MESSAGE_ERROR,
+        messageId,
+        {
+          error: error.message,
+          method: 'rpc',
+          correlationId,
+          retry_count: retryCount
+        }
+      );
       
-      toast({
-        title: 'Processing Completed',
-        description: `Successfully processed ${successCount} of ${pendingMessages.length} messages`,
-        variant: successCount === pendingMessages.length ? 'default' : 'destructive',
-      });
-      
-      return successCount > 0;
-    } catch (err) {
-      console.error('Error in processAllPendingMessages:', err);
-      toast({
-        title: 'Processing Error',
-        description: err instanceof Error ? err.message : 'Unknown error',
-        variant: 'destructive',
-      });
-      return false;
-    } finally {
-      setIsProcessing(false);
+      return {
+        success: false,
+        message: error.message,
+        error: error.message,
+        retryCount
+      };
     }
-  };
-  
-  return {
-    standardizeStoragePaths,
-    fixMediaUrls,
-    repairMediaBatch,
-    processAllPendingMessages
-  };
+    
+    await logEvent(
+      LogEventType.MESSAGE_PROCESSED,
+      messageId,
+      {
+        result: data,
+        method: 'rpc',
+        correlationId,
+        retry_count: retryCount
+      }
+    );
+    
+    return {
+      success: true,
+      message: 'Caption processed successfully',
+      data,
+      retryCount
+    };
+  } catch (error) {
+    console.error('Error in processCaptionRpc:', error);
+    
+    await logEvent(
+      LogEventType.MESSAGE_ERROR,
+      messageId,
+      {
+        error: error instanceof Error ? error.message : String(error),
+        method: 'exception',
+        correlationId: crypto.randomUUID().toString()
+      }
+    );
+    
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Unknown error occurred',
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
 }

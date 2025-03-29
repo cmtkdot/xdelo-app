@@ -1,6 +1,6 @@
+
 import { supabase } from "@/integrations/supabase/client";
-import { logProcessingEvent } from "supabase/functions/_shared/consolidatedMessageUtils";
-import { Logger, createLogger } from "./logger";
+import { logProcessingEvent } from "../../../supabase/functions/_shared/consolidatedMessageUtils";
 
 export enum LogEventType {
   // Message events
@@ -39,6 +39,76 @@ export enum LogEventType {
 
 export interface EventLogData {
   [key: string]: any;
+}
+
+export class Logger {
+  private namespace: string;
+  
+  constructor(namespace: string) {
+    this.namespace = namespace;
+  }
+  
+  async logEvent(
+    eventType: LogEventType | string,
+    entityId: string,
+    metadata: EventLogData = {}
+  ): Promise<void> {
+    try {
+      const correlationId = crypto.randomUUID().toString();
+      
+      // First attempt direct API call
+      try {
+        await supabase.functions.invoke('log-operation', {
+          body: { 
+            eventType,
+            entityId,
+            metadata: {
+              ...metadata,
+              namespace: this.namespace
+            }
+          }
+        });
+        return;
+      } catch (apiError) {
+        console.warn(`Edge function logging failed, falling back to RPC: ${apiError.message}`);
+      }
+      
+      // Fallback: log to database via RPC
+      await supabase.rpc('log_processing_event', {
+        p_event_type: eventType,
+        p_entity_id: entityId,
+        p_correlation_id: correlationId,
+        p_metadata: {
+          ...metadata,
+          namespace: this.namespace
+        }
+      });
+    } catch (error) {
+      console.error(`Error logging event: ${error}`);
+    }
+  }
+  
+  async logMediaOperation(
+    operation: string,
+    messageId: string,
+    success: boolean,
+    metadata: EventLogData = {}
+  ): Promise<void> {
+    const eventType = success 
+      ? `MEDIA_${operation.toUpperCase()}_SUCCESS` 
+      : `MEDIA_${operation.toUpperCase()}_FAILED`;
+      
+    await this.logEvent(eventType, messageId, {
+      operation,
+      success,
+      ...metadata
+    });
+  }
+}
+
+// Helper function to create a logger
+export function createLogger(namespace: string): Logger {
+  return new Logger(namespace);
 }
 
 // Default logger for backward compatibility

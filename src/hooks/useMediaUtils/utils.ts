@@ -1,186 +1,189 @@
 
-import React from 'react';
-import { supabase } from "@/integrations/supabase/client";
-import { RetryHandler, shouldRetryOperation } from './retryHandler';
+import { supabase } from '@/integrations/supabase/client';
+import { useState, useCallback } from 'react';
+import { ensureMessagesCompatibility } from '@/integrations/supabase/dbExtensions';
 
 /**
- * Higher-order function to handle retrying operations with standardized error handling
+ * Media processing state and actions
  */
-export const withRetry = async <T>(
-  operation: () => Promise<T>,
-  options = { 
-    maxAttempts: 3, 
-    baseDelayMs: 1000, 
-    maxDelayMs: 10000, 
-    retryableErrors: [],
-    delay: undefined as number | undefined 
-  }
-): Promise<T> => {
-  const retryHandler = new RetryHandler({
-    maxAttempts: options.maxAttempts,
-    baseDelayMs: options.baseDelayMs,
-    maxDelayMs: options.maxDelayMs,
-    retryableErrors: options.retryableErrors,
-    delay: options.delay
-  });
-  
-  try {
-    return await retryHandler.execute(operation, shouldRetryOperation);
-  } catch (error) {
-    // Rethrow the error after retry attempts are exhausted
-    throw error;
-  }
-};
+export interface MediaProcessingState {
+  isProcessing: boolean;
+  processingMessageIds: string[];
+}
+
+export interface MediaProcessingActions {
+  setIsProcessing: (isProcessing: boolean) => void;
+  addProcessingMessageId: (messageId: string) => void;
+  removeProcessingMessageId: (messageId: string) => void;
+}
 
 /**
- * Create a standard media processing state manager
+ * Options for media sync operations
  */
-export const createMediaProcessingState = () => {
-  const [state, setState] = React.useState<{
-    isProcessing: boolean;
-    processingMessageIds: Record<string, boolean>;
-  }>({
-    isProcessing: false,
-    processingMessageIds: {}
-  });
-
-  const actions = {
-    setIsProcessing: (isProcessing: boolean) => {
-      setState(prev => ({ ...prev, isProcessing }));
-    },
-    
-    addProcessingMessageId: (messageId: string) => {
-      setState(prev => ({
-        ...prev,
-        processingMessageIds: { ...prev.processingMessageIds, [messageId]: true }
-      }));
-    },
-    
-    removeProcessingMessageId: (messageId: string) => {
-      setState(prev => {
-        const updatedIds = { ...prev.processingMessageIds };
-        delete updatedIds[messageId];
-        return {
-          ...prev,
-          processingMessageIds: updatedIds
-        };
-      });
-    }
-  };
-
-  return [state, actions] as const;
-};
+export interface MediaSyncOptions {
+  forceSync?: boolean;
+  syncEditHistory?: boolean;
+}
 
 /**
- * Check if a caption is valid and not empty
+ * Result from sync operations
  */
-export const hasValidCaption = (caption: string | null | undefined): boolean => {
-  return !!caption && caption.trim().length > 0;
-};
+export interface SyncResult {
+  success: boolean;
+  error?: Error | null;
+  result?: any;
+}
 
 /**
- * Validate if a string is a valid UUID
+ * Create a state manager for media processing
  */
-export const isValidUuid = (str: string): boolean => {
-  if (!str) return false;
-  
-  // UUID regex pattern
-  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidPattern.test(str);
-};
+export function createMediaProcessingState(): [MediaProcessingState, MediaProcessingActions] {
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [processingMessageIds, setProcessingMessageIds] = useState<string[]>([]);
+
+  const addProcessingMessageId = useCallback((messageId: string) => {
+    setProcessingMessageIds((prev) => [...prev, messageId]);
+  }, []);
+
+  const removeProcessingMessageId = useCallback((messageId: string) => {
+    setProcessingMessageIds((prev) => prev.filter((id) => id !== messageId));
+  }, []);
+
+  return [
+    { isProcessing, processingMessageIds },
+    { setIsProcessing, addProcessingMessageId, removeProcessingMessageId }
+  ];
+}
 
 /**
- * Helper function to safely extract properties from JSON data
+ * Check if a message has a valid caption
  */
-export const safeJsonExtract = <T>(json: any, propertyPath: string, defaultValue: T): T => {
-  try {
-    if (!json) return defaultValue;
-    
-    // Handle nested properties using a path like "result.updated_count"
-    const parts = propertyPath.split('.');
-    let current = json;
-    
-    for (const part of parts) {
-      if (current === null || current === undefined || typeof current !== 'object') {
-        return defaultValue;
+export function hasValidCaption(caption?: string): boolean {
+  return Boolean(caption && caption.trim().length > 0);
+}
+
+/**
+ * Validate a UUID string
+ */
+export function isValidUuid(id?: string): boolean {
+  if (!id) return false;
+  const regexExp = /^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/gi;
+  return regexExp.test(id);
+}
+
+interface RetryOptions {
+  maxAttempts?: number;
+  baseDelayMs?: number;
+  maxDelayMs?: number;
+  retryableErrors?: string[];
+}
+
+/**
+ * Retry a database operation with exponential backoff
+ */
+export async function withRetry<T>(
+  operation: () => Promise<{ data: T | null; error: any }>,
+  options: RetryOptions = {}
+): Promise<{ data: T | null; error: any; retryCount?: number }> {
+  const maxAttempts = options.maxAttempts || 3;
+  const baseDelayMs = options.baseDelayMs || 1000;
+  const maxDelayMs = options.maxDelayMs || 10000;
+  const retryableErrors = options.retryableErrors || [];
+
+  let attempts = 0;
+  let lastError = null;
+
+  while (attempts < maxAttempts) {
+    try {
+      const result = await operation();
+      
+      if (result.error) {
+        lastError = result.error;
+        
+        // Check if we should retry this error
+        const shouldRetry = retryableErrors.length === 0 || 
+          retryableErrors.some(errType => 
+            result.error.message?.includes(errType) || 
+            result.error.code?.includes(errType)
+          );
+          
+        if (!shouldRetry) {
+          return { ...result, retryCount: attempts };
+        }
+      } else {
+        // Success, return the result
+        return attempts > 0 
+          ? { ...result, retryCount: attempts }
+          : result;
       }
-      current = current[part];
+    } catch (error) {
+      lastError = error;
     }
     
-    return current !== undefined && current !== null 
-      ? current as unknown as T 
-      : defaultValue;
-  } catch (err) {
-    console.warn(`Error extracting ${propertyPath} from JSON:`, err);
-    return defaultValue;
+    // Increment attempt counter
+    attempts++;
+    
+    // Don't delay if this was the last attempt
+    if (attempts >= maxAttempts) break;
+    
+    // Calculate backoff with jitter
+    const jitter = Math.random() * 0.2 - 0.1; // ±10% jitter
+    const delay = Math.min(
+      baseDelayMs * Math.pow(2, attempts - 1),
+      maxDelayMs
+    ) * (1 + jitter);
+    
+    // Wait before next attempt
+    await new Promise(resolve => setTimeout(resolve, delay));
   }
-};
+  
+  // If we get here, we've exhausted all retry attempts
+  return { data: null, error: lastError, retryCount: attempts };
+}
 
 /**
- * Add error catch and retry functionality to media group syncing
+ * Sync media group content with retry mechanism
  */
-export const syncMediaGroupWithRetry = async (
+export async function syncMediaGroupWithRetry(
   messageId: string,
   mediaGroupId: string,
   analyzedContent: any,
-  options: {
-    forceSync?: boolean;
-    syncEditHistory?: boolean;
-    maxRetries?: number;
-  } = {}
-) => {
-  const { forceSync = true, syncEditHistory = false, maxRetries = 3 } = options;
-  let retryCount = 0;
-  let lastError = null;
-
-  const attemptSync = async () => {
-    try {
-      // Call the RPC function to sync the media group
-      const { data, error } = await supabase.rpc('xdelo_sync_media_group_content', {
-        p_message_id: messageId,
-        p_analyzed_content: analyzedContent,
-        p_force_sync: forceSync,
-        p_sync_edit_history: syncEditHistory
-      });
-
-      if (error) throw error;
-      
-      // Safely extract updated_count from the response
-      const updatedCount = safeJsonExtract(data, 'updated_count', 0);
-      
-      return { 
-        success: true, 
-        result: {
-          ...data,
-          updated_count: updatedCount
+  options: MediaSyncOptions & { maxRetries?: number } = {}
+): Promise<SyncResult> {
+  try {
+    const { data, error, retryCount } = await withRetry(
+      () => supabase.rpc(
+        'xdelo_sync_media_group_content',
+        {
+          p_message_id: messageId,
+          p_analyzed_content: analyzedContent,
+          p_force_sync: options.forceSync !== false,
+          p_sync_edit_history: !!options.syncEditHistory
         }
-      };
-    } catch (err) {
-      retryCount++;
-      lastError = err;
-      
-      // Log the failure
-      console.error(`Failed to sync media group (attempt ${retryCount}/${maxRetries}):`, err);
-      
-      // If we've reached the max retries, stop trying
-      if (retryCount >= maxRetries) {
-        console.error(`Max retries (${maxRetries}) reached for media group sync. Giving up.`);
-        return { 
-          success: false, 
-          error: lastError, 
-          retryCount 
-        };
+      ),
+      {
+        maxAttempts: options.maxRetries || 3,
+        baseDelayMs: 1000,
+        maxDelayMs: 10000,
+        retryableErrors: ['timeout', 'connection', 'network']
       }
-      
-      // Exponential backoff
-      const backoffMs = Math.min(1000 * Math.pow(2, retryCount - 1), 10000);
-      console.log(`Retrying in ${backoffMs}ms...`);
-      await new Promise(resolve => setTimeout(resolve, backoffMs));
-      
-      // Try again
-      return await attemptSync();
+    );
+    
+    if (error) {
+      return {
+        success: false,
+        error: new Error(error.message || 'Unknown error syncing media group')
+      };
     }
-  };
-
-  return attemptSync();
-};
+    
+    return {
+      success: true,
+      result: data
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err : new Error(String(err))
+    };
+  }
+}

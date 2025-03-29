@@ -3,7 +3,7 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types/MessagesTypes';
 import { useToast } from '@/hooks/useToast';
-import { createLogger } from '@/lib/logger';
+import { Logger, createLogger } from '@/lib/logger';
 
 // Create a logger specific to telegram operations
 const logger = createLogger('telegram-operations');

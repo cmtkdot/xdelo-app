@@ -1,11 +1,12 @@
 
-import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { logProcessingEvent } from "./auditLogger.ts";
+import { supabaseClient } from "./supabase.ts";
+import { logProcessingEvent } from "./consolidatedMessageUtils.ts";
 
 interface RetryOptions {
   maxAttempts?: number;
   baseDelayMs?: number;
   maxDelayMs?: number;
+  retryableErrors?: string[];
 }
 
 export class RetryHandler {
@@ -13,11 +14,13 @@ export class RetryHandler {
   private readonly maxAttempts: number;
   private readonly baseDelayMs: number;
   private readonly maxDelayMs: number;
+  private readonly retryableErrors: string[];
 
   constructor(options: RetryOptions = {}) {
     this.maxAttempts = options.maxAttempts || 3;
     this.baseDelayMs = options.baseDelayMs || 1000;
     this.maxDelayMs = options.maxDelayMs || 10000;
+    this.retryableErrors = options.retryableErrors || [];
   }
 
   async execute<T>(
