@@ -41,6 +41,7 @@ export async function checkExistingMessage(
  * Create or update message in the database
  */
 export async function createMessage(messageInput: any, logger?: any): Promise<any> {
+  // Fix: Ensure parameters are correctly ordered and named according to the SQL function definition
   const { data, error } = await supabaseClient.rpc('handle_media_message', {
     p_telegram_message_id: messageInput.telegram_message_id,
     p_chat_id: messageInput.chat_id,

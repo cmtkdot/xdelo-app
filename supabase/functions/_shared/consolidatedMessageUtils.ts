@@ -9,19 +9,22 @@ import { supabaseClient } from "./supabase.ts";
  * @param correlationId Optional correlation ID for tracing
  * @param metadata Optional metadata to include with the log
  * @param errorMessage Optional error message if the event failed
+ * @param entityType Optional entity type (default: system)
  */
 export async function logProcessingEvent(
   eventType: string,
   entityId?: string,
   correlationId?: string,
   metadata?: Record<string, any>,
-  errorMessage?: string
+  errorMessage?: string,
+  entityType: string = "message"
 ): Promise<void> {
   try {
     // Create a standardized log entry
     const logEntry = {
       event_type: eventType,
       entity_id: entityId || null,
+      entity_type: entityType,
       correlation_id: correlationId || crypto.randomUUID().toString(),
       metadata: metadata || {},
       error_message: errorMessage || null,
@@ -36,6 +39,7 @@ export async function logProcessingEvent(
     // Also log to console for debugging
     console.log(`[AUDIT] ${eventType}`, {
       entity_id: entityId,
+      entity_type: entityType,
       correlation_id: correlationId,
       error: errorMessage
     });
@@ -45,6 +49,7 @@ export async function logProcessingEvent(
     console.error(`Failed to log processing event: ${error instanceof Error ? error.message : String(error)}`, {
       event_type: eventType,
       entity_id: entityId,
+      entity_type: entityType,
       correlation_id: correlationId
     });
   }
@@ -58,7 +63,8 @@ export async function logErrorEvent(
   entityId: string,
   correlationId: string,
   error: unknown,
-  metadata: Record<string, any> = {}
+  metadata: Record<string, any> = {},
+  entityType: string = "message"
 ): Promise<void> {
   const errorMessage = error instanceof Error ? error.message : String(error);
   const errorStack = error instanceof Error ? error.stack : undefined;
@@ -67,9 +73,17 @@ export async function logErrorEvent(
     ...metadata,
     error_type: typeof error,
     error_stack: errorStack,
+    logged_at: new Date().toISOString()
   };
   
-  await logProcessingEvent(eventType, entityId, correlationId, enhancedMetadata, errorMessage);
+  await logProcessingEvent(
+    eventType,
+    entityId,
+    correlationId,
+    enhancedMetadata,
+    errorMessage,
+    entityType
+  );
 }
 
 /**

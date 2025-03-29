@@ -1,3 +1,4 @@
+
 /**
  * Shared audit logging functionality for edge functions
  */
@@ -17,7 +18,8 @@ export async function logProcessingEvent(
   entityId: string,
   correlationId?: string,
   metadata: Record<string, any> = {},
-  errorMessage?: string
+  errorMessage?: string,
+  entityType: string = "message" // Default to "message" for backward compatibility
 ) {
   try {
     // Ensure entityId is in UUID format when possible
@@ -35,6 +37,7 @@ export async function logProcessingEvent(
     const { data, error } = await supabaseClient.from('unified_audit_logs').insert({
       event_type: eventType,
       entity_id: normalizedEntityId,
+      entity_type: entityType, // Add the entity type
       correlation_id: correlationId || crypto.randomUUID().toString(),
       metadata: enhancedMetadata,
       error_message: errorMessage
@@ -61,7 +64,8 @@ export async function logErrorEvent(
   entityId: string,
   correlationId: string,
   error: unknown,
-  metadata: Record<string, any> = {}
+  metadata: Record<string, any> = {},
+  entityType: string = "message" // Default to "message" for backward compatibility
 ): Promise<void> {
   const errorMessage = error instanceof Error ? error.message : String(error);
   const errorStack = error instanceof Error ? error.stack : undefined;
@@ -78,7 +82,8 @@ export async function logErrorEvent(
     entityId,
     correlationId,
     enhancedMetadata,
-    errorMessage
+    errorMessage,
+    entityType
   );
 }
 
