@@ -50,6 +50,8 @@ import {
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { useTelegramOperations } from '@/hooks/useTelegramOperations'
+import { useMediaUtils } from '@/hooks/useMediaUtils' // Added import
+import { useToast } from '@/hooks/useToast' // Added import
 import { MessageAdapter } from '@/components/common/MessageAdapter'
 
 interface MediaViewerDetailProps {
@@ -77,9 +79,15 @@ export function MediaViewerDetail({
   const [isEditingCaption, setIsEditingCaption] = useState(false)
   const [captionValue, setCaptionValue] = useState('')
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [processingOperation, setProcessingOperation] = useState<string | null>(null)
-  const { handleDelete, reuploadMediaFromTelegram, fixContentDispositionForMessage, syncMediaGroup } = useTelegramOperations()
+  // Removed local isProcessing and processingOperation state
+  const { handleDelete } = useTelegramOperations() // Keep for delete
+  const { 
+    reuploadMediaFromTelegram, 
+    fixContentDispositionForMessage, 
+    syncMediaGroup,
+    isLoading: isMediaUtilsLoading, // Use loading state from the hook
+  } = useMediaUtils();
+  const { toast } = useToast(); // Get toast object
   
   const currentMedia = currentGroup[currentIndex]
   
@@ -129,6 +137,7 @@ export function MediaViewerDetail({
   const handleDeleteConfirm = async (deleteFrom: 'database' | 'telegram' | 'both') => {
     if (!currentMedia) return
     
+    // Consider adding loading state for delete if useTelegramOperations provides one
     try {
       if (deleteFrom === 'database') {
         await handleDelete(currentMedia, false)
@@ -139,70 +148,55 @@ export function MediaViewerDetail({
       }
       
       setIsDeleteDialogOpen(false)
-      onClose()
+      toast({ title: 'Success', description: 'Message deleted.' }) // Use imported toast
+      onClose() // Close dialog after deletion
+      // Removed triggerRefresh() call
     } catch (error) {
       console.error('Error deleting message:', error)
+      toast({ title: 'Error', description: 'Failed to delete message.', variant: 'destructive' }) // Use imported toast
     }
   }
   
   const handleReuploadMedia = async () => {
     if (!currentMedia) return;
     
-    setIsProcessing(true);
-    setProcessingOperation('reupload');
-    
+    // Loading state is handled within useMediaUtils hook
     const result = await reuploadMediaFromTelegram(currentMedia.id);
     
     if (result) {
-      toast.success('Media successfully re-uploaded');
-      triggerRefresh();
-    } else {
-      toast.error('Failed to re-upload media');
-    }
-    
-    setIsProcessing(false);
-    setProcessingOperation(null);
+      // toast is already called inside useMediaUtils on success/error
+      // Removed triggerRefresh() call
+    } 
+    // Error toast is handled inside useMediaUtils
   };
   
   const handleFixContentDisposition = async () => {
     if (!currentMedia) return;
     
-    setIsProcessing(true);
-    setProcessingOperation('fixdisposition');
-    
+    // Loading state is handled within useMediaUtils hook
     const result = await fixContentDispositionForMessage(currentMedia.id);
     
     if (result) {
-      toast.success('Content disposition fixed');
-      triggerRefresh();
-    } else {
-      toast.error('Failed to fix content disposition');
+      // toast is already called inside useMediaUtils on success/error
+      // Removed triggerRefresh() call
     }
-    
-    setIsProcessing(false);
-    setProcessingOperation(null);
+    // Error toast is handled inside useMediaUtils
   };
   
   const handleSyncMediaGroup = async () => {
     if (!currentMedia || !currentMedia.media_group_id) return;
     
-    setIsProcessing(true);
-    setProcessingOperation('syncgroup');
-    
+    // Loading state is handled within useMediaUtils hook
     const result = await syncMediaGroup(
       currentMedia.id,
       currentMedia.media_group_id
     );
     
     if (result) {
-      toast.success('Media group synchronized');
-      triggerRefresh();
-    } else {
-      toast.error('Failed to synchronize media group');
+      // toast is already called inside useMediaUtils on success/error
+      // Removed triggerRefresh() call
     }
-    
-    setIsProcessing(false);
-    setProcessingOperation(null);
+    // Error toast is handled inside useMediaUtils
   };
   
   const openTelegramLink = () => {
@@ -556,7 +550,7 @@ export function MediaViewerDetail({
               variant="outline"
               className="border-destructive text-destructive hover:bg-destructive/10"
               onClick={() => handleDeleteConfirm('database')}
-              disabled={isProcessing}
+              disabled={isMediaUtilsLoading} // Use hook's loading state
             >
               <Database className="h-4 w-4 mr-2" />
               Database Only
@@ -565,7 +559,7 @@ export function MediaViewerDetail({
               variant="outline"
               className="border-destructive text-destructive hover:bg-destructive/10"
               onClick={() => handleDeleteConfirm('telegram')}
-              disabled={isProcessing}
+              disabled={isMediaUtilsLoading} // Use hook's loading state
             >
               <Send className="h-4 w-4 mr-2" />
               Telegram Only
@@ -573,7 +567,7 @@ export function MediaViewerDetail({
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => handleDeleteConfirm('both')}
-              disabled={isProcessing}
+              disabled={isMediaUtilsLoading} // Use hook's loading state
             >
               <Trash2 className="h-4 w-4 mr-2" />
               Delete From Both

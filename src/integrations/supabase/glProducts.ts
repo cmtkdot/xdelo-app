@@ -1,6 +1,6 @@
 
 import { supabase } from './client';
-import { GlProduct } from './dbExtensions';
+import { GlProduct } from './databaseExtensions';
 
 // Helper function to fetch GL products safely
 export async function fetchGlProducts(options: {

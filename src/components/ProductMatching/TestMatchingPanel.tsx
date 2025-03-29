@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Search } from "lucide-react";
 import { TestResultsDisplay } from "./TestResultsDisplay";
 import { fetchMatchingConfig } from "@/lib/productMatchingConfig";
-import { GlProduct } from "@/integrations/supabase/dbExtensions";
+import { GlProduct } from "@/integrations/supabase/databaseExtensions";
 
 interface TestResult {
   messageId: string;
@@ -30,7 +30,15 @@ export const TestMatchingPanel = () => {
   const [selectedMessageId, setSelectedMessageId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<{
+    id: string;
+    caption?: string;
+    analyzed_content?: {
+      product_name?: string;
+      vendor_uid?: string;
+      purchase_date?: string;
+    };
+  }[]>([]);
   const [result, setResult] = useState<TestResult | null>(null);
   const [customText, setCustomText] = useState("");
   const [useCustomText, setUseCustomText] = useState(false);

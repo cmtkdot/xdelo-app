@@ -1,7 +1,7 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/useToast';
+import { Json } from '@/integrations/supabase/types'; // Added Json import
 
 // Types
 export interface MediaSyncOptions {
@@ -102,9 +102,12 @@ export function useMediaUtils() {
         return false;
       }
 
+      // Cast data to expected shape to access updated_count
+      const resultData = data as { updated_count?: number };
+
       toast({
         title: 'Group Synced',
-        description: `Synchronized content to ${data.updated_count || 0} messages`,
+        description: `Synchronized content to ${resultData?.updated_count || 0} messages`,
       });
 
       return true;
@@ -447,9 +450,9 @@ export function useMediaUtils() {
   };
 
   // Helper function for retrying operations with configurable attempts and delay
-  const withRetry = async <T extends unknown>(
+  const withRetry = async <T,>( // Added trailing comma after T
     operation: () => Promise<T>,
-    options: {
+    options: { // Reverted to inline type definition
       maxAttempts: number;
       delay: number;
       retryableErrors?: string[];

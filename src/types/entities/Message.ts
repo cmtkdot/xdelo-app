@@ -1,6 +1,6 @@
 export interface Message {
   id: string;
-  file_unique_id: string;
+  file_unique_id: string; // Required
   public_url: string;
   created_at?: string;
   updated_at?: string;

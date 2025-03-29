@@ -19,7 +19,7 @@ export interface Message {
   group_caption_synced?: boolean;
   caption?: string;
   file_id?: string;
-  file_unique_id: string; // Required
+  file_unique_id: string; // Required to match entities/Message.ts
   public_url: string; // Required
   storage_path?: string;
   storage_path_standardized?: boolean | string; 
@@ -28,7 +28,7 @@ export interface Message {
   mime_type_verified?: boolean;
   mime_type_original?: string;
   content_disposition?: 'inline' | 'attachment';
-  storage_metadata?: Record<string, any>;
+  storage_metadata?: Record<string, unknown>;
   file_size?: number;
   width?: number;
   height?: number;
@@ -37,7 +37,7 @@ export interface Message {
   processing_state?: ProcessingState;
   processing_started_at?: string;
   processing_completed_at?: string;
-  analyzed_content?: Record<string, any>;
+  analyzed_content?: Record<string, unknown>;
   old_analyzed_content?: Record<string, unknown>[];
   telegram_data?: Record<string, unknown>;
   error_message?: string;

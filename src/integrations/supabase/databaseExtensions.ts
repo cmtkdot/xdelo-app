@@ -5,9 +5,24 @@ import { Database } from './types';
  * Extends the generated Supabase types with additional tables and fields
  * that might not be in the original schema
  */
+export interface GlProduct {
+  id: string;
+  name: string;
+  code: string;
+  vendor_id: string;
+  purchase_date?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ExtendedDatabase extends Database {
   public: Database['public'] & {
     Tables: Database['public']['Tables'] & {
+      gl_products: {
+        Row: GlProduct;
+        Insert: Omit<GlProduct, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<GlProduct, 'id' | 'created_at'>>;
+      };
     };
     Functions: Database['public']['Functions'] & {
       xdelo_process_caption_workflow: {

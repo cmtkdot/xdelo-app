@@ -1,7 +1,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { useState, useCallback } from 'react';
-import { ensureMessagesCompatibility } from '@/integrations/supabase/dbExtensions';
+// Removed incorrect import for ensureMessagesCompatibility
 
 /**
  * Media processing state and actions
@@ -31,13 +31,13 @@ export interface MediaSyncOptions {
 export interface SyncResult {
   success: boolean;
   error?: Error | null;
-  result?: any;
+  result?: Json | null; // Changed any to Json | null
 }
 
 /**
- * Create a state manager for media processing
+ * Custom hook to manage media processing state
  */
-export function createMediaProcessingState(): [MediaProcessingState, MediaProcessingActions] {
+export function useMediaProcessingState(): [MediaProcessingState, MediaProcessingActions] { // Renamed function
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [processingMessageIds, setProcessingMessageIds] = useState<string[]>([]);
 
@@ -82,9 +82,9 @@ interface RetryOptions {
  * Retry a database operation with exponential backoff
  */
 export async function withRetry<T>(
-  operation: () => Promise<{ data: T | null; error: any }>,
+  operation: () => Promise<{ data: T | null; error: Error | null }>, // Changed error: any
   options: RetryOptions = {}
-): Promise<{ data: T | null; error: any; retryCount?: number }> {
+): Promise<{ data: T | null; error: Error | null; retryCount?: number }> { // Changed error: any
   const maxAttempts = options.maxAttempts || 3;
   const baseDelayMs = options.baseDelayMs || 1000;
   const maxDelayMs = options.maxDelayMs || 10000;
@@ -147,7 +147,7 @@ export async function withRetry<T>(
 export async function syncMediaGroupWithRetry(
   messageId: string,
   mediaGroupId: string,
-  analyzedContent: any,
+  analyzedContent: Json | null, // Changed any to Json | null
   options: MediaSyncOptions & { maxRetries?: number } = {}
 ): Promise<SyncResult> {
   try {
