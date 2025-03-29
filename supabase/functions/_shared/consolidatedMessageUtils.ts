@@ -17,7 +17,7 @@ export async function logProcessingEvent(
   correlationId?: string,
   metadata?: Record<string, any>,
   errorMessage?: string,
-  entityType: string = "system"
+  entityType: string = "message"
 ): Promise<void> {
   try {
     // Create a standardized log entry
