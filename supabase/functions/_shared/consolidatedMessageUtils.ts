@@ -1,5 +1,58 @@
-// Removed supabaseClient import
 
+import { supabaseClient } from "./supabase.ts";
+
+/**
+ * Log a processing event to the audit log table
+ * 
+ * @param eventType The type of event being logged
+ * @param entityId The ID of the entity being processed
+ * @param correlationId Optional correlation ID for tracing
+ * @param metadata Optional metadata to include with the log
+ * @param errorMessage Optional error message if the event failed
+ */
+export async function logProcessingEvent(
+  eventType: string,
+  entityId?: string,
+  correlationId?: string,
+  metadata?: Record<string, any>,
+  errorMessage?: string
+): Promise<void> {
+  try {
+    // Create a standardized log entry
+    const logEntry = {
+      event_type: eventType,
+      entity_id: entityId || null,
+      correlation_id: correlationId || crypto.randomUUID().toString(),
+      metadata: metadata || {},
+      error_message: errorMessage || null,
+      event_timestamp: new Date().toISOString()
+    };
+
+    // Log to the database
+    await supabaseClient
+      .from('unified_audit_logs')
+      .insert(logEntry);
+      
+    // Also log to console for debugging
+    console.log(`[AUDIT] ${eventType}`, {
+      entity_id: entityId,
+      correlation_id: correlationId,
+      error: errorMessage
+    });
+    
+  } catch (error) {
+    // Log to console if database logging fails
+    console.error(`Failed to log processing event: ${error instanceof Error ? error.message : String(error)}`, {
+      event_type: eventType,
+      entity_id: entityId,
+      correlation_id: correlationId
+    });
+  }
+}
+
+/**
+ * Construct a Telegram message URL from chat ID and message ID
+ */
 export function constructTelegramMessageUrl(
   chatId: number,
   messageId: number
@@ -30,18 +83,5 @@ export function constructTelegramMessageUrl(
   }
 }
 
-/**
- * Check if a message was forwarded from another chat
- */
-export function isMessageForwarded(message: any): boolean {
-  return !!(
-    message.forward_from ||
-    message.forward_from_chat ||
-    message.forward_from_message_id ||
-    message.forward_signature ||
-    message.forward_sender_name ||
-    message.forward_date
-  );
-}
-
-// Removed logProcessingEvent function definition. Import from auditLogger.ts instead.
+// Re-export the supabaseClient for convenience
+export { supabaseClient };

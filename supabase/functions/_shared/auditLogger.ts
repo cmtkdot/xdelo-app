@@ -1,42 +1,84 @@
-import { supabaseClient } from './supabase.ts'; // Import the Supabase client
+
+import { supabaseClient } from "./supabase.ts";
 
 /**
- * Unified function to log processing events to the audit log table.
+ * Log a processing event to the audit log table
+ * 
+ * @param eventType The type of event being logged
+ * @param entityId The ID of the entity being processed
+ * @param correlationId Optional correlation ID for tracing
+ * @param metadata Optional metadata to include with the log
+ * @param errorMessage Optional error message if the event failed
  */
 export async function logProcessingEvent(
   eventType: string,
-  entityId: string,
-  correlationId: string,
-  metadata: Record<string, unknown> = {},
+  entityId?: string,
+  correlationId?: string,
+  metadata?: Record<string, any>,
   errorMessage?: string
 ): Promise<void> {
   try {
-    // Ensure correlation ID is valid
-    const validCorrelationId =
-      correlationId &&
-      typeof correlationId === 'string' &&
-      correlationId.length > 8 ?
-      correlationId :
-      crypto.randomUUID().toString();
-
-    // Ensure metadata has a timestamp
-    const enhancedMetadata = {
-      ...metadata,
-      timestamp: metadata.timestamp || new Date().toISOString(),
-      correlation_id: validCorrelationId,
-      logged_from: 'edge_function'
+    // Create a standardized log entry
+    const logEntry = {
+      event_type: eventType,
+      entity_id: entityId || null,
+      correlation_id: correlationId || crypto.randomUUID().toString(),
+      metadata: metadata || {},
+      error_message: errorMessage || null,
+      event_timestamp: new Date().toISOString()
     };
 
-    await supabaseClient.from('unified_audit_logs').insert({
-      event_type: eventType,
+    // Log to the database
+    await supabaseClient
+      .from('unified_audit_logs')
+      .insert(logEntry);
+      
+    // Also log to console for debugging
+    console.log(`[AUDIT] ${eventType}`, {
       entity_id: entityId,
-      metadata: enhancedMetadata,
-      error_message: errorMessage,
-      correlation_id: validCorrelationId,
-      event_timestamp: new Date().toISOString()
+      correlation_id: correlationId,
+      error: errorMessage
     });
+    
   } catch (error) {
     // Log to console if database logging fails
-    console.error(`Error logging event to database: ${eventType}`, error);
+    console.error(`Failed to log processing event: ${error instanceof Error ? error.message : String(error)}`, {
+      event_type: eventType,
+      entity_id: entityId,
+      correlation_id: correlationId
+    });
+  }
+}
+
+/**
+ * Construct a Telegram message URL from chat ID and message ID
+ */
+export function constructTelegramMessageUrl(
+  chatId: number,
+  messageId: number
+): string | undefined {
+  try {
+    // Private chats don't have shareable URLs
+    if (chatId > 0) {
+      return undefined;
+    }
+
+    // Format the chat ID based on its pattern
+    let formattedChatId: string;
+    if (chatId.toString().startsWith('-100')) {
+      // For supergroups/channels
+      formattedChatId = chatId.toString().substring(4);
+    } else if (chatId < 0) {
+      // For regular groups
+      formattedChatId = Math.abs(chatId).toString();
+    } else {
+      // Default case
+      formattedChatId = chatId.toString();
+    }
+
+    return `https://t.me/c/${formattedChatId}/${messageId}`;
+  } catch (error) {
+    console.error('Error constructing Telegram URL:', error);
+    return undefined;
   }
 }
