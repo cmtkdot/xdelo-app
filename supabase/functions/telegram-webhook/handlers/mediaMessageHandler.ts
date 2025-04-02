@@ -1,13 +1,12 @@
-
-import { corsHeaders } from '../../_shared/cors.ts';
-import { TelegramMessage, MessageContext } from '../types.ts';
-import { 
-  constructTelegramMessageUrl,
-  isMessageForwarded,
-  extractTelegramMetadata,
-  logProcessingEvent 
+import {
+    constructTelegramMessageUrl,
+    extractTelegramMetadata,
+    isMessageForwarded,
+    logProcessingEvent
 } from '../../_shared/consolidatedMessageUtils.ts';
+import { corsHeaders } from '../../_shared/cors.ts';
 import { createMediaMessage, syncMediaGroupContent } from '../dbOperations.ts';
+import { MessageContext, TelegramMessage } from '../types.ts';
 
 export async function handleMediaMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
@@ -64,7 +63,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
     const telegramMetadata = extractTelegramMetadata(message);
     
     // Create message record
-    const { id: messageId, success, error } = await createMediaMessage({
+    const { id: messageId, success, error, is_duplicate } = await createMediaMessage({
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
       chat_type: message.chat.type,
@@ -91,6 +90,44 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
         logger.error(`Failed to store media message in database`, { error });
       }
       throw new Error(error || 'Failed to create message record');
+    }
+    
+    // Handle duplicate media differently
+    if (is_duplicate) {
+      if (logger) {
+        logger.info(`Processed duplicate media message ${message.message_id}`, {
+          message_id: message.message_id,
+          db_id: messageId,
+          media_group_id: message.media_group_id,
+          duplicate: true,
+          message_url: message_url
+        });
+      }
+      
+      // Log duplicate detection
+      await logProcessingEvent(
+        "duplicate_media_detected",
+        messageId,
+        correlationId,
+        {
+          telegram_message_id: message.message_id,
+          chat_id: message.chat.id,
+          media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
+          media_group_id: message.media_group_id,
+          message_url: message_url
+        }
+      );
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          messageId, 
+          correlationId,
+          message_url: message_url,
+          is_duplicate: true
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
     
     // Log successful processing using consolidated logging
