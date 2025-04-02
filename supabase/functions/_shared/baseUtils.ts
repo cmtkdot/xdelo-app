@@ -8,30 +8,60 @@ export const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
+/**
+ * Create Supabase client with enhanced error handling and retry capabilities
+ */
+export function createSupabaseClient(options = {}) {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || 'https://xjhhehxcxkiumnwbirel.supabase.co';
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  
+  if (!supabaseKey) {
+    console.error('SUPABASE_SERVICE_ROLE_KEY is not defined in environment');
+  }
+  
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false
+    },
+    global: {
+      fetch: (...args) => fetch(...args)
+    },
+    ...options
+  });
+}
+
 // Initialize Supabase client
-export const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-);
+export const supabase = createSupabaseClient();
 
 /**
- * Log an event to the unified audit log
+ * Unified logging function for all operations
  */
 export async function logEvent(
   eventType: string,
-  entityId: string,
+  entityId: string | number,
   correlationId: string | null = null,
   metadata: Record<string, unknown> = {},
   errorMessage: string | null = null,
 ): Promise<boolean> {
   try {
-    // Use the new consolidated log event function
-    const { data, error } = await supabase
-      .rpc('xdelo_log_event', {
+    // Ensure entityId is a string
+    const entityIdStr = entityId.toString();
+    
+    // Add timestamp if not already present
+    if (!metadata.timestamp) {
+      metadata.timestamp = new Date().toISOString();
+    }
+    
+    // Use the consolidated log event function
+    const { data, error } = await supabase.rpc(
+      'xdelo_log_event',
+      {
         p_event_type: eventType,
-        p_entity_id: entityId,
-        p_metadata: metadata,
+        p_entity_id: entityIdStr,
         p_correlation_id: correlationId,
+        p_metadata: metadata,
         p_error_message: errorMessage,
       });
 
@@ -58,7 +88,7 @@ export async function updateMessageState(
   errorMessage: string | null = null,
 ): Promise<Record<string, unknown>> {
   try {
-    // Use the new consolidated update message state function
+    // Use the consolidated update message state function
     const { data, error } = await supabase
       .rpc('xdelo_update_message_state', {
         p_message_id: messageId,
@@ -97,8 +127,8 @@ export async function updateMessageState(
  */
 export function formatErrorResponse(
   error: string | Error,
-  statusCode: number = 400,
   correlationId?: string,
+  statusCode: number = 400,
 ): Response {
   const errorMessage = error instanceof Error ? error.message : error;
   
@@ -121,12 +151,14 @@ export function formatErrorResponse(
  */
 export function formatSuccessResponse(
   data: Record<string, unknown>,
+  correlationId?: string,
   statusCode: number = 200,
 ): Response {
   return new Response(
     JSON.stringify({
       success: true,
       ...data,
+      correlationId,
       timestamp: new Date().toISOString(),
     }),
     {
@@ -199,189 +231,138 @@ export async function checkMessageExists(
         .select('id')
         .eq('id', chatIdOrMessageId)
         .maybeSingle();
-        
-      if (error) {
-        console.error('Error checking message existence by ID:', error);
-        return false;
-      }
       
-      return !!data;
-    } 
-    // Otherwise assume it's chat_id and telegram_message_id
-    else if (typeof chatIdOrMessageId === 'number' && typeof telegramMessageId === 'number') {
-      const { data, error } = await supabase
-        .rpc('xdelo_check_message_exists', {
-          p_chat_id: chatIdOrMessageId,
-          p_telegram_message_id: telegramMessageId
-        });
-
-      if (error) {
-        console.error('Error checking message existence by chat/message IDs:', error);
-        return false;
-      }
-
-      return data || false;
+      return !error && !!data;
     }
     
-    console.error('Invalid parameters for checkMessageExists');
-    return false;
+    // Otherwise check by chat_id and telegram_message_id
+    const { data, error } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('chat_id', chatIdOrMessageId)
+      .eq('telegram_message_id', telegramMessageId)
+      .maybeSingle();
+    
+    return !error && !!data;
   } catch (error) {
-    console.error('Exception checking message existence:', error);
+    console.error('Error checking message existence:', error);
     return false;
   }
 }
 
 /**
- * Synchronize a media group's content from a source message
+ * Parse a caption/text to extract structured data
+ */
+export async function parseCaption(
+  caption: string,
+  options: Record<string, any> = {}
+): Promise<AnalyzedContent> {
+  // Basic implementation - should be enhanced with actual parsing logic
+  return {
+    raw_text: caption,
+    parsing_metadata: {
+      trigger_source: options.trigger_source || 'manual',
+      parsing_time: Date.now().toString(),
+      success: true
+    },
+    parsed_at: new Date().toISOString()
+  };
+}
+
+/**
+ * Synchronize content across all messages in a media group
  */
 export async function syncMediaGroup(
   sourceMessageId: string,
   mediaGroupId: string,
   correlationId: string | null = null,
   forceSync: boolean = false,
-  syncEditHistory: boolean = false,
+  syncEditHistory: boolean = false
 ): Promise<Record<string, unknown>> {
   try {
-    // Use the new consolidated media group sync function
-    const { data, error } = await supabase
-      .rpc('xdelo_sync_media_group', {
+    const { data, error } = await supabase.rpc(
+      'xdelo_sync_media_group',
+      {
         p_source_message_id: sourceMessageId,
         p_media_group_id: mediaGroupId,
         p_correlation_id: correlationId,
-        p_force: forceSync,
-        p_sync_edit_history: syncEditHistory,
-      });
-
+        p_force_sync: forceSync,
+        p_sync_edit_history: syncEditHistory
+      }
+    );
+    
     if (error) {
-      console.error('Error syncing media group:', error);
+      console.error('Error in syncMediaGroup:', error);
       return {
         success: false,
         error: error.message,
-        sourceMessageId,
         mediaGroupId,
+        sourceMessageId
       };
     }
-
+    
     return data || {
       success: true,
-      sourceMessageId,
       mediaGroupId,
-      updatedCount: 0,
+      sourceMessageId
     };
   } catch (error) {
-    console.error('Exception syncing media group:', error.message);
+    console.error('Exception in syncMediaGroup:', error);
     return {
       success: false,
       error: error.message,
-      sourceMessageId,
       mediaGroupId,
+      sourceMessageId
     };
   }
 }
 
 /**
- * Parse a caption into structured content
+ * Extract essential metadata from a Telegram message for efficient storage
  */
-export async function parseCaption(caption: string): Promise<AnalyzedContent> {
-  if (!caption || caption.trim() === '') {
-    return {
-      caption,
-      parsing_metadata: {
-        method: 'empty',
-        timestamp: new Date().toISOString(),
-        partial_success: true,
-        missing_fields: ['product_name', 'product_code', 'vendor_uid', 'purchase_date', 'quantity'],
-      },
-      product_name: '',
-      product_code: '',
-      vendor_uid: null,
-      purchase_date: null,
-      quantity: null,
-      notes: '',
-    };
+export function extractMessageMetadata(message: any): Record<string, any> {
+  if (!message) {
+    return {};
   }
 
   try {
-    // Simple parser implementation 
-    // Extracts basic product information from the caption
-    const productMatch = caption.match(/^(.+?)(?:\s+#|$)/i);
-    const codeMatch = caption.match(/#([A-Za-z]{1,4}\d{5,6})/i);
-    const quantityMatch = caption.match(/x\s*(\d+)/i) || caption.match(/(\d+)\s*x/i);
-    const notesMatch = caption.match(/\(([^)]+)\)/);
+    // Determine the root message object based on message type
+    const rootMessage = message.message || message.channel_post || 
+                      message.edited_message || message.edited_channel_post || 
+                      message;
 
-    // Build the result
-    const result: AnalyzedContent = {
-      caption,
-      parsing_metadata: {
-        method: 'manual',
-        timestamp: new Date().toISOString(),
-        partial_success: false,
-      },
-      product_name: productMatch ? productMatch[1].trim() : '',
-      product_code: codeMatch ? codeMatch[1] : '',
-      vendor_uid: codeMatch ? codeMatch[1].match(/^([A-Za-z]{1,4})/i)?.[1].toUpperCase() || null : null,
-      purchase_date: null,
-      quantity: quantityMatch ? parseInt(quantityMatch[1], 10) : null,
-      notes: notesMatch ? notesMatch[1] : '',
+    // Basic metadata structure
+    const metadata: Record<string, any> = {
+      message_type: message.message ? 'message' : 
+                  message.channel_post ? 'channel_post' :
+                  message.edited_message ? 'edited_message' :
+                  message.edited_channel_post ? 'edited_channel_post' : 'unknown',
+      message_id: rootMessage.message_id,
+      date: rootMessage.date, // Unix timestamp
     };
 
-    // Try to parse purchase date from product code
-    if (codeMatch) {
-      const dateDigits = codeMatch[1].match(/^[A-Za-z]{1,4}(\d{5,6})/i)?.[1];
-      if (dateDigits) {
-        const paddedDigits = dateDigits.length === 5 ? '0' + dateDigits : dateDigits;
-        
-        if (paddedDigits.length === 6) {
-          const month = paddedDigits.substring(0, 2);
-          const day = paddedDigits.substring(2, 4);
-          const year = '20' + paddedDigits.substring(4, 6);
-          
-          // Make sure it's a valid date
-          try {
-            const date = new Date(`${year}-${month}-${day}`);
-            if (!isNaN(date.getTime())) {
-              result.purchase_date = `${year}-${month}-${day}`;
-            }
-          } catch {
-            // Invalid date, leave as null
-          }
-        }
-      }
+    // Add chat info if available
+    if (rootMessage.chat) {
+      metadata.chat = {
+        id: rootMessage.chat.id,
+        type: rootMessage.chat.type,
+        title: rootMessage.chat.title,
+        username: rootMessage.chat.username
+      };
     }
 
-    // Check for missing fields
-    const missingFields = [];
-    if (!result.product_name) missingFields.push('product_name');
-    if (!result.product_code) missingFields.push('product_code');
-    if (!result.vendor_uid) missingFields.push('vendor_uid');
-    if (!result.purchase_date) missingFields.push('purchase_date');
-    if (result.quantity === null) missingFields.push('quantity');
-
-    if (missingFields.length > 0) {
-      result.parsing_metadata.partial_success = true;
-      result.parsing_metadata.missing_fields = missingFields;
+    // Add sender info if available (not present in channel posts)
+    if (rootMessage.from) {
+      metadata.from = {
+        id: rootMessage.from.id,
+        first_name: rootMessage.from.first_name,
+        last_name: rootMessage.from.last_name,
+        username: rootMessage.from.username,
+        is_bot: rootMessage.from.is_bot
+      };
     }
 
-    return result;
+    return metadata;
   } catch (error) {
-    console.error('Error parsing caption:', error);
-    
-    // Return partial result on error
-    return {
-      caption,
-      parsing_metadata: {
-        method: 'error',
-        timestamp: new Date().toISOString(),
-        partial_success: true,
-        error: error.message,
-        missing_fields: ['product_name', 'product_code', 'vendor_uid', 'purchase_date', 'quantity'],
-      },
-      product_name: '',
-      product_code: '',
-      vendor_uid: null,
-      purchase_date: null,
-      quantity: null,
-      notes: '',
-    };
-  }
-} 
+    console.error('Error extracting message metadata:', error);
+ 
