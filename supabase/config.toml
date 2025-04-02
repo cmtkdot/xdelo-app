@@ -10,23 +10,29 @@ verify_jwt = false
 verify_jwt = false
 [functions.delete-telegram-message]
 verify_jwt = false
-[functions.direct-caption-processor]
-verify_jwt = false
 [functions.generic-webhook]
+verify_jwt = false
+[functions.log-operation]
 verify_jwt = false
 [functions.manual-caption-parser]
 verify_jwt = false
 [functions.media-management]
 verify_jwt = false
+[functions.migrate_telegram_data]
+verify_jwt = false
 [functions.openai-request]
 verify_jwt = false
 [functions.parse-caption-with-ai]
 verify_jwt = false
+[functions.process-audio-upload]
+verify_jwt = false
 [functions.product-matching]
 verify_jwt = false
-[functions.redownload-missing-files]
+[functions.repair-media]
 verify_jwt = false
 [functions.telegram-webhook]
+verify_jwt = false
+[functions.unified-logging]
 verify_jwt = false
 [functions.update-telegram-caption]
 verify_jwt = false

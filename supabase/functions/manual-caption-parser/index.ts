@@ -1,5 +1,3 @@
-
-import { xdelo_parseCaption } from "../_shared/captionParser.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { AnalysisRequest, MediaGroupResult } from "./types.ts";
@@ -15,6 +13,87 @@ const supabaseClient = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
+
+// Local caption parser function
+function xdelo_parseCaption(caption: string) {
+  if (!caption || caption.trim() === '') {
+    return {
+      products: [],
+      prices: [],
+      tags: [],
+      content: caption,
+      raw_caption: caption,
+      parsing_metadata: {
+        method: 'manual',
+        timestamp: new Date().toISOString(),
+        original_caption: caption
+      }
+    };
+  }
+
+  try {
+    // Extract hashtags as tags
+    const tagRegex = /#[\w\u0080-\uFFFF]+/g;
+    const tagMatches = caption.match(tagRegex);
+    const tags = tagMatches ? tagMatches.map(tag => tag.substring(1)) : [];
+    
+    // Extract prices
+    const priceRegex = /(\$|€|£|¥|\b[A-Z]{3}\s*)(\d+(?:[.,]\d+)?)/g;
+    const prices: { amount: number; currency: string; raw: string }[] = [];
+    let match;
+    
+    while ((match = priceRegex.exec(caption)) !== null) {
+      const [raw, currency, amountStr] = match;
+      const amount = parseFloat(amountStr.replace(',', '.'));
+      
+      if (!isNaN(amount)) {
+        let currencyCode = currency.trim();
+        if (currencyCode === '$') currencyCode = 'USD';
+        if (currencyCode === '€') currencyCode = 'EUR';
+        if (currencyCode === '£') currencyCode = 'GBP';
+        if (currencyCode === '¥') currencyCode = 'JPY';
+        
+        prices.push({ amount, currency: currencyCode, raw });
+      }
+    }
+    
+    // Extract products from tags
+    const productTags = tags.filter(tag => {
+      const lowerTag = tag.toLowerCase();
+      return !lowerTag.match(/sale|discount|new|promo|deal|offer|price/i);
+    });
+
+    return {
+      products: productTags,
+      prices,
+      tags,
+      content: caption,
+      raw_caption: caption,
+      parsing_metadata: {
+        method: 'manual',
+        timestamp: new Date().toISOString(),
+        original_caption: caption
+      }
+    };
+  } catch (error) {
+    console.error("Error parsing caption:", error);
+    
+    return {
+      products: [],
+      prices: [],
+      tags: [],
+      content: caption,
+      raw_caption: caption,
+      error: error.message,
+      parsing_metadata: {
+        method: 'manual',
+        timestamp: new Date().toISOString(),
+        original_caption: caption,
+        error: error.message
+      }
+    };
+  }
+}
 
 async function handleCaptionParsing(request: AnalysisRequest) {
   // Input validation
