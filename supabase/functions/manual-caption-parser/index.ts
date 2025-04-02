@@ -1,291 +1,182 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { AnalysisRequest, MediaGroupResult } from "./types.ts";
+import { CaptionAnalysisRequest } from "../_shared/types.ts";
+import {
+  corsHeaders,
+  formatErrorResponse,
+  formatSuccessResponse,
+  logEvent,
+  parseCaption,
+  supabase,
+  syncMediaGroup,
+  updateMessageState
+} from "../_shared/utils.ts";
 
-// Set up CORS headers for browser clients
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-// Create Supabase client
-const supabaseClient = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-);
-
-// Local caption parser function
-function xdelo_parseCaption(caption: string) {
-  if (!caption || caption.trim() === '') {
-    return {
-      products: [],
-      prices: [],
-      tags: [],
-      content: caption,
-      raw_caption: caption,
-      parsing_metadata: {
-        method: 'manual',
-        timestamp: new Date().toISOString(),
-        original_caption: caption
-      }
-    };
-  }
-
-  try {
-    // Extract hashtags as tags
-    const tagRegex = /#[\w\u0080-\uFFFF]+/g;
-    const tagMatches = caption.match(tagRegex);
-    const tags = tagMatches ? tagMatches.map(tag => tag.substring(1)) : [];
-    
-    // Extract prices
-    const priceRegex = /(\$|€|£|¥|\b[A-Z]{3}\s*)(\d+(?:[.,]\d+)?)/g;
-    const prices: { amount: number; currency: string; raw: string }[] = [];
-    let match;
-    
-    while ((match = priceRegex.exec(caption)) !== null) {
-      const [raw, currency, amountStr] = match;
-      const amount = parseFloat(amountStr.replace(',', '.'));
-      
-      if (!isNaN(amount)) {
-        let currencyCode = currency.trim();
-        if (currencyCode === '$') currencyCode = 'USD';
-        if (currencyCode === '€') currencyCode = 'EUR';
-        if (currencyCode === '£') currencyCode = 'GBP';
-        if (currencyCode === '¥') currencyCode = 'JPY';
-        
-        prices.push({ amount, currency: currencyCode, raw });
-      }
-    }
-    
-    // Extract products from tags
-    const productTags = tags.filter(tag => {
-      const lowerTag = tag.toLowerCase();
-      return !lowerTag.match(/sale|discount|new|promo|deal|offer|price/i);
-    });
-
-    return {
-      products: productTags,
-      prices,
-      tags,
-      content: caption,
-      raw_caption: caption,
-      parsing_metadata: {
-        method: 'manual',
-        timestamp: new Date().toISOString(),
-        original_caption: caption
-      }
-    };
-  } catch (error) {
-    console.error("Error parsing caption:", error);
-    
-    return {
-      products: [],
-      prices: [],
-      tags: [],
-      content: caption,
-      raw_caption: caption,
-      error: error.message,
-      parsing_metadata: {
-        method: 'manual',
-        timestamp: new Date().toISOString(),
-        original_caption: caption,
-        error: error.message
-      }
-    };
-  }
-}
-
-async function handleCaptionParsing(request: AnalysisRequest) {
-  // Input validation
+/**
+ * Handles caption parsing requests
+ */
+async function handleCaptionParsing(request: CaptionAnalysisRequest): Promise<Record<string, unknown>> {
+  // Generate correlation ID if not provided
+  const correlationId = request.correlationId || crypto.randomUUID();
+  
+  // Validate request
   if (!request.messageId) {
-    throw new Error("Missing required parameter: messageId");
-  }
-
-  try {
-    // Fetch the message to get its caption
-    const { data: message, error: fetchError } = await supabaseClient
-      .from("messages")
-      .select("*")
-      .eq("id", request.messageId)
-      .single();
-
-    if (fetchError) {
-      throw new Error(`Error fetching message: ${fetchError.message}`);
-    }
-
-    if (!message) {
-      throw new Error(`Message with ID ${request.messageId} not found`);
-    }
-
-    // Use the provided caption (for edits) or the one from the database
-    const captionToAnalyze = request.caption || message.caption;
-    
-    if (!captionToAnalyze) {
-      throw new Error("No caption available for analysis");
-    }
-
-    console.log(`Analyzing caption for message ${request.messageId}: "${captionToAnalyze.substring(0, 100)}${captionToAnalyze.length > 100 ? '...' : ''}"`);
-    
-    // Determine if this is an edit operation
-    const isEdit = request.isEdit || false;
-    
-    // Analyze the caption using our shared parser from _shared/captionParser.ts
-    const parsedContent = xdelo_parseCaption(captionToAnalyze);
-    
-    // Add metadata about this processing operation
-    const parsingMetadata = {
-      method: 'manual' as const,
-      timestamp: new Date().toISOString(),
-      original_caption: captionToAnalyze,
-      is_edit: isEdit,
+    return {
+      success: false,
+      error: 'Message ID is required',
+      correlationId
     };
+  }
+  
+  const messageId = request.messageId;
+  
+  try {
+    // Fetch message from database
+    const { data: message, error: fetchError } = await supabase
+      .from('messages')
+      .select('id, caption, telegram_message_id, chat_id, media_group_id, processing_state')
+      .eq('id', messageId)
+      .single();
     
-    if (request.trigger_source) {
-      // Add additional metadata that might be useful but not part of the core type
-      parsedContent.parsing_metadata = {
-        ...parsingMetadata,
-        trigger_source: request.trigger_source
-      };
-    } else {
-      parsedContent.parsing_metadata = parsingMetadata;
-    }
-
-    // Save the analysis results to the database
-    const { error: updateError } = await supabaseClient
-      .from("messages")
-      .update({
-        analyzed_content: parsedContent,
-        processing_state: "completed",
-        processing_completed_at: new Date().toISOString(),
-        is_original_caption: message.media_group_id ? true : null,
-        group_caption_synced: false,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", request.messageId);
-
-    if (updateError) {
-      throw new Error(`Error updating message with analysis: ${updateError.message}`);
-    }
-
-    let syncResult: MediaGroupResult | null = null;
-
-    // If this is part of a media group, synchronize the content
-    if (message.media_group_id) {
-      syncResult = await syncMediaGroupContent(
-        message.media_group_id,
-        request.messageId,
-        request.correlationId || crypto.randomUUID(),
-        isEdit
+    if (fetchError || !message) {
+      await logEvent(
+        'caption_analysis_error',
+        messageId,
+        correlationId,
+        { error: fetchError?.message || 'Message not found' },
+        fetchError?.message || 'Message not found'
       );
       
-      console.log(`Media group sync completed: ${syncResult.synced_count} messages updated`);
+      return {
+        success: false,
+        error: fetchError?.message || 'Message not found',
+        correlationId
+      };
     }
-
+    
+    // Update message state to processing
+    await updateMessageState(messageId, 'processing', correlationId);
+    
+    // Analyze caption
+    const caption = message.caption || '';
+    const analyzedContent = await parseCaption(caption);
+    
+    // Add parsing metadata
+    if (analyzedContent.parsing_metadata) {
+      analyzedContent.parsing_metadata.is_edit = request.isEdit || false;
+      analyzedContent.parsing_metadata.trigger_source = request.trigger_source || 'manual';
+    }
+    
+    // Update database with analyzed content
+    const updateResult = await updateMessageState(
+      messageId,
+      'completed',
+      correlationId,
+      analyzedContent
+    );
+    
+    if (!updateResult.success) {
+      return {
+        success: false,
+        error: updateResult.error || 'Failed to update message state',
+        correlationId
+      };
+    }
+    
+    // Log the successful analysis
+    await logEvent(
+      'caption_analysis_completed',
+      messageId,
+      correlationId,
+      {
+        telegram_message_id: message.telegram_message_id,
+        chat_id: message.chat_id,
+        media_group_id: message.media_group_id,
+        analyzed_content: analyzedContent
+      }
+    );
+    
+    // If message is part of a media group, sync the content
+    if (message.media_group_id && request.syncMediaGroup !== false) {
+      const syncResult = await syncMediaGroup(
+        messageId,
+        message.media_group_id,
+        correlationId,
+        request.forceSync || false
+      );
+      
+      // Return result with sync info
+      return {
+        success: true,
+        messageId,
+        caption,
+        analyzedContent,
+        correlationId,
+        mediaGroupSynced: syncResult.success,
+        mediaGroupId: message.media_group_id,
+        syncResult
+      };
+    }
+    
+    // Return result without sync
     return {
       success: true,
-      message_id: request.messageId,
-      analyzed: true,
-      caption_length: captionToAnalyze.length,
-      has_media_group: !!message.media_group_id,
-      media_group_id: message.media_group_id,
-      media_group_synced: !!syncResult,
-      synced_count: syncResult?.synced_count || 0
+      messageId,
+      caption,
+      analyzedContent,
+      correlationId
     };
   } catch (error) {
-    console.error(`Error in handleCaptionParsing: ${error.message}`);
-    throw error;
-  }
-}
-
-async function syncMediaGroupContent(
-  mediaGroupId: string,
-  sourceMessageId: string,
-  correlationId: string,
-  isEdit: boolean = false
-): Promise<MediaGroupResult> {
-  try {
-    // Use the dedicated edge function for media group synchronization
-    const response = await fetch(
-      `${Deno.env.get('SUPABASE_URL')}/functions/v1/xdelo_sync_media_group`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-        },
-        body: JSON.stringify({
-          mediaGroupId,
-          sourceMessageId,
-          correlationId,
-          forceSync: true,
-          syncEditHistory: isEdit
-        })
-      }
+    // Log error
+    await logEvent(
+      'caption_analysis_error',
+      messageId,
+      correlationId,
+      { error: error.message },
+      error.message
     );
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Edge function sync failed: ${errorText || response.statusText}`);
-    }
+    // Update message state to error
+    await updateMessageState(
+      messageId,
+      'error', 
+      correlationId,
+      null,
+      error.message
+    );
     
-    const result = await response.json();
     return {
-      success: result.success,
-      synced_count: result.synced_count || 0,
-      media_group_id: mediaGroupId
-    };
-  } catch (error) {
-    console.error(`Error in syncMediaGroupContent: ${error.message}`);
-    return {
-      success: false, 
-      synced_count: 0,
-      media_group_id: mediaGroupId,
-      error: error.message
+      success: false,
+      error: `Caption analysis failed: ${error.message}`,
+      correlationId
     };
   }
 }
 
+// Handle requests
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
   }
-
+  
   try {
-    const request = await req.json();
+    // Parse request
+    const request = await req.json() as CaptionAnalysisRequest;
     
-    console.log("Caption parser request received:", {
-      messageId: request.messageId,
-      isEdit: request.isEdit,
-      hasCaption: !!request.caption,
-      correlationId: request.correlationId,
-      trigger_source: request.trigger_source
-    });
-
-    // Process the caption
+    // Process caption
     const result = await handleCaptionParsing(request);
-
-    // Return success response
-    return new Response(
-      JSON.stringify(result),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      }
-    );
-  } catch (error) {
-    console.error(`Error in manual-caption-parser: ${error.message}`);
     
-    // Return error response
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400,
-      }
+    // Return appropriate response
+    if (result.success) {
+      return formatSuccessResponse(result);
+    } else {
+      return formatErrorResponse(result.error as string, 400, result.correlationId as string);
+    }
+  } catch (error) {
+    console.error('Error processing request:', error);
+    return formatErrorResponse(
+      `Failed to process request: ${error.message}`,
+      500
     );
   }
 });
